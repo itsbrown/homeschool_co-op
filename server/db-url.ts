@@ -1,19 +1,7 @@
-// This file handles proper encoding of the database URL
-let dbUrl = process.env.DATABASE_URL;
+// This file handles the database URL from Replit-provisioned PostgreSQL
+// We construct the URL from individual environment variables to avoid encoding issues
+export const DATABASE_URL = process.env.PGHOST 
+  ? `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT}/${process.env.PGDATABASE}`
+  : process.env.DATABASE_URL;
 
-if (dbUrl && dbUrl.includes('postgresql://')) {
-  // Extract components from the URL
-  const urlParts = dbUrl.match(/postgresql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
-  
-  if (urlParts) {
-    const [_, username, password, host, port, database] = urlParts;
-    
-    // Encode the password properly
-    const encodedPassword = encodeURIComponent(password);
-    
-    // Reconstruct the URL
-    dbUrl = `postgresql://${username}:${encodedPassword}@${host}:${port}/${database}`;
-  }
-}
-
-export const DATABASE_URL = dbUrl;
+console.log("Using database URL:", DATABASE_URL ? DATABASE_URL.replace(/:[^:@]+@/, ':****@') : 'Not set');

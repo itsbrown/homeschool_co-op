@@ -12,6 +12,6 @@ if (!DATABASE_URL) {
   );
 }
 
-console.log("Connecting to database with encoded URL...");
+console.log("Connecting to Replit-provisioned PostgreSQL database...");
 export const pool = new Pool({ connectionString: DATABASE_URL });
 export const db = drizzle({ client: pool, schema });
