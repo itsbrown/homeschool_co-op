@@ -22,6 +22,14 @@ try {
 const MODEL = 'claude-3-7-sonnet-20250219';
 
 /**
+ * Utility function to check if the Anthropic client is available
+ * Used by the AI status API and other components
+ */
+export function isAnthropicAvailable(): boolean {
+  return anthropic !== null && !!process.env.ANTHROPIC_API_KEY;
+}
+
+/**
  * Generates a curriculum template using Claude AI
  */
 export async function generateAICurriculum(formData: AIGenerationFormData): Promise<CurriculumTemplate> {

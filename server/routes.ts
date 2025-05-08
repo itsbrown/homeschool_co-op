@@ -45,6 +45,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   };
   
+  // AI Status endpoint
+  app.get("/api/ai/status", async (req, res) => {
+    try {
+      // Dynamically import the anthropicService to check availability
+      const { isAnthropicAvailable } = await import("./services/anthropicService");
+      
+      const isAvailable = isAnthropicAvailable();
+      return res.status(200).json({
+        anthropic: {
+          available: isAvailable,
+          status: isAvailable ? 'operational' : 'unavailable',
+          message: isAvailable 
+            ? 'Anthropic API is available and operational' 
+            : 'Anthropic API is currently unavailable, using fallback mechanisms'
+        }
+      });
+    } catch (error) {
+      console.error('Error checking AI status:', error);
+      return res.status(500).json({ 
+        message: 'Failed to check AI service status',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
