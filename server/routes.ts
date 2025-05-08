@@ -186,6 +186,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // AI curriculum generation
+  app.post("/api/curricula/generate", isAuthenticated, async (req, res) => {
+    try {
+      const { subject, gradeLevel, learningStyles, additionalDetails } = req.body;
+      
+      // Validate form data
+      if (!subject || !gradeLevel || !learningStyles || learningStyles.length === 0) {
+        return res.status(400).json({
+          message: "Required fields are missing",
+          requiredFields: ["subject", "gradeLevel", "learningStyles"]
+        });
+      }
+      
+      // Generate curriculum template using AI
+      const { generateCurriculumTemplate, curriculumTemplateToDbFormat, lessonTemplateToDbFormat } = await import("./services/curriculumService");
+      
+      // Generate curriculum template
+      const curriculumTemplate = await generateCurriculumTemplate({ 
+        subject, 
+        gradeLevel, 
+        learningStyles, 
+        additionalDetails 
+      });
+      
+      // Convert to database format
+      const curriculumData = curriculumTemplateToDbFormat(curriculumTemplate, req.session.userId);
+      
+      // Save to database
+      const curriculum = await storage.createCurriculum(curriculumData);
+      
+      // Create associated lessons
+      for (const unit of curriculumTemplate.units) {
+        for (const lessonTemplate of unit.lessons) {
+          const lessonData = lessonTemplateToDbFormat(
+            lessonTemplate,
+            unit.title,
+            curriculum.id,
+            req.session.userId,
+            curriculumData.subject,
+            curriculumData.gradeLevel
+          );
+          
+          await storage.createLesson(lessonData);
+        }
+      }
+      
+      res.status(201).json(curriculum);
+    } catch (error) {
+      console.error("Generate curriculum error:", error);
+      res.status(500).json({ 
+        message: "Error generating curriculum", 
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
   // Lesson routes
   app.post("/api/lessons", isAuthenticated, async (req, res) => {
     try {
