@@ -1,46 +1,49 @@
 import React from 'react';
-import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertTriangle } from "lucide-react";
+import { useAIStatusContext } from '@/contexts/AIStatusContext';
+import { Badge } from '@/components/ui/badge';
+import { CheckCircle, AlertCircle, RotateCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface AIStatusBadgeProps {
-  isAIAvailable: boolean;
-  component: string;
   className?: string;
 }
 
 /**
- * A component that displays the AI service status
- * Used to inform users when AI services are in fallback mode
+ * A simple badge component that shows the current AI status
+ * For use in headers, navbars, etc.
  */
-export const AIStatusBadge: React.FC<AIStatusBadgeProps> = ({ 
-  isAIAvailable, 
-  component,
-  className = ""
-}) => {
-  if (isAIAvailable) {
+export const AIStatusBadge: React.FC<AIStatusBadgeProps> = ({ className }) => {
+  const { isAIAvailable, isLoading } = useAIStatusContext();
+  
+  if (isLoading) {
     return (
-      <Badge variant="outline" className={`bg-green-50 text-green-700 border-green-200 ${className}`}>
-        AI Powered
+      <Badge variant="outline" className={cn("bg-slate-100 text-slate-700 border-slate-200", className)}>
+        <RotateCw size={12} className="mr-1 animate-spin" />
+        <span>Checking AI...</span>
       </Badge>
     );
   }
-
+  
+  if (isAIAvailable) {
+    return (
+      <Badge 
+        variant="outline" 
+        className={cn("bg-green-50 text-green-700 border-green-200 flex items-center gap-1", className)}
+      >
+        <CheckCircle size={12} />
+        <span>AI Online</span>
+      </Badge>
+    );
+  }
+  
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge variant="outline" className={`bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 ${className}`}>
-            <AlertTriangle size={12} />
-            <span>AI Fallback</span>
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>AI service for {component} is currently unavailable.</p>
-          <p>Using built-in templates instead.</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Badge 
+      variant="outline" 
+      className={cn("bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1", className)}
+    >
+      <AlertCircle size={12} />
+      <span>AI Fallback Mode</span>
+    </Badge>
   );
 };
 

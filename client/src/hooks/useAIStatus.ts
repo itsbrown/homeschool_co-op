@@ -16,8 +16,8 @@ interface AIStatusResponse {
  */
 export function useAIStatus() {
   const { data, error, isLoading, refetch } = useQuery<AIStatusResponse>({
-    queryKey: ['ai', 'status'],
-    queryFn: getQueryFn('/api/ai/status', { on401: 'returnNull' }),
+    queryKey: ['/api/ai/status'],
+    queryFn: getQueryFn({ on401: 'returnNull' }),
     // Cache for 5 minutes, but refetch in the background after 1 minute
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,

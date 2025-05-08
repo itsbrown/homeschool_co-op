@@ -34,6 +34,8 @@ export const AIStatusProvider: React.FC<{ children: ReactNode }> = ({ children }
 /**
  * Hook to access the AI status information
  */
-export const useAIStatusContext = () => useContext(AIStatusContext);
+export function useAIStatusContext() {
+  return useContext(AIStatusContext);
+}
 
 export default AIStatusProvider;
