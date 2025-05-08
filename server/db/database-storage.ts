@@ -98,6 +98,11 @@ export class DatabaseStorage implements IStorage {
     return event || undefined;
   }
   
+  async getEvent(id: number): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    return event || undefined;
+  }
+
   async getEventsByOrganizer(organizerId: number): Promise<Event[]> {
     return await db.select().from(events).where(eq(events.organizerId, organizerId));
   }
