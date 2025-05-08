@@ -1,367 +1,265 @@
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchLessons, createLesson } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import AppShell from "@/components/layout/AppShell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { useAIStatusContext } from "@/contexts/AIStatusContext";
-import AIStatusBadge from "@/components/ui/AIStatusBadge";
-import { Clock, Edit, Plus, TrashIcon, ClipboardCheck, BookOpen, Brain } from "lucide-react";
-import { Lesson } from "@/lib/types";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { PlusCircle, Search, Filter, MoreVertical, Clock, Tag, GraduationCap, Wand2 } from "lucide-react";
+import { AIStatusBadge } from "@/components/ui/AIStatusBadge";
+import { useAIStatus } from "@/hooks/useAIStatus";
 
-// Common subjects and grade levels
-const subjects = [
-  "Mathematics",
-  "Science",
-  "Language Arts",
-  "Social Studies",
-  "Computer Science",
-  "Art",
-  "Music",
-  "Physical Education"
-];
-
-const gradeLevels = [
-  "Elementary (Grades K-5)",
-  "Middle School (Grades 6-8)",
-  "High School (Grades 9-12)",
-  "College",
-  "Adult Education"
-];
+// Types
+interface Lesson {
+  id: number;
+  title: string;
+  subject: string;
+  gradeLevel: string;
+  authorId: number;
+  duration: number;
+  status: "draft" | "published" | "archived";
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export default function Lessons() {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const { isAIAvailable } = useAIStatusContext();
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterGrade, setFilterGrade] = useState<string>("");
+  const [filterSubject, setFilterSubject] = useState<string>("");
   
-  // Form state
-  const [formData, setFormData] = useState<{
-    title: string;
-    description: string;
-    subject: string;
-    gradeLevel: string;
-    duration: number;
-    content: any;
-  }>({
-    title: "",
-    description: "",
-    subject: "",
-    gradeLevel: "",
-    duration: 45,
-    content: {
-      activities: [],
-      resources: [],
-      assessments: []
-    }
-  });
-
-  // Fetch lessons
   const { data: lessons, isLoading } = useQuery({
     queryKey: ["/api/lessons"],
-    queryFn: fetchLessons,
-  });
-
-  // Create lesson mutation
-  const createMutation = useMutation({
-    mutationFn: createLesson,
-    onSuccess: () => {
-      // Reset form
-      setFormData({
-        title: "",
-        description: "",
-        subject: "",
-        gradeLevel: "",
-        duration: 45,
-        content: {
-          activities: [],
-          resources: [],
-          assessments: []
-        }
-      });
-      
-      // Close dialog
-      setIsCreateDialogOpen(false);
-      
-      // Show success message
-      toast({
-        title: "Lesson Created",
-        description: "Your lesson has been successfully created.",
-      });
-      
-      // Invalidate and refetch lessons
-      queryClient.invalidateQueries({ queryKey: ["/api/lessons"] });
-    },
-    onError: () => {
-      toast({
-        title: "Creation Failed",
-        description: "Failed to create lesson. Please try again.",
-        variant: "destructive"
-      });
+    queryFn: async () => {
+      // This would be replaced with actual API call
+      return [
+        {
+          id: 1,
+          title: "Introduction to Algebra",
+          subject: "Mathematics",
+          gradeLevel: "Grade 7",
+          authorId: 1,
+          duration: 45,
+          status: "published",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 2,
+          title: "Photosynthesis Exploration",
+          subject: "Science",
+          gradeLevel: "Grade 5",
+          authorId: 1,
+          duration: 60,
+          status: "draft",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 3,
+          title: "World History Overview",
+          subject: "History",
+          gradeLevel: "Grade 9",
+          authorId: 1,
+          duration: 90,
+          status: "published",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 4,
+          title: "Essay Writing Workshop",
+          subject: "Language Arts",
+          gradeLevel: "Grade 8",
+          authorId: 1,
+          duration: 75,
+          status: "draft",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as Lesson[];
     }
   });
 
-  // Handle form submission
-  const handleCreateLesson = (e: React.FormEvent) => {
-    e.preventDefault();
+  const { isAIAvailable } = useAIStatus();
+  
+  // Filtering logic
+  const filteredLessons = lessons?.filter(lesson => {
+    const matchesSearch = searchQuery === "" || 
+      lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lesson.subject.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // Create lesson object
-    const lessonData = {
-      ...formData,
-      isPublished: false,
-      status: "draft" as const,
-    };
+    const matchesGrade = filterGrade === "" || lesson.gradeLevel === filterGrade;
+    const matchesSubject = filterSubject === "" || lesson.subject === filterSubject;
     
-    // Submit mutation
-    createMutation.mutate(lessonData);
+    return matchesSearch && matchesGrade && matchesSubject;
+  });
+  
+  // Status badge colors for different lesson statuses
+  const statusColors = {
+    draft: "bg-yellow-100 text-yellow-800",
+    published: "bg-green-100 text-green-800",
+    archived: "bg-gray-100 text-gray-800",
   };
 
-  // Filter lessons based on active tab
-  const filteredLessons = lessons?.filter(lesson => {
-    if (activeTab === "all") return true;
-    if (activeTab === "draft") return lesson.status === "draft";
-    if (activeTab === "published") return lesson.status === "published";
-    if (activeTab === "archived") return lesson.status === "archived";
-    return true;
-  }) || [];
-
-  // Status display helper
-  const getStatusBadge = (status: string) => {
-    const statusClasses = {
-      draft: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      published: "bg-green-100 text-green-800 border-green-200",
-      archived: "bg-gray-100 text-gray-800 border-gray-200",
-    };
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses[status as keyof typeof statusClasses]}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
+  // Helper to get unique values for filters
+  const getUniqueValues = (key: keyof Lesson) => {
+    return lessons ? [...new Set(lessons.map(lesson => lesson[key]))] : [];
   };
 
   return (
     <AppShell>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold">Lessons</h1>
-          <p className="text-sm text-muted-foreground">
-            Create and manage your educational lessons
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage and organize your learning materials
           </p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="hidden md:block">
-            <AIStatusBadge />
-          </div>
-          
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Lesson
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle>Create New Lesson</DialogTitle>
-              </DialogHeader>
-              
-              <form onSubmit={handleCreateLesson} className="space-y-4 mt-4">
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <Label htmlFor="title">Lesson Title</Label>
-                    <Input 
-                      id="title"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      placeholder="Enter lesson title"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="Enter lesson description"
-                      rows={3}
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="subject">Subject</Label>
-                      <Select 
-                        value={formData.subject}
-                        onValueChange={(value) => setFormData({ ...formData, subject: value })}
-                      >
-                        <SelectTrigger id="subject">
-                          <SelectValue placeholder="Select subject" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {subjects.map(subject => (
-                            <SelectItem key={subject} value={subject}>{subject}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="gradeLevel">Grade Level</Label>
-                      <Select 
-                        value={formData.gradeLevel}
-                        onValueChange={(value) => setFormData({ ...formData, gradeLevel: value })}
-                      >
-                        <SelectTrigger id="gradeLevel">
-                          <SelectValue placeholder="Select grade level" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {gradeLevels.map(level => (
-                            <SelectItem key={level} value={level}>{level}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="duration">Duration (minutes)</Label>
-                    <Input 
-                      id="duration"
-                      type="number"
-                      min={5}
-                      max={180}
-                      value={formData.duration}
-                      onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <DialogFooter>
-                  <Button 
-                    type="submit" 
-                    disabled={createMutation.isPending || !formData.title || !formData.subject || !formData.gradeLevel}
-                  >
-                    {createMutation.isPending ? "Creating..." : "Create Lesson"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-          
-          <Button variant="outline">
-            <Brain className="mr-2 h-4 w-4" />
-            AI Generate
+        <div className="mt-4 md:mt-0 flex flex-col sm:flex-row gap-3">
+          <Button>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Create Lesson
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/lessons/ai-generator">
+              <Wand2 className="mr-2 h-4 w-4" />
+              AI Generator
+              <AIStatusBadge className="ml-2" />
+            </Link>
           </Button>
         </div>
       </div>
       
-      <Card className="mb-6">
-        <CardHeader className="bg-muted/50 border-b">
-          <CardTitle>Manage Lessons</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6">
-              <TabsTrigger value="all">All Lessons</TabsTrigger>
-              <TabsTrigger value="draft">Drafts</TabsTrigger>
-              <TabsTrigger value="published">Published</TabsTrigger>
-              <TabsTrigger value="archived">Archived</TabsTrigger>
-            </TabsList>
+      {/* Search and filter bar */}
+      <div className="bg-card rounded-lg shadow p-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-grow">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search lessons..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Select value={filterGrade} onValueChange={setFilterGrade}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Grade level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All grades</SelectItem>
+                {getUniqueValues("gradeLevel").map((grade) => (
+                  <SelectItem key={grade as string} value={grade as string}>
+                    {grade as string}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             
-            <TabsContent value={activeTab} className="pt-2">
-              {isLoading ? (
-                <div className="flex items-center justify-center p-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <Select value={filterSubject} onValueChange={setFilterSubject}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Subject" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All subjects</SelectItem>
+                {getUniqueValues("subject").map((subject) => (
+                  <SelectItem key={subject as string} value={subject as string}>
+                    {subject as string}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Button variant="outline" size="icon" title="More filters">
+              <Filter className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+      
+      {/* Lessons grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {isLoading ? (
+          // Skeleton loading for lessons
+          Array(6).fill(0).map((_, i) => (
+            <Card key={i} className="overflow-hidden">
+              <CardHeader className="pb-2">
+                <Skeleton className="h-5 w-3/4 mb-2" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center mb-3">
+                  <Skeleton className="h-4 w-4 mr-2 rounded-full" />
+                  <Skeleton className="h-4 w-24" />
                 </div>
-              ) : filteredLessons.length > 0 ? (
-                <div className="space-y-4">
-                  {filteredLessons.map((lesson) => (
-                    <div key={lesson.id} className="flex items-start justify-between border rounded-lg p-4">
-                      <div className="flex items-start gap-4">
-                        <div className="bg-muted rounded-md p-2">
-                          <BookOpen className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">{lesson.title}</h4>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {lesson.subject} • {lesson.gradeLevel}
-                          </p>
-                          <div className="flex items-center gap-3 mt-3">
-                            <div className="flex items-center text-xs text-muted-foreground">
-                              <Clock className="h-3 w-3 mr-1" />
-                              <span>{lesson.duration} minutes</span>
-                            </div>
-                            {getStatusBadge(lesson.status)}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost">
-                          <Edit className="h-4 w-4" />
-                          <span className="sr-only">Edit</span>
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <ClipboardCheck className="h-4 w-4" />
-                          <span className="sr-only">Publish</span>
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <TrashIcon className="h-4 w-4" />
-                          <span className="sr-only">Delete</span>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center">
+                  <Skeleton className="h-4 w-4 mr-2 rounded-full" />
+                  <Skeleton className="h-4 w-24" />
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <BookOpen className="mx-auto h-12 w-12 text-muted-foreground opacity-30" />
-                  <h3 className="mt-4 text-lg font-medium">No lessons found</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {activeTab === "all" 
-                      ? "You haven't created any lessons yet" 
-                      : `You don't have any ${activeTab} lessons`}
-                  </p>
-                  <Button 
-                    className="mt-4" 
-                    onClick={() => setIsCreateDialogOpen(true)}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Your First Lesson
-                  </Button>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-10" />
+              </CardFooter>
+            </Card>
+          ))
+        ) : (
+          filteredLessons?.map((lesson) => (
+            <Card key={lesson.id} className="overflow-hidden">
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-lg">{lesson.title}</CardTitle>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="-mt-1 -mr-2">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem>Edit</DropdownMenuItem>
+                      <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                      <DropdownMenuItem>Share</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+                <CardDescription>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[lesson.status]}`}>
+                    {lesson.status.charAt(0).toUpperCase() + lesson.status.slice(1)}
+                  </span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center mb-3">
+                  <Tag className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">{lesson.subject}</span>
+                </div>
+                <div className="flex items-center">
+                  <GraduationCap className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">{lesson.gradeLevel}</span>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-between text-sm text-muted-foreground">
+                <div className="flex items-center">
+                  <Clock className="h-4 w-4 mr-2" />
+                  <span>{lesson.duration} minutes</span>
+                </div>
+                <Button variant="ghost" size="sm">View</Button>
+              </CardFooter>
+            </Card>
+          ))
+        )}
+      </div>
     </AppShell>
   );
 }
