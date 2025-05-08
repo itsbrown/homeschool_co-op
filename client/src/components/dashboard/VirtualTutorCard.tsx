@@ -2,25 +2,68 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, BookOpen } from "lucide-react";
+import { askTutor, getTutorResources } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+
+interface Message {
+  id: string;
+  text: string;
+  sender: 'user' | 'tutor';
+  timestamp: Date;
+}
 
 export default function VirtualTutorCard() {
+  const { toast } = useToast();
   const [message, setMessage] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [chatHistory, setChatHistory] = useState<Message[]>([{
+    id: "welcome",
+    text: "Hi! How can I help with your lessons today? I can assist with generating practice problems, creating assessment materials, developing student activities, or adapting lessons for different learning styles.",
+    sender: 'tutor',
+    timestamp: new Date()
+  }]);
+  
+  // Ask tutor mutation
+  const askTutorMutation = useMutation({
+    mutationFn: (content: string) => askTutor(content),
+    onSuccess: (response) => {
+      // Add tutor response to chat history
+      setChatHistory(prev => [...prev, {
+        id: `tutor-${Date.now()}`,
+        text: response,
+        sender: 'tutor',
+        timestamp: new Date()
+      }]);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to get a response from the tutor. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!message.trim() || askTutorMutation.isPending) return;
     
-    // In a real app, this would call an API to interact with the AI tutor
-    console.log("Message sent:", message);
+    // Add user message to chat history
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      text: message,
+      sender: 'user' as const,
+      timestamp: new Date()
+    };
+    
+    setChatHistory(prev => [...prev, userMessage]);
+    
+    // Call AI tutor API
+    askTutorMutation.mutate(message);
+    
+    // Clear input
     setMessage("");
-    setIsTyping(true);
-    
-    // Simulate AI response
-    setTimeout(() => {
-      setIsTyping(false);
-    }, 2000);
   };
 
   return (

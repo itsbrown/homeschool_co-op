@@ -104,6 +104,29 @@ export async function generateCurriculum(data: AIGenerationFormData): Promise<Cu
   return await res.json();
 }
 
+// AI Tutor API
+export async function askTutor(message: string, subject?: string, gradeLevel?: string): Promise<string> {
+  const res = await apiRequest("POST", "/api/tutor/ask", { message, subject, gradeLevel });
+  const data = await res.json();
+  return data.response;
+}
+
+export async function getTutorResources(
+  topic: string,
+  subject: string,
+  gradeLevel: string,
+  learningStyle?: string
+): Promise<string[]> {
+  const res = await apiRequest("POST", "/api/tutor/resources", { 
+    topic, 
+    subject, 
+    gradeLevel, 
+    learningStyle 
+  });
+  const data = await res.json();
+  return data.resources;
+}
+
 // Mock API for dashboard stats (would connect to a real API in production)
 export async function fetchDashboardStats(): Promise<Stats> {
   // This would be a real API call in production

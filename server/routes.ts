@@ -356,6 +356,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Virtual tutor routes
+  app.post("/api/tutor/ask", isAuthenticated, async (req, res) => {
+    try {
+      const { message, subject, gradeLevel } = req.body;
+      
+      if (!message) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+      
+      // Import tutorService dynamically to prevent circular dependencies
+      const { getAITutorResponse } = await import("./services/tutorService");
+      const response = await getAITutorResponse(message, subject, gradeLevel);
+      
+      res.status(200).json({ response });
+    } catch (error) {
+      console.error("Tutor response error:", error);
+      res.status(500).json({ message: "Error getting tutor response" });
+    }
+  });
+
+  app.post("/api/tutor/resources", isAuthenticated, async (req, res) => {
+    try {
+      const { topic, subject, gradeLevel, learningStyle } = req.body;
+      
+      if (!topic || !subject || !gradeLevel) {
+        return res.status(400).json({ 
+          message: "Required fields are missing", 
+          requiredFields: ["topic", "subject", "gradeLevel"] 
+        });
+      }
+      
+      // Import tutorService dynamically to prevent circular dependencies
+      const { getSuggestedResources } = await import("./services/tutorService");
+      const resources = await getSuggestedResources(topic, subject, gradeLevel, learningStyle);
+      
+      res.status(200).json({ resources });
+    } catch (error) {
+      console.error("Resource suggestions error:", error);
+      res.status(500).json({ message: "Error getting resource suggestions" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
