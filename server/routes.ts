@@ -1,0 +1,305 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import bcrypt from "bcryptjs";
+import session from "express-session";
+import { z } from "zod";
+import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema } from "@shared/schema";
+
+declare module "express-session" {
+  interface SessionData {
+    userId: number;
+    userRole: string;
+  }
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Configure session middleware
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "your-secret-key",
+      resave: false,
+      saveUninitialized: false,
+      cookie: { 
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      }
+    })
+  );
+  
+  // Middleware to check authentication
+  const isAuthenticated = (req, res, next) => {
+    if (req.session.userId) {
+      return next();
+    }
+    res.status(401).json({ message: "Unauthorized" });
+  };
+  
+  // Middleware to check role
+  const hasRole = (roles: string[]) => {
+    return (req, res, next) => {
+      if (req.session.userId && roles.includes(req.session.userRole)) {
+        return next();
+      }
+      res.status(403).json({ message: "Forbidden" });
+    };
+  };
+  
+  // Auth routes
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const validatedData = insertUserSchema.parse(req.body);
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(validatedData.username);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      
+      const existingEmail = await storage.getUserByEmail(validatedData.email);
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email already exists" });
+      }
+      
+      // Hash password
+      const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+      
+      // Create user
+      const user = await storage.createUser({
+        ...validatedData,
+        password: hashedPassword
+      });
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      
+      res.status(201).json({ message: "User created successfully", user: userWithoutPassword });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error creating user" });
+    }
+  });
+  
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password are required" });
+      }
+      
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      const passwordValid = await bcrypt.compare(password, user.password);
+      if (!passwordValid) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      // Set session data
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+      
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user;
+      
+      res.status(200).json({ message: "Login successful", user: userWithoutPassword });
+    } catch (error) {
+      res.status(500).json({ message: "Error during login" });
+    }
+  });
+  
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ message: "Error during logout" });
+      }
+      res.status(200).json({ message: "Logout successful" });
+    });
+  });
+  
+  app.get("/api/auth/me", isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      
+      res.status(200).json(userWithoutPassword);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching user data" });
+    }
+  });
+  
+  // Curriculum routes
+  app.post("/api/curricula", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = insertCurriculumSchema.parse(req.body);
+      
+      const curriculum = await storage.createCurriculum({
+        ...validatedData,
+        authorId: req.session.userId
+      });
+      
+      res.status(201).json(curriculum);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error creating curriculum" });
+    }
+  });
+  
+  app.get("/api/curricula", isAuthenticated, async (req, res) => {
+    try {
+      const curricula = await storage.getCurriculaByAuthor(req.session.userId);
+      res.status(200).json(curricula);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching curricula" });
+    }
+  });
+  
+  app.get("/api/curricula/:id", isAuthenticated, async (req, res) => {
+    try {
+      const curriculumId = parseInt(req.params.id);
+      const curriculum = await storage.getCurriculum(curriculumId);
+      
+      if (!curriculum) {
+        return res.status(404).json({ message: "Curriculum not found" });
+      }
+      
+      // Check if user is author or curriculum is public
+      if (curriculum.authorId !== req.session.userId && !curriculum.isPublic) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      res.status(200).json(curriculum);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching curriculum" });
+    }
+  });
+  
+  // Lesson routes
+  app.post("/api/lessons", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = insertLessonSchema.parse(req.body);
+      
+      const lesson = await storage.createLesson({
+        ...validatedData,
+        authorId: req.session.userId
+      });
+      
+      res.status(201).json(lesson);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error creating lesson" });
+    }
+  });
+  
+  app.get("/api/lessons", isAuthenticated, async (req, res) => {
+    try {
+      const lessons = await storage.getLessonsByAuthor(req.session.userId);
+      res.status(200).json(lessons);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching lessons" });
+    }
+  });
+  
+  app.get("/api/lessons/:id", isAuthenticated, async (req, res) => {
+    try {
+      const lessonId = parseInt(req.params.id);
+      const lesson = await storage.getLesson(lessonId);
+      
+      if (!lesson) {
+        return res.status(404).json({ message: "Lesson not found" });
+      }
+      
+      // Check if user is author
+      if (lesson.authorId !== req.session.userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      res.status(200).json(lesson);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching lesson" });
+    }
+  });
+  
+  // Event routes
+  app.post("/api/events", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = insertEventSchema.parse(req.body);
+      
+      const event = await storage.createEvent({
+        ...validatedData,
+        organizerId: req.session.userId
+      });
+      
+      res.status(201).json(event);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error creating event" });
+    }
+  });
+  
+  app.get("/api/events/upcoming", isAuthenticated, async (req, res) => {
+    try {
+      const events = await storage.getUpcomingEvents(req.session.userId);
+      res.status(200).json(events);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching upcoming events" });
+    }
+  });
+  
+  // Marketplace routes
+  app.post("/api/marketplace", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = insertMarketplaceItemSchema.parse(req.body);
+      
+      const item = await storage.createMarketplaceItem({
+        ...validatedData,
+        sellerId: req.session.userId
+      });
+      
+      res.status(201).json(item);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error creating marketplace item" });
+    }
+  });
+  
+  app.get("/api/marketplace/top", isAuthenticated, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 5;
+      const items = await storage.getTopSellingItems(limit);
+      res.status(200).json(items);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching top selling items" });
+    }
+  });
+  
+  app.get("/api/marketplace/seller", isAuthenticated, async (req, res) => {
+    try {
+      const items = await storage.getMarketplaceItemsBySeller(req.session.userId);
+      res.status(200).json(items);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching seller's items" });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
