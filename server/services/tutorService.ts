@@ -1,9 +1,20 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 // Initialize Anthropic client with API key from environment variables
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+let anthropic: Anthropic | null = null;
+
+try {
+  if (process.env.ANTHROPIC_API_KEY) {
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+    console.log('Anthropic API initialized successfully for tutor service');
+  } else {
+    console.warn('Anthropic API Key not provided for tutor service');
+  }
+} catch (error) {
+  console.error('Failed to initialize Anthropic client for tutor service:', error);
+}
 
 // the newest Anthropic model is "claude-3-7-sonnet-20250219" which was released February 24, 2025
 const MODEL = 'claude-3-7-sonnet-20250219';
@@ -17,6 +28,14 @@ export async function getAITutorResponse(
   gradeLevel?: string
 ): Promise<string> {
   try {
+    // Check if Anthropic client is initialized
+    if (!anthropic) {
+      console.warn('Anthropic client not initialized. Providing fallback tutor response.');
+      throw new Error('Anthropic API not available');
+    }
+
+    console.log(`Processing tutor request for subject: ${subject || 'general'}, grade level: ${gradeLevel || 'any'}`);
+    
     // Construct system prompt
     const systemPrompt = `You are Edison, an expert AI tutor specializing in ${subject || 'all academic subjects'} 
 at the ${gradeLevel || 'all levels'} level. You provide clear, accurate, and helpful responses to student questions.
@@ -42,6 +61,8 @@ Always be positive and encouraging, helping students understand concepts rather 
       ],
     });
 
+    console.log('Successfully received tutor response from Anthropic API');
+
     const contentBlock = response.content[0];
     if (contentBlock.type !== 'text') {
       throw new Error('Unexpected response format from AI');
@@ -50,6 +71,15 @@ Always be positive and encouraging, helping students understand concepts rather 
     return contentBlock.text;
   } catch (error: any) {
     console.error('Error getting AI tutor response:', error);
+    
+    // Provide a fallback response when API is unavailable
+    if (error.message === 'Anthropic API not available') {
+      const subjectText = subject ? ` about ${subject}` : '';
+      const gradeLevelText = gradeLevel ? ` for ${gradeLevel} level` : '';
+      
+      return `**Edison AI Tutor (Offline Mode)**\n\nI'm sorry, but I'm currently unable to provide a personalized response to your question${subjectText}${gradeLevelText}. Our AI tutoring system is temporarily unavailable.\n\nWhile we work to restore the service, you might find these resources helpful:\n\n- Check your textbook's index for relevant topics\n- Visit Khan Academy for free lessons on most academic subjects\n- Consider using educational resources like CrashCourse or educational YouTube channels\n\nThank you for your understanding.`;
+    }
+    
     throw new Error('Failed to get tutor response: ' + (error.message || 'Unknown error'));
   }
 }
@@ -64,6 +94,14 @@ export async function getSuggestedResources(
   learningStyle?: string
 ): Promise<string[]> {
   try {
+    // Check if Anthropic client is initialized
+    if (!anthropic) {
+      console.warn('Anthropic client not initialized. Providing fallback resource suggestions.');
+      throw new Error('Anthropic API not available');
+    }
+
+    console.log(`Getting resource suggestions for topic: ${topic}, subject: ${subject}, grade level: ${gradeLevel}${learningStyle ? `, learning style: ${learningStyle}` : ''}`);
+    
     // Construct system prompt
     const systemPrompt = `You are a specialized AI designed to recommend high-quality educational resources.
 Given a topic, subject, grade level, and learning style, provide 3-5 specific resource recommendations.
@@ -87,6 +125,8 @@ in the subject of ${subject} for ${gradeLevel} students${learningStyle ? ` with 
       ],
     });
 
+    console.log('Successfully received resource suggestions from Anthropic API');
+
     const contentBlock = response.content[0];
     if (contentBlock.type !== 'text') {
       throw new Error('Unexpected response format from AI');
@@ -105,6 +145,62 @@ in the subject of ${subject} for ${gradeLevel} students${learningStyle ? ` with 
     }
   } catch (error: any) {
     console.error('Error getting resource suggestions:', error);
+    
+    // Provide fallback suggestions when API is unavailable
+    if (error.message === 'Anthropic API not available') {
+      // Generic resources based on subject
+      const subjectResources: Record<string, string[]> = {
+        mathematics: [
+          "Khan Academy: Math Curriculum",
+          "Desmos: Interactive Math Tools",
+          "Wolfram Alpha: Math Problem Solver",
+          "Brilliant.org: Interactive Math Courses",
+          "YouTube: 3Blue1Brown Math Visualizations"
+        ],
+        science: [
+          "Khan Academy: Science Courses",
+          "NASA Education Resources",
+          "National Geographic Education",
+          "PhET Interactive Simulations",
+          "YouTube: Crash Course Science"
+        ],
+        history: [
+          "Khan Academy: History & Humanities",
+          "Smithsonian Learning Lab",
+          "Library of Congress Digital Collections",
+          "Crash Course History on YouTube",
+          "BBC History Resources"
+        ],
+        english: [
+          "Purdue Online Writing Lab",
+          "ReadWriteThink.org",
+          "Grammarly",
+          "Project Gutenberg (Free eBooks)",
+          "YouTube: Crash Course Literature"
+        ],
+        default: [
+          "Khan Academy",
+          "YouTube Educational Channels",
+          "Coursera Free Courses",
+          "edX Free Courses",
+          "Open Educational Resources (OER) Commons"
+        ]
+      };
+      
+      // Select resources based on subject or use defaults
+      const lowerSubject = subject.toLowerCase();
+      let resources = subjectResources.default;
+      
+      for (const [key, value] of Object.entries(subjectResources)) {
+        if (lowerSubject.includes(key)) {
+          resources = value;
+          break;
+        }
+      }
+      
+      return resources;
+    }
+    
     throw new Error('Failed to get resource suggestions: ' + (error.message || 'Unknown error'));
   }
 }

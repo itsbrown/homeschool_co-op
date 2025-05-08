@@ -185,6 +185,12 @@ Please format your response as a JSON object matching this structure:
  */
 export async function getAIFeedback(text: string, feedbackType: 'curriculum' | 'lesson' | 'assessment'): Promise<string> {
   try {
+    // Check if Anthropic client is initialized
+    if (!anthropic) {
+      console.warn('Anthropic client not initialized. Unable to get AI feedback.');
+      throw new Error('Anthropic API not available');
+    }
+    
     const systemPrompt = `You are an expert educator providing constructive feedback on ${feedbackType} content.
 Your feedback should be thoughtful, specific, and actionable, highlighting both strengths and areas for improvement.
 For ${feedbackType === 'curriculum' ? 'curricula' : feedbackType === 'lesson' ? 'lessons' : 'assessments'}, focus on:
@@ -197,6 +203,8 @@ For ${feedbackType === 'curriculum' ? 'curricula' : feedbackType === 'lesson' ? 
 
 Provide your feedback in a clear, professional manner that would be helpful to an educator.`;
 
+    console.log(`Getting AI feedback for ${feedbackType} content...`);
+    
     // Call Claude API
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -207,6 +215,8 @@ Provide your feedback in a clear, professional manner that would be helpful to a
       ],
     });
 
+    console.log(`Successfully received feedback response from Anthropic API`);
+    
     const contentBlock = response.content[0];
     if (contentBlock.type !== 'text') {
       throw new Error('Unexpected response format from AI');
@@ -215,6 +225,12 @@ Provide your feedback in a clear, professional manner that would be helpful to a
     return contentBlock.text;
   } catch (error: any) {
     console.error('Error getting AI feedback:', error);
+    
+    // Provide a fallback feedback message when API is unavailable
+    if (error.message === 'Anthropic API not available') {
+      return `**Feedback Service Unavailable**\n\nThe AI feedback service is currently unavailable. Here are some general recommendations for ${feedbackType} content:\n\n- Ensure clear objectives aligned with learning outcomes\n- Include a variety of activities for different learning styles\n- Check for logical organization and sequencing\n- Verify assessments match the stated objectives\n- Consider adding more opportunities for student engagement`;
+    }
+    
     throw new Error('Failed to get AI feedback: ' + (error.message || 'Unknown error'));
   }
 }
