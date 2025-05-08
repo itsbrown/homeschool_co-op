@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboardStats } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
@@ -60,9 +60,11 @@ export default function Dashboard() {
             <PlusCircle className="mr-2 h-4 w-4" />
             Create Curriculum
           </Button>
-          <Button variant="outline">
-            <Wand2 className="mr-2 h-4 w-4" />
-            Generate Lessons
+          <Button variant="outline" asChild>
+            <Link href="/lessons/ai-generator">
+              <Wand2 className="mr-2 h-4 w-4" />
+              Generate Lessons
+            </Link>
           </Button>
         </div>
       </div>

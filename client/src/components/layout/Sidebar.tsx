@@ -12,6 +12,10 @@ import {
   DollarSign,
   User,
   LogOut,
+  GraduationCap,
+  Sparkles,
+  Layers,
+  Brain,
 } from "lucide-react";
 
 const navigationItems = [
@@ -20,6 +24,8 @@ const navigationItems = [
     items: [
       { name: "Dashboard", href: "/dashboard", icon: Home },
       { name: "My Curriculum", href: "/curriculum", icon: BookOpen },
+      { name: "Lessons", href: "/lessons", icon: GraduationCap },
+      { name: "AI Lesson Generator", href: "/lessons/ai-generator", icon: Sparkles },
       { name: "Knowledge Marketplace", href: "/marketplace", icon: ShoppingBag },
       { name: "Virtual Tutor", href: "/tutor", icon: User },
       { name: "Community", href: "/community", icon: Users },

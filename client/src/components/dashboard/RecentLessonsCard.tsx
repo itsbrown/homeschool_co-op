@@ -22,7 +22,7 @@ export default function RecentLessonsCard() {
   };
 
   const viewAllLessons = () => {
-    console.log("View all lessons");
+    window.location.href = "/lessons";
   };
 
   const statusColors = {
