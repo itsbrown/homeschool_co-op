@@ -45,7 +45,7 @@ export const curricula = pgTable("curricula", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertCurriculumSchema = createInsertSchema(curricula).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCurriculumSchema = createInsertSchema(curricula).omit({ id: true, createdAt: true, updatedAt: true, authorId: true });
 export type InsertCurriculum = z.infer<typeof insertCurriculumSchema>;
 export type Curriculum = typeof curricula.$inferSelect;
 
