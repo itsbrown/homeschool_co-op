@@ -52,6 +52,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="ml-auto flex items-center space-x-4">
+        <div className="hidden md:block">
+          <AIStatusBadge />
+        </div>
+        
         <Button variant="ghost" size="icon" className="text-muted-foreground">
           <Bell className="h-5 w-5" />
           <span className="sr-only">Notifications</span>

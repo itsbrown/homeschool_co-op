@@ -10,6 +10,7 @@ import RecentLessonsCard from "@/components/dashboard/RecentLessonsCard";
 import VirtualTutorCard from "@/components/dashboard/VirtualTutorCard";
 import UpcomingEventsCard from "@/components/dashboard/UpcomingEventsCard";
 import MarketplaceAnalyticsCard from "@/components/dashboard/MarketplaceAnalyticsCard";
+import AIStatusPanel from "@/components/AIStatusPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
@@ -113,6 +114,11 @@ export default function Dashboard() {
             />
           </>
         )}
+      </div>
+      
+      {/* AI Status Panel */}
+      <div className="mb-6">
+        <AIStatusPanel />
       </div>
       
       {/* Main content sections */}
