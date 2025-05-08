@@ -6,6 +6,7 @@ import { ArrowUp, BookOpen } from "lucide-react";
 import { askTutor, getTutorResources } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Message {
   id: string;
@@ -67,44 +68,58 @@ export default function VirtualTutorCard() {
   };
 
   return (
-    <Card>
-      <CardHeader className="bg-muted/50 border-b">
-        <CardTitle>AI Virtual Tutor</CardTitle>
-      </CardHeader>
-      <CardContent className="p-6">
-        <div className="flex items-center mb-4">
+    <Card className="h-[500px] flex flex-col">
+      <CardHeader className="bg-muted/50 border-b px-4 py-3">
+        <div className="flex items-center">
           <img 
             src="https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?ixlib=rb-1.2.1&auto=format&fit=crop&w=100&h=100&q=80" 
             alt="AI Assistant avatar" 
-            className="w-10 h-10 rounded-full object-cover"
+            className="w-8 h-8 rounded-full object-cover mr-3"
           />
-          <div className="ml-3">
-            <p className="text-sm font-medium">Edison</p>
+          <div>
+            <CardTitle className="text-base">Edison</CardTitle>
             <p className="text-xs text-muted-foreground">AI Learning Assistant</p>
           </div>
         </div>
-        
-        <div className="bg-muted/50 rounded-lg p-4 mb-4">
-          <p className="text-sm">Hi! How can I help with your lessons today? I can assist with:</p>
-          <ul className="mt-2 text-sm space-y-1 pl-5 list-disc">
-            <li>Generating practice problems</li>
-            <li>Creating assessment materials</li>
-            <li>Developing student activities</li>
-            <li>Adapting lessons for different learning styles</li>
-          </ul>
-          
-          {isTyping && (
-            <div className="mt-3 flex items-center">
-              <div className="flex space-x-1.5">
-                <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+      </CardHeader>
+      
+      <ScrollArea className="flex-grow px-4 py-4">
+        <div className="space-y-4">
+          {chatHistory.map((msg) => (
+            <div 
+              key={msg.id} 
+              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div 
+                className={`max-w-[80%] rounded-lg p-3 ${
+                  msg.sender === 'user' 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'bg-muted'
+                }`}
+              >
+                <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                <p className="text-xs opacity-70 mt-1">
+                  {msg.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </p>
               </div>
-              <span className="ml-2 text-xs text-muted-foreground">Edison is typing...</span>
+            </div>
+          ))}
+          
+          {askTutorMutation.isPending && (
+            <div className="flex justify-start">
+              <div className="bg-muted rounded-lg p-3">
+                <div className="flex space-x-1.5">
+                  <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                  <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                  <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                </div>
+              </div>
             </div>
           )}
         </div>
-        
+      </ScrollArea>
+      
+      <div className="p-4 border-t">
         <form onSubmit={handleSendMessage} className="relative">
           <Input
             placeholder="Ask anything..."
@@ -116,13 +131,13 @@ export default function VirtualTutorCard() {
             size="icon" 
             className="absolute right-1 top-1 h-8 w-8 text-primary"
             type="submit"
-            disabled={!message.trim() || isTyping}
+            disabled={!message.trim() || askTutorMutation.isPending}
           >
             <ArrowUp className="h-4 w-4" />
             <span className="sr-only">Send</span>
           </Button>
         </form>
-      </CardContent>
+      </div>
     </Card>
   );
 }
