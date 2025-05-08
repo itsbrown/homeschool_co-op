@@ -22,7 +22,7 @@ export interface CurriculumTemplate {
 }
 
 // Common learning objectives based on subject
-const subjectObjectives = {
+const subjectObjectives: Record<string, string[]> = {
   "Mathematics": [
     "Develop problem-solving skills and logical reasoning",
     "Master fundamental mathematical concepts",
@@ -75,47 +75,40 @@ const subjectObjectives = {
 
 // Generate a curriculum template based on form data
 export async function generateCurriculumTemplate(formData: AIGenerationFormData): Promise<CurriculumTemplate> {
-  const { subject, gradeLevel, learningStyles, additionalDetails } = formData;
-  
-  // Adapt content based on learning styles
-  const adaptedApproaches = learningStyles.map(style => {
-    switch(style) {
-      case "visual":
-        return "Incorporate visual aids, diagrams, charts, and videos";
-      case "auditory":
-        return "Include discussions, audio recordings, and verbal explanations";
-      case "reading-writing":
-        return "Provide comprehensive reading materials and writing exercises";
-      case "kinesthetic":
-        return "Implement hands-on activities, experiments, and physical movements";
-      default:
-        return "";
-    }
-  }).filter(approach => approach !== "");
-  
-  // Generate title based on subject and grade level
-  const title = `${subject} Curriculum for ${gradeLevel}`;
-  
-  // Generate description with learning styles and additional details
-  const description = `A comprehensive ${subject} curriculum designed for ${gradeLevel} students. This curriculum incorporates ${learningStyles.join(", ")} learning styles${additionalDetails ? ` with focus on ${additionalDetails}` : ''}.`;
-  
-  // Generate objectives based on subject
-  const objectives = subjectObjectives[subject] || [
-    "Develop comprehensive understanding of the subject matter",
-    "Build critical thinking and problem-solving skills",
-    "Apply concepts to real-world situations",
-    "Foster a love of learning and subject mastery"
-  ];
-  
-  // Generate units based on subject and grade level
-  const units = generateUnits(subject, gradeLevel, learningStyles);
-  
-  return {
-    title,
-    description,
-    objectives,
-    units
-  };
+  try {
+    // First attempt to use AI service to generate curriculum
+    const aiCurriculum = await generateAICurriculum(formData);
+    return aiCurriculum;
+  } catch (error: any) {
+    console.warn('AI curriculum generation failed, falling back to template-based generation:', error);
+    
+    // Fallback to template-based generation if AI fails
+    const { subject, gradeLevel, learningStyles, additionalDetails } = formData;
+    
+    // Generate title based on subject and grade level
+    const title = `${subject} Curriculum for ${gradeLevel}`;
+    
+    // Generate description with learning styles and additional details
+    const description = `A comprehensive ${subject} curriculum designed for ${gradeLevel} students. This curriculum incorporates ${learningStyles.join(", ")} learning styles${additionalDetails ? ` with focus on ${additionalDetails}` : ''}.`;
+    
+    // Generate objectives based on subject
+    const objectives = subjectObjectives[subject] || [
+      "Develop comprehensive understanding of the subject matter",
+      "Build critical thinking and problem-solving skills",
+      "Apply concepts to real-world situations",
+      "Foster a love of learning and subject mastery"
+    ];
+    
+    // Generate units based on subject and grade level
+    const units = generateUnits(subject, gradeLevel, learningStyles);
+    
+    return {
+      title,
+      description,
+      objectives,
+      units
+    };
+  }
 }
 
 // Generate units based on subject

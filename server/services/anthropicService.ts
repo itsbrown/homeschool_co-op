@@ -61,17 +61,20 @@ The curriculum should have 4-6 units with 3-5 lessons each.`;
     });
 
     // The response content is a structured object with multiple properties
-    const content = response.content[0].text;
+    const contentBlock = response.content[0];
+    if (contentBlock.type !== 'text') {
+      throw new Error('Unexpected response format from AI');
+    }
     
     // Extract the JSON from the response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const jsonMatch = contentBlock.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to extract JSON from AI response');
     }
     
     const curriculumTemplate: CurriculumTemplate = JSON.parse(jsonMatch[0]);
     return curriculumTemplate;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating AI curriculum:', error);
     throw new Error('Failed to generate curriculum with AI: ' + (error.message || 'Unknown error'));
   }
@@ -130,16 +133,19 @@ Please format your response as a JSON object matching this structure:
     });
 
     // Extract the JSON from the response
-    const content = response.content[0].text;
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const contentBlock = response.content[0];
+    if (contentBlock.type !== 'text') {
+      throw new Error('Unexpected response format from AI');
+    }
     
+    const jsonMatch = contentBlock.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to extract JSON from AI response');
     }
     
     const lessonPlan = JSON.parse(jsonMatch[0]);
     return lessonPlan;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating AI lesson plan:', error);
     throw new Error('Failed to generate lesson plan with AI: ' + (error.message || 'Unknown error'));
   }
@@ -172,8 +178,13 @@ Provide your feedback in a clear, professional manner that would be helpful to a
       ],
     });
 
-    return response.content[0].text;
-  } catch (error) {
+    const contentBlock = response.content[0];
+    if (contentBlock.type !== 'text') {
+      throw new Error('Unexpected response format from AI');
+    }
+    
+    return contentBlock.text;
+  } catch (error: any) {
     console.error('Error getting AI feedback:', error);
     throw new Error('Failed to get AI feedback: ' + (error.message || 'Unknown error'));
   }

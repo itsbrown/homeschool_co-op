@@ -100,7 +100,7 @@ export async function fetchSellerItems(): Promise<MarketplaceItem[]> {
 
 // AI Generation API
 export async function generateCurriculum(data: AIGenerationFormData): Promise<Curriculum> {
-  const res = await apiRequest("POST", "/api/ai/generate-curriculum", data);
+  const res = await apiRequest("POST", "/api/curricula/generate", data);
   return await res.json();
 }
 
