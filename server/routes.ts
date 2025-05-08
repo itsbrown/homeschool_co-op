@@ -211,6 +211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI curriculum generation
   app.post("/api/curricula/generate", isAuthenticated, async (req, res) => {
     try {
+      console.log("AI Curriculum Generation - Request received", { userId: req.session.userId });
       const { subject, gradeLevel, learningStyles, additionalDetails } = req.body;
       
       // Validate form data
@@ -221,40 +222,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Generate curriculum template using AI
+      console.log("AI Curriculum Generation - Validation passed, attempting to import services");
+      
+      // Import services
       const { generateCurriculumTemplate, curriculumTemplateToDbFormat, lessonTemplateToDbFormat } = await import("./services/curriculumService");
       
-      // Generate curriculum template
-      const curriculumTemplate = await generateCurriculumTemplate({ 
-        subject, 
-        gradeLevel, 
-        learningStyles, 
-        additionalDetails 
-      });
+      console.log("AI Curriculum Generation - Services imported, calling template generator");
       
-      // Convert to database format
-      const curriculumData = curriculumTemplateToDbFormat(curriculumTemplate, req.session.userId);
+      // Declare variables in outer scope
+      let curriculumTemplate;
+      let curriculumData;
+      let curriculum;
       
-      // Save to database
-      const curriculum = await storage.createCurriculum(curriculumData);
-      
-      // Create associated lessons
-      for (const unit of curriculumTemplate.units) {
-        for (const lessonTemplate of unit.lessons) {
-          const lessonData = lessonTemplateToDbFormat(
-            lessonTemplate,
-            unit.title,
-            curriculum.id,
-            req.session.userId,
-            curriculumData.subject,
-            curriculumData.gradeLevel
-          );
-          
-          await storage.createLesson(lessonData);
-        }
+      try {
+        // Generate curriculum template
+        curriculumTemplate = await generateCurriculumTemplate({ 
+          subject, 
+          gradeLevel, 
+          learningStyles, 
+          additionalDetails 
+        });
+        
+        console.log("AI Curriculum Generation - Template generated successfully");
+        
+        // Convert to database format
+        curriculumData = curriculumTemplateToDbFormat(curriculumTemplate, req.session.userId);
+        
+        // Save to database
+        curriculum = await storage.createCurriculum(curriculumData);
+        console.log("AI Curriculum Generation - Saved to database successfully");
+      } catch (templateError) {
+        console.error("Error generating curriculum template:", templateError);
+        return res.status(500).json({ 
+          message: "Failed to generate curriculum", 
+          error: templateError.message 
+        });
       }
       
-      res.status(201).json(curriculum);
+      try {
+        // Create associated lessons
+        for (const unit of curriculumTemplate.units) {
+          for (const lessonTemplate of unit.lessons) {
+            const lessonData = lessonTemplateToDbFormat(
+              lessonTemplate,
+              unit.title,
+              curriculum.id,
+              req.session.userId,
+              curriculumData.subject,
+              curriculumData.gradeLevel
+            );
+            
+            await storage.createLesson(lessonData);
+          }
+        }
+        
+        res.status(201).json(curriculum);
+      } catch (lessonError) {
+        console.error("Error creating lessons:", lessonError);
+        // Return success with curriculum but note that lessons failed
+        return res.status(201).json({ 
+          curriculum,
+          warning: "Curriculum was created but some lessons failed to be generated"
+        });
+      }
     } catch (error) {
       console.error("Generate curriculum error:", error);
       res.status(500).json({ 

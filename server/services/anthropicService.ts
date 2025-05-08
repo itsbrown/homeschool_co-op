@@ -3,9 +3,20 @@ import { AIGenerationFormData } from '@/lib/types';
 import { CurriculumTemplate } from './curriculumService';
 
 // Initialize Anthropic client with API key from environment variables
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+let anthropic: Anthropic | null = null;
+
+try {
+  if (process.env.ANTHROPIC_API_KEY) {
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+    console.log('Anthropic API initialized successfully, key available:', !!process.env.ANTHROPIC_API_KEY);
+  } else {
+    console.warn('Anthropic API Key not provided in environment variables');
+  }
+} catch (error) {
+  console.error('Failed to initialize Anthropic client:', error);
+}
 
 // the newest Anthropic model is "claude-3-7-sonnet-20250219" which was released February 24, 2025
 const MODEL = 'claude-3-7-sonnet-20250219';
@@ -15,6 +26,12 @@ const MODEL = 'claude-3-7-sonnet-20250219';
  */
 export async function generateAICurriculum(formData: AIGenerationFormData): Promise<CurriculumTemplate> {
   try {
+    // Check if Anthropic client is initialized
+    if (!anthropic) {
+      console.warn('Anthropic client not initialized. Unable to generate curriculum with AI.');
+      throw new Error('Anthropic API not available');
+    }
+
     const { subject, gradeLevel, learningStyles, additionalDetails } = formData;
     
     // Construct system prompt
@@ -50,6 +67,8 @@ The curriculum should have 4-6 units with 3-5 lessons each.`;
 
     const userPrompt = `Please generate a curriculum for ${subject} at the ${gradeLevel} level that incorporates ${learningStyles.join(', ')} learning styles.`;
     
+    console.log(`Attempting to generate AI curriculum for ${subject} at ${gradeLevel} level...`);
+    
     // Call Claude API
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -59,6 +78,8 @@ The curriculum should have 4-6 units with 3-5 lessons each.`;
         { role: 'user', content: userPrompt }
       ],
     });
+
+    console.log('Successfully received response from Anthropic API');
 
     // The response content is a structured object with multiple properties
     const contentBlock = response.content[0];
@@ -91,6 +112,12 @@ export async function generateAILesson(
   duration: number = 45
 ): Promise<any> {
   try {
+    // Check if Anthropic client is initialized
+    if (!anthropic) {
+      console.warn('Anthropic client not initialized. Unable to generate lesson with AI.');
+      throw new Error('Anthropic API not available');
+    }
+    
     // Construct system prompt
     const systemPrompt = `You are an expert lesson planner with extensive knowledge of educational best practices.
 Your task is to create a detailed lesson plan for teaching "${topic}" within the subject of ${subject} for ${gradeLevel} students.
@@ -121,6 +148,8 @@ Please format your response as a JSON object matching this structure:
 }`;
 
     const userPrompt = `Please generate a detailed lesson plan for teaching "${topic}" within ${subject} for ${gradeLevel} students, accommodating ${learningStyles.join(', ')} learning styles and lasting ${duration} minutes.`;
+    
+    console.log(`Attempting to generate AI lesson for ${topic} in ${subject} at ${gradeLevel} level...`);
     
     // Call Claude API
     const response = await anthropic.messages.create({
