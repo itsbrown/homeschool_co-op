@@ -315,7 +315,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Event routes
   app.post("/api/events", isAuthenticated, async (req, res) => {
     try {
-      const validatedData = insertEventSchema.parse(req.body);
+      // Parse dates before validation
+      const data = {
+        ...req.body,
+        startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
+        endDate: req.body.endDate ? new Date(req.body.endDate) : undefined
+      };
+      
+      const validatedData = insertEventSchema.parse(data);
       
       const event = await storage.createEvent({
         ...validatedData,
@@ -327,6 +334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
+      console.error("Error creating event:", error);
       res.status(500).json({ message: "Error creating event" });
     }
   });
