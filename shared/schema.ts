@@ -72,7 +72,7 @@ export const lessons = pgTable("lessons", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertLessonSchema = createInsertSchema(lessons).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertLessonSchema = createInsertSchema(lessons).omit({ id: true, createdAt: true, updatedAt: true, authorId: true });
 export type InsertLesson = z.infer<typeof insertLessonSchema>;
 export type Lesson = typeof lessons.$inferSelect;
 
@@ -95,7 +95,7 @@ export const events = pgTable("events", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true });
+export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true, organizerId: true });
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
 
@@ -119,7 +119,7 @@ export const marketplaceItems = pgTable("marketplace_items", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertMarketplaceItemSchema = createInsertSchema(marketplaceItems).omit({ id: true, createdAt: true, sales: true, revenue: true });
+export const insertMarketplaceItemSchema = createInsertSchema(marketplaceItems).omit({ id: true, createdAt: true, sales: true, revenue: true, sellerId: true });
 export type InsertMarketplaceItem = z.infer<typeof insertMarketplaceItemSchema>;
 export type MarketplaceItem = typeof marketplaceItems.$inferSelect;
 
