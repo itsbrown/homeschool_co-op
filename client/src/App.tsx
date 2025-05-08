@@ -10,6 +10,7 @@ import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/useAuth";
+import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
   return (
@@ -27,10 +28,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+        <AIStatusProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </AIStatusProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
