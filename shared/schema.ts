@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 // Users table
 export const users = pgTable("users", {
@@ -18,6 +19,14 @@ export const users = pgTable("users", {
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Define user relations
+export const usersRelations = relations(users, ({ many }) => ({
+  curricula: many(curricula),
+  lessons: many(lessons),
+  events: many(events),
+  marketplaceItems: many(marketplaceItems)
+}));
 
 // Curriculum table
 export const curricula = pgTable("curricula", {
@@ -40,6 +49,12 @@ export const insertCurriculumSchema = createInsertSchema(curricula).omit({ id: t
 export type InsertCurriculum = z.infer<typeof insertCurriculumSchema>;
 export type Curriculum = typeof curricula.$inferSelect;
 
+// Define curriculum relations
+export const curriculaRelations = relations(curricula, ({ one, many }) => ({
+  author: one(users, { fields: [curricula.authorId], references: [users.id] }),
+  lessons: many(lessons)
+}));
+
 // Lessons table
 export const lessons = pgTable("lessons", {
   id: serial("id").primaryKey(),
@@ -61,6 +76,12 @@ export const insertLessonSchema = createInsertSchema(lessons).omit({ id: true, c
 export type InsertLesson = z.infer<typeof insertLessonSchema>;
 export type Lesson = typeof lessons.$inferSelect;
 
+// Define lesson relations
+export const lessonsRelations = relations(lessons, ({ one }) => ({
+  author: one(users, { fields: [lessons.authorId], references: [users.id] }),
+  curriculum: one(curricula, { fields: [lessons.curriculumId], references: [curricula.id] })
+}));
+
 // Events table
 export const events = pgTable("events", {
   id: serial("id").primaryKey(),
@@ -77,6 +98,11 @@ export const events = pgTable("events", {
 export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true });
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
+
+// Define event relations
+export const eventsRelations = relations(events, ({ one }) => ({
+  organizer: one(users, { fields: [events.organizerId], references: [users.id] })
+}));
 
 // MarketplaceItems table
 export const marketplaceItems = pgTable("marketplace_items", {
@@ -96,3 +122,8 @@ export const marketplaceItems = pgTable("marketplace_items", {
 export const insertMarketplaceItemSchema = createInsertSchema(marketplaceItems).omit({ id: true, createdAt: true, sales: true, revenue: true });
 export type InsertMarketplaceItem = z.infer<typeof insertMarketplaceItemSchema>;
 export type MarketplaceItem = typeof marketplaceItems.$inferSelect;
+
+// Define marketplace item relations
+export const marketplaceItemsRelations = relations(marketplaceItems, ({ one }) => ({
+  seller: one(users, { fields: [marketplaceItems.sellerId], references: [users.id] })
+}));
