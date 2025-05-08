@@ -1,0 +1,1913 @@
+To build the Adaptive AI-Driven Curriculum Generation and Learning Management System on Replit, I will provide detailed prompts for each task in the six-sprint development plan, incorporating the features: Knowledge Base Marketplace, AI-Driven Website Generation, Email Management Module, Discount and Referral Management Module, Summer Camp Management Module, AI-Powered Virtual Tutor, Gamified Social Learning Community, and Parent/Educator Analytics Dashboard with Predictive Insights. These prompts are tailored for Replit’s cloud-based IDE, ensuring they are actionable, cohesive, and aligned with the modern, clean UI (React, Tailwind CSS, blue/white palette, Inter font, 8px grid). Each prompt specifies the task, files to create/modify, dependencies, and expected outcomes, maintaining the sprint structure and ensuring cohesiveness through a shared component library, GraphQL data layer, and reusable logic. The prompts assume a small team (2-3 developers) using Replit’s free tier, with AWS integration for heavy tasks (AI training, blockchain, production).
+Development Plan Recap
+Sprints: Six, 2-3 weeks each, building features incrementally.
+Tech Stack:
+Frontend: React, Tailwind CSS, Vite, React Router, Chart.js.
+Backend: Node.js, Express (Sprints 1-2), GraphQL (Apollo Server, Sprint 3+), Socket.IO.
+Database: MongoDB Atlas, PostgreSQL (Supabase), Elasticsearch (AWS OpenSearch).
+AI/ML: Python (Replit/AWS SageMaker), Hugging Face Transformers, TensorFlow Lite, Claude-3.7-Sonnet API.
+Email: Amazon SES, Nodemailer.
+Blockchain: Ethereum (Infura), Hardhat (AWS EC2).
+Cloud: AWS (Lambda, Amplify, S3, CloudFront, SageMaker, EC2).
+Testing: Jest, Cypress.
+UI: Modern, clean (blue #1e3a8a, white #f0f4f8, Inter font, 8px grid), Notion-inspired.
+Cohesiveness: Monorepo, shared component library, GraphQL, reusable email/discount/AI logic.
+Replit Prompts for Each Task
+Below are prompts for each task in the six sprints, formatted for Replit’s environment. Each prompt includes:
+Task Description: What to accomplish.
+Files: Files to create/modify.
+Dependencies: Packages to install via npm/Pip.
+Steps: Instructions for Replit.
+Expected Outcome: Deliverable and verification.
+Cohesiveness Notes: How it integrates with other tasks.
+Sprint 1: Foundation and Core UI (2 Weeks)
+Task 1.1: Setup Replit Monorepo
+Description: Initialize a monorepo for frontend, backend, and AI, with Git, ESLint, Prettier, and Jest.
+Files:
+/package.json
+/.replit
+/.eslintrc.js
+/.prettierrc
+/jest.config.js
+/client/package.json (frontend)
+/server/package.json (backend)
+/ai/package.json (AI)
+Dependencies:
+npm: vite @vitejs/plugin-react eslint prettier jest @testing-library/react
+Steps:
+Create a new Replit project (Node.js template).
+Run mkdir client server ai to set up monorepo folders.
+In root, run npm init -y and add "workspaces": ["client", "server", "ai"] to package.json.
+Create /client and run npm init -y, then npm install vite @vitejs/plugin-react.
+Create /server and run npm init -y.
+Create /ai and run npm init -y.
+In root, run npm install eslint prettier jest @testing-library/react --save-dev.
+Create /.eslintrc.js:
+ javascript
+Copy
+module.exports = {
+  env: { browser: true, es2021: true, node: true },
+  extends: ['eslint:recommended', 'plugin:react/recommended'],
+  parserOptions: { ecmaVersion: 12, sourceType: 'module' },
+  rules: { 'react/prop-types': 'off' },
+};
+
+
+Create /.prettierrc:
+ json
+Copy
+{ "semi": true, "trailingComma": "es5", "singleQuote": true, "tabWidth": 2 }
+
+
+Create /jest.config.js:
+ javascript
+Copy
+module.exports = { testEnvironment: 'jsdom', setupFilesAfterEnv: ['@testing-library/jest-dom'] };
+
+
+Create /.replit:
+ plaintext
+Copy
+run = "npm run dev --prefix client"
+
+
+Initialize Git: Run git init, create .gitignore (node_modules, dist), and link to GitHub.
+Expected Outcome: Monorepo with frontend, backend, AI folders, linting, formatting, and testing configured. Replit runs a blank Vite app.
+Cohesiveness Notes: Monorepo ensures centralized dependency management; ESLint/Prettier enforce consistent code style.
+Task 1.2: Build Express APIs for User Authentication
+Description: Create RESTful APIs for user registration/login using JWT.
+Files:
+/server/src/index.js
+/server/src/routes/auth.js
+/server/src/models/user.js
+Dependencies:
+npm: express mongoose jsonwebtoken bcryptjs dotenv
+Steps:
+In /server, run npm install express mongoose jsonwebtoken bcryptjs dotenv.
+Create .env in /server:
+ plaintext
+Copy
+MONGODB_URI=your_mongodb_atlas_uri
+JWT_SECRET=your_secret
+
+
+Create /server/src/models/user.js:
+ javascript
+Copy
+const mongoose = require('mongoose');
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  role: { type: String, enum: ['learner', 'parent', 'educator', 'admin'], default: 'learner' },
+  subscription: { type: String, enum: ['free', 'individual', 'family', 'educator', 'institutional'], default: 'free' },
+});
+module.exports = mongoose.model('User', userSchema);
+
+
+Create /server/src/routes/auth.js:
+ javascript
+Copy
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/user');
+const router = express.Router();
+
+router.post('/register', async (req, res) => {
+  const { email, password, role } = req.body;
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = new User({ email, password: hashedPassword, role });
+  await user.save();
+  res.status(201).json({ message: 'User registered' });
+});
+
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user || !await bcrypt.compare(password, user.password)) {
+    return res.status(401).json({ message: 'Invalid credentials' });
+  }
+  const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+  res.json({ token });
+});
+
+module.exports = router;
+
+
+Create /server/src/index.js:
+ javascript
+Copy
+const express = require('express');
+const mongoose = require('mongoose');
+const authRoutes = require('./routes/auth');
+require('dotenv').config();
+
+const app = express();
+app.use(express.json());
+app.use('/api/auth', authRoutes);
+
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error(err));
+
+app.listen(3000, () => console.log('Server running on port 3000'));
+
+
+Update /server/package.json:
+ json
+Copy
+"scripts": { "start": "node src/index.js" }
+
+
+Create a test repl to run node src/index.js and test APIs with Postman (/api/auth/register, /api/auth/login).
+Expected Outcome: Functional auth APIs, tested via Postman, storing users in MongoDB Atlas.
+Cohesiveness Notes: Auth APIs form the backbone for all user interactions; MongoDB schema supports subscriptions.
+Task 1.3: Create Component Library and UI
+Description: Build a shared React component library and core UI (homepage, login/register, dashboard).
+Files:
+/client/src/components/Button.jsx
+/client/src/components/Modal.jsx
+/client/src/components/Card.jsx
+/client/src/pages/Home.jsx
+/client/src/pages/Login.jsx
+/client/src/pages/Register.jsx
+/client/src/pages/Dashboard.jsx
+/client/src/App.jsx
+/client/src/index.css
+Dependencies:
+npm: react-router-dom tailwindcss postcss autoprefixer
+Steps:
+In /client, run npx tailwindcss init -p to create tailwind.config.js:
+ javascript
+Copy
+module.exports = {
+  content: ['./src/**/*.{js,jsx}'],
+  theme: { extend: { colors: { primary: '#1e3a8a', secondary: '#f0f4f8' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } },
+  plugins: [],
+};
+
+
+Create /client/src/index.css:
+ css
+Copy
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+Run npm install react-router-dom tailwindcss postcss autoprefixer.
+Create /client/src/components/Button.jsx:
+ jsx
+Copy
+import React from 'react';
+const Button = ({ children, className, ...props }) => (
+  <button className={`bg-primary text-white px-4 py-2 rounded-md ${className}`} {...props}>
+    {children}
+  </button>
+);
+export default Button;
+
+
+Create /client/src/components/Modal.jsx:
+ jsx
+Copy
+import React from 'react';
+const Modal = ({ isOpen, onClose, children }) => isOpen ? (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div className="bg-white p-6 rounded-lg">
+      {children}
+      <button className="mt-4 bg-primary text-white px-4 py-2 rounded-md" onClick={onClose}>Close</button>
+    </div>
+  </div>
+) : null;
+export default Modal;
+
+
+Create /client/src/components/Card.jsx:
+ jsx
+Copy
+import React from 'react';
+const Card = ({ children, className }) => (
+  <div className={`bg-white shadow-md rounded-lg p-4 ${className}`}>
+    {children}
+  </div>
+);
+export default Card;
+
+
+Create /client/src/pages/Home.jsx:
+ jsx
+Copy
+import React from 'react';
+import Button from '../components/Button';
+const Home = () => (
+  <div className="min-h-screen bg-secondary flex flex-col items-center justify-center">
+    <h1 className="text-4xl font-bold text-primary mb-4">Welcome to the Learning Platform</h1>
+    <Button>Get Started</Button>
+  </div>
+);
+export default Home;
+
+
+Create /client/src/pages/Login.jsx and /client/src/pages/Register.jsx (basic forms using Button, Card).
+Create /client/src/pages/Dashboard.jsx (placeholder with Card for user info).
+Update /client/src/App.jsx:
+ jsx
+Copy
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import './index.css';
+
+const App = () => (
+  <Router>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+    </Routes>
+  </Router>
+);
+export default App;
+
+
+Update /client/package.json:
+ json
+Copy
+"scripts": { "dev": "vite", "build": "vite build", "test": "jest" }
+
+
+Run npm run dev in /client to test UI on Replit’s preview.
+Expected Outcome: Modern, clean UI with homepage, login/register, dashboard, using shared components.
+Cohesiveness Notes: Component library ensures consistent UI; Tailwind classes maintain style guide.
+Task 1.4: Configure Email for Welcome/Verification
+Description: Set up Amazon SES for welcome/verification emails triggered by registration.
+Files:
+/server/src/services/email.js
+Dependencies:
+npm: nodemailer aws-sdk
+Steps:
+In /server, run npm install nodemailer aws-sdk.
+Update /server/.env:
+ plaintext
+Copy
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_REGION=us-east-1
+
+
+Create /server/src/services/email.js:
+ javascript
+Copy
+const nodemailer = require('nodemailer');
+require('dotenv').config();
+
+const transporter = nodemailer.createTransport({
+  host: 'email-smtp.us-east-1.amazonaws.com',
+  port: 587,
+  auth: {
+    user: process.env.AWS_ACCESS_KEY_ID,
+    pass: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const sendWelcomeEmail = async (email) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Welcome to the Learning Platform!',
+    html: `<h1>Welcome!</h1><p>Thank you for joining. <a href="http://platform.com/login">Log in</a> to start learning.</p>`,
+  });
+};
+
+const sendVerificationEmail = async (email, token) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Verify Your Email',
+    html: `<p>Click <a href="http://platform.com/verify?token=${token}">here</a> to verify your email.</p>`,
+  });
+};
+
+module.exports = { sendWelcomeEmail, sendVerificationEmail };
+
+
+Update /server/src/routes/auth.js to trigger emails on registration:
+ javascript
+Copy
+const { sendWelcomeEmail, sendVerificationEmail } = require('../services/email');
+router.post('/register', async (req, res) => {
+  // ... existing code ...
+  await user.save();
+  await sendWelcomeEmail(email);
+  await sendVerificationEmail(email, 'sample-token'); // Replace with actual token logic
+  res.status(201).json({ message: 'User registered' });
+});
+
+
+Test email sending in Replit’s console using a test repl (node -e "require('./src/services/email').sendWelcomeEmail('test@example.com')").
+Expected Outcome: Welcome/verification emails sent on registration, verified via email client.
+Cohesiveness Notes: Email service integrates with auth APIs; reusable for future email tasks.
+Sprint 2: Curriculum, Lessons, and Virtual Tutor (3 Weeks)
+Task 2.1: APIs for Curriculum/Lesson Generation
+Description: Create APIs to generate curricula and lessons using Python and Hugging Face Transformers.
+Files:
+/ai/src/curriculum.js
+/server/src/routes/curriculum.js
+Dependencies:
+npm: axios
+Pip: transformers torch (Replit Python environment)
+Steps:
+In /ai, run pip install transformers torch in Replit’s Python shell.
+Create /ai/src/curriculum.js (Node.js wrapper for Python script):
+ javascript
+Copy
+const { spawn } = require('child_process');
+const path = require('path');
+
+const generateCurriculum = (profile) => new Promise((resolve, reject) => {
+  const python = spawn('python', [path.join(__dirname, 'curriculum.py'), JSON.stringify(profile)]);
+  let output = '';
+  python.stdout.on('data', (data) => output += data);
+  python.stderr.on('data', (data) => reject(data.toString()));
+  python.on('close', () => resolve(JSON.parse(output)));
+});
+
+module.exports = { generateCurriculum };
+
+
+Create /ai/src/curriculum.py:
+ python
+Copy
+import sys
+import json
+from transformers import pipeline
+
+def generate_curriculum(profile):
+    nlp = pipeline('text-generation', model='distilgpt2')
+    prompt = f"Generate a curriculum for a {profile['age']} year old student interested in {profile['subjects']}"
+    curriculum = nlp(prompt, max_length=100)[0]['generated_text']
+    return {'curriculum': curriculum, 'lessons': [{'id': 1, 'title': 'Intro Lesson', 'content': 'Sample content'}]}
+
+if __name__ == '__main__':
+    profile = json.loads(sys.argv[1])
+    result = generate_curriculum(profile)
+    print(json.dumps(result))
+
+
+In /server, run npm install axios.
+Create /server/src/routes/curriculum.js:
+ javascript
+Copy
+const express = require('express');
+const { generateCurriculum } = require('../../../ai/src/curriculum');
+const router = express.Router();
+
+router.post('/generate', async (req, res) => {
+  const { age, subjects } = req.body;
+  const curriculum = await generateCurriculum({ age, subjects });
+  res.json(curriculum);
+});
+
+module.exports = router;
+
+
+Update /server/src/index.js:
+ javascript
+Copy
+const curriculumRoutes = require('./routes/curriculum');
+app.use('/api/curriculum', curriculumRoutes);
+
+
+Test API in Replit using Postman (POST /api/curriculum/generate, body: { "age": 12, "subjects": "math, science" }).
+Expected Outcome: Curriculum API generates sample curricula/lessons, stored in MongoDB.
+Cohesiveness Notes: Curriculum API integrates with auth; Python AI script reuses for tutor.
+Task 2.2: Curriculum Engine and Tutor
+Description: Build a curriculum engine with TensorFlow Lite and a text-based virtual tutor using Claude-3.7-Sonnet API.
+Files:
+/ai/src/engine.py
+/ai/src/tutor.js
+Dependencies:
+Pip: tensorflow (lightweight, Replit)
+npm: axios
+Steps:
+In /ai, run pip install tensorflow in Replit’s Python shell.
+Create /ai/src/engine.py:
+ python
+Copy
+import tensorflow as tf
+import json
+import sys
+
+def curriculum_engine(profile):
+    # Placeholder: Simple TF model to map profile to lessons
+    lessons = [{'id': 1, 'title': f"{profile['subjects'][0]} Intro", 'content': 'Generated content'}]
+    return lessons
+
+if __name__ == '__main__':
+    profile = json.loads(sys.argv[1])
+    result = curriculum_engine(profile)
+    print(json.dumps(result))
+
+
+Create /ai/src/tutor.js:
+ javascript
+Copy
+const axios = require('axios');
+const { spawn } = require('child_process');
+const path = require('path');
+
+const callClaudeAPI = async (prompt) => {
+  const response = await axios.post('https://api.anthropic.com/v1/complete', {
+    prompt: `You are a tutor. ${prompt}`,
+    model: 'claude-3-sonnet',
+    max_tokens_to_sample: 100,
+  }, { headers: { 'x-api-key': process.env.CLAUDE_API_KEY } });
+  return response.data.completion;
+};
+
+const generateTutorResponse = async (question, context) => {
+  const prompt = `Context: ${context}. Question: ${question}. Provide a clear, concise answer.`;
+  return await callClaudeAPI(prompt);
+};
+
+module.exports = { generateTutorResponse };
+
+
+Update /server/.env:
+ plaintext
+Copy
+CLAUDE_API_KEY=your_claude_key
+
+
+Update /server/src/routes/curriculum.js:
+ javascript
+Copy
+const { generateTutorResponse } = require('../../../ai/src/tutor');
+router.post('/tutor', async (req, res) => {
+  const { question, context } = req.body;
+  const response = await generateTutorResponse(question, context);
+  res.json({ response });
+});
+
+
+Test tutor API in Replit (POST /api/curriculum/tutor, body: { "question": "What is algebra?", "context": "Math lesson" }).
+If TensorFlow is slow, configure AWS SageMaker in Replit’s .env and run training scripts via AWS CLI.
+Expected Outcome: Curriculum engine generates lesson sequences; tutor responds to questions.
+Cohesiveness Notes: Tutor uses curriculum context; AI scripts reusable for marketplace/camps.
+Task 2.3: Curriculum Dashboard, Lesson Viewer, and Tutor UI
+Description: Build UI for curriculum dashboard, lesson viewer, and tutor chatbot.
+Files:
+/client/src/pages/Curriculum.jsx
+/client/src/pages/Lesson.jsx
+/client/src/components/TutorChat.jsx
+Dependencies:
+npm: axios
+Steps:
+In /client, run npm install axios.
+Create /client/src/components/TutorChat.jsx:
+ jsx
+Copy
+import React, { useState } from 'react';
+import axios from 'axios';
+import Card from './Card';
+
+const TutorChat = ({ lessonId }) => {
+  const [question, setQuestion] = useState('');
+  const [response, setResponse] = useState('');
+
+  const handleSubmit = async () => {
+    const res = await axios.post('http://localhost:3000/api/curriculum/tutor', {
+      question,
+      context: `Lesson ${lessonId}`,
+    });
+    setResponse(res.data.response);
+  };
+
+  return (
+    <Card className="p-4">
+      <input
+        type="text"
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+        className="border p-2 w-full mb-2"
+        placeholder="Ask the tutor..."
+      />
+      <button onClick={handleSubmit} className="bg-primary text-white px-4 py-2 rounded-md">Ask</button>
+      {response && <p className="mt-2">{response}</p>}
+    </Card>
+  );
+};
+export default TutorChat;
+
+
+Create /client/src/pages/Curriculum.jsx:
+ jsx
+Copy
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import Card from '../components/Card';
+import { Link } from 'react-router-dom';
+
+const Curriculum = () => {
+  const [curriculum, setCurriculum] = useState(null);
+
+  useEffect(() => {
+    axios.post('http://localhost:3000/api/curriculum/generate', { age: 12, subjects: ['math'] })
+      .then(res => setCurriculum(res.data));
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-secondary p-8">
+      <h1 className="text-3xl font-bold text-primary mb-4">Your Curriculum</h1>
+      {curriculum && curriculum.lessons.map(lesson => (
+        <Card key={lesson.id} className="mb-4">
+          <Link to={`/lesson/${lesson.id}`}>{lesson.title}</Link>
+        </Card>
+      ))}
+    </div>
+  );
+};
+export default Curriculum;
+
+
+Create /client/src/pages/Lesson.jsx:
+ jsx
+Copy
+import React from 'react';
+import TutorChat from '../components/TutorChat';
+import Card from '../components/Card';
+
+const Lesson = ({ match }) => (
+  <div className="min-h-screen bg-secondary p-8">
+    <Card className="mb-4">
+      <h1 className="text-2xl font-bold text-primary">Lesson Title</h1>
+      <p>Sample lesson content...</p>
+    </Card>
+    <TutorChat lessonId={match.params.id} />
+  </div>
+);
+export default Lesson;
+
+
+Update /client/src/App.jsx:
+ jsx
+Copy
+<Routes>
+  <Route path="/curriculum" element={<Curriculum />} />
+  <Route path="/lesson/:id" element={<Lesson />} />
+</Routes>
+
+
+Run npm run dev in /client to test UI on Replit’s preview.
+Expected Outcome: Curriculum dashboard lists lessons; lesson viewer shows content and tutor chatbot.
+Cohesiveness Notes: Reuses Card, Button; tutor UI integrates with curriculum APIs.
+Task 2.4: Schedule and Progress Update Emails
+Description: Add email notifications for lesson schedules and progress updates.
+Files:
+/server/src/services/email.js
+Dependencies: None (uses existing nodemailer, aws-sdk).
+Steps:
+Update /server/src/services/email.js:
+ javascript
+Copy
+const sendScheduleEmail = async (email, schedule) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Your Weekly Lesson Schedule',
+    html: `<h1>Upcoming Lessons</h1><p>${schedule}</p>`,
+  });
+};
+
+const sendProgressEmail = async (email, progress) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Your Learning Progress',
+    html: `<h1>Progress Update</h1><p>${progress}</p>`,
+  });
+};
+
+module.exports = { sendWelcomeEmail, sendVerificationEmail, sendScheduleEmail, sendProgressEmail };
+
+
+Update /server/src/routes/curriculum.js:
+ javascript
+Copy
+const { sendScheduleEmail, sendProgressEmail } = require('../services/email');
+router.post('/generate', async (req, res) => {
+  // ... existing code ...
+  await sendScheduleEmail(req.body.email, JSON.stringify(curriculum));
+  res.json(curriculum);
+});
+
+
+Test emails in Replit’s console (node -e "require('./src/services/email').sendScheduleEmail('test@example.com', 'Sample schedule')").
+Expected Outcome: Schedule/progress emails sent on curriculum generation, verified via email client.
+Cohesiveness Notes: Reuses email service; integrates with curriculum APIs.
+Sprint 3: Knowledge Base Marketplace and Social Community (3 Weeks)
+Task 3.1: GraphQL for Marketplace/Community Queries
+Description: Transition to GraphQL for marketplace and community data queries.
+Files:
+/server/src/schema.js
+/server/src/resolvers.js
+/server/src/index.js
+Dependencies:
+npm: @apollo/server graphql
+Steps:
+In /server, run npm install @apollo/server graphql.
+Create /server/src/schema.js:
+ javascript
+Copy
+const { gql } = require('@apollo/server');
+const typeDefs = gql`
+  type KnowledgeBase {
+    id: ID!
+    title: String!
+    creator: String!
+    subject: String!
+    price: Float!
+  }
+  type CommunityPost {
+    id: ID!
+    content: String!
+    author: String!
+  }
+  type Query {
+    knowledgeBases: [KnowledgeBase]
+    communityPosts: [CommunityPost]
+  }
+  type Mutation {
+    createKnowledgeBase(title: String!, creator: String!, subject: String!, price: Float!): KnowledgeBase
+    createCommunityPost(content: String!, author: String!): CommunityPost
+  }
+`;
+module.exports = typeDefs;
+
+
+Create /server/src/resolvers.js:
+ javascript
+Copy
+const KnowledgeBase = require('./models/knowledgeBase');
+const CommunityPost = require('./models/communityPost');
+
+const resolvers = {
+  Query: {
+    knowledgeBases: async () => await KnowledgeBase.find(),
+    communityPosts: async () => await CommunityPost.find(),
+  },
+  Mutation: {
+    createKnowledgeBase: async (_, { title, creator, subject, price }) => {
+      const base = new KnowledgeBase({ title, creator, subject, price });
+      await base.save();
+      return base;
+    },
+    createCommunityPost: async (_, { content, author }) => {
+      const post = new CommunityPost({ content, author });
+      await post.save();
+      return post;
+    },
+  },
+};
+module.exports = resolvers;
+
+
+Create /server/src/models/knowledgeBase.js:
+ javascript
+Copy
+const mongoose = require('mongoose');
+const schema = new mongoose.Schema({
+  title: String,
+  creator: String,
+  subject: String,
+  price: Number,
+});
+module.exports = mongoose.model('KnowledgeBase', schema);
+
+
+Create /server/src/models/communityPost.js:
+ javascript
+Copy
+const mongoose = require('mongoose');
+const schema = new mongoose.Schema({
+  content: String,
+  author: String,
+});
+module.exports = mongoose.model('CommunityPost', schema);
+
+
+Update /server/src/index.js:
+ javascript
+Copy
+const { ApolloServer } = require('@apollo/server');
+const { startStandaloneServer } = require('@apollo/server/standalone');
+const typeDefs = require('./schema');
+const resolvers = require('./resolvers');
+
+const server = new ApolloServer({ typeDefs, resolvers });
+startStandaloneServer(server, { listen: { port: 4000 } })
+  .then(({ url }) => console.log(`GraphQL server running at ${url}`));
+
+
+Update /server/package.json:
+ json
+Copy
+"scripts": { "start": "node src/index.js" }
+
+
+Test GraphQL in Replit’s preview (http://localhost:4000), using queries:
+ graphql
+Copy
+query { knowledgeBases { id title } }
+mutation { createKnowledgeBase(title: "Math Base", creator: "User", subject: "Math", price: 10) { id title } }
+
+
+Expected Outcome: GraphQL server handles marketplace/community queries, storing data in MongoDB.
+Cohesiveness Notes: GraphQL unifies data; integrates with curriculum APIs.
+Task 3.2: Marketplace and Community APIs
+Description: Build APIs for listing/purchasing knowledge bases and community chat/forums.
+Files:
+/server/src/models/knowledgeBase.js (update)
+/server/src/models/communityPost.js (update)
+/server/src/resolvers.js (update)
+Dependencies:
+npm: socket.io
+Steps:
+In /server, run npm install socket.io.
+Update /server/src/models/knowledgeBase.js:
+ javascript
+Copy
+const schema = new mongoose.Schema({
+  title: String,
+  creator: String,
+  subject: String,
+  price: Number,
+  purchasedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+});
+
+
+Update /server/src/models/communityPost.js:
+ javascript
+Copy
+const schema = new mongoose.Schema({
+  content: String,
+  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  createdAt: { type: Date, default: Date.now },
+});
+
+
+Update /server/src/resolvers.js:
+ javascript
+Copy
+const purchaseKnowledgeBase = async (_, { id, userId }) => {
+  const base = await KnowledgeBase.findById(id);
+  base.purchasedBy.push(userId);
+  await base.save();
+  return base;
+};
+const Mutation = {
+  // ... existing mutations ...
+  purchaseKnowledgeBase,
+};
+
+
+Create /server/src/socket.js:
+ javascript
+Copy
+const { Server } = require('socket.io');
+const CommunityPost = require('./models/communityPost');
+
+const initSocket = (httpServer) => {
+  const io = new Server(httpServer);
+  io.on('connection', (socket) => {
+    socket.on('post', async ({ content, author }) => {
+      const post = new CommunityPost({ content, author });
+      await post.save();
+      io.emit('newPost', post);
+    });
+  });
+};
+module.exports = initSocket;
+
+
+Update /server/src/index.js:
+ javascript
+Copy
+const http = require('http');
+const initSocket = require('./socket');
+const server = http.createServer(app);
+initSocket(server);
+server.listen(3000, () => console.log('Server running on port 3000'));
+
+
+Test marketplace purchase (mutation { purchaseKnowledgeBase(id: "id", userId: "userId") { id } }) and community chat (emit post via Socket.IO client).
+Expected Outcome: APIs for marketplace purchases and real-time community posts, stored in MongoDB.
+Cohesiveness Notes: Marketplace integrates with curriculum; community uses GraphQL.
+Task 3.3: Blockchain for Badges
+Description: Implement blockchain for storing community badges.
+Files:
+/server/src/contracts/Badge.sol
+/server/src/scripts/deploy.js
+Dependencies:
+npm: hardhat ethers
+Steps:
+In /server, run npm install hardhat ethers.
+Run npx hardhat init and select JavaScript project.
+Create /server/src/contracts/Badge.sol:
+ solidity
+Copy
+pragma solidity ^0.8.0;
+contract Badge {
+  mapping(address => string[]) public badges;
+  function awardBadge(address user, string memory badge) public {
+    badges[user].push(badge);
+  }
+  function getBadges(address user) public view returns (string[] memory) {
+    return badges[user];
+  }
+}
+
+
+Create /server/src/scripts/deploy.js:
+ javascript
+Copy
+const hre = require('hardhat');
+async function main() {
+  const Badge = await hre.ethers.getContractFactory('Badge');
+  const badge = await Badge.deploy();
+  await badge.deployed();
+  console.log('Badge deployed to:', badge.address);
+}
+main().catch(console.error);
+
+
+Update /server/hardhat.config.js:
+ javascript
+Copy
+require('@nomiclabs/hardhat-ethers');
+module.exports = {
+  solidity: '0.8.0',
+  networks: {
+    ropsten: {
+      url: 'https://ropsten.infura.io/v3/your_infura_key',
+      accounts: ['your_private_key'],
+    },
+  },
+};
+
+
+Run npx hardhat run src/scripts/deploy.js --network ropsten in an AWS EC2 instance (due to Replit’s limits), or test locally in Replit’s Hardhat console.
+Update /server/src/resolvers.js:
+ javascript
+Copy
+const ethers = require('ethers');
+const provider = new ethers.providers.InfuraProvider('ropsten', 'your_infura_key');
+const wallet = new ethers.Wallet('your_private_key', provider);
+const badgeContract = new ethers.Contract('contract_address', ['function awardBadge(address,string)'], wallet);
+
+const awardBadge = async (_, { userAddress, badge }) => {
+  const tx = await badgeContract.awardBadge(userAddress, badge);
+  await tx.wait();
+  return { userAddress, badge };
+};
+const Mutation = { /* ... */ awardBadge };
+
+
+Test badge awarding in Replit (mutation { awardBadge(userAddress: "0x...", badge: "Quiz Master") { badge } }).
+Expected Outcome: Badges stored on Ethereum Ropsten, accessible via GraphQL.
+Cohesiveness Notes: Blockchain integrates with community; reusable for certificates/referrals.
+Task 3.4: Marketplace and Community UI
+Description: Build UI for marketplace (search, listings, purchase) and community hub (chat, forums, leaderboards).
+Files:
+/client/src/pages/Marketplace.jsx
+/client/src/pages/Community.jsx
+/client/src/components/Chat.jsx
+Dependencies:
+npm: @apollo/client socket.io-client
+Steps:
+In /client, run npm install @apollo/client socket.io-client.
+Create /client/src/pages/Marketplace.jsx:
+ jsx
+Copy
+import React from 'react';
+import { useQuery, gql } from '@apollo/client';
+import Card from '../components/Card';
+
+const GET_BASES = gql`
+  query { knowledgeBases { id title creator subject price } }
+`;
+
+const Marketplace = () => {
+  const { loading, data } = useQuery(GET_BASES);
+  return (
+    <div className="min-h-screen bg-secondary p-8">
+      <h1 className="text-3xl font-bold text-primary mb-4">Knowledge Base Marketplace</h1>
+      {loading ? <p>Loading...</p> : data.knowledgeBases.map(base => (
+        <Card key={base.id} className="mb-4">
+          <h2>{base.title}</h2>
+          <p>By {base.creator} | ${base.price}</p>
+        </Card>
+      ))}
+    </div>
+  );
+};
+export default Marketplace;
+
+
+Create /client/src/components/Chat.jsx:
+ jsx
+Copy
+import React, { useState, useEffect } from 'react';
+import io from 'socket.io-client';
+import Card from './Card';
+
+const socket = io('http://localhost:3000');
+
+const Chat = () => {
+  const [message, setMessage] = useState('');
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    socket.on('newPost', (post) => setPosts([...posts, post]));
+    return () => socket.off('newPost');
+  }, [posts]);
+
+  const sendMessage = () => {
+    socket.emit('post', { content: message, author: 'User' });
+    setMessage('');
+  };
+
+  return (
+    <Card className="p-4">
+      <div className="h-64 overflow-y-scroll mb-2">
+        {posts.map((post, i) => <p key={i}>{post.author}: {post.content}</p>)}
+      </div>
+      <input
+        type="text"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        className="border p-2 w-full mb-2"
+      />
+      <button onClick={sendMessage} className="bg-primary text-white px-4 py-2 rounded-md">Send</button>
+    </Card>
+  );
+};
+export default Chat;
+
+
+Create /client/src/pages/Community.jsx:
+ jsx
+Copy
+import React from 'react';
+import Chat from '../components/Chat';
+import Card from '../components/Card';
+
+const Community = () => (
+  <div className="min-h-screen bg-secondary p-8">
+    <h1 className="text-3xl font-bold text-primary mb-4">Community Hub</h1>
+    <Card className="mb-4">
+      <h2>Leaderboard</h2>
+      <p>Top User: 100 points</p>
+    </Card>
+    <Chat />
+  </div>
+);
+export default Community;
+
+
+Update /client/src/App.jsx:
+ jsx
+Copy
+<Routes>
+  <Route path="/marketplace" element={<Marketplace />} />
+  <Route path="/community" element={<Community />} />
+</Routes>
+
+
+Run npm run dev in /client to test UI on Replit’s preview.
+Expected Outcome: Marketplace lists bases; community hub shows chat and leaderboards.
+Cohesiveness Notes: Reuses Card, Button; integrates with GraphQL/Socket.IO.
+Task 3.5: Purchase and Community Emails
+Description: Add emails for marketplace purchases and community notifications.
+Files:
+/server/src/services/email.js
+Dependencies: None (uses existing nodemailer).
+Steps:
+Update /server/src/services/email.js:
+ javascript
+Copy
+const sendPurchaseEmail = async (email, baseTitle) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Knowledge Base Purchase Confirmation',
+    html: `<h1>Thank You!</h1><p>You purchased "${baseTitle}". Access it in your dashboard.</p>`,
+  });
+};
+
+const sendCommunityEmail = async (email, content) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'New Community Post',
+    html: `<h1>Community Update</h1><p>New post: ${content}</p>`,
+  });
+};
+
+module.exports = { sendWelcomeEmail, sendVerificationEmail, sendScheduleEmail, sendProgressEmail, sendPurchaseEmail, sendCommunityEmail };
+
+
+Update /server/src/resolvers.js:
+ javascript
+Copy
+const { sendPurchaseEmail } = require('./services/email');
+const purchaseKnowledgeBase = async (_, { id, userId }) => {
+  // ... existing code ...
+  await sendPurchaseEmail('user@example.com', base.title); // Replace with user email
+  return base;
+};
+
+
+Test emails in Replit’s console (node -e "require('./src/services/email').sendPurchaseEmail('test@example.com', 'Math Base')").
+Expected Outcome: Purchase/community emails sent, verified via email client.
+Cohesiveness Notes: Reuses email service; integrates with marketplace/community.
+Sprint 4: Summer Camps and Analytics Dashboard (3 Weeks)
+Task 4.1: APIs for Camp Registration/Scheduling
+Description: Build APIs for summer camp registration and scheduling.
+Files:
+/server/src/models/camp.js
+/server/src/routes/camp.js
+Dependencies: None (uses existing mongoose).
+Steps:
+Create /server/src/models/camp.js:
+ javascript
+Copy
+const mongoose = require('mongoose');
+const schema = new mongoose.Schema({
+  title: String,
+  type: String,
+  dates: String,
+  ageRange: String,
+  theme: String,
+  schedule: [{ day: String, activities: [{ time: String, activity: String }] }],
+  registeredUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+});
+module.exports = mongoose.model('Camp', schema);
+
+
+Create /server/src/routes/camp.js:
+ javascript
+Copy
+const express = require('express');
+const Camp = require('../models/camp');
+const router = express.Router();
+
+router.post('/register', async (req, res) => {
+  const { campId, userId } = req.body;
+  const camp = await Camp.findById(campId);
+  camp.registeredUsers.push(userId);
+  await camp.save();
+  res.json(camp);
+});
+
+router.get('/schedule/:campId', async (req, res) => {
+  const camp = await Camp.findById(req.params.campId);
+  res.json(camp.schedule);
+});
+
+module.exports = router;
+
+
+Update /server/src/index.js:
+ javascript
+Copy
+const campRoutes = require('./routes/camp');
+app.use('/api/camp', campRoutes);
+
+
+Test APIs in Replit using Postman (POST /api/camp/register, GET /api/camp/schedule/:campId).
+Expected Outcome: APIs for camp registration/scheduling, stored in MongoDB.
+Cohesiveness Notes: Camps integrate with curriculum; reusable for community projects.
+Task 4.2: Predictive Analytics APIs
+Description: Build APIs for predictive analytics using TensorFlow.
+Files:
+/ai/src/analytics.py
+Dependencies:
+Pip: tensorflow (Replit for inference, SageMaker for training)
+Steps:
+Create /ai/src/analytics.py:
+ python
+Copy
+import tensorflow as tf
+import json
+import sys
+
+def predict_engagement(data):
+    # Placeholder: Simple TF model
+    return {'risk': 'low', 'recommendation': 'Assign math base'}
+
+if __name__ == '__main__':
+    data = json.loads(sys.argv[1])
+    result = predict_engagement(data)
+    print(json.dumps(result))
+
+
+Create /server/src/routes/analytics.js:
+ javascript
+Copy
+const express = require('express');
+const { spawn } = require('child_process');
+const path = require('path');
+const router = express.Router();
+
+router.post('/predict', async (req, res) => {
+  const python = spawn('python', [path.join(__dirname, '../../../ai/src/analytics.py'), JSON.stringify(req.body)]);
+  let output = '';
+  python.stdout.on('data', (data) => output += data);
+  python.stderr.on('data', (data) => res.status(500).send(data.toString()));
+  python.on('close', () => res.json(JSON.parse(output)));
+});
+
+module.exports = router;
+
+
+Update /server/src/index.js:
+ javascript
+Copy
+const analyticsRoutes = require('./routes/analytics');
+app.use('/api/analytics', analyticsRoutes);
+
+
+If TensorFlow training is slow, configure AWS SageMaker in /server/.env and run training scripts via AWS CLI.
+Test API in Replit (POST /api/analytics/predict, body: { "scores": [80, 90], "engagement": 0.7 }).
+Expected Outcome: Analytics API predicts engagement risks, with recommendations.
+Cohesiveness Notes: Analytics integrates with curriculum/camps; reusable for tutor.
+Task 4.3: Camp Registration UI and Analytics Dashboard
+Description: Build UI for camp registration and predictive analytics dashboard.
+Files:
+/client/src/pages/Camp.jsx
+/client/src/pages/Analytics.jsx
+Dependencies:
+npm: chart.js react-chartjs-2
+Steps:
+In /client, run npm install chart.js react-chartjs-2.
+Create /client/src/pages/Camp.jsx:
+ jsx
+Copy
+import React, { useState } from 'react';
+import axios from 'axios';
+import Card from '../components/Card';
+import Button from '../components/Button';
+
+const Camp = () => {
+  const [campId, setCampId] = useState('');
+  const handleRegister = async () => {
+    await axios.post('http://localhost:3000/api/camp/register', { campId, userId: 'user_id' });
+    alert('Registered!');
+  };
+
+  return (
+    <div className="min-h-screen bg-secondary p-8">
+      <h1 className="text-3xl font-bold text-primary mb-4">Summer Camps</h1>
+      <Card className="mb-4">
+        <input
+          type="text"
+          value={campId}
+          onChange={(e) => setCampId(e.target.value)}
+          className="border p-2 w-full mb-2"
+          placeholder="Enter Camp ID"
+        />
+        <Button onClick={handleRegister}>Register</Button>
+      </Card>
+    </div>
+  );
+};
+export default Camp;
+
+
+Create /client/src/pages/Analytics.jsx:
+ jsx
+Copy
+import React, { useState } from 'react';
+import axios from 'axios';
+import { Bar } from 'react-chartjs-2';
+import Card from '../components/Card';
+
+const Analytics = () => {
+  const [insights, setInsights] = useState(null);
+  const data = {
+    labels: ['Math', 'Science'],
+    datasets: [{ label: 'Scores', data: [80, 90], backgroundColor: '#1e3a8a' }],
+  };
+
+  const fetchInsights = async () => {
+    const res = await axios.post('http://localhost:3000/api/analytics/predict', {
+      scores: [80, 90],
+      engagement: 0.7,
+    });
+    setInsights(res.data);
+  };
+
+  return (
+    <div className="min-h-screen bg-secondary p-8">
+      <h1 className="text-3xl font-bold text-primary mb-4">Analytics Dashboard</h1>
+      <Card className="mb-4">
+        <Bar data={data} />
+        <button onClick={fetchInsights} className="bg-primary text-white px-4 py-2 rounded-md mt-4">Get Insights</button>
+        {insights && <p>Risk: {insights.risk}, Recommendation: {insights.recommendation}</p>}
+      </Card>
+    </div>
+  );
+};
+export default Analytics;
+
+
+Update /client/src/App.jsx:
+ jsx
+Copy
+<Routes>
+  <Route path="/camp" element={<Camp />} />
+  <Route path="/analytics" element={<Analytics />} />
+</Routes>
+
+
+Run npm run dev in /client to test UI on Replit’s preview.
+Expected Outcome: Camp registration form and analytics dashboard with charts/insights.
+Cohesiveness Notes: Reuses Card, Button; integrates with camp/analytics APIs.
+Task 4.4: Camp and Insight Emails
+Description: Add emails for camp registration and analytics insights.
+Files:
+/server/src/services/email.js
+Dependencies: None (uses existing nodemailer).
+Steps:
+Update /server/src/services/email.js:
+ javascript
+Copy
+const sendCampRegistrationEmail = async (email, campTitle) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Camp Registration Confirmation',
+    html: `<h1>You're In!</h1><p>Registered for ${campTitle}. Check your schedule.</p>`,
+  });
+};
+
+const sendInsightEmail = async (email, insight) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Learning Insights',
+    html: `<h1>Insights</h1><p>Risk: ${insight.risk}, Recommendation: ${insight.recommendation}</p>`,
+  });
+};
+
+module.exports = { /* ... */ sendCampRegistrationEmail, sendInsightEmail };
+
+
+Update /server/src/routes/camp.js:
+ javascript
+Copy
+const { sendCampRegistrationEmail } = require('../services/email');
+router.post('/register', async (req, res) => {
+  // ... existing code ...
+  await sendCampRegistrationEmail('user@example.com', camp.title);
+  res.json(camp);
+});
+
+
+Update /server/src/routes/analytics.js:
+ javascript
+Copy
+const { sendInsightEmail } = require('../services/email');
+router.post('/predict', async (req, res) => {
+  // ... existing code ...
+  await sendInsightEmail('user@example.com', JSON.parse(output));
+  res.json(JSON.parse(output));
+});
+
+
+Test emails in Replit’s console.
+Expected Outcome: Camp registration/insight emails sent, verified via email client.
+Cohesiveness Notes: Reuses email service; integrates with camp/analytics.
+Sprint 5: Discounts, Referrals, and Website Generation (3 Weeks)
+Task 5.1: APIs for Discount/Referral Creation
+Description: Build APIs for creating/applying discounts and referrals.
+Files:
+/server/src/models/discount.js
+/server/src/models/referral.js
+/server/src/routes/discount.js
+Dependencies:
+npm: stripe
+Steps:
+In /server, run npm install stripe.
+Create /server/src/models/discount.js:
+ javascript
+Copy
+const mongoose = require('mongoose');
+const schema = new mongoose.Schema({
+  code: String,
+  type: String,
+  value: Number,
+  eligibility: [String],
+  expiration: Date,
+});
+module.exports = mongoose.model('Discount', schema);
+
+
+Create /server/src/models/referral.js:
+ javascript
+Copy
+const mongoose = require('mongoose');
+const schema = new mongoose.Schema({
+  referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  referredId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reward: Number,
+});
+module.exports = mongoose.model('Referral', schema);
+
+
+Create /server/src/routes/discount.js:
+ javascript
+Copy
+const express = require('express');
+const Discount = require('../models/discount');
+const Referral = require('../models/referral');
+const router = express.Router();
+
+router.post('/create', async (req, res) => {
+  const discount = new Discount(req.body);
+  await discount.save();
+  res.json(discount);
+});
+
+router.post('/apply', async (req, res) => {
+  const { code, userId } = req.body;
+  const discount = await Discount.findOne({ code });
+  if (!discount) return res.status(404).json({ message: 'Invalid code' });
+  // Apply discount logic (e.g., reduce subscription price)
+  res.json({ message: 'Discount applied' });
+});
+
+router.post('/refer', async (req, res) => {
+  const { referrerId, referredId } = req.body;
+  const referral = new Referral({ referrerId, referredId, reward: 10 });
+  await referral.save();
+  res.json(referral);
+});
+
+module.exports = router;
+
+
+Update /server/src/index.js:
+ javascript
+Copy
+const discountRoutes = require('./routes/discount');
+app.use('/api/discount', discountRoutes);
+
+
+Test APIs in Replit using Postman (POST /api/discount/create, POST /api/discount/apply, POST /api/discount/refer).
+Expected Outcome: APIs for discount/referral creation, stored in MongoDB.
+Cohesiveness Notes: Discounts integrate with subscriptions/marketplace; referrals tie to auth.
+Task 5.2: Blockchain for Referral Rewards/Certificates
+Description: Extend blockchain for referral rewards and certificates.
+Files:
+/server/src/contracts/Reward.sol
+Dependencies: None (uses existing hardhat, ethers).
+Steps:
+Create /server/src/contracts/Reward.sol:
+ solidity
+Copy
+pragma solidity ^0.8.0;
+contract Reward {
+  mapping(address => uint) public rewards;
+  function awardReward(address user, uint amount) public {
+    rewards[user] += amount;
+  }
+}
+
+
+Update /server/src/scripts/deploy.js to deploy Reward contract.
+Update /server/src/routes/discount.js:
+ javascript
+Copy
+const ethers = require('ethers');
+const rewardContract = new ethers.Contract('reward_contract_address', ['function awardReward(address,uint)'], wallet);
+
+router.post('/refer', async (req, res) => {
+  // ... existing code ...
+  await rewardContract.awardReward('user_address', 10);
+  res.json(referral);
+});
+
+
+Test reward awarding in Replit or AWS EC2 (npx hardhat console --network ropsten).
+Expected Outcome: Referral rewards stored on Ethereum, accessible via API.
+Cohesiveness Notes: Blockchain extends badges; integrates with discounts.
+Task 5.3: APIs for Website Generation
+Description: Build APIs for AI-driven website generation.
+Files:
+/ai/src/website.js
+Dependencies:
+npm: axios
+Steps:
+Create /ai/src/website.js:
+ javascript
+Copy
+const axios = require('axios');
+
+const generateWebsite = async (branding) => {
+  const response = await axios.post('https://api.anthropic.com/v1/complete', {
+    prompt: `Generate React code for a branded website with logo: ${branding.logo}, colors: ${branding.colors}`,
+    model: 'claude-3-sonnet',
+    max_tokens_to_sample: 500,
+  }, { headers: { 'x-api-key': process.env.CLAUDE_API_KEY } });
+  return response.data.completion;
+};
+
+module.exports = { generateWebsite };
+
+
+Create /server/src/routes/website.js:
+ javascript
+Copy
+const express = require('express');
+const { generateWebsite } = require('../../../ai/src/website');
+const router = express.Router();
+
+router.post('/generate', async (req, res) => {
+  const websiteCode = await generateWebsite(req.body);
+  res.json({ code: websiteCode });
+});
+
+module.exports = router;
+
+
+Update /server/src/index.js:
+ javascript
+Copy
+const websiteRoutes = require('./routes/website');
+app.use('/api/website', websiteRoutes);
+
+
+Test API in Replit (POST /api/website/generate, body: { "logo": "url", "colors": "blue" }).
+Expected Outcome: Website generation API returns sample React code.
+Cohesiveness Notes: Integrates with tutor for content; reusable for camp websites.
+Task 5.4: Discount/Referral and Website UI
+Description: Build UI for discounts, referrals, and website generation.
+Files:
+/client/src/pages/Discount.jsx
+/client/src/pages/Website.jsx
+Dependencies: None (uses existing axios).
+Steps:
+Create /client/src/pages/Discount.jsx:
+ jsx
+Copy
+import React, { useState } from 'react';
+import axios from 'axios';
+import Card from '../components/Card';
+import Button from '../components/Button';
+
+const Discount = () => {
+  const [code, setCode] = useState('');
+  const handleApply = async () => {
+    await axios.post('http://localhost:3000/api/discount/apply', { code, userId: 'user_id' });
+    alert('Discount applied!');
+  };
+
+  return (
+    <div className="min-h-screen bg-secondary p-8">
+      <h1 className="text-3xl font-bold text-primary mb-4">Discounts & Referrals</h1>
+      <Card className="mb-4">
+        <input
+          type="text"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          className="border p-2 w-full mb-2"
+          placeholder="Enter Discount Code"
+        />
+        <Button onClick={handleApply}>Apply</Button>
+      </Card>
+    </div>
+  );
+};
+export default Discount;
+
+
+Create /client/src/pages/Website.jsx:
+ jsx
+Copy
+import React, { useState } from 'react';
+import axios from 'axios';
+import Card from '../components/Card';
+import Button from '../components/Button';
+
+const Website = () => {
+  const [branding, setBranding] = useState({ logo: '', colors: '' });
+  const [code, setCode] = useState('');
+
+  const handleGenerate = async () => {
+    const res = await axios.post('http://localhost:3000/api/website/generate', branding);
+    setCode(res.data.code);
+  };
+
+  return (
+    <div className="min-h-screen bg-secondary p-8">
+      <h1 className="text-3xl font-bold text-primary mb-4">Generate Website</h1>
+      <Card className="mb-4">
+        <input
+          type="text"
+          value={branding.logo}
+          onChange={(e) => setBranding({ ...branding, logo: e.target.value })}
+          className="border p-2 w-full mb-2"
+          placeholder="Logo URL"
+        />
+        <input
+          type="text"
+          value={branding.colors}
+          onChange={(e) => setBranding({ ...branding, colors: e.target.value })}
+          className="border p-2 w-full mb-2"
+          placeholder="Colors"
+        />
+        <Button onClick={handleGenerate}>Generate</Button>
+        {code && <pre className="mt-4">{code}</pre>}
+      </Card>
+    </div>
+  );
+};
+export default Website;
+
+
+Update /client/src/App.jsx:
+ jsx
+Copy
+<Routes>
+  <Route path="/discount" element={<Discount />} />
+  <Route path="/website" element={<Website />} />
+</Routes>
+
+
+Run npm run dev in /client to test UI on Replit’s preview.
+Expected Outcome: UI for applying discounts/referrals and generating websites.
+Cohesiveness Notes: Reuses Card, Button; integrates with discount/website APIs.
+Task 5.5: Discount/Referral and Website Emails
+Description: Add emails for discounts, referrals, and website generation.
+Files:
+/server/src/services/email.js
+Dependencies: None (uses existing nodemailer).
+Steps:
+Update /server/src/services/email.js:
+ javascript
+Copy
+const sendDiscountEmail = async (email, code) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'New Discount Available',
+    html: `<h1>Save Now!</h1><p>Use code ${code} for a discount.</p>`,
+  });
+};
+
+const sendReferralEmail = async (email, referralLink) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Refer a Friend',
+    html: `<h1>Earn Rewards!</h1><p>Share this link: ${referralLink}</p>`,
+  });
+};
+
+const sendWebsiteEmail = async (email, websiteUrl) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Your Website is Ready',
+    html: `<h1>Congratulations!</h1><p>View your website: <a href="${websiteUrl}">${websiteUrl}</a></p>`,
+  });
+};
+
+module.exports = { /* ... */ sendDiscountEmail, sendReferralEmail, sendWebsiteEmail };
+
+
+Update /server/src/routes/discount.js:
+ javascript
+Copy
+const { sendDiscountEmail, sendReferralEmail } = require('../services/email');
+router.post('/create', async (req, res) => {
+  // ... existing code ...
+  await sendDiscountEmail('user@example.com', discount.code);
+  res.json(discount);
+});
+router.post('/refer', async (req, res) => {
+  // ... existing code ...
+  await sendReferralEmail('user@example.com', 'http://platform.com/refer/sample');
+  res.json(referral);
+});
+
+
+Update /server/src/routes/website.js:
+ javascript
+Copy
+const { sendWebsiteEmail } = require('../services/email');
+router.post('/generate', async (req, res) => {
+  // ... existing code ...
+  await sendWebsiteEmail('user@example.com', 'http://generated.website.com');
+  res.json({ code: websiteCode });
+});
+
+
+Test emails in Replit’s console.
+Expected Outcome: Discount/referral/website emails sent, verified via email client.
+Cohesiveness Notes: Reuses email service; integrates with discount/website.
+Sprint 6: Final Integration and Polish (3 Weeks)
+Task 6.1: Enhance Tutor APIs for Voice Support
+Description: Add voice support to the virtual tutor for premium tiers.
+Files:
+/ai/src/tutor.js (update)
+Dependencies:
+npm: axios
+Steps:
+Update /ai/src/tutor.js:
+ javascript
+Copy
+const generateTutorVoiceResponse = async (question, context) => {
+  const response = await callClaudeAPI(`Context: ${context}. Question: ${question}. Provide a concise answer for voice output.`);
+  // Placeholder for text-to-speech (e.g., AWS Polly)
+  return { text: response, audio: 'audio_url' };
+};
+
+module.exports = { generateTutorResponse, generateTutorVoiceResponse };
+
+
+Update /server/src/routes/curriculum.js:
+ javascript
+Copy
+router.post('/tutor/voice', async (req, res) => {
+  const { question, context } = req.body;
+  const response = await generateTutorVoiceResponse(question, context);
+  res.json(response);
+});
+
+
+Test voice API in Replit (POST /api/curriculum/tutor/voice, body: { "question": "What is algebra?", "context": "Math lesson" }).
+Expected Outcome: Tutor API supports voice responses (placeholder audio URL).
+Cohesiveness Notes: Extends tutor; integrates with lesson UI.
+Task 6.2: Optimize Community APIs and Add Group Projects
+Description: Optimize community APIs for scalability and add group project features.
+Files:
+/server/src/models/communityPost.js (update)
+/server/src/resolvers.js (update)
+Dependencies: None (uses existing socket.io).
+Steps:
+Update /server/src/models/communityPost.js:
+ javascript
+Copy
+const schema = new mongoose.Schema({
+  content: String,
+  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  createdAt: { type: Date, default: Date.now },
+  projectId: String,
+});
+
+
+Update /server/src/resolvers.js:
+ javascript
+Copy
+const createGroupProject = async (_, { name, members }) => {
+  // Placeholder: Store project in MongoDB
+  return { id: 'project_id', name, members };
+};
+const Mutation = { /* ... */ createGroupProject };
+
+
+Update /server/src/socket.js:
+ javascript
+Copy
+io.on('connection', (socket) => {
+  socket.on('projectPost', async ({ content, author, projectId }) => {
+    const post = new CommunityPost({ content, author, projectId });
+    await post.save();
+    io.emit('newProjectPost', post);
+  });
+});
+
+
+Test group project posts in Replit (emit projectPost via Socket.IO client).
+Expected Outcome: Community supports group projects, with scalable APIs.
+Cohesiveness Notes: Extends community; integrates with camps.
+Task 6.3: Finalize Analytics with Recommendations
+Description: Add recommendation logic to analytics APIs.
+Files:
+/ai/src/analytics.py (update)
+Dependencies: None (uses existing tensorflow).
+Steps:
+Update /ai/src/analytics.py:
+ python
+Copy
+def predict_engagement(data):
+    return {
+      'risk': 'low',
+      'recommendation': 'Assign marketplace base ID: kb_123456',
+      'baseId': 'kb_123456',
+    };
+
+
+Update /server/src/routes/analytics.js:
+ javascript
+Copy
+router.post('/predict', async (req, res) => {
+  // ... existing code ...
+  const result = JSON.parse(output);
+  // Link recommendation to marketplace
+  res.json(result);
+});
+
+
+Test API in Replit (POST /api/analytics/predict).
+Expected Outcome: Analytics API includes marketplace recommendations.
+Cohesiveness Notes: Integrates with marketplace; reusable for tutor.
+Task 6.4: Polish UI for Accessibility
+Description: Enhance UI for WCAG 2.1 compliance.
+Files:
+/client/src/index.css (update)
+All UI components/pages
+Dependencies:
+npm: axe-core
+Steps:
+In /client, run npm install axe-core.
+Update /client/src/index.css:
+ css
+Copy
+/* Add focus styles */
+:focus { outline: 2px solid #1e3a8a; outline-offset: 2px; }
+/* Ensure high contrast */
+.text-primary { color: #1e3a8a; }
+
+
+Update all components (e.g., Button, Modal) with ARIA attributes:
+ jsx
+Copy
+<button className="bg-primary text-white px-4 py-2 rounded-md" aria-label="Submit" {...props}>
+
+
+Create /client/src/tests/accessibility.test.js:
+ javascript
+Copy
+import { render } from '@testing-library/react';
+import axe from 'axe-core';
+import Home from '../pages/Home';
+
+test('Home page is accessible', async () => {
+  const { container } = render(<Home />);
+  const results = await axe.run(container);
+  expect(results.violations.length).toBe(0);
+});
+
+
+Run npm test in /client to check accessibility.
+Manually test UI in Replit’s preview with screen reader (e.g., ChromeVox).
+Expected Outcome: UI meets WCAG 2.1, verified via axe-core.
+Cohesiveness Notes: Accessibility enhancements apply to all UI components.
+Task 6.5: Add Tutor/Community/Insight Emails
+Description: Add emails for tutor sessions, community projects, and analytics insights.
+Files:
+/server/src/services/email.js
+Dependencies: None (uses existing nodemailer).
+Steps:
+Update /server/src/services/email.js:
+ javascript
+Copy
+const sendTutorEmail = async (email, sessionSummary) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'Tutor Session Summary',
+    html: `<h1>Session Complete</h1><p>${sessionSummary}</p>`,
+  });
+};
+
+const sendProjectEmail = async (email, projectName) => {
+  await transporter.sendMail({
+    from: 'no-reply@platform.com',
+    to: email,
+    subject: 'New Group Project',
+    html: `<h1>Project Update</h1><p>Joined ${projectName}. Collaborate now!</p>`,
+  });
+};
+
+module.exports = { /* ... */ sendTutorEmail, sendProjectEmail, sendInsightEmail };
+
+
+Update /server/src/routes/curriculum.js:
+ javascript
+Copy
+const { sendTutorEmail } = require('../services/email');
+router.post('/tutor', async (req, res) => {
+  // ... existing code ...
+  await sendTutorEmail('user@example.com', `Answered: ${question}`);
+  res.json({ response });
+});
+
+
+Update /server/src/resolvers.js:
+ javascript
+Copy
+const { sendProjectEmail } = require('./services/email');
+const createGroupProject = async (_, { name, members }) => {
+  // ... existing code ...
+  await sendProjectEmail('user@example.com', name);
+  return { id: 'project_id', name, members };
+};
+
+
+Test emails in Replit’s console.
+Expected Outcome: Tutor/community/insight emails sent, verified via email client.
+Cohesiveness Notes: Reuses email service; integrates with tutor/community.
+Task 6.6: Testing and Deployment
+Description: Perform end-to-end testing and deploy to AWS.
+Files:
+/client/cypress/integration/app.spec.js
+/server/.github/workflows/deploy.yml
+Dependencies:
+npm: cypress
+Steps:
+In /client, run npm install cypress --save-dev.
+Create /client/cypress/integration/app.spec.js:
+ javascript
+Copy
+describe('App', () => {
+  it('navigates and performs actions', () => {
+    cy.visit('/');
+    cy.contains('Get Started').click();
+    cy.url().should('include', '/login');
+    cy.get('input[name="email"]').type('test@example.com');
+    cy.get('button').click();
+  });
+});
+
+
+Update /client/package.json:
+ json
+Copy
+"scripts": { /* ... */ "cypress": "cypress open" }
+
+
+Run npm run cypress in /client to test UI flows in Replit.
+Create /server/.github/workflows/deploy.yml:
+ yaml
+Copy
+name: Deploy to AWS
+on: [push]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with: { node-version: '16'
+
