@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import AIStatusBadge from "@/components/ui/AIStatusBadge";
 
 interface HeaderProps {
   onMenuClick: () => void;
