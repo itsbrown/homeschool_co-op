@@ -244,7 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/curricula/generate", isAuthenticated, async (req, res) => {
     try {
       console.log("AI Curriculum Generation - Request received", { userId: req.session.userId });
-      const { subject, gradeLevel, learningStyles, additionalDetails } = req.body;
+      const { subject, gradeLevel, learningStyles, additionalDetails, knowledgeBaseIds } = req.body;
       
       // Validate form data
       if (!subject || !gradeLevel || !learningStyles || learningStyles.length === 0) {
@@ -261,6 +261,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("AI Curriculum Generation - Services imported, calling template generator");
       
+      // Log knowledge base IDs if provided
+      if (knowledgeBaseIds && knowledgeBaseIds.length > 0) {
+        console.log(`Including ${knowledgeBaseIds.length} knowledge base(s) in curriculum generation:`, knowledgeBaseIds);
+      }
+      
       // Declare variables in outer scope
       let curriculumTemplate;
       let curriculumData;
@@ -272,7 +277,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subject, 
           gradeLevel, 
           learningStyles, 
-          additionalDetails 
+          additionalDetails,
+          knowledgeBaseIds 
         });
         
         console.log("AI Curriculum Generation - Template generated successfully");

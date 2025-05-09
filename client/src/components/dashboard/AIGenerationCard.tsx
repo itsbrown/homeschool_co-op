@@ -13,9 +13,11 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { AIGenerationFormData } from "@/lib/types";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { generateCurriculum } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import type { KnowledgeBase } from "@shared/schema";
 
 const subjects = [
   "Mathematics",
@@ -45,12 +47,48 @@ const learningStyles = [
 
 export default function AIGenerationCard() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [formData, setFormData] = useState<AIGenerationFormData>({
     subject: "",
     gradeLevel: "",
     learningStyles: [],
-    additionalDetails: ""
+    additionalDetails: "",
+    knowledgeBaseIds: []
   });
+
+  // Fetch available knowledge bases
+  const { data: personalKnowledgeBases, isLoading: isLoadingPersonalKnowledgeBases } = useQuery({
+    queryKey: ['/api/knowledge-bases/author/me'],
+    enabled: !!user
+  });
+
+  const { data: publicKnowledgeBases, isLoading: isLoadingPublicKnowledgeBases } = useQuery({
+    queryKey: ['/api/knowledge-bases/public']
+  });
+
+  // Combine personal and public knowledge bases
+  const allKnowledgeBases: KnowledgeBase[] = [
+    ...(Array.isArray(personalKnowledgeBases) ? personalKnowledgeBases : []), 
+    ...(Array.isArray(publicKnowledgeBases) ? publicKnowledgeBases : [])
+  ];
+  const isLoadingKnowledgeBases = isLoadingPersonalKnowledgeBases || isLoadingPublicKnowledgeBases;
+  
+  // Handle knowledge base selection
+  const handleKnowledgeBaseChange = (kbId: number, checked: boolean) => {
+    setFormData(prev => {
+      if (checked) {
+        return {
+          ...prev,
+          knowledgeBaseIds: [...(prev.knowledgeBaseIds || []), kbId]
+        };
+      } else {
+        return {
+          ...prev,
+          knowledgeBaseIds: (prev.knowledgeBaseIds || []).filter(id => id !== kbId)
+        };
+      }
+    });
+  };
 
   const generateMutation = useMutation({
     mutationFn: generateCurriculum,
@@ -170,6 +208,43 @@ export default function AIGenerationCard() {
               value={formData.additionalDetails}
               onChange={(e) => setFormData({ ...formData, additionalDetails: e.target.value })}
             />
+          </div>
+          
+          <div>
+            <Label className="mb-2 block">Knowledge Bases (Optional)</Label>
+            {isLoadingKnowledgeBases ? (
+              <div className="flex items-center justify-center p-4 border rounded">
+                <div className="animate-spin h-5 w-5 border-t-2 border-primary rounded-full" />
+                <span className="ml-2 text-sm">Loading knowledge bases...</span>
+              </div>
+            ) : allKnowledgeBases.length === 0 ? (
+              <div className="p-4 border rounded text-center text-sm text-muted-foreground">
+                No knowledge bases available. Create knowledge bases to enhance curriculum generation.
+              </div>
+            ) : (
+              <div className="max-h-[200px] overflow-y-auto border rounded p-2">
+                {allKnowledgeBases.map(kb => (
+                  <div key={kb.id} className="flex items-center p-2 hover:bg-muted/50 rounded">
+                    <Checkbox
+                      id={`kb-${kb.id}`}
+                      checked={formData.knowledgeBaseIds?.includes(kb.id)}
+                      onCheckedChange={(checked) => 
+                        handleKnowledgeBaseChange(kb.id, checked as boolean)
+                      }
+                    />
+                    <Label
+                      htmlFor={`kb-${kb.id}`}
+                      className="ml-3 text-sm font-normal cursor-pointer"
+                    >
+                      {kb.title} <span className="text-xs text-muted-foreground">({kb.subject})</span>
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Selected knowledge bases will be used to enhance the generated curriculum
+            </p>
           </div>
           
           <Button 
