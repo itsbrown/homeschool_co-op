@@ -137,6 +137,18 @@ export function KnowledgeBaseCreateDialog({
       console.log("Form submission started", data);
       setIsSubmitting(true);
       
+      // Log form data for debugging
+      console.log("Form data:", data);
+      console.log("Field values:", {
+        title: data.title,
+        description: data.description,
+        subject: data.subject,
+        difficulty: data.difficulty,
+        price: typeof data.price, // log the type
+        isPublic: data.isPublic,
+        files: uploadedFiles
+      });
+      
       // Ensure we're providing all the required fields according to the schema
       const payload = {
         title: data.title,
@@ -153,10 +165,61 @@ export function KnowledgeBaseCreateDialog({
       };
       
       console.log("Submitting payload:", payload);
-      const response = await createKnowledgeBaseMutation.mutateAsync(payload);
-      console.log("Knowledge base created successfully", response);
+      
+      // Direct fetch approach as a fallback
+      try {
+        console.log("Using direct fetch for submission");
+        const response = await fetch('/api/knowledge-bases', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log("Knowledge base created successfully", result);
+        
+        // Successful submission - reset form and close dialog
+        form.reset();
+        setUploadedFiles([]);
+        setIsSubmitting(false);
+        onOpenChange(false);
+        
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/author/me"] });
+        toast({
+          title: "Success",
+          description: "Knowledge base created successfully",
+        });
+      } catch (fetchError) {
+        console.error("Fetch error:", fetchError);
+        // Try the mutation approach as a fallback
+        const response = await createKnowledgeBaseMutation.mutateAsync(payload);
+        console.log("Knowledge base created via mutation", response);
+        
+        // Successful submission - reset form and close dialog
+        form.reset();
+        setUploadedFiles([]);
+        setIsSubmitting(false);
+        onOpenChange(false);
+        
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/author/me"] });
+        toast({
+          title: "Success",
+          description: "Knowledge base created successfully",
+        });
+      }
     } catch (error) {
       console.error("Error creating knowledge base:", error);
+      setIsSubmitting(false);
       toast({
         title: "Error",
         description: "Failed to create knowledge base. Please try again.",
@@ -297,21 +360,24 @@ export function KnowledgeBaseCreateDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Difficulty Level</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
+                    <div className="relative">
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select difficulty level" />
-                        </SelectTrigger>
+                        <select
+                          className="w-full h-10 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                          value={field.value}
+                          onChange={field.onChange}
+                        >
+                          <option value="beginner">Beginner</option>
+                          <option value="intermediate">Intermediate</option>
+                          <option value="advanced">Advanced</option>
+                        </select>
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="beginner">Beginner</SelectItem>
-                        <SelectItem value="intermediate">Intermediate</SelectItem>
-                        <SelectItem value="advanced">Advanced</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                      </div>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
