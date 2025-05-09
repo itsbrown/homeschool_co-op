@@ -77,35 +77,27 @@ const subjectObjectives: Record<string, string[]> = {
 // Generate a curriculum template based on form data and selected knowledge bases
 export async function generateCurriculumTemplate(formData: AIGenerationFormData): Promise<CurriculumTemplate> {
   try {
-    // Check if knowledge bases are provided and if enhanced generation is available
-    if (formData.knowledgeBaseIds && formData.knowledgeBaseIds.length > 0 && isEnhancedGenerationAvailable()) {
+    // First check if AI is available at all
+    if (isAnthropicAvailable()) {
       try {
-        console.log('Attempting to use enhanced AI curriculum generation with knowledge base integration');
+        console.log('Using AI curriculum generation with knowledge base integration');
         
-        // Fetch knowledge bases
-        const { storage } = await import('../storage');
-        const knowledgeBases = await Promise.all(
-          formData.knowledgeBaseIds.map(id => storage.getKnowledgeBase(id))
-        );
-        
-        // Filter out undefined knowledge bases
-        const validKnowledgeBases = knowledgeBases.filter(kb => kb !== undefined);
-        
-        if (validKnowledgeBases.length > 0) {
-          console.log(`Using enhanced generation with ${validKnowledgeBases.length} knowledge bases`);
-          // Use our enhanced curriculum generation that better integrates knowledge base content
-          const enhancedCurriculum = await generateEnhancedCurriculum(formData, validKnowledgeBases);
-          return enhancedCurriculum;
+        // Always attempt to use enhanced generation if AI is available, regardless of knowledge bases
+        if (isEnhancedGenerationAvailable()) {
+          return await generateEnhancedCurriculum(formData);
         }
-      } catch (enhancedError) {
-        console.warn('Enhanced curriculum generation failed, falling back to standard AI generation:', enhancedError);
+        
+        // If enhanced generation is not available, fall back to standard AI
+        console.log('Enhanced AI unavailable, using standard AI curriculum generation');
+        return await generateAICurriculum(formData);
+      } catch (aiError) {
+        console.warn('AI curriculum generation failed, falling back to template-based generation:', aiError);
       }
+    } else {
+      console.log('AI services unavailable, using template-based generation');
     }
     
-    // Fall back to standard AI generation if enhanced generation fails or isn't applicable
-    console.log('Using standard AI curriculum generation');
-    const aiCurriculum = await generateAICurriculum(formData);
-    return aiCurriculum;
+    // If AI generation failed or is unavailable, use template-based generation
   } catch (error: any) {
     console.warn('AI curriculum generation failed, falling back to template-based generation:', error);
     

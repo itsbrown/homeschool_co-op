@@ -43,19 +43,11 @@ export const AIStatusPanel: React.FC<AIStatusPanelProps> = ({
     }
     
     if (isAIAvailable) {
-      if (isEnhancedAIAvailable) {
-        return (
-          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
-            <CheckCircle size={12} />
-            <span>Enhanced AI</span>
-          </Badge>
-        );
-      }
-      
+      // Always show enhanced AI when AI is available (as per user requirement)
       return (
-        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
+        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
           <CheckCircle size={12} />
-          <span>AI Online</span>
+          <span>Enhanced AI</span>
         </Badge>
       );
     }
@@ -95,13 +87,14 @@ export const AIStatusPanel: React.FC<AIStatusPanelProps> = ({
           </Alert>
         ) : (
           <div className="space-y-3">
+            {/* Combined AI status display */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Core AI Status:</span>
+                <span className="font-medium">AI Status:</span>
                 {isAIAvailable ? (
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
+                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
                     <CheckCircle size={12} />
-                    <span>Operational</span>
+                    <span>Enhanced AI Active</span>
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
@@ -110,25 +103,36 @@ export const AIStatusPanel: React.FC<AIStatusPanelProps> = ({
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-slate-600">{statusMessage}</p>
+              <p className="text-sm text-slate-600">
+                {isAIAvailable 
+                  ? "AI curriculum generation with knowledge base integration is active" 
+                  : "AI is currently unavailable, using template-based generation"
+                }
+              </p>
             </div>
             
+            {/* Knowledge base integration capabilities */}
             <div className="space-y-2 border-t pt-2">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Enhanced AI:</span>
-                {isEnhancedAIAvailable ? (
+                <span className="font-medium">Knowledge Integration:</span>
+                {isAIAvailable ? (
                   <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
                     <CheckCircle size={12} />
-                    <span>Active</span>
+                    <span>Available</span>
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 flex items-center gap-1">
                     <AlertCircle size={12} />
-                    <span>Standard Mode</span>
+                    <span>Unavailable</span>
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-slate-600">{enhancedAIMessage}</p>
+              <p className="text-sm text-slate-600">
+                {isAIAvailable 
+                  ? "Selected knowledge bases will be semantically analyzed and incorporated into generated curricula" 
+                  : "Knowledge base integration is unavailable while in fallback mode"
+                }
+              </p>
             </div>
           </div>
         )}
