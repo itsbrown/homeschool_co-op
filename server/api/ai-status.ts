@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { isAnthropicAvailable } from '../services/anthropicService';
+import { isEnhancedGenerationAvailable } from '../services/aiEnhancedGeneration';
 
 /**
  * Returns the status of the AI services
@@ -7,6 +8,7 @@ import { isAnthropicAvailable } from '../services/anthropicService';
 export const getAIStatus = async (req: Request, res: Response) => {
   try {
     const isAvailable = isAnthropicAvailable();
+    const isEnhancedAvailable = isEnhancedGenerationAvailable();
     
     return res.status(200).json({
       anthropic: {
@@ -15,6 +17,13 @@ export const getAIStatus = async (req: Request, res: Response) => {
         message: isAvailable 
           ? 'Anthropic API is available and operational' 
           : 'Anthropic API is currently unavailable, using fallback mechanisms'
+      },
+      enhancedAI: {
+        available: isEnhancedAvailable,
+        status: isEnhancedAvailable ? 'operational' : 'unavailable',
+        message: isEnhancedAvailable
+          ? 'Enhanced AI capabilities for knowledge base integration are available'
+          : 'Enhanced AI capabilities are unavailable, using standard generation'
       }
     });
   } catch (error) {

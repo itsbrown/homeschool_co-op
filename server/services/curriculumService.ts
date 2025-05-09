@@ -1,6 +1,7 @@
 import { AIGenerationFormData } from "@/lib/types";
 import { Curriculum, Lesson } from "@shared/schema";
 import { generateAICurriculum } from "./anthropicService";
+import { generateEnhancedCurriculum, isEnhancedGenerationAvailable } from "./aiEnhancedGeneration";
 
 // Template for curriculum structure
 export interface CurriculumTemplate {
@@ -76,7 +77,33 @@ const subjectObjectives: Record<string, string[]> = {
 // Generate a curriculum template based on form data and selected knowledge bases
 export async function generateCurriculumTemplate(formData: AIGenerationFormData): Promise<CurriculumTemplate> {
   try {
-    // First attempt to use AI service to generate curriculum
+    // Check if knowledge bases are provided and if enhanced generation is available
+    if (formData.knowledgeBaseIds && formData.knowledgeBaseIds.length > 0 && isEnhancedGenerationAvailable()) {
+      try {
+        console.log('Attempting to use enhanced AI curriculum generation with knowledge base integration');
+        
+        // Fetch knowledge bases
+        const { storage } = await import('../storage');
+        const knowledgeBases = await Promise.all(
+          formData.knowledgeBaseIds.map(id => storage.getKnowledgeBase(id))
+        );
+        
+        // Filter out undefined knowledge bases
+        const validKnowledgeBases = knowledgeBases.filter(kb => kb !== undefined);
+        
+        if (validKnowledgeBases.length > 0) {
+          console.log(`Using enhanced generation with ${validKnowledgeBases.length} knowledge bases`);
+          // Use our enhanced curriculum generation that better integrates knowledge base content
+          const enhancedCurriculum = await generateEnhancedCurriculum(formData, validKnowledgeBases);
+          return enhancedCurriculum;
+        }
+      } catch (enhancedError) {
+        console.warn('Enhanced curriculum generation failed, falling back to standard AI generation:', enhancedError);
+      }
+    }
+    
+    // Fall back to standard AI generation if enhanced generation fails or isn't applicable
+    console.log('Using standard AI curriculum generation');
     const aiCurriculum = await generateAICurriculum(formData);
     return aiCurriculum;
   } catch (error: any) {
