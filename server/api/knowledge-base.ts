@@ -1,189 +1,181 @@
-import { Request, Response } from 'express';
-import { storage } from '../storage';
-import { ZodError } from 'zod';
-import { insertKnowledgeBaseSchema } from '@shared/schema';
-import { formatZodError } from '../utils';
+import { Request, Response } from "express";
+import { storage } from "../storage";
+import { insertKnowledgeBaseSchema } from "@shared/schema";
+import { z } from "zod";
+import { formatZodError } from "../utils";
 
-// Get all public knowledge bases with optional limit
+/**
+ * Get a list of public knowledge bases
+ */
 export const getPublicKnowledgeBases = async (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
     const knowledgeBases = await storage.getPublicKnowledgeBases(limit);
-    return res.json(knowledgeBases);
+    res.status(200).json(knowledgeBases);
   } catch (error) {
-    console.error("Error getting public knowledge bases:", error);
-    return res.status(500).json({ message: "Failed to retrieve public knowledge bases" });
+    console.error("Error fetching public knowledge bases:", error);
+    res.status(500).json({ message: "Error fetching public knowledge bases" });
   }
 };
 
-// Get knowledge bases by subject
+/**
+ * Get knowledge bases by subject
+ */
 export const getKnowledgeBasesBySubject = async (req: Request, res: Response) => {
   try {
     const { subject } = req.params;
-    if (!subject) {
-      return res.status(400).json({ message: "Subject is required" });
-    }
-    
     const knowledgeBases = await storage.getKnowledgeBasesBySubject(subject);
-    return res.json(knowledgeBases);
+    res.status(200).json(knowledgeBases);
   } catch (error) {
-    console.error("Error getting knowledge bases by subject:", error);
-    return res.status(500).json({ message: "Failed to retrieve knowledge bases" });
+    console.error("Error fetching knowledge bases by subject:", error);
+    res.status(500).json({ message: "Error fetching knowledge bases" });
   }
 };
 
-// Get knowledge bases created by a user
+/**
+ * Get knowledge bases by author
+ */
 export const getKnowledgeBasesByAuthor = async (req: Request, res: Response) => {
   try {
     const { authorId } = req.params;
-    if (!authorId) {
-      return res.status(400).json({ message: "Author ID is required" });
-    }
     
-    const knowledgeBases = await storage.getKnowledgeBasesByAuthor(parseInt(authorId));
-    return res.json(knowledgeBases);
+    // If requesting own knowledge bases, use session user ID
+    const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
+    
+    const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
+    res.status(200).json(knowledgeBases);
   } catch (error) {
-    console.error("Error getting knowledge bases by author:", error);
-    return res.status(500).json({ message: "Failed to retrieve knowledge bases" });
+    console.error("Error fetching knowledge bases by author:", error);
+    res.status(500).json({ message: "Error fetching knowledge bases" });
   }
 };
 
-// Get a specific knowledge base by ID
+/**
+ * Get a specific knowledge base by ID
+ */
 export const getKnowledgeBaseById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({ message: "Knowledge base ID is required" });
-    }
+    const knowledgeBaseId = parseInt(req.params.id);
+    const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
     
-    const knowledgeBase = await storage.getKnowledgeBase(parseInt(id));
     if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
     
-    return res.json(knowledgeBase);
+    // Check if knowledge base is public or user is authenticated and is the author
+    const isAuthor = req.session.userId && knowledgeBase.authorId === req.session.userId;
+    if (!knowledgeBase.isPublic && !isAuthor) {
+      return res.status(403).json({ message: "You don't have permission to access this knowledge base" });
+    }
+    
+    res.status(200).json(knowledgeBase);
   } catch (error) {
-    console.error("Error getting knowledge base:", error);
-    return res.status(500).json({ message: "Failed to retrieve knowledge base" });
+    console.error("Error fetching knowledge base:", error);
+    res.status(500).json({ message: "Error fetching knowledge base" });
   }
 };
 
-// Create a new knowledge base
+/**
+ * Create a new knowledge base
+ */
 export const createKnowledgeBase = async (req: Request, res: Response) => {
   try {
-    const userId = req.session.userId;
-    if (!userId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    const validatedData = insertKnowledgeBaseSchema.parse(req.body);
     
-    // Validate request body against schema
-    const data = insertKnowledgeBaseSchema.parse(req.body);
-    
-    // Create the knowledge base with the current user as author
     const knowledgeBase = await storage.createKnowledgeBase({
-      ...data,
-      authorId: userId
+      ...validatedData,
+      authorId: req.session.userId
     });
     
-    return res.status(201).json(knowledgeBase);
+    res.status(201).json(knowledgeBase);
   } catch (error) {
-    console.error("Error creating knowledge base:", error);
-    
-    if (error instanceof ZodError) {
-      return res.status(400).json({ message: "Invalid data", errors: formatZodError(error) });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "Validation error",
+        errors: formatZodError(error)
+      });
     }
-    
-    return res.status(500).json({ message: "Failed to create knowledge base" });
+    console.error("Error creating knowledge base:", error);
+    res.status(500).json({ message: "Error creating knowledge base" });
   }
 };
 
-// Update a knowledge base
+/**
+ * Update an existing knowledge base
+ */
 export const updateKnowledgeBase = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const userId = req.session.userId;
+    const knowledgeBaseId = parseInt(req.params.id);
+    const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
     
-    if (!userId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-    
-    if (!id) {
-      return res.status(400).json({ message: "Knowledge base ID is required" });
-    }
-    
-    // Check if knowledge base exists and is owned by the user
-    const knowledgeBase = await storage.getKnowledgeBase(parseInt(id));
     if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
     
-    if (knowledgeBase.authorId !== userId) {
+    // Check if user is the author
+    if (knowledgeBase.authorId !== req.session.userId) {
       return res.status(403).json({ message: "You don't have permission to update this knowledge base" });
     }
     
-    // Validate request body against schema
-    const updateData = insertKnowledgeBaseSchema.partial().parse(req.body);
+    const validatedData = insertKnowledgeBaseSchema.partial().parse(req.body);
+    const updatedKnowledgeBase = await storage.updateKnowledgeBase(knowledgeBaseId, validatedData);
     
-    // Update the knowledge base
-    const updatedKnowledgeBase = await storage.updateKnowledgeBase(parseInt(id), updateData);
-    
-    return res.json(updatedKnowledgeBase);
+    res.status(200).json(updatedKnowledgeBase);
   } catch (error) {
-    console.error("Error updating knowledge base:", error);
-    
-    if (error instanceof ZodError) {
-      return res.status(400).json({ message: "Invalid data", errors: formatZodError(error) });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "Validation error",
+        errors: formatZodError(error)
+      });
     }
-    
-    return res.status(500).json({ message: "Failed to update knowledge base" });
+    console.error("Error updating knowledge base:", error);
+    res.status(500).json({ message: "Error updating knowledge base" });
   }
 };
 
-// Increment download count
+/**
+ * Increment the download count for a knowledge base
+ */
 export const incrementDownloadCount = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({ message: "Knowledge base ID is required" });
-    }
+    const knowledgeBaseId = parseInt(req.params.id);
+    const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
     
-    const updatedKnowledgeBase = await storage.incrementDownloadCount(parseInt(id));
-    if (!updatedKnowledgeBase) {
+    if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
     
-    return res.json({ success: true, downloadCount: updatedKnowledgeBase.downloadCount });
+    // Increment the download count
+    const updatedKnowledgeBase = await storage.incrementDownloadCount(knowledgeBaseId);
+    
+    res.status(200).json({ 
+      success: true, 
+      downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+    });
   } catch (error) {
-    console.error("Error incrementing download count:", error);
-    return res.status(500).json({ message: "Failed to update download count" });
+    console.error("Error recording download:", error);
+    res.status(500).json({ message: "Error recording download" });
   }
 };
 
-// Record a purchase
+/**
+ * Record a purchase of a knowledge base
+ */
 export const recordPurchase = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const userId = req.session.userId;
+    const knowledgeBaseId = parseInt(req.params.id);
+    const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
     
-    if (!userId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-    
-    if (!id) {
-      return res.status(400).json({ message: "Knowledge base ID is required" });
-    }
-    
-    const knowledgeBase = await storage.getKnowledgeBase(parseInt(id));
     if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
     
     // Record the purchase
-    const updatedKnowledgeBase = await storage.addPurchaser(parseInt(id), userId);
+    await storage.addPurchaser(knowledgeBaseId, req.session.userId);
     
-    return res.json({ success: true });
+    res.status(200).json({ success: true });
   } catch (error) {
     console.error("Error recording purchase:", error);
-    return res.status(500).json({ message: "Failed to record purchase" });
+    res.status(500).json({ message: "Error recording purchase" });
   }
 };

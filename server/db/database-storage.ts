@@ -1,6 +1,13 @@
-import { users, type User, type InsertUser, curricula, type Curriculum, type InsertCurriculum, lessons, type Lesson, type InsertLesson, events, type Event, type InsertEvent, marketplaceItems, type MarketplaceItem, type InsertMarketplaceItem } from "@shared/schema";
+import { 
+  users, type User, type InsertUser, 
+  curricula, type Curriculum, type InsertCurriculum, 
+  lessons, type Lesson, type InsertLesson, 
+  events, type Event, type InsertEvent, 
+  marketplaceItems, type MarketplaceItem, type InsertMarketplaceItem,
+  knowledgeBases, type KnowledgeBase, type InsertKnowledgeBase
+} from "@shared/schema";
 import { db } from "../db";
-import { eq, desc, and, gte, gt } from "drizzle-orm";
+import { eq, desc, and, gte, gt, sql } from "drizzle-orm";
 import { IStorage } from "../storage";
 
 export class DatabaseStorage implements IStorage {
@@ -168,5 +175,109 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedItem || undefined;
+  }
+  
+  // Knowledge Base methods
+  async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
+    const [knowledgeBase] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));
+    return knowledgeBase || undefined;
+  }
+  
+  async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
+    return await db.select().from(knowledgeBases).where(eq(knowledgeBases.authorId, authorId));
+  }
+  
+  async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
+    // Case insensitive search by converting both to lowercase
+    return await db
+      .select()
+      .from(knowledgeBases)
+      .where(
+        sql`LOWER(${knowledgeBases.subject}) = LOWER(${subject})`
+      );
+  }
+  
+  async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
+    const query = db
+      .select()
+      .from(knowledgeBases)
+      .where(eq(knowledgeBases.isPublic, true))
+      .orderBy(desc(knowledgeBases.downloadCount));
+    
+    if (limit) {
+      return await query.limit(limit);
+    }
+    
+    return await query;
+  }
+  
+  async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
+    const now = new Date();
+    
+    const [knowledgeBase] = await db
+      .insert(knowledgeBases)
+      .values({
+        ...insertKnowledgeBase,
+        downloadCount: 0,
+        purchasedBy: [],
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    
+    return knowledgeBase;
+  }
+  
+  async updateKnowledgeBase(id: number, updateData: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
+    const now = new Date();
+    
+    const [updatedKnowledgeBase] = await db
+      .update(knowledgeBases)
+      .set({ 
+        ...updateData, 
+        updatedAt: now 
+      })
+      .where(eq(knowledgeBases.id, id))
+      .returning();
+    
+    return updatedKnowledgeBase || undefined;
+  }
+  
+  async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = await this.getKnowledgeBase(id);
+    if (!knowledgeBase) return undefined;
+    
+    const [updatedKnowledgeBase] = await db
+      .update(knowledgeBases)
+      .set({
+        downloadCount: knowledgeBase.downloadCount + 1
+      })
+      .where(eq(knowledgeBases.id, id))
+      .returning();
+    
+    return updatedKnowledgeBase || undefined;
+  }
+  
+  async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = await this.getKnowledgeBase(id);
+    if (!knowledgeBase) return undefined;
+    
+    // Check if user has already purchased
+    if (knowledgeBase.purchasedBy.includes(userId)) {
+      return knowledgeBase;
+    }
+    
+    // Add the user to the purchasedBy array
+    const updatedPurchasedBy = [...knowledgeBase.purchasedBy, userId];
+    
+    const [updatedKnowledgeBase] = await db
+      .update(knowledgeBases)
+      .set({
+        purchasedBy: updatedPurchasedBy
+      })
+      .where(eq(knowledgeBases.id, id))
+      .returning();
+    
+    return updatedKnowledgeBase || undefined;
   }
 }
