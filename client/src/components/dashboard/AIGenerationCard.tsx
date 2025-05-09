@@ -231,8 +231,8 @@ export default function AIGenerationCard() {
               </div>
             ) : (
               <div className="max-h-[200px] overflow-y-auto border rounded p-2">
-                {allKnowledgeBases.map(kb => (
-                  <div key={kb.id} className="flex items-center p-2 hover:bg-muted/50 rounded">
+                {allKnowledgeBases.map((kb, index) => (
+                  <div key={`knowledge-base-${kb.id}-${index}`} className="flex items-center p-2 hover:bg-muted/50 rounded">
                     <Checkbox
                       id={`kb-${kb.id}`}
                       checked={formData.knowledgeBaseIds?.includes(kb.id)}
