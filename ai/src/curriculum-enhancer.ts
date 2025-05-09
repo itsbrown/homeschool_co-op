@@ -3,7 +3,8 @@
  * Integrates knowledge base content with AI curriculum generation
  */
 
-import { KnowledgeBase } from '@shared/schema';
+// Using relative path to avoid module resolution issues
+import type { KnowledgeBase } from '../../shared/schema';
 import { processKnowledgeBase } from './scanner';
 import { buildSemanticMap, SemanticMap } from './semantic';
 

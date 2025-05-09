@@ -83,11 +83,73 @@ export async function generateAICurriculum(formData: AIGenerationFormData): Prom
       }
       
       // Build a comprehensive prompt for the curriculum generation
-      const enhancedPrompt = `Generate a comprehensive curriculum for ${subject} for ${gradeLevel} students.
+      // Retrieve any extracted key concepts to enhance the prompt if we have valid knowledge bases
+      let keyConcepts = { topics: [], keyTerms: [], mainIdeas: [] };
+      try {
+        // If knowledge base IDs are provided, extract key concepts
+        if (knowledgeBaseIds && knowledgeBaseIds.length > 0) {
+          // Import storage dynamically to avoid circular dependencies
+          const { storage } = await import('../storage');
+          
+          // Fetch knowledge bases
+          const knowledgeBases = await Promise.all(
+            knowledgeBaseIds.map(id => storage.getKnowledgeBase(id))
+          );
+          
+          // Extract metadata and content from knowledge bases using our utility
+          const validKnowledgeBases = knowledgeBases.filter(kb => kb !== undefined);
+          
+          if (validKnowledgeBases.length > 0) {
+            // Extract key concepts for improved prompt
+            keyConcepts = extractKeyConceptsFromKnowledgeBases(validKnowledgeBases);
+            console.log('Extracted key concepts for enhanced prompt:', {
+              topics: keyConcepts.topics,
+              keyTerms: keyConcepts.keyTerms,
+              mainIdeas: keyConcepts.mainIdeas.length
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('Error extracting key concepts for enhanced prompt:', error);
+        // Continue with default empty concepts
+      }
+      
+      let enhancedPrompt = `Generate a comprehensive curriculum for ${subject} for ${gradeLevel} students.
       This curriculum should incorporate the following learning styles: ${learningStyles.join(', ')}.
       ${additionalDetails ? `Consider these additional requirements: ${additionalDetails}` : ''}
-      ${knowledgeBaseContent ? `\n${knowledgeBaseContent}\n` : ''}
+      `;
       
+      // Include knowledge base content with better formatting
+      if (knowledgeBaseContent) {
+        enhancedPrompt += `\nBased on the following knowledge base materials:\n${knowledgeBaseContent}\n`;
+        
+        // Add key topics if available
+        if (keyConcepts.topics && keyConcepts.topics.length > 0) {
+          enhancedPrompt += `\nKey topics from these materials include:\n`;
+          keyConcepts.topics.forEach(topic => {
+            enhancedPrompt += `- ${topic}\n`;
+          });
+        }
+        
+        // Add key terms if available
+        if (keyConcepts.keyTerms && keyConcepts.keyTerms.length > 0) {
+          enhancedPrompt += `\nImportant concepts to cover:\n`;
+          keyConcepts.keyTerms.forEach(term => {
+            enhancedPrompt += `- ${term}\n`;
+          });
+        }
+        
+        // Add main ideas if available
+        if (keyConcepts.mainIdeas && keyConcepts.mainIdeas.length > 0) {
+          enhancedPrompt += `\nMain ideas to incorporate:\n`;
+          keyConcepts.mainIdeas.forEach((_, idx) => {
+            enhancedPrompt += `- Include content about main idea ${idx+1}\n`;
+          });
+        }
+      }
+      
+      // Add the desired JSON format to ensure proper output
+      enhancedPrompt += `
       Format your response as a JSON object with this structure:
       {
         "title": "title of the curriculum",
@@ -100,16 +162,18 @@ export async function generateAICurriculum(formData: AIGenerationFormData): Prom
             "lessons": [
               {
                 "title": "lesson title",
-                "description": "lesson description",
+                "description": "lesson description that references knowledge base content",
                 "duration": 45,
-                "activities": ["activity 1", "activity 2", ...],
-                "resources": ["resource 1", "resource 2", ...],
+                "activities": ["activity 1 that uses knowledge base concepts", "activity 2", ...],
+                "resources": ["resource 1 related to knowledge base", "resource 2", ...],
                 "assessments": ["assessment 1", "assessment 2", ...]
               }
             ]
           }
         ]
-      }`;
+      }
+      
+      IMPORTANT: Make sure to directly reference and incorporate specific concepts, topics, and content from the knowledge base materials in the curriculum. Lessons should explicitly build on the provided knowledge base content.`;
       
       const jsonResponse = await generateCurriculumWithAI(enhancedPrompt);
       const jsonMatch = jsonResponse.match(/\{[\s\S]*\}/);

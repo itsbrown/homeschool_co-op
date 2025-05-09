@@ -3,9 +3,11 @@
  * Advanced content extraction for knowledge base files
  */
 
-import { KnowledgeBase } from '@shared/schema';
+// Import types
+// Using a relative path to avoid the module resolution issues with the @shared alias
+import type { KnowledgeBase } from "../../shared/schema";
 
-// Types for extracted content and embeddings
+// Types for file content and embeddings
 export type FileContent = {
   fileName: string;
   mimeType: string;
@@ -27,77 +29,40 @@ export async function extractContentFromFiles(files: any[]): Promise<FileContent
   if (!files || files.length === 0) {
     return [];
   }
-
+  
   const extractedContent: FileContent[] = [];
-
+  
   for (const file of files) {
     try {
-      const fileName = file.name || 'unnamed';
-      const mimeType = file.type || 'text/plain';
+      // Extract based on file type
+      const fileName = file.name || "unnamed-file";
+      const mimeType = file.type || "text/plain";
       let content = '';
       
-      if (typeof file === 'object') {
-        // Handle different content storage formats
-        if (file.content) {
-          content = typeof file.content === 'string' 
-            ? file.content 
-            : JSON.stringify(file.content);
-        } 
-        else if (file.text) {
-          content = typeof file.text === 'string' 
-            ? file.text 
-            : JSON.stringify(file.text);
+      // Handle different file types
+      if (typeof file.content === 'string') {
+        // If content is already available as string, use it directly
+        content = file.content;
+      } else if (file.text && typeof file.text === 'function') {
+        // If there's a text() method (like in File objects)
+        content = await file.text();
+      } else if (file.content && typeof file.content === 'object') {
+        // Attempt to stringify content if it's an object
+        try {
+          content = JSON.stringify(file.content, null, 2);
+        } catch (e) {
+          content = "Failed to convert content to string";
         }
-        else if (file.data) {
-          content = typeof file.data === 'string' 
-            ? file.data
-            : JSON.stringify(file.data);
-        }
-        // For base64 content, decode it
-        else if (file.base64Content) {
-          try {
-            // Use browser or Node.js compatible base64 decoding
-            content = typeof window !== 'undefined'
-              ? atob(file.base64Content)
-              : Buffer.from(file.base64Content, 'base64').toString('utf-8');
-          } catch (e) {
-            console.warn(`Failed to decode base64 content for ${fileName}:`, e);
-            content = '(Unable to decode content)';
-          }
-        }
-        // Fallback to any available text fields
-        else if (file.description) {
-          content = file.description;
-        }
+      } else {
+        // Default case
+        content = "Content could not be extracted";
       }
       
-      // For empty content, use fallback metadata extraction
-      if (!content) {
-        // Extract any available metadata
-        const metadata: Record<string, any> = {};
-        if (typeof file === 'object') {
-          Object.entries(file).forEach(([key, value]) => {
-            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-              if (key !== 'name' && key !== 'type') {
-                metadata[key] = value;
-              }
-            }
-          });
-        }
-        
-        extractedContent.push({
-          fileName,
-          mimeType,
-          content: `File metadata: ${JSON.stringify(metadata)}`,
-          metadata
-        });
-      } else {
-        extractedContent.push({
-          fileName,
-          mimeType,
-          content
-        });
-      }
+      extractedContent.push({
+        fileName,
+        mimeType,
+        content
+      });
     } catch (error) {
       console.error(`Error extracting content from file:`, error);
     }
@@ -111,38 +76,30 @@ export async function extractContentFromFiles(files: any[]): Promise<FileContent
  * Simple implementation - would be replaced with NLP in full version
  */
 export function extractKeywords(text: string, maxKeywords: number = 10): string[] {
-  if (!text) return [];
+  if (!text || typeof text !== 'string') return [];
   
-  // Remove common stop words for better keyword extraction
-  const stopWords = new Set([
-    'a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'was', 
-    'were', 'be', 'been', 'being', 'in', 'on', 'at', 'to', 'for',
-    'with', 'by', 'about', 'against', 'between', 'into', 'through',
-    'during', 'before', 'after', 'above', 'below', 'from', 'up',
-    'down', 'of', 'off', 'over', 'under', 'again', 'further', 'then',
-    'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all',
-    'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some',
-    'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than',
-    'too', 'very', 's', 't', 'can', 'will', 'just', 'don', 'should',
-    'now', 'd', 'll', 'm', 'o', 're', 've', 'y', 'ain', 'aren', 'couldn',
-    'didn', 'doesn', 'hadn', 'hasn', 'haven', 'isn', 'ma', 'mightn',
-    'mustn', 'needn', 'shan', 'shouldn', 'wasn', 'weren', 'won', 'wouldn'
-  ]);
+  // Basic preprocessing
+  const cleanedText = text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
+    .replace(/\s+/g, ' ')     // Replace multiple spaces with a single space
+    .trim();
   
-  // Clean and tokenize text
-  const words = text.toLowerCase()
-    .replace(/[^\w\s]/g, ' ')  // Replace punctuation with spaces
-    .split(/\s+/)              // Split on whitespace
-    .filter(word => word.length > 2 && !stopWords.has(word));  // Filter out stop words and short words
+  // Split text into words
+  const words = cleanedText.split(' ');
   
   // Count word frequency
-  const wordCounts: Record<string, number> = {};
-  for (const word of words) {
-    wordCounts[word] = (wordCounts[word] || 0) + 1;
-  }
+  const wordFrequency: Record<string, number> = {};
+  const stopWords = new Set(['the', 'and', 'or', 'a', 'an', 'in', 'on', 'at', 'of', 'to', 'for', 'with', 'by', 'about', 'as', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'but', 'if', 'then', 'else', 'when', 'up', 'down', 'out', 'from', 'into', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'this', 'that', 'these', 'those']);
   
-  // Sort by frequency and return top keywords
-  return Object.entries(wordCounts)
+  words.forEach(word => {
+    if (word.length > 2 && !stopWords.has(word)) {
+      wordFrequency[word] = (wordFrequency[word] || 0) + 1;
+    }
+  });
+  
+  // Sort words by frequency and take top N
+  return Object.entries(wordFrequency)
     .sort((a, b) => b[1] - a[1])
     .slice(0, maxKeywords)
     .map(entry => entry[0]);
@@ -153,8 +110,13 @@ export function extractKeywords(text: string, maxKeywords: number = 10): string[
  * In a production system, this would use a proper NLP model
  */
 export function generateMockEmbeddings(text: string, dimensions: number = 10): number[] {
-  // This is a simplified hash function to generate consistent values
-  const simpleHash = (str: string) => {
+  // In a real implementation, this would call a proper embedding model
+  // For now, we'll use a simple hash-based approach to generate consistent
+  // but meaningless vectors that have some relation to the text content
+  
+  if (!text) return Array(dimensions).fill(0);
+  
+  const hash = (str: string): number => {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
@@ -164,45 +126,67 @@ export function generateMockEmbeddings(text: string, dimensions: number = 10): n
     return hash;
   };
   
-  // Generate deterministic embeddings based on text
-  const embeddings: number[] = [];
-  for (let i = 0; i < dimensions; i++) {
-    // Use different seed for each dimension
-    const seed = simpleHash(text + i.toString());
-    // Generate value between -1 and 1
-    embeddings.push(Math.sin(seed) / 2 + 0.5);
-  }
+  // Extract keywords to use as basis for embedding
+  const keywords = extractKeywords(text, 5);
   
-  return embeddings;
+  // Generate a pseudo-random but deterministic vector based on the keywords
+  const embedding = Array(dimensions).fill(0);
+  keywords.forEach((keyword, idx) => {
+    const keywordHash = hash(keyword);
+    for (let i = 0; i < dimensions; i++) {
+      // Use different math operations to create variation in the embedding
+      const value = ((keywordHash * (i + 1)) % 100) / 100;
+      embedding[i] += value / (idx + 1); // Divide by index+1 to give earlier keywords more weight
+    }
+  });
+  
+  // Normalize the vector
+  const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+  return embedding.map(val => magnitude > 0 ? val / magnitude : 0);
 }
 
 /**
  * Process knowledge base files to extract content and generate embeddings
  */
 export async function processKnowledgeBase(knowledgeBase: KnowledgeBase): Promise<{
-  extractedContent: FileContent[];
-  embeddings: ContentEmbedding[];
+  extractedContent: FileContent[],
+  embeddings: ContentEmbedding[]
 }> {
-  if (!knowledgeBase || !knowledgeBase.files || !Array.isArray(knowledgeBase.files)) {
+  try {
+    // Prepare files for processing
+    let files: any[] = [];
+    
+    if (knowledgeBase.files && Array.isArray(knowledgeBase.files)) {
+      // If files are available directly as an array
+      files = knowledgeBase.files;
+    } else if (knowledgeBase.files && typeof knowledgeBase.files === 'object') {
+      // If files is an object but not an array, wrap it
+      files = [knowledgeBase.files];
+    } else if (knowledgeBase.description) {
+      // If no files but we have a description, use that as content
+      files = [{
+        name: `${knowledgeBase.title}.txt`,
+        type: 'text/plain',
+        content: knowledgeBase.description
+      }];
+    } else {
+      console.warn(`Knowledge base ${knowledgeBase.id} has no files or content`);
+      return { extractedContent: [], embeddings: [] };
+    }
+    
+    // Extract content from files
+    const extractedContent = await extractContentFromFiles(files);
+    
+    // Generate embeddings and extract keywords
+    const embeddings: ContentEmbedding[] = extractedContent.map(fileContent => ({
+      fileName: fileContent.fileName,
+      embedding: generateMockEmbeddings(fileContent.content),
+      keywords: extractKeywords(fileContent.content, 10)
+    }));
+    
+    return { extractedContent, embeddings };
+  } catch (error) {
+    console.error(`Error processing knowledge base ${knowledgeBase.id}:`, error);
     return { extractedContent: [], embeddings: [] };
   }
-  
-  console.log(`Processing knowledge base: ${knowledgeBase.title} with ${knowledgeBase.files.length} files`);
-  
-  // Extract content from files
-  const extractedContent = await extractContentFromFiles(knowledgeBase.files);
-  
-  // Generate embeddings for each file
-  const embeddings: ContentEmbedding[] = extractedContent.map(file => {
-    const keywords = extractKeywords(file.content);
-    const embedding = generateMockEmbeddings(file.content);
-    
-    return {
-      fileName: file.fileName,
-      embedding,
-      keywords
-    };
-  });
-  
-  return { extractedContent, embeddings };
 }
