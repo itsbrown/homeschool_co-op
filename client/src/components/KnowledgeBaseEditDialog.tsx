@@ -1,0 +1,477 @@
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { insertKnowledgeBaseSchema } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { Trash2, Plus, FileText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+const validationSchema = insertKnowledgeBaseSchema.extend({
+  tags: z.string().optional(),
+  objectives: z.string().optional(),
+  fileUpload: z.instanceof(FileList).optional(),
+});
+
+type FormValues = z.infer<typeof validationSchema>;
+
+interface FileData {
+  name: string;
+  type: string;
+  url: string; // This would be a data URL in our case
+}
+
+type KnowledgeBaseEditDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  knowledgeBaseId: number;
+};
+
+export function KnowledgeBaseEditDialog({
+  open,
+  onOpenChange,
+  knowledgeBaseId,
+}: KnowledgeBaseEditDialogProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<FileData[]>([]);
+  const [existingFiles, setExistingFiles] = useState<FileData[]>([]);
+
+  // Fetch the knowledge base data
+  const knowledgeBaseQuery = useQuery({
+    queryKey: [`/api/knowledge-bases/${knowledgeBaseId}`],
+    enabled: open && !!knowledgeBaseId,
+    refetchOnWindowFocus: false,
+  });
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(validationSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      subject: "",
+      difficulty: "beginner",
+      price: 0,
+      isPublic: true,
+      tags: "",
+      objectives: "",
+    },
+  });
+
+  // Set form values when knowledge base data is loaded
+  useEffect(() => {
+    if (knowledgeBaseQuery.data) {
+      const kb = knowledgeBaseQuery.data;
+      
+      form.reset({
+        title: kb.title,
+        description: kb.description || "",
+        subject: kb.subject,
+        difficulty: kb.difficulty,
+        price: kb.price,
+        isPublic: kb.isPublic,
+        tags: kb.metadata?.tags?.join(", ") || "",
+        objectives: kb.metadata?.objectives?.join("\n") || "",
+      });
+      
+      // Load existing files
+      if (kb.files && kb.files.length > 0) {
+        setExistingFiles(kb.files);
+      }
+    }
+  }, [knowledgeBaseQuery.data, form]);
+
+  const updateKnowledgeBaseMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest(`/api/knowledge-bases/${knowledgeBaseId}`, "PATCH", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/author/me"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${knowledgeBaseId}`] });
+      toast({
+        title: "Success",
+        description: "Knowledge base updated successfully",
+      });
+      onOpenChange(false);
+    },
+    onError: (error) => {
+      console.error("Error updating knowledge base:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update knowledge base",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setIsSubmitting(false);
+    },
+  });
+
+  const handleFileChange = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    
+    const filesArray: FileData[] = [];
+    
+    // Convert files to data URLs
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        filesArray.push({
+          name: file.name,
+          type: file.type,
+          url: e.target?.result as string,
+        });
+        
+        // Update state only after all files are processed
+        if (filesArray.length === fileList.length) {
+          setUploadedFiles([...uploadedFiles, ...filesArray]);
+        }
+      };
+      
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeExistingFile = (index: number) => {
+    setExistingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeUploadedFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const onSubmit = async (data: FormValues) => {
+    setIsSubmitting(true);
+    
+    const payload = {
+      title: data.title,
+      description: data.description,
+      subject: data.subject,
+      difficulty: data.difficulty,
+      price: data.price,
+      isPublic: data.isPublic,
+      files: [...existingFiles, ...uploadedFiles],
+      metadata: {
+        tags: data.tags ? data.tags.split(",").map(tag => tag.trim()) : [],
+        objectives: data.objectives ? data.objectives.split("\n").filter(o => o.trim().length > 0) : [],
+      },
+    };
+    
+    updateKnowledgeBaseMutation.mutate(payload);
+  };
+
+  if (knowledgeBaseQuery.isLoading) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Knowledge Base</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="w-full h-8 bg-gray-200 animate-pulse rounded"></div>
+            <div className="w-full h-24 bg-gray-200 animate-pulse rounded"></div>
+            <div className="w-full h-8 bg-gray-200 animate-pulse rounded"></div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Knowledge Base</DialogTitle>
+          <DialogDescription>
+            Update your educational resources
+          </DialogDescription>
+        </DialogHeader>
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Title</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter a title for your knowledge base" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Describe your knowledge base and what it contains"
+                      className="min-h-[100px]"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="subject"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subject</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Mathematics, Science, History" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="difficulty"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Difficulty Level</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select difficulty level" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="beginner">Beginner</SelectItem>
+                        <SelectItem value="intermediate">Intermediate</SelectItem>
+                        <SelectItem value="advanced">Advanced</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Price (in cents)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0 for free"
+                      {...field}
+                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Set to 0 for a free resource or specify price in cents (e.g., 500 = $5.00)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="isPublic"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Public Resource</FormLabel>
+                    <FormDescription>
+                      Make this knowledge base publicly visible to all users
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="tags"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tags</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Enter tags separated by commas"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Tags help users find your resources (e.g., algebra, polynomials, equations)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="objectives"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Learning Objectives</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter learning objectives (one per line)"
+                      className="min-h-[100px]"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    What will users learn from this knowledge base?
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            {/* Existing Files Section */}
+            {existingFiles.length > 0 && (
+              <div className="border rounded-md p-4">
+                <h4 className="text-sm font-medium mb-2">Current Files</h4>
+                <div className="space-y-2">
+                  {existingFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between bg-muted p-2 rounded-md">
+                      <div className="flex items-center">
+                        <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <span className="text-sm">{file.name}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeExistingFile(index)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Newly Uploaded Files Section */}
+            {uploadedFiles.length > 0 && (
+              <div className="border rounded-md p-4">
+                <h4 className="text-sm font-medium mb-2">New Files to Add</h4>
+                <div className="space-y-2">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between bg-muted p-2 rounded-md">
+                      <div className="flex items-center">
+                        <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <span className="text-sm">{file.name}</span>
+                        <Badge variant="outline" className="ml-2 bg-primary/10">New</Badge>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeUploadedFile(index)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* File Upload Field */}
+            <FormField
+              control={form.control}
+              name="fileUpload"
+              render={({ field: { value, onChange, ...field } }) => (
+                <FormItem>
+                  <FormLabel>Add More Files</FormLabel>
+                  <FormControl>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        multiple
+                        {...field}
+                        onChange={(e) => {
+                          handleFileChange(e.target.files);
+                          onChange(e.target.files);
+                        }}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    Upload PDFs, documents, slides, or other educational resources
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Updating..." : "Update Knowledge Base"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}

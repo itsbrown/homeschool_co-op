@@ -12,6 +12,7 @@ import Lessons from "@/pages/Lessons";
 import AILessonGenerator from "@/pages/AILessonGenerator";
 import KnowledgeBase from "@/pages/KnowledgeBase";
 import KnowledgeBaseDetail from "@/pages/KnowledgeBaseDetail";
+import KnowledgeBaseEdit from "@/pages/KnowledgeBaseEdit";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/useAuth";
 import AIStatusProvider from "@/contexts/AIStatusContext";
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/lessons" component={Lessons} />
       <Route path="/lessons/ai-generator" component={AILessonGenerator} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
+      <Route path="/knowledge-base/:id/edit" component={KnowledgeBaseEdit} />
       <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
       <Route component={NotFound} />
     </Switch>
