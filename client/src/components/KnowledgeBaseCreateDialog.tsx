@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -165,6 +165,23 @@ export function KnowledgeBaseCreateDialog({
     }
   };
 
+  // Add an effect to handle escape key presses
+  useEffect(() => {
+    const handleEscapeKey = (e: KeyboardEvent) => {
+      if (open && e.key === 'Escape') {
+        onOpenChange(false);
+      }
+    };
+
+    // Add event listener when component mounts
+    document.addEventListener('keydown', handleEscapeKey);
+    
+    // Clean up event listener when component unmounts
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [open, onOpenChange]);
+
   // If the dialog is not open, don't render anything
   if (!open) return null;
   
@@ -203,11 +220,24 @@ export function KnowledgeBaseCreateDialog({
           overflow: 'auto'
         }}
       >
-        <div className="flex flex-col space-y-1.5 text-center sm:text-left mb-4">
-          <h2 className="text-lg font-semibold leading-none tracking-tight">Create Knowledge Base</h2>
-          <p className="text-sm text-muted-foreground">
-            Share your educational resources with other educators and learners
-          </p>
+        <div className="flex flex-row justify-between items-start mb-4">
+          <div className="flex flex-col space-y-1.5 text-left">
+            <h2 className="text-lg font-semibold leading-none tracking-tight">Create Knowledge Base</h2>
+            <p className="text-sm text-muted-foreground">
+              Share your educational resources with other educators and learners
+            </p>
+          </div>
+          <button 
+            type="button"
+            className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100 focus:outline-none"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close dialog"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x">
+              <path d="M18 6 6 18"></path>
+              <path d="m6 6 12 12"></path>
+            </svg>
+          </button>
         </div>
         {/* Log dialog visibility for debugging */}
         <div className="sr-only">{console.log("Custom dialog content rendered, dialog state:", open)}</div>
@@ -396,10 +426,33 @@ export function KnowledgeBaseCreateDialog({
                   <FormMessage />
                   {uploadedFiles.length > 0 && (
                     <div className="mt-2">
-                      <p className="text-sm font-medium mb-1">Uploaded Files:</p>
-                      <ul className="text-sm text-muted-foreground">
+                      <p className="text-sm font-medium mb-1">Files to upload:</p>
+                      <ul className="space-y-2">
                         {uploadedFiles.map((file, index) => (
-                          <li key={index}>{file.name}</li>
+                          <li key={index} className="flex items-center justify-between border rounded p-2 bg-gray-50">
+                            <div className="flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-blue-500">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                              </svg>
+                              <span className="text-sm">{file.name}</span>
+                            </div>
+                            <button 
+                              type="button" 
+                              className="text-red-500 hover:bg-red-50 p-1 rounded-full"
+                              onClick={() => {
+                                const newFiles = [...uploadedFiles];
+                                newFiles.splice(index, 1);
+                                setUploadedFiles(newFiles);
+                              }}
+                              aria-label="Remove file"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18 6 6 18"></path>
+                                <path d="m6 6 12 12"></path>
+                              </svg>
+                            </button>
+                          </li>
                         ))}
                       </ul>
                     </div>
