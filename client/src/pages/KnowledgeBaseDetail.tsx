@@ -27,73 +27,97 @@ export default function KnowledgeBaseDetailPage() {
     refetchOnWindowFocus: false,
   });
 
-  const downloadMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/knowledge-bases/${id}/download`, "POST");
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Download started successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${id}`] });
-    },
-    onError: (error) => {
-      console.error("Error downloading knowledge base:", error);
-      toast({
-        title: "Error",
-        description: "Failed to download knowledge base",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const purchaseMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/knowledge-bases/${id}/purchase`, "POST");
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Purchase completed successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${id}`] });
-      setShowPurchaseDialog(false);
-    },
-    onError: (error) => {
-      console.error("Error purchasing knowledge base:", error);
-      toast({
-        title: "Error",
-        description: "Failed to complete purchase",
-        variant: "destructive",
-      });
-    },
-  });
+  // We use direct fetch calls in the handler functions instead of mutations
 
   const isOwner = user && knowledgeBaseQuery.data?.authorId === user.id;
   const hasPurchased = user && knowledgeBaseQuery.data?.purchasedBy?.includes(user.id);
   const canDownload = knowledgeBaseQuery.data?.price === 0 || isOwner || hasPurchased;
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (canDownload) {
-      downloadMutation.mutate();
-      
-      // Also trigger the actual file downloads
-      knowledgeBaseQuery.data?.files?.forEach(file => {
-        const link = document.createElement("a");
-        link.href = file.url;
-        link.download = file.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
+      try {
+        console.log("Starting download with direct fetch");
+        
+        // Use direct fetch with explicit method
+        const response = await fetch(`/api/knowledge-bases/${id}/download`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Error: ${response.status} ${response.statusText}`);
+        }
+        
+        // Log success
+        console.log("Download API call successful");
+        toast({
+          title: "Success",
+          description: "Download started successfully",
+        });
+        
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${id}`] });
+        
+        // Also trigger the actual file downloads
+        knowledgeBaseQuery.data?.files?.forEach(file => {
+          const link = document.createElement("a");
+          link.href = file.url;
+          link.download = file.name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        });
+      } catch (error) {
+        console.error("Error downloading knowledge base:", error);
+        toast({
+          title: "Error",
+          description: "Failed to download knowledge base. See console for details.",
+          variant: "destructive",
+        });
+      }
     } else {
       setShowPurchaseDialog(true);
     }
   };
 
-  const handlePurchase = () => {
-    purchaseMutation.mutate();
+  const handlePurchase = async () => {
+    try {
+      console.log("Starting purchase with direct fetch");
+      
+      // Use direct fetch with explicit method
+      const response = await fetch(`/api/knowledge-bases/${id}/purchase`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status} ${response.statusText}`);
+      }
+      
+      console.log("Purchase API call successful");
+      toast({
+        title: "Success",
+        description: "Purchase completed successfully",
+      });
+      
+      // Refresh data and close dialog
+      queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${id}`] });
+      setShowPurchaseDialog(false);
+      
+    } catch (error) {
+      console.error("Error purchasing knowledge base:", error);
+      toast({
+        title: "Error",
+        description: "Failed to complete purchase. See console for details.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (knowledgeBaseQuery.isLoading) {
@@ -248,10 +272,9 @@ export default function KnowledgeBaseDetailPage() {
               <Button 
                 className="w-full" 
                 onClick={handleDownload} 
-                disabled={downloadMutation.isPending}
               >
                 <Download className="mr-2 h-4 w-4" />
-                {downloadMutation.isPending ? "Downloading..." : canDownload ? "Download Files" : "Purchase to Download"}
+                {canDownload ? "Download Files" : "Purchase to Download"}
               </Button>
               
               {isOwner && (
@@ -338,9 +361,9 @@ export default function KnowledgeBaseDetailPage() {
             <Button variant="outline" onClick={() => setShowPurchaseDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handlePurchase} disabled={purchaseMutation.isPending}>
+            <Button onClick={handlePurchase}>
               <CreditCard className="mr-2 h-4 w-4" />
-              {purchaseMutation.isPending ? "Processing..." : `Pay $${(data.price / 100).toFixed(2)} USD`}
+              {`Pay $${(data.price / 100).toFixed(2)} USD`}
             </Button>
           </DialogFooter>
         </DialogContent>
