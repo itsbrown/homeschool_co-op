@@ -8,6 +8,11 @@ interface AIStatusResponse {
     status: 'operational' | 'unavailable';
     message: string;
   };
+  enhancedAI?: {
+    available: boolean;
+    status: 'operational' | 'unavailable';
+    message: string;
+  };
 }
 
 /**
@@ -28,6 +33,11 @@ export function useAIStatus() {
   const aiStatus = data?.anthropic?.status ?? 'unavailable';
   const statusMessage = data?.anthropic?.message ?? 'AI service status unknown';
   
+  // Enhanced AI status
+  const isEnhancedAIAvailable = data?.enhancedAI?.available ?? false;
+  const enhancedAIStatus = data?.enhancedAI?.status ?? 'unavailable';
+  const enhancedAIMessage = data?.enhancedAI?.message ?? 'Enhanced AI status unknown';
+  
   // User-friendly error message if there was an error checking status
   const errorMessage = error 
     ? 'There was an error checking AI service status'
@@ -37,6 +47,9 @@ export function useAIStatus() {
     isAIAvailable,
     aiStatus,
     statusMessage,
+    isEnhancedAIAvailable,
+    enhancedAIStatus,
+    enhancedAIMessage,
     errorMessage,
     isLoading,
     refetch

@@ -25,6 +25,8 @@ export const AIStatusPanel: React.FC<AIStatusPanelProps> = ({
     isAIAvailable, 
     aiStatus, 
     statusMessage, 
+    isEnhancedAIAvailable,
+    enhancedAIMessage,
     errorMessage, 
     isLoading, 
     refetch 
@@ -41,6 +43,15 @@ export const AIStatusPanel: React.FC<AIStatusPanelProps> = ({
     }
     
     if (isAIAvailable) {
+      if (isEnhancedAIAvailable) {
+        return (
+          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
+            <CheckCircle size={12} />
+            <span>Enhanced AI</span>
+          </Badge>
+        );
+      }
+      
       return (
         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
           <CheckCircle size={12} />
@@ -83,22 +94,42 @@ export const AIStatusPanel: React.FC<AIStatusPanelProps> = ({
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">Status:</span>
-              {isAIAvailable ? (
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
-                  <CheckCircle size={12} />
-                  <span>Operational</span>
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
-                  <AlertCircle size={12} />
-                  <span>Using Fallback</span>
-                </Badge>
-              )}
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Core AI Status:</span>
+                {isAIAvailable ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
+                    <CheckCircle size={12} />
+                    <span>Operational</span>
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    <span>Using Fallback</span>
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-slate-600">{statusMessage}</p>
             </div>
-            <p className="text-sm text-slate-600">{statusMessage}</p>
+            
+            <div className="space-y-2 border-t pt-2">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Enhanced AI:</span>
+                {isEnhancedAIAvailable ? (
+                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
+                    <CheckCircle size={12} />
+                    <span>Active</span>
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    <span>Standard Mode</span>
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-slate-600">{enhancedAIMessage}</p>
+            </div>
           </div>
         )}
       </CardContent>

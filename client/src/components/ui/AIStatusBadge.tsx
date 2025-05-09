@@ -25,6 +25,20 @@ export const AIStatusBadge: React.FC<AIStatusBadgeProps> = ({ className }) => {
   }
   
   if (isAIAvailable) {
+    const { isEnhancedAIAvailable } = useAIStatusContext();
+    
+    if (isEnhancedAIAvailable) {
+      return (
+        <Badge 
+          variant="outline" 
+          className={cn("bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1", className)}
+        >
+          <CheckCircle size={12} />
+          <span>Enhanced AI</span>
+        </Badge>
+      );
+    }
+    
     return (
       <Badge 
         variant="outline" 

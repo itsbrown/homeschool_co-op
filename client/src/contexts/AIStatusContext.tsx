@@ -5,6 +5,9 @@ interface AIStatusContextType {
   isAIAvailable: boolean;
   aiStatus: 'operational' | 'unavailable';
   statusMessage: string;
+  isEnhancedAIAvailable: boolean;
+  enhancedAIStatus: 'operational' | 'unavailable';
+  enhancedAIMessage: string;
   errorMessage?: string;
   isLoading: boolean;
   refetch: () => void;
@@ -14,6 +17,9 @@ const AIStatusContext = createContext<AIStatusContextType>({
   isAIAvailable: false,
   aiStatus: 'unavailable',
   statusMessage: 'AI service status not initialized',
+  isEnhancedAIAvailable: false,
+  enhancedAIStatus: 'unavailable',
+  enhancedAIMessage: 'Enhanced AI status not initialized',
   isLoading: false,
   refetch: () => {}
 });
