@@ -3,9 +3,11 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
-// Increase the size limit to 10MB for file uploads
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+// Increase the size limit to 50MB for file uploads
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+app.use(express.raw({ limit: '50mb' }));
+app.use(express.text({ limit: '50mb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();

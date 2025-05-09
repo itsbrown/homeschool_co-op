@@ -142,28 +142,63 @@ export function KnowledgeBaseEditDialog({
   const handleFileChange = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
     
-    const filesArray: FileData[] = [];
-    
-    // Convert files to data URLs
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        filesArray.push({
-          name: file.name,
-          type: file.type,
-          url: e.target?.result as string,
-        });
-        
-        // Update state only after all files are processed
-        if (filesArray.length === fileList.length) {
-          setUploadedFiles([...uploadedFiles, ...filesArray]);
-        }
-      };
-      
-      reader.readAsDataURL(file);
+    // Show loading toast for large files
+    if (Array.from(fileList).some(file => file.size > 5 * 1024 * 1024)) { // 5MB threshold
+      toast({
+        title: "Processing large files",
+        description: "Please wait while we process your files. This may take a moment.",
+      });
     }
+    
+    // Process files sequentially to avoid memory issues with large files
+    const processFiles = async () => {
+      const newFiles: FileData[] = [];
+      
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        
+        // Skip extremely large files that might cause issues
+        if (file.size > 40 * 1024 * 1024) { // 40MB limit
+          toast({
+            title: "File too large",
+            description: `${file.name} exceeds the 40MB limit and was skipped.`,
+            variant: "destructive",
+          });
+          continue;
+        }
+        
+        try {
+          const fileData = await new Promise<FileData>((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+              resolve({
+                name: file.name,
+                type: file.type,
+                url: e.target?.result as string,
+              });
+            };
+            
+            reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+            reader.readAsDataURL(file);
+          });
+          
+          newFiles.push(fileData);
+        } catch (error) {
+          console.error("Error processing file:", error);
+          toast({
+            title: "File Error",
+            description: `Failed to process ${file.name}. Please try again.`,
+            variant: "destructive",
+          });
+        }
+      }
+      
+      // Update state with all successfully processed files
+      setUploadedFiles(prev => [...prev, ...newFiles]);
+    };
+    
+    await processFiles();
   };
 
   const removeExistingFile = (index: number) => {
