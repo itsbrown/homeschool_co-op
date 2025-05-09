@@ -33,8 +33,8 @@ interface Lesson {
 
 export default function Lessons() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterGrade, setFilterGrade] = useState<string>("");
-  const [filterSubject, setFilterSubject] = useState<string>("");
+  const [filterGrade, setFilterGrade] = useState<string>("all-grades");
+  const [filterSubject, setFilterSubject] = useState<string>("all-subjects");
   
   const { data: lessons, isLoading } = useQuery({
     queryKey: ["/api/lessons"],
@@ -97,8 +97,8 @@ export default function Lessons() {
       lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lesson.subject.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesGrade = filterGrade === "" || lesson.gradeLevel === filterGrade;
-    const matchesSubject = filterSubject === "" || lesson.subject === filterSubject;
+    const matchesGrade = filterGrade === "" || filterGrade === "all-grades" || lesson.gradeLevel === filterGrade;
+    const matchesSubject = filterSubject === "" || filterSubject === "all-subjects" || lesson.subject === filterSubject;
     
     return matchesSearch && matchesGrade && matchesSubject;
   });
@@ -157,7 +157,7 @@ export default function Lessons() {
                 <SelectValue placeholder="Grade level" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All grades</SelectItem>
+                <SelectItem value="all-grades">All grades</SelectItem>
                 {getUniqueValues("gradeLevel").map((grade) => (
                   <SelectItem key={grade as string} value={grade as string}>
                     {grade as string}
@@ -171,7 +171,7 @@ export default function Lessons() {
                 <SelectValue placeholder="Subject" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All subjects</SelectItem>
+                <SelectItem value="all-subjects">All subjects</SelectItem>
                 {getUniqueValues("subject").map((subject) => (
                   <SelectItem key={subject as string} value={subject as string}>
                     {subject as string}
