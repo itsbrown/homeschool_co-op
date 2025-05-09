@@ -247,7 +247,7 @@ function KnowledgeBaseCard({ knowledgeBase, onDownload, isOwner }: KnowledgeBase
         <div className="flex justify-between items-start">
           <CardTitle className="text-xl">{knowledgeBase.title}</CardTitle>
           <Badge variant={knowledgeBase.price > 0 ? "default" : "secondary"}>
-            {knowledgeBase.price > 0 ? `$${(knowledgeBase.price / 100).toFixed(2)}` : "Free"}
+            {knowledgeBase.price > 0 ? `$${(knowledgeBase.price / 100).toFixed(2)} USD` : "Free"}
           </Badge>
         </div>
         <CardDescription>

@@ -323,7 +323,7 @@ export default function KnowledgeBaseDetailPage() {
             </div>
             <div className="flex justify-between mb-4">
               <span>Price:</span>
-              <span className="font-medium">${(data.price / 100).toFixed(2)}</span>
+              <span className="font-medium">${(data.price / 100).toFixed(2)} USD</span>
             </div>
             
             <div className="border-t pt-4 mt-4">
@@ -340,7 +340,7 @@ export default function KnowledgeBaseDetailPage() {
             </Button>
             <Button onClick={handlePurchase} disabled={purchaseMutation.isPending}>
               <CreditCard className="mr-2 h-4 w-4" />
-              {purchaseMutation.isPending ? "Processing..." : `Pay $${(data.price / 100).toFixed(2)}`}
+              {purchaseMutation.isPending ? "Processing..." : `Pay $${(data.price / 100).toFixed(2)} USD`}
             </Button>
           </DialogFooter>
         </DialogContent>
