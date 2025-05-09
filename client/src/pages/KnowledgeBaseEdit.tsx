@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Edit, FileText } from "lucide-react";
 import { Link } from "wouter";
 import { type KnowledgeBase } from "@shared/schema";
+import PageLayout from "@/components/layout/PageLayout";
 
 export default function KnowledgeBaseEditPage() {
   const [, params] = useRoute("/knowledge-base/:id/edit");
@@ -50,91 +51,81 @@ export default function KnowledgeBaseEditPage() {
 
   if (knowledgeBaseQuery.isLoading) {
     return (
-      <div className="container py-10">
-        <div className="mb-8">
-          <Skeleton className="h-8 w-64 mb-2" />
-          <Skeleton className="h-4 w-96" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2">
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-6 w-full mb-2" />
-                <Skeleton className="h-4 w-1/2" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-6 w-full" />
-                <Skeleton className="h-6 w-full" />
-              </CardContent>
-            </Card>
+      <PageLayout title="Loading..." backTo={`/knowledge-base/${id}`}>
+        <div className="container py-4">
+          <div className="mb-8">
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-96" />
           </div>
-          <div>
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-6 w-3/4" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2">
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-6 w-full mb-2" />
+                  <Skeleton className="h-4 w-1/2" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-32 w-full" />
+                  <Skeleton className="h-6 w-full" />
+                  <Skeleton className="h-6 w-full" />
+                </CardContent>
+              </Card>
+            </div>
+            <div>
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-6 w-3/4" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
-      </div>
+      </PageLayout>
     );
   }
 
   if (!knowledgeBaseQuery.data) {
     return (
-      <div className="container py-10 text-center">
-        <h1 className="text-3xl font-bold mb-4">Knowledge Base Not Found</h1>
-        <p className="text-muted-foreground mb-6">The knowledge base you're looking for doesn't exist or you don't have permission to view it.</p>
-        <Link href="/knowledge-base">
-          <Button>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Knowledge Base
-          </Button>
-        </Link>
-      </div>
+      <PageLayout title="Not Found" backTo="/knowledge-base">
+        <div className="container py-4 text-center">
+          <h1 className="text-3xl font-bold mb-4">Knowledge Base Not Found</h1>
+          <p className="text-muted-foreground mb-6">The knowledge base you're looking for doesn't exist or you don't have permission to view it.</p>
+        </div>
+      </PageLayout>
     );
   }
 
   const { data } = knowledgeBaseQuery;
 
   return (
-    <div className="container py-10">
-      <div className="mb-8">
-        <div className="flex items-center mb-4">
-          <Link href={`/knowledge-base/${id}`}>
-            <Button variant="outline" size="sm" className="mr-4">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Cancel Editing
+    <PageLayout title={`Edit: ${data.title}`} backTo={`/knowledge-base/${id}`}>
+      <div className="container py-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Edit Knowledge Base</CardTitle>
+            <CardDescription>
+              Update your educational resource information and files
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => setShowEditDialog(true)}>
+              <Edit className="mr-2 h-4 w-4" /> Open Editor
             </Button>
-          </Link>
-          <h1 className="text-3xl font-bold">Edit: {data.title}</h1>
-        </div>
+          </CardContent>
+        </Card>
+
+        {knowledgeBaseQuery.data && (
+          <KnowledgeBaseEditDialog
+            open={showEditDialog}
+            onOpenChange={handleDialogClose}
+            knowledgeBaseId={id}
+          />
+        )}
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Edit Knowledge Base</CardTitle>
-          <CardDescription>
-            Update your educational resource information and files
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={() => setShowEditDialog(true)}>
-            <Edit className="mr-2 h-4 w-4" /> Open Editor
-          </Button>
-        </CardContent>
-      </Card>
-
-      {knowledgeBaseQuery.data && (
-        <KnowledgeBaseEditDialog
-          open={showEditDialog}
-          onOpenChange={handleDialogClose}
-          knowledgeBaseId={id}
-        />
-      )}
-    </div>
+    </PageLayout>
   );
 }

@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KnowledgeBaseCreateDialog } from "@/components/KnowledgeBaseCreateDialog";
 import JSZip from 'jszip';
-
 import PageLayout from "@/components/layout/PageLayout";
 
 export default function KnowledgeBasePage() {
