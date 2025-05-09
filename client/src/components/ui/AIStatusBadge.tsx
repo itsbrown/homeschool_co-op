@@ -25,7 +25,8 @@ export const AIStatusBadge: React.FC<AIStatusBadgeProps> = ({ className }) => {
   }
   
   if (isAIAvailable) {
-    const { isEnhancedAIAvailable } = useAIStatusContext();
+    // Get enhanced status from the same context hook to maintain hook order
+    const isEnhancedAIAvailable = useAIStatusContext().isEnhancedAIAvailable;
     
     if (isEnhancedAIAvailable) {
       return (
