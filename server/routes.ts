@@ -637,8 +637,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Add both GET and POST methods for download endpoint to ensure it works
-  // with different client approaches
+  // Import required libraries for zip creation
+  const archiver = require('archiver');
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+  const stream = require('stream');
+  const { promisify } = require('util');
+  const pipeline = promisify(stream.pipeline);
+  
+  // Add GET method for download endpoint that creates and serves a zip file
   app.get("/api/knowledge-bases/:id/download", async (req, res) => {
     try {
       const knowledgeBaseId = parseInt(req.params.id);
@@ -651,20 +659,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Increment the download count
       const updatedKnowledgeBase = await storage.incrementDownloadCount(knowledgeBaseId);
       
-      // If the knowledge base has files, return them
-      if (knowledgeBase.files && Array.isArray(knowledgeBase.files)) {
-        res.status(200).json({ 
-          success: true,
-          files: knowledgeBase.files,
-          downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
-        });
-      } else {
-        res.status(200).json({ 
+      // Check if there are files to download
+      if (!knowledgeBase.files || !Array.isArray(knowledgeBase.files) || knowledgeBase.files.length === 0) {
+        return res.status(200).json({ 
           success: true, 
+          message: "No files available for download",
           files: [],
           downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
         });
       }
+      
+      // If there's only one file, return info to download directly
+      if (knowledgeBase.files.length === 1) {
+        return res.status(200).json({ 
+          success: true,
+          singleFile: true,
+          files: knowledgeBase.files,
+          downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+        });
+      }
+      
+      // For multiple files, prepare a JSON response that includes file info 
+      // (the client will handle zipping on the frontend since we're using direct URLs)
+      return res.status(200).json({ 
+        success: true,
+        singleFile: false,
+        files: knowledgeBase.files,
+        title: knowledgeBase.title,
+        downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+      });
     } catch (error) {
       console.error("Error processing download:", error);
       res.status(500).json({ message: "Error processing download" });
@@ -684,20 +707,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Increment the download count
       const updatedKnowledgeBase = await storage.incrementDownloadCount(knowledgeBaseId);
       
-      // If the knowledge base has files, return them
-      if (knowledgeBase.files && Array.isArray(knowledgeBase.files)) {
-        res.status(200).json({ 
-          success: true,
-          files: knowledgeBase.files,
-          downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
-        });
-      } else {
-        res.status(200).json({ 
+      // Check if there are files to download
+      if (!knowledgeBase.files || !Array.isArray(knowledgeBase.files) || knowledgeBase.files.length === 0) {
+        return res.status(200).json({ 
           success: true, 
+          message: "No files available for download",
           files: [],
           downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
         });
       }
+      
+      // If there's only one file, return info to download directly
+      if (knowledgeBase.files.length === 1) {
+        return res.status(200).json({ 
+          success: true,
+          singleFile: true,
+          files: knowledgeBase.files,
+          downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+        });
+      }
+      
+      // For multiple files, prepare a JSON response that includes file info
+      // (the client will handle zipping on the frontend since we're using direct URLs)
+      return res.status(200).json({ 
+        success: true,
+        singleFile: false,
+        files: knowledgeBase.files,
+        title: knowledgeBase.title,
+        downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+      });
     } catch (error) {
       console.error("Error processing download:", error);
       res.status(500).json({ message: "Error processing download" });

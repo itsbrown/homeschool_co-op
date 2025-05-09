@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KnowledgeBaseCreateDialog } from "@/components/KnowledgeBaseCreateDialog";
+import JSZip from 'jszip';
 
 export default function KnowledgeBasePage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -58,6 +59,80 @@ export default function KnowledgeBasePage() {
     return matchesSearch && matchesSubject;
   });
 
+  // Helper function to download a single file
+  const downloadSingleFile = (file: any) => {
+    const link = document.createElement("a");
+    link.href = file.url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Helper function to create a zip file from multiple files
+  const downloadFilesAsZip = async (files: any[], zipName: string) => {
+    try {
+      toast({
+        title: "Processing",
+        description: "Creating your zip file...",
+      });
+      
+      // Create a new JSZip instance
+      const zip = new JSZip();
+      const fetchPromises = [];
+      
+      // Add each file to the zip
+      for (const file of files) {
+        // Fetch the file content
+        fetchPromises.push(
+          fetch(file.url)
+            .then(response => {
+              if (!response.ok) throw new Error(`Failed to fetch ${file.name}`);
+              return response.blob();
+            })
+            .then(blob => {
+              // Add the file to the zip
+              zip.file(file.name, blob);
+              console.log(`Added ${file.name} to zip`);
+            })
+            .catch(error => {
+              console.error(`Error fetching file ${file.name}:`, error);
+              throw error;
+            })
+        );
+      }
+      
+      // Wait for all files to be fetched and added to the zip
+      await Promise.all(fetchPromises);
+      
+      // Generate the zip file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      // Create a download link for the zip file
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = `${zipName}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      URL.revokeObjectURL(link.href);
+      
+      toast({
+        title: "Success",
+        description: "Download completed successfully",
+      });
+    } catch (error) {
+      console.error("Error creating zip file:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create zip file. See console for details.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDownload = async (id: number) => {
     try {
       console.log("Starting download with direct fetch");
@@ -79,55 +154,56 @@ export default function KnowledgeBasePage() {
       const data = await response.json();
       console.log("Download API call successful", data);
       
-      // Get the knowledge base to access its files
-      const knowledgeBaseResponse = await fetch(`/api/knowledge-bases/${id}`, {
-        method: "GET",
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
+      let files = [];
+      let title = "";
       
-      if (!knowledgeBaseResponse.ok) {
-        throw new Error(`Error fetching knowledge base: ${knowledgeBaseResponse.status}`);
-      }
-      
-      const knowledgeBase = await knowledgeBaseResponse.json();
-      
-      // Check if we have files in the response
+      // Get files and title from the response or fetch knowledge base details if needed
       if (data.files && data.files.length > 0) {
-        // Use files from the response
-        data.files.forEach(file => {
-          const link = document.createElement("a");
-          link.href = file.url;
-          link.download = file.name;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        });
-      } else if (knowledgeBase.files && knowledgeBase.files.length > 0) {
-        // Fallback to using files from the query data
-        knowledgeBase.files.forEach(file => {
-          const link = document.createElement("a");
-          link.href = file.url;
-          link.download = file.name;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        });
+        files = data.files;
+        title = data.title || `knowledge-base-${id}`;
       } else {
-        console.warn("No files found to download");
-        toast({
-          title: "Warning",
-          description: "No files found to download in this knowledge base",
-          variant: "default",
+        // Fetch knowledge base details if no files in the response
+        const knowledgeBaseResponse = await fetch(`/api/knowledge-bases/${id}`, {
+          method: "GET",
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json'
+          }
         });
+        
+        if (!knowledgeBaseResponse.ok) {
+          throw new Error(`Error fetching knowledge base: ${knowledgeBaseResponse.status}`);
+        }
+        
+        const knowledgeBase = await knowledgeBaseResponse.json();
+        
+        if (knowledgeBase.files && knowledgeBase.files.length > 0) {
+          files = knowledgeBase.files;
+          title = knowledgeBase.title || `knowledge-base-${id}`;
+        } else {
+          console.warn("No files found to download");
+          toast({
+            title: "Warning",
+            description: "No files found to download in this knowledge base",
+            variant: "default",
+          });
+          return;
+        }
       }
       
-      toast({
-        title: "Success",
-        description: "Download started successfully",
-      });
+      // If there's only one file, download it directly
+      if (files.length === 1) {
+        downloadSingleFile(files[0]);
+        toast({
+          title: "Success",
+          description: "Download started successfully",
+        });
+      } 
+      // If there are multiple files, create a zip file
+      else if (files.length > 1) {
+        await downloadFilesAsZip(files, title);
+      }
+      
     } catch (error) {
       console.error("Error downloading knowledge base:", error);
       toast({
