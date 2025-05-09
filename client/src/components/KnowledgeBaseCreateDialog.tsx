@@ -123,7 +123,7 @@ export function KnowledgeBaseCreateDialog({
         
         // Update state only after all files are processed
         if (filesArray.length === fileList.length) {
-          setUploadedFiles(filesArray);
+          setUploadedFiles([...uploadedFiles, ...filesArray]);
         }
       };
       

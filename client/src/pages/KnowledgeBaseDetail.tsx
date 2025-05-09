@@ -162,7 +162,7 @@ export default function KnowledgeBaseDetailPage() {
           {isOwner && (
             <Link href={`/knowledge-base/${id}/edit`}>
               <Button variant="outline" size="sm" className="ml-4">
-                <Edit className="h-4 w-4" />
+                <Edit className="mr-2 h-4 w-4" /> Edit
               </Button>
             </Link>
           )}
@@ -253,6 +253,14 @@ export default function KnowledgeBaseDetailPage() {
                 <Download className="mr-2 h-4 w-4" />
                 {downloadMutation.isPending ? "Downloading..." : canDownload ? "Download Files" : "Purchase to Download"}
               </Button>
+              
+              {isOwner && (
+                <Link href={`/knowledge-base/${id}/edit`} className="w-full">
+                  <Button variant="secondary" className="w-full">
+                    <Edit className="mr-2 h-4 w-4" /> Edit Knowledge Base
+                  </Button>
+                </Link>
+              )}
               
               <Button 
                 variant="outline" 
