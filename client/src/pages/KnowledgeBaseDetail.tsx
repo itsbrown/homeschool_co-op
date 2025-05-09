@@ -38,12 +38,12 @@ export default function KnowledgeBaseDetailPage() {
       try {
         console.log("Starting download with direct fetch");
         
-        // Use direct fetch with explicit method
+        // Use direct fetch with GET method
         const response = await fetch(`/api/knowledge-bases/${id}/download`, {
-          method: 'POST',
+          method: 'GET',
           credentials: 'include',
           headers: {
-            'Content-Type': 'application/json'
+            'Accept': 'application/json'
           }
         });
         
@@ -51,8 +51,33 @@ export default function KnowledgeBaseDetailPage() {
           throw new Error(`Error: ${response.status} ${response.statusText}`);
         }
         
-        // Log success
-        console.log("Download API call successful");
+        // Parse the JSON response
+        const data = await response.json();
+        console.log("Download API call successful", data);
+        
+        // Check if we have files in the response
+        if (data.files && data.files.length > 0) {
+          // Use files from the response
+          data.files.forEach(file => {
+            const link = document.createElement("a");
+            link.href = file.url;
+            link.download = file.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          });
+        } else {
+          // Fallback to using files from the query data
+          knowledgeBaseQuery.data?.files?.forEach(file => {
+            const link = document.createElement("a");
+            link.href = file.url;
+            link.download = file.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          });
+        }
+        
         toast({
           title: "Success",
           description: "Download started successfully",
@@ -60,16 +85,6 @@ export default function KnowledgeBaseDetailPage() {
         
         // Refresh data
         queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${id}`] });
-        
-        // Also trigger the actual file downloads
-        knowledgeBaseQuery.data?.files?.forEach(file => {
-          const link = document.createElement("a");
-          link.href = file.url;
-          link.download = file.name;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        });
       } catch (error) {
         console.error("Error downloading knowledge base:", error);
         toast({
