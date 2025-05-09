@@ -43,7 +43,7 @@ export default function KnowledgeBasePage() {
       kb.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (kb.description && kb.description.toLowerCase().includes(searchTerm.toLowerCase()));
       
-    const matchesSubject = !selectedSubject || kb.subject === selectedSubject;
+    const matchesSubject = !selectedSubject || selectedSubject === "all" || kb.subject === selectedSubject;
     
     return matchesSearch && matchesSubject;
   });
@@ -53,7 +53,7 @@ export default function KnowledgeBasePage() {
       kb.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (kb.description && kb.description.toLowerCase().includes(searchTerm.toLowerCase()));
       
-    const matchesSubject = !selectedSubject || kb.subject === selectedSubject;
+    const matchesSubject = !selectedSubject || selectedSubject === "all" || kb.subject === selectedSubject;
     
     return matchesSearch && matchesSubject;
   });
@@ -120,7 +120,7 @@ export default function KnowledgeBasePage() {
               </div>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Subjects</SelectItem>
+              <SelectItem value="all">All Subjects</SelectItem>
               {subjectsQuery.data?.map((subject) => (
                 <SelectItem key={subject} value={subject}>
                   {subject}
