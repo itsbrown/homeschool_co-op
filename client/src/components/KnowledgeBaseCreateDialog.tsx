@@ -254,7 +254,7 @@ export function KnowledgeBaseCreateDialog({
               name="price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Price (in cents)</FormLabel>
+                  <FormLabel>Price (in USD cents)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -265,7 +265,7 @@ export function KnowledgeBaseCreateDialog({
                     />
                   </FormControl>
                   <FormDescription>
-                    Set to 0 for a free resource or specify price in cents (e.g., 500 = $5.00)
+                    Set to 0 for a free resource or specify price in cents (e.g., 500 = $5.00 USD)
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
