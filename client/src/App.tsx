@@ -8,6 +8,8 @@ import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
+import Curriculum from "@/pages/Curriculum";
+import CurriculumDetail from "@/pages/CurriculumDetail";
 import Lessons from "@/pages/Lessons";
 import AILessonGenerator from "@/pages/AILessonGenerator";
 import KnowledgeBase from "@/pages/KnowledgeBase";
