@@ -133,8 +133,27 @@ export async function generateAICurriculum(formData: AIGenerationFormData): Prom
         throw new Error('Enhanced service failed to return valid JSON');
       }
       
-      const curriculumTemplate: CurriculumTemplate = JSON.parse(jsonMatch[0]);
-      return curriculumTemplate;
+      try {
+        // Attempt to parse JSON directly
+        const curriculumTemplate: CurriculumTemplate = JSON.parse(jsonMatch[0]);
+        return curriculumTemplate;
+      } catch (jsonError) {
+        console.warn('JSON parse error on enhanced service, attempting to clean and repair the JSON:', jsonError);
+        // Clean up common JSON formatting issues
+        const cleanedJson = jsonMatch[0]
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+          .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+          .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+          .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are double-quoted
+          .replace(/:\s*'/g, ': "') // Replace single quotes with double quotes for values
+          .replace(/'\s*,/g, '",')  // Replace single quotes with double quotes for values
+          .replace(/'\s*}/g, '"}')  // Replace single quotes with double quotes for values
+          .replace(/'\s*]/g, '"]'); // Replace single quotes with double quotes for values
+          
+        // Try parsing the cleaned JSON
+        const curriculumTemplate: CurriculumTemplate = JSON.parse(cleanedJson);
+        return curriculumTemplate;
+      }
     } catch (enhancedError) {
       console.warn('Enhanced curriculum generation failed, falling back to original implementation:', enhancedError);
       
@@ -262,8 +281,27 @@ The curriculum should have 4-6 units with 3-5 lessons each.`;
         throw new Error('Failed to extract JSON from AI response');
       }
       
-      const curriculumTemplate: CurriculumTemplate = JSON.parse(jsonMatch[0]);
-      return curriculumTemplate;
+      try {
+        // Attempt to parse JSON directly
+        const curriculumTemplate: CurriculumTemplate = JSON.parse(jsonMatch[0]);
+        return curriculumTemplate;
+      } catch (jsonError) {
+        console.warn('JSON parse error on fallback service, attempting to clean and repair the JSON:', jsonError);
+        // Clean up common JSON formatting issues
+        const cleanedJson = jsonMatch[0]
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+          .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+          .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+          .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are double-quoted
+          .replace(/:\s*'/g, ': "') // Replace single quotes with double quotes for values
+          .replace(/'\s*,/g, '",')  // Replace single quotes with double quotes for values
+          .replace(/'\s*}/g, '"}')  // Replace single quotes with double quotes for values
+          .replace(/'\s*]/g, '"]'); // Replace single quotes with double quotes for values
+          
+        // Try parsing the cleaned JSON
+        const curriculumTemplate: CurriculumTemplate = JSON.parse(cleanedJson);
+        return curriculumTemplate;
+      }
     }
   } catch (error: any) {
     console.error('Error generating AI curriculum:', error);
@@ -302,8 +340,27 @@ export async function generateAILesson(
         throw new Error('Enhanced service failed to return valid JSON');
       }
       
-      const lessonPlan = JSON.parse(jsonMatch[0]);
-      return lessonPlan;
+      try {
+        // Attempt to parse JSON directly
+        const lessonPlan = JSON.parse(jsonMatch[0]);
+        return lessonPlan;
+      } catch (jsonError) {
+        console.warn('JSON parse error on enhanced lesson service, attempting to clean and repair the JSON:', jsonError);
+        // Clean up common JSON formatting issues
+        const cleanedJson = jsonMatch[0]
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+          .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+          .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+          .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are double-quoted
+          .replace(/:\s*'/g, ': "') // Replace single quotes with double quotes for values
+          .replace(/'\s*,/g, '",')  // Replace single quotes with double quotes for values
+          .replace(/'\s*}/g, '"}')  // Replace single quotes with double quotes for values
+          .replace(/'\s*]/g, '"]'); // Replace single quotes with double quotes for values
+          
+        // Try parsing the cleaned JSON
+        const lessonPlan = JSON.parse(cleanedJson);
+        return lessonPlan;
+      }
     } catch (enhancedError) {
       console.warn('Enhanced lesson generation failed, falling back to original implementation:', enhancedError);
       
@@ -367,8 +424,27 @@ Please format your response as a JSON object matching this structure:
         throw new Error('Failed to extract JSON from AI response');
       }
       
-      const lessonPlan = JSON.parse(jsonMatch[0]);
-      return lessonPlan;
+      try {
+        // Attempt to parse JSON directly
+        const lessonPlan = JSON.parse(jsonMatch[0]);
+        return lessonPlan;
+      } catch (jsonError) {
+        console.warn('JSON parse error on fallback lesson service, attempting to clean and repair the JSON:', jsonError);
+        // Clean up common JSON formatting issues
+        const cleanedJson = jsonMatch[0]
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+          .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+          .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+          .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are double-quoted
+          .replace(/:\s*'/g, ': "') // Replace single quotes with double quotes for values
+          .replace(/'\s*,/g, '",')  // Replace single quotes with double quotes for values
+          .replace(/'\s*}/g, '"}')  // Replace single quotes with double quotes for values
+          .replace(/'\s*]/g, '"]'); // Replace single quotes with double quotes for values
+          
+        // Try parsing the cleaned JSON
+        const lessonPlan = JSON.parse(cleanedJson);
+        return lessonPlan;
+      }
     }
   } catch (error: any) {
     console.error('Error generating AI lesson plan:', error);
