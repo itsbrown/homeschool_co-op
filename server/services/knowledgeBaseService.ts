@@ -74,6 +74,20 @@ export async function findRelevantKnowledgeBases(
 }
 
 /**
+ * Interface for structured contextual information
+ */
+export interface ContextualInfo {
+  subject?: string;
+  gradeLevel?: string;
+  learningStyles?: string[];
+  duration?: number;
+  keywords?: string[];
+  standards?: string[];
+  differentiationNeeds?: string[];
+  userId?: number;
+}
+
+/**
  * Generate enhanced prompt content with knowledge base integration
  */
 export async function generateEnhancedPrompt(
@@ -158,6 +172,191 @@ export async function generateEnhancedPrompt(
   } catch (error) {
     console.error("Error generating enhanced prompt:", error);
     return basePrompt; // Fall back to the original prompt if there's an error
+  }
+}
+
+/**
+ * Generate enhanced contextual prompt with structured knowledge base integration
+ * Improved version that returns structured context for multi-step generation
+ */
+export async function generateEnhancedContextualPrompt(
+  basePrompt: string,
+  contextInfo: ContextualInfo,
+  type: "curriculum" | "lesson" | "assessment"
+): Promise<{ prompt: string, context: any }> {
+  try {
+    // Extract context information
+    const { subject, gradeLevel, userId, learningStyles, duration, standards, differentiationNeeds } = contextInfo;
+    
+    // Find relevant knowledge bases
+    const relevantKnowledgeBases = await findRelevantKnowledgeBases(subject, gradeLevel, userId);
+    
+    // Initialize context object with available contextual information
+    const context: any = {
+      subject,
+      gradeLevel,
+      learningStyles,
+      duration,
+      standards,
+      differentiationNeeds,
+      knowledgeBases: []
+    };
+    
+    // Start with base prompt
+    let enrichedPrompt = basePrompt;
+    
+    // If no knowledge bases found, return just the base prompt with context
+    if (relevantKnowledgeBases.length === 0) {
+      return { prompt: enrichedPrompt, context };
+    }
+
+    // Add reference knowledge section
+    enrichedPrompt += "\n\n### Reference Knowledge ###\n";
+    
+    // Process each knowledge base
+    for (const kb of relevantKnowledgeBases) {
+      // Add to context object for structured use
+      context.knowledgeBases.push({
+        id: kb.id,
+        title: kb.title,
+        type: kb.type,
+        subject: kb.subject,
+        gradeLevel: kb.gradeLevel
+      });
+      
+      // Add to prompt in conversational format
+      enrichedPrompt += `\nFrom ${kb.title} (${kb.type}):\n`;
+      
+      // Different formatting based on knowledge base type
+      if (typeof kb.content === 'object' && kb.content !== null) {
+        // Handle structured content based on type
+        switch (kb.type) {
+          case "curriculum_standards":
+            if ('standards' in kb.content) {
+              const standards = kb.content.standards;
+              if (Array.isArray(standards)) {
+                enrichedPrompt += "Standards:\n" + standards.map((s: any) => `- ${s}`).join("\n");
+                // Add to context object for structured use
+                if (!context.curriculumStandards) context.curriculumStandards = [];
+                context.curriculumStandards = [...context.curriculumStandards, ...standards];
+              }
+            }
+            break;
+            
+          case "teaching_resources":
+            if ('resources' in kb.content) {
+              const resources = kb.content.resources;
+              if (Array.isArray(resources)) {
+                enrichedPrompt += "Resources:\n" + resources.map((r: any) => `- ${r.title}: ${r.description}`).join("\n");
+                // Add to context object for structured use
+                if (!context.teachingResources) context.teachingResources = [];
+                context.teachingResources = [...context.teachingResources, ...resources];
+              }
+            }
+            break;
+            
+          case "assessment_tools":
+            if ('assessmentMethods' in kb.content) {
+              const methods = kb.content.assessmentMethods;
+              if (Array.isArray(methods)) {
+                enrichedPrompt += "Assessment Methods:\n" + methods.map((m: any) => `- ${m.name}: ${m.description}`).join("\n");
+                // Add to context object for structured use
+                if (!context.assessmentMethods) context.assessmentMethods = [];
+                context.assessmentMethods = [...context.assessmentMethods, ...methods];
+              }
+            }
+            break;
+            
+          case "subject_specific":
+            if ('concepts' in kb.content) {
+              const concepts = kb.content.concepts;
+              if (Array.isArray(concepts)) {
+                enrichedPrompt += "Key Concepts:\n" + concepts.map((c: any) => `- ${c}`).join("\n");
+                // Add to context object for structured use
+                if (!context.keyConcepts) context.keyConcepts = [];
+                context.keyConcepts = [...context.keyConcepts, ...concepts];
+              }
+            }
+            if ('misconceptions' in kb.content) {
+              const misconceptions = kb.content.misconceptions;
+              if (Array.isArray(misconceptions)) {
+                enrichedPrompt += "Common Misconceptions:\n" + misconceptions.map((m: any) => `- ${m}`).join("\n");
+                // Add to context object
+                if (!context.commonMisconceptions) context.commonMisconceptions = [];
+                context.commonMisconceptions = [...context.commonMisconceptions, ...misconceptions];
+              }
+            }
+            break;
+            
+          case "pedagogical_approaches":
+            if ('approaches' in kb.content) {
+              const approaches = kb.content.approaches;
+              if (Array.isArray(approaches)) {
+                enrichedPrompt += "Pedagogical Approaches:\n" + approaches.map((a: any) => `- ${a.name}: ${a.description}`).join("\n");
+                // Add to context object
+                if (!context.pedagogicalApproaches) context.pedagogicalApproaches = [];
+                context.pedagogicalApproaches = [...context.pedagogicalApproaches, ...approaches];
+              }
+            }
+            break;
+            
+          default:
+            // For other types or unknown structure, use the top-level summary if available
+            if ('summary' in kb.content) {
+              enrichedPrompt += kb.content.summary;
+              // Add to context
+              if (!context.additionalContent) context.additionalContent = [];
+              context.additionalContent.push({
+                title: kb.title,
+                content: kb.content.summary
+              });
+            } else {
+              const contentStr = JSON.stringify(kb.content).substring(0, 500) + "...";
+              enrichedPrompt += contentStr;
+              // Add to context
+              if (!context.additionalContent) context.additionalContent = [];
+              context.additionalContent.push({
+                title: kb.title,
+                content: contentStr
+              });
+            }
+        }
+      } else if (typeof kb.content === 'string') {
+        // Handle string content
+        const contentStr = kb.content.substring(0, 500) + "...";
+        enrichedPrompt += contentStr;
+        // Add to context
+        if (!context.additionalContent) context.additionalContent = [];
+        context.additionalContent.push({
+          title: kb.title,
+          content: contentStr
+        });
+      }
+    }
+    
+    // Record the usage of these knowledge bases for analytics
+    const referencePromises = relevantKnowledgeBases.map(kb => 
+      db.insert(knowledgeReferences).values({
+        knowledgeBaseId: kb.id,
+        referenceType: type,
+        referenceId: 0 // Will be updated later when the actual content is created
+      })
+    );
+    
+    await Promise.all(referencePromises);
+    
+    return { prompt: enrichedPrompt, context };
+  } catch (error) {
+    console.error("Error generating enhanced contextual prompt:", error);
+    // Fall back to the original prompt if there's an error
+    return { 
+      prompt: basePrompt, 
+      context: {
+        subject: contextInfo.subject,
+        gradeLevel: contextInfo.gradeLevel,
+        errorOccurred: true
+      } 
+    };
   }
 }
 
