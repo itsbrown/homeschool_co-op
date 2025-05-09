@@ -25,7 +25,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   curricula: many(curricula),
   lessons: many(lessons),
   events: many(events),
-  marketplaceItems: many(marketplaceItems)
+  marketplaceItems: many(marketplaceItems),
+  knowledgeBases: many(knowledgeBases)
 }));
 
 // Curriculum table
@@ -126,4 +127,38 @@ export type MarketplaceItem = typeof marketplaceItems.$inferSelect;
 // Define marketplace item relations
 export const marketplaceItemsRelations = relations(marketplaceItems, ({ one }) => ({
   seller: one(users, { fields: [marketplaceItems.sellerId], references: [users.id] })
+}));
+
+// Knowledge Base table
+export const knowledgeBases = pgTable("knowledge_bases", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  subject: text("subject").notNull(),
+  difficulty: text("difficulty").notNull(), // beginner, intermediate, advanced
+  authorId: integer("author_id").notNull().references(() => users.id),
+  price: integer("price").default(0).notNull(), // in cents
+  files: jsonb("files").notNull(), // [{url: string, type: string, name: string}]
+  metadata: jsonb("metadata").notNull(), // {tags: string[], objectives: string[]}
+  isPublic: boolean("is_public").default(false).notNull(),
+  downloadCount: integer("download_count").default(0).notNull(),
+  purchasedBy: jsonb("purchased_by").default([]).notNull(), // array of user IDs
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertKnowledgeBaseSchema = createInsertSchema(knowledgeBases).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true, 
+  authorId: true, 
+  downloadCount: true,
+  purchasedBy: true 
+});
+export type InsertKnowledgeBase = z.infer<typeof insertKnowledgeBaseSchema>;
+export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
+
+// Define knowledge base relations
+export const knowledgeBasesRelations = relations(knowledgeBases, ({ one, many }) => ({
+  author: one(users, { fields: [knowledgeBases.authorId], references: [users.id] }),
 }));
