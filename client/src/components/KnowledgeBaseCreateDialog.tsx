@@ -132,23 +132,35 @@ export function KnowledgeBaseCreateDialog({
   };
 
   const onSubmit = async (data: FormValues) => {
-    setIsSubmitting(true);
-    
-    const payload = {
-      title: data.title,
-      description: data.description,
-      subject: data.subject,
-      difficulty: data.difficulty,
-      price: data.price,
-      isPublic: data.isPublic,
-      files: uploadedFiles,
-      metadata: {
-        tags: data.tags ? data.tags.split(",").map(tag => tag.trim()) : [],
-        objectives: data.objectives ? data.objectives.split("\n").filter(o => o.trim().length > 0) : [],
-      },
-    };
-    
-    createKnowledgeBaseMutation.mutate(payload);
+    try {
+      console.log("Form submission started", data);
+      setIsSubmitting(true);
+      
+      const payload = {
+        title: data.title,
+        description: data.description,
+        subject: data.subject,
+        difficulty: data.difficulty,
+        price: data.price || 0, // Ensure price is set to 0 if undefined
+        isPublic: data.isPublic ?? true, // Default to true if undefined
+        files: uploadedFiles,
+        metadata: {
+          tags: data.tags ? data.tags.split(",").map(tag => tag.trim()) : [],
+          objectives: data.objectives ? data.objectives.split("\n").filter(o => o.trim().length > 0) : [],
+        },
+      };
+      
+      console.log("Submitting payload:", payload);
+      await createKnowledgeBaseMutation.mutateAsync(payload);
+      console.log("Knowledge base created successfully");
+    } catch (error) {
+      console.error("Error creating knowledge base:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create knowledge base. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

@@ -565,20 +565,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/knowledge-bases", isAuthenticated, async (req, res) => {
     try {
-      const validatedData = insertKnowledgeBaseSchema.parse(req.body);
+      console.log("Received knowledge base creation request:", JSON.stringify(req.body, null, 2));
       
-      const knowledgeBase = await storage.createKnowledgeBase({
-        ...validatedData,
-        authorId: req.session.userId
-      });
-      
-      res.status(201).json(knowledgeBase);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      // Check if user ID is available in session
+      if (!req.session.userId) {
+        return res.status(401).json({ message: "User not authenticated" });
       }
+      
+      try {
+        const validatedData = insertKnowledgeBaseSchema.parse(req.body);
+        console.log("Validation passed, creating knowledge base with data:", validatedData);
+        
+        const knowledgeBase = await storage.createKnowledgeBase({
+          ...validatedData,
+          authorId: req.session.userId
+        });
+        
+        console.log("Knowledge base created with ID:", knowledgeBase.id);
+        res.status(201).json(knowledgeBase);
+      } catch (zodError) {
+        if (zodError instanceof z.ZodError) {
+          console.error("Validation error:", zodError.errors);
+          return res.status(400).json({ 
+            message: "Validation error", 
+            errors: zodError.errors 
+          });
+        }
+        throw zodError;
+      }
+    } catch (error) {
       console.error("Error creating knowledge base:", error);
-      res.status(500).json({ message: "Error creating knowledge base" });
+      res.status(500).json({ 
+        message: "Error creating knowledge base",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
   
