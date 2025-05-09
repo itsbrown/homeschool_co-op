@@ -16,6 +16,7 @@ import {
   Sparkles,
   Layers,
   Brain,
+  Library,
 } from "lucide-react";
 
 const navigationItems = [
@@ -26,6 +27,7 @@ const navigationItems = [
       { name: "My Curriculum", href: "/curriculum", icon: BookOpen },
       { name: "Lessons", href: "/lessons", icon: GraduationCap },
       { name: "AI Lesson Generator", href: "/lessons/ai-generator", icon: Sparkles },
+      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
       { name: "Knowledge Marketplace", href: "/marketplace", icon: ShoppingBag },
       { name: "Virtual Tutor", href: "/tutor", icon: User },
       { name: "Community", href: "/community", icon: Users },
