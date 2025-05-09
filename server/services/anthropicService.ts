@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AIGenerationFormData } from '@/lib/types';
 import { CurriculumTemplate } from './curriculumService';
 import { generateCurriculumWithAI, generateLessonPlanWithAI, analyzeStudentWork } from './anthropic';
+import { extractKnowledgeBaseContent, extractKeyConceptsFromKnowledgeBases } from './knowledgeBaseExtraction';
 
 // Initialize Anthropic client with API key from environment variables
 let anthropic: Anthropic | null = null;
@@ -55,41 +56,21 @@ export async function generateAICurriculum(formData: AIGenerationFormData): Prom
             knowledgeBaseIds.map(id => storage.getKnowledgeBase(id))
           );
           
-          // Extract metadata and content from knowledge bases
+          // Extract metadata and content from knowledge bases using our utility
           const validKnowledgeBases = knowledgeBases.filter(kb => kb !== undefined);
           
           if (validKnowledgeBases.length > 0) {
-            knowledgeBaseContent = "Based on the following knowledge base materials:\n\n";
+            // Use our knowledge base extraction utility
+            knowledgeBaseContent = extractKnowledgeBaseContent(validKnowledgeBases);
             
-            validKnowledgeBases.forEach((kb, index) => {
-              knowledgeBaseContent += `Knowledge Base ${index + 1}: "${kb.title}"\n`;
-              
-              // Add metadata
-              if (kb.metadata) {
-                // Extract objectives if they exist
-                const metadata = kb.metadata as any;
-                if (metadata.objectives && Array.isArray(metadata.objectives)) {
-                  knowledgeBaseContent += "Objectives:\n";
-                  metadata.objectives.forEach((obj: string) => {
-                    knowledgeBaseContent += `- ${obj}\n`;
-                  });
-                }
-                
-                // Extract tags if they exist
-                if (metadata.tags && Array.isArray(metadata.tags)) {
-                  knowledgeBaseContent += "Tags: " + metadata.tags.join(", ") + "\n";
-                }
-              }
-              
-              // Add file names
-              if (kb.files && Array.isArray(kb.files)) {
-                knowledgeBaseContent += "Files:\n";
-                kb.files.forEach((file: any) => {
-                  knowledgeBaseContent += `- ${file.name}\n`;
-                });
-              }
-              
-              knowledgeBaseContent += "\n";
+            // Also extract key concepts for improved context
+            const keyConcepts = extractKeyConceptsFromKnowledgeBases(validKnowledgeBases);
+            
+            // Log the extracted concepts for debugging
+            console.log('Extracted key concepts from knowledge bases:', {
+              topics: keyConcepts.topics,
+              keyTerms: keyConcepts.keyTerms,
+              mainIdeas: keyConcepts.mainIdeas.length
             });
           }
         } catch (kbError) {
@@ -178,41 +159,21 @@ export async function generateAICurriculum(formData: AIGenerationFormData): Prom
             knowledgeBaseIds.map(id => storage.getKnowledgeBase(id))
           );
           
-          // Extract metadata and content from knowledge bases
+          // Extract metadata and content from knowledge bases using our utility
           const validKnowledgeBases = knowledgeBases.filter(kb => kb !== undefined);
           
           if (validKnowledgeBases.length > 0) {
-            knowledgeBaseContent = "Based on the following knowledge base materials:\n\n";
+            // Use our knowledge base extraction utility for the fallback method too
+            knowledgeBaseContent = extractKnowledgeBaseContent(validKnowledgeBases);
             
-            validKnowledgeBases.forEach((kb, index) => {
-              knowledgeBaseContent += `Knowledge Base ${index + 1}: "${kb.title}"\n`;
-              
-              // Add metadata
-              if (kb.metadata) {
-                // Extract objectives if they exist
-                const metadata = kb.metadata as any;
-                if (metadata.objectives && Array.isArray(metadata.objectives)) {
-                  knowledgeBaseContent += "Objectives:\n";
-                  metadata.objectives.forEach((obj: string) => {
-                    knowledgeBaseContent += `- ${obj}\n`;
-                  });
-                }
-                
-                // Extract tags if they exist
-                if (metadata.tags && Array.isArray(metadata.tags)) {
-                  knowledgeBaseContent += "Tags: " + metadata.tags.join(", ") + "\n";
-                }
-              }
-              
-              // Add file names
-              if (kb.files && Array.isArray(kb.files)) {
-                knowledgeBaseContent += "Files:\n";
-                kb.files.forEach((file: any) => {
-                  knowledgeBaseContent += `- ${file.name}\n`;
-                });
-              }
-              
-              knowledgeBaseContent += "\n";
+            // Also extract key concepts for improved context
+            const keyConcepts = extractKeyConceptsFromKnowledgeBases(validKnowledgeBases);
+            
+            // Log the extracted concepts for debugging
+            console.log('Fallback method - Extracted key concepts from knowledge bases:', {
+              topics: keyConcepts.topics,
+              keyTerms: keyConcepts.keyTerms,
+              mainIdeas: keyConcepts.mainIdeas.length
             });
           }
         } catch (kbError) {
