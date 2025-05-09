@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AIGenerationFormData } from '@/lib/types';
 import { CurriculumTemplate } from './curriculumService';
-import { generateCurriculumWithAI, generateLessonPlanWithAI } from './anthropic';
+import { generateCurriculumWithAI, generateLessonPlanWithAI, analyzeStudentWork } from './anthropic';
 
 // Initialize Anthropic client with API key from environment variables
 let anthropic: Anthropic | null = null;
@@ -166,14 +166,39 @@ export async function generateAILesson(
   duration: number = 45
 ): Promise<any> {
   try {
-    // Check if Anthropic client is initialized
-    if (!anthropic) {
-      console.warn('Anthropic client not initialized. Unable to generate lesson with AI.');
-      throw new Error('Anthropic API not available');
-    }
-    
-    // Construct system prompt
-    const systemPrompt = `You are an expert lesson planner with extensive knowledge of educational best practices.
+    // Try using our enhanced function first
+    try {
+      console.log(`Attempting to generate AI lesson using enhanced service for ${topic} in ${subject} at ${gradeLevel} level...`);
+      
+      // Generate objectives from the topic
+      const objectives = `Create a comprehensive understanding of ${topic} appropriate for ${gradeLevel} students`;
+      
+      const lessonPlanJson = await generateLessonPlanWithAI(
+        subject,
+        gradeLevel,
+        duration,
+        learningStyles,
+        objectives
+      );
+      
+      const jsonMatch = lessonPlanJson.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Enhanced service failed to return valid JSON');
+      }
+      
+      const lessonPlan = JSON.parse(jsonMatch[0]);
+      return lessonPlan;
+    } catch (enhancedError) {
+      console.warn('Enhanced lesson generation failed, falling back to original implementation:', enhancedError);
+      
+      // Check if Anthropic client is initialized
+      if (!anthropic) {
+        console.warn('Anthropic client not initialized. Unable to generate lesson with AI.');
+        throw new Error('Anthropic API not available');
+      }
+      
+      // Construct system prompt
+      const systemPrompt = `You are an expert lesson planner with extensive knowledge of educational best practices.
 Your task is to create a detailed lesson plan for teaching "${topic}" within the subject of ${subject} for ${gradeLevel} students.
 The lesson should be designed to last approximately ${duration} minutes and accommodate these learning styles: ${learningStyles.join(', ')}.
 
@@ -201,33 +226,34 @@ Please format your response as a JSON object matching this structure:
   "extensions": ["extension1", "extension2", ...]
 }`;
 
-    const userPrompt = `Please generate a detailed lesson plan for teaching "${topic}" within ${subject} for ${gradeLevel} students, accommodating ${learningStyles.join(', ')} learning styles and lasting ${duration} minutes.`;
-    
-    console.log(`Attempting to generate AI lesson for ${topic} in ${subject} at ${gradeLevel} level...`);
-    
-    // Call Claude API
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 3000,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: userPrompt }
-      ],
-    });
+      const userPrompt = `Please generate a detailed lesson plan for teaching "${topic}" within ${subject} for ${gradeLevel} students, accommodating ${learningStyles.join(', ')} learning styles and lasting ${duration} minutes.`;
+      
+      console.log(`Attempting to generate AI lesson using fallback method for ${topic} in ${subject} at ${gradeLevel} level...`);
+      
+      // Call Claude API
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 3000,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt }
+        ],
+      });
 
-    // Extract the JSON from the response
-    const contentBlock = response.content[0];
-    if (contentBlock.type !== 'text') {
-      throw new Error('Unexpected response format from AI');
+      // Extract the JSON from the response
+      const contentBlock = response.content[0];
+      if (contentBlock.type !== 'text') {
+        throw new Error('Unexpected response format from AI');
+      }
+      
+      const jsonMatch = contentBlock.text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Failed to extract JSON from AI response');
+      }
+      
+      const lessonPlan = JSON.parse(jsonMatch[0]);
+      return lessonPlan;
     }
-    
-    const jsonMatch = contentBlock.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to extract JSON from AI response');
-    }
-    
-    const lessonPlan = JSON.parse(jsonMatch[0]);
-    return lessonPlan;
   } catch (error: any) {
     console.error('Error generating AI lesson plan:', error);
     throw new Error('Failed to generate lesson plan with AI: ' + (error.message || 'Unknown error'));
@@ -239,13 +265,48 @@ Please format your response as a JSON object matching this structure:
  */
 export async function getAIFeedback(text: string, feedbackType: 'curriculum' | 'lesson' | 'assessment'): Promise<string> {
   try {
-    // Check if Anthropic client is initialized
-    if (!anthropic) {
-      console.warn('Anthropic client not initialized. Unable to get AI feedback.');
-      throw new Error('Anthropic API not available');
-    }
-    
-    const systemPrompt = `You are an expert educator providing constructive feedback on ${feedbackType} content.
+    // Try using our enhanced analyzeStudentWork function first
+    try {
+      console.log(`Attempting to analyze ${feedbackType} content using enhanced service...`);
+      
+      // Convert feedbackType to appropriate subject and assignment context
+      let subject = 'education';
+      let assignment = '';
+      
+      switch(feedbackType) {
+        case 'curriculum':
+          subject = 'curriculum design';
+          assignment = 'Create a comprehensive curriculum with clear objectives, units, and lessons';
+          break;
+        case 'lesson':
+          subject = 'instructional design';
+          assignment = 'Create a detailed lesson plan with objectives, activities, and assessments';
+          break;
+        case 'assessment':
+          subject = 'educational assessment';
+          assignment = 'Create effective assessment tools that measure student learning outcomes';
+          break;
+      }
+      
+      // Use the enhanced service
+      const feedback = await analyzeStudentWork(
+        subject,
+        assignment,
+        text,
+        'professional educator'
+      );
+      
+      return feedback;
+    } catch (enhancedError) {
+      console.warn('Enhanced feedback service failed, falling back to original implementation:', enhancedError);
+      
+      // Check if Anthropic client is initialized for fallback
+      if (!anthropic) {
+        console.warn('Anthropic client not initialized. Unable to get AI feedback.');
+        throw new Error('Anthropic API not available');
+      }
+      
+      const systemPrompt = `You are an expert educator providing constructive feedback on ${feedbackType} content.
 Your feedback should be thoughtful, specific, and actionable, highlighting both strengths and areas for improvement.
 For ${feedbackType === 'curriculum' ? 'curricula' : feedbackType === 'lesson' ? 'lessons' : 'assessments'}, focus on:
 - Overall structure and organization
@@ -257,26 +318,27 @@ For ${feedbackType === 'curriculum' ? 'curricula' : feedbackType === 'lesson' ? 
 
 Provide your feedback in a clear, professional manner that would be helpful to an educator.`;
 
-    console.log(`Getting AI feedback for ${feedbackType} content...`);
-    
-    // Call Claude API
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 1500,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: `Please review this ${feedbackType} content and provide constructive feedback:\n\n${text}` }
-      ],
-    });
+      console.log(`Getting AI feedback for ${feedbackType} content using fallback method...`);
+      
+      // Call Claude API
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 1500,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: `Please review this ${feedbackType} content and provide constructive feedback:\n\n${text}` }
+        ],
+      });
 
-    console.log(`Successfully received feedback response from Anthropic API`);
-    
-    const contentBlock = response.content[0];
-    if (contentBlock.type !== 'text') {
-      throw new Error('Unexpected response format from AI');
+      console.log(`Successfully received feedback response from Anthropic API`);
+      
+      const contentBlock = response.content[0];
+      if (contentBlock.type !== 'text') {
+        throw new Error('Unexpected response format from AI');
+      }
+      
+      return contentBlock.text;
     }
-    
-    return contentBlock.text;
   } catch (error: any) {
     console.error('Error getting AI feedback:', error);
     
