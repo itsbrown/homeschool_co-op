@@ -28,6 +28,8 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/curriculum" component={Curriculum} />
+      <Route path="/curriculum/:id" component={CurriculumDetail} />
       <Route path="/lessons" component={Lessons} />
       <Route path="/lessons/ai-generator" component={AILessonGenerator} />
       <Route path="/knowledge-base" component={KnowledgeBase} />

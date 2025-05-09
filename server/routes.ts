@@ -380,6 +380,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.get("/api/lessons/curriculum/:curriculumId", isAuthenticated, async (req, res) => {
+    try {
+      const curriculumId = parseInt(req.params.curriculumId);
+      
+      // Verify access to curriculum
+      const curriculum = await storage.getCurriculum(curriculumId);
+      
+      if (!curriculum) {
+        return res.status(404).json({ message: "Curriculum not found" });
+      }
+      
+      // Check if user is author or curriculum is public
+      if (curriculum.authorId !== req.session.userId && !curriculum.isPublic) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      const lessons = await storage.getLessonsByCurriculum(curriculumId);
+      res.status(200).json(lessons);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching lessons for curriculum" });
+    }
+  });
+  
   // Event routes
   app.post("/api/events", isAuthenticated, async (req, res) => {
     try {
