@@ -73,7 +73,7 @@ const subjectObjectives: Record<string, string[]> = {
   ]
 };
 
-// Generate a curriculum template based on form data
+// Generate a curriculum template based on form data and selected knowledge bases
 export async function generateCurriculumTemplate(formData: AIGenerationFormData): Promise<CurriculumTemplate> {
   try {
     // First attempt to use AI service to generate curriculum
@@ -83,7 +83,7 @@ export async function generateCurriculumTemplate(formData: AIGenerationFormData)
     console.warn('AI curriculum generation failed, falling back to template-based generation:', error);
     
     // Fallback to template-based generation if AI fails
-    const { subject, gradeLevel, learningStyles, additionalDetails } = formData;
+    const { subject, gradeLevel, learningStyles, additionalDetails, knowledgeBaseIds } = formData;
     
     // Generate title based on subject and grade level
     const title = `${subject} Curriculum for ${gradeLevel}`;

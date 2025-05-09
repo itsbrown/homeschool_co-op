@@ -93,4 +93,5 @@ export interface AIGenerationFormData {
   gradeLevel: string;
   learningStyles: string[];
   additionalDetails?: string;
+  knowledgeBaseIds?: number[];
 }

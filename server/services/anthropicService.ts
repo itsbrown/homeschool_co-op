@@ -35,16 +35,74 @@ export function isAnthropicAvailable(): boolean {
  */
 export async function generateAICurriculum(formData: AIGenerationFormData): Promise<CurriculumTemplate> {
   try {
-    const { subject, gradeLevel, learningStyles, additionalDetails } = formData;
+    const { subject, gradeLevel, learningStyles, additionalDetails, knowledgeBaseIds } = formData;
     
     // Try using our enhanced curriculumWithAI function first
     try {
       console.log(`Attempting to generate AI curriculum using enhanced service for ${subject} at ${gradeLevel} level...`);
       
+      // If knowledge base IDs are provided, fetch their content to integrate
+      let knowledgeBaseContent = "";
+      if (knowledgeBaseIds && knowledgeBaseIds.length > 0) {
+        try {
+          // Import storage dynamically to avoid circular dependencies
+          const { storage } = await import('../storage');
+          
+          console.log(`Fetching knowledge bases with IDs: ${knowledgeBaseIds.join(', ')}`);
+          
+          // Fetch knowledge bases
+          const knowledgeBases = await Promise.all(
+            knowledgeBaseIds.map(id => storage.getKnowledgeBase(id))
+          );
+          
+          // Extract metadata and content from knowledge bases
+          const validKnowledgeBases = knowledgeBases.filter(kb => kb !== undefined);
+          
+          if (validKnowledgeBases.length > 0) {
+            knowledgeBaseContent = "Based on the following knowledge base materials:\n\n";
+            
+            validKnowledgeBases.forEach((kb, index) => {
+              knowledgeBaseContent += `Knowledge Base ${index + 1}: "${kb.title}"\n`;
+              
+              // Add metadata
+              if (kb.metadata) {
+                // Extract objectives if they exist
+                const metadata = kb.metadata as any;
+                if (metadata.objectives && Array.isArray(metadata.objectives)) {
+                  knowledgeBaseContent += "Objectives:\n";
+                  metadata.objectives.forEach((obj: string) => {
+                    knowledgeBaseContent += `- ${obj}\n`;
+                  });
+                }
+                
+                // Extract tags if they exist
+                if (metadata.tags && Array.isArray(metadata.tags)) {
+                  knowledgeBaseContent += "Tags: " + metadata.tags.join(", ") + "\n";
+                }
+              }
+              
+              // Add file names
+              if (kb.files && Array.isArray(kb.files)) {
+                knowledgeBaseContent += "Files:\n";
+                kb.files.forEach((file: any) => {
+                  knowledgeBaseContent += `- ${file.name}\n`;
+                });
+              }
+              
+              knowledgeBaseContent += "\n";
+            });
+          }
+        } catch (kbError) {
+          console.warn("Error fetching knowledge base content:", kbError);
+          // Continue with generation even if knowledge base fetch fails
+        }
+      }
+      
       // Build a comprehensive prompt for the curriculum generation
       const enhancedPrompt = `Generate a comprehensive curriculum for ${subject} for ${gradeLevel} students.
       This curriculum should incorporate the following learning styles: ${learningStyles.join(', ')}.
       ${additionalDetails ? `Consider these additional requirements: ${additionalDetails}` : ''}
+      ${knowledgeBaseContent ? `\n${knowledgeBaseContent}\n` : ''}
       
       Format your response as a JSON object with this structure:
       {
@@ -87,11 +145,69 @@ export async function generateAICurriculum(formData: AIGenerationFormData): Prom
         throw new Error('Anthropic API not available');
       }
       
+      // Get knowledge base content
+      let knowledgeBaseContent = "";
+      if (knowledgeBaseIds && knowledgeBaseIds.length > 0) {
+        try {
+          // Import storage dynamically to avoid circular dependencies
+          const { storage } = await import('../storage');
+          
+          console.log(`Fetching knowledge bases with IDs: ${knowledgeBaseIds.join(', ')}`);
+          
+          // Fetch knowledge bases
+          const knowledgeBases = await Promise.all(
+            knowledgeBaseIds.map(id => storage.getKnowledgeBase(id))
+          );
+          
+          // Extract metadata and content from knowledge bases
+          const validKnowledgeBases = knowledgeBases.filter(kb => kb !== undefined);
+          
+          if (validKnowledgeBases.length > 0) {
+            knowledgeBaseContent = "Based on the following knowledge base materials:\n\n";
+            
+            validKnowledgeBases.forEach((kb, index) => {
+              knowledgeBaseContent += `Knowledge Base ${index + 1}: "${kb.title}"\n`;
+              
+              // Add metadata
+              if (kb.metadata) {
+                // Extract objectives if they exist
+                const metadata = kb.metadata as any;
+                if (metadata.objectives && Array.isArray(metadata.objectives)) {
+                  knowledgeBaseContent += "Objectives:\n";
+                  metadata.objectives.forEach((obj: string) => {
+                    knowledgeBaseContent += `- ${obj}\n`;
+                  });
+                }
+                
+                // Extract tags if they exist
+                if (metadata.tags && Array.isArray(metadata.tags)) {
+                  knowledgeBaseContent += "Tags: " + metadata.tags.join(", ") + "\n";
+                }
+              }
+              
+              // Add file names
+              if (kb.files && Array.isArray(kb.files)) {
+                knowledgeBaseContent += "Files:\n";
+                kb.files.forEach((file: any) => {
+                  knowledgeBaseContent += `- ${file.name}\n`;
+                });
+              }
+              
+              knowledgeBaseContent += "\n";
+            });
+          }
+        } catch (kbError) {
+          console.warn("Error fetching knowledge base content for fallback method:", kbError);
+          // Continue with generation even if knowledge base fetch fails
+        }
+      }
+      
       // Construct system prompt
       const systemPrompt = `You are an expert curriculum designer with extensive knowledge of educational best practices. 
 Your task is to create a comprehensive, well-structured curriculum for ${subject} at the ${gradeLevel} level.
 The curriculum should be specifically tailored to accommodate the following learning styles: ${learningStyles.join(', ')}.
 ${additionalDetails ? `Additionally, consider these specific requirements: ${additionalDetails}` : ''}
+${knowledgeBaseContent ? `\n${knowledgeBaseContent}\n` : ''}
 
 Please format your response as a JSON object matching this structure:
 {
