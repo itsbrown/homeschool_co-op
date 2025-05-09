@@ -47,12 +47,39 @@ export function extractKnowledgeBaseContent(knowledgeBases: KnowledgeBase[]): st
       for (const file of kb.files) {
         content += `--- File: ${file.name} ---\n`;
         
-        // Check if we have content/text field in the file data
-        if (file.content || file.text) {
-          const fileContent = file.content || file.text;
+        // Extract content from various possible locations in the file object
+        let fileContent = '';
+        
+        // Check for content in common locations
+        if (typeof file === 'object') {
+          // Handle different file storage formats
+          if (file.content) {
+            fileContent = typeof file.content === 'string' ? file.content : JSON.stringify(file.content);
+          } 
+          else if (file.text) {
+            fileContent = typeof file.text === 'string' ? file.text : JSON.stringify(file.text);
+          }
+          else if (file.data) {
+            fileContent = typeof file.data === 'string' ? file.data : JSON.stringify(file.data);
+          }
+          // If we have base64 content, try to decode it
+          else if (file.base64Content) {
+            try {
+              fileContent = Buffer.from(file.base64Content, 'base64').toString('utf-8');
+            } catch (e) {
+              fileContent = '(Unable to decode base64 content)';
+            }
+          }
+        }
+        
+        // If we extracted any content
+        if (fileContent) {
           // For large content, include a summary or truncate
-          if (fileContent.length > 1000) {
-            content += fileContent.substring(0, 1000) + "...\n";
+          if (fileContent.length > 2000) {
+            // Extract first and last parts to get both the beginning context and conclusion
+            const firstPart = fileContent.substring(0, 1500);
+            const lastPart = fileContent.substring(fileContent.length - 500);
+            content += `${firstPart}\n\n[...Content truncated...]\n\n${lastPart}\n`;
           } else {
             content += fileContent + "\n";
           }
@@ -61,9 +88,19 @@ export function extractKnowledgeBaseContent(knowledgeBases: KnowledgeBase[]): st
         else if (file.description) {
           content += `Description: ${file.description}\n`;
         }
-        // Otherwise, just note that content is not available
+        // Otherwise, try to extract key information from file object
         else {
-          content += `(Content not available - using file metadata only)\n`;
+          content += `(Full content not available)\n`;
+          
+          // Try to extract any useful metadata
+          if (typeof file === 'object') {
+            // Extract any string properties that might be useful
+            Object.entries(file).forEach(([key, value]) => {
+              if (typeof value === 'string' && key !== 'name' && value.length < 100) {
+                content += `${key}: ${value}\n`;
+              }
+            });
+          }
         }
         
         content += "\n";

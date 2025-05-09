@@ -124,26 +124,67 @@ export default function CurriculumDetail() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="divide-y">
-                      {unit.lessons?.map((lesson: any, lessonIndex: number) => (
-                        <div key={lessonIndex} className="py-3 px-1">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-medium">
-                                Lesson {lessonIndex + 1}: {lesson.title}
-                              </h3>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {lesson.description}
-                              </p>
+                      {unit.lessons?.map((lesson: any, lessonIndex: number) => {
+                        // Find the actual lesson from the database if it exists
+                        const actualLesson = Array.isArray(lessons) ? 
+                          lessons.find((l: any) => 
+                            l.title?.includes(lesson.title) || 
+                            lesson.title?.includes(l.title?.split(':').pop()?.trim() || '')
+                          ) : null;
+                          
+                        return (
+                          <div key={lessonIndex} className="py-3 px-1">
+                            <div className="flex justify-between items-start">
+                              <div className="w-full pr-4">
+                                <h3 className="font-medium">
+                                  {/* Clean up lesson title display */}
+                                  {/^Lesson \d+/i.test(lesson.title) 
+                                    ? lesson.title 
+                                    : `Lesson ${lessonIndex + 1}: ${lesson.title}`}
+                                </h3>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {lesson.description}
+                                </p>
+                                
+                                {/* Show activities if they exist */}
+                                {lesson.activities && lesson.activities.length > 0 && (
+                                  <div className="mt-3">
+                                    <h4 className="text-sm font-medium">Activities:</h4>
+                                    <ul className="text-sm text-muted-foreground list-disc pl-5 mt-1">
+                                      {lesson.activities.map((activity: string, actIndex: number) => (
+                                        <li key={actIndex}>{activity}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                
+                                {/* Show resources if they exist */}
+                                {lesson.resources && lesson.resources.length > 0 && (
+                                  <div className="mt-2">
+                                    <h4 className="text-sm font-medium">Resources:</h4>
+                                    <ul className="text-sm text-muted-foreground list-disc pl-5 mt-1">
+                                      {lesson.resources.map((resource: string, resIndex: number) => (
+                                        <li key={resIndex}>{resource}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Link to actual lesson if it exists in the database */}
+                              {actualLesson && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => navigate(`/lessons/${actualLesson.id}`)}
+                                >
+                                  View Lesson
+                                </Button>
+                              )}
                             </div>
-                            {/* Link to actual lesson if it exists in the database */}
-                            {Array.isArray(lessons) && lessons.find((l: any) => l.title?.includes(lesson.title)) && (
-                              <Button variant="ghost" size="sm">
-                                View Lesson
-                              </Button>
-                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </CardContent>
                   </Card>
                 ))}

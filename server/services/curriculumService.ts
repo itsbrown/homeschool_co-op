@@ -218,8 +218,65 @@ function generateUnits(subject: string, gradeLevel: string, learningStyles: stri
 // Helper function to generate lesson templates
 function generateLessons(count: number, learningStyles: string[], minDuration: number, maxDuration: number) {
   const lessons = [];
+  
+  // List of more specific lesson titles by common subject areas
+  const lessonTitlesBySubject: Record<string, string[]> = {
+    "Mathematics": [
+      "Number Systems & Operations", 
+      "Algebraic Thinking", 
+      "Geometry Concepts", 
+      "Data Analysis", 
+      "Measurement Principles"
+    ],
+    "Science": [
+      "Scientific Method & Inquiry", 
+      "Energy & Matter", 
+      "Living Systems", 
+      "Earth Systems", 
+      "Forces & Motion"
+    ],
+    "Language Arts": [
+      "Reading Comprehension", 
+      "Writing Process", 
+      "Speaking & Listening", 
+      "Language Conventions", 
+      "Research Skills"
+    ],
+    "Social Studies": [
+      "Historical Analysis", 
+      "Geographic Concepts", 
+      "Civic Engagement", 
+      "Cultural Studies", 
+      "Economic Principles"
+    ],
+    "Computer Science": [
+      "Computational Thinking", 
+      "Programming Fundamentals", 
+      "Data Structures", 
+      "Algorithms", 
+      "Digital Ethics"
+    ]
+  };
+  
+  // Generic lesson titles for any subject
+  const genericLessonTitles = [
+    "Key Principles", 
+    "Fundamental Concepts", 
+    "Essential Frameworks", 
+    "Core Methodologies", 
+    "Critical Applications"
+  ];
+  
   for (let i = 1; i <= count; i++) {
     const duration = Math.floor(Math.random() * (maxDuration - minDuration + 1)) + minDuration;
+    
+    // Choose a more meaningful lesson title
+    let lessonTitle: string;
+    if (i <= genericLessonTitles.length) {
+      lessonTitle = genericLessonTitles[i-1];
+    } else {
+      lessonTitle = `Topic ${i}`;
+    }
     
     const activities = [];
     if (learningStyles.includes('visual')) {
@@ -236,8 +293,8 @@ function generateLessons(count: number, learningStyles: string[], minDuration: n
     }
     
     lessons.push({
-      title: `Lesson ${i}`,
-      description: `Core concepts and skills for Lesson ${i}`,
+      title: lessonTitle,
+      description: `Students will explore core concepts and develop essential skills related to ${lessonTitle.toLowerCase()}`,
       duration: duration,
       activities: activities.slice(0, 3),
       resources: ["Digital presentations", "Interactive worksheets", "Reference materials"],
@@ -305,8 +362,19 @@ export function lessonTemplateToDbFormat(
   subject: string,
   gradeLevel: string
 ): Omit<Lesson, "id" | "createdAt" | "updatedAt"> {
+  // Extract unit number if present (e.g., "Unit 1: Fundamentals" -> "Unit 1")
+  const unitPrefix = unitTitle.match(/^Unit \d+/)?.[0] || "";
+  
+  // Create a clean title without duplication
+  let cleanTitle = lessonTemplate.title;
+  
+  // If the lesson title starts with "Lesson X", remove it to avoid duplication
+  if (/^Lesson \d+/i.test(cleanTitle)) {
+    cleanTitle = cleanTitle.replace(/^Lesson \d+:\s*/i, '').trim();
+  }
+  
   return {
-    title: `${unitTitle}: ${lessonTemplate.title}`,
+    title: `${unitPrefix}: ${cleanTitle}`,
     description: lessonTemplate.description,
     subject: subject,
     gradeLevel: gradeLevel,
