@@ -1,0 +1,103 @@
+Comprehensive Development Plan for Adaptive AI-Driven Curriculum Generation and Learning Management System
+Abstract
+A sprint-based development plan for an AI-powered educational platform with a Knowledge Base Marketplace (enhanced with curated content uploader and packaging/download system), AI-Driven Website Generation, Email Management Module, Discount and Referral Management Module, Summer Camp Management Module, AI-Powered Virtual Tutor, Gamified Social Learning Community, and Parent/Educator Analytics Dashboard. Built on Replit with AWS integration, the plan ensures a modern, clean UI (React, Tailwind CSS) and cohesiveness across six sprints.
+System Overview
+The platform automates education for K-12, higher education, professional development, and summer camps, with a subscription-based model. The enhanced Knowledge Base Marketplace allows users to upload curated/specialized materials for curriculum/lesson generation and package them for sale/download. It leverages React, Node.js, GraphQL, Python AI, blockchain, and AWS.
+Development Plan
+Tools
+Frontend: React, Tailwind CSS, Vite, React Router, Chart.js, react-dropzone.
+Backend: Node.js, Express, GraphQL (Apollo Server), Socket.IO, Multer, Archiver.
+Database: MongoDB Atlas, PostgreSQL (Supabase), Elasticsearch (AWS OpenSearch).
+AI/ML: Python (Replit/AWS SageMaker), Hugging Face Transformers, TensorFlow Lite (Replit), TensorFlow (SageMaker), Claude-3.7-Sonnet API.
+Email: Amazon SES, Nodemailer.
+Blockchain: Ethereum (Infura), Hardhat (AWS EC2).
+Cloud: AWS (Lambda, Amplify, S3, CloudFront, SageMaker, EC2).
+Testing: Jest, Cypress.
+Design: Figma.
+Collaboration: Replit Multiplayer, Trello, Discord.
+Security: Helmet, JWT, GDPR/HIPAA compliance.
+Processes
+Agile Scrum: 2-3 week sprints, daily standups, sprint reviews.
+UI Consistency: Shared component library, Figma style guide (blue/white, Inter font, 8px grid).
+Code Quality: ESLint/Prettier, peer reviews, Storybook.
+Testing: Jest (unit), Cypress (E2E), manual uploader/tutor testing.
+Deployment: Replit for dev/testing, AWS for production (GitHub Actions).
+Cohesiveness: Monorepo, GraphQL, global state (React Context), reusable email/discount/AI logic.
+Sprints
+Sprint 1: Foundation and Core UI (2 Weeks)
+Tasks:
+1.1: Setup Replit Monorepo
+1.2: Build Express APIs for User Authentication
+1.3: Create Component Library and UI
+1.4: Configure Email for Welcome/Verification
+Prompts: As in previous artifact.
+Deliverables: Login/register, modern UI, welcome emails.
+Cohesiveness: Component library includes Uploader; auth supports marketplace.
+Sprint 2: Curriculum, Lessons, and Virtual Tutor (3 Weeks)
+Tasks:
+2.1: APIs for Curriculum/Lesson Generation (References uploaded materials)
+2.2: Curriculum Engine and Tutor (Uses uploaded materials)
+2.3: Curriculum Dashboard, Lesson Viewer, and Tutor UI
+2.4: Schedule and Progress Update Emails
+Prompts: Updated above for 2.1-2.2; 2.3-2.4 unchanged.
+Deliverables: Curriculum/lesson system, text-based tutor, schedule emails.
+Cohesiveness: Uploader materials feed curriculum/tutor; APIs reusable for camps.
+Sprint 3: Knowledge Base Marketplace and Social Community (3 Weeks)
+Tasks:
+3.1: GraphQL for Marketplace/Community Queries (Supports packaged bases)
+3.2: Marketplace and Community APIs (Uploader and packaging/download)
+3.3: Blockchain for Badges and Licensing
+3.4: Marketplace and Community UI (Uploader and download)
+3.5: Purchase and Community Emails (Download notifications)
+Prompts: Updated above.
+Deliverables: Marketplace with uploader/packaging, community hub, emails.
+Cohesiveness: GraphQL unifies data; uploader integrates with curriculum.
+Sprint 4: Summer Camps and Analytics Dashboard (3 Weeks)
+Tasks:
+4.1: APIs for Camp Registration/Scheduling (Uses packaged bases)
+4.2: Predictive Analytics APIs (Tracks material usage)
+4.3: Camp Registration UI and Analytics Dashboard
+4.4: Camp and Insight Emails
+Prompts: Updated above for 4.1-4.2; 4.3-4.4 unchanged.
+Deliverables: Camp system, analytics dashboard, camp emails.
+Cohesiveness: Camps use packaged bases; analytics tracks usage.
+Sprint 5: Discounts, Referrals, and Website Generation (3 Weeks)
+Tasks:
+5.1: APIs for Discount/Referral Creation (Supports marketplace bases)
+5.2: Blockchain for Referral Rewards/Certificates
+5.3: APIs for Website Generation (Includes packaged bases)
+5.4: Discount/Referral and Website UI
+5.5: Discount/Referral and Website Emails
+Prompts: Updated above for 5.1, 5.3; others unchanged.
+Deliverables: Discount/referral system, websites, emails.
+Cohesiveness: Discounts apply to bases; websites showcase bases.
+Sprint 6: Final Integration and Polish (3 Weeks)
+Tasks:
+6.1: Enhance Tutor APIs for Voice Support
+6.2: Optimize Community APIs and Add Group Projects
+6.3: Finalize Analytics with Recommendations
+6.4: Polish UI for Accessibility
+6.5: Add Tutor/Community/Insight Emails (Upload notifications)
+6.6: Testing and Deployment
+Prompts: Updated above for 6.5; others unchanged.
+Deliverables: Advanced tutor, enhanced community, full analytics, production-ready platform.
+Cohesiveness: Final testing ensures uploader integration.
+Patentable Features
+Dynamic Curriculum Synthesis: Uses uploaded materials.
+Knowledge Base Marketplace: Curated uploader, blockchain-secured packaging/download.
+AI-Driven Website Generation: Showcases packaged bases.
+AI-Personalized Email System: Includes upload notifications.
+AI-Driven Discount/Referral System: Applies to bases.
+AI-Driven Summer Camp Management: Uses packaged bases.
+AI-Powered Virtual Tutor: References uploaded materials.
+Gamified Social Learning Community: Reviews bases.
+Parent/Educator Analytics Dashboard: Tracks material usage.
+Revenue Potential
+Subscriptions: 100,000 users (~$24M/year).
+Marketplace: 10,000 transactions/month, 20% commission ($1.2M/year).
+Website Add-Ons: 5,000 users at $5/month, 500 packages at $100 ($360,000/year).
+Camp Registrations: 10,000 campers at $100 ($1M/year).
+Analytics/Referral: 100 Institutional Plans at $100/year, 5,000 new users via referrals ($910,000/year).
+Download Fees: 5,000 downloads at $2 ($10,000/year).
+Total: ~$27.48M/year.
+

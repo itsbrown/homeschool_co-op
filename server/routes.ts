@@ -637,6 +637,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Add both GET and POST methods for download endpoint to ensure it works
+  // with different client approaches
+  app.get("/api/knowledge-bases/:id/download", async (req, res) => {
+    try {
+      const knowledgeBaseId = parseInt(req.params.id);
+      const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
+      
+      if (!knowledgeBase) {
+        return res.status(404).json({ message: "Knowledge base not found" });
+      }
+      
+      // Increment the download count
+      const updatedKnowledgeBase = await storage.incrementDownloadCount(knowledgeBaseId);
+      
+      // If the knowledge base has files, return them
+      if (knowledgeBase.files && Array.isArray(knowledgeBase.files)) {
+        res.status(200).json({ 
+          success: true,
+          files: knowledgeBase.files,
+          downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+        });
+      } else {
+        res.status(200).json({ 
+          success: true, 
+          files: [],
+          downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+        });
+      }
+    } catch (error) {
+      console.error("Error processing download:", error);
+      res.status(500).json({ message: "Error processing download" });
+    }
+  });
+  
+  // Keep the POST version for backward compatibility
   app.post("/api/knowledge-bases/:id/download", async (req, res) => {
     try {
       const knowledgeBaseId = parseInt(req.params.id);
@@ -649,13 +684,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Increment the download count
       const updatedKnowledgeBase = await storage.incrementDownloadCount(knowledgeBaseId);
       
-      res.status(200).json({ 
-        success: true, 
-        downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
-      });
+      // If the knowledge base has files, return them
+      if (knowledgeBase.files && Array.isArray(knowledgeBase.files)) {
+        res.status(200).json({ 
+          success: true,
+          files: knowledgeBase.files,
+          downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+        });
+      } else {
+        res.status(200).json({ 
+          success: true, 
+          files: [],
+          downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
+        });
+      }
     } catch (error) {
-      console.error("Error recording download:", error);
-      res.status(500).json({ message: "Error recording download" });
+      console.error("Error processing download:", error);
+      res.status(500).json({ message: "Error processing download" });
     }
   });
   
