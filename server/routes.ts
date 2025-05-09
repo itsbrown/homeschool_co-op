@@ -501,7 +501,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const knowledgeBases = await storage.getPublicKnowledgeBases();
       
       // Extract unique subjects
-      const subjects = [...new Set(knowledgeBases.map(kb => kb.subject))];
+      let subjects = [...new Set(knowledgeBases.map(kb => kb.subject))];
+      
+      // Add some default subjects if none found (for a better UX)
+      if (!subjects.length) {
+        subjects = ["Mathematics", "Science", "Language Arts", "History", "Computer Science"];
+      }
       
       res.status(200).json(subjects);
     } catch (error) {
