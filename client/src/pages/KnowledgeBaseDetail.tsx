@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -176,41 +176,34 @@ export default function KnowledgeBaseDetailPage() {
     }
   };
 
-  const handlePurchase = async () => {
-    try {
-      console.log("Starting purchase with direct fetch");
-      
-      // Use direct fetch with explicit method
-      const response = await fetch(`/api/knowledge-bases/${id}/purchase`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status} ${response.statusText}`);
-      }
-      
-      console.log("Purchase API call successful");
+  const [location, navigate] = useLocation();
+
+  // Redirect to Stripe checkout
+  const handlePurchase = () => {
+    if (!user) {
       toast({
-        title: "Success",
-        description: "Purchase completed successfully",
-      });
-      
-      // Refresh data and close dialog
-      queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${id}`] });
-      setShowPurchaseDialog(false);
-      
-    } catch (error) {
-      console.error("Error purchasing knowledge base:", error);
-      toast({
-        title: "Error",
-        description: "Failed to complete purchase. See console for details.",
+        title: "Login Required",
+        description: "Please login to purchase this knowledge base",
         variant: "destructive",
       });
+      navigate("/login");
+      return;
     }
+
+    if (!data) {
+      return;
+    }
+
+    // Create URL with query parameters
+    const price = data.price || 0;
+    const title = encodeURIComponent(data.title);
+    
+    // Redirect to the Checkout page with necessary parameters
+    const checkoutUrl = `/checkout?kb=${id}&amount=${price}&title=${title}`;
+    navigate(checkoutUrl);
+    
+    // Close purchase dialog if open
+    setShowPurchaseDialog(false);
   };
 
   if (knowledgeBaseQuery.isLoading) {
@@ -444,8 +437,8 @@ export default function KnowledgeBaseDetailPage() {
             
             <div className="border-t pt-4 mt-4">
               <p className="text-sm text-muted-foreground mb-4">
-                Note: In a production system, this would connect to a payment processor like Stripe.
-                For this demo, we'll simulate a successful purchase.
+                You'll be redirected to our secure checkout page where you can complete your purchase
+                using your preferred payment method.
               </p>
             </div>
           </div>
