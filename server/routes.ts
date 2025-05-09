@@ -483,6 +483,195 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Knowledge base routes
+  app.get("/api/knowledge-bases/public", async (req, res) => {
+    try {
+      // Import dynamically to prevent circular dependencies
+      const { getAllPublicKnowledgeBases } = await import("./api/knowledge-base");
+      await getAllPublicKnowledgeBases(req, res);
+    } catch (error) {
+      console.error("Error handling public knowledge bases:", error);
+      res.status(500).json({ message: "Error getting public knowledge bases" });
+    }
+  });
+
+  app.get("/api/knowledge-bases/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { getKnowledgeBase } = await import("./api/knowledge-base");
+      await getKnowledgeBase(req, res);
+    } catch (error) {
+      console.error("Error handling knowledge base retrieval:", error);
+      res.status(500).json({ message: "Error getting knowledge base" });
+    }
+  });
+
+  app.get("/api/knowledge-bases", isAuthenticated, async (req, res) => {
+    try {
+      const { getUserKnowledgeBases } = await import("./api/knowledge-base");
+      await getUserKnowledgeBases(req, res);
+    } catch (error) {
+      console.error("Error handling user knowledge bases:", error);
+      res.status(500).json({ message: "Error getting user knowledge bases" });
+    }
+  });
+
+  app.post("/api/knowledge-bases", isAuthenticated, async (req, res) => {
+    try {
+      const { createKnowledgeBase } = await import("./api/knowledge-base");
+      await createKnowledgeBase(req, res);
+    } catch (error) {
+      console.error("Error handling knowledge base creation:", error);
+      res.status(500).json({ message: "Error creating knowledge base" });
+    }
+  });
+
+  app.put("/api/knowledge-bases/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { updateKnowledgeBase } = await import("./api/knowledge-base");
+      await updateKnowledgeBase(req, res);
+    } catch (error) {
+      console.error("Error handling knowledge base update:", error);
+      res.status(500).json({ message: "Error updating knowledge base" });
+    }
+  });
+
+  app.delete("/api/knowledge-bases/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { deleteKnowledgeBase } = await import("./api/knowledge-base");
+      await deleteKnowledgeBase(req, res);
+    } catch (error) {
+      console.error("Error handling knowledge base deletion:", error);
+      res.status(500).json({ message: "Error deleting knowledge base" });
+    }
+  });
+
+  app.post("/api/knowledge-bases/:id/publish", isAuthenticated, async (req, res) => {
+    try {
+      const { publishToMarketplace } = await import("./api/knowledge-base");
+      await publishToMarketplace(req, res);
+    } catch (error) {
+      console.error("Error handling knowledge base publishing:", error);
+      res.status(500).json({ message: "Error publishing knowledge base to marketplace" });
+    }
+  });
+
+  app.post("/api/knowledge-bases/:id/rate", isAuthenticated, async (req, res) => {
+    try {
+      const { rateKnowledgeBase } = await import("./api/knowledge-base");
+      await rateKnowledgeBase(req, res);
+    } catch (error) {
+      console.error("Error handling knowledge base rating:", error);
+      res.status(500).json({ message: "Error rating knowledge base" });
+    }
+  });
+
+  app.post("/api/knowledge-bases/:id/acquire", isAuthenticated, async (req, res) => {
+    try {
+      const { acquireKnowledgeBase } = await import("./api/knowledge-base");
+      await acquireKnowledgeBase(req, res);
+    } catch (error) {
+      console.error("Error handling knowledge base acquisition:", error);
+      res.status(500).json({ message: "Error acquiring knowledge base" });
+    }
+  });
+
+  app.get("/api/knowledge-bases/recommended", isAuthenticated, async (req, res) => {
+    try {
+      const { getRecommendedKnowledgeBases } = await import("./api/knowledge-base");
+      await getRecommendedKnowledgeBases(req, res);
+    } catch (error) {
+      console.error("Error handling recommended knowledge bases:", error);
+      res.status(500).json({ message: "Error getting recommended knowledge bases" });
+    }
+  });
+
+  // AI generation with knowledge base support routes
+  app.post("/api/ai/generate-with-knowledge", isAuthenticated, async (req, res) => {
+    try {
+      const { basePrompt, subject, gradeLevel, contentType, knowledgeBaseIds } = req.body;
+      
+      if (!basePrompt || !contentType) {
+        return res.status(400).json({ 
+          message: "Required fields are missing",
+          requiredFields: ["basePrompt", "contentType"]
+        });
+      }
+      
+      // Import service dynamically
+      const { generateEnhancedPrompt } = await import("./services/knowledgeBaseService");
+      
+      // Generate enhanced prompt using knowledge base
+      const enhancedPrompt = await generateEnhancedPrompt(
+        basePrompt,
+        subject,
+        gradeLevel,
+        req.session.userId,
+        contentType
+      );
+      
+      // Call appropriate AI service based on content type
+      let result;
+      if (contentType === "curriculum") {
+        const { generateAICurriculum } = await import("./services/anthropicService");
+        result = await generateAICurriculum({
+          subject: subject || "",
+          gradeLevel: gradeLevel || "",
+          learningStyles: [],
+          additionalDetails: enhancedPrompt
+        });
+      } else if (contentType === "lesson") {
+        const { generateAILesson } = await import("./services/anthropicService");
+        result = await generateAILesson(
+          subject || "General",
+          gradeLevel || "All levels",
+          basePrompt,
+          [],
+          45
+        );
+      } else {
+        // Default to getting AI feedback
+        const { getAIFeedback } = await import("./services/anthropicService");
+        result = await getAIFeedback(basePrompt, "assessment");
+      }
+      
+      res.status(200).json({ result });
+    } catch (error) {
+      console.error("Error generating with knowledge base:", error);
+      res.status(500).json({ 
+        message: "Error generating content with knowledge base",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Extract knowledge from text
+  app.post("/api/knowledge-bases/extract", isAuthenticated, async (req, res) => {
+    try {
+      const { text, type, subject, gradeLevel } = req.body;
+      
+      if (!text || !type) {
+        return res.status(400).json({ 
+          message: "Required fields are missing",
+          requiredFields: ["text", "type"]
+        });
+      }
+      
+      // Import service dynamically
+      const { extractKnowledgeFromText } = await import("./services/knowledgeBaseService");
+      
+      // Extract structured knowledge
+      const knowledge = await extractKnowledgeFromText(text, type, subject, gradeLevel);
+      
+      res.status(200).json({ knowledge });
+    } catch (error) {
+      console.error("Error extracting knowledge:", error);
+      res.status(500).json({ 
+        message: "Error extracting knowledge from text",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
