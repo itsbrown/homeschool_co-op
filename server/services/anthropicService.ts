@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AIGenerationFormData } from '@/lib/types';
 import { CurriculumTemplate } from './curriculumService';
+import { generateCurriculumWithAI, generateLessonPlanWithAI } from './anthropic';
 
 // Initialize Anthropic client with API key from environment variables
 let anthropic: Anthropic | null = null;
@@ -34,16 +35,60 @@ export function isAnthropicAvailable(): boolean {
  */
 export async function generateAICurriculum(formData: AIGenerationFormData): Promise<CurriculumTemplate> {
   try {
-    // Check if Anthropic client is initialized
-    if (!anthropic) {
-      console.warn('Anthropic client not initialized. Unable to generate curriculum with AI.');
-      throw new Error('Anthropic API not available');
-    }
-
     const { subject, gradeLevel, learningStyles, additionalDetails } = formData;
     
-    // Construct system prompt
-    const systemPrompt = `You are an expert curriculum designer with extensive knowledge of educational best practices. 
+    // Try using our enhanced curriculumWithAI function first
+    try {
+      console.log(`Attempting to generate AI curriculum using enhanced service for ${subject} at ${gradeLevel} level...`);
+      
+      // Build a comprehensive prompt for the curriculum generation
+      const enhancedPrompt = `Generate a comprehensive curriculum for ${subject} for ${gradeLevel} students.
+      This curriculum should incorporate the following learning styles: ${learningStyles.join(', ')}.
+      ${additionalDetails ? `Consider these additional requirements: ${additionalDetails}` : ''}
+      
+      Format your response as a JSON object with this structure:
+      {
+        "title": "title of the curriculum",
+        "description": "comprehensive overview of the curriculum",
+        "objectives": ["learning objective 1", "learning objective 2", ...],
+        "units": [
+          {
+            "title": "unit title",
+            "description": "description of the unit",
+            "lessons": [
+              {
+                "title": "lesson title",
+                "description": "lesson description",
+                "duration": 45,
+                "activities": ["activity 1", "activity 2", ...],
+                "resources": ["resource 1", "resource 2", ...],
+                "assessments": ["assessment 1", "assessment 2", ...]
+              }
+            ]
+          }
+        ]
+      }`;
+      
+      const jsonResponse = await generateCurriculumWithAI(enhancedPrompt);
+      const jsonMatch = jsonResponse.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Enhanced service failed to return valid JSON');
+      }
+      
+      const curriculumTemplate: CurriculumTemplate = JSON.parse(jsonMatch[0]);
+      return curriculumTemplate;
+    } catch (enhancedError) {
+      console.warn('Enhanced curriculum generation failed, falling back to original implementation:', enhancedError);
+      
+      // Fallback to original implementation
+      // Check if Anthropic client is initialized
+      if (!anthropic) {
+        console.warn('Anthropic client not initialized. Unable to generate curriculum with AI.');
+        throw new Error('Anthropic API not available');
+      }
+      
+      // Construct system prompt
+      const systemPrompt = `You are an expert curriculum designer with extensive knowledge of educational best practices. 
 Your task is to create a comprehensive, well-structured curriculum for ${subject} at the ${gradeLevel} level.
 The curriculum should be specifically tailored to accommodate the following learning styles: ${learningStyles.join(', ')}.
 ${additionalDetails ? `Additionally, consider these specific requirements: ${additionalDetails}` : ''}
@@ -73,36 +118,37 @@ Please format your response as a JSON object matching this structure:
 
 The curriculum should have 4-6 units with 3-5 lessons each.`;
 
-    const userPrompt = `Please generate a curriculum for ${subject} at the ${gradeLevel} level that incorporates ${learningStyles.join(', ')} learning styles.`;
-    
-    console.log(`Attempting to generate AI curriculum for ${subject} at ${gradeLevel} level...`);
-    
-    // Call Claude API
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 4000,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: userPrompt }
-      ],
-    });
+      const userPrompt = `Please generate a curriculum for ${subject} at the ${gradeLevel} level that incorporates ${learningStyles.join(', ')} learning styles.`;
+      
+      console.log(`Attempting to generate AI curriculum using fallback method for ${subject} at ${gradeLevel} level...`);
+      
+      // Call Claude API
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 4000,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt }
+        ],
+      });
 
-    console.log('Successfully received response from Anthropic API');
+      console.log('Successfully received response from Anthropic API');
 
-    // The response content is a structured object with multiple properties
-    const contentBlock = response.content[0];
-    if (contentBlock.type !== 'text') {
-      throw new Error('Unexpected response format from AI');
+      // The response content is a structured object with multiple properties
+      const contentBlock = response.content[0];
+      if (contentBlock.type !== 'text') {
+        throw new Error('Unexpected response format from AI');
+      }
+      
+      // Extract the JSON from the response
+      const jsonMatch = contentBlock.text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Failed to extract JSON from AI response');
+      }
+      
+      const curriculumTemplate: CurriculumTemplate = JSON.parse(jsonMatch[0]);
+      return curriculumTemplate;
     }
-    
-    // Extract the JSON from the response
-    const jsonMatch = contentBlock.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to extract JSON from AI response');
-    }
-    
-    const curriculumTemplate: CurriculumTemplate = JSON.parse(jsonMatch[0]);
-    return curriculumTemplate;
   } catch (error: any) {
     console.error('Error generating AI curriculum:', error);
     throw new Error('Failed to generate curriculum with AI: ' + (error.message || 'Unknown error'));

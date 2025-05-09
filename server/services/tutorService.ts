@@ -1,3 +1,4 @@
+import { askVirtualTutor, analyzeStudentWork } from './anthropic';
 import Anthropic from '@anthropic-ai/sdk';
 
 // Initialize Anthropic client with API key from environment variables
@@ -25,19 +26,31 @@ const MODEL = 'claude-3-7-sonnet-20250219';
 export async function getAITutorResponse(
   userMessage: string, 
   subject?: string, 
-  gradeLevel?: string
+  gradeLevel?: string,
+  learningStyle?: string
 ): Promise<string> {
   try {
-    // Check if Anthropic client is initialized
-    if (!anthropic) {
-      console.warn('Anthropic client not initialized. Providing fallback tutor response.');
-      throw new Error('Anthropic API not available');
-    }
-
-    console.log(`Processing tutor request for subject: ${subject || 'general'}, grade level: ${gradeLevel || 'any'}`);
+    console.log(`Processing tutor request for subject: ${subject || 'general'}, grade level: ${gradeLevel || 'any'}, learning style: ${learningStyle || 'general'}`);
     
-    // Construct system prompt
-    const systemPrompt = `You are Edison, an expert AI tutor specializing in ${subject || 'all academic subjects'} 
+    // Use our enhanced Anthropic service if available
+    try {
+      return await askVirtualTutor(
+        subject || 'general knowledge',
+        userMessage,
+        gradeLevel || 'intermediate',
+        learningStyle || 'visual'
+      );
+    } catch (aiError) {
+      console.warn('Enhanced AI tutor unavailable, falling back to basic implementation:', aiError);
+      
+      // Fallback to original implementation if enhanced service fails
+      if (!anthropic) {
+        console.warn('Anthropic client not initialized. Providing fallback tutor response.');
+        throw new Error('Anthropic API not available');
+      }
+      
+      // Construct system prompt
+      const systemPrompt = `You are Edison, an expert AI tutor specializing in ${subject || 'all academic subjects'} 
 at the ${gradeLevel || 'all levels'} level. You provide clear, accurate, and helpful responses to student questions.
 Your tone is friendly, encouraging, and professional. You follow these guidelines:
 
@@ -51,24 +64,25 @@ Your tone is friendly, encouraging, and professional. You follow these guideline
 
 Always be positive and encouraging, helping students understand concepts rather than just giving them answers.`;
 
-    // Call Claude API with user message
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 500,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: userMessage }
-      ],
-    });
+      // Call Claude API with user message
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 500,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userMessage }
+        ],
+      });
 
-    console.log('Successfully received tutor response from Anthropic API');
+      console.log('Successfully received tutor response from Anthropic API');
 
-    const contentBlock = response.content[0];
-    if (contentBlock.type !== 'text') {
-      throw new Error('Unexpected response format from AI');
+      const contentBlock = response.content[0];
+      if (contentBlock.type !== 'text') {
+        throw new Error('Unexpected response format from AI');
+      }
+      
+      return contentBlock.text;
     }
-    
-    return contentBlock.text;
   } catch (error: any) {
     console.error('Error getting AI tutor response:', error);
     
