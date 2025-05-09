@@ -5,6 +5,13 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
 import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema } from "@shared/schema";
+import archiver from 'archiver';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import stream from 'stream';
+import { promisify } from 'util';
+import Stripe from "stripe";
 
 declare module "express-session" {
   interface SessionData {
@@ -637,14 +644,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Import required libraries for zip creation
-  const archiver = require('archiver');
-  const fs = require('fs');
-  const path = require('path');
-  const os = require('os');
-  const stream = require('stream');
-  const { promisify } = require('util');
-  const pipeline = promisify(stream.pipeline);
+
   
   // Add GET method for download endpoint that creates and serves a zip file
   app.get("/api/knowledge-bases/:id/download", async (req, res) => {
@@ -742,6 +742,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Initialize Stripe
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.warn('Missing STRIPE_SECRET_KEY environment variable. Stripe payments will not work.');
+  }
+  
+  const stripe = process.env.STRIPE_SECRET_KEY ? 
+    new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' }) : 
+    null;
+
+  // Create payment intent for knowledge base purchase
+  app.post("/api/create-payment-intent", isAuthenticated, async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe is not configured" });
+      }
+
+      const { amount, knowledgeBaseId, title } = req.body;
+      
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ message: "Valid amount is required" });
+      }
+      
+      // Create a payment intent
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Convert to cents
+        currency: "usd",
+        metadata: {
+          knowledgeBaseId: knowledgeBaseId.toString(),
+          userId: req.session.userId.toString(),
+          title: title || "Knowledge Base Purchase"
+        }
+      });
+      
+      res.status(200).json({ 
+        clientSecret: paymentIntent.client_secret
+      });
+    } catch (error) {
+      console.error("Error creating payment intent:", error);
+      res.status(500).json({ 
+        message: "Error creating payment intent", 
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Process knowledge base purchase (post-payment)
   app.post("/api/knowledge-bases/:id/purchase", isAuthenticated, async (req, res) => {
     try {
       const knowledgeBaseId = parseInt(req.params.id);
@@ -749,6 +795,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!knowledgeBase) {
         return res.status(404).json({ message: "Knowledge base not found" });
+      }
+      
+      // Check if payment was successful (can be expanded to validate with Stripe)
+      const { paymentIntentId } = req.body;
+      
+      if (stripe && paymentIntentId) {
+        // Verify the payment intent if provided
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        if (paymentIntent.status !== 'succeeded') {
+          return res.status(400).json({ message: "Payment not successful" });
+        }
+        
+        // Check that the metadata matches
+        if (paymentIntent.metadata.knowledgeBaseId !== knowledgeBaseId.toString() ||
+            paymentIntent.metadata.userId !== req.session.userId.toString()) {
+          return res.status(400).json({ message: "Payment validation failed" });
+        }
       }
       
       // Record the purchase
