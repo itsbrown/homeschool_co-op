@@ -1,6 +1,6 @@
 import { AIGenerationFormData } from "@/lib/types";
 import { Curriculum, Lesson } from "@shared/schema";
-import { generateAICurriculum } from "./anthropicService";
+import { generateAICurriculum, isAnthropicAvailable } from "./anthropicService";
 import { generateEnhancedCurriculum, isEnhancedGenerationAvailable } from "./aiEnhancedGeneration";
 
 // Template for curriculum structure
@@ -97,37 +97,44 @@ export async function generateCurriculumTemplate(formData: AIGenerationFormData)
       console.log('AI services unavailable, using template-based generation');
     }
     
-    // If AI generation failed or is unavailable, use template-based generation
+    // Generate fallback template-based curriculum
+    console.log('Using template-based generation');
+    return generateTemplateBasedCurriculum(formData);
   } catch (error: any) {
     console.warn('AI curriculum generation failed, falling back to template-based generation:', error);
-    
-    // Fallback to template-based generation if AI fails
-    const { subject, gradeLevel, learningStyles, additionalDetails, knowledgeBaseIds } = formData;
-    
-    // Generate title based on subject and grade level
-    const title = `${subject} Curriculum for ${gradeLevel}`;
-    
-    // Generate description with learning styles and additional details
-    const description = `A comprehensive ${subject} curriculum designed for ${gradeLevel} students. This curriculum incorporates ${learningStyles.join(", ")} learning styles${additionalDetails ? ` with focus on ${additionalDetails}` : ''}.`;
-    
-    // Generate objectives based on subject
-    const objectives = subjectObjectives[subject] || [
-      "Develop comprehensive understanding of the subject matter",
-      "Build critical thinking and problem-solving skills",
-      "Apply concepts to real-world situations",
-      "Foster a love of learning and subject mastery"
-    ];
-    
-    // Generate units based on subject and grade level
-    const units = generateUnits(subject, gradeLevel, learningStyles);
-    
-    return {
-      title,
-      description,
-      objectives,
-      units
-    };
+    return generateTemplateBasedCurriculum(formData);
   }
+}
+
+/**
+ * Generates a template-based curriculum when AI is unavailable or fails
+ */
+function generateTemplateBasedCurriculum(formData: AIGenerationFormData): CurriculumTemplate {
+  const { subject, gradeLevel, learningStyles, additionalDetails, knowledgeBaseIds } = formData;
+  
+  // Generate title based on subject and grade level
+  const title = `${subject} Curriculum for ${gradeLevel}`;
+  
+  // Generate description with learning styles and additional details
+  const description = `A comprehensive ${subject} curriculum designed for ${gradeLevel} students. This curriculum incorporates ${learningStyles.join(", ")} learning styles${additionalDetails ? ` with focus on ${additionalDetails}` : ''}.`;
+  
+  // Generate objectives based on subject
+  const objectives = subjectObjectives[subject] || [
+    "Develop comprehensive understanding of the subject matter",
+    "Build critical thinking and problem-solving skills",
+    "Apply concepts to real-world situations",
+    "Foster a love of learning and subject mastery"
+  ];
+  
+  // Generate units based on subject and grade level
+  const units = generateUnits(subject, gradeLevel, learningStyles);
+  
+  return {
+    title,
+    description,
+    objectives,
+    units
+  };
 }
 
 // Generate units based on subject
