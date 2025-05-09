@@ -175,23 +175,77 @@ export function KnowledgeBaseEditDialog({
   };
 
   const onSubmit = async (data: FormValues) => {
-    setIsSubmitting(true);
-    
-    const payload = {
-      title: data.title,
-      description: data.description,
-      subject: data.subject,
-      difficulty: data.difficulty,
-      price: data.price,
-      isPublic: data.isPublic,
-      files: [...existingFiles, ...uploadedFiles],
-      metadata: {
-        tags: data.tags ? data.tags.split(",").map(tag => tag.trim()) : [],
-        objectives: data.objectives ? data.objectives.split("\n").filter(o => o.trim().length > 0) : [],
-      },
-    };
-    
-    updateKnowledgeBaseMutation.mutate(payload);
+    try {
+      console.log("Edit form submission started with data:", data);
+      setIsSubmitting(true);
+      
+      // Construct a standardized payload
+      const payload = {
+        title: data.title || "",
+        description: data.description || "",
+        subject: data.subject || "General",
+        difficulty: data.difficulty || "beginner",
+        price: parseInt(data.price?.toString() || "0"),
+        isPublic: Boolean(data.isPublic),
+        files: [...existingFiles, ...uploadedFiles],
+        metadata: {
+          tags: data.tags ? data.tags.split(",").map(tag => tag.trim()) : [],
+          objectives: data.objectives ? data.objectives.split("\n").filter(o => o.trim().length > 0) : [],
+        },
+      };
+      
+      console.log("Submitting edit payload:", payload);
+      
+      // Use a direct fetch call instead of the mutation
+      const response = await fetch(`/api/knowledge-bases/${knowledgeBaseId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        credentials: 'include' // Important for cookies/session
+      });
+      
+      const responseText = await response.text();
+      console.log("Edit response status:", response.status);
+      console.log("Edit response text:", responseText);
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+        console.log("Parsed edit result:", result);
+      } catch (e) {
+        console.log("Could not parse edit response as JSON");
+      }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}, message: ${responseText}`);
+      }
+      
+      // Success handling
+      setIsSubmitting(false);
+      
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/author/me"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${knowledgeBaseId}`] });
+      
+      toast({
+        title: "Success",
+        description: "Knowledge base updated successfully",
+      });
+      
+      onOpenChange(false);
+      
+    } catch (error) {
+      console.error("Error updating knowledge base:", error);
+      setIsSubmitting(false);
+      toast({
+        title: "Error",
+        description: "Failed to update knowledge base. Please check console for details.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (knowledgeBaseQuery.isLoading) {
@@ -465,7 +519,20 @@ export function KnowledgeBaseEditDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button 
+                type="button" 
+                disabled={isSubmitting}
+                onClick={() => {
+                  console.log("Manual update button clicked");
+                  
+                  // Get the form values directly
+                  const formValues = form.getValues();
+                  console.log("Update form values:", formValues);
+                  
+                  // Call submit function directly with current values
+                  onSubmit(formValues);
+                }}
+              >
                 {isSubmitting ? "Updating..." : "Update Knowledge Base"}
               </Button>
             </DialogFooter>
