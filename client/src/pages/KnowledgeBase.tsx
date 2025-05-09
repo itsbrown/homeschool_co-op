@@ -85,7 +85,10 @@ export default function KnowledgeBasePage() {
           <p className="text-muted-foreground">Discover, share, and learn with educational resources</p>
         </div>
         {user && (
-          <Button onClick={() => setShowCreateDialog(true)}>
+          <Button onClick={() => {
+            console.log("Create button clicked");
+            setShowCreateDialog(true);
+          }}>
             <PlusCircle className="mr-2 h-4 w-4" /> Create New
           </Button>
         )}

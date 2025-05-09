@@ -59,6 +59,7 @@ export function KnowledgeBaseCreateDialog({
   open,
   onOpenChange,
 }: KnowledgeBaseCreateDialogProps) {
+  console.log("KnowledgeBaseCreateDialog rendered, open:", open);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
