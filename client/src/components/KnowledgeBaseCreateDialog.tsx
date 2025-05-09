@@ -136,108 +136,73 @@ export function KnowledgeBaseCreateDialog({
 
   const onSubmit = async (data: FormValues) => {
     try {
-      // Check for form errors first
-      const errors = form.formState.errors;
-      if (Object.keys(errors).length > 0) {
-        console.error("Form has validation errors:", errors);
-        toast({
-          title: "Validation Error",
-          description: "Please fix the errors in the form before submitting",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      console.log("Form submission started", data);
+      console.log("Form submission started with data:", data);
       setIsSubmitting(true);
       
-      // Log form data for debugging
-      console.log("Form data:", data);
-      console.log("Field values:", {
-        title: data.title,
-        description: data.description,
-        subject: data.subject,
-        difficulty: data.difficulty,
-        price: data.price, 
-        priceType: typeof data.price, // log the type
-        isPublic: data.isPublic,
-        files: uploadedFiles
-      });
-      
-      // Ensure we're providing all the required fields according to the schema
+      // Construct a simpler payload
       const payload = {
         title: data.title || "Untitled Resource",
-        description: data.description || null,
+        description: data.description || "",
         subject: data.subject || "General",
         difficulty: data.difficulty || "beginner",
-        price: typeof data.price === 'number' ? data.price : 0, // Ensure price is a number
-        isPublic: data.isPublic ?? true, // Default to true if undefined
-        files: uploadedFiles.length > 0 ? uploadedFiles : [], // Ensure files is an array
+        price: parseInt(data.price?.toString() || "0"),
+        isPublic: Boolean(data.isPublic),
+        files: uploadedFiles,
         metadata: {
           tags: data.tags ? data.tags.split(",").map(tag => tag.trim()) : [],
           objectives: data.objectives ? data.objectives.split("\n").filter(o => o.trim().length > 0) : [],
         },
       };
       
-      console.log("Submitting payload:", payload);
+      console.log("Submitting simplified payload:", payload);
       
-      // Direct fetch approach as a fallback
+      // Use a simpler, direct fetch call
+      const response = await fetch('/api/knowledge-bases', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        credentials: 'include' // Important for cookies/session
+      });
+      
+      const responseText = await response.text();
+      console.log("Response status:", response.status);
+      console.log("Response text:", responseText);
+      
+      let result;
       try {
-        console.log("Using direct fetch for submission");
-        const response = await fetch('/api/knowledge-bases', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        console.log("Knowledge base created successfully", result);
-        
-        // Successful submission - reset form and close dialog
-        form.reset();
-        setUploadedFiles([]);
-        setIsSubmitting(false);
-        onOpenChange(false);
-        
-        // Refresh data
-        queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/author/me"] });
-        toast({
-          title: "Success",
-          description: "Knowledge base created successfully",
-        });
-      } catch (fetchError) {
-        console.error("Fetch error:", fetchError);
-        // Try the mutation approach as a fallback
-        const response = await createKnowledgeBaseMutation.mutateAsync(payload);
-        console.log("Knowledge base created via mutation", response);
-        
-        // Successful submission - reset form and close dialog
-        form.reset();
-        setUploadedFiles([]);
-        setIsSubmitting(false);
-        onOpenChange(false);
-        
-        // Refresh data
-        queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/author/me"] });
-        toast({
-          title: "Success",
-          description: "Knowledge base created successfully",
-        });
+        result = JSON.parse(responseText);
+        console.log("Parsed result:", result);
+      } catch (e) {
+        console.log("Could not parse response as JSON");
       }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}, message: ${responseText}`);
+      }
+      
+      // Success handling
+      form.reset();
+      setUploadedFiles([]);
+      setIsSubmitting(false);
+      onOpenChange(false);
+      
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/author/me"] });
+      
+      toast({
+        title: "Success",
+        description: "Knowledge base created successfully",
+      });
+      
     } catch (error) {
       console.error("Error creating knowledge base:", error);
       setIsSubmitting(false);
       toast({
         title: "Error",
-        description: "Failed to create knowledge base. Please try again.",
+        description: "Failed to create knowledge base. Please check console for details.",
         variant: "destructive",
       });
     }
@@ -558,7 +523,13 @@ export function KnowledgeBaseCreateDialog({
                 disabled={isSubmitting}
                 onClick={() => {
                   console.log("Manual submit button clicked");
-                  form.handleSubmit(onSubmit)();
+                  
+                  // Get the form values directly
+                  const formValues = form.getValues();
+                  console.log("Form values:", formValues);
+                  
+                  // Call submit function directly with current values
+                  onSubmit(formValues);
                 }}
               >
                 {isSubmitting ? "Creating..." : "Create Knowledge Base"}
