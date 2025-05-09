@@ -227,12 +227,10 @@ export default function KnowledgeBasePage() {
         )}
       </Tabs>
 
-      {showCreateDialog && (
-        <KnowledgeBaseCreateDialog
-          open={showCreateDialog}
-          onOpenChange={setShowCreateDialog}
-        />
-      )}
+      <KnowledgeBaseCreateDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
     </div>
   );
 }

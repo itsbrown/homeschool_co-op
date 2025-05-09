@@ -137,14 +137,15 @@ export function KnowledgeBaseCreateDialog({
       console.log("Form submission started", data);
       setIsSubmitting(true);
       
+      // Ensure we're providing all the required fields according to the schema
       const payload = {
         title: data.title,
-        description: data.description,
+        description: data.description || null,
         subject: data.subject,
         difficulty: data.difficulty,
         price: data.price || 0, // Ensure price is set to 0 if undefined
         isPublic: data.isPublic ?? true, // Default to true if undefined
-        files: uploadedFiles,
+        files: uploadedFiles.length > 0 ? uploadedFiles : [], // Ensure files is an array
         metadata: {
           tags: data.tags ? data.tags.split(",").map(tag => tag.trim()) : [],
           objectives: data.objectives ? data.objectives.split("\n").filter(o => o.trim().length > 0) : [],
@@ -152,8 +153,8 @@ export function KnowledgeBaseCreateDialog({
       };
       
       console.log("Submitting payload:", payload);
-      await createKnowledgeBaseMutation.mutateAsync(payload);
-      console.log("Knowledge base created successfully");
+      const response = await createKnowledgeBaseMutation.mutateAsync(payload);
+      console.log("Knowledge base created successfully", response);
     } catch (error) {
       console.error("Error creating knowledge base:", error);
       toast({
@@ -165,14 +166,16 @@ export function KnowledgeBaseCreateDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto !z-[100]">
         <DialogHeader>
           <DialogTitle>Create Knowledge Base</DialogTitle>
           <DialogDescription>
             Share your educational resources with other educators and learners
           </DialogDescription>
         </DialogHeader>
+        {/* Log dialog visibility for debugging */}
+        <div className="sr-only">{console.log("Dialog content rendered, dialog state:", open)}</div>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
