@@ -166,8 +166,8 @@ export function KnowledgeBaseCreateDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto !z-[100]">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={true} id="knowledge-base-create-dialog">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto RadixUI__Dialog-content">
         <DialogHeader>
           <DialogTitle>Create Knowledge Base</DialogTitle>
           <DialogDescription>

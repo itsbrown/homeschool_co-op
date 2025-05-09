@@ -77,6 +77,10 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  useEffect(() => {
+    console.log("Knowledge Base page: showCreateDialog state changed to:", showCreateDialog);
+  }, [showCreateDialog]);
+  
   return (
     <div className="container py-10">
       <div className="flex justify-between items-center mb-6">
@@ -85,10 +89,13 @@ export default function KnowledgeBasePage() {
           <p className="text-muted-foreground">Discover, share, and learn with educational resources</p>
         </div>
         {user && (
-          <Button onClick={() => {
-            console.log("Create button clicked");
-            setShowCreateDialog(true);
-          }}>
+          <Button 
+            onClick={() => {
+              console.log("Create button clicked, setting dialog state to true");
+              setShowCreateDialog(true);
+            }}
+            id="create-knowledge-base-button"
+          >
             <PlusCircle className="mr-2 h-4 w-4" /> Create New
           </Button>
         )}
