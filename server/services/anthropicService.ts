@@ -4,6 +4,9 @@ import { CurriculumTemplate } from './curriculumService';
 import { generateCurriculumWithAI, generateLessonPlanWithAI, analyzeStudentWork } from './anthropic';
 import { extractKnowledgeBaseContent, extractKeyConceptsFromKnowledgeBases } from './knowledgeBaseExtraction';
 
+// Import new AI enhancement modules (commented out until fully integrated)
+// import { enhanceCurriculumGeneration } from '../../ai/src/curriculum-enhancer';
+
 // Initialize Anthropic client with API key from environment variables
 let anthropic: Anthropic | null = null;
 
