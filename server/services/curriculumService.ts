@@ -15,9 +15,20 @@ export interface CurriculumTemplate {
       title: string;
       description: string;
       duration: number;
-      activities: string[];
-      resources: string[];
-      assessments: string[];
+      // Legacy fields
+      activities?: string[];
+      // New structured format fields
+      learningObjectives?: string[];
+      introduction?: string;
+      mainActivities?: {
+        type: string;
+        name: string;
+        description: string;
+        duration: number;
+      }[];
+      resources?: any[]; // Using any to handle both string[] and object[] formats
+      assessments?: any[]; // Using any to handle both string[] and object[] formats
+      reflection?: string[];
     }[];
   }[];
 }
@@ -241,7 +252,7 @@ function generateUnits(subject: string, gradeLevel: string, learningStyles: stri
   return units;
 }
 
-// Helper function to generate lesson templates
+// Helper function to generate structured lesson templates
 function generateLessons(count: number, learningStyles: string[], minDuration: number, maxDuration: number) {
   const lessons = [];
   
@@ -293,6 +304,34 @@ function generateLessons(count: number, learningStyles: string[], minDuration: n
     "Critical Applications"
   ];
   
+  // Teaching strategies by learning style
+  const teachingStrategies: Record<string, string[]> = {
+    'visual': [
+      'Direct instruction with visual aids',
+      'Visual concept mapping',
+      'Diagram and chart analysis',
+      'Video demonstrations'
+    ],
+    'auditory': [
+      'Lecture and discussion',
+      'Peer teaching',
+      'Audio recordings',
+      'Group discussions'
+    ],
+    'reading-writing': [
+      'Independent research',
+      'Note-taking strategies',
+      'Written analysis',
+      'Journaling and reflection'
+    ],
+    'kinesthetic': [
+      'Hands-on experimentation',
+      'Project-based learning',
+      'Role-playing and simulations',
+      'Physical models and manipulatives'
+    ]
+  };
+  
   for (let i = 1; i <= count; i++) {
     const duration = Math.floor(Math.random() * (maxDuration - minDuration + 1)) + minDuration;
     
@@ -304,27 +343,96 @@ function generateLessons(count: number, learningStyles: string[], minDuration: n
       lessonTitle = `Topic ${i}`;
     }
     
-    const activities = [];
-    if (learningStyles.includes('visual')) {
-      activities.push("Create visual concept maps", "Analyze diagrams and charts");
+    // Generate 2-3 learning objectives
+    const learningObjectives = [
+      `Understand key concepts related to ${lessonTitle.toLowerCase()}`,
+      `Apply ${lessonTitle.toLowerCase()} to solve real-world problems`,
+      `Analyze the significance of ${lessonTitle.toLowerCase()} in broader contexts`
+    ];
+    
+    // Generate introduction that aligns with objectives
+    const introduction = `This lesson introduces students to important ${lessonTitle.toLowerCase()} that form the foundation of this subject area. Students will explore key ideas, apply concepts to practical situations, and evaluate their understanding through targeted activities and assessments.`;
+    
+    // Generate activities based on learning styles
+    const mainActivities = [];
+    const preferredLearningStyles = [...learningStyles]; // Copy the array to avoid modifying the original
+    
+    // Ensure we include at least one activity for each selected learning style
+    for (const style of preferredLearningStyles) {
+      if (teachingStrategies[style] && teachingStrategies[style].length > 0) {
+        // Select a random strategy for this learning style
+        const strategyIndex = Math.floor(Math.random() * teachingStrategies[style].length);
+        const strategy = teachingStrategies[style][strategyIndex];
+        
+        mainActivities.push({
+          type: style,
+          name: strategy,
+          description: `Students will engage with ${lessonTitle.toLowerCase()} through ${strategy.toLowerCase()}, allowing them to develop a deeper understanding of key concepts.`,
+          duration: Math.floor(duration / 3) // Allocate approximately 1/3 of the lesson time
+        });
+      }
     }
-    if (learningStyles.includes('auditory')) {
-      activities.push("Group discussions on key concepts", "Verbal explanations of processes");
-    }
-    if (learningStyles.includes('reading-writing')) {
-      activities.push("Reading and summarizing texts", "Research and write about concepts");
-    }
-    if (learningStyles.includes('kinesthetic')) {
-      activities.push("Hands-on experiments", "Interactive demonstrations");
-    }
+    
+    // Generate assessment strategies
+    const assessmentTypes = ['formative', 'summative', 'diagnostic', 'performance'];
+    const assessmentTools = ['quiz', 'discussion', 'project', 'presentation', 'written reflection'];
+    
+    const assessments = [
+      {
+        type: assessmentTypes[Math.floor(Math.random() * assessmentTypes.length)],
+        tool: assessmentTools[Math.floor(Math.random() * assessmentTools.length)],
+        description: `Students will demonstrate their understanding of ${lessonTitle.toLowerCase()} through this assessment.`,
+        alignment: `This assessment aligns with learning objective ${Math.floor(Math.random() * 3) + 1}.`
+      }
+    ];
+    
+    // Generate resources
+    const resources = [
+      {
+        type: 'reading',
+        name: `Core concepts in ${lessonTitle}`,
+        url: '#',
+        description: 'Primary reference material for this lesson'
+      },
+      {
+        type: 'media',
+        name: 'Supplementary visual aids',
+        url: '#',
+        description: 'Visual resources to support learning'
+      },
+      {
+        type: 'worksheet',
+        name: 'Practice activities',
+        url: '#',
+        description: 'Exercises to reinforce learning'
+      }
+    ];
+    
+    // Generate reflection prompts
+    const reflectionPrompts = [
+      `How does your understanding of ${lessonTitle.toLowerCase()} connect to previous knowledge?`,
+      `What aspects of ${lessonTitle.toLowerCase()} did you find most challenging?`,
+      `How might you apply these concepts in real-world contexts?`
+    ];
+    
+    // Extract simple string activities from mainActivities for backward compatibility
+    const simpleActivities = mainActivities.map(activity => 
+      `${activity.name}: ${activity.description.substring(0, 50)}...`
+    );
     
     lessons.push({
       title: lessonTitle,
       description: `Students will explore core concepts and develop essential skills related to ${lessonTitle.toLowerCase()}`,
       duration: duration,
-      activities: activities.slice(0, 3),
-      resources: ["Digital presentations", "Interactive worksheets", "Reference materials"],
-      assessments: ["Formative assessment", "Skills check", "Reflection questions"]
+      // Include activities for backward compatibility
+      activities: simpleActivities,
+      // Include new structured format fields
+      learningObjectives: learningObjectives,
+      introduction: introduction,
+      mainActivities: mainActivities,
+      assessments: assessments,
+      resources: resources,
+      reflection: reflectionPrompts
     });
   }
   return lessons;
@@ -399,6 +507,33 @@ export function lessonTemplateToDbFormat(
     cleanTitle = cleanTitle.replace(/^Lesson \d+:\s*/i, '').trim();
   }
   
+  // Handle both legacy and new structured lesson formats
+  let contentObject: any = {};
+  
+  // Check if this is the new structured format with learningObjectives
+  if ('learningObjectives' in lessonTemplate) {
+    contentObject = {
+      learningObjectives: lessonTemplate.learningObjectives || [],
+      introduction: lessonTemplate.introduction || '',
+      mainActivities: lessonTemplate.mainActivities || [],
+      resources: lessonTemplate.resources || [],
+      assessments: lessonTemplate.assessments || [],
+      reflection: lessonTemplate.reflection || []
+    };
+  } else {
+    // Legacy format
+    contentObject = {
+      activities: lessonTemplate.activities || [],
+      resources: lessonTemplate.resources || [],
+      assessments: lessonTemplate.assessments || [],
+      // Add empty placeholders for the new fields to maintain compatibility
+      learningObjectives: [],
+      introduction: '',
+      mainActivities: [],
+      reflection: []
+    };
+  }
+  
   return {
     title: `${unitPrefix}: ${cleanTitle}`,
     description: lessonTemplate.description,
@@ -408,11 +543,7 @@ export function lessonTemplateToDbFormat(
     curriculumId: curriculumId,
     isPublished: false,
     duration: lessonTemplate.duration,
-    content: {
-      activities: lessonTemplate.activities,
-      resources: lessonTemplate.resources,
-      assessments: lessonTemplate.assessments
-    },
+    content: contentObject,
     status: "draft"
   };
 }
