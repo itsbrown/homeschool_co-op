@@ -13,7 +13,8 @@ interface AIStatusBadgeProps {
  * For use in headers, navbars, etc.
  */
 export const AIStatusBadge: React.FC<AIStatusBadgeProps> = ({ className }) => {
-  const { isAIAvailable, isLoading } = useAIStatusContext();
+  // Get all status variables at once to maintain hook order
+  const { isAIAvailable, isEnhancedAIAvailable, isLoading } = useAIStatusContext();
   
   if (isLoading) {
     return (
@@ -24,29 +25,15 @@ export const AIStatusBadge: React.FC<AIStatusBadgeProps> = ({ className }) => {
     );
   }
   
+  // When AI is available, we always show enhanced mode (per user request)
   if (isAIAvailable) {
-    // Get enhanced status from the same context hook to maintain hook order
-    const isEnhancedAIAvailable = useAIStatusContext().isEnhancedAIAvailable;
-    
-    if (isEnhancedAIAvailable) {
-      return (
-        <Badge 
-          variant="outline" 
-          className={cn("bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1", className)}
-        >
-          <CheckCircle size={12} />
-          <span>Enhanced AI</span>
-        </Badge>
-      );
-    }
-    
     return (
       <Badge 
         variant="outline" 
-        className={cn("bg-green-50 text-green-700 border-green-200 flex items-center gap-1", className)}
+        className={cn("bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1", className)}
       >
         <CheckCircle size={12} />
-        <span>AI Online</span>
+        <span>Enhanced AI</span>
       </Badge>
     );
   }

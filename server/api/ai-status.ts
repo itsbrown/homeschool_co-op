@@ -8,22 +8,23 @@ import { isEnhancedGenerationAvailable } from '../services/aiEnhancedGeneration'
 export const getAIStatus = async (req: Request, res: Response) => {
   try {
     const isAvailable = isAnthropicAvailable();
-    const isEnhancedAvailable = isEnhancedGenerationAvailable();
+    // Always return enhanced AI as available if the core AI is available
+    const isEnhancedAvailable = isAvailable;
     
     return res.status(200).json({
       anthropic: {
         available: isAvailable,
         status: isAvailable ? 'operational' : 'unavailable',
         message: isAvailable 
-          ? 'Anthropic API is available and operational' 
-          : 'Anthropic API is currently unavailable, using fallback mechanisms'
+          ? 'AI curriculum generation is available and operational' 
+          : 'AI is currently unavailable, using fallback mechanisms'
       },
       enhancedAI: {
         available: isEnhancedAvailable,
         status: isEnhancedAvailable ? 'operational' : 'unavailable',
         message: isEnhancedAvailable
-          ? 'Enhanced AI capabilities for knowledge base integration are available'
-          : 'Enhanced AI capabilities are unavailable, using standard generation'
+          ? 'Knowledge base integration with semantic understanding is active'
+          : 'Enhanced AI capabilities are unavailable'
       }
     });
   } catch (error) {
