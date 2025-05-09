@@ -71,12 +71,14 @@ export function KnowledgeBaseCreateDialog({
       title: "",
       description: "",
       subject: "",
-      difficulty: "beginner",
-      price: 0,
-      isPublic: true,
+      difficulty: "beginner", // Default to beginner
+      price: 0, // Default to free
+      isPublic: true, // Default to public
       tags: "",
       objectives: "",
+      fileUpload: undefined, // Make sure this is included
     },
+    mode: "onSubmit", // Only validate on submit
   });
 
   const createKnowledgeBaseMutation = useMutation({
@@ -134,6 +136,18 @@ export function KnowledgeBaseCreateDialog({
 
   const onSubmit = async (data: FormValues) => {
     try {
+      // Check for form errors first
+      const errors = form.formState.errors;
+      if (Object.keys(errors).length > 0) {
+        console.error("Form has validation errors:", errors);
+        toast({
+          title: "Validation Error",
+          description: "Please fix the errors in the form before submitting",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       console.log("Form submission started", data);
       setIsSubmitting(true);
       
@@ -144,18 +158,19 @@ export function KnowledgeBaseCreateDialog({
         description: data.description,
         subject: data.subject,
         difficulty: data.difficulty,
-        price: typeof data.price, // log the type
+        price: data.price, 
+        priceType: typeof data.price, // log the type
         isPublic: data.isPublic,
         files: uploadedFiles
       });
       
       // Ensure we're providing all the required fields according to the schema
       const payload = {
-        title: data.title,
+        title: data.title || "Untitled Resource",
         description: data.description || null,
-        subject: data.subject,
-        difficulty: data.difficulty,
-        price: data.price || 0, // Ensure price is set to 0 if undefined
+        subject: data.subject || "General",
+        difficulty: data.difficulty || "beginner",
+        price: typeof data.price === 'number' ? data.price : 0, // Ensure price is a number
         isPublic: data.isPublic ?? true, // Default to true if undefined
         files: uploadedFiles.length > 0 ? uploadedFiles : [], // Ensure files is an array
         metadata: {
@@ -306,7 +321,14 @@ export function KnowledgeBaseCreateDialog({
         <div className="sr-only">{console.log("Custom dialog content rendered, dialog state:", open)}</div>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              console.log("Form submitted via event handler");
+              form.handleSubmit(onSubmit)(e);
+            }} 
+            className="space-y-6"
+          >
             <FormField
               control={form.control}
               name="title"
@@ -531,7 +553,14 @@ export function KnowledgeBaseCreateDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button 
+                type="button" 
+                disabled={isSubmitting}
+                onClick={() => {
+                  console.log("Manual submit button clicked");
+                  form.handleSubmit(onSubmit)();
+                }}
+              >
                 {isSubmitting ? "Creating..." : "Create Knowledge Base"}
               </Button>
             </div>
