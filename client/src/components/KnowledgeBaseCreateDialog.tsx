@@ -165,17 +165,52 @@ export function KnowledgeBaseCreateDialog({
     }
   };
 
+  // If the dialog is not open, don't render anything
+  if (!open) return null;
+  
+  // Create a modal dialog directly in the DOM without using Dialog components
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={true} id="knowledge-base-create-dialog">
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto RadixUI__Dialog-content">
-        <DialogHeader>
-          <DialogTitle>Create Knowledge Base</DialogTitle>
-          <DialogDescription>
+    <div 
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80"
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999
+      }}
+      onClick={(e) => {
+        // Close the dialog when clicking the backdrop (outside the content)
+        if (e.target === e.currentTarget) {
+          onOpenChange(false);
+        }
+      }}
+    >
+      <div 
+        className="bg-background p-6 rounded-lg w-full max-w-[600px] max-h-[90vh] overflow-y-auto"
+        style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '0.5rem',
+          width: '100%',
+          maxWidth: '600px',
+          maxHeight: '90vh',
+          overflow: 'auto'
+        }}
+      >
+        <div className="flex flex-col space-y-1.5 text-center sm:text-left mb-4">
+          <h2 className="text-lg font-semibold leading-none tracking-tight">Create Knowledge Base</h2>
+          <p className="text-sm text-muted-foreground">
             Share your educational resources with other educators and learners
-          </DialogDescription>
-        </DialogHeader>
+          </p>
+        </div>
         {/* Log dialog visibility for debugging */}
-        <div className="sr-only">{console.log("Dialog content rendered, dialog state:", open)}</div>
+        <div className="sr-only">{console.log("Custom dialog content rendered, dialog state:", open)}</div>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -373,17 +408,17 @@ export function KnowledgeBaseCreateDialog({
               )}
             />
             
-            <DialogFooter>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-6">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Creating..." : "Create Knowledge Base"}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
