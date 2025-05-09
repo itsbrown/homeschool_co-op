@@ -1,0 +1,378 @@
+﻿To enable the Adaptive AI-Driven Curriculum Generation and Learning Management System to utilize and learn from the knowledge base and allow users to select single or multiple knowledge bases for building curricula and lessons, we need to enhance the AI Curriculum Engine and Knowledge Base Marketplace features. This will involve modifying the system to dynamically reference user-selected knowledge bases, train the AI on their content, and integrate a user interface for selection, ensuring seamless curriculum and lesson generation. The solution will build on the existing platform capabilities (e.g., Curated Content Uploader, Packaging/Download System, AI-Powered Virtual Tutor, Gamified Social Learning Community, Parent/Educator Analytics Dashboard, Summer Camp Management Module, Email Management, Discount/Referral Management, and AI-Driven Website Generation) and align with your Replit-based development plan, maintaining a modern, clean UI (React, Tailwind CSS, blue/white palette, Inter font, 8px grid).
+Below, I explain how to achieve this, provide a strategy for AI learning, update the development plan with new tasks and Replit prompts, and ensure cohesiveness across the six-sprint structure. This response draws subtly on your prior interest in curricula for American Seekers Academy, hands-on activities, and AI integration with digitized content, ensuring the solution supports your educational goals (e.g., personalized learning, homeschool co-ops).
+Strategy for AI Utilization and Learning from Knowledge Bases
+To meet your requirements—utilizing and learning from the knowledge base and selecting single or multiple knowledge bases for curriculum/lesson generation—the system will be enhanced as follows:
+1. Utilizing and Learning from the Knowledge Base
+* AI Utilization:
+   * The AI Curriculum Engine (powered by TensorFlow Lite and Claude-3.7-Sonnet) will extract content from selected knowledge bases using NLP (Hugging Face Transformers, e.g., BERT) to generate curricula and lessons. Each knowledge base contains curated materials (e.g., PDFs, videos, historical documents) with metadata (subject, difficulty, objectives).
+   * The Virtual Tutor will reference these materials for context-aware responses, ensuring alignment with the curriculum.
+   * The engine will prioritize materials based on metadata matching the learner’s profile (e.g., age, subjects, learning style), stored in MongoDB.
+* AI Learning:
+   * Initial Training: The AI will be pre-trained on a subset of knowledge base materials using AWS SageMaker (due to Replit’s resource limits). Training involves fine-tuning BERT for content extraction and TensorFlow for curriculum optimization, using metadata to map materials to learning objectives.
+   * Continuous Learning: The AI will learn from user interactions (e.g., lesson completions, tutor queries, analytics data) via reinforcement learning. Feedback (e.g., quiz scores, community ratings) will refine content prioritization, stored in PostgreSQL for analytics.
+   * Knowledge Base Updates: When new materials are uploaded or purchased, the AI incrementally updates its model using transfer learning, ensuring it adapts to new content without retraining from scratch.
+* Implementation:
+   * Content Extraction: BERT processes uploaded files (text, PDFs) to extract key concepts, stored as embeddings in MongoDB for quick retrieval.
+   * Curriculum Generation: TensorFlow Lite ranks materials based on learner profiles and metadata, generating sequenced lessons.
+   * Tutor Integration: Claude-3.7-Sonnet uses embeddings to provide real-time explanations, referencing specific materials.
+   * Feedback Loop: Analytics Dashboard tracks material usage, feeding data to TensorFlow for model updates.
+2. Selecting Single or Multiple Knowledge Bases
+* User Interface:
+   * A Knowledge Base Selector will be added to the curriculum dashboard, allowing users (learners, parents, educators, admins) to choose one or multiple knowledge bases from their purchased or uploaded collection.
+   * The selector will feature a searchable, filterable list (by subject, difficulty, creator) with checkboxes for multiple selections, built with React and integrated into the UI.
+* Functionality:
+   * Single Selection: Users select one knowledge base (e.g., “Advanced Physics”) to focus the curriculum/lessons on its materials.
+   * Multiple Selections: Users select multiple bases (e.g., “Physics” and “Math”) to create a blended curriculum, with the AI weighting materials based on relevance.
+   * Dynamic Updates: Selected bases are passed to the AI Curriculum Engine via GraphQL, updating the curriculum in real-time.
+   * Access Control: Free Tier users select 1 base/month; Individual/Family Plans select 5; Educator Plan selects 10; Institutional Plan has unlimited selections.
+* Implementation:
+   * UI Component: A new KnowledgeBaseSelector component will allow users to browse and select bases, querying MongoDB via GraphQL.
+   * API Integration: The curriculum API will accept an array of knowledge base IDs, filtering content accordingly.
+   * Storage: Selected bases are stored in the user’s profile (MongoDB) for persistent access.
+* Value:
+   * Personalization: Users tailor curricula to specific needs (e.g., STEM-focused camps, classical education), aligning with your American Seekers Academy goals.
+   * Flexibility: Supports diverse use cases (e.g., single-subject focus, interdisciplinary learning).
+   * Engagement: Encourages marketplace purchases, as users select high-quality bases.
+Integration with Existing Features
+* Knowledge Base Marketplace: Users select purchased or uploaded bases, driving sales and uploads.
+* Virtual Tutor: References selected bases for contextual responses, enhancing guidance.
+* Summer Camps: Camp curricula use selected bases, supporting hands-on activities.
+* Analytics Dashboard: Tracks base selection and usage, informing predictive insights (e.g., “Popular base for math”).
+* Email: Sends notifications for base selection and curriculum updates.
+* Discounts/Referrals: Applies to base purchases, incentivizing selection.
+* Website Generation: Branded websites display selected bases, promoting their use.
+* Social Community: Users discuss/rate selected bases, boosting engagement.
+Updated Development Plan with Replit Prompts
+The six-sprint plan is updated to include the Knowledge Base Selector and AI Learning Mechanism, ensuring the AI utilizes and learns from selected knowledge bases. New tasks are added to Sprints 2 and 3, with integration tasks in Sprints 4-6. The plan uses Replit for development/prototyping and AWS for heavy AI/blockchain tasks, maintaining the modern, clean UI and cohesiveness.
+Tool Recommendations (Updated)
+* Frontend: React, Tailwind CSS, Vite, React Router, Chart.js, react-dropzone.
+* Backend: Node.js, Express, GraphQL (Apollo Server), Socket.IO, Multer, Archiver.
+* Database: MongoDB Atlas, PostgreSQL (Supabase), Elasticsearch (AWS OpenSearch).
+* AI/ML:
+   * Python (Replit/AWS SageMaker).
+   * Hugging Face Transformers (NLP, uploader auto-tagging, tutor).
+   * TensorFlow Lite (analytics, curriculum, Replit), TensorFlow (SageMaker).
+   * Claude-3.7-Sonnet API (tutor, website, email).
+* Email: Amazon SES, Nodemailer.
+* Blockchain: Ethereum (Infura), Hardhat (AWS EC2).
+* Cloud: AWS (Lambda, Amplify, S3, CloudFront, SageMaker, EC2).
+* Testing: Jest, Cypress.
+* Design: Figma.
+* Collaboration: Replit Multiplayer, Trello, Discord.
+* Security: Helmet, JWT, GDPR/HIPAA compliance.
+Development Processes
+* Agile Scrum: 2-3 week sprints, daily standups, sprint reviews.
+* UI Consistency:
+   * Shared component library (Button, Modal, Chat, Uploader, KnowledgeBaseSelector).
+   * Style guide: Blue (#1e3a8a), white (#f0f4f8), Inter font, 8px grid.
+   * Figma mockups for selector UI.
+* Code Quality: ESLint/Prettier, peer reviews, Storybook.
+* Testing: Jest (unit), Cypress (E2E), manual testing for selector/tutor.
+* Deployment: Replit for dev/testing, AWS for production (GitHub Actions).
+* Cohesiveness:
+   * Monorepo on Replit (/client, /server, /ai).
+   * GraphQL unifies data.
+   * Global state (React Context) for UI.
+   * Reusable email templates, discount logic, AI models.
+Sprints (Updated)
+Sprint 1: Foundation and Core UI (2 Weeks)
+* Tasks: Unchanged (Setup Replit Monorepo, User Authentication APIs, Component Library/UI, Welcome/Verification Emails).
+* Prompts: As in previous artifact.
+* Deliverables: Login/register, modern UI, welcome emails.
+* Cohesiveness: Component library includes KnowledgeBaseSelector foundation; auth supports base selection.
+Sprint 2: Curriculum, Lessons, and Virtual Tutor (3 Weeks)
+* Tasks:
+   * 2.1: APIs for Curriculum/Lesson Generation (Updated to support selected bases).
+   * 2.2: Curriculum Engine and Tutor (Updated for learning from bases).
+   * 2.3: Curriculum Dashboard, Lesson Viewer, and Tutor UI (Updated for base selector).
+   * 2.4: Schedule and Progress Update Emails.
+* Prompts:
+   * Task 2.1: APIs for Curriculum/Lesson Generation:
+      * Description: Enhance APIs to generate curricula/lessons from selected knowledge bases.
+      * Files:
+         * /ai/src/curriculum.js
+         * /server/src/routes/curriculum.js
+         * /server/src/models/knowledgeBase.js
+      * Dependencies:
+         * npm: axios
+         * Pip: transformers torch
+      * Steps:
+         * Ensure /server/src/models/knowledgeBase.js exists (from previous artifact).
+Update /ai/src/curriculum.js:
+javascript
+Copy
+const { spawn } = require('child_process');
+const path = require('path');
+const KnowledgeBase = require('../../../server/src/models/knowledgeBase');
+
+
+const generateCurriculum = async (profile, baseIds) => {
+  const bases = await KnowledgeBase.find({ _id: { $in: baseIds } });
+  const python = spawn('python', [path.join(__dirname, 'curriculum.py'), JSON.stringify({ ...profile, bases })]);
+  let output = '';
+  python.stdout.on('data', (data) => output += data);
+  python.stderr.on('data', (data) => reject(data.toString()));
+  python.on('close', () => resolve(JSON.parse(output)));
+};
+         * module.exports = { generateCurriculum };
+
+Update /ai/src/curriculum.py:
+python
+Copy
+import sys
+import json
+from transformers import pipeline
+
+
+def generate_curriculum(profile):
+    nlp = pipeline('text-generation', model='distilgpt2')
+    files = [f for base in profile['bases'] for f in base['files']]
+    prompt = f"Generate a curriculum for a {profile['age']} year old using files: {', '.join(f['url'] for f in files)}"
+    curriculum = nlp(prompt, max_length=100)[0]['generated_text']
+    return {'curriculum': curriculum, 'lessons': [{'id': 1, 'title': 'Intro', 'content': files[0]['url'] if files else 'Sample'}]}
+
+
+if __name__ == '__main__':
+    profile = json.loads(sys.argv[1])
+    result = generate_curriculum(profile)
+   *     print(json.dumps(result))
+
+Update /server/src/routes/curriculum.js:
+javascript
+Copy
+const express = require('express');
+const { generateCurriculum } = require('../../../ai/src/curriculum');
+const router = express.Router();
+
+
+router.post('/generate', async (req, res) => {
+  const { age, subjects, baseIds, email } = req.body;
+  const curriculum = await generateCurriculum({ age, subjects }, baseIds);
+  await sendScheduleEmail(email, JSON.stringify(curriculum));
+  res.json(curriculum);
+});
+
+
+      * module.exports = router;
+
+      * Test API in Replit (POST /api/curriculum/generate, body: { "age": 12, "subjects": ["math"], "baseIds": ["base_id1", "base_id2"], "email": "test@example.com" }).
+      * Expected Outcome: Curriculum API generates lessons from selected bases.
+      * Cohesiveness Notes: Integrates with uploader; supports tutor/camps.
+         * Task 2.2: Curriculum Engine and Tutor:
+         * Description: Enhance engine to learn from selected bases; update tutor to reference them.
+         * Files:
+         * /ai/src/engine.py
+         * /ai/src/tutor.js
+         * Dependencies:
+         * Pip: tensorflow
+         * npm: axios
+         * Steps:
+Update /ai/src/engine.py:
+python
+Copy
+import tensorflow as tf
+import json
+import sys
+
+
+def curriculum_engine(profile):
+    bases = profile.get('bases', [])
+    lessons = [{'id': 1, 'title': f"{profile['subjects'][0]} Intro", 'content': bases[0]['files'][0]['url'] if bases else 'Sample'}]
+    # Placeholder: Update TF model with base feedback
+    return lessons
+
+
+if __name__ == '__main__':
+    profile = json.loads(sys.argv[1])
+    result = curriculum_engine(profile)
+         *     print(json.dumps(result))
+
+Update /ai/src/tutor.js:
+javascript
+Copy
+const axios = require('axios');
+const KnowledgeBase = require('../../../server/src/models/knowledgeBase');
+
+
+const callClaudeAPI = async (prompt) => {
+  const response = await axios.post('https://api.anthropic.com/v1/complete', {
+    prompt: `You are a tutor. ${prompt}`,
+    model: 'claude-3-sonnet',
+    max_tokens_to_sample: 100,
+  }, { headers: { 'x-api-key': process.env.CLAUDE_API_KEY } });
+  return response.data.completion;
+};
+
+
+const generateTutorResponse = async (question, context, baseIds) => {
+  const bases = await KnowledgeBase.find({ _id: { $in: baseIds } });
+  const files = bases.flatMap(base => base.files.map(f => f.url)).join(', ');
+  const prompt = `Context: ${context}. Files: ${files}. Question: ${question}.`;
+  return await callClaudeAPI(prompt);
+};
+
+
+            * module.exports = { generateTutorResponse };
+
+Update /server/src/routes/curriculum.js:
+javascript
+Copy
+router.post('/tutor', async (req, res) => {
+  const { question, context, baseIds } = req.body;
+  const response = await generateTutorResponse(question, context, baseIds);
+  await sendTutorEmail('user@example.com', `Answered: ${question}`);
+  res.json({ response });
+               * });
+
+               * Test tutor API in Replit (POST /api/curriculum/tutor, body: { "question": "Explain algebra", "context": "Math lesson", "baseIds": ["base_id1"] }).
+               * For initial training, configure AWS SageMaker in /server/.env (SAGEMAKER_ENDPOINT=your_endpoint) and run:
+bash
+Copy
+aws sagemaker invoke-endpoint --endpoint-name your_endpoint --body '{"bases": ["base_id1"]}'
+
+               * Expected Outcome: Engine learns from selected bases; tutor references them.
+               * Cohesiveness Notes: Extends curriculum; reusable for camps/community.
+                  * Task 2.3: Curriculum Dashboard, Lesson Viewer, and Tutor UI:
+                  * Description: Add Knowledge Base Selector to dashboard.
+                  * Files:
+                  * /client/src/components/KnowledgeBaseSelector.jsx
+                  * /client/src/pages/Curriculum.jsx (update)
+                  * Dependencies:
+                  * npm: @apollo/client
+                  * Steps:
+Create /client/src/components/KnowledgeBaseSelector.jsx:
+jsx
+Copy
+import React, { useState } from 'react';
+import { useQuery, gql } from '@apollo/client';
+import Card from './Card';
+
+
+const GET_BASES = gql`query { knowledgeBases { id title subject } }`;
+
+
+const KnowledgeBaseSelector = ({ onSelect }) => {
+  const { loading, data } = useQuery(GET_BASES);
+  const [selectedIds, setSelectedIds] = useState([]);
+
+
+  const handleSelect = (id) => {
+    const newIds = selectedIds.includes(id)
+      ? selectedIds.filter(sid => sid !== id)
+      : [...selectedIds, id];
+    setSelectedIds(newIds);
+    onSelect(newIds);
+  };
+
+
+  return (
+    <Card className="p-4">
+      <h2 className="text-xl font-bold text-primary mb-2">Select Knowledge Bases</h2>
+      {loading ? <p>Loading...</p> : data.knowledgeBases.map(base => (
+        <div key={base.id} className="flex items-center mb-2">
+          <input
+            type="checkbox"
+            checked={selectedIds.includes(base.id)}
+            onChange={() => handleSelect(base.id)}
+            className="mr-2"
+          />
+          <span>{base.title} ({base.subject})</span>
+        </div>
+      ))}
+    </Card>
+  );
+};
+                  * export default KnowledgeBaseSelector;
+
+Update /client/src/pages/Curriculum.jsx:
+jsx
+Copy
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import Card from '../components/Card';
+import { Link } from 'react-router-dom';
+import KnowledgeBaseSelector from '../components/KnowledgeBaseSelector';
+
+
+const Curriculum = () => {
+  const [curriculum, setCurriculum] = useState(null);
+  const [baseIds, setBaseIds] = useState([]);
+
+
+  useEffect(() => {
+    if (baseIds.length) {
+      axios.post('http://localhost:3000/api/curriculum/generate', {
+        age: 12,
+        subjects: ['math'],
+        baseIds,
+        email: 'test@example.com',
+      }).then(res => setCurriculum(res.data));
+    }
+  }, [baseIds]);
+
+
+  return (
+    <div className="min-h-screen bg-secondary p-8">
+      <h1 className="text-3xl font-bold text-primary mb-4">Your Curriculum</h1>
+      <KnowledgeBaseSelector onSelect={setBaseIds} />
+      {curriculum && curriculum.lessons.map(lesson => (
+        <Card key={lesson.id} className="mb-4">
+          <Link to={`/lesson/${lesson.id}`}>{lesson.title}</Link>
+        </Card>
+      ))}
+    </div>
+  );
+};
+                     * export default Curriculum;
+
+                     * Run npm run dev in /client to test UI on Replit’s preview.
+                     * Expected Outcome: Dashboard includes selector for choosing knowledge bases.
+                     * Cohesiveness Notes: Reuses Card; integrates with curriculum APIs.
+                        * Task 2.4: Unchanged.
+Sprint 3: Knowledge Base Marketplace and Social Community (3 Weeks)
+                        * Tasks:
+                        * 3.1: GraphQL for Marketplace/Community Queries.
+                        * 3.2: Marketplace and Community APIs (Uploader and packaging/download).
+                        * 3.3: Blockchain for Badges and Licensing.
+                        * 3.4: Marketplace and Community UI (Uploader and download).
+                        * 3.5: Purchase and Community Emails (Download notifications).
+                        * Prompts: Unchanged from previous artifact, as they already support the enhanced knowledge base feature (uploader, packaging/download).
+                        * Deliverables: Marketplace with uploader/packaging, community hub, emails.
+                        * Cohesiveness: Selector data feeds marketplace; community discusses bases.
+Sprint 4: Summer Camps and Analytics Dashboard (3 Weeks)
+                        * Tasks:
+                        * 4.1: APIs for Camp Registration/Scheduling (Uses packaged bases).
+                        * 4.2: Predictive Analytics APIs (Tracks material usage).
+                        * 4.3: Camp Registration UI and Analytics Dashboard.
+                        * 4.4: Camp and Insight Emails.
+                        * Prompts: Unchanged, as they support selected bases.
+                        * Deliverables: Camp system, analytics dashboard, camp emails.
+                        * Cohesiveness: Camps use selected bases; analytics tracks selections.
+Sprint 5: Discounts, Referrals, and Website Generation (3 Weeks)
+                        * Tasks:
+                        * 5.1: APIs for Discount/Referral Creation (Supports marketplace bases).
+                        * 5.2: Blockchain for Referral Rewards/Certificates.
+                        * 5.3: APIs for Website Generation (Includes packaged bases).
+                        * 5.4: Discount/Referral and Website UI.
+                        * 5.5: Discount/Referral and Website Emails.
+                        * Prompts: Unchanged, as they support selected bases.
+                        * Deliverables: Discount/referral system, websites, emails.
+                        * Cohesiveness: Discounts apply to base selections; websites showcase bases.
+Sprint 6: Final Integration and Polish (3 Weeks)
+                        * Tasks:
+                        * 6.1: Enhance Tutor APIs for Voice Support.
+                        * 6.2: Optimize Community APIs and Add Group Projects.
+                        * 6.3: Finalize Analytics with Recommendations.
+                        * 6.4: Polish UI for Accessibility.
+                        * 6.5: Add Tutor/Community/Insight Emails (Upload notifications).
+                        * 6.6: Testing and Deployment.
+                        * Prompts: Unchanged, as they support the enhanced feature.
+                        * Deliverables: Advanced tutor, enhanced community, full analytics, production-ready platform.
+                        * Cohesiveness: Final testing ensures selector integration.
+Ensuring Cohesiveness
+                        * Monorepo: Centralizes code on Replit, with /client, /server, /ai.
+                        * GraphQL: Unifies data, including selected bases (Sprint 3).
+                        * UI Library: KnowledgeBaseSelector extends shared components, maintaining design consistency.
+                        * Reusable Logic: Selector integrates with curriculum/tutor; AI learning reuses NLP models.
+                        * AWS Integration: SageMaker trains AI on bases, S3 stores materials, ensuring Replit’s limits are bypassed.
+                        * Testing: Cypress tests validate selector flows; end-to-end tests ensure integration.
