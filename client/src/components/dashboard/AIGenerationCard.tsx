@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { KnowledgeBase } from "@shared/schema";
+import { useAIStatusContext } from "@/contexts/AIStatusContext";
+import { AlertCircle, BookOpen, Brain, CheckCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const subjects = [
   "Mathematics",
@@ -50,6 +53,7 @@ const learningStyles = [
 export default function AIGenerationCard() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { isAIAvailable, isEnhancedAIAvailable } = useAIStatusContext();
   const [formData, setFormData] = useState<AIGenerationFormData>({
     subject: "",
     gradeLevel: "",
@@ -151,12 +155,41 @@ export default function AIGenerationCard() {
   return (
     <Card>
       <CardHeader className="bg-muted/50 border-b">
-        <CardTitle>AI Curriculum Generation</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <span>AI Curriculum Generation</span>
+          {isEnhancedAIAvailable && (
+            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
+              <Brain size={12} />
+              <span>Enhanced AI</span>
+            </Badge>
+          )}
+        </CardTitle>
+        <CardDescription>
+          Create personalized learning paths with {isEnhancedAIAvailable ? 'advanced AI semantic understanding' : 'AI-powered generation'}
+        </CardDescription>
       </CardHeader>
       <CardContent className="p-6">
-        <p className="text-sm text-muted-foreground mb-4">
-          Generate personalized curriculum based on student needs, learning styles, and educational goals.
-        </p>
+        {!isAIAvailable ? (
+          <div className="bg-amber-50 text-amber-800 p-3 rounded-md flex items-start gap-2 mb-4">
+            <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-medium">AI is currently unavailable</p>
+              <p className="text-sm">The system will use pre-defined templates instead of AI-generated content.</p>
+            </div>
+          </div>
+        ) : isEnhancedAIAvailable ? (
+          <div className="bg-indigo-50 text-indigo-800 p-3 rounded-md flex items-start gap-2 mb-4">
+            <Brain className="h-5 w-5 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-medium">Enhanced AI Enabled</p>
+              <p className="text-sm">Knowledge bases will be analyzed with advanced semantic understanding for richer curriculum content.</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground mb-4">
+            Generate personalized curriculum based on student needs, learning styles, and educational goals.
+          </p>
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -231,7 +264,15 @@ export default function AIGenerationCard() {
           </div>
           
           <div>
-            <Label className="mb-2 block">Knowledge Bases (Optional)</Label>
+            <div className="flex items-center gap-2 mb-2">
+              <Label>Knowledge Bases</Label>
+              {isEnhancedAIAvailable && (
+                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs">
+                  Enhanced Understanding
+                </Badge>
+              )}
+            </div>
+            
             {isLoadingKnowledgeBases ? (
               <div className="flex items-center justify-center p-4 border rounded">
                 <div className="animate-spin h-5 w-5 border-t-2 border-primary rounded-full" />
@@ -242,7 +283,7 @@ export default function AIGenerationCard() {
                 No knowledge bases available. Create knowledge bases to enhance curriculum generation.
               </div>
             ) : (
-              <div className="max-h-[200px] overflow-y-auto border rounded p-2">
+              <div className={`max-h-[200px] overflow-y-auto border rounded p-2 ${isEnhancedAIAvailable ? 'border-indigo-200 bg-indigo-50/30' : ''}`}>
                 {allKnowledgeBases.map((kb, index) => (
                   <div key={`knowledge-base-${kb.id}-${index}`} className="flex items-center p-2 hover:bg-muted/50 rounded">
                     <Checkbox
@@ -254,25 +295,53 @@ export default function AIGenerationCard() {
                     />
                     <Label
                       htmlFor={`kb-${kb.id}`}
-                      className="ml-3 text-sm font-normal cursor-pointer"
+                      className="ml-3 text-sm font-normal cursor-pointer flex-1"
                     >
-                      {kb.title} <span className="text-xs text-muted-foreground">({kb.subject})</span>
+                      <span className="font-medium">{kb.title}</span> <span className="text-xs text-muted-foreground">({kb.subject})</span>
                     </Label>
+                    {isEnhancedAIAvailable && formData.knowledgeBaseIds?.includes(kb.id) && (
+                      <BookOpen size={16} className="text-indigo-500 ml-2" />
+                    )}
                   </div>
                 ))}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">
-              Selected knowledge bases will be used to enhance the generated curriculum
+            <p className="text-xs mt-1 flex items-center gap-1">
+              {isEnhancedAIAvailable ? (
+                <>
+                  <Brain size={12} className="text-indigo-500" />
+                  <span className="text-indigo-700">
+                    Selected resources will be deeply analyzed for semantic content understanding
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">
+                  Selected knowledge bases will be used to enhance the generated curriculum
+                </span>
+              )}
             </p>
           </div>
           
           <Button 
             type="submit" 
-            className="w-full" 
+            className={`w-full ${isEnhancedAIAvailable && formData.knowledgeBaseIds?.length ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}
             disabled={!formData.subject || !formData.gradeLevel || formData.learningStyles.length === 0 || generateMutation.isPending}
           >
-            {generateMutation.isPending ? "Generating..." : "Generate Curriculum"}
+            {generateMutation.isPending ? (
+              <>
+                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                {isEnhancedAIAvailable && formData.knowledgeBaseIds?.length ? "Analyzing Content & Generating..." : "Generating..."}
+              </>
+            ) : (
+              <>
+                {isEnhancedAIAvailable && formData.knowledgeBaseIds?.length ? (
+                  <>
+                    <Brain className="mr-2 h-4 w-4" />
+                    Generate Enhanced Curriculum
+                  </>
+                ) : "Generate Curriculum"}
+              </>
+            )}
           </Button>
         </form>
       </CardContent>
