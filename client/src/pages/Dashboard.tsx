@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Users, BookOpen, CheckCircle, DollarSign, 
-  PlusCircle, Wand2, Database, Flask
+  PlusCircle, Wand2
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -64,12 +64,6 @@ export default function Dashboard() {
             <Link href="/lessons/ai-generator">
               <Wand2 className="mr-2 h-4 w-4" />
               Generate Lessons
-            </Link>
-          </Button>
-          <Button variant="secondary" asChild>
-            <Link href="/test/knowledge-base">
-              <Database className="mr-2 h-4 w-4" />
-              Test Knowledge Base
             </Link>
           </Button>
         </div>
