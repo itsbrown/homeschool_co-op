@@ -76,17 +76,24 @@ export default function AIGenerationCard() {
   // Handle knowledge base selection
   const handleKnowledgeBaseChange = (kbId: number, checked: boolean) => {
     setFormData(prev => {
-      if (checked) {
-        return {
-          ...prev,
-          knowledgeBaseIds: [...(prev.knowledgeBaseIds || []), kbId]
-        };
-      } else {
-        return {
-          ...prev,
-          knowledgeBaseIds: (prev.knowledgeBaseIds || []).filter(id => id !== kbId)
-        };
-      }
+      const newState = checked
+        ? {
+            ...prev,
+            knowledgeBaseIds: [...(prev.knowledgeBaseIds || []), kbId]
+          }
+        : {
+            ...prev,
+            knowledgeBaseIds: (prev.knowledgeBaseIds || []).filter(id => id !== kbId)
+          };
+      
+      console.log('Knowledge base selection changed:', {
+        kbId,
+        checked,
+        currentSelection: prev.knowledgeBaseIds,
+        newSelection: newState.knowledgeBaseIds
+      });
+      
+      return newState;
     });
   };
 
@@ -109,6 +116,7 @@ export default function AIGenerationCard() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Submitting form data for curriculum generation:', formData);
     generateMutation.mutate(formData);
   };
 
