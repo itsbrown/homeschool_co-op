@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { KnowledgeBaseCreateDialog } from "@/components/KnowledgeBaseCreateDialog";
 import JSZip from 'jszip';
 
+import PageLayout from "@/components/layout/PageLayout";
+
 export default function KnowledgeBasePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>("");
@@ -219,24 +221,24 @@ export default function KnowledgeBasePage() {
   }, [showCreateDialog]);
   
   return (
-    <div className="container py-10">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Knowledge Base</h1>
-          <p className="text-muted-foreground">Discover, share, and learn with educational resources</p>
+    <PageLayout title="Knowledge Base">
+      <div className="container py-4">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <p className="text-muted-foreground">Discover, share, and learn with educational resources</p>
+          </div>
+          {user && (
+            <Button 
+              onClick={() => {
+                console.log("Create button clicked, setting dialog state to true");
+                setShowCreateDialog(true);
+              }}
+              id="create-knowledge-base-button"
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Create New
+            </Button>
+          )}
         </div>
-        {user && (
-          <Button 
-            onClick={() => {
-              console.log("Create button clicked, setting dialog state to true");
-              setShowCreateDialog(true);
-            }}
-            id="create-knowledge-base-button"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" /> Create New
-          </Button>
-        )}
-      </div>
 
       <div className="flex flex-col gap-4 md:flex-row mb-6">
         <div className="flex-1">
@@ -376,6 +378,7 @@ export default function KnowledgeBasePage() {
         onOpenChange={setShowCreateDialog}
       />
     </div>
+    </PageLayout>
   );
 }
 
