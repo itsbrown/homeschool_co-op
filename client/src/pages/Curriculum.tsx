@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import AppShell from "@/components/layout/AppShell";
@@ -13,6 +13,7 @@ import { BookOpen, Clock, Tag } from "lucide-react";
 export default function Curriculum() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -20,6 +21,13 @@ export default function Curriculum() {
       navigate("/login");
     }
   }, [user, navigate]);
+
+  // Ensure data is refreshed when component mounts
+  useEffect(() => {
+    if (user) {
+      queryClient.invalidateQueries({ queryKey: ['/api/curricula'] });
+    }
+  }, [user, queryClient]);
 
   // Fetch curricula created by the current user
   const { data: curricula, isLoading, error } = useQuery({

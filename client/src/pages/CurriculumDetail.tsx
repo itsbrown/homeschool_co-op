@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import AppShell from "@/components/layout/AppShell";
@@ -16,6 +16,7 @@ export default function CurriculumDetail() {
   const params = useParams();
   const [, navigate] = useLocation();
   const curriculumId = params.id;
+  const queryClient = useQueryClient();
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -23,6 +24,15 @@ export default function CurriculumDetail() {
       navigate("/login");
     }
   }, [user, navigate]);
+
+  // Ensure data is refreshed when component mounts
+  useEffect(() => {
+    if (user && curriculumId) {
+      // Refresh both curriculum and lessons data
+      queryClient.invalidateQueries({ queryKey: [`/api/curricula/${curriculumId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/lessons/curriculum/${curriculumId}`] });
+    }
+  }, [user, curriculumId, queryClient]);
 
   // Fetch curriculum details
   const { data: curriculum, isLoading: isLoadingCurriculum } = useQuery({

@@ -17,6 +17,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { generateCurriculum } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { queryClient } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 import type { KnowledgeBase } from "@shared/schema";
 
 const subjects = [
@@ -97,13 +99,23 @@ export default function AIGenerationCard() {
     });
   };
 
+  const [, navigate] = useLocation();
+  
   const generateMutation = useMutation({
     mutationFn: generateCurriculum,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Invalidate the curricula cache to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/curricula'] });
+      
       toast({
         title: "Curriculum Generated",
         description: "Your curriculum has been successfully generated.",
       });
+      
+      // Redirect to curricula page after a short delay
+      setTimeout(() => {
+        navigate("/curriculum");
+      }, 1500);
     },
     onError: () => {
       toast({
