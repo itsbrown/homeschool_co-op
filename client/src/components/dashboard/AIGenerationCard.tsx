@@ -39,10 +39,10 @@ const gradeLevels = [
 ];
 
 const learningStyles = [
-  { id: "visual", label: "Visual" },
-  { id: "auditory", label: "Auditory" },
-  { id: "reading-writing", label: "Reading/Writing" },
-  { id: "kinesthetic", label: "Kinesthetic" }
+  { id: "visual", label: "Visual", uniqueKey: "style-visual" },
+  { id: "auditory", label: "Auditory", uniqueKey: "style-auditory" },
+  { id: "reading-writing", label: "Reading/Writing", uniqueKey: "style-reading-writing" },
+  { id: "kinesthetic", label: "Kinesthetic", uniqueKey: "style-kinesthetic" }
 ];
 
 export default function AIGenerationCard() {
@@ -186,7 +186,7 @@ export default function AIGenerationCard() {
             <div className="grid grid-cols-2 gap-3 mt-1">
               {learningStyles.map(style => (
                 <div
-                  key={style.id}
+                  key={style.uniqueKey}
                   className="flex items-center p-3 border rounded-md hover:bg-muted/50 cursor-pointer"
                 >
                   <Checkbox
