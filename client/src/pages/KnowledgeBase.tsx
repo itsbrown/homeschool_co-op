@@ -60,9 +60,70 @@ export default function KnowledgeBasePage() {
 
   const handleDownload = async (id: number) => {
     try {
-      await fetch(`/api/knowledge-bases/${id}/download`, {
-        method: "POST",
+      console.log("Starting download with direct fetch");
+      
+      // Use GET method for the download endpoint
+      const response = await fetch(`/api/knowledge-bases/${id}/download`, {
+        method: "GET",
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
       });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status} ${response.statusText}`);
+      }
+      
+      // Parse the JSON response
+      const data = await response.json();
+      console.log("Download API call successful", data);
+      
+      // Get the knowledge base to access its files
+      const knowledgeBaseResponse = await fetch(`/api/knowledge-bases/${id}`, {
+        method: "GET",
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!knowledgeBaseResponse.ok) {
+        throw new Error(`Error fetching knowledge base: ${knowledgeBaseResponse.status}`);
+      }
+      
+      const knowledgeBase = await knowledgeBaseResponse.json();
+      
+      // Check if we have files in the response
+      if (data.files && data.files.length > 0) {
+        // Use files from the response
+        data.files.forEach(file => {
+          const link = document.createElement("a");
+          link.href = file.url;
+          link.download = file.name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        });
+      } else if (knowledgeBase.files && knowledgeBase.files.length > 0) {
+        // Fallback to using files from the query data
+        knowledgeBase.files.forEach(file => {
+          const link = document.createElement("a");
+          link.href = file.url;
+          link.download = file.name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        });
+      } else {
+        console.warn("No files found to download");
+        toast({
+          title: "Warning",
+          description: "No files found to download in this knowledge base",
+          variant: "default",
+        });
+      }
+      
       toast({
         title: "Success",
         description: "Download started successfully",
@@ -71,7 +132,7 @@ export default function KnowledgeBasePage() {
       console.error("Error downloading knowledge base:", error);
       toast({
         title: "Error",
-        description: "Failed to download knowledge base",
+        description: "Failed to download knowledge base. See console for details.",
         variant: "destructive",
       });
     }
