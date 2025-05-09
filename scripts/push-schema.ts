@@ -51,17 +51,17 @@ async function main() {
         description TEXT,
         type TEXT NOT NULL,
         subject TEXT NOT NULL,
-        "gradeLevel" TEXT NOT NULL,
-        "authorId" INTEGER NOT NULL REFERENCES users(id),
+        grade_level TEXT NOT NULL,
+        author_id INTEGER NOT NULL REFERENCES users(id),
         content JSONB NOT NULL,
-        "isPublished" BOOLEAN NOT NULL DEFAULT false,
-        "isPublic" BOOLEAN NOT NULL DEFAULT false,
+        is_published BOOLEAN NOT NULL DEFAULT false,
+        is_public BOOLEAN NOT NULL DEFAULT false,
         price NUMERIC NOT NULL DEFAULT 0,
         downloads INTEGER NOT NULL DEFAULT 0,
-        "avgRating" NUMERIC NOT NULL DEFAULT 0,
-        "ratingCount" INTEGER NOT NULL DEFAULT 0,
-        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        avg_rating NUMERIC NOT NULL DEFAULT 0,
+        rating_count INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
 

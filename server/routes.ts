@@ -745,6 +745,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test enhanced multi-step curriculum generation
+  app.post("/api/test/multi-step-generation", isAuthenticated, async (req, res) => {
+    try {
+      const { 
+        subject = "Mathematics", 
+        gradeLevel = "Grade 5", 
+        prompt = "Create a comprehensive curriculum for teaching fractions",
+        learningStyles = ["visual", "auditory", "kinesthetic", "reading/writing"]
+      } = req.body;
+      
+      // Import services dynamically
+      const { generateEnhancedContextualPrompt, ContextualInfo } = await import("./services/knowledgeBaseService");
+      
+      // Create contextual information object
+      const contextInfo: ContextualInfo = {
+        subject,
+        gradeLevel,
+        learningStyles,
+        userId: req.session.userId,
+        differentiationNeeds: ["ESL students", "advanced learners", "students with learning disabilities"]
+      };
+      
+      // Generate enhanced contextual prompt
+      const { prompt: enhancedPrompt, context } = await generateEnhancedContextualPrompt(
+        prompt,
+        contextInfo,
+        "curriculum"
+      );
+      
+      // Import the multi-step generation service
+      const { generateCurriculumWithAI } = await import("./services/anthropic");
+      
+      // Generate curriculum using multi-step process
+      const result = await generateCurriculumWithAI(enhancedPrompt, context);
+      
+      // Return the results showing each step of the process
+      res.status(200).json({
+        originalPrompt: prompt,
+        enhancedPrompt,
+        contextData: context,
+        result
+      });
+      
+    } catch (error) {
+      console.error("Error in multi-step curriculum generation:", error);
+      res.status(500).json({ 
+        message: "Error in multi-step curriculum generation",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Test enhanced multi-step lesson generation 
+  app.post("/api/test/multi-step-lesson", isAuthenticated, async (req, res) => {
+    try {
+      const { 
+        subject = "Mathematics", 
+        gradeLevel = "Grade 5", 
+        duration = 60,
+        objectives = "Understand and apply fraction addition with unlike denominators",
+        learningStyles = ["visual", "auditory", "kinesthetic", "reading/writing"]
+      } = req.body;
+      
+      // Import services
+      const { generateEnhancedContextualPrompt, ContextualInfo } = await import("./services/knowledgeBaseService");
+      
+      // Create contextual information object
+      const contextInfo: ContextualInfo = {
+        subject,
+        gradeLevel,
+        learningStyles,
+        duration,
+        userId: req.session.userId,
+        standards: ["Common Core Math 5.NF.1", "Common Core Math 5.NF.2"]
+      };
+      
+      // Base prompt for lesson generation
+      const basePrompt = `Create a detailed lesson plan for teaching ${objectives} to ${gradeLevel} students in ${subject}. The lesson should be ${duration} minutes long.`;
+      
+      // Generate enhanced contextual prompt
+      const { prompt: enhancedPrompt, context } = await generateEnhancedContextualPrompt(
+        basePrompt,
+        contextInfo,
+        "lesson"
+      );
+      
+      // Import the multi-step lesson generation service
+      const { generateLessonPlanWithAI } = await import("./services/anthropic");
+      
+      // Generate lesson plan using multi-step process
+      const result = await generateLessonPlanWithAI(
+        subject,
+        gradeLevel,
+        duration,
+        learningStyles,
+        objectives,
+        context
+      );
+      
+      // Return the results showing the process
+      res.status(200).json({
+        originalPrompt: basePrompt,
+        enhancedPrompt,
+        contextData: context,
+        result
+      });
+      
+    } catch (error) {
+      console.error("Error in multi-step lesson generation:", error);
+      res.status(500).json({ 
+        message: "Error in multi-step lesson generation",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
