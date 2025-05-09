@@ -1,6 +1,8 @@
 // Test script for knowledge base and Anthropic integration
-const { db } = require('./server/db');
-const { knowledgeBases } = require('./shared/schema');
+import { db } from './server/db.js';
+import { knowledgeBases } from './shared/schema.js';
+import { generateEnhancedPrompt } from './server/services/knowledgeBaseService.js';
+import { generateCurriculumWithAI } from './server/services/anthropic.js';
 
 async function createTestKnowledgeBase() {
   try {
@@ -58,9 +60,6 @@ async function createTestKnowledgeBase() {
     
     console.log('Test knowledge base created successfully:', knowledgeBase.id);
     
-    // Import the knowledge base service
-    const { generateEnhancedPrompt } = require('./server/services/knowledgeBaseService');
-    
     // Generate an enhanced prompt
     const basePrompt = 'Create a curriculum for teaching fractions to Grade 5 students';
     const enhancedPrompt = await generateEnhancedPrompt(
@@ -75,8 +74,6 @@ async function createTestKnowledgeBase() {
     console.log(enhancedPrompt);
     
     // Test AI generation with enhanced prompt
-    const { generateCurriculumWithAI } = require('./server/services/anthropic');
-    
     console.log('\nGenerating curriculum with AI...');
     const aiResult = await generateCurriculumWithAI(enhancedPrompt);
     

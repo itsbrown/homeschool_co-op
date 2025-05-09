@@ -644,6 +644,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test knowledge base integration with AI
+  app.post("/api/test/knowledge-base-ai", async (req, res) => {
+    try {
+      // Create a test knowledge base for curriculum standards
+      const { knowledgeBases } = await import("@shared/schema");
+      const { db } = await import("./db");
+      
+      // Create a test knowledge base
+      const [knowledgeBase] = await db
+        .insert(knowledgeBases)
+        .values({
+          title: 'Common Core Math Standards - Grade 5',
+          description: 'Comprehensive collection of Grade 5 math standards from Common Core',
+          type: 'curriculum_standards',
+          subject: 'Mathematics',
+          gradeLevel: 'Grade 5',
+          authorId: req.session.userId || 1, // Use current user or fallback to admin
+          isPublished: true,
+          isPublic: true,
+          content: {
+            standards: [
+              'Operations & Algebraic Thinking: Write and interpret numerical expressions',
+              'Number & Operations in Base Ten: Understand the place value system',
+              'Number & Operations—Fractions: Use equivalent fractions as a strategy to add and subtract fractions',
+              'Measurement & Data: Convert like measurement units within a given measurement system',
+              'Geometry: Graph points on the coordinate plane to solve real-world problems'
+            ],
+            summary: 'Common Core standards for Grade 5 Mathematics',
+            keyCompetencies: ['Problem Solving', 'Reasoning', 'Communication'],
+            crossCuttingConcepts: ['Patterns', 'Properties', 'Precision']
+          },
+          downloads: 0,
+          avgRating: 0,
+          ratingCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      
+      // Import the knowledge base service
+      const { generateEnhancedPrompt } = await import("./services/knowledgeBaseService");
+      
+      // Generate an enhanced prompt
+      const basePrompt = 'Create a curriculum for teaching fractions to Grade 5 students';
+      const enhancedPrompt = await generateEnhancedPrompt(
+        basePrompt,
+        'Mathematics',
+        'Grade 5',
+        req.session.userId,
+        'curriculum'
+      );
+      
+      // Test AI generation with enhanced prompt
+      const { generateCurriculumWithAI } = await import("./services/anthropic");
+      const aiResult = await generateCurriculumWithAI(enhancedPrompt);
+      
+      // Return the results
+      res.status(200).json({
+        knowledgeBase: knowledgeBase,
+        basePrompt,
+        enhancedPrompt,
+        aiResult
+      });
+      
+    } catch (error) {
+      console.error("Error testing knowledge base AI integration:", error);
+      res.status(500).json({ 
+        message: "Error testing knowledge base AI integration",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
   // Extract knowledge from text
   app.post("/api/knowledge-bases/extract", isAuthenticated, async (req, res) => {
     try {
