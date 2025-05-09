@@ -1,4 +1,11 @@
-import { users, type User, type InsertUser, curricula, type Curriculum, type InsertCurriculum, lessons, type Lesson, type InsertLesson, events, type Event, type InsertEvent, marketplaceItems, type MarketplaceItem, type InsertMarketplaceItem } from "@shared/schema";
+import { 
+  users, type User, type InsertUser, 
+  curricula, type Curriculum, type InsertCurriculum, 
+  lessons, type Lesson, type InsertLesson, 
+  events, type Event, type InsertEvent, 
+  marketplaceItems, type MarketplaceItem, type InsertMarketplaceItem,
+  knowledgeBases, type KnowledgeBase, type InsertKnowledgeBase
+} from "@shared/schema";
 
 export interface IStorage {
   // User methods
@@ -32,6 +39,16 @@ export interface IStorage {
   getTopSellingItems(limit: number): Promise<MarketplaceItem[]>;
   createMarketplaceItem(item: InsertMarketplaceItem): Promise<MarketplaceItem>;
   updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<MarketplaceItem | undefined>;
+  
+  // Knowledge Base methods
+  getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined>;
+  getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]>;
+  getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
+  getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;
+  createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase>;
+  updateKnowledgeBase(id: number, knowledgeBase: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined>;
+  incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined>;
+  addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -40,12 +57,14 @@ export class MemStorage implements IStorage {
   private lessonsStore: Map<number, Lesson>;
   private eventsStore: Map<number, Event>;
   private marketplaceItemsStore: Map<number, MarketplaceItem>;
+  private knowledgeBaseStore: Map<number, KnowledgeBase>;
   
   private userIdCounter: number;
   private curriculumIdCounter: number;
   private lessonIdCounter: number;
   private eventIdCounter: number;
   private marketplaceItemIdCounter: number;
+  private knowledgeBaseIdCounter: number;
 
   constructor() {
     this.usersStore = new Map();
@@ -53,12 +72,14 @@ export class MemStorage implements IStorage {
     this.lessonsStore = new Map();
     this.eventsStore = new Map();
     this.marketplaceItemsStore = new Map();
+    this.knowledgeBaseStore = new Map();
     
     this.userIdCounter = 1;
     this.curriculumIdCounter = 1;
     this.lessonIdCounter = 1;
     this.eventIdCounter = 1;
     this.marketplaceItemIdCounter = 1;
+    this.knowledgeBaseIdCounter = 1;
     
     // Initialize with a default admin user
     this.createUser({
@@ -248,6 +269,96 @@ export class MemStorage implements IStorage {
     
     this.marketplaceItemsStore.set(id, updatedItem);
     return updatedItem;
+  }
+  
+  // Knowledge Base methods
+  async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
+    return this.knowledgeBaseStore.get(id);
+  }
+  
+  async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
+    return Array.from(this.knowledgeBaseStore.values()).filter(
+      kb => kb.authorId === authorId
+    );
+  }
+  
+  async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
+    return Array.from(this.knowledgeBaseStore.values()).filter(
+      kb => kb.subject.toLowerCase() === subject.toLowerCase()
+    );
+  }
+  
+  async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
+    const publicBases = Array.from(this.knowledgeBaseStore.values()).filter(
+      kb => kb.isPublic
+    );
+    
+    if (limit) {
+      return publicBases.slice(0, limit);
+    }
+    
+    return publicBases;
+  }
+  
+  async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
+    const id = this.knowledgeBaseIdCounter++;
+    const now = new Date();
+    const knowledgeBase: KnowledgeBase = { 
+      ...insertKnowledgeBase, 
+      id, 
+      createdAt: now,
+      updatedAt: now,
+      downloadCount: 0,
+      purchasedBy: []
+    };
+    
+    this.knowledgeBaseStore.set(id, knowledgeBase);
+    return knowledgeBase;
+  }
+  
+  async updateKnowledgeBase(id: number, updateData: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = this.knowledgeBaseStore.get(id);
+    if (!knowledgeBase) return undefined;
+    
+    const updatedKnowledgeBase = {
+      ...knowledgeBase,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    
+    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
+    return updatedKnowledgeBase;
+  }
+  
+  async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = this.knowledgeBaseStore.get(id);
+    if (!knowledgeBase) return undefined;
+    
+    const updatedKnowledgeBase = {
+      ...knowledgeBase,
+      downloadCount: knowledgeBase.downloadCount + 1
+    };
+    
+    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
+    return updatedKnowledgeBase;
+  }
+  
+  async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = this.knowledgeBaseStore.get(id);
+    if (!knowledgeBase) return undefined;
+    
+    // Check if user has already purchased
+    if (knowledgeBase.purchasedBy.includes(userId)) {
+      return knowledgeBase;
+    }
+    
+    const updatedKnowledgeBase = {
+      ...knowledgeBase,
+      purchasedBy: [...knowledgeBase.purchasedBy, userId]
+    };
+    
+    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
+    return updatedKnowledgeBase;
   }
 }
 
