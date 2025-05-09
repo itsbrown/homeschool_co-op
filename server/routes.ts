@@ -565,16 +565,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/knowledge-bases", isAuthenticated, async (req, res) => {
     try {
-      console.log("Received knowledge base creation request:", JSON.stringify(req.body, null, 2));
+      console.log("Received knowledge base creation request from:", req.session.userId);
+      console.log("Request body:", JSON.stringify(req.body, null, 2));
+      console.log("Session:", JSON.stringify(req.session, null, 2));
       
       // Check if user ID is available in session
       if (!req.session.userId) {
+        console.log("User not authenticated in session");
         return res.status(401).json({ message: "User not authenticated" });
       }
       
       try {
+        console.log("Attempting to validate data with schema");
+        console.log("Schema expects:", Object.keys(insertKnowledgeBaseSchema.shape).join(", "));
+        console.log("Received fields:", Object.keys(req.body).join(", "));
+        
         const validatedData = insertKnowledgeBaseSchema.parse(req.body);
-        console.log("Validation passed, creating knowledge base with data:", validatedData);
+        console.log("Validation passed, creating knowledge base with data:", JSON.stringify(validatedData, null, 2));
         
         const knowledgeBase = await storage.createKnowledgeBase({
           ...validatedData,
@@ -585,12 +592,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(201).json(knowledgeBase);
       } catch (zodError) {
         if (zodError instanceof z.ZodError) {
-          console.error("Validation error:", zodError.errors);
+          console.error("Validation error:", JSON.stringify(zodError.errors, null, 2));
           return res.status(400).json({ 
             message: "Validation error", 
             errors: zodError.errors 
           });
         }
+        console.error("Non-Zod error during validation:", zodError);
         throw zodError;
       }
     } catch (error) {
