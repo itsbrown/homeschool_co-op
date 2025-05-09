@@ -495,6 +495,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.get("/api/knowledge-bases/subjects", async (req, res) => {
+    try {
+      // Get all public knowledge bases to extract unique subjects
+      const knowledgeBases = await storage.getPublicKnowledgeBases();
+      
+      // Extract unique subjects
+      const subjects = [...new Set(knowledgeBases.map(kb => kb.subject))];
+      
+      res.status(200).json(subjects);
+    } catch (error) {
+      console.error("Error fetching subjects:", error);
+      res.status(500).json({ message: "Error fetching subjects" });
+    }
+  });
+  
   app.get("/api/knowledge-bases/subject/:subject", async (req, res) => {
     try {
       const { subject } = req.params;
