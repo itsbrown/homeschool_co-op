@@ -368,11 +368,17 @@ export class DatabaseStorage implements IStorage {
       query = query.where(eq(programs.category, category));
     }
     
+    // For gradeLevel filtering, we need to check if the grade level is in the array
+    let result = await query;
+    
     if (gradeLevel) {
-      query = query.where(eq(programs.gradeLevels, gradeLevel));
+      // Filter in memory for array containment
+      result = result.filter(program => 
+        program.gradeLevels.includes(gradeLevel)
+      );
     }
     
-    return await query;
+    return result;
   }
 
   async getProgramsByInstructorId(instructorId: number): Promise<Program[]> {

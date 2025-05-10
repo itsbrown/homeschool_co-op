@@ -858,6 +858,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Children routes
+  app.get('/api/children', isAuthenticated, childrenApi.getMyChildren);
+  app.get('/api/children/:id', isAuthenticated, childrenApi.getChildById);
+  app.post('/api/children', isAuthenticated, childrenApi.createChild);
+  app.put('/api/children/:id', isAuthenticated, childrenApi.updateChild);
+  app.delete('/api/children/:id', isAuthenticated, childrenApi.deleteChild);
+
+  // Emergency Contacts routes
+  app.get('/api/emergency-contacts', isAuthenticated, emergencyContactsApi.getMyEmergencyContacts);
+  app.get('/api/emergency-contacts/:id', isAuthenticated, emergencyContactsApi.getEmergencyContactById);
+  app.post('/api/emergency-contacts', isAuthenticated, emergencyContactsApi.createEmergencyContact);
+  app.put('/api/emergency-contacts/:id', isAuthenticated, emergencyContactsApi.updateEmergencyContact);
+  app.delete('/api/emergency-contacts/:id', isAuthenticated, emergencyContactsApi.deleteEmergencyContact);
+
+  // Programs routes
+  app.get('/api/programs', programsApi.getPublishedPrograms); // Public endpoint to browse programs
+  app.get('/api/programs/:id', programsApi.getProgramById); // Public endpoint to view single program
+  app.get('/api/my-programs', isAuthenticated, hasRole(['educator', 'admin']), programsApi.getMyPrograms);
+  app.post('/api/programs', isAuthenticated, hasRole(['educator', 'admin']), programsApi.createProgram);
+  app.put('/api/programs/:id', isAuthenticated, hasRole(['educator', 'admin']), programsApi.updateProgram);
+  app.delete('/api/programs/:id', isAuthenticated, hasRole(['educator', 'admin']), programsApi.deleteProgram);
+
+  // Program Enrollments routes
+  app.get('/api/enrollments', isAuthenticated, programEnrollmentsApi.getMyChildrenEnrollments);
+  app.get('/api/programs/:programId/enrollments', isAuthenticated, hasRole(['educator', 'admin']), programEnrollmentsApi.getProgramEnrollments);
+  app.get('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.getEnrollmentById);
+  app.post('/api/enrollments', isAuthenticated, programEnrollmentsApi.createEnrollment);
+  app.put('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
+  app.delete('/api/enrollments/:id', isAuthenticated, hasRole(['admin']), programEnrollmentsApi.deleteEnrollment);
+
   const httpServer = createServer(app);
   return httpServer;
 }
