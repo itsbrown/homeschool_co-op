@@ -284,4 +284,181 @@ export class DatabaseStorage implements IStorage {
     
     return updatedKnowledgeBase || undefined;
   }
+  
+  // Child methods
+  async getChildById(id: number): Promise<Child | undefined> {
+    const [child] = await db.select().from(children).where(eq(children.id, id));
+    return child || undefined;
+  }
+
+  async getChildrenByParentId(parentId: number): Promise<Child[]> {
+    return await db.select().from(children).where(eq(children.parentId, parentId));
+  }
+
+  async createChild(childData: InsertChild & { parentId: number }): Promise<Child> {
+    const [child] = await db
+      .insert(children)
+      .values(childData)
+      .returning();
+    return child;
+  }
+
+  async updateChild(id: number, updateData: Partial<InsertChild>): Promise<Child | undefined> {
+    const [updatedChild] = await db
+      .update(children)
+      .set({
+        ...updateData,
+        updatedAt: new Date()
+      })
+      .where(eq(children.id, id))
+      .returning();
+    
+    return updatedChild || undefined;
+  }
+
+  async deleteChild(id: number): Promise<void> {
+    await db.delete(children).where(eq(children.id, id));
+  }
+
+  // Emergency Contact methods
+  async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
+    const [contact] = await db.select().from(emergencyContacts).where(eq(emergencyContacts.id, id));
+    return contact || undefined;
+  }
+
+  async getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]> {
+    return await db.select().from(emergencyContacts).where(eq(emergencyContacts.userId, userId));
+  }
+
+  async createEmergencyContact(contactData: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact> {
+    const [contact] = await db
+      .insert(emergencyContacts)
+      .values(contactData)
+      .returning();
+    return contact;
+  }
+
+  async updateEmergencyContact(id: number, updateData: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
+    const [updatedContact] = await db
+      .update(emergencyContacts)
+      .set({
+        ...updateData,
+        updatedAt: new Date()
+      })
+      .where(eq(emergencyContacts.id, id))
+      .returning();
+    
+    return updatedContact || undefined;
+  }
+
+  async deleteEmergencyContact(id: number): Promise<void> {
+    await db.delete(emergencyContacts).where(eq(emergencyContacts.id, id));
+  }
+
+  // Program methods
+  async getProgramById(id: number): Promise<Program | undefined> {
+    const [program] = await db.select().from(programs).where(eq(programs.id, id));
+    return program || undefined;
+  }
+
+  async getPublishedPrograms(category?: string, gradeLevel?: string): Promise<Program[]> {
+    let query = db.select().from(programs).where(eq(programs.isPublished, true));
+    
+    if (category) {
+      query = query.where(eq(programs.category, category));
+    }
+    
+    if (gradeLevel) {
+      query = query.where(eq(programs.gradeLevels, gradeLevel));
+    }
+    
+    return await query;
+  }
+
+  async getProgramsByInstructorId(instructorId: number): Promise<Program[]> {
+    return await db.select().from(programs).where(eq(programs.instructorId, instructorId));
+  }
+
+  async createProgram(programData: InsertProgram & { instructorId: number }): Promise<Program> {
+    const [program] = await db
+      .insert(programs)
+      .values(programData)
+      .returning();
+    return program;
+  }
+
+  async updateProgram(id: number, updateData: Partial<InsertProgram>): Promise<Program | undefined> {
+    const [updatedProgram] = await db
+      .update(programs)
+      .set({
+        ...updateData,
+        updatedAt: new Date()
+      })
+      .where(eq(programs.id, id))
+      .returning();
+    
+    return updatedProgram || undefined;
+  }
+
+  async deleteProgram(id: number): Promise<void> {
+    await db.delete(programs).where(eq(programs.id, id));
+  }
+
+  // Program Enrollment methods
+  async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
+    const [enrollment] = await db.select().from(programEnrollments).where(eq(programEnrollments.id, id));
+    return enrollment || undefined;
+  }
+
+  async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
+    if (childIds.length === 0) return [];
+    
+    return await db
+      .select()
+      .from(programEnrollments)
+      .where(sql`${programEnrollments.childId} IN (${sql.join(childIds, sql`, `)})`);
+  }
+
+  async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {
+    return await db.select().from(programEnrollments).where(eq(programEnrollments.programId, programId));
+  }
+
+  async getEnrollmentCountForProgram(programId: number): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.programId, programId),
+          sql`${programEnrollments.status} IN ('pending', 'confirmed', 'active')`
+        )
+      );
+    
+    return result[0]?.count || 0;
+  }
+
+  async createProgramEnrollment(enrollmentData: InsertProgramEnrollment): Promise<ProgramEnrollment> {
+    const [enrollment] = await db
+      .insert(programEnrollments)
+      .values(enrollmentData)
+      .returning();
+    return enrollment;
+  }
+
+  async updateProgramEnrollment(id: number, updateData: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
+    const [updatedEnrollment] = await db
+      .update(programEnrollments)
+      .set({
+        ...updateData,
+        updatedAt: new Date()
+      })
+      .where(eq(programEnrollments.id, id))
+      .returning();
+    
+    return updatedEnrollment || undefined;
+  }
+
+  async deleteProgramEnrollment(id: number): Promise<void> {
+    await db.delete(programEnrollments).where(eq(programEnrollments.id, id));
+  }
 }
