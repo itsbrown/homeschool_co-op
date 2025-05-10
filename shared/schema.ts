@@ -49,7 +49,17 @@ export const children = pgTable("children", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertChildSchema = createInsertSchema(children).omit({ id: true, createdAt: true, updatedAt: true, parentId: true });
+export const insertChildSchema = createInsertSchema(children)
+  .omit({ id: true, createdAt: true, updatedAt: true, parentId: true })
+  .extend({
+    // Set default values for nullable fields
+    learningStyle: z.array(z.string()).nullable().default(null),
+    specialNeeds: z.string().nullable().default(null),
+    interests: z.array(z.string()).nullable().default(null),
+    allergies: z.string().nullable().default(null),
+    healthNotes: z.string().nullable().default(null),
+    profileImage: z.string().nullable().default(null)
+  });
 export type InsertChild = z.infer<typeof insertChildSchema>;
 export type Child = typeof children.$inferSelect;
 
@@ -73,7 +83,13 @@ export const emergencyContacts = pgTable("emergency_contacts", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertEmergencyContactSchema = createInsertSchema(emergencyContacts).omit({ id: true, createdAt: true, updatedAt: true, userId: true });
+export const insertEmergencyContactSchema = createInsertSchema(emergencyContacts)
+  .omit({ id: true, createdAt: true, updatedAt: true, userId: true })
+  .extend({
+    // Set default values for nullable fields
+    email: z.string().nullable().default(null),
+    isAuthorizedPickup: z.boolean().default(false)
+  });
 export type InsertEmergencyContact = z.infer<typeof insertEmergencyContactSchema>;
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
 
@@ -113,9 +129,13 @@ export const programs = pgTable("programs", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertProgramSchema = createInsertSchema(programs).omit({ 
-  id: true, createdAt: true, updatedAt: true, instructorId: true 
-});
+export const insertProgramSchema = createInsertSchema(programs)
+  .omit({ id: true, createdAt: true, updatedAt: true, instructorId: true })
+  .extend({
+    // Allow strings for date fields which will be parsed into Date objects
+    startDate: z.string().transform((str) => new Date(str)),
+    endDate: z.string().transform((str) => new Date(str))
+  });
 export type InsertProgram = z.infer<typeof insertProgramSchema>;
 export type Program = typeof programs.$inferSelect;
 
@@ -150,9 +170,16 @@ export const programEnrollments = pgTable("program_enrollments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments).omit({ 
-  id: true, createdAt: true, updatedAt: true 
-});
+export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    // Set default values for optional fields
+    status: z.enum(["pending", "confirmed", "waitlisted", "cancelled", "completed"]).default("pending"),
+    paymentStatus: z.enum(["pending", "paid", "refunded", "failed"]).default("pending"),
+    enrollmentDate: z.date().default(() => new Date()),
+    notes: z.string().nullable().default(null),
+    paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "scholarship"]).nullable().default(null)
+  });
 export type InsertProgramEnrollment = z.infer<typeof insertProgramEnrollmentSchema>;
 export type ProgramEnrollment = typeof programEnrollments.$inferSelect;
 
