@@ -104,6 +104,10 @@ export class MemStorage implements IStorage {
   private eventIdCounter: number;
   private marketplaceItemIdCounter: number;
   private knowledgeBaseIdCounter: number;
+  private childIdCounter: number;
+  private emergencyContactIdCounter: number;
+  private programIdCounter: number;
+  private programEnrollmentIdCounter: number;
 
   constructor() {
     this.usersStore = new Map();
@@ -112,6 +116,10 @@ export class MemStorage implements IStorage {
     this.eventsStore = new Map();
     this.marketplaceItemsStore = new Map();
     this.knowledgeBaseStore = new Map();
+    this.childrenStore = new Map();
+    this.emergencyContactsStore = new Map();
+    this.programsStore = new Map();
+    this.programEnrollmentsStore = new Map();
     
     this.userIdCounter = 1;
     this.curriculumIdCounter = 1;
@@ -119,6 +127,10 @@ export class MemStorage implements IStorage {
     this.eventIdCounter = 1;
     this.marketplaceItemIdCounter = 1;
     this.knowledgeBaseIdCounter = 1;
+    this.childIdCounter = 1;
+    this.emergencyContactIdCounter = 1;
+    this.programIdCounter = 1;
+    this.programEnrollmentIdCounter = 1;
     
     // Initialize with a default admin user
     this.createUser({
@@ -398,6 +410,201 @@ export class MemStorage implements IStorage {
     
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
     return updatedKnowledgeBase;
+  }
+
+  // Child methods
+  async getChildById(id: number): Promise<Child | undefined> {
+    return this.childrenStore.get(id);
+  }
+
+  async getChildrenByParentId(parentId: number): Promise<Child[]> {
+    return Array.from(this.childrenStore.values()).filter(child => child.parentId === parentId);
+  }
+
+  async createChild(childData: InsertChild & { parentId: number }): Promise<Child> {
+    const id = this.childIdCounter++;
+    const now = new Date();
+    
+    const child: Child = {
+      ...childData,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.childrenStore.set(id, child);
+    return child;
+  }
+
+  async updateChild(id: number, updateData: Partial<InsertChild>): Promise<Child | undefined> {
+    const child = this.childrenStore.get(id);
+    if (!child) return undefined;
+    
+    const updatedChild: Child = {
+      ...child,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    
+    this.childrenStore.set(id, updatedChild);
+    return updatedChild;
+  }
+
+  async deleteChild(id: number): Promise<void> {
+    this.childrenStore.delete(id);
+  }
+
+  // Emergency Contact methods
+  async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
+    return this.emergencyContactsStore.get(id);
+  }
+
+  async getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]> {
+    return Array.from(this.emergencyContactsStore.values()).filter(contact => contact.userId === userId);
+  }
+
+  async createEmergencyContact(contactData: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact> {
+    const id = this.emergencyContactIdCounter++;
+    const now = new Date();
+    
+    const contact: EmergencyContact = {
+      ...contactData,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.emergencyContactsStore.set(id, contact);
+    return contact;
+  }
+
+  async updateEmergencyContact(id: number, updateData: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
+    const contact = this.emergencyContactsStore.get(id);
+    if (!contact) return undefined;
+    
+    const updatedContact: EmergencyContact = {
+      ...contact,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    
+    this.emergencyContactsStore.set(id, updatedContact);
+    return updatedContact;
+  }
+
+  async deleteEmergencyContact(id: number): Promise<void> {
+    this.emergencyContactsStore.delete(id);
+  }
+
+  // Program methods
+  async getProgramById(id: number): Promise<Program | undefined> {
+    return this.programsStore.get(id);
+  }
+
+  async getPublishedPrograms(category?: string, gradeLevel?: string): Promise<Program[]> {
+    let programs = Array.from(this.programsStore.values()).filter(program => program.isPublished);
+    
+    if (category) {
+      programs = programs.filter(program => program.category === category);
+    }
+    
+    if (gradeLevel) {
+      programs = programs.filter(program => program.gradeLevel === gradeLevel);
+    }
+    
+    return programs;
+  }
+
+  async getProgramsByInstructorId(instructorId: number): Promise<Program[]> {
+    return Array.from(this.programsStore.values()).filter(program => program.instructorId === instructorId);
+  }
+
+  async createProgram(programData: InsertProgram & { instructorId: number }): Promise<Program> {
+    const id = this.programIdCounter++;
+    const now = new Date();
+    
+    const program: Program = {
+      ...programData,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.programsStore.set(id, program);
+    return program;
+  }
+
+  async updateProgram(id: number, updateData: Partial<InsertProgram>): Promise<Program | undefined> {
+    const program = this.programsStore.get(id);
+    if (!program) return undefined;
+    
+    const updatedProgram: Program = {
+      ...program,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    
+    this.programsStore.set(id, updatedProgram);
+    return updatedProgram;
+  }
+
+  async deleteProgram(id: number): Promise<void> {
+    this.programsStore.delete(id);
+  }
+
+  // Program Enrollment methods
+  async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
+    return this.programEnrollmentsStore.get(id);
+  }
+
+  async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
+    return Array.from(this.programEnrollmentsStore.values())
+      .filter(enrollment => childIds.includes(enrollment.childId));
+  }
+
+  async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {
+    return Array.from(this.programEnrollmentsStore.values())
+      .filter(enrollment => enrollment.programId === programId);
+  }
+
+  async getEnrollmentCountForProgram(programId: number): Promise<number> {
+    return this.getEnrollmentsByProgramId(programId).then(enrollments => 
+      enrollments.filter(enrollment => 
+        enrollment.status === 'active' || enrollment.status === 'pending').length
+    );
+  }
+
+  async createProgramEnrollment(enrollmentData: InsertProgramEnrollment): Promise<ProgramEnrollment> {
+    const id = this.programEnrollmentIdCounter++;
+    const now = new Date();
+    
+    const enrollment: ProgramEnrollment = {
+      ...enrollmentData,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.programEnrollmentsStore.set(id, enrollment);
+    return enrollment;
+  }
+
+  async updateProgramEnrollment(id: number, updateData: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
+    const enrollment = this.programEnrollmentsStore.get(id);
+    if (!enrollment) return undefined;
+    
+    const updatedEnrollment: ProgramEnrollment = {
+      ...enrollment,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    
+    this.programEnrollmentsStore.set(id, updatedEnrollment);
+    return updatedEnrollment;
+  }
+
+  async deleteProgramEnrollment(id: number): Promise<void> {
+    this.programEnrollmentsStore.delete(id);
   }
 }
 

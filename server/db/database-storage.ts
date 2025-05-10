@@ -4,7 +4,11 @@ import {
   lessons, type Lesson, type InsertLesson, 
   events, type Event, type InsertEvent, 
   marketplaceItems, type MarketplaceItem, type InsertMarketplaceItem,
-  knowledgeBases, type KnowledgeBase, type InsertKnowledgeBase
+  knowledgeBases, type KnowledgeBase, type InsertKnowledgeBase,
+  children, type Child, type InsertChild,
+  emergencyContacts, type EmergencyContact, type InsertEmergencyContact,
+  programs, type Program, type InsertProgram,
+  programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, desc, and, gte, gt, sql } from "drizzle-orm";
