@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -26,7 +26,140 @@ export const usersRelations = relations(users, ({ many }) => ({
   lessons: many(lessons),
   events: many(events),
   marketplaceItems: many(marketplaceItems),
-  knowledgeBases: many(knowledgeBases)
+  knowledgeBases: many(knowledgeBases),
+  children: many(children),
+  emergencyContacts: many(emergencyContacts)
+}));
+
+// Children table for parent registration
+export const children = pgTable("children", {
+  id: serial("id").primaryKey(),
+  parentId: integer("parent_id").notNull().references(() => users.id),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  birthDate: date("birth_date").notNull(),
+  gradeLevel: text("grade_level").notNull(),
+  learningStyle: text("learning_style").array(),
+  specialNeeds: text("special_needs"),
+  interests: text("interests").array(),
+  allergies: text("allergies"),
+  healthNotes: text("health_notes"),
+  profileImage: text("profile_image"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertChildSchema = createInsertSchema(children).omit({ id: true, createdAt: true, updatedAt: true, parentId: true });
+export type InsertChild = z.infer<typeof insertChildSchema>;
+export type Child = typeof children.$inferSelect;
+
+// Define child relations - note: programEnrollments will be defined later
+export const childrenRelations = relations(children, ({ one, many }) => ({
+  parent: one(users, { fields: [children.parentId], references: [users.id] })
+  // programEnrollments relation will be added after the programEnrollments table is defined
+}));
+
+// Emergency contacts table
+export const emergencyContacts = pgTable("emergency_contacts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  relationship: text("relationship").notNull(),
+  phoneNumber: text("phone_number").notNull(),
+  email: text("email"),
+  isAuthorizedPickup: boolean("is_authorized_pickup").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEmergencyContactSchema = createInsertSchema(emergencyContacts).omit({ id: true, createdAt: true, updatedAt: true, userId: true });
+export type InsertEmergencyContact = z.infer<typeof insertEmergencyContactSchema>;
+export type EmergencyContact = typeof emergencyContacts.$inferSelect;
+
+// Define emergency contact relations
+export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
+  user: one(users, { fields: [emergencyContacts.userId], references: [users.id] })
+}));
+
+// Programs table for the Programs Category
+export const programs = pgTable("programs", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category", { 
+    enum: ["academic", "enrichment", "summer-camp", "workshop", "course", "other"] 
+  }).notNull(),
+  ageRange: text("age_range").notNull(),
+  gradeLevels: text("grade_levels").array().notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  scheduleType: text("schedule_type", { 
+    enum: ["one-time", "recurring", "flexible"] 
+  }).notNull(),
+  scheduleDetails: jsonb("schedule_details").notNull(),
+  locationName: text("location_name"),
+  locationAddress: text("location_address"),
+  isVirtual: boolean("is_virtual").default(false).notNull(),
+  meetingUrl: text("meeting_url"),
+  capacity: integer("capacity").notNull(),
+  price: integer("price").notNull(), // in cents
+  instructorId: integer("instructor_id").notNull().references(() => users.id),
+  curriculumId: integer("curriculum_id").references(() => curricula.id),
+  coverImage: text("cover_image"),
+  materials: jsonb("materials"),
+  isPublished: boolean("is_published").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProgramSchema = createInsertSchema(programs).omit({ 
+  id: true, createdAt: true, updatedAt: true, instructorId: true 
+});
+export type InsertProgram = z.infer<typeof insertProgramSchema>;
+export type Program = typeof programs.$inferSelect;
+
+// Define program relations - programEnrollments will be defined later
+export const programsRelations = relations(programs, ({ one, many }) => ({
+  instructor: one(users, { fields: [programs.instructorId], references: [users.id] }),
+  curriculum: one(curricula, { fields: [programs.curriculumId], references: [curricula.id] })
+  // enrollments relation will be added after programEnrollments is defined
+}));
+
+// Program enrollments table
+export const programEnrollments = pgTable("program_enrollments", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").notNull().references(() => programs.id),
+  childId: integer("child_id").notNull().references(() => children.id),
+  enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
+  status: text("status", { 
+    enum: ["pending", "confirmed", "waitlisted", "cancelled", "completed"] 
+  }).default("pending").notNull(),
+  paymentStatus: text("payment_status", { 
+    enum: ["pending", "paid", "refunded", "failed"] 
+  }).default("pending").notNull(),
+  paymentMethod: text("payment_method", { 
+    enum: ["credit_card", "paypal", "bank_transfer", "cash", "scholarship"] 
+  }),
+  transactionId: text("transaction_id"),
+  discountCode: text("discount_code"),
+  discountAmount: integer("discount_amount"), // in cents
+  totalPaid: integer("total_paid"), // in cents
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments).omit({ 
+  id: true, createdAt: true, updatedAt: true 
+});
+export type InsertProgramEnrollment = z.infer<typeof insertProgramEnrollmentSchema>;
+export type ProgramEnrollment = typeof programEnrollments.$inferSelect;
+
+// Define program enrollment relations
+export const programEnrollmentsRelations = relations(programEnrollments, ({ one }) => ({
+  program: one(programs, { fields: [programEnrollments.programId], references: [programs.id] }),
+  child: one(children, { fields: [programEnrollments.childId], references: [children.id] })
 }));
 
 // Curriculum table
@@ -161,4 +294,14 @@ export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
 // Define knowledge base relations
 export const knowledgeBasesRelations = relations(knowledgeBases, ({ one, many }) => ({
   author: one(users, { fields: [knowledgeBases.authorId], references: [users.id] }),
+}));
+
+// Now that all tables are defined, update the child relations with programEnrollments
+export const childProgramEnrollmentsRelations = relations(children, ({ many }) => ({
+  programEnrollments: many(programEnrollments)
+}));
+
+// Now that all tables are defined, update the program relations with enrollments
+export const programEnrollmentsRelations2 = relations(programs, ({ many }) => ({
+  enrollments: many(programEnrollments)
 }));
