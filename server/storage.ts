@@ -611,6 +611,6 @@ export class MemStorage implements IStorage {
 // Import DatabaseStorage for PostgreSQL database storage
 import { DatabaseStorage } from "./db/database-storage";
 
-// Use DatabaseStorage for persistent storage with our PostgreSQL database
-console.log("Using DatabaseStorage with PostgreSQL database");
-export const storage = new DatabaseStorage();
+// Temporarily using MemStorage until database issues are resolved
+console.log("Using MemStorage for temporary storage");
+export const storage = new MemStorage();
