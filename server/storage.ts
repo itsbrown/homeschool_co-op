@@ -4,7 +4,11 @@ import {
   lessons, type Lesson, type InsertLesson, 
   events, type Event, type InsertEvent, 
   marketplaceItems, type MarketplaceItem, type InsertMarketplaceItem,
-  knowledgeBases, type KnowledgeBase, type InsertKnowledgeBase
+  knowledgeBases, type KnowledgeBase, type InsertKnowledgeBase,
+  children, type Child, type InsertChild,
+  emergencyContacts, type EmergencyContact, type InsertEmergencyContact,
+  programs, type Program, type InsertProgram,
+  programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment
 } from "@shared/schema";
 
 export interface IStorage {
@@ -49,6 +53,37 @@ export interface IStorage {
   updateKnowledgeBase(id: number, knowledgeBase: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined>;
   incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined>;
   addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined>;
+  
+  // Child methods
+  getChildById(id: number): Promise<Child | undefined>;
+  getChildrenByParentId(parentId: number): Promise<Child[]>;
+  createChild(child: InsertChild & { parentId: number }): Promise<Child>;
+  updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined>;
+  deleteChild(id: number): Promise<void>;
+  
+  // Emergency Contact methods
+  getEmergencyContactById(id: number): Promise<EmergencyContact | undefined>;
+  getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]>;
+  createEmergencyContact(contact: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact>;
+  updateEmergencyContact(id: number, contact: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined>;
+  deleteEmergencyContact(id: number): Promise<void>;
+  
+  // Program methods
+  getProgramById(id: number): Promise<Program | undefined>;
+  getPublishedPrograms(category?: string, gradeLevel?: string): Promise<Program[]>;
+  getProgramsByInstructorId(instructorId: number): Promise<Program[]>;
+  createProgram(program: InsertProgram & { instructorId: number }): Promise<Program>;
+  updateProgram(id: number, program: Partial<InsertProgram>): Promise<Program | undefined>;
+  deleteProgram(id: number): Promise<void>;
+  
+  // Program Enrollment methods
+  getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined>;
+  getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]>;
+  getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]>;
+  getEnrollmentCountForProgram(programId: number): Promise<number>;
+  createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment>;
+  updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined>;
+  deleteProgramEnrollment(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -58,6 +93,10 @@ export class MemStorage implements IStorage {
   private eventsStore: Map<number, Event>;
   private marketplaceItemsStore: Map<number, MarketplaceItem>;
   private knowledgeBaseStore: Map<number, KnowledgeBase>;
+  private childrenStore: Map<number, Child>;
+  private emergencyContactsStore: Map<number, EmergencyContact>;
+  private programsStore: Map<number, Program>;
+  private programEnrollmentsStore: Map<number, ProgramEnrollment>;
   
   private userIdCounter: number;
   private curriculumIdCounter: number;
