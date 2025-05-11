@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { DashboardShell } from "@/components/ui/dashboard-shell";
+import { DashboardShell } from "../components/ui/dashboard-shell";
 import { Route, Switch, useLocation } from "wouter";
-import { useAuth } from "@/hooks/use-auth";
-import { RegistrationDashboard } from "@/components/registration/RegistrationDashboard";
-import { ChildrenManagement } from "@/components/registration/ChildrenManagement";
-import { EmergencyContactsManagement } from "@/components/registration/EmergencyContactsManagement";
+import { useAuth } from "../hooks/use-auth";
+import { RegistrationDashboard } from "../components/registration/RegistrationDashboard";
+import { ChildrenManagement } from "../components/registration/ChildrenManagement";
+import { EmergencyContactsManagement } from "../components/registration/EmergencyContactsManagement";
 
 // Registration Page with sub-routes
 export function RegistrationPage() {

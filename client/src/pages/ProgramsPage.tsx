@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { DashboardShell } from "@/components/ui/dashboard-shell";
-import { useAuth } from "@/hooks/use-auth";
-import { ProgramList } from "@/components/registration/ProgramList";
-import { ProgramEnrollmentForm } from "@/components/registration/ProgramEnrollmentForm";
-import { EnrollmentList } from "@/components/registration/EnrollmentList";
+import { DashboardShell } from "../components/ui/dashboard-shell";
+import { useAuth } from "../hooks/use-auth";
+import { ProgramList } from "../components/registration/ProgramList";
+import { ProgramEnrollmentForm } from "../components/registration/ProgramEnrollmentForm";
+import { EnrollmentList } from "../components/registration/EnrollmentList";
 import { Route, Switch, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 
