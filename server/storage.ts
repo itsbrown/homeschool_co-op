@@ -8,7 +8,8 @@ import {
   children, type Child, type InsertChild,
   emergencyContacts, type EmergencyContact, type InsertEmergencyContact,
   programs, type Program, type InsertProgram,
-  programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment
+  programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
+  classes, type Class, type InsertClass
 } from "@shared/schema";
 
 export interface IStorage {
@@ -84,6 +85,14 @@ export interface IStorage {
   createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment>;
   updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined>;
   deleteProgramEnrollment(id: number): Promise<void>;
+  
+  // Class methods
+  getClassById(id: number): Promise<Class | undefined>;
+  getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]>;
+  getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number>;
+  createClass(classData: InsertClass & { instructorId: number }): Promise<Class>;
+  updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
+  deleteClass(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -97,6 +106,7 @@ export class MemStorage implements IStorage {
   private emergencyContactsStore: Map<number, EmergencyContact>;
   private programsStore: Map<number, Program>;
   private programEnrollmentsStore: Map<number, ProgramEnrollment>;
+  private classesStore: Map<number, Class>;
   
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -108,6 +118,7 @@ export class MemStorage implements IStorage {
   private emergencyContactIdCounter: number;
   private programIdCounter: number;
   private programEnrollmentIdCounter: number;
+  private classIdCounter: number;
 
   constructor() {
     this.usersStore = new Map();
@@ -120,6 +131,7 @@ export class MemStorage implements IStorage {
     this.emergencyContactsStore = new Map();
     this.programsStore = new Map();
     this.programEnrollmentsStore = new Map();
+    this.classesStore = new Map();
     
     this.userIdCounter = 1;
     this.curriculumIdCounter = 1;
@@ -131,6 +143,7 @@ export class MemStorage implements IStorage {
     this.emergencyContactIdCounter = 1;
     this.programIdCounter = 1;
     this.programEnrollmentIdCounter = 1;
+    this.classIdCounter = 1;
     
     // Initialize with a default admin user
     this.createUser({
