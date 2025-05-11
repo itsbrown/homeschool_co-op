@@ -163,9 +163,9 @@ export function ProgramList({ isAdmin = false }: ProgramListProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All categories</SelectItem>
-                    {categories.map((category) => (
+                    {Array.isArray(categories) && categories.map((category: string) => (
                       <SelectItem key={category} value={category}>
-                        {category.charAt(0).toUpperCase() + category.slice(1)}
+                        {typeof category === 'string' ? category.charAt(0).toUpperCase() + category.slice(1) : category}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -225,7 +225,7 @@ export function ProgramList({ isAdmin = false }: ProgramListProps) {
             <ProgramCard 
               key={program.id} 
               program={program} 
-              children={children}
+              children={Array.isArray(children) ? children as Child[] : []}
               isAdmin={isAdmin}
             />
           ))}

@@ -70,7 +70,8 @@ export function ProgramEnrollmentForm({
   // Get available programs and children
   const { data: programs, isLoading: isLoadingPrograms } = useQuery({
     queryKey: ["/api/programs"],
-    select: (data) => data.filter((program: Program) => program.isPublished),
+    select: (data: any) => Array.isArray(data) ? data.filter((program: Program) => 
+      program && typeof program === 'object' && 'isPublished' in program && program.isPublished) : [],
   });
 
   const { data: children, isLoading: isLoadingChildren } = useQuery({

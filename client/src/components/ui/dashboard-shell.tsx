@@ -1,8 +1,8 @@
 import { ReactNode } from "react";
-import { MainNav } from "@/components/MainNav";
-import { DashboardNav } from "@/components/DashboardNav";
-import { UserAccountNav } from "@/components/UserAccountNav";
-import { ModeToggle } from "@/components/mode-toggle";
+import { MainNav } from "../MainNav";
+import { DashboardNav } from "../DashboardNav";
+import { UserAccountNav } from "../UserAccountNav";
+import { ModeToggle } from "../mode-toggle";
 
 interface DashboardShellProps {
   children: ReactNode;
@@ -20,14 +20,21 @@ export function DashboardShell({ children }: DashboardShellProps) {
           </div>
         </div>
       </header>
-      <div className="container grid flex-1 gap-12 md:grid-cols-[200px_1fr] pt-4">
-        <aside className="hidden w-[200px] flex-col md:flex">
+      <div className="container grid flex-1 gap-12 md:grid-cols-[200px_1fr] lg:grid-cols-[240px_1fr]">
+        <aside className="hidden w-[200px] flex-col md:flex lg:w-[240px]">
           <DashboardNav />
         </aside>
-        <main className="flex w-full flex-1 flex-col overflow-hidden pb-8">
+        <main className="flex w-full flex-1 flex-col overflow-hidden py-6">
           {children}
         </main>
       </div>
+      <footer className="border-t py-6">
+        <div className="container flex flex-col items-center justify-between gap-4 md:flex-row">
+          <p className="text-center text-sm text-muted-foreground md:text-left">
+            &copy; {new Date().getFullYear()} Adaptive Learning System. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
