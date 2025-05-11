@@ -80,8 +80,8 @@ export function ChildrenManagement() {
   });
 
   // Get selected child data for editing
-  const selectedChild = selectedChildId 
-    ? children?.find((child: Child) => child.id === selectedChildId) 
+  const selectedChild = selectedChildId && Array.isArray(children)
+    ? children.find((child: Child) => child.id === selectedChildId) 
     : null;
 
   // Format date for display
@@ -187,7 +187,7 @@ export function ChildrenManagement() {
         </Dialog>
       </div>
 
-      {children?.length === 0 ? (
+      {!children || (Array.isArray(children) && children.length === 0) ? (
         <Card>
           <CardHeader>
             <CardTitle>No Children Registered</CardTitle>
@@ -210,7 +210,7 @@ export function ChildrenManagement() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {children.map((child: Child) => (
+          {Array.isArray(children) && children.map((child: Child) => (
             <Card key={child.id} className="overflow-hidden">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">

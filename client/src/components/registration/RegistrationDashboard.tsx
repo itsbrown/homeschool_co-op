@@ -44,13 +44,13 @@ export function RegistrationDashboard() {
   
   const { data: programsData } = useQuery({
     queryKey: ["/api/programs"],
-    select: (data) => data.filter((program: any) => program.isPublished),
+    select: (data: any) => data.filter((program: any) => program.isPublished),
   });
 
-  const childrenCount = childrenData?.length || 0;
-  const contactsCount = contactsData?.length || 0;
-  const enrollmentsCount = enrollmentsData?.length || 0;
-  const programsCount = programsData?.length || 0;
+  const childrenCount = Array.isArray(childrenData) ? childrenData.length : 0;
+  const contactsCount = Array.isArray(contactsData) ? contactsData.length : 0;
+  const enrollmentsCount = Array.isArray(enrollmentsData) ? enrollmentsData.length : 0;
+  const programsCount = Array.isArray(programsData) ? programsData.length : 0;
 
   return (
     <div className="flex flex-col space-y-6">

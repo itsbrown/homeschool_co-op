@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
@@ -77,7 +77,7 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
   const [isEnrolling, setIsEnrolling] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -180,7 +180,7 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
         <div className="w-full flex items-center justify-between">
           <span className="text-sm">Instructor: {program.instructorName}</span>
           {isAdmin ? (
-            <Button size="sm" variant="outline" onClick={() => navigate(`/admin/programs/${program.id}`)}>
+            <Button size="sm" variant="outline" onClick={() => setLocation(`/admin/programs/${program.id}`)}>
               Manage
             </Button>
           ) : (

@@ -72,8 +72,8 @@ export function EmergencyContactsManagement() {
   });
 
   // Get selected contact data for editing
-  const selectedContact = selectedContactId 
-    ? contacts?.find((contact: EmergencyContact) => contact.id === selectedContactId) 
+  const selectedContact = selectedContactId && Array.isArray(contacts)
+    ? contacts.find((contact: EmergencyContact) => contact.id === selectedContactId) 
     : null;
 
   // Handle adding a new contact
@@ -169,7 +169,7 @@ export function EmergencyContactsManagement() {
         </Dialog>
       </div>
 
-      {contacts?.length === 0 ? (
+      {!contacts || (Array.isArray(contacts) && contacts.length === 0) ? (
         <Card>
           <CardHeader>
             <CardTitle>No Emergency Contacts</CardTitle>
@@ -192,7 +192,7 @@ export function EmergencyContactsManagement() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {contacts.map((contact: EmergencyContact) => (
+          {Array.isArray(contacts) && contacts.map((contact: EmergencyContact) => (
             <Card key={contact.id}>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
@@ -264,7 +264,7 @@ export function EmergencyContactsManagement() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm">Authorized for pickup:</span>
                     {contact.isAuthorizedPickup ? (
-                      <Badge variant="success" className="flex items-center gap-1">
+                      <Badge variant="default" className="flex items-center gap-1">
                         <CheckCircle className="h-3 w-3" /> Yes
                       </Badge>
                     ) : (

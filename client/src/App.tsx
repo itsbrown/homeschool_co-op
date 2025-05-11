@@ -17,6 +17,8 @@ import KnowledgeBaseDetail from "@/pages/KnowledgeBaseDetail";
 import KnowledgeBaseEdit from "@/pages/KnowledgeBaseEdit";
 import Checkout from "@/pages/Checkout";
 import CheckoutSuccess from "@/pages/CheckoutSuccess";
+import RegistrationPage from "@/pages/RegistrationPage";
+import ProgramsPage from "@/pages/ProgramsPage";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/useAuth";
 import AIStatusProvider from "@/contexts/AIStatusContext";
@@ -37,6 +39,11 @@ function Router() {
       <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/checkout-success" component={CheckoutSuccess} />
+      
+      {/* Registration system routes */}
+      <Route path="/registration" component={RegistrationPage} />
+      <Route path="/programs" component={ProgramsPage} />
+      
       <Route component={NotFound} />
     </Switch>
   );

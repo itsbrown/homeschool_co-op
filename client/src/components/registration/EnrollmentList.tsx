@@ -132,8 +132,8 @@ export function EnrollmentList({ childId, isAdmin = false }: EnrollmentListProps
   // Get badge variant based on status
   const getStatusBadgeVariant = (status: Enrollment["status"]) => {
     switch (status) {
-      case "confirmed": return "success";
-      case "pending": return "warning";
+      case "confirmed": return "default"; // Using default instead of success
+      case "pending": return "secondary"; // Using secondary instead of warning
       case "waitlisted": return "secondary";
       case "cancelled": return "destructive";
       case "completed": return "default";
@@ -144,8 +144,8 @@ export function EnrollmentList({ childId, isAdmin = false }: EnrollmentListProps
   // Get badge variant based on payment status
   const getPaymentStatusBadgeVariant = (status: Enrollment["paymentStatus"]) => {
     switch (status) {
-      case "paid": return "success";
-      case "pending": return "warning";
+      case "paid": return "default"; // Using default instead of success
+      case "pending": return "secondary"; // Using secondary instead of warning
       case "refunded": return "secondary";
       case "failed": return "destructive";
       default: return "secondary";
