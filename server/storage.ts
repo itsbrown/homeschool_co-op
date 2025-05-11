@@ -164,6 +164,34 @@ export class MemStorage implements IStorage {
       name: "Sarah Johnson",
       subscription: "educator"
     });
+    
+    // Test users for each role
+    this.createUser({
+      username: "learner",
+      email: "learner@example.com",
+      password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
+      role: "learner",
+      name: "Test Learner",
+      subscription: "free"
+    });
+    
+    this.createUser({
+      username: "parent",
+      email: "parent@example.com",
+      password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
+      role: "parent",
+      name: "Test Parent",
+      subscription: "family"
+    });
+    
+    this.createUser({
+      username: "educator",
+      email: "educator@example.com",
+      password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
+      role: "educator",
+      name: "Test Educator",
+      subscription: "educator"
+    });
   }
 
   // User methods

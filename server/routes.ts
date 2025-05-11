@@ -138,9 +138,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("User found, checking password");
       
-      // Test direct comparison for admin/password
-      if (username === "admin" && password === "password") {
-        console.log("Admin login success with direct password comparison");
+      // Test direct comparison for test accounts with password "password"
+      const testAccounts = ["admin", "learner", "parent", "educator"];
+      if (testAccounts.includes(username) && password === "password") {
+        console.log(`Test account login success for ${username}`);
         
         // Set session data
         req.session.userId = user.id;
