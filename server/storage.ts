@@ -619,11 +619,110 @@ export class MemStorage implements IStorage {
   async deleteProgramEnrollment(id: number): Promise<void> {
     this.programEnrollmentsStore.delete(id);
   }
+  
+  // Class methods
+  async getClassById(id: number): Promise<Class | undefined> {
+    return this.classesStore.get(id);
+  }
+  
+  async getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]> {
+    const { page, limit, search = "", category = "", status = "" } = options;
+    
+    let filteredClasses = Array.from(this.classesStore.values());
+    
+    // Apply filters
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredClasses = filteredClasses.filter(classItem => 
+        classItem.title.toLowerCase().includes(searchLower) || 
+        classItem.description.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    if (category) {
+      filteredClasses = filteredClasses.filter(classItem => 
+        classItem.category.toLowerCase() === category.toLowerCase()
+      );
+    }
+    
+    if (status === "published") {
+      filteredClasses = filteredClasses.filter(classItem => classItem.isPublished);
+    } else if (status === "draft") {
+      filteredClasses = filteredClasses.filter(classItem => !classItem.isPublished);
+    }
+    
+    // Sort by creation date (newest first)
+    filteredClasses.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    
+    return filteredClasses.slice(startIndex, endIndex);
+  }
+  
+  async getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number> {
+    const { search = "", category = "", status = "" } = options;
+    
+    let filteredClasses = Array.from(this.classesStore.values());
+    
+    // Apply filters
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredClasses = filteredClasses.filter(classItem => 
+        classItem.title.toLowerCase().includes(searchLower) || 
+        classItem.description.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    if (category) {
+      filteredClasses = filteredClasses.filter(classItem => 
+        classItem.category.toLowerCase() === category.toLowerCase()
+      );
+    }
+    
+    if (status === "published") {
+      filteredClasses = filteredClasses.filter(classItem => classItem.isPublished);
+    } else if (status === "draft") {
+      filteredClasses = filteredClasses.filter(classItem => !classItem.isPublished);
+    }
+    
+    return filteredClasses.length;
+  }
+  
+  async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
+    const id = this.classIdCounter++;
+    const now = new Date();
+    
+    const newClass: Class = {
+      ...classData,
+      id,
+      createdAt: now,
+      updatedAt: now,
+      enrollmentCount: 0
+    };
+    
+    this.classesStore.set(id, newClass);
+    return newClass;
+  }
+  
+  async updateClass(id: number, updateData: Partial<InsertClass>): Promise<Class | undefined> {
+    const classItem = this.classesStore.get(id);
+    if (!classItem) return undefined;
+    
+    const updatedClass: Class = {
+      ...classItem,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    
+    this.classesStore.set(id, updatedClass);
+    return updatedClass;
+  }
+  
+  async deleteClass(id: number): Promise<void> {
+    this.classesStore.delete(id);
+  }
 }
 
-// Import DatabaseStorage for PostgreSQL database storage
-import { DatabaseStorage } from "./db/database-storage";
-
-// Temporarily using MemStorage until database issues are resolved
-console.log("Using MemStorage for temporary storage");
 export const storage = new MemStorage();
