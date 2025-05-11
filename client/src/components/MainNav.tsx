@@ -1,10 +1,15 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { useAuth } from "../hooks/use-auth";
 
 export function MainNav({
   className,
   ...props
 }: React.HTMLAttributes<HTMLElement>) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [location] = useLocation();
+  
   return (
     <nav
       className={cn("flex items-center space-x-4 lg:space-x-6", className)}
@@ -52,6 +57,15 @@ export function MainNav({
       >
         Programs
       </Link>
+      
+      {isAdmin && (
+        <Link
+          to="/admin/classes"
+          className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+        >
+          Admin Classes
+        </Link>
+      )}
     </nav>
   );
 }

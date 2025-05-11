@@ -1,67 +1,51 @@
 import { Request, Response, NextFunction } from "express";
 
-/**
- * Middleware to check if the user is authenticated
- */
-export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
-  // Check if session exists and has userId
-  if (req.session && req.session.userId) {
-    return next();
+declare module "express-session" {
+  interface SessionData {
+    userId: number;
+    userRole: string;
   }
-  
-  // If not authenticated, return 401 Unauthorized
-  return res.status(401).json({ message: "Unauthorized" });
 }
 
 /**
- * Middleware to check if the user is an admin
+ * Middleware to check if a user is authenticated
  */
-export function isAdmin(req: Request, res: Response, next: NextFunction) {
-  // Check if session exists and has userRole = admin
-  if (req.session && req.session.userId && req.session.userRole === "admin") {
-    return next();
+export const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ message: "Unauthorized" });
   }
-  
-  // If not admin, return 403 Forbidden
-  return res.status(403).json({ message: "Forbidden: Admin access required" });
-}
+  next();
+};
 
 /**
- * Middleware to check if the user is an instructor
+ * Middleware to check if a user has a specific role
+ * @param roles Array of allowed roles
  */
-export function isInstructor(req: Request, res: Response, next: NextFunction) {
-  // Check if session exists and has userRole = instructor or admin
-  if (req.session && req.session.userId && 
-      (req.session.userRole === "instructor" || req.session.userRole === "admin")) {
-    return next();
-  }
-  
-  // If not instructor or admin, return 403 Forbidden
-  return res.status(403).json({ message: "Forbidden: Instructor access required" });
-}
-
-/**
- * Custom middleware type extending Express Request
- */
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: number;
-    role: string;
+export const hasRole = (roles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    
+    if (!req.session.userRole || !roles.includes(req.session.userRole)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    
+    next();
   };
-}
+};
 
 /**
- * Enhanced authentication middleware that loads user info
+ * Middleware to check if user is an admin
  */
-export function loadUser(req: Request, res: Response, next: NextFunction) {
-  // Check if session exists and has userId
-  if (req.session && req.session.userId) {
-    // Add user object to request
-    (req as AuthenticatedRequest).user = {
-      id: req.session.userId,
-      role: req.session.userRole || "user"
-    };
+export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ message: "Unauthorized" });
   }
   
-  return next();
-}
+  if (!req.session.userRole || req.session.userRole !== "admin") {
+    return res.status(403).json({ message: "Forbidden: Admin access required" });
+  }
+  
+  next();
+};

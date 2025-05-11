@@ -332,3 +332,45 @@ export const childProgramEnrollmentsRelations = relations(children, ({ many }) =
 export const programEnrollmentsRelations2 = relations(programs, ({ many }) => ({
   enrollments: many(programEnrollments)
 }));
+
+// Classes table for AI-suggested pricing
+export const classes = pgTable("classes", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(), // academic, arts, music, sports, stem, language, coding, cooking, crafts
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  durationWeeks: integer("duration_weeks").notNull(),
+  sessionsPerWeek: integer("sessions_per_week").notNull(),
+  sessionLengthMinutes: integer("session_length_minutes").notNull(),
+  gradeLevels: text("grade_levels").array().notNull(),
+  capacity: integer("capacity").notNull(),
+  location: text("location").notNull(),
+  instructorName: text("instructor_name").notNull(),
+  instructorId: integer("instructor_id").notNull().references(() => users.id),
+  price: integer("price").notNull(), // in cents
+  suggestedPrice: integer("suggested_price"), // AI suggested price in cents
+  isPublished: boolean("is_published").default(false).notNull(),
+  enrollmentCount: integer("enrollment_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertClassSchema = createInsertSchema(classes)
+  .omit({ id: true, createdAt: true, updatedAt: true, instructorId: true, enrollmentCount: true })
+  .extend({
+    // String dates will be converted to Date objects
+    startDate: z.string().transform((str) => new Date(str)),
+    endDate: z.string().transform((str) => new Date(str)),
+    // Convert dollar amounts to cents for storage
+    price: z.number().transform(amount => Math.round(amount * 100)),
+    suggestedPrice: z.number().optional().transform(amount => amount ? Math.round(amount * 100) : undefined),
+  });
+export type InsertClass = z.infer<typeof insertClassSchema>;
+export type Class = typeof classes.$inferSelect;
+
+// Define class relations
+export const classesRelations = relations(classes, ({ one }) => ({
+  instructor: one(users, { fields: [classes.instructorId], references: [users.id] }),
+}));
