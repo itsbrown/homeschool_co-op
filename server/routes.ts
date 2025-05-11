@@ -9,6 +9,7 @@ import * as childrenApi from "./api/children";
 import * as emergencyContactsApi from "./api/emergency-contacts";
 import * as programsApi from "./api/programs";
 import * as programEnrollmentsApi from "./api/program-enrollments";
+import aiPricingRouter from "./api/ai-pricing";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -888,6 +889,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
   app.delete('/api/enrollments/:id', isAuthenticated, hasRole(['admin']), programEnrollmentsApi.deleteEnrollment);
 
+  // Register AI pricing API
+  app.use("/api/ai", aiPricingRouter);
+  
   const httpServer = createServer(app);
   return httpServer;
 }
