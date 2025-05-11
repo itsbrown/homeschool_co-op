@@ -62,9 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Register mutation
   const registerMutation = useMutation({
     mutationFn: registerUser,
-    onSuccess: () => {
-      setLocation("/login");
-    },
+    // Remove the automatic redirect - we'll handle it in the Register component
+    // to enable auto-login after registration
   });
 
   const login = async (username: string, password: string) => {

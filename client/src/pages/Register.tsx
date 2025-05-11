@@ -64,11 +64,23 @@ export default function Register() {
     try {
       setRegisterError(null);
       await register(data);
-      toast({
-        title: "Registration successful",
-        description: "Your account has been created. Please log in.",
-      });
-      setLocation("/login");
+      
+      // After registration, log the user in automatically
+      try {
+        await login(data.username, data.password);
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created and you're now logged in!",
+        });
+        // Login mutation in useAuth.ts will handle the redirect to dashboard
+      } catch (loginError) {
+        // If auto-login fails, redirect to login page
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created. Please log in.",
+        });
+        setLocation("/login");
+      }
     } catch (error) {
       setRegisterError("Registration failed. Please try again with different credentials.");
       toast({
