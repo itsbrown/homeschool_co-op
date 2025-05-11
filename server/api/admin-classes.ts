@@ -74,7 +74,7 @@ router.post("/classes", isAuthenticated, isAdmin, async (req, res) => {
     // Create class
     const classItem = await storage.createClass({
       ...validatedData,
-      instructorId: req.session.userId,
+      instructorId: req.session.userId!,
     });
     
     return res.status(201).json(classItem);
