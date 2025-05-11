@@ -1,37 +1,32 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 type Theme = "dark" | "light" | "system";
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Check for theme in localStorage
-    if (typeof window !== "undefined") {
-      const storedTheme = localStorage.getItem("theme") as Theme | null;
-      if (storedTheme) {
-        return storedTheme;
-      }
-    }
-    
-    // Default to system preference
-    return "system";
-  });
+  const [theme, setTheme] = useState<Theme>(
+    () => (localStorage.getItem("theme") as Theme) || "system"
+  );
 
   useEffect(() => {
-    // Update localStorage when theme changes
-    localStorage.setItem("theme", theme);
-
-    // Update document class based on theme
     const root = window.document.documentElement;
-    root.classList.remove("light", "dark");
     
+    // Remove all existing theme classes
+    root.classList.remove("light", "dark");
+
     if (theme === "system") {
       const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light";
+      
       root.classList.add(systemTheme);
-    } else {
-      root.classList.add(theme);
+      return;
     }
+    
+    root.classList.add(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
   return { theme, setTheme };
