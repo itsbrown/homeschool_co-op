@@ -106,7 +106,7 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
     }
     
     // Check if user is authorized to update this class
-    if (existingClass.instructorId !== req.session.userId) {
+    if (existingClass.instructorId !== req.session.userId!) {
       return res.status(403).json({ message: "Not authorized to update this class" });
     }
     
@@ -145,7 +145,7 @@ router.delete("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
     }
     
     // Check if user is authorized to delete this class
-    if (existingClass.instructorId !== req.session.userId) {
+    if (existingClass.instructorId !== req.session.userId!) {
       return res.status(403).json({ message: "Not authorized to delete this class" });
     }
     
