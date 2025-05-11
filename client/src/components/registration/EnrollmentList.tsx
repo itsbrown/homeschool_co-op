@@ -166,7 +166,7 @@ export function EnrollmentList({ childId, isAdmin = false }: EnrollmentListProps
     );
   }
 
-  if (!enrollments?.length) {
+  if (!enrollments || (Array.isArray(enrollments) && enrollments.length === 0)) {
     return (
       <Card>
         <CardHeader>
@@ -222,7 +222,7 @@ export function EnrollmentList({ childId, isAdmin = false }: EnrollmentListProps
             </TableRow>
           </TableHeader>
           <TableBody>
-            {enrollments.map((enrollment: Enrollment) => (
+            {Array.isArray(enrollments) && enrollments.map((enrollment: Enrollment) => (
               <TableRow key={enrollment.id}>
                 {!childId && (
                   <TableCell>

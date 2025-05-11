@@ -199,7 +199,7 @@ export function ProgramEnrollmentForm({
     );
   }
 
-  if (!children?.length) {
+  if (!children || (Array.isArray(children) && children.length === 0)) {
     return (
       <Card>
         <CardHeader>
@@ -246,7 +246,7 @@ export function ProgramEnrollmentForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {children.map((child: Child) => (
+                        {Array.isArray(children) && children.map((child: Child) => (
                           <SelectItem key={child.id} value={child.id.toString()}>
                             {child.firstName} {child.lastName} ({child.gradeLevel})
                           </SelectItem>

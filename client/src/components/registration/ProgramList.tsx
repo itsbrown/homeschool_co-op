@@ -59,7 +59,7 @@ export function ProgramList({ isAdmin = false }: ProgramListProps) {
   // Fetch programs
   const { data: programs, isLoading: isLoadingPrograms } = useQuery({
     queryKey: ["/api/programs"],
-    select: (data) => data.filter((program: Program) => program.isPublished || isAdmin),
+    select: (data: any) => Array.isArray(data) ? data.filter((program: Program) => program.isPublished || isAdmin) : [],
   });
 
   // Fetch children (if not admin)
