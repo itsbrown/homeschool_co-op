@@ -80,13 +80,16 @@ export default function ClassesUploadPage() {
         description: `Successfully imported ${data.processedCount || 0} classes`,
       });
       
-      // Invalidate the classes query to refresh data
+      // Force a hard refresh of the classes data
+      // First invalidate the query cache
       queryClient.invalidateQueries({ queryKey: ['/api/admin/classes'] });
+      // Then force a refetch to ensure it's updated
+      queryClient.resetQueries({ queryKey: ['/api/admin/classes'] });
       
-      // Redirect back to classes page after a brief delay to show success message
+      // Redirect back to classes page after a delay to ensure data is refreshed
       setTimeout(() => {
         setLocation("/admin/classes");
-      }, 1500);
+      }, 2500);
     } catch (error: any) {
       console.error("Error uploading CSV:", error);
       setUploadStatus("error");

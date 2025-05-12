@@ -84,8 +84,10 @@ export function AdminClassesPage() {
     data: classesData,
     isLoading: isLoadingClasses,
     isError,
+    refetch
   } = useQuery({
     queryKey: ['/api/admin/classes', page, search, category],
+    queryFn: () => apiRequest("GET", `/api/admin/classes?page=${page}&limit=10${search ? `&search=${search}` : ""}${category ? `&category=${category}` : ""}`),
     enabled: !!isAdmin,
   });
 

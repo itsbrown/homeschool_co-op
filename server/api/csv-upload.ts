@@ -183,6 +183,7 @@ export const uploadClassesCsv = async (req: Request, res: Response) => {
       processedCount: results.successful,
       failedCount: results.failed,
       errors: results.errors,
+      success: results.successful > 0,
     });
   } catch (error: any) {
     console.error("Error processing CSV upload:", error);
