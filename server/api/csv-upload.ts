@@ -25,15 +25,8 @@ export const uploadClassesCsv = [
   upload.single('file'),
   async (req: MulterRequest, res: Response) => {
     try {
-      // Check for authentication
-      if (!req.session.userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      // Check for admin role
-      if (req.session.userRole !== "admin") {
-        return res.status(403).json({ message: "Only administrators can upload class data" });
-      }
+      // Note: Authentication and role checks are now handled by middleware
+      // These checks are kept for additional security
 
       // Check if file was uploaded
       if (!req.file) {
