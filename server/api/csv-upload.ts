@@ -65,7 +65,7 @@ export const uploadClassesCsv = async (req: Request, res: Response) => {
         // Helper function to get mapped fields with fallbacks
         const getValue = (fieldKey: string, defaultFieldNames: string[]): string => {
           // First try using the mapping
-          if (columnMapping[fieldKey] && record[columnMapping[fieldKey]]) {
+          if (columnMapping[fieldKey] && columnMapping[fieldKey] !== "__none__" && record[columnMapping[fieldKey]]) {
             return record[columnMapping[fieldKey]];
           }
           

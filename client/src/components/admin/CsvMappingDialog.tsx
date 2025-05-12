@@ -61,7 +61,7 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
       if (match) {
         initialMapping[field.key] = match.name;
       } else {
-        initialMapping[field.key] = "";
+        initialMapping[field.key] = "__none__";
       }
     });
     
@@ -78,7 +78,7 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
   const handleConfirm = () => {
     // Validate required fields are mapped
     const missingRequired = classFields
-      .filter(field => field.required && !mapping[field.key])
+      .filter(field => field.required && (mapping[field.key] === "__none__" || !mapping[field.key]))
       .map(field => field.label);
 
     if (missingRequired.length > 0) {
@@ -117,7 +117,7 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
                     <SelectValue placeholder="Select a column" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">-- Do not map --</SelectItem>
+                    <SelectItem value="__none__">-- Do not map --</SelectItem>
                     {columns.map(column => (
                       <SelectItem key={column.name} value={column.name}>
                         {column.name} (sample: {column.sample.substring(0, 20)}{column.sample.length > 20 ? '...' : ''})

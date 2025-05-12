@@ -114,7 +114,7 @@ export default function ClassesUploadPage() {
       setFile(null);
     };
     
-    reader.readAsText(file);
+    reader.readAsText(file); // Read the selected file, not the class file member variable
   };
 
   const handleMappingConfirm = async (mapping: Record<string, string>) => {
