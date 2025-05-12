@@ -62,122 +62,145 @@ export const uploadClassesCsv = async (req: Request, res: Response) => {
 
     for (const record of records) {
       try {
-        // Extract age/grade range
-        let minAge = 5;
-        let maxAge = 18;
-        let gradeLevels: string[] = [];
-        
-        const ageGradeRange = record['Age/Grade Range'] || '';
-        
-        if (ageGradeRange.includes('Ages')) {
-          // Format: "Ages 0–3" or "Ages 4–5 (PreK–K)"
-          const ageRange = ageGradeRange.match(/Ages\s+(\d+)[\u2013\-](\d+)/);
-          if (ageRange && ageRange.length >= 3) {
-            minAge = parseInt(ageRange[1], 10);
-            maxAge = parseInt(ageRange[2], 10);
+        // Helper function to get mapped fields with fallbacks
+        const getValue = (fieldKey: string, defaultFieldNames: string[]): string => {
+          // First try using the mapping
+          if (columnMapping[fieldKey] && record[columnMapping[fieldKey]]) {
+            return record[columnMapping[fieldKey]];
           }
-        } else if (ageGradeRange.includes('Grades')) {
-          // Format: "Grades 1–2" or "Grades 3–5"
-          const gradeRange = ageGradeRange.match(/Grades\s+(\d+)[\u2013\-](\d+)/);
-          if (gradeRange && gradeRange.length >= 3) {
-            const minGrade = parseInt(gradeRange[1], 10);
-            const maxGrade = parseInt(gradeRange[2], 10);
-            
-            // Convert grades to ages (approximate)
-            minAge = minGrade + 5;
-            maxAge = maxGrade + 5;
-            
-            // Generate grade levels array
-            for (let i = minGrade; i <= maxGrade; i++) {
-              let gradeSuffix = 'th';
-              if (i === 1) gradeSuffix = 'st';
-              else if (i === 2) gradeSuffix = 'nd';
-              else if (i === 3) gradeSuffix = 'rd';
-              
-              gradeLevels.push(`${i}${gradeSuffix} Grade`);
+          
+          // Then try default field names
+          for (const fieldName of defaultFieldNames) {
+            if (record[fieldName] && record[fieldName].trim()) {
+              return record[fieldName];
             }
           }
+          
+          return '';
+        };
+        
+        // Extract title (required)
+        const title = getValue('title', ['Class Name', 'Title', 'Name', 'Course Title']);
+        if (!title) {
+          throw new Error('Class title is required');
         }
-        
-        // Extract subjects as a description
-        const subjects = record['Subjects Covered'] || '';
-        
-        // Extract and convert hours to schedule
-        const hours = record['Instructional Hours'] || '';
-        
-        // Extract pricing
-        let price = 0;
-        const pricing = record['Pricing'] || '';
-        const priceMatch = pricing.match(/\$(\d+)/);
-        if (priceMatch && priceMatch.length >= 2) {
-          price = parseInt(priceMatch[1], 10);
-        }
-        
-        // Learning objectives as description
-        const learningObjectives = record['Learning Objectives'] || '';
-        
-        // Materials as added benefits
-        const materials = record['Curriculum Materials'] || '';
         
         // Build description from available fields
-        let description = '';
-        if (subjects) description += `Subjects: ${subjects}\n\n`;
-        if (learningObjectives) description += `Learning Objectives: ${learningObjectives}\n\n`;
-        if (materials) description += `Materials: ${materials}\n\n`;
-        if (record['Teaching Methods']) description += `Teaching Methods: ${record['Teaching Methods']}\n\n`;
-        if (record['Sample Activities']) description += `Sample Activities: ${record['Sample Activities']}\n\n`;
-        if (record['Assessments']) description += `Assessments: ${record['Assessments']}\n\n`;
+        let description = getValue('description', ['Description', 'Class Description', 'Details']);
+        const subjects = getValue('subjects', ['Subjects Covered', 'Subjects', 'Topics']);
+        const learningObjectives = getValue('learningObjectives', ['Learning Objectives', 'Objectives', 'Goals']);
+        const materials = getValue('materials', ['Curriculum Materials', 'Materials', 'Resources']);
         
-        // Calculate session details based on hours
-        const hoursMatch = hours.match(/(\d+)\s+hours/);
-        let durationWeeks = 36; // Default to 36 weeks (standard school year)
-        let sessionsPerWeek = 5; // Default to 5 sessions per week
-        let sessionLengthMinutes = 50; // Default to 50 minutes per session
-        
-        if (hoursMatch && hoursMatch.length >= 2) {
-          const totalHours = parseInt(hoursMatch[1], 10);
-          const totalMinutes = totalHours * 60;
-          // Calculate based on 36-week school year
-          const minutesPerWeek = totalMinutes / durationWeeks;
-          sessionLengthMinutes = Math.round(minutesPerWeek / sessionsPerWeek);
+        // If no direct description, build one from components
+        if (!description) {
+          let descParts = [];
+          if (subjects) descParts.push(`Subjects: ${subjects}`);
+          if (learningObjectives) descParts.push(`Learning Objectives: ${learningObjectives}`);
+          if (materials) descParts.push(`Materials: ${materials}`);
+          if (record['Teaching Methods']) descParts.push(`Teaching Methods: ${record['Teaching Methods']}`);
+          if (record['Sample Activities']) descParts.push(`Sample Activities: ${record['Sample Activities']}`);
+          
+          description = descParts.join('\n\n');
+          
+          // Default description if nothing else
+          if (!description) {
+            description = `${title} class`;
+          }
         }
         
-        // Set capacity based on the class type
-        const capacity = 20; // Default capacity
+        // Extract dates with fallbacks
+        let startDate: Date | null = null;
+        const startDateStr = getValue('startDate', ['Start Date', 'Begin Date', 'Class Start']);
+        try {
+          startDate = startDateStr ? new Date(startDateStr) : new Date();
+        } catch (e) {
+          startDate = new Date();
+        }
         
-        // Create a date range for the school year (starting now, ending in 9 months)
-        const startDate = new Date();
-        const endDate = new Date();
-        endDate.setMonth(endDate.getMonth() + 9);
+        let endDate: Date | null = null;
+        const endDateStr = getValue('endDate', ['End Date', 'Finish Date', 'Class End']);
+        try {
+          endDate = endDateStr ? new Date(endDateStr) : new Date(startDate);
+          if (endDate <= startDate) {
+            // Default to 3 months after start
+            endDate = new Date(startDate);
+            endDate.setMonth(endDate.getMonth() + 3);
+          }
+        } catch (e) {
+          endDate = new Date(startDate);
+          endDate.setMonth(endDate.getMonth() + 3);
+        }
         
-        // Get the first instructor in the system, or the current user
-        let instructorName = "Staff Instructor";
+        // Extract grade levels
+        let gradeLevels: string[] = [];
+        const gradeLevelStr = getValue('gradeLevels', ['Grade Levels', 'Grades', 'Level', 'Age/Grade Range']);
         
-        // Map CSV columns to database fields
+        if (gradeLevelStr) {
+          // Parse grade levels from string
+          gradeLevels = gradeLevelStr.split(/[,;-]/).map(g => g.trim());
+        } else {
+          gradeLevels = ['K-12']; // Default
+        }
+        
+        // Extract durations
+        const durationWeeksStr = getValue('durationWeeks', ['Duration (weeks)', 'Weeks', 'Term Length']);
+        const durationWeeks = parseInt(durationWeeksStr || '10', 10);
+        
+        const sessionsPerWeekStr = getValue('sessionsPerWeek', ['Sessions Per Week', 'Weekly Sessions']);
+        const sessionsPerWeek = parseInt(sessionsPerWeekStr || '1', 10);
+        
+        const sessionLengthStr = getValue('sessionLengthMinutes', ['Session Length (min)', 'Minutes', 'Duration']);
+        const sessionLengthMinutes = parseInt(sessionLengthStr || '60', 10);
+        
+        // Extract price - convert to cents
+        let price = 0;
+        const priceStr = getValue('price', ['Price', 'Cost', 'Fee', 'Pricing', 'Tuition']);
+        if (priceStr) {
+          // Handle $ in price
+          if (priceStr.includes('$')) {
+            const priceMatch = priceStr.match(/\$(\d+(\.\d+)?)/);
+            if (priceMatch && priceMatch.length >= 2) {
+              price = Math.round(parseFloat(priceMatch[1]) * 100);
+            }
+          } else {
+            price = Math.round(parseFloat(priceStr) * 100);
+          }
+        }
+        
+        // Extract other fields
+        const capacity = parseInt(getValue('capacity', ['Capacity', 'Max Students', 'Class Size']) || '20', 10);
+        const instructorName = getValue('instructorName', ['Instructor', 'Teacher', 'Faculty']) || 'Staff Instructor';
+        const sessionDays = getValue('sessionDays', ['Session Days', 'Days', 'Class Days']) || 'Monday-Friday';
+        const category = getValue('category', ['Category', 'Class Type', 'Type']) || 'academic';
+        const categoryName = getValue('categoryName', ['Category Name', 'Program', 'Term']) || 'SPRING 2025 PROGRAM';
+        
+        console.log(`Processing class: ${title}, Price: ${price}, Start: ${startDate}`);
+        
+        // Map data to class structure
         const classData = {
-          title: record['Class Name'] || '',
+          title,
           description: description.trim(),
-          productId: `class-${Date.now()}-${Math.floor(Math.random() * 1000)}`, // Generate a unique ID
+          productId: `class-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           productType: 'class',
-          categoryName: record['Category'] || 'SPRING 2025 PROGRAM',
-          category: 'academic', // Default, can be overridden by mapping
+          categoryName,
+          category,
           startDate,
           endDate,
           numSessions: durationWeeks * sessionsPerWeek,
-          sessionDays: record['Session Days'] || 'Monday-Friday',
+          sessionDays,
           durationWeeks,
           sessionsPerWeek,
           sessionLengthMinutes,
           gradeLevels,
           capacity,
-          location: 'On-site',
-          instructorName: record['Instructor'] || instructorName,
-          price, // Already converted to cents
-          suggestedPrice: price, // Set the same as regular price initially
+          location: getValue('location', ['Location', 'Venue', 'Site']) || 'On-site',
+          instructorName,
+          price,
+          suggestedPrice: price,
           totalOrders: 0,
           paidOrders: 0,
           isPublished: true,
-          instructorId: req.session.userId, // Default to the current admin user
+          instructorId: req.session.userId,
         };
 
         // Create the class
