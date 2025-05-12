@@ -25,6 +25,7 @@ import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
 import ChildrenPage from "./pages/ChildrenPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
+import CalendarPage from "./pages/CalendarPage";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/useAuth";
 import AIStatusProvider from "@/contexts/AIStatusContext";
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/children/register" component={ChildRegistrationPage} />
       <Route path="/children/register/confirm" component={ChildRegistrationConfirmation} />
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />
+      <Route path="/calendar" component={CalendarPage} />
       
       {/* Admin routes */}
       <Route path="/admin/classes/:rest*" component={AdminClassesPage} />

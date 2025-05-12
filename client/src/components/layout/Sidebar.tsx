@@ -44,7 +44,7 @@ const adminNavigationItems = [
   {
     title: "Management",
     items: [
-      { name: "Summer Camps", href: "/admin/camps", icon: Calendar },
+      { name: "Calendar", href: "/calendar", icon: Calendar },
       { name: "Analytics", href: "/admin/analytics", icon: BarChart2 },
       { name: "Payments", href: "/admin/payments", icon: CreditCard },
       { name: "Settings", href: "/admin/settings", icon: Settings },
@@ -68,7 +68,7 @@ const educatorNavigationItems = [
   {
     title: "Management",
     items: [
-      { name: "Calendar", href: "/educator/calendar", icon: Calendar },
+      { name: "Calendar", href: "/calendar", icon: Calendar },
       { name: "Students", href: "/educator/students", icon: Users },
       { name: "Reports", href: "/educator/reports", icon: FileText },
       { name: "Community", href: "/community", icon: Building },
@@ -91,7 +91,7 @@ const parentNavigationItems = [
   {
     title: "Management",
     items: [
-      { name: "Calendar", href: "/schedule", icon: Calendar },
+      { name: "Calendar", href: "/calendar", icon: Calendar },
       { name: "Enrollments", href: "/enrollments", icon: FileText },
       { name: "Payments", href: "/payments", icon: CreditCard },
       { name: "Messages", href: "/messages", icon: Mail },
