@@ -27,11 +27,13 @@ const getEventColor = (eventType: string) => {
 type Event = {
   id: number;
   title: string;
-  startDate: string;
-  endDate: string;
+  startDate: string | Date;
+  endDate: string | Date;
   eventType: "class" | "meeting" | "workshop" | "camp" | "other";
   location?: string | null;
   description?: string | null;
+  organizerId?: number;
+  createdAt?: Date;
 };
 
 export default function CalendarPage() {
@@ -65,13 +67,24 @@ export default function CalendarPage() {
   // Current displayed month
   const currentMonth = addMonths(new Date(), monthOffset);
 
-  // Convert event dates from strings to Date objects if needed
+  // Format event dates for consistency
   const formatDates = (events: Event[]) => {
-    return events.map(event => ({
-      ...event,
-      startDate: typeof event.startDate === 'string' ? event.startDate : event.startDate.toISOString(),
-      endDate: typeof event.endDate === 'string' ? event.endDate : event.endDate.toISOString()
-    }));
+    return events.map(event => {
+      // Make a copy of the event object
+      const formattedEvent = { ...event };
+      
+      // Handle startDate - convert to string if it's a Date object
+      if (formattedEvent.startDate && typeof formattedEvent.startDate !== 'string') {
+        formattedEvent.startDate = new Date(formattedEvent.startDate).toISOString();
+      }
+      
+      // Handle endDate - convert to string if it's a Date object
+      if (formattedEvent.endDate && typeof formattedEvent.endDate !== 'string') {
+        formattedEvent.endDate = new Date(formattedEvent.endDate).toISOString();
+      }
+      
+      return formattedEvent;
+    });
   };
   
   // Filter events based on selected filter and current month
