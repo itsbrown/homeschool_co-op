@@ -72,11 +72,11 @@ export default function ClassesUploadPage() {
       }
 
       setUploadStatus("success");
-      setStatusMessage(`Successfully imported ${data.count || 0} classes`);
+      setStatusMessage(`Successfully imported ${data.processedCount || 0} classes`);
       
       toast({
         title: "Upload successful",
-        description: `Successfully imported ${data.count || 0} classes`,
+        description: `Successfully imported ${data.processedCount || 0} classes`,
       });
     } catch (error: any) {
       console.error("Error uploading CSV:", error);
