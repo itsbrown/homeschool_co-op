@@ -84,6 +84,23 @@ export default function ChildProfileEditPage() {
   const { data: child, isLoading: isLoadingChild } = useQuery({
     queryKey: [`/api/children/${childId}`],
     enabled: !!childId && isAuthenticated,
+    // Provide default empty object to avoid type errors
+    placeholderData: {
+      id: 0,
+      firstName: "",
+      lastName: "",
+      birthdate: "",
+      school: "",
+      gradeLevel: "",
+      learningStyle: "",
+      interests: [],
+      allergies: "",
+      specialNeeds: "",
+      medicalInfo: "",
+      parentId: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
   });
   
   // Initialize form with validation
