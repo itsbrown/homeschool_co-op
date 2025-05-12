@@ -43,7 +43,7 @@ export default function ParentDashboard() {
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/programs/browse">
+            <Link href="/programs">
               <BookOpen className="mr-2 h-4 w-4" />
               Browse Programs
             </Link>

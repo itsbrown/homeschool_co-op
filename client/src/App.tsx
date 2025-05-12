@@ -27,6 +27,7 @@ import ChildrenPage from "./pages/ChildrenPage";
 import ChildProfileEditPage from "./pages/ChildProfileEditPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import CalendarPage from "./pages/CalendarPage";
+import ProgramsBrowseRedirect from "./pages/ProgramsBrowseRedirect";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/useAuth";
 import AIStatusProvider from "@/contexts/AIStatusContext";
@@ -51,6 +52,7 @@ function Router() {
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
       <Route path="/programs" component={ProgramsPage} />
+      <Route path="/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/register" component={ChildRegistrationPage} />
       <Route path="/children/register/confirm" component={ChildRegistrationConfirmation} />
