@@ -147,6 +147,9 @@ export class MemStorage implements IStorage {
     this.classIdCounter = 1;
     
     // Initialize with a default admin user
+    
+    // Add sample events for testing the calendar
+    this.initializeSampleEvents();
     this.createUser({
       username: "admin",
       email: "admin@example.com",
@@ -309,6 +312,12 @@ export class MemStorage implements IStorage {
       .filter(event => event.startDate > now)
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
       .slice(0, 5);
+  }
+  
+  async getAllEvents(userId: number): Promise<Event[]> {
+    // For now, return all events - in a real app we would filter based on permissions
+    return Array.from(this.eventsStore.values())
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   }
   
   async createEvent(insertEvent: InsertEvent): Promise<Event> {
@@ -751,6 +760,84 @@ export class MemStorage implements IStorage {
   
   async deleteClass(id: number): Promise<void> {
     this.classesStore.delete(id);
+  }
+  
+  // Helper method to initialize sample events for the calendar
+  private initializeSampleEvents(): void {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDay = now.getDate();
+    
+    // Sample event 1: Class - Today
+    const event1: Event = {
+      id: this.eventIdCounter++,
+      title: "Introduction to Python",
+      startDate: new Date(currentYear, currentMonth, currentDay, 10, 0),
+      endDate: new Date(currentYear, currentMonth, currentDay, 12, 0),
+      eventType: "class",
+      location: "Main Campus - Room 101",
+      description: "Learn the basics of Python programming language",
+      organizerId: 1,
+      createdAt: new Date()
+    };
+    this.eventsStore.set(event1.id, event1);
+    
+    // Sample event 2: Meeting - Tomorrow
+    const event2: Event = {
+      id: this.eventIdCounter++,
+      title: "Parent-Teacher Conference",
+      startDate: new Date(currentYear, currentMonth, currentDay + 1, 14, 0),
+      endDate: new Date(currentYear, currentMonth, currentDay + 1, 15, 0),
+      eventType: "meeting",
+      location: "Virtual Meeting",
+      description: "Discuss student progress and upcoming curriculum",
+      organizerId: 1,
+      createdAt: new Date()
+    };
+    this.eventsStore.set(event2.id, event2);
+    
+    // Sample event 3: Workshop - Next week
+    const event3: Event = {
+      id: this.eventIdCounter++,
+      title: "Art & Creativity Workshop",
+      startDate: new Date(currentYear, currentMonth, currentDay + 7, 13, 0),
+      endDate: new Date(currentYear, currentMonth, currentDay + 7, 16, 0),
+      eventType: "workshop",
+      location: "Art Studio - Building B",
+      description: "Explore different art techniques and creative expression",
+      organizerId: 1,
+      createdAt: new Date()
+    };
+    this.eventsStore.set(event3.id, event3);
+    
+    // Sample event 4: Camp - Later this month
+    const event4: Event = {
+      id: this.eventIdCounter++,
+      title: "Summer Science Camp",
+      startDate: new Date(currentYear, currentMonth, currentDay + 14, 9, 0),
+      endDate: new Date(currentYear, currentMonth, currentDay + 18, 15, 0),
+      eventType: "camp",
+      location: "Science Center",
+      description: "Five-day science exploration camp for elementary students",
+      organizerId: 1,
+      createdAt: new Date()
+    };
+    this.eventsStore.set(event4.id, event4);
+    
+    // Sample event 5: Other - Next month
+    const event5: Event = {
+      id: this.eventIdCounter++,
+      title: "End of Semester Celebration",
+      startDate: new Date(currentYear, currentMonth + 1, 5, 17, 0),
+      endDate: new Date(currentYear, currentMonth + 1, 5, 19, 0),
+      eventType: "other",
+      location: "School Auditorium",
+      description: "Celebration of student achievements with performances and awards",
+      organizerId: 1,
+      createdAt: new Date()
+    };
+    this.eventsStore.set(event5.id, event5);
   }
 }
 

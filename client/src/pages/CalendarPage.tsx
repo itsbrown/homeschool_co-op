@@ -65,8 +65,18 @@ export default function CalendarPage() {
   // Current displayed month
   const currentMonth = addMonths(new Date(), monthOffset);
 
+  // Convert event dates from strings to Date objects if needed
+  const formatDates = (events: Event[]) => {
+    return events.map(event => ({
+      ...event,
+      startDate: typeof event.startDate === 'string' ? event.startDate : event.startDate.toISOString(),
+      endDate: typeof event.endDate === 'string' ? event.endDate : event.endDate.toISOString()
+    }));
+  };
+  
   // Filter events based on selected filter and current month
-  const filteredEvents = Array.isArray(events) ? events
+  const formattedEvents = Array.isArray(events) ? formatDates(events) : [];
+  const filteredEvents = formattedEvents
     .filter((event: Event) => {
       if (filter !== "all" && event.eventType !== filter) {
         return false;
@@ -76,7 +86,7 @@ export default function CalendarPage() {
     })
     .sort((a: Event, b: Event) => {
       return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
-    }) : [];
+    });
 
   // Group events by date for list view
   const eventsByDate = filteredEvents.reduce((acc: Record<string, Event[]>, event: Event) => {
