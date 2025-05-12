@@ -3,6 +3,9 @@ import { z } from "zod";
 import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { isAdmin, isAuthenticated } from "../middleware/auth";
+import fs from "fs";
+import path from "path";
+import { parse } from "csv-parse";
 
 const router = Router();
 
@@ -156,6 +159,99 @@ router.delete("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
   } catch (error) {
     console.error("Error deleting class:", error);
     return res.status(500).json({ message: "Error deleting class" });
+  }
+});
+
+// Handle CSV file upload for classes
+router.post("/classes/upload", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const file = req.files.file;
+    
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(__dirname, "../../uploads");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    const uploadPath = path.join(uploadsDir, file.name);
+    
+    // Save the uploaded file
+    await new Promise((resolve, reject) => {
+      file.mv(uploadPath, (err) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
+    
+    // Read the CSV file
+    const csvContent = fs.readFileSync(uploadPath, "utf8");
+    
+    // Parse the CSV data
+    const { data } = await new Promise((resolve, reject) => {
+      parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true
+      }, (err, data) => {
+        if (err) reject(err);
+        else resolve({ data });
+      });
+    });
+    
+    // Process each row
+    const importedClasses = [];
+    
+    for (const row of data) {
+      // Map CSV columns to class fields
+      const classData = {
+        title: row.title || row.className || row.name || "",
+        description: row.description || "",
+        price: parseFloat(row.price || "0") * 100, // Convert to cents
+        gradeLevel: row.gradeLevel || row.grade || "K-12",
+        subject: row.subject || "General",
+        category: row.category || "General",
+        categoryName: row.categoryName || row.category || "General",
+        startDate: row.startDate ? new Date(row.startDate) : new Date(),
+        endDate: row.endDate ? new Date(row.endDate) : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
+        capacity: parseInt(row.capacity || "20"),
+        location: row.location || "Virtual",
+        instructorName: row.instructor || "Staff",
+        instructorId: req.session.userId!,
+        isPublished: true,
+        status: row.status || "published",
+        productId: row.productId || null,
+        totalOrders: parseInt(row.totalOrders || "0"),
+        sessionDays: row.sessionDays ? row.sessionDays.split(",").map(day => day.trim()) : ["Monday"],
+        programType: row.programType || "class"
+      };
+      
+      // Validate required fields
+      if (!classData.title) {
+        continue; // Skip this row
+      }
+      
+      // Create the class
+      const newClass = await storage.createClass(classData);
+      importedClasses.push(newClass);
+    }
+    
+    // Clean up
+    fs.unlinkSync(uploadPath);
+    
+    return res.status(200).json({ 
+      message: "Classes imported successfully", 
+      count: importedClasses.length 
+    });
+  } catch (error) {
+    console.error("Error importing classes:", error);
+    return res.status(500).json({ 
+      message: "Error importing classes", 
+      error: error.message 
+    });
   }
 });
 
