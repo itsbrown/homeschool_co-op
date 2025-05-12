@@ -59,10 +59,11 @@ export default function ClassesUploadPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      // Use existing csv upload route
+      // Use existing csv upload route with credentials
       const response = await fetch("/api/admin/upload/classes", {
         method: "POST",
         body: formData,
+        credentials: "include" // Include cookies for auth
       });
 
       const data = await response.json();
