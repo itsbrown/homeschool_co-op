@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAIStatus } from "@/hooks/useAIStatus";
 import { useToast } from "@/hooks/use-toast";
 import AppShell from "@/components/layout/AppShell";
-import { AIStatusPanel } from "@/components/AIStatusPanel";
+import AIStatusPanel from "@/components/AIStatusPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {

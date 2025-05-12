@@ -1,17 +1,11 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { BrainCircuit, Cloud, Zap } from 'lucide-react';
+import { useAIStatus } from '@/hooks/useAIStatus';
 
 export default function AIStatusPanel() {
-  const { data: aiStatus, isLoading } = useQuery({
-    queryKey: ['/api/ai/status'],
-    queryFn: () => fetch('/api/ai/status').then(res => res.json()),
-  });
-
-  const isAIAvailable = aiStatus?.anthropic?.available;
-  const aiServiceStatus = aiStatus?.anthropic?.status;
+  const { isAIAvailable, isEnhancedAIAvailable, aiStatus, enhancedAIStatus, statusMessage, enhancedAIMessage, isLoading } = useAIStatus();
 
   return (
     <Card className="border-dashed border border-primary/30 bg-background/50">
@@ -39,23 +33,24 @@ export default function AIStatusPanel() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Zap className="h-3 w-3 text-amber-500" />
-                <span className="text-xs mr-1">AI Enhancement:</span>
-                <Badge variant="secondary" className="text-[10px] py-0 px-2 h-4">
-                  {aiServiceStatus === 'operational' ? "Active" : "Standby"}
-                </Badge>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Cloud className="h-3 w-3 text-blue-500" />
-                <span className="text-xs mr-1">Generator Mode:</span>
-                <Badge variant="secondary" className="text-[10px] py-0 px-2 h-4">
-                  {isAIAvailable ? "AI-Enhanced" : "Template-Based"}
+                <div className={`h-2 w-2 rounded-full ${isEnhancedAIAvailable ? 'bg-green-500' : 'bg-amber-500'}`}></div>
+                <span className="text-xs mr-1">Enhanced AI:</span>
+                <Badge variant={isEnhancedAIAvailable ? "default" : "outline"} className="text-[10px] py-0 px-2 h-4">
+                  {isEnhancedAIAvailable ? "Available" : "Limited"}
                 </Badge>
               </div>
             </>
           )}
         </div>
+        
+        {!isLoading && (
+          <div className="mt-3 text-xs text-muted-foreground">
+            <p>{statusMessage}</p>
+            {enhancedAIMessage !== 'Enhanced AI status unknown' && (
+              <p className="mt-1">{enhancedAIMessage}</p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

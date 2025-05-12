@@ -1,6 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getQueryFn } from '@/lib/queryClient';
+import { useQuery } from "@tanstack/react-query";
 
 interface AIStatusResponse {
   anthropic: {
@@ -22,7 +20,7 @@ interface AIStatusResponse {
 export function useAIStatus() {
   const { data, error, isLoading, refetch } = useQuery<AIStatusResponse>({
     queryKey: ['/api/ai/status'],
-    queryFn: getQueryFn({ on401: 'returnNull' }),
+    queryFn: () => fetch('/api/ai/status').then(res => res.json()),
     // Cache for 5 minutes, but refetch in the background after 1 minute
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,

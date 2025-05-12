@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAIStatusContext } from '@/contexts/AIStatusContext';
+import { useAIStatus } from '@/hooks/useAIStatus';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, AlertCircle, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,7 +14,7 @@ interface AIStatusBadgeProps {
  */
 export const AIStatusBadge: React.FC<AIStatusBadgeProps> = ({ className }) => {
   // Get all status variables at once to maintain hook order
-  const { isAIAvailable, isEnhancedAIAvailable, isLoading } = useAIStatusContext();
+  const { isAIAvailable, isLoading } = useAIStatus();
   
   if (isLoading) {
     return (
