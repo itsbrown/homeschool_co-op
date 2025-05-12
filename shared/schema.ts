@@ -340,19 +340,30 @@ export const classes = pgTable("classes", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull(),
+  productId: text("product_id"),
+  productType: text("product_type"),
+  categoryName: text("category_name"), // e.g. "SPRING 2025 10 WEEK PROGRAM"
   category: text("category").notNull(), // academic, arts, music, sports, stem, language, coding, cooking, crafts
-  startDate: date("start_date").notNull(),
-  endDate: date("end_date").notNull(),
-  durationWeeks: integer("duration_weeks").notNull(),
-  sessionsPerWeek: integer("sessions_per_week").notNull(),
-  sessionLengthMinutes: integer("session_length_minutes").notNull(),
-  gradeLevels: text("grade_levels").array().notNull(),
-  capacity: integer("capacity").notNull(),
-  location: text("location").notNull(),
-  instructorName: text("instructor_name").notNull(),
-  instructorId: integer("instructor_id").notNull().references(() => users.id),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  numSessions: integer("num_sessions"),
+  sessionDays: text("session_days"),
+  durationWeeks: integer("duration_weeks"),
+  sessionsPerWeek: integer("sessions_per_week"),
+  sessionLengthMinutes: integer("session_length_minutes"),
+  gradeLevels: text("grade_levels").array(),
+  capacity: integer("capacity"),
+  location: text("location"),
+  instructorName: text("instructor_name"),
+  instructorId: integer("instructor_id").references(() => users.id),
   price: integer("price").notNull(), // in cents
   suggestedPrice: integer("suggested_price"), // AI suggested price in cents
+  totalOrders: integer("total_orders").default(0),
+  paidOrders: integer("paid_orders").default(0),
+  totalWaitlisted: integer("total_waitlisted").default(0),
+  totalOrderValue: integer("total_order_value").default(0), // in cents
+  totalDiscounted: integer("total_discounted").default(0), // in cents
+  totalCollected: integer("total_collected").default(0), // in cents
   isPublished: boolean("is_published").default(false).notNull(),
   enrollmentCount: integer("enrollment_count").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -363,11 +374,30 @@ export const insertClassSchema = createInsertSchema(classes)
   .omit({ id: true, createdAt: true, updatedAt: true, instructorId: true, enrollmentCount: true })
   .extend({
     // String dates will be converted to Date objects
-    startDate: z.string().transform((str) => new Date(str)),
-    endDate: z.string().transform((str) => new Date(str)),
+    startDate: z.string().nullable().transform((str) => str ? new Date(str) : null),
+    endDate: z.string().nullable().transform((str) => str ? new Date(str) : null),
     // Convert dollar amounts to cents for storage
     price: z.number().transform(amount => Math.round(amount * 100)),
     suggestedPrice: z.number().optional().transform(amount => amount ? Math.round(amount * 100) : undefined),
+    // Make certain fields optional
+    productId: z.string().optional(),
+    productType: z.string().optional(),
+    categoryName: z.string().optional(),
+    numSessions: z.number().optional(),
+    sessionDays: z.string().optional(),
+    durationWeeks: z.number().optional(),
+    sessionsPerWeek: z.number().optional(),
+    sessionLengthMinutes: z.number().optional(),
+    gradeLevels: z.array(z.string()).optional(),
+    capacity: z.number().optional(),
+    location: z.string().optional(),
+    instructorName: z.string().optional(),
+    totalOrders: z.number().optional(),
+    paidOrders: z.number().optional(), 
+    totalWaitlisted: z.number().optional(),
+    totalOrderValue: z.number().optional(),
+    totalDiscounted: z.number().optional(),
+    totalCollected: z.number().optional(),
   });
 export type InsertClass = z.infer<typeof insertClassSchema>;
 export type Class = typeof classes.$inferSelect;
