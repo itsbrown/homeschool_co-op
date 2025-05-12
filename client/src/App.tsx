@@ -24,6 +24,7 @@ import ChildRegistrationPage from "./pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
 import ChildrenPage from "./pages/ChildrenPage";
+import ChildProfileEditPage from "./pages/ChildProfileEditPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import CalendarPage from "./pages/CalendarPage";
 import NotFound from "@/pages/not-found";
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/children/register" component={ChildRegistrationPage} />
       <Route path="/children/register/confirm" component={ChildRegistrationConfirmation} />
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />
+      <Route path="/children/:id/edit" component={ChildProfileEditPage} />
       <Route path="/calendar" component={CalendarPage} />
       
       {/* Admin routes */}

@@ -100,14 +100,14 @@ router.patch("/:id", async (req, res) => {
     const updateSchema = z.object({
       firstName: z.string().min(1).optional(),
       lastName: z.string().min(1).optional(),
-      age: z.number().min(1).optional(),
+      birthdate: z.string().optional(),
       gradeLevel: z.string().optional(),
       school: z.string().optional().nullable(),
-      learningStyle: z.array(z.string()).optional().nullable(),
+      learningStyle: z.string().optional().nullable(),
       interests: z.array(z.string()).optional().nullable(),
       specialNeeds: z.string().optional().nullable(),
       allergies: z.string().optional().nullable(),
-      healthNotes: z.string().optional().nullable(),
+      medicalInfo: z.string().optional().nullable(),
     });
     
     const parseResult = updateSchema.safeParse(req.body);
@@ -187,13 +187,14 @@ router.post("/", async (req, res) => {
     const childSchema = z.object({
       firstName: z.string().min(1, "First name is required"),
       lastName: z.string().min(1, "Last name is required"),
-      birthDate: z.string().min(1, "Birth date is required"),
+      birthdate: z.string().min(1, "Birth date is required"),
       gradeLevel: z.string().min(1, "Grade level is required"),
+      school: z.string().nullable().optional(),
       specialNeeds: z.string().nullable().optional(),
       allergies: z.string().nullable().optional(),
-      healthNotes: z.string().nullable().optional(),
+      medicalInfo: z.string().nullable().optional(),
       interests: z.array(z.string()).optional().nullable(),
-      learningStyle: z.array(z.string()).optional().nullable(),
+      learningStyle: z.string().optional().nullable(),
       profileImage: z.string().nullable().optional(),
     });
     
@@ -211,11 +212,12 @@ router.post("/", async (req, res) => {
       ...parseResult.data,
       parentId: user.id,
       // Ensure these fields are not undefined
+      school: parseResult.data.school || null,
       learningStyle: parseResult.data.learningStyle || null,
       interests: parseResult.data.interests || null,
       specialNeeds: parseResult.data.specialNeeds || null,
       allergies: parseResult.data.allergies || null,
-      healthNotes: parseResult.data.healthNotes || null,
+      medicalInfo: parseResult.data.medicalInfo || null,
       profileImage: parseResult.data.profileImage || null,
     };
     
