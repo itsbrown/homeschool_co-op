@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,22 +37,26 @@ export default function ChildRegistrationPage() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // If not authenticated, redirect to login
-  if (!isLoading && !user) {
-    setLocation("/login");
-    return null;
-  }
-
-  // Verify user is a parent
-  if (user && user.role !== "parent") {
-    toast({
-      title: "Access Denied",
-      description: "Only parent accounts can register children.",
-      variant: "destructive",
-    });
-    setLocation("/dashboard");
-    return null;
-  }
+  // Use useEffect for auth redirects instead of doing it in render
+  useEffect(() => {
+    // If not authenticated, redirect to login
+    if (!isLoading && !user) {
+      setTimeout(() => {
+        setLocation("/login");
+      }, 0);
+    }
+    // Verify user is a parent
+    else if (user && user.role !== "parent") {
+      toast({
+        title: "Access Denied",
+        description: "Only parent accounts can register children.",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        setLocation("/dashboard");
+      }, 0);
+    }
+  }, [isLoading, user, toast, setLocation]);
 
   const form = useForm<ChildFormValues>({
     resolver: zodResolver(childFormSchema),
