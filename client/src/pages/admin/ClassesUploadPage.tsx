@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, FileSpreadsheet, Upload, Check, AlertCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function ClassesUploadPage() {
   const [location, setLocation] = useLocation();
@@ -79,6 +79,14 @@ export default function ClassesUploadPage() {
         title: "Upload successful",
         description: `Successfully imported ${data.processedCount || 0} classes`,
       });
+      
+      // Invalidate the classes query to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/classes'] });
+      
+      // Redirect back to classes page after a brief delay to show success message
+      setTimeout(() => {
+        setLocation("/admin/classes");
+      }, 1500);
     } catch (error: any) {
       console.error("Error uploading CSV:", error);
       setUploadStatus("error");
