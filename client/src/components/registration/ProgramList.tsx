@@ -115,10 +115,12 @@ export function ProgramList({ isAdmin = false, childId, featured = false, limit 
         program.instructorName.toLowerCase().includes(searchTerm.toLowerCase());
       
       // Category filter
-      const matchesCategory = categoryFilter ? program.category === categoryFilter : true;
+      const matchesCategory = categoryFilter && categoryFilter !== 'all-categories' 
+        ? program.category === categoryFilter 
+        : true;
       
       // Grade level filter
-      const matchesGradeLevel = gradeLevelFilter 
+      const matchesGradeLevel = gradeLevelFilter && gradeLevelFilter !== 'all-grades'
         ? program.gradeLevels.includes(gradeLevelFilter) 
         : true;
       
@@ -208,7 +210,7 @@ export function ProgramList({ isAdmin = false, childId, featured = false, limit 
                       <SelectValue placeholder="All categories" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All categories</SelectItem>
+                      <SelectItem value="all-categories">All categories</SelectItem>
                       {Array.isArray(categories) && categories.map((category: string) => (
                         <SelectItem key={category} value={category}>
                           {typeof category === 'string' ? category.charAt(0).toUpperCase() + category.slice(1) : category}
@@ -228,7 +230,7 @@ export function ProgramList({ isAdmin = false, childId, featured = false, limit 
                       <SelectValue placeholder="All grades" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All grades</SelectItem>
+                      <SelectItem value="all-grades">All grades</SelectItem>
                       {gradeLevels.map((grade) => (
                         <SelectItem key={grade} value={grade}>
                           {grade}

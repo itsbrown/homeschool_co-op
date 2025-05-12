@@ -188,7 +188,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                         <SelectValue placeholder="Any program" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Any program</SelectItem>
+                        <SelectItem value="all">Any program</SelectItem>
                         {classCategories.map((cat: string) => (
                           <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                         ))}
@@ -197,10 +197,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                   </div>
                   
                   <div className="md:col-span-3 flex justify-end gap-2">
-                    {(searchTerm || categoryFilter) && (
+                    {(searchTerm || (categoryFilter && categoryFilter !== 'all')) && (
                       <Button variant="outline" type="button" onClick={() => {
                         setSearchTerm("");
-                        setCategoryFilter("");
+                        setCategoryFilter("all");
                       }}>
                         Clear Filters
                       </Button>
