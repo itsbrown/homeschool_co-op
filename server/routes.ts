@@ -896,6 +896,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/admin", adminClassesRouter);
   
+  // CSV Upload routes
+  app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);
+  
   const httpServer = createServer(app);
   return httpServer;
 }

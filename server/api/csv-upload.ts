@@ -114,12 +114,6 @@ export const uploadClassesCsv = [
           
           // Extract and convert hours to schedule
           const hours = record['Instructional Hours'] || '';
-          const hoursMatch = hours.match(/(\d+)\s+hours/);
-          let schedule = 'Flexible schedule';
-          if (hoursMatch && hoursMatch.length >= 2) {
-            const totalHours = parseInt(hoursMatch[1], 10);
-            schedule = `${totalHours} hours annually, schedule TBD`;
-          }
           
           // Extract pricing
           let price = 0;

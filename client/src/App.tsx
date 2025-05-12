@@ -23,6 +23,7 @@ import { AdminClassesPage } from "./pages/AdminClassesPage";
 import ChildRegistrationPage from "./pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
+import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/useAuth";
 import AIStatusProvider from "@/contexts/AIStatusContext";
@@ -53,6 +54,7 @@ function Router() {
       
       {/* Admin routes */}
       <Route path="/admin/classes" component={AdminClassesPage} />
+      <Route path="/admin/classes/upload" component={ClassesUploadPage} />
       
       <Route component={NotFound} />
     </Switch>

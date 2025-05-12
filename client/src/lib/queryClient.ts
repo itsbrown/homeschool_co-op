@@ -7,15 +7,26 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+interface ApiRequestOptions {
+  rawFormData?: boolean;
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  options?: ApiRequestOptions
 ): Promise<Response> {
+  const isFormData = data instanceof FormData || (options && options.rawFormData);
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    headers: data && !isFormData ? { "Content-Type": "application/json" } : {},
+    body: data instanceof FormData 
+      ? data 
+      : data && !isFormData 
+        ? JSON.stringify(data) 
+        : undefined,
     credentials: "include",
   });
 
