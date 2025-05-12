@@ -17,15 +17,16 @@ import { useQueryClient } from "@tanstack/react-query";
 export const childFormSchema = z.object({
   firstName: z.string().min(2, { message: "First name must be at least 2 characters" }),
   lastName: z.string().min(2, { message: "Last name must be at least 2 characters" }),
-  birthDate: z.string().refine((date) => !isNaN(Date.parse(date)), {
+  birthdate: z.string().refine((date) => !isNaN(Date.parse(date)), {
     message: "Please enter a valid date"
   }),
   gradeLevel: z.string().min(1, { message: "Grade level is required" }),
+  school: z.string().optional().nullable(),
   specialNeeds: z.string().optional().nullable(),
   allergies: z.string().optional().nullable(),
-  healthNotes: z.string().optional().nullable(),
+  medicalInfo: z.string().optional().nullable(),
   // Add these fields that are expected by the server
-  learningStyle: z.array(z.string()).optional().nullable(),
+  learningStyle: z.string().optional().nullable(),
   interests: z.array(z.string()).optional().nullable(),
   profileImage: z.string().optional().nullable(),
 });
@@ -48,11 +49,12 @@ export function ChildForm({ defaultValues, onSuccess, childId }: ChildFormProps)
     defaultValues: defaultValues || {
       firstName: "",
       lastName: "",
-      birthDate: "",
+      birthdate: "",
       gradeLevel: "",
+      school: "",
       specialNeeds: "",
       allergies: "",
-      healthNotes: "",
+      medicalInfo: "",
       learningStyle: null,
       interests: null,
       profileImage: null,
@@ -164,7 +166,7 @@ export function ChildForm({ defaultValues, onSuccess, childId }: ChildFormProps)
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="birthDate"
+                name="birthdate"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Birth Date</FormLabel>
@@ -199,6 +201,20 @@ export function ChildForm({ defaultValues, onSuccess, childId }: ChildFormProps)
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="school"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>School</FormLabel>
+                    <FormControl>
+                      <Input placeholder="School name" {...field} value={field.value || ""} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -245,10 +261,10 @@ export function ChildForm({ defaultValues, onSuccess, childId }: ChildFormProps)
 
             <FormField
               control={form.control}
-              name="healthNotes"
+              name="medicalInfo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Health Notes</FormLabel>
+                  <FormLabel>Medical Information</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Any additional health information we should know about (if none, leave blank)"
