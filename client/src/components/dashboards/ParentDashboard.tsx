@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function ParentDashboard() {

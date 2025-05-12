@@ -27,14 +27,37 @@ export default function ClassesPage() {
   const [categoryNameFilter, setCategoryNameFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   
+  interface ClassData {
+    id: number;
+    title: string;
+    description: string;
+    price: number;
+    category: string;
+    categoryName: string;
+    startDate?: string;
+    endDate?: string;
+    numSessions?: number;
+    totalOrders: number;
+    totalWaitlisted: number;
+  }
+  
+  interface ClassesResponse {
+    classes: ClassData[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalItems: number;
+    }
+  }
+  
   // Fetch categories
-  const { data: categories } = useQuery({
+  const { data: categories = [] } = useQuery<string[]>({
     queryKey: ["/api/classes/categories/names"],
     enabled: true,
   });
   
   // Fetch classes with filters
-  const { data: classesData, isLoading } = useQuery({
+  const { data: classesData = { classes: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0 } }, isLoading } = useQuery<ClassesResponse>({
     queryKey: ["/api/classes", { page: currentPage, limit: 12, search: searchTerm, category: categoryFilter, categoryName: categoryNameFilter }],
     enabled: true,
   });
