@@ -13,13 +13,14 @@ import { useQueryClient } from "@tanstack/react-query";
 interface ChildFormData {
   firstName: string;
   lastName: string;
-  birthDate: string;
+  birthdate: string;
   gradeLevel: string;
+  school: string | null;
   specialNeeds: string | null;
   allergies: string | null;
-  healthNotes: string | null;
+  medicalInfo: string | null;
   // Add missing fields that are expected by the server
-  learningStyle: string[] | null;
+  learningStyle: string | null;
   interests: string[] | null;
   profileImage: string | null;
 }
@@ -218,7 +219,7 @@ export default function ChildRegistrationConfirmation() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Birth Date</h3>
-                  <p className="text-base">{formatDate(childData.birthDate)}</p>
+                  <p className="text-base">{formatDate(childData.birthdate)}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Grade Level</h3>
@@ -237,8 +238,8 @@ export default function ChildRegistrationConfirmation() {
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Health Notes</h3>
-                <p className="text-base">{childData.healthNotes || "None specified"}</p>
+                <h3 className="text-sm font-medium text-muted-foreground">Medical Information</h3>
+                <p className="text-base">{childData.medicalInfo || "None specified"}</p>
               </div>
             </div>
           </CardContent>

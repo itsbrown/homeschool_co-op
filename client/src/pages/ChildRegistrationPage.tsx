@@ -63,11 +63,15 @@ export default function ChildRegistrationPage() {
     defaultValues: {
       firstName: "",
       lastName: "",
-      birthDate: "",
+      birthdate: "",
       gradeLevel: "",
+      school: "",
       specialNeeds: "",
       allergies: "",
-      healthNotes: "",
+      medicalInfo: "",
+      learningStyle: null,
+      interests: [],
+      profileImage: null,
     },
   });
 
