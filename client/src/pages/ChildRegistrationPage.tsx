@@ -20,13 +20,17 @@ import { ChevronRight, Users } from "lucide-react";
 const childFormSchema = z.object({
   firstName: z.string().min(2, { message: "First name must be at least 2 characters" }),
   lastName: z.string().min(2, { message: "Last name must be at least 2 characters" }),
-  birthDate: z.string().refine((date) => !isNaN(Date.parse(date)), {
+  birthdate: z.string().refine((date) => !isNaN(Date.parse(date)), {
     message: "Please enter a valid date"
   }),
   gradeLevel: z.string().min(1, { message: "Grade level is required" }),
+  school: z.string().optional().nullable(),
   specialNeeds: z.string().optional().nullable(),
   allergies: z.string().optional().nullable(),
-  healthNotes: z.string().optional().nullable(),
+  medicalInfo: z.string().optional().nullable(),
+  learningStyle: z.string().optional().nullable(),
+  interests: z.array(z.string()).optional().nullable(),
+  profileImage: z.string().optional().nullable(),
 });
 
 type ChildFormValues = z.infer<typeof childFormSchema>;
@@ -184,7 +188,7 @@ export default function ChildRegistrationPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="birthDate"
+                    name="birthdate"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Birth Date</FormLabel>
@@ -265,10 +269,10 @@ export default function ChildRegistrationPage() {
 
                 <FormField
                   control={form.control}
-                  name="healthNotes"
+                  name="medicalInfo"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Health Notes</FormLabel>
+                      <FormLabel>Medical Information</FormLabel>
                       <FormControl>
                         <Textarea
                           placeholder="Any additional health information we should know about (if none, leave blank)"
