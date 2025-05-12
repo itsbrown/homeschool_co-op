@@ -210,6 +210,13 @@ router.post("/", async (req, res) => {
     const childData = {
       ...parseResult.data,
       parentId: user.id,
+      // Ensure these fields are not undefined
+      learningStyle: parseResult.data.learningStyle || null,
+      interests: parseResult.data.interests || null,
+      specialNeeds: parseResult.data.specialNeeds || null,
+      allergies: parseResult.data.allergies || null,
+      healthNotes: parseResult.data.healthNotes || null,
+      profileImage: parseResult.data.profileImage || null,
     };
     
     const newChild = await storage.createChild(childData);

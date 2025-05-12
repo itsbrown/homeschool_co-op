@@ -18,6 +18,10 @@ interface ChildFormData {
   specialNeeds: string | null;
   allergies: string | null;
   healthNotes: string | null;
+  // Add missing fields that are expected by the server
+  learningStyle: string[] | null;
+  interests: string[] | null;
+  profileImage: string | null;
 }
 
 export default function ChildRegistrationConfirmation() {
@@ -42,7 +46,11 @@ export default function ChildRegistrationConfirmation() {
           description: "There was a problem retrieving your registration data. Please try again.",
           variant: "destructive",
         });
-        setLocation("/children/register");
+        
+        // Use setTimeout to avoid updating during render
+        setTimeout(() => {
+          setLocation("/children/register");
+        }, 0);
       }
     } else {
       // No data in session storage, redirect back to registration form
@@ -50,26 +58,33 @@ export default function ChildRegistrationConfirmation() {
         title: "Missing Information",
         description: "Please complete the registration form first.",
       });
-      setLocation("/children/register");
+      
+      // Use setTimeout to avoid updating during render
+      setTimeout(() => {
+        setLocation("/children/register");
+      }, 0);
     }
-  }, []);
+  }, [toast, setLocation]);
 
   // If not authenticated, redirect to login
-  if (!isLoading && !user) {
-    setLocation("/login");
-    return null;
-  }
-
-  // Verify user is a parent
-  if (user && user.role !== "parent") {
-    toast({
-      title: "Access Denied",
-      description: "Only parent accounts can register children.",
-      variant: "destructive",
-    });
-    setLocation("/dashboard");
-    return null;
-  }
+  useEffect(() => {
+    if (!isLoading && !user) {
+      setTimeout(() => {
+        setLocation("/login");
+      }, 0);
+    }
+    // Verify user is a parent
+    else if (user && user.role !== "parent") {
+      toast({
+        title: "Access Denied",
+        description: "Only parent accounts can register children.",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        setLocation("/dashboard");
+      }, 0);
+    }
+  }, [isLoading, user, toast, setLocation]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "";

@@ -24,6 +24,10 @@ export const childFormSchema = z.object({
   specialNeeds: z.string().optional().nullable(),
   allergies: z.string().optional().nullable(),
   healthNotes: z.string().optional().nullable(),
+  // Add these fields that are expected by the server
+  learningStyle: z.array(z.string()).optional().nullable(),
+  interests: z.array(z.string()).optional().nullable(),
+  profileImage: z.string().optional().nullable(),
 });
 
 export type ChildFormValues = z.infer<typeof childFormSchema>;
@@ -49,6 +53,9 @@ export function ChildForm({ defaultValues, onSuccess, childId }: ChildFormProps)
       specialNeeds: "",
       allergies: "",
       healthNotes: "",
+      learningStyle: null,
+      interests: null,
+      profileImage: null,
     },
   });
 
