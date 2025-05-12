@@ -50,9 +50,11 @@ interface Child {
 interface ProgramListProps {
   isAdmin?: boolean;
   childId?: string;
+  featured?: boolean;
+  limit?: number;
 }
 
-export function ProgramList({ isAdmin = false, childId }: ProgramListProps) {
+export function ProgramList({ isAdmin = false, childId, featured = false, limit }: ProgramListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [gradeLevelFilter, setGradeLevelFilter] = useState("");
@@ -105,7 +107,7 @@ export function ProgramList({ isAdmin = false, childId }: ProgramListProps) {
   const filteredPrograms = useMemo(() => {
     if (!programs) return [];
     
-    return programs.filter((program: Program) => {
+    let filtered = programs.filter((program: Program) => {
       // Search term filter
       const matchesSearch = 
         program.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -120,9 +122,30 @@ export function ProgramList({ isAdmin = false, childId }: ProgramListProps) {
         ? program.gradeLevels.includes(gradeLevelFilter) 
         : true;
       
-      return matchesSearch && matchesCategory && matchesGradeLevel;
+      // For featured programs, we'll simply take the ones that are published and have capacity
+      const matchesFeatured = featured 
+        ? program.isPublished && (program.capacity > program.enrollmentCount)
+        : true;
+      
+      return matchesSearch && matchesCategory && matchesGradeLevel && matchesFeatured;
     });
-  }, [programs, searchTerm, categoryFilter, gradeLevelFilter]);
+
+    // Sort featured programs by enrollment percentage (most popular first)
+    if (featured) {
+      filtered.sort((a, b) => {
+        const aPercentage = a.enrollmentCount / a.capacity;
+        const bPercentage = b.enrollmentCount / b.capacity;
+        return bPercentage - aPercentage;
+      });
+    }
+    
+    // Apply limit if specified
+    if (limit && limit > 0) {
+      filtered = filtered.slice(0, limit);
+    }
+    
+    return filtered;
+  }, [programs, searchTerm, categoryFilter, gradeLevelFilter, featured, limit]);
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -149,88 +172,91 @@ export function ProgramList({ isAdmin = false, childId }: ProgramListProps) {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Program Search</CardTitle>
-          <CardDescription>
-            Find the perfect program for your child
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <Label htmlFor="search">Search</Label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="search"
-                    placeholder="Search by name, description, or instructor"
-                    className="pl-8"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+      {/* Only show search UI when not in featured mode */}
+      {!featured && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Program Search</CardTitle>
+            <CardDescription>
+              Find the perfect program for your child
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="search">Search</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="search"
+                      placeholder="Search by name, description, or instructor"
+                      className="pl-8"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+                
+                <div className="w-full md:w-1/4">
+                  <Label htmlFor="category">Category</Label>
+                  <Select 
+                    value={categoryFilter} 
+                    onValueChange={setCategoryFilter}
+                  >
+                    <SelectTrigger id="category">
+                      <SelectValue placeholder="All categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All categories</SelectItem>
+                      {Array.isArray(categories) && categories.map((category: string) => (
+                        <SelectItem key={category} value={category}>
+                          {typeof category === 'string' ? category.charAt(0).toUpperCase() + category.slice(1) : category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="w-full md:w-1/4">
+                  <Label htmlFor="grade">Grade Level</Label>
+                  <Select 
+                    value={gradeLevelFilter} 
+                    onValueChange={setGradeLevelFilter}
+                  >
+                    <SelectTrigger id="grade">
+                      <SelectValue placeholder="All grades" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All grades</SelectItem>
+                      {gradeLevels.map((grade) => (
+                        <SelectItem key={grade} value={grade}>
+                          {grade}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               
-              <div className="w-full md:w-1/4">
-                <Label htmlFor="category">Category</Label>
-                <Select 
-                  value={categoryFilter} 
-                  onValueChange={setCategoryFilter}
-                >
-                  <SelectTrigger id="category">
-                    <SelectValue placeholder="All categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All categories</SelectItem>
-                    {Array.isArray(categories) && categories.map((category: string) => (
-                      <SelectItem key={category} value={category}>
-                        {typeof category === 'string' ? category.charAt(0).toUpperCase() + category.slice(1) : category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="w-full md:w-1/4">
-                <Label htmlFor="grade">Grade Level</Label>
-                <Select 
-                  value={gradeLevelFilter} 
-                  onValueChange={setGradeLevelFilter}
-                >
-                  <SelectTrigger id="grade">
-                    <SelectValue placeholder="All grades" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All grades</SelectItem>
-                    {gradeLevels.map((grade) => (
-                      <SelectItem key={grade} value={grade}>
-                        {grade}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {(searchTerm || categoryFilter || gradeLevelFilter) && (
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">
+                    {filteredPrograms.length} program{filteredPrograms.length !== 1 ? 's' : ''} found
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={clearFilters}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              )}
             </div>
-            
-            {(searchTerm || categoryFilter || gradeLevelFilter) && (
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-muted-foreground">
-                  {filteredPrograms.length} program{filteredPrograms.length !== 1 ? 's' : ''} found
-                </p>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={clearFilters}
-                >
-                  Clear filters
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
       
       {filteredPrograms.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12">
