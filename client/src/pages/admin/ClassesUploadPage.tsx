@@ -296,6 +296,17 @@ export default function ClassesUploadPage() {
             </div>
           </CardContent>
         </Card>
+        
+        {/* CSV Mapping Dialog */}
+        {csvData && csvColumns.length > 0 && (
+          <CsvMappingDialog 
+            isOpen={showMappingDialog}
+            columns={csvColumns}
+            sampleData={csvData}
+            onClose={() => setShowMappingDialog(false)}
+            onConfirm={handleMappingConfirm}
+          />
+        )}
       </div>
     </AdminShell>
   );

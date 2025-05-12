@@ -24,6 +24,18 @@ export const uploadClassesCsv = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Only CSV files are allowed" });
     }
     
+    // Check for column mappings from the frontend
+    let columnMapping: Record<string, string> = {};
+    try {
+      if (req.body.mapping) {
+        columnMapping = JSON.parse(req.body.mapping);
+        console.log("Received column mapping:", columnMapping);
+      }
+    } catch (error) {
+      console.error("Error parsing mapping data:", error);
+      // Continue without mapping if there's an error
+    }
+    
     // Read the uploaded file
     const fileContent = uploadedFile.data.toString('utf-8');
 
