@@ -447,6 +447,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.get("/api/events", isAuthenticated, async (req, res) => {
+    try {
+      const events = await storage.getAllEvents(req.session.userId);
+      res.status(200).json(events);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching all events" });
+    }
+  });
+  
   // Marketplace routes
   app.post("/api/marketplace", isAuthenticated, async (req, res) => {
     try {

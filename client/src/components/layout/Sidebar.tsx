@@ -115,7 +115,7 @@ const learnerNavigationItems = [
   {
     title: "Tools",
     items: [
-      { name: "Calendar", href: "/learner/calendar", icon: Calendar },
+      { name: "Calendar", href: "/calendar", icon: Calendar },
       { name: "Community", href: "/community", icon: Users },
       { name: "Resources", href: "/learner/resources", icon: Briefcase },
     ],

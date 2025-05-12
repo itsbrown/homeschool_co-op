@@ -53,7 +53,7 @@ export default function CalendarPage() {
   }, [isLoading, user, setLocation]);
 
   // Fetch events
-  const { data: events = [], isLoading: isLoadingEvents } = useQuery({
+  const { data: events = [], isLoading: isLoadingEvents } = useQuery<Event[]>({
     queryKey: ["/api/events"],
   });
 
@@ -66,7 +66,7 @@ export default function CalendarPage() {
   const currentMonth = addMonths(new Date(), monthOffset);
 
   // Filter events based on selected filter and current month
-  const filteredEvents = events
+  const filteredEvents = Array.isArray(events) ? events
     .filter((event: Event) => {
       if (filter !== "all" && event.eventType !== filter) {
         return false;
@@ -76,7 +76,7 @@ export default function CalendarPage() {
     })
     .sort((a: Event, b: Event) => {
       return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
-    });
+    }) : [];
 
   // Group events by date for list view
   const eventsByDate = filteredEvents.reduce((acc: Record<string, Event[]>, event: Event) => {

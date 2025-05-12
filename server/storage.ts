@@ -36,6 +36,7 @@ export interface IStorage {
   getEvent(id: number): Promise<Event | undefined>;
   getEventsByOrganizer(organizerId: number): Promise<Event[]>;
   getUpcomingEvents(userId: number): Promise<Event[]>;
+  getAllEvents(userId: number): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
   
   // Marketplace methods
