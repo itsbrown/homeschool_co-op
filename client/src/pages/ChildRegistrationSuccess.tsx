@@ -110,7 +110,22 @@ export default function ChildRegistrationSuccess() {
                   </p>
                 </CardContent>
                 <CardFooter className="p-4 pt-0">
-                  <Button className="w-full" onClick={() => setLocation("/programs/browse")}>
+                  <Button className="w-full" onClick={() => {
+                    // Get the registered child id from sessionStorage
+                    const childDataStr = sessionStorage.getItem('registeredChildId');
+                    let childId = '';
+                    
+                    if (childDataStr) {
+                      try {
+                        childId = JSON.parse(childDataStr);
+                      } catch (error) {
+                        console.error("Error parsing child ID:", error);
+                      }
+                    }
+                    
+                    // Navigate to programs with child ID as query parameter for filtering
+                    setLocation(childId ? `/programs?childId=${childId}` : "/programs");
+                  }}>
                     Browse Programs
                   </Button>
                 </CardFooter>

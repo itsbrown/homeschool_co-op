@@ -88,7 +88,13 @@ export default function ChildRegistrationConfirmation() {
     setIsSubmitting(true);
     try {
       // Submit data to API
-      await apiRequest("POST", "/api/children", childData);
+      const response = await apiRequest("POST", "/api/children", childData);
+      const newChild = await response.json();
+      
+      // Store the new child ID in sessionStorage for the success page
+      if (newChild && newChild.id) {
+        sessionStorage.setItem('registeredChildId', JSON.stringify(newChild.id));
+      }
       
       // Clear form data from session storage
       sessionStorage.removeItem('childRegistrationData');

@@ -17,29 +17,107 @@ import {
   Layers,
   Brain,
   Library,
+  Settings,
+  School,
+  UserPlus,
+  Briefcase,
+  FileText,
+  Award,
+  Clock,
+  Building,
+  CreditCard,
 } from "lucide-react";
 
-const navigationItems = [
+// Admin navigation items
+const adminNavigationItems = [
   {
     title: "Main",
     items: [
       { name: "Dashboard", href: "/dashboard", icon: Home },
-      { name: "My Curriculum", href: "/curriculum", icon: BookOpen },
-      { name: "Lessons", href: "/lessons", icon: GraduationCap },
-      { name: "AI Lesson Generator", href: "/lessons/ai-generator", icon: Sparkles },
+      { name: "Users", href: "/admin/users", icon: Users },
+      { name: "Classes", href: "/admin/classes", icon: School },
+      { name: "Programs", href: "/admin/programs", icon: BookOpen },
+      { name: "Curricula", href: "/curriculum", icon: FileText },
       { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
-      { name: "Knowledge Marketplace", href: "/marketplace", icon: ShoppingBag },
-      { name: "Virtual Tutor", href: "/tutor", icon: User },
-      { name: "Community", href: "/community", icon: Users },
     ],
   },
   {
     title: "Management",
     items: [
-      { name: "Summer Camps", href: "/camps", icon: Calendar },
-      { name: "Email Center", href: "/email", icon: Mail },
-      { name: "Analytics", href: "/analytics", icon: BarChart2 },
-      { name: "Discounts & Referrals", href: "/discounts", icon: DollarSign },
+      { name: "Summer Camps", href: "/admin/camps", icon: Calendar },
+      { name: "Analytics", href: "/admin/analytics", icon: BarChart2 },
+      { name: "Payments", href: "/admin/payments", icon: CreditCard },
+      { name: "Settings", href: "/admin/settings", icon: Settings },
+    ],
+  },
+];
+
+// Educator navigation items
+const educatorNavigationItems = [
+  {
+    title: "Main",
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: Home },
+      { name: "My Classes", href: "/educator/classes", icon: School },
+      { name: "Curricula", href: "/curriculum", icon: BookOpen },
+      { name: "Lessons", href: "/lessons", icon: GraduationCap },
+      { name: "AI Lesson Generator", href: "/lessons/ai-generator", icon: Sparkles },
+      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
+    ],
+  },
+  {
+    title: "Management",
+    items: [
+      { name: "Calendar", href: "/educator/calendar", icon: Calendar },
+      { name: "Students", href: "/educator/students", icon: Users },
+      { name: "Reports", href: "/educator/reports", icon: FileText },
+      { name: "Community", href: "/community", icon: Building },
+    ],
+  },
+];
+
+// Parent navigation items
+const parentNavigationItems = [
+  {
+    title: "Main",
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: Home },
+      { name: "My Children", href: "/children", icon: Users },
+      { name: "Register Child", href: "/children/register", icon: UserPlus },
+      { name: "Programs", href: "/programs", icon: Award },
+      { name: "Knowledge Marketplace", href: "/marketplace", icon: ShoppingBag },
+    ],
+  },
+  {
+    title: "Management",
+    items: [
+      { name: "Calendar", href: "/schedule", icon: Calendar },
+      { name: "Enrollments", href: "/enrollments", icon: FileText },
+      { name: "Payments", href: "/payments", icon: CreditCard },
+      { name: "Messages", href: "/messages", icon: Mail },
+    ],
+  },
+];
+
+// Learner navigation items
+const learnerNavigationItems = [
+  {
+    title: "Main",
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: Home },
+      { name: "My Courses", href: "/learner/courses", icon: BookOpen },
+      { name: "Assignments", href: "/learner/assignments", icon: FileText },
+      { name: "Progress", href: "/learner/progress", icon: Award },
+      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
+      { name: "Virtual Tutor", href: "/tutor", icon: User },
+    ],
+  },
+  {
+    title: "Tools",
+    items: [
+      { name: "Calendar", href: "/learner/calendar", icon: Calendar },
+      { name: "Community", href: "/community", icon: Users },
+      { name: "Resources", href: "/learner/resources", icon: Briefcase },
     ],
   },
 ];
@@ -47,6 +125,29 @@ const navigationItems = [
 export default function Sidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+
+  // Get the appropriate navigation items based on user role
+  const getRoleNavigationItems = () => {
+    if (!user || !user.role) {
+      return [];
+    }
+
+    switch (user.role) {
+      case "admin":
+        return adminNavigationItems;
+      case "educator":
+        return educatorNavigationItems;
+      case "parent":
+        return parentNavigationItems;
+      case "learner":
+        return learnerNavigationItems;
+      default:
+        // Default navigation as fallback
+        return parentNavigationItems;
+    }
+  };
+
+  const navigationItems = getRoleNavigationItems();
 
   return (
     <div className="flex flex-col w-64 bg-sidebar border-r border-sidebar-border h-screen">
@@ -67,13 +168,16 @@ export default function Sidebar() {
             <div className="space-y-1">
               {section.items.map((item) => {
                 const Icon = item.icon;
+                const isActive = location === item.href || 
+                                (item.href !== "/dashboard" && location.startsWith(item.href));
+                
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
                     className={cn(
                       "flex items-center px-4 py-2 text-sm font-medium transition-colors",
-                      location === item.href
+                      isActive
                         ? "bg-sidebar-accent text-sidebar-primary"
                         : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary"
                     )}
@@ -91,11 +195,9 @@ export default function Sidebar() {
       {/* User profile */}
       <div className="flex items-center p-4 border-t border-sidebar-border">
         <div className="flex-shrink-0">
-          <img
-            src={user?.avatar || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
-            alt="User profile"
-            className="w-8 h-8 rounded-full"
-          />
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+            {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+          </div>
         </div>
         <div className="ml-3 min-w-0 flex-1">
           <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.name || "User"}</p>
