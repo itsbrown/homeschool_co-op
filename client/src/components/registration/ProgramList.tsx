@@ -49,12 +49,18 @@ interface Child {
 
 interface ProgramListProps {
   isAdmin?: boolean;
+  childId?: string;
 }
 
-export function ProgramList({ isAdmin = false }: ProgramListProps) {
+export function ProgramList({ isAdmin = false, childId }: ProgramListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [gradeLevelFilter, setGradeLevelFilter] = useState("");
+  
+  // Get childId from URL if not provided as prop
+  const params = new URLSearchParams(window.location.search);
+  const urlChildId = params.get('childId');
+  const selectedChildId = childId || urlChildId;
 
   // Fetch programs
   const { data: programs, isLoading: isLoadingPrograms } = useQuery({
@@ -67,6 +73,21 @@ export function ProgramList({ isAdmin = false }: ProgramListProps) {
     queryKey: ["/api/children"],
     enabled: !isAdmin,
   });
+  
+  // Find selected child if childId is provided
+  const selectedChild = useMemo(() => {
+    if (!selectedChildId || !children || !Array.isArray(children)) return null;
+    return children.find((child: Child) => 
+      child.id === parseInt(selectedChildId as string)
+    );
+  }, [selectedChildId, children]);
+  
+  // Set grade level filter based on selected child
+  useEffect(() => {
+    if (selectedChild && selectedChild.gradeLevel) {
+      setGradeLevelFilter(selectedChild.gradeLevel);
+    }
+  }, [selectedChild]);
 
   // Calculate available categories and grade levels from data
   const categories = useMemo(() => {

@@ -14,36 +14,43 @@ export default function ChildRegistrationSuccess() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if we came from the confirmation page
-    const referrer = document.referrer;
-    const isFromConfirmation = referrer.includes("/children/register/confirm");
+    // Check if we have a registered child ID in sessionStorage
+    const registeredChildId = sessionStorage.getItem('registeredChildId');
     
-    if (!isFromConfirmation && !isLoading) {
+    if (!registeredChildId && !isLoading) {
       // If navigated directly to this page without going through the registration flow
       toast({
         title: "Incomplete Registration",
         description: "Please complete the registration form first.",
       });
-      setLocation("/children/register");
+      
+      // Use setTimeout to avoid React state update warnings
+      setTimeout(() => {
+        setLocation("/children/register");
+      }, 0);
     }
-  }, [isLoading]);
+  }, [isLoading, toast, setLocation]);
 
-  // If not authenticated, redirect to login
-  if (!isLoading && !user) {
-    setLocation("/login");
-    return null;
-  }
-
-  // Verify user is a parent
-  if (user && user.role !== "parent") {
-    toast({
-      title: "Access Denied",
-      description: "Only parent accounts can register children.",
-      variant: "destructive",
-    });
-    setLocation("/dashboard");
-    return null;
-  }
+  // Use useEffect for auth redirects instead of doing it in render
+  useEffect(() => {
+    // If not authenticated, redirect to login
+    if (!isLoading && !user) {
+      setTimeout(() => {
+        setLocation("/login");
+      }, 0);
+    }
+    // Verify user is a parent
+    else if (user && user.role !== "parent") {
+      toast({
+        title: "Access Denied",
+        description: "Only parent accounts can register children.",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        setLocation("/dashboard");
+      }, 0);
+    }
+  }, [isLoading, user, toast, setLocation]);
 
   return (
     <AppShell>

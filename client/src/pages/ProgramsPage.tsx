@@ -35,7 +35,12 @@ export function ProgramsPage() {
         <Switch>
           <Route path="/programs">
             {({ matches }) => {
-              if (matches) return <ProgramList isAdmin={isAdmin} />;
+              if (matches) {
+                // Get childId from URL query parameters if present
+                const params = new URLSearchParams(window.location.search);
+                const childId = params.get('childId');
+                return <ProgramList isAdmin={isAdmin} childId={childId || undefined} />;
+              }
               return null;
             }}
           </Route>
