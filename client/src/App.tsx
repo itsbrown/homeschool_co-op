@@ -53,8 +53,7 @@ function Router() {
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />
       
       {/* Admin routes */}
-      <Route path="/admin/classes" component={AdminClassesPage} />
-      <Route path="/admin/classes/upload" component={ClassesUploadPage} />
+      <Route path="/admin/classes/:rest*" component={AdminClassesPage} />
       
       <Route component={NotFound} />
     </Switch>

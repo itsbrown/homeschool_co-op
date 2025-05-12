@@ -455,6 +455,16 @@ export function AdminClassesPage() {
               );
             }}
           </Route>
+          
+          <Route path="/admin/classes/upload">
+            {({ matches }) => {
+              if (matches) {
+                const ClassesUploadPage = require("../pages/admin/ClassesUploadPage").default;
+                return <ClassesUploadPage />;
+              }
+              return null;
+            }}
+          </Route>
         </Switch>
       </div>
     </DashboardShell>
