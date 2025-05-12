@@ -140,7 +140,7 @@ export function AdminClassesPage() {
   };
 
   const handleCategoryChange = (value: string) => {
-    setCategory(value);
+    setCategory(value === 'all-categories' ? '' : value);
     setPage(1); // Reset to first page on category change
   };
 
@@ -211,7 +211,7 @@ export function AdminClassesPage() {
                                 <SelectValue placeholder="Category" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">All Categories</SelectItem>
+                                <SelectItem value="all-categories">All Categories</SelectItem>
                                 <SelectItem value="academic">Academic</SelectItem>
                                 <SelectItem value="arts">Arts</SelectItem>
                                 <SelectItem value="music">Music</SelectItem>

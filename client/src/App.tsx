@@ -63,7 +63,15 @@ function Router() {
       <Route path="/calendar" component={CalendarPage} />
       
       {/* Admin routes */}
+      <Route path="/admin/classes" component={AdminClassesPage} />
       <Route path="/admin/classes/:rest*" component={AdminClassesPage} />
+      <Route path="/admin/programs" component={Dashboard} />
+      <Route path="/admin/programs/:rest*" component={Dashboard} />
+      <Route path="/admin/users" component={Dashboard} />
+      <Route path="/admin/users/:rest*" component={Dashboard} />
+      <Route path="/admin/reports" component={Dashboard} />
+      <Route path="/admin/reports/:rest*" component={Dashboard} />
+      <Route path="/admin" component={Dashboard} />
       
       <Route component={NotFound} />
     </Switch>
