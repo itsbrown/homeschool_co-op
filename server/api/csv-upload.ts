@@ -33,6 +33,9 @@ export const uploadClassesCsv = async (req: Request, res: Response) => {
       skip_empty_lines: true,
       trim: true,
     });
+    
+    // Log the first record to debug what fields are available
+    console.log("First CSV record:", records[0]);
 
     if (records.length === 0) {
       return res.status(400).json({ message: "The CSV file is empty" });
@@ -138,22 +141,29 @@ export const uploadClassesCsv = async (req: Request, res: Response) => {
         // Get the first instructor in the system, or the current user
         let instructorName = "Staff Instructor";
         
-        // Validate and transform the record
+        // Map CSV columns to database fields
         const classData = {
           title: record['Class Name'] || '',
           description: description.trim(),
-          category: 'academic',
+          productId: `class-${Date.now()}-${Math.floor(Math.random() * 1000)}`, // Generate a unique ID
+          productType: 'class',
+          categoryName: record['Category'] || 'SPRING 2025 PROGRAM',
+          category: 'academic', // Default, can be overridden by mapping
           startDate,
           endDate,
+          numSessions: durationWeeks * sessionsPerWeek,
+          sessionDays: record['Session Days'] || 'Monday-Friday',
           durationWeeks,
           sessionsPerWeek,
           sessionLengthMinutes,
           gradeLevels,
           capacity,
           location: 'On-site',
-          instructorName,
-          price,
+          instructorName: record['Instructor'] || instructorName,
+          price, // Already converted to cents
           suggestedPrice: price, // Set the same as regular price initially
+          totalOrders: 0,
+          paidOrders: 0,
           isPublished: true,
           instructorId: req.session.userId, // Default to the current admin user
         };

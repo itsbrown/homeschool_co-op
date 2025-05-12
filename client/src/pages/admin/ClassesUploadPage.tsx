@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, FileSpreadsheet, Upload, Check, AlertCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { CsvMappingDialog } from "@/components/admin/CsvMappingDialog";
 
 export default function ClassesUploadPage() {
   const [location, setLocation] = useLocation();
@@ -18,6 +19,9 @@ export default function ClassesUploadPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState("");
+  const [csvData, setCsvData] = useState<any[] | null>(null);
+  const [csvColumns, setCsvColumns] = useState<{ name: string; sample: string }[]>([]);
+  const [showMappingDialog, setShowMappingDialog] = useState(false);
 
   // Check if user is admin
   const isAdmin = user?.role === "admin";
@@ -32,6 +36,9 @@ export default function ClassesUploadPage() {
       setFile(selectedFile);
       setUploadStatus("idle");
       setStatusMessage("");
+      
+      // Parse CSV file to extract headers and sample data
+      parseCsvFile(selectedFile);
     } else {
       setFile(null);
       toast({
@@ -41,23 +48,87 @@ export default function ClassesUploadPage() {
       });
     }
   };
-
-  const handleUpload = async () => {
-    if (!file) {
+  
+  const parseCsvFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const csvText = event.target?.result as string;
+        const lines = csvText.split('\n');
+        
+        if (lines.length < 2) {
+          throw new Error("CSV file must have at least headers and one data row");
+        }
+        
+        // Extract headers
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        
+        // Parse data rows (up to 10)
+        const data: any[] = [];
+        for (let i = 1; i < Math.min(lines.length, 11); i++) {
+          if (!lines[i].trim()) continue;
+          
+          const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+          
+          if (values.length !== headers.length) {
+            // Skip malformed rows
+            continue;
+          }
+          
+          const row: any = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index];
+          });
+          
+          data.push(row);
+        }
+        
+        // Create columns with samples for mapping
+        const columns = headers.map(header => ({
+          name: header,
+          sample: data[0]?.[header] || ""
+        }));
+        
+        setCsvColumns(columns);
+        setCsvData(data);
+        
+        // Show mapping dialog
+        setShowMappingDialog(true);
+      } catch (error: any) {
+        console.error("Error parsing CSV:", error);
+        toast({
+          title: "Invalid CSV format",
+          description: error.message || "Could not parse the CSV file",
+          variant: "destructive",
+        });
+        setFile(null);
+      }
+    };
+    
+    reader.onerror = () => {
       toast({
-        title: "No file selected",
-        description: "Please select a CSV file to upload",
+        title: "Error reading file",
+        description: "Failed to read the CSV file",
         variant: "destructive",
       });
-      return;
-    }
+      setFile(null);
+    };
+    
+    reader.readAsText(file);
+  };
 
+  const handleMappingConfirm = async (mapping: Record<string, string>) => {
+    if (!file || !csvData) return;
+    
+    setShowMappingDialog(false);
     setIsLoading(true);
     setUploadStatus("idle");
     
     try {
+      // Create FormData with both file and mapping
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("mapping", JSON.stringify(mapping));
 
       // Use existing csv upload route with credentials
       const response = await fetch("/api/admin/upload/classes", {
@@ -102,6 +173,25 @@ export default function ClassesUploadPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleUpload = () => {
+    if (!file) {
+      toast({
+        title: "No file selected",
+        description: "Please select a CSV file to upload",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Show the mapping dialog if we already have CSV data
+    if (csvData && csvColumns.length > 0) {
+      setShowMappingDialog(true);
+    } else {
+      // Otherwise, parse the file
+      parseCsvFile(file);
     }
   };
 
