@@ -229,6 +229,21 @@ export default function ChildRegistrationPage() {
                   />
                 </div>
 
+                {/* Add the School field */}
+                <FormField
+                  control={form.control}
+                  name="school"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>School</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Current school (if applicable)" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="allergies"
