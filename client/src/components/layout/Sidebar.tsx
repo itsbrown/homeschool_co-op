@@ -38,7 +38,7 @@ const adminNavigationItems = [
       { name: "Classes", href: "/admin/classes", icon: School },
       { name: "Programs", href: "/admin/programs", icon: BookOpen },
       { name: "Curricula", href: "/curriculum", icon: FileText },
-      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
+      { name: "Curriculum Marketplace", href: "/admin/marketplace", icon: ShoppingBag },
     ],
   },
   {
@@ -62,7 +62,7 @@ const educatorNavigationItems = [
       { name: "Curricula", href: "/curriculum", icon: BookOpen },
       { name: "Lessons", href: "/lessons", icon: GraduationCap },
       { name: "AI Lesson Generator", href: "/lessons/ai-generator", icon: Sparkles },
-      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
+      { name: "Lesson Marketplace", href: "/educator/marketplace", icon: ShoppingBag },
     ],
   },
   {
@@ -85,7 +85,7 @@ const parentNavigationItems = [
       { name: "My Children", href: "/children", icon: Users },
       { name: "Register Child", href: "/children/register", icon: UserPlus },
       { name: "Programs", href: "/programs", icon: Award },
-      { name: "Knowledge Marketplace", href: "/marketplace", icon: ShoppingBag },
+      { name: "Learning Marketplace", href: "/marketplace", icon: ShoppingBag },
     ],
   },
   {
@@ -108,7 +108,7 @@ const learnerNavigationItems = [
       { name: "My Courses", href: "/learner/courses", icon: BookOpen },
       { name: "Assignments", href: "/learner/assignments", icon: FileText },
       { name: "Progress", href: "/learner/progress", icon: Award },
-      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
+      { name: "Learning Resources", href: "/learner/resources", icon: Library },
       { name: "Virtual Tutor", href: "/tutor", icon: User },
     ],
   },
