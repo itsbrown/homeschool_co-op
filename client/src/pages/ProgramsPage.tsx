@@ -4,7 +4,7 @@ import { useAuth } from "../hooks/use-auth";
 import { ProgramList } from "../components/registration/ProgramList";
 import { ProgramEnrollmentForm } from "../components/registration/ProgramEnrollmentForm";
 import { EnrollmentList } from "../components/registration/EnrollmentList";
-import { Route, Switch, useLocation, Link } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,15 +15,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack } from "lucide-react";
 
-export function ProgramsPage() {
-  const { user, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
-  const { data: userRole } = useQuery({ queryKey: ["/api/auth/role"] });
+// Separate component for Programs content to avoid hooks issues
+function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  
+
+  // Get childId from URL query parameters if present
+  const urlParams = new URLSearchParams(window.location.search);
+  const childId = urlParams.get('childId');
+
   // Fetch categories for classes
   const { data: classCategories = [] } = useQuery<string[]>({
     queryKey: ["/api/classes/categories/names"],
@@ -59,14 +61,6 @@ export function ProgramsPage() {
     enabled: activeTab === "classes" || activeTab === "all",
   });
   
-  // If not authenticated, redirect to login
-  if (!isLoading && !user) {
-    window.location.href = "/login";
-    return null;
-  }
-
-  const isAdmin = userRole === "admin";
-  
   // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -79,6 +73,320 @@ export function ProgramsPage() {
   // Check if there are any summer camp classes
   const summerCamps = classesData.classes.filter(c => c.category === "summer-camp");
   const classesList = classesData.classes.filter(c => c.category === "academic" || c.category === "membership");
+
+  return (
+    <div className="space-y-6">
+      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="all">All Offerings</TabsTrigger>
+          <TabsTrigger value="programs">Programs</TabsTrigger>
+          <TabsTrigger value="classes">Classes</TabsTrigger>
+          <TabsTrigger value="camps">Summer Camps</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="all" className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Programs Card */}
+            <Card className="flex flex-col">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Academic Programs</CardTitle>
+                  <CardDescription>Long-term structured learning paths</CardDescription>
+                </div>
+                <BookOpen className="h-8 w-8 text-primary" />
+              </CardHeader>
+              <CardContent className="flex-1">
+                <p>Our academic programs provide comprehensive educational paths designed to build skills progressively.</p>
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full" onClick={() => setActiveTab("programs")}>Browse Programs</Button>
+              </CardFooter>
+            </Card>
+            
+            {/* Classes Card */}
+            <Card className="flex flex-col">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Classes</CardTitle>
+                  <CardDescription>Individual classes and short courses</CardDescription>
+                </div>
+                <Users className="h-8 w-8 text-primary" />
+              </CardHeader>
+              <CardContent className="flex-1">
+                <p>Join our wide variety of individual classes on specific topics, from science to arts and more.</p>
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full" onClick={() => setActiveTab("classes")}>Browse Classes</Button>
+              </CardFooter>
+            </Card>
+            
+            {/* Summer Camps Card */}
+            <Card className="flex flex-col md:col-span-2">
+              <CardHeader className="flex flex-row items-center justify-between bg-primary/5 rounded-t-lg">
+                <div>
+                  <CardTitle>Summer Camps 2025</CardTitle>
+                  <CardDescription>Engaging summer learning experiences</CardDescription>
+                </div>
+                <Sparkles className="h-8 w-8 text-primary" />
+              </CardHeader>
+              <CardContent className="flex-1">
+                <p className="mb-4">Our summer camps offer immersive learning experiences during school breaks. Discover creativity, technology, and outdoor adventures!</p>
+                <div className="flex gap-2 flex-wrap">
+                  <Badge variant="outline" className="bg-primary/5">STEM Exploration</Badge>
+                  <Badge variant="outline" className="bg-primary/5">Art & Design</Badge>
+                  <Badge variant="outline" className="bg-primary/5">Coding Adventures</Badge>
+                  <Badge variant="outline" className="bg-primary/5">Outdoor Learning</Badge>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full" onClick={() => setActiveTab("camps")}>
+                  <CalendarDays className="mr-2 h-4 w-4" />
+                  Explore Summer Camps
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+          
+          {/* Featured Programs Section */}
+          <h3 className="text-xl font-bold mt-8">Featured Programs</h3>
+          <div className="space-y-4">
+            <ProgramList isAdmin={isAdmin} childId={childId || undefined} limit={3} featured={true} />
+            <div className="flex justify-center">
+              <Button variant="outline" onClick={() => setActiveTab("programs")}>View All Programs</Button>
+            </div>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="programs">
+          <ProgramList isAdmin={isAdmin} childId={childId || undefined} />
+        </TabsContent>
+        
+        <TabsContent value="classes">
+          <div className="space-y-6">
+            {/* Search & Filter */}
+            <Card className="mb-6">
+              <CardHeader className="pb-3">
+                <CardTitle>Search Classes</CardTitle>
+                <CardDescription>Find the perfect class for your child</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={(e) => e.preventDefault()} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <Label htmlFor="search">Search</Label>
+                    <Input
+                      id="search"
+                      placeholder="Search by title or description"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="programType">Program</Label>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger id="programType">
+                        <SelectValue placeholder="Any program" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Any program</SelectItem>
+                        {classCategories.map((cat: string) => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="md:col-span-3 flex justify-end gap-2">
+                    {(searchTerm || categoryFilter) && (
+                      <Button variant="outline" type="button" onClick={() => {
+                        setSearchTerm("");
+                        setCategoryFilter("");
+                      }}>
+                        Clear Filters
+                      </Button>
+                    )}
+                    <Button type="submit">Search</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+            
+            {/* Classes Grid */}
+            {classesLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                <span className="ml-2">Loading classes...</span>
+              </div>
+            ) : classesList.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {classesList.map((classItem: ClassData) => (
+                  <Card key={classItem.id} className="flex flex-col h-full">
+                    <CardHeader className="pb-3">
+                      <div className="flex justify-between">
+                        <CardTitle className="line-clamp-2">{classItem.title}</CardTitle>
+                        <Badge variant={classItem.category === "academic" ? "default" : "secondary"}>
+                          {classItem.category === "academic" ? "Academic" : "Membership"}
+                        </Badge>
+                      </div>
+                      <CardDescription className="line-clamp-2">{classItem.description || "No description provided"}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1">
+                      <div className="space-y-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center"><DollarSign className="h-4 w-4 mr-1 opacity-70" />Price:</div>
+                          <div className="font-semibold">{formatCurrency(classItem.price)}</div>
+                        </div>
+                        
+                        {classItem.totalOrders > 0 && (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Enrolled:</div>
+                            <div className="font-medium">{classItem.totalOrders}</div>
+                          </div>
+                        )}
+                        
+                        {classItem.numSessions && (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center"><BookOpen className="h-4 w-4 mr-1 opacity-70" />Sessions:</div>
+                            <div className="font-medium">{classItem.numSessions}</div>
+                          </div>
+                        )}
+                        
+                        {(classItem.startDate && classItem.endDate) && (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center"><CalendarIcon className="h-4 w-4 mr-1 opacity-70" />Dates:</div>
+                            <div className="font-medium">
+                              {new Date(classItem.startDate).toLocaleDateString()} - {new Date(classItem.endDate).toLocaleDateString()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                    <CardFooter>
+                      <Button className="w-full">
+                        Enroll Now
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Filter className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-xl font-medium">No classes found</h3>
+                <p className="text-muted-foreground mt-2">
+                  Try adjusting your filters or search term
+                </p>
+              </div>
+            )}
+            
+            {/* Pagination controls would go here */}
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="camps">
+          <div className="space-y-6">
+            {/* Summer Camps Hero */}
+            <div className="relative overflow-hidden rounded-lg bg-primary/10 py-8 px-6 mb-8">
+              <div className="max-w-3xl">
+                <h2 className="text-3xl font-bold mb-2">Summer Camps 2025</h2>
+                <p className="text-lg mb-4">
+                  Exciting, educational, and engaging summer experiences for all ages.
+                </p>
+                <p className="mb-6">
+                  Our summer camps combine fun activities with meaningful learning experiences, guided by expert instructors in a supportive environment.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">June - August 2025</Badge>
+                  <Badge variant="secondary">Ages 5-16</Badge>
+                  <Badge variant="secondary">Full & Half Day Options</Badge>
+                </div>
+              </div>
+              <Sparkles className="absolute right-4 bottom-4 h-32 w-32 text-primary opacity-10" />
+            </div>
+            
+            {/* Summer Camps Grid */}
+            {classesLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                <span className="ml-2">Loading summer camps...</span>
+              </div>
+            ) : summerCamps.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {summerCamps.map((camp: ClassData) => (
+                  <Card key={camp.id} className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-primary/5 to-transparent border-primary/20">
+                    <CardHeader className="pb-3 border-b border-primary/10">
+                      <CardTitle className="text-xl">{camp.title}</CardTitle>
+                      <CardDescription className="line-clamp-2">{camp.description || "An exciting summer adventure"}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6 flex-1">
+                      <div className="space-y-4">
+                        <div className="flex gap-2 flex-wrap">
+                          <Badge className="bg-primary/10 hover:bg-primary/20 text-foreground border-0">
+                            <CalendarDays className="mr-1 h-3 w-3" /> 
+                            {camp.numSessions} Sessions
+                          </Badge>
+                          
+                          <Badge className="bg-primary/10 hover:bg-primary/20 text-foreground border-0">
+                            <DollarSign className="mr-1 h-3 w-3" />
+                            {formatCurrency(camp.price)}
+                          </Badge>
+                        </div>
+                        
+                        {(camp.startDate && camp.endDate) && (
+                          <div className="flex items-center text-sm">
+                            <CalendarIcon className="h-4 w-4 mr-2 opacity-70" />
+                            <span className="font-medium">
+                              {new Date(camp.startDate).toLocaleDateString()} - {new Date(camp.endDate).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                        
+                        <p className="text-sm">{camp.description}</p>
+                        
+                        {camp.totalOrders > 0 && (
+                          <div className="text-sm text-muted-foreground">
+                            {camp.totalOrders} already enrolled
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                    <CardFooter className="pt-0">
+                      <Button className="w-full">
+                        <Backpack className="mr-2 h-4 w-4" />
+                        Register for Camp
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Sparkles className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-xl font-medium">No summer camps available yet</h3>
+                <p className="text-muted-foreground mt-2">
+                  Check back soon for our upcoming summer programs
+                </p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+export function ProgramsPage() {
+  const { user, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+  const { data: userRole } = useQuery({ queryKey: ["/api/auth/role"] });
+  
+  // If not authenticated, redirect to login
+  if (!isLoading && !user) {
+    window.location.href = "/login";
+    return null;
+  }
+
+  const isAdmin = userRole === "admin";
 
   return (
     <DashboardShell>
@@ -104,371 +412,8 @@ export function ProgramsPage() {
               <EnrollmentList childId={parseInt(params.childId)} />
             )}
           </Route>
-          
           <Route path="/programs">
-            {(params) => {
-              // Access route through useLocation instead of matches
-              const [location] = useLocation();
-              const isMatch = location === "/programs";
-              
-              if (isMatch) {
-                // Get childId from URL query parameters if present
-                const urlParams = new URLSearchParams(window.location.search);
-                const childId = urlParams.get('childId');
-                
-                return (
-                  <div className="space-y-6">
-                    <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
-                      <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="all">All Offerings</TabsTrigger>
-                        <TabsTrigger value="programs">Programs</TabsTrigger>
-                        <TabsTrigger value="classes">Classes</TabsTrigger>
-                        <TabsTrigger value="camps">Summer Camps</TabsTrigger>
-                      </TabsList>
-                      
-                      <TabsContent value="all" className="space-y-6">
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                          {/* Programs Card */}
-                          <Card className="flex flex-col">
-                            <CardHeader className="flex flex-row items-center justify-between">
-                              <div>
-                                <CardTitle>Academic Programs</CardTitle>
-                                <CardDescription>Long-term structured learning paths</CardDescription>
-                              </div>
-                              <BookOpen className="h-8 w-8 text-primary" />
-                            </CardHeader>
-                            <CardContent className="flex-1">
-                              <p>Our academic programs provide comprehensive educational paths designed to build skills progressively.</p>
-                            </CardContent>
-                            <CardFooter>
-                              <Button className="w-full" onClick={() => setActiveTab("programs")}>Browse Programs</Button>
-                            </CardFooter>
-                          </Card>
-                          
-                          {/* Classes Card */}
-                          <Card className="flex flex-col">
-                            <CardHeader className="flex flex-row items-center justify-between">
-                              <div>
-                                <CardTitle>Classes</CardTitle>
-                                <CardDescription>Individual classes and short courses</CardDescription>
-                              </div>
-                              <Users className="h-8 w-8 text-primary" />
-                            </CardHeader>
-                            <CardContent className="flex-1">
-                              <p>Join our wide variety of individual classes on specific topics, from science to arts and more.</p>
-                            </CardContent>
-                            <CardFooter>
-                              <Button className="w-full" onClick={() => setActiveTab("classes")}>Browse Classes</Button>
-                            </CardFooter>
-                          </Card>
-                          
-                          {/* Summer Camps Card */}
-                          <Card className="flex flex-col md:col-span-2">
-                            <CardHeader className="flex flex-row items-center justify-between bg-primary/5 rounded-t-lg">
-                              <div>
-                                <CardTitle>Summer Camps 2025</CardTitle>
-                                <CardDescription>Engaging summer learning experiences</CardDescription>
-                              </div>
-                              <Sparkles className="h-8 w-8 text-primary" />
-                            </CardHeader>
-                            <CardContent className="flex-1">
-                              <p className="mb-4">Our summer camps offer immersive learning experiences during school breaks. Discover creativity, technology, and outdoor adventures!</p>
-                              <div className="flex gap-2 flex-wrap">
-                                <Badge variant="outline" className="bg-primary/5">STEM Exploration</Badge>
-                                <Badge variant="outline" className="bg-primary/5">Art & Design</Badge>
-                                <Badge variant="outline" className="bg-primary/5">Coding Adventures</Badge>
-                                <Badge variant="outline" className="bg-primary/5">Outdoor Learning</Badge>
-                              </div>
-                            </CardContent>
-                            <CardFooter>
-                              <Button className="w-full" onClick={() => setActiveTab("camps")}>
-                                <CalendarDays className="mr-2 h-4 w-4" />
-                                Explore Summer Camps
-                              </Button>
-                            </CardFooter>
-                          </Card>
-                        </div>
-                        
-                        {/* Featured Programs Section */}
-                        <h3 className="text-xl font-bold mt-8">Featured Programs</h3>
-                        <div className="space-y-4">
-                          <ProgramList isAdmin={isAdmin} childId={childId || undefined} limit={3} featured={true} />
-                          <div className="flex justify-center">
-                            <Button variant="outline" onClick={() => setActiveTab("programs")}>View All Programs</Button>
-                          </div>
-                        </div>
-                      </TabsContent>
-                      
-                      <TabsContent value="programs">
-                        <ProgramList isAdmin={isAdmin} childId={childId || undefined} />
-                      </TabsContent>
-                      
-                      <TabsContent value="classes">
-                        <div className="space-y-6">
-                          {/* Search & Filter */}
-                          <Card className="mb-6">
-                            <CardHeader className="pb-3">
-                              <CardTitle>Search Classes</CardTitle>
-                              <CardDescription>Find the perfect class for your child</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <form onSubmit={(e) => e.preventDefault()} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="md:col-span-2">
-                                  <Label htmlFor="search">Search</Label>
-                                  <Input
-                                    id="search"
-                                    placeholder="Search by title or description"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                  />
-                                </div>
-                                
-                                <div>
-                                  <Label htmlFor="programType">Program</Label>
-                                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                                    <SelectTrigger id="programType">
-                                      <SelectValue placeholder="Any program" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="">Any program</SelectItem>
-                                      {classCategories.map((cat: string) => (
-                                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                
-                                <div className="md:col-span-3 flex justify-end gap-2">
-                                  {(searchTerm || categoryFilter) && (
-                                    <Button variant="outline" type="button" onClick={() => {
-                                      setSearchTerm("");
-                                      setCategoryFilter("");
-                                    }}>
-                                      Clear Filters
-                                    </Button>
-                                  )}
-                                  <Button type="submit">Search</Button>
-                                </div>
-                              </form>
-                            </CardContent>
-                          </Card>
-                          
-                          {/* Classes Grid */}
-                          {classesLoading ? (
-                            <div className="flex justify-center items-center py-12">
-                              <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
-                              <span className="ml-2">Loading classes...</span>
-                            </div>
-                          ) : classesList.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                              {classesList.map((classItem: ClassData) => (
-                                <Card key={classItem.id} className="flex flex-col h-full">
-                                  <CardHeader className="pb-3">
-                                    <div className="flex justify-between">
-                                      <CardTitle className="line-clamp-2">{classItem.title}</CardTitle>
-                                      <Badge variant={classItem.category === "academic" ? "default" : "secondary"}>
-                                        {classItem.category === "academic" ? "Academic" : "Membership"}
-                                      </Badge>
-                                    </div>
-                                    <CardDescription className="line-clamp-2">{classItem.description || "No description provided"}</CardDescription>
-                                  </CardHeader>
-                                  <CardContent className="flex-1">
-                                    <div className="space-y-3 text-sm">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center"><DollarSign className="h-4 w-4 mr-1 opacity-70" />Price:</div>
-                                        <div className="font-semibold">{formatCurrency(classItem.price)}</div>
-                                      </div>
-                                      
-                                      {classItem.totalOrders > 0 && (
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Enrolled:</div>
-                                          <div className="font-medium">{classItem.totalOrders}</div>
-                                        </div>
-                                      )}
-                                      
-                                      {classItem.numSessions && (
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center"><BookOpen className="h-4 w-4 mr-1 opacity-70" />Sessions:</div>
-                                          <div className="font-medium">{classItem.numSessions}</div>
-                                        </div>
-                                      )}
-                                      
-                                      {classItem.startDate && classItem.endDate && (
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center"><CalendarIcon className="h-4 w-4 mr-1 opacity-70" />Dates:</div>
-                                          <div className="font-medium">
-                                            {new Date(classItem.startDate).toLocaleDateString()} - {new Date(classItem.endDate).toLocaleDateString()}
-                                          </div>
-                                        </div>
-                                      )}
-                                      
-                                      {classItem.categoryName && (
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center"><Filter className="h-4 w-4 mr-1 opacity-70" />Program:</div>
-                                          <div className="font-medium">{classItem.categoryName}</div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </CardContent>
-                                  <CardFooter className="pt-0">
-                                    <Button className="w-full">Register</Button>
-                                  </CardFooter>
-                                </Card>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center py-12">
-                              <BookOpen className="h-16 w-16 text-muted-foreground mb-4" />
-                              <h3 className="text-xl font-medium">No classes found</h3>
-                              <p className="text-muted-foreground mt-2">
-                                Try adjusting your search filters
-                              </p>
-                            </div>
-                          )}
-                          
-                          {/* Pagination */}
-                          {classesData.pagination && classesData.pagination.totalPages > 1 && (
-                            <div className="flex justify-center mt-8">
-                              <div className="flex gap-2">
-                                <Button 
-                                  variant="outline" 
-                                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                  disabled={currentPage === 1}
-                                >
-                                  Previous
-                                </Button>
-                                <Button variant="outline" disabled>
-                                  Page {currentPage} of {classesData.pagination.totalPages}
-                                </Button>
-                                <Button 
-                                  variant="outline" 
-                                  onClick={() => setCurrentPage(p => Math.min(classesData.pagination.totalPages, p + 1))}
-                                  disabled={currentPage === classesData.pagination.totalPages}
-                                >
-                                  Next
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </TabsContent>
-                      
-                      <TabsContent value="camps">
-                        <div className="space-y-6">
-                          {/* Summer Camps Banner */}
-                          <Card className="bg-primary/5 border-none shadow-md">
-                            <CardHeader>
-                              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div>
-                                  <CardTitle className="text-2xl md:text-3xl">Summer Camps 2025</CardTitle>
-                                  <CardDescription className="text-base">Enriching experiences for curious minds</CardDescription>
-                                </div>
-                                <Badge className="text-base py-1 px-3 bg-primary/10 text-primary hover:bg-primary/20 border-none">Early Registration Open</Badge>
-                              </div>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="mb-6">
-                                Our summer camps offer immersive educational experiences in a fun, engaging environment. 
-                                From coding to arts and outdoor adventures, we provide opportunities for children to explore 
-                                their interests, develop new skills, and build lasting friendships.
-                              </p>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="flex items-center gap-2">
-                                  <CalendarDays className="h-5 w-5 text-primary" />
-                                  <span>June - August 2025</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Users className="h-5 w-5 text-primary" />
-                                  <span>Ages 5-16</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Backpack className="h-5 w-5 text-primary" />
-                                  <span>Weekly sessions available</span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                          
-                          {/* Summer Camps Grid */}
-                          {classesLoading ? (
-                            <div className="flex justify-center items-center py-12">
-                              <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
-                              <span className="ml-2">Loading summer camps...</span>
-                            </div>
-                          ) : summerCamps.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                              {summerCamps.map((camp: ClassData) => (
-                                <Card key={camp.id} className="flex flex-col h-full border-primary/20">
-                                  <CardHeader className="pb-3 bg-primary/5 rounded-t-lg">
-                                    <div className="flex justify-between">
-                                      <CardTitle className="line-clamp-2">{camp.title}</CardTitle>
-                                      <Badge variant="outline" className="bg-white/50">
-                                        Summer Camp
-                                      </Badge>
-                                    </div>
-                                    <CardDescription className="line-clamp-2">{camp.description || "No description provided"}</CardDescription>
-                                  </CardHeader>
-                                  <CardContent className="flex-1">
-                                    <div className="space-y-3 text-sm">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center"><DollarSign className="h-4 w-4 mr-1 opacity-70" />Price:</div>
-                                        <div className="font-semibold">{formatCurrency(camp.price)}</div>
-                                      </div>
-                                      
-                                      {camp.totalOrders > 0 && (
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Enrolled:</div>
-                                          <div className="font-medium">{camp.totalOrders}</div>
-                                        </div>
-                                      )}
-                                      
-                                      {camp.numSessions && (
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center"><BookOpen className="h-4 w-4 mr-1 opacity-70" />Sessions:</div>
-                                          <div className="font-medium">{camp.numSessions}</div>
-                                        </div>
-                                      )}
-                                      
-                                      {camp.startDate && camp.endDate && (
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center"><CalendarIcon className="h-4 w-4 mr-1 opacity-70" />Dates:</div>
-                                          <div className="font-medium">
-                                            {new Date(camp.startDate).toLocaleDateString()} - {new Date(camp.endDate).toLocaleDateString()}
-                                          </div>
-                                        </div>
-                                      )}
-                                      
-                                      {camp.categoryName && (
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center"><Filter className="h-4 w-4 mr-1 opacity-70" />Program:</div>
-                                          <div className="font-medium">{camp.categoryName}</div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </CardContent>
-                                  <CardFooter className="pt-0">
-                                    <Button className="w-full" variant="default">Register for Camp</Button>
-                                  </CardFooter>
-                                </Card>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center py-12">
-                              <Sparkles className="h-16 w-16 text-muted-foreground mb-4" />
-                              <h3 className="text-xl font-medium">Summer Camp Registration Coming Soon</h3>
-                              <p className="text-muted-foreground mt-2">
-                                Check back soon for our exciting summer camp offerings!
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </div>
-                );
-              }
-              return null;
-            }}
+            <ProgramsContent isAdmin={isAdmin} />
           </Route>
         </Switch>
       </div>
