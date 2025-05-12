@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { DashboardShell } from "../components/ui/dashboard-shell";
+import { AdminShell } from "../components/ui/admin-shell";
 import { useAuth } from "../hooks/use-auth";
 import { ClassCreationForm } from "../components/admin/ClassCreationForm";
 import { Route, Switch, useLocation } from "wouter";
@@ -160,7 +160,7 @@ export function AdminClassesPage() {
   };
 
   return (
-    <DashboardShell>
+    <AdminShell>
       <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
@@ -467,6 +467,6 @@ export function AdminClassesPage() {
           </Route>
         </Switch>
       </div>
-    </DashboardShell>
+    </AdminShell>
   );
 }

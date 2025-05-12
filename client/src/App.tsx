@@ -64,6 +64,7 @@ function Router() {
       
       {/* Admin routes */}
       <Route path="/admin/classes" component={AdminClassesPage} />
+      <Route path="/admin/classes/upload" component={ClassesUploadPage} />
       <Route path="/admin/classes/:rest*" component={AdminClassesPage} />
       <Route path="/admin/programs" component={Dashboard} />
       <Route path="/admin/programs/:rest*" component={Dashboard} />
