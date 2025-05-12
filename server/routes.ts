@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
 import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema } from "@shared/schema";
-import * as childrenApi from "./api/children";
+import childrenRouter from "./api/children";
 import * as emergencyContactsApi from "./api/emergency-contacts";
 import * as programsApi from "./api/programs";
 import * as programEnrollmentsApi from "./api/program-enrollments";
@@ -863,11 +863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Children routes
-  app.get('/api/children', isAuthenticated, childrenApi.getMyChildren);
-  app.get('/api/children/:id', isAuthenticated, childrenApi.getChildById);
-  app.post('/api/children', isAuthenticated, childrenApi.createChild);
-  app.put('/api/children/:id', isAuthenticated, childrenApi.updateChild);
-  app.delete('/api/children/:id', isAuthenticated, childrenApi.deleteChild);
+  app.use('/api/children', childrenRouter);
 
   // Emergency Contacts routes
   app.get('/api/emergency-contacts', isAuthenticated, emergencyContactsApi.getMyEmergencyContacts);

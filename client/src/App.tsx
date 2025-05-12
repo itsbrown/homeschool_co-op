@@ -23,6 +23,7 @@ import { AdminClassesPage } from "./pages/AdminClassesPage";
 import ChildRegistrationPage from "./pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
+import ChildrenPage from "./pages/ChildrenPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -48,6 +49,7 @@ function Router() {
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
       <Route path="/programs" component={ProgramsPage} />
+      <Route path="/children" component={ChildrenPage} />
       <Route path="/children/register" component={ChildRegistrationPage} />
       <Route path="/children/register/confirm" component={ChildRegistrationConfirmation} />
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />
