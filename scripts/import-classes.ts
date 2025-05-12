@@ -1,7 +1,12 @@
 import { parse } from 'csv-parse/sync';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { storage } from '../server/storage';
+
+// Get current file path for ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function importClasses() {
   try {

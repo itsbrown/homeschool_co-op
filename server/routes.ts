@@ -12,6 +12,7 @@ import * as programEnrollmentsApi from "./api/program-enrollments";
 import * as csvUploadApi from "./api/csv-upload";
 import aiPricingRouter from "./api/ai-pricing";
 import adminClassesRouter from "./api/admin-classes";
+import classesRouter from "./api/classes";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
