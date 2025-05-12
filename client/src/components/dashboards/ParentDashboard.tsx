@@ -242,7 +242,7 @@ export default function ParentDashboard() {
                   <BookOpen className="h-12 w-12 mx-auto mb-2" />
                   <p>No active enrollments</p>
                   <Button className="mt-4" asChild>
-                    <Link href="/programs/browse">Browse Programs</Link>
+                    <Link href="/programs">Browse Programs</Link>
                   </Button>
                 </div>
               ) : (
@@ -250,7 +250,7 @@ export default function ParentDashboard() {
                   {/* Enrollment cards would go here */}
                   <div className="flex justify-end mt-2">
                     <Button asChild>
-                      <Link href="/programs/browse">Browse More Programs</Link>
+                      <Link href="/programs">Browse More Programs</Link>
                     </Button>
                   </div>
                 </div>
