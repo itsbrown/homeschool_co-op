@@ -144,21 +144,47 @@ export const uploadClassesCsv = [
           if (record['Sample Activities']) description += `Sample Activities: ${record['Sample Activities']}\n\n`;
           if (record['Assessments']) description += `Assessments: ${record['Assessments']}\n\n`;
           
+          // Calculate session details based on hours
+          const hoursMatch = hours.match(/(\d+)\s+hours/);
+          let durationWeeks = 36; // Default to 36 weeks (standard school year)
+          let sessionsPerWeek = 5; // Default to 5 sessions per week
+          let sessionLengthMinutes = 50; // Default to 50 minutes per session
+          
+          if (hoursMatch && hoursMatch.length >= 2) {
+            const totalHours = parseInt(hoursMatch[1], 10);
+            const totalMinutes = totalHours * 60;
+            // Calculate based on 36-week school year
+            const minutesPerWeek = totalMinutes / durationWeeks;
+            sessionLengthMinutes = Math.round(minutesPerWeek / sessionsPerWeek);
+          }
+          
+          // Set capacity based on the class type
+          const capacity = 20; // Default capacity
+          
+          // Create a date range for the school year (starting now, ending in 9 months)
+          const startDate = new Date();
+          const endDate = new Date();
+          endDate.setMonth(endDate.getMonth() + 9);
+          
+          // Get the first instructor in the system, or the current user
+          let instructorName = "Staff Instructor";
+          
           // Validate and transform the record
           const classData = {
             title: record['Class Name'] || '',
             description: description.trim(),
             category: 'academic',
-            maxCapacity: 20,
-            minAge,
-            maxAge,
-            startDate: new Date(),
-            endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-            schedule,
-            location: 'On-site',
-            price,
+            startDate,
+            endDate,
+            durationWeeks,
+            sessionsPerWeek,
+            sessionLengthMinutes,
             gradeLevels,
-            status: "published" as "published" | "draft" | "archived",
+            capacity,
+            location: 'On-site',
+            instructorName,
+            price,
+            suggestedPrice: price, // Set the same as regular price initially
             isPublished: true,
             instructorId: req.session.userId, // Default to the current admin user
           };

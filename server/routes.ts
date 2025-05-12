@@ -9,6 +9,7 @@ import * as childrenApi from "./api/children";
 import * as emergencyContactsApi from "./api/emergency-contacts";
 import * as programsApi from "./api/programs";
 import * as programEnrollmentsApi from "./api/program-enrollments";
+import * as csvUploadApi from "./api/csv-upload";
 import aiPricingRouter from "./api/ai-pricing";
 import adminClassesRouter from "./api/admin-classes";
 import archiver from 'archiver';
