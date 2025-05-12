@@ -60,6 +60,7 @@ import {
   Tag,
   Eye,
   EyeOff,
+  Upload,
 } from "lucide-react";
 
 export function AdminClassesPage() {
@@ -152,16 +153,27 @@ export function AdminClassesPage() {
   const handleEditClass = (id: number) => {
     setLocation(`/admin/classes/edit/${id}`);
   };
+  
+  // Navigate to CSV upload page
+  const handleNavigateToUpload = () => {
+    setLocation("/admin/classes/upload");
+  };
 
   return (
     <DashboardShell>
       <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
-          <Button onClick={handleCreateClass} className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Create Class
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleNavigateToUpload} variant="outline" className="flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Upload CSV
+            </Button>
+            <Button onClick={handleCreateClass} className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Create Class
+            </Button>
+          </div>
         </div>
 
         <Switch>
