@@ -11,7 +11,13 @@ router.get('/', async (req, res) => {
     const search = req.query.search as string || '';
     const category = req.query.category as string || '';
     const categoryName = req.query.categoryName as string || '';
-    const status = req.query.status as "published" | "draft" | "" || '';
+    const statusParam = req.query.status as string || '';
+    
+    // Validate status before using it
+    let status: "published" | "draft" | "" = "";
+    if (statusParam === "published" || statusParam === "draft") {
+      status = statusParam;
+    }
     
     const options = {
       page,
@@ -119,8 +125,17 @@ router.get('/categories/names', async (req, res) => {
       status: 'published'
     });
     
-    // Extract unique category names
-    const categoryNames = [...new Set(allClasses.map(c => c.categoryName).filter(Boolean))];
+    // Extract unique category names using an object as a map
+    const categoryNamesMap: {[key: string]: boolean} = {};
+    
+    allClasses.forEach(c => {
+      if (c.categoryName) {
+        categoryNamesMap[c.categoryName] = true;
+      }
+    });
+    
+    // Convert object keys to array
+    const categoryNames = Object.keys(categoryNamesMap);
     
     res.json(categoryNames);
   } catch (error) {

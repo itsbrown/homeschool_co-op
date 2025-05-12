@@ -902,6 +902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/enrollments/:id', isAuthenticated, hasRole(['admin']), programEnrollmentsApi.deleteEnrollment);
 
   // Register API routers
+  app.use("/api/classes", classesRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/admin", adminClassesRouter);
   

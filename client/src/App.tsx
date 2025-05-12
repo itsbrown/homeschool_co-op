@@ -26,6 +26,7 @@ import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
 import ChildrenPage from "./pages/ChildrenPage";
 import ChildProfileEditPage from "./pages/ChildProfileEditPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
+import ClassesPage from "./pages/ClassesPage";
 import CalendarPage from "./pages/CalendarPage";
 import ProgramsBrowseRedirect from "./pages/ProgramsBrowseRedirect";
 import NotFound from "@/pages/not-found";
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/registration" component={RegistrationPage} />
       <Route path="/programs" component={ProgramsPage} />
       <Route path="/programs/browse" component={ProgramsBrowseRedirect} />
+      <Route path="/classes" component={ClassesPage} />
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/register" component={ChildRegistrationPage} />
       <Route path="/children/register/confirm" component={ChildRegistrationConfirmation} />

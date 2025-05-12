@@ -42,10 +42,16 @@ export default function ParentDashboard() {
               Register Child
             </Link>
           </Button>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="mr-2">
             <Link href="/programs">
               <BookOpen className="mr-2 h-4 w-4" />
               Browse Programs
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/classes">
+              <Users className="mr-2 h-4 w-4" />
+              Browse Classes
             </Link>
           </Button>
         </div>
