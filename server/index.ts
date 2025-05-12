@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import fileUpload from "express-fileupload";
 
 const app = express();
 // Increase the size limit to 50MB for file uploads
@@ -8,6 +9,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(express.raw({ limit: '50mb' }));
 app.use(express.text({ limit: '50mb' }));
+app.use(fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+  abortOnLimit: true,
+  createParentPath: true,
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();
