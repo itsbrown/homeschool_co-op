@@ -162,10 +162,9 @@ router.get("/:id", async (req, res) => {
 // Generate activity
 router.post("/generate", async (req, res) => {
   try {
-    const userId = req.session?.userId;
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    // Allow generation for both authenticated and unauthenticated users
+    // Use userId if available, otherwise use a default guest ID
+    const userId = req.session?.userId || 0; // Use 0 as guest user ID
 
     const validationResult = ActivityGenerationSchema.safeParse(req.body);
     if (!validationResult.success) {
