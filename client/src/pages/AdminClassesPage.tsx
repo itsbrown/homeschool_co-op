@@ -149,22 +149,22 @@ export function AdminClassesPage() {
   // Navigate to create new class
   const handleCreateClass = () => {
     console.log("Creating new class");
-    // Force a full page navigation rather than using setLocation
-    window.location.href = "/admin/classes/new";
+    // Use setLocation for navigation within the React app instead of full page refresh
+    setLocation("/admin/classes/new");
   };
 
   // Navigate to edit class
   const handleEditClass = (id: number) => {
     console.log("Editing class:", id);
-    // Force a full page navigation rather than using setLocation
-    window.location.href = `/admin/classes/edit/${id}`;
+    // Use setLocation for navigation within the React app instead of full page refresh
+    setLocation(`/admin/classes/edit/${id}`);
   };
   
   // Navigate to CSV upload page
   const handleNavigateToUpload = () => {
     console.log("Navigating to CSV upload");
-    // Force a full page navigation rather than using setLocation
-    window.location.href = "/admin/classes/upload";
+    // Use setLocation for navigation within the React app instead of full page refresh
+    setLocation("/admin/classes/upload");
   };
 
   return (
