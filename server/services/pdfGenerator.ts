@@ -174,24 +174,93 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   doc.fontSize(12).font(REGULAR_FONT).text(content.instructions);
   doc.moveDown();
   
-  // Add coloring instructions
-  if (content.content?.elements) {
-    doc.fontSize(14).font(BOLD_FONT).text('Coloring Guide:', { underline: true });
-    doc.moveDown();
-    
+  // Add coloring guide - handle multiple potential data structures
+  doc.fontSize(14).font(BOLD_FONT).text('Coloring Guide:', { underline: true });
+  doc.moveDown();
+  
+  // Different possible structures based on AI models (OpenAI vs Anthropic)
+  let hasColoringGuide = false;
+  
+  // Structure 1: content.content.elements array with name/description
+  if (content.content?.elements && Array.isArray(content.content.elements)) {
+    hasColoringGuide = true;
     content.content.elements.forEach((element: any) => {
-      doc.fontSize(12).font(BOLD_FONT).text(`${element.name}:`);
-      doc.fontSize(12).font(REGULAR_FONT).text(`${element.description}`);
+      if (typeof element === 'object' && element !== null) {
+        // Handle objects with name and description
+        if (element.name && element.description) {
+          doc.fontSize(12).font(BOLD_FONT).text(`${element.name}:`);
+          doc.fontSize(12).font(REGULAR_FONT).text(`${element.description}`);
+        } 
+        // Handle objects with element and instruction
+        else if (element.element && element.instruction) {
+          doc.fontSize(12).font(BOLD_FONT).text(`${element.element}:`);
+          doc.fontSize(12).font(REGULAR_FONT).text(`${element.instruction}`);
+        }
+        // If we have just a string in the elements array
+        else if (typeof element === 'string') {
+          doc.fontSize(12).font(BOLD_FONT).text(`${element}:`);
+          doc.fontSize(12).font(REGULAR_FONT).text(`Color this element as you like`);
+        }
+        doc.moveDown(0.5);
+      }
+    });
+  }
+  
+  // Structure 2: content.coloring_guide array
+  if (content.coloring_guide && Array.isArray(content.coloring_guide)) {
+    hasColoringGuide = true;
+    content.coloring_guide.forEach((guide: any) => {
+      if (typeof guide === 'object' && guide !== null) {
+        if (guide.element && guide.instruction) {
+          doc.fontSize(12).font(BOLD_FONT).text(`${guide.element}:`);
+          doc.fontSize(12).font(REGULAR_FONT).text(`${guide.instruction}`);
+        }
+        doc.moveDown(0.5);
+      }
+    });
+  }
+  
+  // Structure 3: content.content.theme with elements array
+  if (content.content?.theme && content.content?.elements && Array.isArray(content.content.elements)) {
+    hasColoringGuide = true;
+    // Simple elements array with just strings
+    content.content.elements.forEach((element: string) => {
+      doc.fontSize(12).font(BOLD_FONT).text(`${element}:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`Color this important American symbol`);
       doc.moveDown(0.5);
     });
   }
   
-  // Add image description (in a real implementation, we would generate or import an actual SVG here)
-  doc.moveDown();
-  // Use REGULAR_FONT instead of Helvetica-Italic which is causing the error
-  doc.fontSize(12).font(REGULAR_FONT).text("Image Description:", { underline: true });
-  if (content.content?.image) {
-    doc.fontSize(12).font(REGULAR_FONT).text(content.content.image);
+  // If no coloring guide was found at all, add some generic guidance
+  if (!hasColoringGuide) {
+    // Generic fallback content for American symbols
+    if (content.title.toLowerCase().includes('american') || 
+        content.title.toLowerCase().includes('history') ||
+        content.title.toLowerCase().includes('founding')) {
+      
+      doc.fontSize(12).font(BOLD_FONT).text(`Liberty Bell:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`Famous bell with a crack, rung for independence`);
+      doc.moveDown(0.5);
+      
+      doc.fontSize(12).font(BOLD_FONT).text(`American Flag:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`The original flag with 13 stars arranged in a circle`);
+      doc.moveDown(0.5);
+      
+      doc.fontSize(12).font(BOLD_FONT).text(`George Washington:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`America's first president in his general's uniform`);
+      doc.moveDown(0.5);
+      
+      doc.fontSize(12).font(BOLD_FONT).text(`Independence Hall:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`Building where the Declaration was signed`);
+      doc.moveDown(0.5);
+    }
+  }
+  
+  // Optional image description (if provided)
+  if (content.content?.image || content.content?.description) {
+    doc.moveDown();
+    doc.fontSize(12).font(REGULAR_FONT).text("Image Description:", { underline: true });
+    doc.fontSize(12).font(REGULAR_FONT).text(content.content?.image || content.content?.description || "");
   }
   
   // Create the coloring image using SVG generator
@@ -224,9 +293,32 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
         
         console.log('AI generated image path:', imagePath);
         
-        // Add the generated image to the PDF
-        doc.image(imagePath, 50, doc.y, { width: 500 });
-        console.log('AI-generated image added to PDF');
+        // Calculate available space for image
+        const currentY = doc.y;
+        const pageHeight = doc.page.height;
+        const pageMarginBottom = 50; // Bottom margin
+        const availableHeight = pageHeight - currentY - pageMarginBottom;
+        
+        // Determine if we need to add a new page if there's not enough space
+        if (availableHeight < 300) { // Minimum reasonable height for the image
+          doc.addPage();
+          // Add a title to the new page
+          doc.fontSize(14).font('Helvetica-Bold').text('Coloring Page (continued)', { align: 'center' });
+          doc.moveDown();
+        }
+        
+        // Calculate the optimal image dimensions to fit the page
+        const maxWidth = 500; 
+        const maxHeight = Math.min(500, doc.page.height - doc.y - pageMarginBottom);
+        
+        // Add the generated image to the PDF with dynamic sizing
+        doc.image(imagePath, 50, doc.y, { 
+          width: maxWidth,
+          height: maxHeight,
+          fit: [maxWidth, maxHeight]
+        });
+        
+        console.log('AI-generated image added to PDF with dimensions:', { maxWidth, maxHeight });
         
         // Clean up the image file after a delay (optional)
         setTimeout(() => {

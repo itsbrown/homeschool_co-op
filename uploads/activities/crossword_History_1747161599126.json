@@ -1,0 +1,31 @@
+{
+  "title": "History Crossword Activity",
+  "description": "A beginner level crossword activity about History for 6-8 students.",
+  "instructions": "Complete this crossword activity about History.",
+  "subject": "History",
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "createdAt": "5/13/2025",
+  "content": {
+    "words": [
+      "civilization",
+      "colony",
+      "empire",
+      "government",
+      "century",
+      "document",
+      "constitution",
+      "democracy"
+    ],
+    "clues": [
+      "Related to History: democracy",
+      "Related to History: artifact",
+      "Related to History: document",
+      "Related to History: civilization",
+      "Related to History: freedom",
+      "Related to History: government",
+      "Related to History: liberty",
+      "Related to History: independence"
+    ]
+  }
+}
