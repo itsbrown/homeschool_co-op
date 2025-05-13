@@ -226,17 +226,55 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
     // Simple elements array with just strings
     content.content.elements.forEach((element: string) => {
       doc.fontSize(12).font(BOLD_FONT).text(`${element}:`);
-      doc.fontSize(12).font(REGULAR_FONT).text(`Color this important American symbol`);
+      
+      // Use appropriate text based on content subject
+      if (content.title.toLowerCase().includes('american symbol')) {
+        doc.fontSize(12).font(REGULAR_FONT).text(`Color this important American symbol`);
+      } else if (content.subject) {
+        doc.fontSize(12).font(REGULAR_FONT).text(`Color this ${content.subject.toLowerCase()} element`);
+      } else {
+        doc.fontSize(12).font(REGULAR_FONT).text(`Color this element according to your creativity`);
+      }
+      
       doc.moveDown(0.5);
     });
   }
   
   // If no coloring guide was found at all, add some generic guidance
   if (!hasColoringGuide) {
-    // Generic fallback content for American symbols
-    if (content.title.toLowerCase().includes('american') || 
-        content.title.toLowerCase().includes('history') ||
-        content.title.toLowerCase().includes('founding')) {
+    // Extract potential elements from the title and description
+    const text = `${content.title} ${content.description || ''} ${content.content?.image || ''}`.toLowerCase();
+    
+    // Create a generic coloring guide based on the content
+    const elements = [];
+    
+    // Try to extract names of people, objects, or concepts from the title/description
+    const titleWords = content.title.split(' ');
+    const namePattern = /^[A-Z][a-z]+/; // Simple pattern to identify proper nouns
+    
+    titleWords.forEach(word => {
+      if (namePattern.test(word) && word.length > 3) {
+        elements.push(word);
+      }
+    });
+    
+    // Check if this appears to be about a historical figure
+    if (text.includes('antoinette') && text.includes('brown') && text.includes('blackwell')) {
+      doc.fontSize(12).font(BOLD_FONT).text(`Antoinette Brown Blackwell:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`First ordained woman minister in the United States`);
+      doc.moveDown(0.5);
+      
+      doc.fontSize(12).font(BOLD_FONT).text(`Dress and Robe:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`Typical clothing of the 19th century`);
+      doc.moveDown(0.5);
+      
+      doc.fontSize(12).font(BOLD_FONT).text(`Surroundings:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`Nature elements showing her connection to spirituality`);
+      doc.moveDown(0.5);
+    } 
+    // American symbols fallback - only if explicitly about American symbols
+    else if (content.title.toLowerCase().includes('american symbol') || 
+            (content.title.toLowerCase().includes('founding') && content.title.toLowerCase().includes('symbol'))) {
       
       doc.fontSize(12).font(BOLD_FONT).text(`Liberty Bell:`);
       doc.fontSize(12).font(REGULAR_FONT).text(`Famous bell with a crack, rung for independence`);
@@ -246,13 +284,29 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
       doc.fontSize(12).font(REGULAR_FONT).text(`The original flag with 13 stars arranged in a circle`);
       doc.moveDown(0.5);
       
-      doc.fontSize(12).font(BOLD_FONT).text(`George Washington:`);
-      doc.fontSize(12).font(REGULAR_FONT).text(`America's first president in his general's uniform`);
+      doc.fontSize(12).font(BOLD_FONT).text(`Eagle:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`National bird of the United States`);
       doc.moveDown(0.5);
-      
-      doc.fontSize(12).font(BOLD_FONT).text(`Independence Hall:`);
-      doc.fontSize(12).font(REGULAR_FONT).text(`Building where the Declaration was signed`);
-      doc.moveDown(0.5);
+    }
+    // Generic guidance for other topics
+    else {
+      // Use elements from the title if we extracted any
+      if (elements.length > 0) {
+        elements.forEach(element => {
+          doc.fontSize(12).font(BOLD_FONT).text(`${element}:`);
+          doc.fontSize(12).font(REGULAR_FONT).text(`Color this element based on historical accuracy or your imagination`);
+          doc.moveDown(0.5);
+        });
+      } else {
+        // Most generic fallback if we couldn't extract anything specific
+        doc.fontSize(12).font(BOLD_FONT).text(`Main Subject:`);
+        doc.fontSize(12).font(REGULAR_FONT).text(`Color the main subject with appropriate colors`);
+        doc.moveDown(0.5);
+        
+        doc.fontSize(12).font(BOLD_FONT).text(`Background Elements:`);
+        doc.fontSize(12).font(REGULAR_FONT).text(`Color the surroundings to enhance the main subject`);
+        doc.moveDown(0.5);
+      }
     }
   }
   
@@ -420,10 +474,11 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
     // Try fallback using direct SVG rendering without file operations
     try {
       console.log('Attempting fallback SVG rendering method');
+      // Use content description or title for the SVG, not hardcoded American symbols
       const svgContent = generateSvgForActivity(
         content.title, 
         'coloring',
-        'American symbols with George Washington, Liberty Bell, Constitution and Independence Hall'
+        content.content?.image || content.description || content.title
       );
       
       // Encode SVG as base64 data URL
@@ -433,17 +488,22 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
       // Create a placeholder for the image and add a note about it
       doc.rect(100, doc.y, 400, 300).stroke();
       
+      // Use dynamic title from the content
+      const imageTitle = `Coloring Image: ${content.title}`;
       doc.fontSize(14)
          .font(STANDARD_FONT)
-         .text('Coloring Image: America\'s Founding Symbols', 
-            100 + 200 - doc.widthOfString('Coloring Image: America\'s Founding Symbols') / 2, 
+         .text(imageTitle, 
+            100 + 200 - doc.widthOfString(imageTitle) / 2, 
             doc.y + 20);
             
-      // Add text about what would be in the image
+      // Use dynamic description from the content
+      const imageDescription = content.description || 
+                              content.content?.image || 
+                              `This is a coloring page about ${content.title}`;
+                              
       doc.fontSize(12)
          .font(STANDARD_FONT)
-         .text('This coloring page features George Washington, the Liberty Bell, \nthe 13-star American flag, and Independence Hall.', 
-            150, doc.y + 50, { align: 'center' });
+         .text(imageDescription, 150, doc.y + 50, { align: 'center' });
          
       console.log('Added fallback image description');
     } catch (fallbackError) {
