@@ -45,6 +45,23 @@ const generateColoringSvg = (title: string, description: string): string => {
     elements.push('liberty bell', 'american flag', 'eagle', 'constitution');
   }
   
+  // Add specific elements based on title or description
+  if (description.toLowerCase().includes('washington') || 
+      description.toLowerCase().includes('founding heroes') ||
+      title.toLowerCase().includes('founding') ||
+      title.toLowerCase().includes('america\'s birthday')) {
+    if (!elements.includes('george washington')) {
+      elements.push('george washington');
+    }
+  }
+  
+  if (description.toLowerCase().includes('independence hall') || 
+      description.toLowerCase().includes('philadelphia')) {
+    if (!elements.includes('independence hall')) {
+      elements.push('independence hall');
+    }
+  }
+  
   // Build SVG content with educational symbols of America
   let svgContent = `
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
@@ -206,6 +223,71 @@ const generateColoringSvg = (title: string, description: string): string => {
     `;
   }
 
+  // Add George Washington if it's in the list
+  if (elements.includes('george washington') || elements.includes('washington')) {
+    svgContent += `
+      <g transform="translate(500, 320)">
+        <!-- Washington's profile outline -->
+        <path d="M100,50 C105,40 110,30 120,25 C130,20 140,18 150,20 C160,25 165,35 168,50
+                C170,65 170,80 165,95 C160,105 150,110 140,112 C130,115 120,114 110,110
+                C100,105 95,95 90,85 C85,70 90,60 100,50 Z" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <!-- Hair/wig -->
+        <path d="M110,35 C120,25 135,20 150,22 C165,25 170,35 175,45
+                C165,42 160,45 155,50 C150,40 140,35 130,32
+                C120,30 110,32 105,40" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <!-- Face features -->
+        <path d="M130,55 C132,54 135,54 138,55 M145,70 L150,68 L140,68
+                M125,80 C130,85 140,87 150,85" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <!-- Coat collar and shoulders -->
+        <path d="M90,100 C100,105 110,108 120,110 C130,112 140,112 150,110
+                C160,108 170,105 180,100
+                C175,115 165,125 150,130 C135,125 125,115 120,100" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <text x="135" y="150" font-family="Arial" font-size="16" text-anchor="middle">George Washington</text>
+        <text x="135" y="170" font-family="Arial" font-size="12" text-anchor="middle" fill="gray">America's First President</text>
+      </g>
+    `;
+  }
+  
+  // Add Independence Hall if it's in the list
+  if (elements.includes('independence hall')) {
+    svgContent += `
+      <g transform="translate(150, 450)">
+        <!-- Building base -->
+        <rect x="50" y="20" width="200" height="100" fill="none" stroke="black" stroke-width="1.5"/>
+        
+        <!-- Roof and spire -->
+        <path d="M40,20 L260,20 L250,0 L50,0 Z" fill="none" stroke="black" stroke-width="1.5"/>
+        <path d="M145,0 L145,-20 L155,-20 L155,0" fill="none" stroke="black" stroke-width="1.5"/>
+        <path d="M140,-20 L160,-20 L150,-40 Z" fill="none" stroke="black" stroke-width="1.5"/>
+        
+        <!-- Windows -->
+        <rect x="70" y="40" width="20" height="30" fill="none" stroke="black" stroke-width="1"/>
+        <rect x="110" y="40" width="20" height="30" fill="none" stroke="black" stroke-width="1"/>
+        <rect x="150" y="40" width="20" height="30" fill="none" stroke="black" stroke-width="1"/>
+        <rect x="190" y="40" width="20" height="30" fill="none" stroke="black" stroke-width="1"/>
+        
+        <!-- Door -->
+        <rect x="130" y="80" width="40" height="40" fill="none" stroke="black" stroke-width="1.5"/>
+        <path d="M130,80 L170,80 L170,120 L130,120 Z" fill="none" stroke="black" stroke-width="1"/>
+        <path d="M150,80 L150,120" fill="none" stroke="black" stroke-width="1"/>
+        
+        <!-- Steps -->
+        <path d="M120,120 L180,120 L190,130 L110,130 Z" fill="none" stroke="black" stroke-width="1"/>
+        
+        <text x="150" y="150" font-family="Arial" font-size="16" text-anchor="middle">Independence Hall</text>
+        <text x="150" y="170" font-family="Arial" font-size="12" text-anchor="middle" fill="gray">Birthplace of American Democracy</text>
+      </g>
+    `;
+  }
+  
   // Close the SVG
   svgContent += `</svg>`;
   

@@ -1,0 +1,40 @@
+{
+  "title": "America's Birthday: Founding Heroes",
+  "description": "This coloring page introduces young learners to key figures and symbols from America's founding period in a simplified, age-appropriate format.",
+  "instructions": "Color the different elements of America's founding story. Read the learning facts with an adult to learn more about each part of the picture.",
+  "content": {
+    "image": "A simplified scene showing George Washington, the Liberty Bell, an American flag with 13 stars, and Independence Hall building in Philadelphia.",
+    "elements": [
+      {
+        "name": "George Washington",
+        "description": "America's first president wearing his general's uniform"
+      },
+      {
+        "name": "Liberty Bell",
+        "description": "Famous bell with a crack that was rung to celebrate independence"
+      },
+      {
+        "name": "Original American Flag",
+        "description": "Flag with 13 stars arranged in a circle"
+      },
+      {
+        "name": "Independence Hall",
+        "description": "Building where the Declaration of Independence was signed"
+      }
+    ],
+    "learningFacts": [
+      "The United States became a country in 1776.",
+      "George Washington led American soldiers before becoming the first president.",
+      "The Liberty Bell is an important American symbol of freedom.",
+      "The first American flag had 13 stars for the original 13 colonies."
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Symbol recognition",
+    "Fine motor skills"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}

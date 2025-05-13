@@ -193,6 +193,9 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   doc.moveDown();
   
   try {
+    // Import sharp for SVG to PNG conversion
+    const sharp = require('sharp');
+    
     // Generate SVG content based on the activity title and description
     const svgContent = generateSvgForActivity(
       content.title, 
@@ -201,23 +204,35 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
     );
     
     // Create a temporary SVG file
-    const svgFilePath = path.join(process.cwd(), 'uploads', 'temp', `temp_${Date.now()}.svg`);
-    await ensureDirectoryExists(path.dirname(svgFilePath));
+    const tempDir = path.join(process.cwd(), 'uploads', 'temp');
+    await ensureDirectoryExists(tempDir);
+    
+    const svgFilePath = path.join(tempDir, `temp_${Date.now()}.svg`);
+    const pngFilePath = path.join(tempDir, `temp_${Date.now()}.png`);
+    
+    // Write SVG to file
     fs.writeFileSync(svgFilePath, svgContent);
     
-    // Add the SVG to the PDF
-    doc.image(svgFilePath, 50, doc.y, { width: 500 });
+    // Convert SVG to PNG
+    await sharp(svgFilePath)
+      .resize(800, 600)
+      .png()
+      .toFile(pngFilePath);
     
-    // Clean up temporary file
+    // Add the PNG to the PDF
+    doc.image(pngFilePath, 50, doc.y, { width: 500 });
+    
+    // Clean up temporary files
     setTimeout(() => {
       try {
         fs.unlinkSync(svgFilePath);
+        fs.unlinkSync(pngFilePath);
       } catch (e) {
-        console.warn(`Failed to clean up temporary SVG file: ${e}`);
+        console.warn(`Failed to clean up temporary files: ${e}`);
       }
     }, 1000);
   } catch (svgError) {
-    console.error('Error generating SVG:', svgError);
+    console.error('Error generating SVG or converting to PNG:', svgError);
     
     // Fallback to placeholder if SVG generation fails
     doc.rect(100, doc.y, 400, 300).stroke();
