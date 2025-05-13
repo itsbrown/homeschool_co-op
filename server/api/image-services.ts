@@ -136,29 +136,45 @@ router.get('/test-coloring-pdf', async (req, res) => {
       });
     }
     
+    // Clear existing cache to ensure a fresh image is generated
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const cacheDir = path.join(process.cwd(), 'uploads', 'cache');
+      const cacheFile = path.join(cacheDir, 'american_symbols_cached.png');
+      
+      if (fs.existsSync(cacheFile)) {
+        fs.unlinkSync(cacheFile);
+        console.log('Cleared cached image to force a fresh generation');
+      }
+    } catch (cacheError) {
+      console.warn('Error clearing cache:', cacheError);
+    }
+    
     // Import PDF generator
     const { generateWorksheetPDF } = await import('../services/pdfGenerator');
     const { storage } = await import('../storage');
     
-    // Create a sample coloring page activity
+    // Create a sample coloring page activity with enhanced elements for accurate rendering
     const sampleActivity = {
-      title: "America's Founding Ideas Coloring",
+      title: "America's Important Symbols - Coloring Page",
       type: "coloring" as "worksheet" | "crossword" | "coloring" | "wordsearch" | "maze",
       subject: "History",
       difficulty: "beginner" as "beginner" | "intermediate" | "advanced",
       ageRange: "5-8",
       content: {
-        title: "America's Founding Ideas Coloring",
-        description: "A coloring page featuring important American historical symbols and figures.",
-        instructions: "Color the images of important American symbols using the coloring guide below.",
-        targetSkills: ["History knowledge", "Fine motor skills", "Patriotic symbols recognition"],
+        title: "America's Important Symbols - Coloring Page",
+        description: "A coloring page featuring detailed American historical symbols for young learners.",
+        instructions: "Color each part of the picture carefully. Think about what each symbol means to American history. Use the coloring guide below for ideas or choose your own colors!",
+        targetSkills: ["History knowledge", "Fine motor skills", "Symbol recognition", "Following directions"],
         content: {
-          image: "This illustration features George Washington in his general's uniform, the Liberty Bell with its famous crack, a 13-star American flag, and Independence Hall in Philadelphia.",
+          image: "This illustration features clearly separated historical American symbols: George Washington in his general's uniform with distinct facial features, the Liberty Bell with its famous crack clearly visible, a 13-star American flag with properly drawn five-pointed stars, and Independence Hall with its recognizable façade.",
           elements: [
-            { name: "George Washington", description: "America's first president and general" },
-            { name: "Liberty Bell", description: "Famous symbol of American independence with a crack" },
-            { name: "13-Star Flag", description: "The original American flag with stars in a circle" },
-            { name: "Independence Hall", description: "Where the Declaration of Independence was signed" }
+            { name: "George Washington", description: "America's first president - color his uniform blue and his hair white" },
+            { name: "Liberty Bell", description: "Famous bell with a crack - color it brown or gold" },
+            { name: "13-Star Flag", description: "The original American flag with 13 five-pointed stars in a circle" },
+            { name: "Independence Hall", description: "Famous building where important documents were signed" },
+            { name: "Bald Eagle", description: "America's national bird - color its head white and body brown" }
           ]
         }
       },
