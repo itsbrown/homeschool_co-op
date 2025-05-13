@@ -43,7 +43,7 @@ export const initDocumentAI = async (): Promise<boolean> => {
     console.log('Document AI service initialized successfully');
     return true;
   } catch (error) {
-    console.error('Failed to initialize Document AI service:', error);
+    console.error('Failed to initialize Document AI service:', error instanceof Error ? error.message : String(error));
     return false;
   }
 };
@@ -90,8 +90,8 @@ export const processDocument = async (filePath: string): Promise<string> => {
     // Return the extracted text
     return document.text;
   } catch (error) {
-    console.error('Error processing document with Document AI:', error);
-    throw new Error(`Document AI processing failed: ${error.message || 'Unknown error'}`);
+    console.error('Error processing document with Document AI:', error instanceof Error ? error.message : String(error));
+    throw new Error(`Document AI processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 

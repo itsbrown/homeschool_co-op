@@ -23,6 +23,9 @@ interface JobResult {
   error?: string;
 }
 
+// Type definition for job types
+type JobType = 'activity_generation' | 'general_task';
+
 // Class for managing background tasks
 class BackgroundTaskManager extends EventEmitter {
   private tasks: Map<string, { status: string, result?: JobResult }>;
@@ -36,6 +39,52 @@ class BackgroundTaskManager extends EventEmitter {
     this.runningTasks = 0;
     this.maxConcurrentTasks = maxConcurrent;
     this.taskQueue = [];
+  }
+  
+  // Create and queue a generic job
+  createJob(jobId: string, jobType: JobType, task: () => Promise<any>): string {
+    this.tasks.set(jobId, { status: 'queued' });
+    
+    const taskWrapper = async () => {
+      try {
+        this.tasks.set(jobId, { status: 'in_progress' });
+        
+        // Execute the task
+        const result = await task();
+        
+        // Update task status with success result
+        this.tasks.set(jobId, { 
+          status: 'completed', 
+          result: {
+            success: true,
+            data: result
+          } 
+        });
+        
+        this.emit('task-completed', jobId, result);
+      } catch (error) {
+        console.error(`Error executing ${jobType} job ${jobId}:`, error instanceof Error ? error.message : String(error));
+        
+        // Update task status with error
+        this.tasks.set(jobId, { 
+          status: 'failed', 
+          result: {
+            success: false,
+            error: error instanceof Error ? error.message : String(error)
+          } 
+        });
+        
+        this.emit('task-failed', jobId);
+      } finally {
+        this.runningTasks--;
+        this.processQueue(); // Process next task in queue
+      }
+    };
+    
+    this.taskQueue.push(taskWrapper);
+    this.processQueue();
+    
+    return jobId;
   }
 
   // Create a unique job ID
