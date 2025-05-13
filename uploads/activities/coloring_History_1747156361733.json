@@ -1,0 +1,48 @@
+{
+  "title": "Symbols of America's Beginning",
+  "description": "A coloring page featuring important symbols and people from America's founding that helps young students learn about early American history and values.",
+  "instructions": "Color each part of the image using the suggested colors or your own choices. As you color, read the fun facts to learn about America's beginning!",
+  "content": {
+    "image": "A large detailed outline drawing showing the Liberty Bell in the center, with the American flag waving above it. To the left stands George Washington, and to the right is the Declaration of Independence with a quill pen. At the bottom is the bald eagle symbol.",
+    "elements": [
+      {
+        "name": "Liberty Bell",
+        "description": "Color the Liberty Bell brown or dark gold. This bell rang to announce the signing of the Declaration of Independence."
+      },
+      {
+        "name": "American Flag",
+        "description": "Color the stripes red and white, and the star section blue with white stars."
+      },
+      {
+        "name": "George Washington",
+        "description": "Color Washington's coat blue and his hair white or gray. He was our first president!"
+      },
+      {
+        "name": "Declaration of Independence",
+        "description": "Color the document yellowish-brown like old paper, with black writing."
+      },
+      {
+        "name": "Bald Eagle",
+        "description": "Color the eagle's body dark brown, with a white head and yellow beak."
+      }
+    ],
+    "learningFacts": [
+      "The Liberty Bell has a famous crack in it.",
+      "The first American flag had only 13 stars for the 13 colonies.",
+      "George Washington was a general before becoming president.",
+      "The Declaration of Independence was signed in 1776.",
+      "The bald eagle became America's national symbol in 1782.",
+      "America's founders believed in freedom and equality.",
+      "People in early America wanted to make their own rules."
+    ]
+  },
+  "targetSkills": [
+    "historical awareness",
+    "symbol recognition",
+    "fine motor skills",
+    "reading comprehension"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20 minutes"
+}

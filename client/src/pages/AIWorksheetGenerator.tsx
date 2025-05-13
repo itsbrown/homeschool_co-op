@@ -141,7 +141,17 @@ export default function AIWorksheetGenerator() {
     onSuccess: (data) => {
       // Handle successful generation
       if (data.success) {
-        setGeneratedActivity(data);
+        // Log the entire data structure to understand its shape
+        console.log('Activity generation response:', data);
+        
+        // Normalize the data structure to ensure we have the activity ID
+        const processedData = {
+          ...data,
+          // If data contains a nested 'data.activity' object with an ID, make sure it's accessible at the top level too
+          id: data.id || (data.data?.activity?.id) || null
+        };
+        
+        setGeneratedActivity(processedData);
         setSelectedTab("preview");
         toast({
           title: "Activity Generated!",
@@ -169,7 +179,7 @@ export default function AIWorksheetGenerator() {
 
   // Handle form submission
   // Generate PDF for an activity
-  const generatePDF = async (activityId: number) => {
+  const generatePDF = async (activityId: number | null) => {
     if (!activityId) {
       console.error('Cannot generate PDF: No activity ID provided');
       toast({
@@ -748,7 +758,23 @@ export default function AIWorksheetGenerator() {
                 <h2 className="text-2xl font-bold">Activity Preview</h2>
                 <Button 
                   variant="outline" 
-                  onClick={() => generatedActivity.pdfUrl ? window.open(generatedActivity.pdfUrl) : generatePDF(generatedActivity.id)}
+                  onClick={() => {
+                    console.log('Activity data:', generatedActivity);
+                    if (generatedActivity.pdfUrl) {
+                      window.open(generatedActivity.pdfUrl);
+                    } else if (generatedActivity.id) {
+                      generatePDF(generatedActivity.id);
+                    } else if (generatedActivity.data?.activity?.id) {
+                      // Try getting ID from nested data structure if available
+                      generatePDF(generatedActivity.data.activity.id);
+                    } else {
+                      toast({
+                        title: "Error",
+                        description: "Cannot generate PDF - activity ID not found",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
                   disabled={isGeneratingPdf}
                 >
                   <Download className="mr-2 h-4 w-4" />
