@@ -5,6 +5,7 @@ import fs from "fs/promises";
 import { storage } from "../storage";
 import { checkOpenAIStatus, generateEducationalActivity } from "../services/openai";
 import { InsertActivity } from "../../shared/schema";
+import backgroundTaskManager from "../services/backgroundTasks";
 
 const router = express.Router();
 
@@ -174,15 +175,30 @@ router.post("/generate", async (req, res) => {
       });
     }
 
-    const result = await generateActivity(validationResult.data, userId);
-    if (!result.success) {
-      return res.status(500).json({ message: result.error });
+    // Check OpenAI status
+    const openaiStatus = await checkOpenAIStatus();
+    if (!openaiStatus.available) {
+      return res.status(503).json({ 
+        success: false, 
+        error: "OpenAI service is not available. Please check your API key." 
+      });
     }
 
-    return res.json(result);
+    // Queue the activity generation as a background task
+    const jobId = backgroundTaskManager.queueActivityGeneration({
+      ...validationResult.data,
+      userId
+    });
+
+    // Return immediately with the job ID
+    return res.json({
+      success: true,
+      jobId,
+      message: "Activity generation has been queued and will be processed in the background."
+    });
   } catch (error) {
-    console.error("Error generating activity:", error);
-    return res.status(500).json({ message: "Failed to generate activity" });
+    console.error("Error queuing activity generation:", error);
+    return res.status(500).json({ message: "Failed to queue activity generation" });
   }
 });
 
