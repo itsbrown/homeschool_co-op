@@ -156,47 +156,61 @@ export default function AIWorksheetGenerator() {
     if (!generatedActivity) return null;
     
     const activity = generatedActivity.activityContent;
+    if (!activity) {
+      return (
+        <div className="border p-6 rounded-lg bg-white">
+          <h2 className="text-2xl font-bold mb-2">Error Generating Activity</h2>
+          <p className="text-gray-600 mb-4">
+            The activity could not be generated. Please try again with different parameters.
+          </p>
+          <pre className="mt-4 p-4 bg-gray-100 rounded overflow-auto text-sm">
+            {JSON.stringify(generatedActivity, null, 2)}
+          </pre>
+        </div>
+      );
+    }
+    
     const activityType = form.getValues().activityType as ActivityType;
     
     return (
       <div className="space-y-6">
         <div className="border p-6 rounded-lg bg-white">
-          <h2 className="text-2xl font-bold mb-2">{activity.title}</h2>
-          <p className="text-gray-600 mb-4">{activity.description}</p>
+          <h2 className="text-2xl font-bold mb-2">{activity?.title || "Generated Activity"}</h2>
+          <p className="text-gray-600 mb-4">{activity?.description || "No description available."}</p>
           
           <div className="mb-4">
             <h3 className="text-lg font-medium mb-2">Instructions:</h3>
-            <p>{activity.instructions}</p>
+            <p>{activity?.instructions || "No instructions available."}</p>
           </div>
           
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <span className="text-sm font-medium text-gray-500">Age Range:</span>
-              <span className="ml-2">{activity.ageRange}</span>
+              <span className="ml-2">{activity?.ageRange || form.getValues().ageRange}</span>
             </div>
             <div>
               <span className="text-sm font-medium text-gray-500">Difficulty:</span>
-              <span className="ml-2">{activity.difficulty}</span>
+              <span className="ml-2">{activity?.difficulty || form.getValues().difficulty}</span>
             </div>
             <div>
               <span className="text-sm font-medium text-gray-500">Estimated Time:</span>
-              <span className="ml-2">{activity.timeRequired}</span>
+              <span className="ml-2">{activity?.timeRequired || "Not specified"}</span>
             </div>
             <div>
               <span className="text-sm font-medium text-gray-500">Target Skills:</span>
-              <span className="ml-2">{activity.targetSkills.join(", ")}</span>
+              <span className="ml-2">{activity?.targetSkills?.join(", ") || "None specified"}</span>
             </div>
           </div>
           
           <div className="mt-6 border-t pt-4">
             <h3 className="text-lg font-medium mb-4">Content Preview:</h3>
             
-            {activityType === "worksheet" && (
+            {activityType === "worksheet" && activity?.content?.questions && (
               <div className="space-y-4">
                 {activity.content.questions.map((q: any, i: number) => (
                   <div key={i} className="p-3 border rounded">
-                    <p className="font-medium">{i + 1}. {q.question}</p>
-                    {q.type === "multiple_choice" && (
+                    <p className="font-medium">{i + 1}. {q?.question || "Question not available"}</p>
+                    {q?.type === "multiple_choice" && q?.options && (
                       <div className="ml-6 mt-2 space-y-1">
                         {q.options.map((opt: string, j: number) => (
                           <div key={j} className="flex items-center">
@@ -213,7 +227,7 @@ export default function AIWorksheetGenerator() {
               </div>
             )}
             
-            {activityType === "crossword" && (
+            {activityType === "crossword" && activity?.content?.words && (
               <div className="space-y-4">
                 <p>Crossword puzzle with {activity.content.words.length} words</p>
                 <div className="space-y-2">
@@ -221,7 +235,13 @@ export default function AIWorksheetGenerator() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {activity.content.words.map((w: any, i: number) => (
                       <div key={i} className="p-2 border rounded">
-                        <p><span className="font-medium">{w.direction.charAt(0).toUpperCase() + w.direction.slice(1)} {i + 1}:</span> {w.clue}</p>
+                        <p>
+                          <span className="font-medium">
+                            {w?.direction ? 
+                              `${w.direction.charAt(0).toUpperCase() + w.direction.slice(1)} ${i + 1}:` : 
+                              `Clue ${i + 1}:`}
+                          </span> {w?.clue || "No clue provided"}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -229,29 +249,33 @@ export default function AIWorksheetGenerator() {
               </div>
             )}
             
-            {activityType === "coloring" && (
+            {activityType === "coloring" && activity?.content && (
               <div className="space-y-4">
-                <p className="italic">{activity.content.image}</p>
-                <div className="space-y-2">
-                  <h4 className="font-medium">Elements to Color:</h4>
-                  <ul className="list-disc list-inside">
-                    {activity.content.elements.map((el: any, i: number) => (
-                      <li key={i}>{el.name}: {el.description}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="mt-4">
-                  <h4 className="font-medium">Learning Facts:</h4>
-                  <ul className="list-disc list-inside">
-                    {activity.content.learningFacts.map((fact: string, i: number) => (
-                      <li key={i}>{fact}</li>
-                    ))}
-                  </ul>
-                </div>
+                <p className="italic">{activity.content?.image || "Image description not available"}</p>
+                {activity.content?.elements && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Elements to Color:</h4>
+                    <ul className="list-disc list-inside">
+                      {activity.content.elements.map((el: any, i: number) => (
+                        <li key={i}>{el?.name || `Element ${i+1}`}: {el?.description || "No description"}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {activity.content?.learningFacts && (
+                  <div className="mt-4">
+                    <h4 className="font-medium">Learning Facts:</h4>
+                    <ul className="list-disc list-inside">
+                      {activity.content.learningFacts.map((fact: string, i: number) => (
+                        <li key={i}>{fact || "No fact available"}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
             
-            {activityType === "wordsearch" && (
+            {activityType === "wordsearch" && activity?.content?.words && (
               <div className="space-y-4">
                 <p>Word search puzzle with {activity.content.words.length} words to find</p>
                 <div className="space-y-2">
@@ -259,37 +283,41 @@ export default function AIWorksheetGenerator() {
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {activity.content.words.map((word: string, i: number) => (
                       <div key={i} className="p-2 border rounded text-center">
-                        {word}
+                        {word || `Word ${i+1}`}
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="mt-4">
-                  <h4 className="font-medium">Clues:</h4>
-                  <ol className="list-decimal list-inside">
-                    {activity.content.clues.map((clue: string, i: number) => (
-                      <li key={i}>{clue}</li>
-                    ))}
-                  </ol>
-                </div>
+                {activity.content?.clues && (
+                  <div className="mt-4">
+                    <h4 className="font-medium">Clues:</h4>
+                    <ol className="list-decimal list-inside">
+                      {activity.content.clues.map((clue: string, i: number) => (
+                        <li key={i}>{clue || "No clue available"}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
               </div>
             )}
             
-            {activityType === "maze" && (
+            {activityType === "maze" && activity?.content && (
               <div className="space-y-4">
-                <p>Maze with theme: <strong>{activity.content.theme}</strong></p>
-                <p>Complexity level: {activity.content.complexity}/10</p>
-                <div className="mt-4">
-                  <h4 className="font-medium">Educational Checkpoints:</h4>
-                  <ol className="list-decimal list-inside">
-                    {activity.content.educationalCheckpoints.map((cp: any, i: number) => (
-                      <li key={i} className="mb-2">
-                        <p><strong>Q:</strong> {cp.question}</p>
-                        <p className="ml-6"><strong>A:</strong> {cp.answer}</p>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
+                <p>Maze with theme: <strong>{activity.content?.theme || "No theme specified"}</strong></p>
+                <p>Complexity level: {activity.content?.complexity || "?"}/10</p>
+                {activity.content?.educationalCheckpoints && (
+                  <div className="mt-4">
+                    <h4 className="font-medium">Educational Checkpoints:</h4>
+                    <ol className="list-decimal list-inside">
+                      {activity.content.educationalCheckpoints.map((cp: any, i: number) => (
+                        <li key={i} className="mb-2">
+                          <p><strong>Q:</strong> {cp?.question || "Question not available"}</p>
+                          <p className="ml-6"><strong>A:</strong> {cp?.answer || "Answer not available"}</p>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -303,12 +331,23 @@ export default function AIWorksheetGenerator() {
       <div className="container mx-auto py-6">
         <h1 className="text-3xl font-bold mb-6">AI Worksheet Generator</h1>
         
-        {!checkingAIStatus && aiStatus && !aiStatus.openai?.available && (
+        {!checkingAIStatus && aiStatus && !aiStatus.openai?.available && !aiStatus.anthropic?.available && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>AI Service Unavailable</AlertTitle>
+            <AlertTitle>AI Services Unavailable</AlertTitle>
             <AlertDescription>
-              The OpenAI service is currently unavailable. Worksheet generation may not work properly.
+              Both OpenAI and Anthropic services are currently unavailable. Worksheet generation will not work.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {!checkingAIStatus && aiStatus && !aiStatus.openai?.available && aiStatus.anthropic?.available && (
+          <Alert variant="warning" className="mb-6 bg-amber-50 border-amber-200">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertTitle>OpenAI Service Unavailable</AlertTitle>
+            <AlertDescription>
+              The OpenAI service is currently unavailable, but Anthropic/Claude is available as a backup.
+              Worksheet generation will use Anthropic/Claude instead.
             </AlertDescription>
           </Alert>
         )}
@@ -319,6 +358,7 @@ export default function AIWorksheetGenerator() {
           <AlertTitle>AI Service Ready</AlertTitle>
           <AlertDescription>
             The OpenAI service is operational and ready to generate educational materials.
+            {aiStatus.anthropic?.available && " Anthropic/Claude is also available as backup if needed."}
           </AlertDescription>
         </Alert>
       )}

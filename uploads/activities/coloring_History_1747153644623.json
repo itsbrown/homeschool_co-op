@@ -1,0 +1,40 @@
+{
+  "title": "Ancient Civilizations: Early Ideas of Freedom",
+  "description": "This coloring page introduces young students to concepts of democracy and citizenship from ancient civilizations, which later influenced many modern nations including America.",
+  "instructions": "Color each part of the picture using your favorite colors. As you color, think about how people in ancient times lived and worked together.",
+  "content": {
+    "image": "A simple outline drawing showing the Parthenon of Ancient Greece with several children in togas gathered in front, appearing to be voting or making decisions together. The scene includes simple architectural elements and symbols of early democracy.",
+    "elements": [
+      {
+        "name": "Parthenon",
+        "description": "This was an important building in Ancient Greece where people gathered"
+      },
+      {
+        "name": "Children",
+        "description": "These represent citizens participating in early democracy"
+      },
+      {
+        "name": "Voting area",
+        "description": "A place where people shared their ideas and made decisions together"
+      },
+      {
+        "name": "Olive tree",
+        "description": "A symbol of peace and prosperity in ancient times"
+      }
+    ],
+    "learningFacts": [
+      "Ancient Greece had one of the world's first democracies",
+      "In Athens, citizens would gather to vote on important decisions",
+      "Ancient civilizations created many ideas about governing that we still use today",
+      "People in ancient times worked together to build communities"
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Cultural understanding",
+    "Fine motor skills"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}
