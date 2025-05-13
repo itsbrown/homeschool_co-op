@@ -29,9 +29,9 @@ async function getKnowledgeBaseContent(knowledgeBaseIds: number[], userId: numbe
   try {
     const contentChunks = await Promise.all(
       knowledgeBaseIds.map(async (id) => {
-        const kb = await storage.getKnowledgeBaseById(id, userId);
+        const kb = await storage.getKnowledgeBase(id);
         if (kb) {
-          return `KNOWLEDGE BASE: ${kb.title}\nSUBJECT: ${kb.subject}\n\nCONTENT:\n${JSON.stringify(kb.content)}\n\n`;
+          return `KNOWLEDGE BASE: ${kb.title}\nSUBJECT: ${kb.subject}\n\nCONTENT:\n${JSON.stringify(kb.metadata || {})}\n\n`;
         }
         return "";
       })
@@ -90,13 +90,12 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
     // Save activity in database
     const activityData: InsertActivity = {
       title: generatedActivity.title,
-      description: generatedActivity.description || "",
-      activityType: params.activityType,
+      type: params.activityType as "worksheet" | "crossword" | "coloring" | "wordsearch" | "maze",
       subject: params.subject,
-      difficulty: params.difficulty,
+      difficulty: params.difficulty as "beginner" | "intermediate" | "advanced",
       ageRange: params.ageRange,
       content: generatedActivity,
-      filePath: `/uploads/activities/${filename}`,
+      url: `/uploads/activities/${filename}`,
       authorId: userId,
       isPublic: false, // Default to private
     };

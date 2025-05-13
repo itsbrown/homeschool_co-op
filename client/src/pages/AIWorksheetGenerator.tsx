@@ -301,7 +301,7 @@ export default function AIWorksheetGenerator() {
     <div className="container mx-auto py-6">
       <h1 className="text-3xl font-bold mb-6">AI Worksheet Generator</h1>
       
-      {!aiStatus?.openai?.available && !checkingAIStatus && (
+      {!checkingAIStatus && aiStatus && !aiStatus.openai?.available && (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>AI Service Unavailable</AlertTitle>
@@ -311,7 +311,7 @@ export default function AIWorksheetGenerator() {
         </Alert>
       )}
       
-      {aiStatus?.openai?.available && (
+      {!checkingAIStatus && aiStatus && aiStatus.openai?.available && (
         <Alert variant="default" className="mb-6 bg-green-50 border-green-200">
           <CheckCircle className="h-4 w-4 text-green-600" />
           <AlertTitle>AI Service Ready</AlertTitle>
