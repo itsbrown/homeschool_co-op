@@ -1,0 +1,19 @@
+{
+  "title": "History Coloring Activity",
+  "description": "A beginner level coloring activity about History for 6-8 students.",
+  "instructions": "Complete this coloring activity about History.",
+  "subject": "History",
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "createdAt": "5/13/2025",
+  "content": {
+    "theme": "American Symbols: Educational History Coloring Activity",
+    "elements": [
+      "Liberty Bell",
+      "American Flag",
+      "Bald Eagle",
+      "Constitution"
+    ],
+    "description": "Color these American symbols while learning about their historical importance."
+  }
+}

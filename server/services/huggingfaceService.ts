@@ -31,10 +31,51 @@ export const isHuggingFaceAvailable = (): boolean => {
  * 
  * @returns Path to the generated image
  */
+/**
+ * Generate an American historical symbols image for coloring
+ * Implementation includes caching to avoid repeated API calls
+ * 
+ * @returns Path to the generated image
+ */
 export async function generateAmericanSymbolsLineArt(): Promise<string> {
   const prompt = "American historical symbols: George Washington in his general's uniform standing next to the Liberty Bell, with a 13-star American flag and Independence Hall in the background";
+  const cacheDir = path.join(process.cwd(), 'uploads', 'cache');
+  const cacheFilename = 'american_symbols_cached.png';
+  const cachedPath = path.join(cacheDir, cacheFilename);
   
-  return await generateLineArt(prompt, `american_symbols_${Date.now()}.png`);
+  try {
+    // Try to use cached image if it exists
+    await ensureDirectoryExists(cacheDir);
+    
+    if (fs.existsSync(cachedPath)) {
+      console.log('Using cached American symbols image');
+      const uploadDir = path.join(process.cwd(), 'uploads', 'images');
+      await ensureDirectoryExists(uploadDir);
+      
+      // Copy the cached file to a new unique file
+      const outputFilename = `american_symbols_${Date.now()}.png`;
+      const outputPath = path.join(uploadDir, outputFilename);
+      fs.copyFileSync(cachedPath, outputPath);
+      
+      return outputPath;
+    }
+  } catch (cacheError) {
+    console.warn('Error checking cache:', cacheError);
+    // Continue to generate fresh image if cache fails
+  }
+  
+  // Generate a new image
+  const imagePath = await generateLineArt(prompt, `american_symbols_${Date.now()}.png`);
+  
+  // Cache the result for future use
+  try {
+    fs.copyFileSync(imagePath, cachedPath);
+    console.log('Cached American symbols image for future use');
+  } catch (cacheError) {
+    console.warn('Failed to cache image:', cacheError);
+  }
+  
+  return imagePath;
 }
 
 /**

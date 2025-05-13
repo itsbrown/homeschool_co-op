@@ -96,4 +96,85 @@ router.get('/test-generation', async (req, res) => {
   }
 });
 
+/**
+ * @route GET /api/image-services/test-coloring-pdf
+ * @desc Test the generation of a complete coloring page PDF with AI image
+ * @access Public
+ */
+router.get('/test-coloring-pdf', async (req, res) => {
+  try {
+    if (!isHuggingFaceAvailable()) {
+      return res.status(400).json({
+        status: 'error', 
+        message: 'Hugging Face API key not configured. Please contact your administrator to provide a HUGGINGFACE_API_KEY.'
+      });
+    }
+    
+    // Import PDF generator
+    const { generateWorksheetPDF } = await import('../services/pdfGenerator');
+    const { storage } = await import('../storage');
+    
+    // Create a sample coloring page activity
+    const sampleActivity = {
+      title: "America's Founding Ideas Coloring",
+      type: "coloring" as "worksheet" | "crossword" | "coloring" | "wordsearch" | "maze",
+      subject: "History",
+      difficulty: "beginner" as "beginner" | "intermediate" | "advanced",
+      ageRange: "5-8",
+      content: {
+        title: "America's Founding Ideas Coloring",
+        description: "A coloring page featuring important American historical symbols and figures.",
+        instructions: "Color the images of important American symbols using the coloring guide below.",
+        targetSkills: ["History knowledge", "Fine motor skills", "Patriotic symbols recognition"],
+        content: {
+          image: "This illustration features George Washington in his general's uniform, the Liberty Bell with its famous crack, a 13-star American flag, and Independence Hall in Philadelphia.",
+          elements: [
+            { name: "George Washington", description: "America's first president and general" },
+            { name: "Liberty Bell", description: "Famous symbol of American independence with a crack" },
+            { name: "13-Star Flag", description: "The original American flag with stars in a circle" },
+            { name: "Independence Hall", description: "Where the Declaration of Independence was signed" }
+          ]
+        }
+      },
+      authorId: 1,
+      isPublic: true
+    };
+    
+    // Save temporary activity in database
+    const savedActivity = await storage.createActivity(sampleActivity);
+    
+    if (!savedActivity || !savedActivity.id) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to create temporary activity in database'
+      });
+    }
+    
+    console.log('Starting PDF generation for test coloring page');
+    
+    // Generate the PDF
+    const pdfUrl = await generateWorksheetPDF(savedActivity.id, 1);
+    
+    // Update the activity with the PDF URL
+    await storage.updateActivityPdfUrl(savedActivity.id, pdfUrl);
+    
+    res.json({
+      status: 'success',
+      message: 'Test coloring page PDF generated successfully',
+      data: {
+        activityId: savedActivity.id,
+        pdfUrl,
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error generating test coloring PDF:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to generate test coloring PDF',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 export default router;
