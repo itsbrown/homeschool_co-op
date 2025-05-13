@@ -71,28 +71,96 @@ export async function askVirtualTutor(
   subject: string, 
   question: string, 
   learningLevel: string,
-  learningStyle: string
+  learningStyle: string,
+  outputFormat: string = "text"
 ): Promise<string> {
-  const prompt = `I'm a ${learningLevel} student with a preference for ${learningStyle} learning. 
+  // Determine if the output should be formatted as JSON
+  const isJsonOutput = outputFormat.toLowerCase().includes("json") || 
+                       outputFormat.toLowerCase().includes("structured") ||
+                       outputFormat.toLowerCase().includes("visual");
+  
+  let prompt = `I'm a ${learningLevel} student with a preference for ${learningStyle} learning. 
 I'm studying ${subject} and I have this question: ${question}`;
 
+  // Add JSON formatting instructions if needed
+  if (isJsonOutput) {
+    prompt += `\n\nPlease format your response as a valid JSON object that I can parse directly.`;
+  }
+
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
-      system: `You are a helpful, encouraging educational tutor specializing in ${subject}. 
+    // Create system message based on output format
+    let systemMessage = `You are a helpful, encouraging educational tutor specializing in ${subject}. 
 Tailor your explanations to ${learningLevel} students who prefer ${learningStyle} learning styles.
 Provide clear, accurate information with examples and analogies when helpful.
-Keep responses educational, engaging, and appropriate for the student's level.`,
-      max_tokens: 1000,
+Keep responses educational, engaging, and appropriate for the student's level.`;
+
+    // Add JSON-specific instructions if needed
+    if (isJsonOutput) {
+      systemMessage += `\n\nVERY IMPORTANT: You must respond with ONLY valid JSON. Do not include any explanation text, markdown formatting, 
+or any other text before or after the JSON object. The JSON must be parseable by JavaScript's JSON.parse function.
+Do not include backticks, code block markers or any other non-JSON content in your response.`;
+    }
+
+    const response = await anthropic.messages.create({
+      model: 'claude-3-7-sonnet-20250219',
+      system: systemMessage,
+      max_tokens: 1500,
       messages: [
         { role: 'user', content: prompt }
       ],
     });
 
-    return response.content[0].text;
+    // The response content is a structured object with multiple properties
+    const responseText = response.content[0].text;
+    
+    // If JSON output was requested, try to extract JSON properly
+    if (isJsonOutput) {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          // Validate it parses correctly
+          JSON.parse(jsonMatch[0]);
+          return jsonMatch[0]; // Return just the JSON part
+        } catch (parseError) {
+          console.warn('Anthropic response contained JSON-like content but failed to parse:', parseError);
+          
+          // Try to clean up the JSON
+          const cleanedJson = jsonMatch[0]
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+            .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+            .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+            .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are double-quoted
+            .replace(/:\s*'/g, ': "') // Replace single quotes with double quotes for values
+            .replace(/'\s*,/g, '",')  // Replace single quotes with double quotes for values
+            .replace(/'\s*}/g, '"}')  // Replace single quotes with double quotes for values
+            .replace(/'\s*]/g, '"]'); // Replace single quotes with double quotes for values
+            
+          try {
+            // Try parsing the cleaned JSON
+            JSON.parse(cleanedJson);
+            return cleanedJson;
+          } catch (finalParseError) {
+            console.error("Failed to parse cleaned JSON from Anthropic response:", finalParseError);
+            // Fall back to returning the original text
+          }
+        }
+      }
+    }
+    
+    return responseText;
   } catch (error) {
     console.error('Error with virtual tutor:', error);
-    throw new Error(`Virtual tutor service unavailable: ${error.message}`);
+    
+    if (isJsonOutput) {
+      // Return a minimal valid JSON if that was the expected format
+      return JSON.stringify({
+        title: "Fallback Response",
+        content: "I apologize, but the virtual tutor service is temporarily unavailable. Please try again later.",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+    
+    throw new Error(`Virtual tutor service unavailable: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

@@ -59,9 +59,18 @@ export async function generateContentWithOpenAI(
       const isRateLimit = 
         (error && typeof error === 'object' && 'status' in error && error.status === 429) || 
         (errorMessage.includes('429')) || 
+        (errorMessage.includes('quota')) ||
+        (errorMessage.includes('Quota exceeded')) ||
         (error && typeof error === 'object' && 'error' in error && 
           typeof error.error === 'object' && error.error && 
           'type' in error.error && error.error.type === 'insufficient_quota');
+      
+      // If it's a quota exhaustion, immediately go to fallback without retrying
+      if (errorMessage.includes('exceeded your current quota') || 
+          errorMessage.includes('insufficient_quota')) {
+        console.log('OpenAI quota exhausted. Switching to Anthropic fallback immediately...');
+        break; // Break out of the retry loop and try the fallback
+      }
       
       // If we've exhausted retries or it's not a rate limit issue, try Anthropic as fallback
       if (currentRetry >= retries || !isRateLimit) {
@@ -242,18 +251,9 @@ export async function generateEducationalActivity(
           }
         }
         
-        // Create a minimal valid JSON object as fallback
-        console.warn("Creating fallback JSON for activity - no JSON pattern found");
-        return {
-          title: "Sample Activity",
-          description: "This is a placeholder activity.",
-          instructions: "Follow the instructions provided by your teacher.",
-          content: {
-            questions: ["What is the capital of France?"],
-            words: ["paris", "france", "europe"],
-            clues: ["Capital city", "European country", "Continent"]
-          }
-        };
+        // Generate a fallback activity based on the given parameters
+        console.warn("Creating fallback educational activity for: " + subject + " - " + activityType);
+        return generateFallbackActivity(subject, ageRange, activityType, difficulty);
       }
     } catch (openaiError) {
       console.error("OpenAI service failed (with fallback attempts):", openaiError);
