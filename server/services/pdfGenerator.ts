@@ -276,15 +276,21 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
       console.log('Using AI service for dynamic line art generation');
       
       try {
-        // Generate line art based on the content
-        if (content.title.toLowerCase().includes('american') || 
-            content.title.toLowerCase().includes('founding') ||
-            content.title.toLowerCase().includes('history') ||
-            (content.content?.image && content.content.image.toLowerCase().includes('american'))) {
-          // For American symbols/history content
+        // Always use the most appropriate image generation function based on content
+        // No longer restricting to only American symbols/history
+        
+        // If it's explicitly about American history/symbols, use the specialized function
+        if (content.title.toLowerCase().includes('american symbols') || 
+            (content.content?.image && 
+             content.content.image.toLowerCase().includes('american symbols') &&
+             (content.content.image.toLowerCase().includes('liberty bell') || 
+              content.content.image.toLowerCase().includes('washington')))) {
+          // Specifically for American symbols/history content that matches key elements
+          console.log('Using specialized American symbols image generator');
           imagePath = await generateAmericanSymbolsLineArt();
         } else {
-          // For other educational content
+          // For all other educational content - more flexible approach
+          console.log('Using general educational image generator for: ' + content.title);
           imagePath = await generateEducationalLineArt(
             content.title,
             content.content?.image || content.description
@@ -453,13 +459,18 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   
   doc.moveDown(20);
   
-  // Add learning facts if available
+  // Add learning facts on a new page or in a small sidebar so they don't overlap the image
   if (content.content?.learningFacts) {
-    doc.fontSize(14).font(BOLD_FONT).text('Did You Know?', { underline: true });
+    // Add a new page for the facts
+    doc.addPage();
+    
+    // Add a more discreet header for the facts section
+    doc.fontSize(12).font(BOLD_FONT).text('Fun Facts About American History', { align: 'center' });
     doc.moveDown();
     
+    // Add the facts with smaller font and more subtle formatting
     content.content.learningFacts.forEach((fact: string, index: number) => {
-      doc.fontSize(12).font(STANDARD_FONT).text(`• ${fact}`);
+      doc.fontSize(10).font(STANDARD_FONT).text(`• ${fact}`);
       doc.moveDown(0.5);
     });
   }

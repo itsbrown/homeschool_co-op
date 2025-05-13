@@ -1,0 +1,40 @@
+{
+  "title": "America's Beginning: A Historical Coloring Journey",
+  "description": "This coloring page introduces young students to important symbols and figures from early American history in a simplified, engaging format.",
+  "instructions": "Color each part of the picture using the suggested colors or choose your own. As you color, read the fun facts with a grown-up!",
+  "content": {
+    "image": "A composition showing the American flag being sewn by Betsy Ross, the Liberty Bell, a simplified colonial village with small houses, and children in colonial clothing playing games.",
+    "elements": [
+      {
+        "name": "American Flag",
+        "description": "Color the stars blue and the stripes red and white"
+      },
+      {
+        "name": "Liberty Bell",
+        "description": "Color the bell a golden brown color"
+      },
+      {
+        "name": "Colonial Houses",
+        "description": "Color the houses with brown, white, or red colors"
+      },
+      {
+        "name": "Children's Clothing",
+        "description": "Color the colonial outfits with simple colors"
+      }
+    ],
+    "learningFacts": [
+      "The American flag has 50 stars for our 50 states",
+      "The Liberty Bell is an important symbol of American freedom",
+      "In colonial times, children helped with chores and played different games than we do today",
+      "America officially became a country in 1776"
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Fine motor skills",
+    "Symbol recognition"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}

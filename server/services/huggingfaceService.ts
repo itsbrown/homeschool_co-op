@@ -136,6 +136,7 @@ export async function generateAmericanSymbolsLineArt(): Promise<string> {
 /**
  * Generate a line art image based on educational topic
  * Tailors the prompt to create age-appropriate historical/educational content
+ * Works with any educational subject, not just American history
  * 
  * @param title Title/topic of the coloring page
  * @param description Additional description or details
@@ -145,15 +146,45 @@ export async function generateEducationalLineArt(
   title: string,
   description?: string
 ): Promise<string> {
+  // Start building an appropriate prompt based on the title
   let prompt = title;
   
-  if (description) {
+  if (description && description.trim().length > 0) {
     prompt += `: ${description}`;
   }
   
-  // Add educational context to make it appropriate for children
-  prompt += ` Simple, educational, child-friendly, outline drawing for coloring`;
+  // Identify the general category of the content to customize the prompt
+  const lowerTitle = title.toLowerCase();
+  const lowerDesc = description ? description.toLowerCase() : '';
   
+  // Determine if we have a specific category to enhance the prompt
+  if (lowerTitle.includes('history') || lowerDesc.includes('history')) {
+    console.log('Using Hugging Face for historical line art');
+    if (lowerTitle.includes('america') || lowerDesc.includes('america')) {
+      prompt = `${prompt}: A simple, line-drawn illustration showing historical figures and symbols from early American history`;
+    } else {
+      prompt = `${prompt}: A simple, line-drawn illustration showing historical figures and elements from this time period`;
+    }
+  } else if (lowerTitle.includes('science') || lowerDesc.includes('science')) {
+    console.log('Using Hugging Face for science line art');
+    prompt = `${prompt}: A simple, line-drawn illustration showing scientific concepts with labeled elements`;
+  } else if (lowerTitle.includes('math') || lowerDesc.includes('math')) {
+    console.log('Using Hugging Face for math line art');
+    prompt = `${prompt}: A simple, line-drawn illustration showing mathematical concepts with clear shapes and numbers`;
+  } else if (lowerTitle.includes('geography') || lowerDesc.includes('geography')) {
+    console.log('Using Hugging Face for geography line art');
+    prompt = `${prompt}: A simple, line-drawn illustration showing geographical features and landmarks`;
+  } else {
+    console.log('Using Hugging Face for general educational line art');
+    prompt = `${prompt}: A simple, line-drawn educational illustration`;
+  }
+  
+  // Add standard educational formatting for any topic
+  prompt += `, educational, child-friendly, outline drawing perfect for coloring by elementary students`;
+  
+  console.log('Generating line art for prompt:', JSON.stringify(prompt));
+  
+  // Create a safe filename from the title
   const filename = `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}.png`;
   return await generateLineArt(prompt, filename);
 }

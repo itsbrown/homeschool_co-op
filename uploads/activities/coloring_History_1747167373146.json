@@ -1,0 +1,41 @@
+{
+  "title": "Antoinette Brown Blackwell: America's First Woman Minister",
+  "description": "This coloring page introduces young students to Antoinette Brown Blackwell, an important historical figure who broke barriers for women in the 1800s. The coloring activity helps students learn about history while developing fine motor skills.",
+  "instructions": "Color the picture of Antoinette Brown Blackwell and her sister Henrietta. Read the fun facts about Antoinette's life with an adult, and discuss what you find most interesting!",
+  "content": {
+    "image": "A simple, line-drawn portrait showing Antoinette Brown Blackwell in her minister clothes with a book in hand standing next to her sister Henrietta. Both are wearing 1800s-style long dresses with simple hairstyles. They are smiling and standing in front of a small church building.",
+    "elements": [
+      {
+        "name": "Antoinette",
+        "description": "Antoinette is wearing a long dress and holding a book"
+      },
+      {
+        "name": "Henrietta",
+        "description": "Henrietta is standing beside her sister wearing a different style long dress"
+      },
+      {
+        "name": "Church",
+        "description": "A simple church building in the background"
+      },
+      {
+        "name": "Books",
+        "description": "Some books on a small table to show Antoinette was very educated"
+      }
+    ],
+    "learningFacts": [
+      "Antoinette Brown Blackwell was the first woman in America to become a minister in 1853",
+      "She and her sister Henrietta both fought for women's rights",
+      "Antoinette wrote books and gave speeches about important issues",
+      "She believed that girls and boys should have the same opportunities",
+      "Antoinette lived a very long life and helped change how people thought about what women could do"
+    ]
+  },
+  "targetSkills": [
+    "historical awareness",
+    "fine motor skills",
+    "reading comprehension"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
