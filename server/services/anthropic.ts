@@ -121,6 +121,10 @@ Do not include backticks, code block markers or any other non-JSON content in yo
     });
 
     // The response content is a structured object with multiple properties
+    if (response.content[0].type !== 'text') {
+      throw new Error("Unexpected response format from Anthropic API");
+    }
+    
     const responseText = response.content[0].text;
     
     // If JSON output was requested, try to extract JSON properly
@@ -158,19 +162,20 @@ Do not include backticks, code block markers or any other non-JSON content in yo
     }
     
     return responseText;
-  } catch (error) {
-    console.error('Error with virtual tutor:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Error with virtual tutor:', errorMessage);
     
     if (isJsonOutput) {
       // Return a minimal valid JSON if that was the expected format
       return JSON.stringify({
         title: "Fallback Response",
         content: "I apologize, but the virtual tutor service is temporarily unavailable. Please try again later.",
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage
       });
     }
     
-    throw new Error(`Virtual tutor service unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Virtual tutor service unavailable: ${errorMessage}`);
   }
 }
 
