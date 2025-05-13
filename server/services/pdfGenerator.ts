@@ -293,29 +293,29 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
         
         console.log('AI generated image path:', imagePath);
         
-        // Calculate available space for image
-        const currentY = doc.y;
-        const pageHeight = doc.page.height;
-        const pageMarginBottom = 50; // Bottom margin
-        const availableHeight = pageHeight - currentY - pageMarginBottom;
+        // Always add a new page for the image to prevent text overlap
+        doc.addPage();
         
-        // Determine if we need to add a new page if there's not enough space
-        if (availableHeight < 300) { // Minimum reasonable height for the image
-          doc.addPage();
-          // Add a title to the new page
-          doc.fontSize(14).font('Helvetica-Bold').text('Coloring Page (continued)', { align: 'center' });
-          doc.moveDown();
-        }
+        // Add a title to the new page
+        doc.fontSize(14).font('Helvetica-Bold').text('Coloring Page', { align: 'center' });
+        doc.moveDown();
         
-        // Calculate the optimal image dimensions to fit the page
-        const maxWidth = 500; 
-        const maxHeight = Math.min(500, doc.page.height - doc.y - pageMarginBottom);
+        // Calculate the optimal image dimensions with fixed width to ensure quality
+        const maxWidth = 500;
+        const pageMarginTop = 50;
+        const pageMarginBottom = 50;
+        const availableHeight = doc.page.height - pageMarginTop - pageMarginBottom - 40; // 40px for the title
+        const maxHeight = Math.min(600, availableHeight);
+        
+        // Center the image horizontally
+        const xPosition = (doc.page.width - maxWidth) / 2;
         
         // Add the generated image to the PDF with dynamic sizing
-        doc.image(imagePath, 50, doc.y, { 
+        doc.image(imagePath, xPosition, doc.y, { 
           width: maxWidth,
           height: maxHeight,
-          fit: [maxWidth, maxHeight]
+          fit: [maxWidth, maxHeight],
+          align: 'center'
         });
         
         console.log('AI-generated image added to PDF with dimensions:', { maxWidth, maxHeight });

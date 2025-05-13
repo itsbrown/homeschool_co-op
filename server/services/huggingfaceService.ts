@@ -87,7 +87,7 @@ export const isHuggingFaceAvailable = (): boolean => {
  * @returns Path to the generated image
  */
 export async function generateAmericanSymbolsLineArt(): Promise<string> {
-  const prompt = "American historical symbols: George Washington in his general's uniform standing next to the Liberty Bell, with a 13-star American flag and Independence Hall in the background";
+  const prompt = "American historical symbols: A clear line drawing showing: (1) George Washington in his general's uniform with distinct facial features, (2) the Liberty Bell with its famous crack clearly visible, (3) a 13-star American flag with each star having five points, and (4) Independence Hall with its recognizable façade. Each element should be clearly separated with clean outlines perfect for a children's coloring book";
   const cacheDir = path.join(process.cwd(), 'uploads', 'cache');
   const cacheFilename = 'american_symbols_cached.png';
   const cachedPath = path.join(cacheDir, cacheFilename);
@@ -179,19 +179,23 @@ export async function generateLineArt(
     // Complete path for the output file
     const outputPath = path.join(uploadDir, outputFilename);
     
-    // Enhance the prompt for line art generation
-    const enhancedPrompt = `A simple black and white line drawing for a children's coloring page of: ${prompt}. Clean lines, no shading, suitable for coloring by young children.`;
+    // Enhance the prompt for line art generation with more specific guidance
+    const enhancedPrompt = `A simple black and white line drawing for a children's coloring page of: ${prompt}. 
+    Clear, distinct outlines with no overlapping text. All symbols must be accurately drawn (e.g., stars with 5 points, 
+    Liberty Bell with proper shape, etc). Very clean lines, no shading, high contrast outlines suitable for 
+    elementary school children to color. Make each element easily identifiable and separated from others.`;
     
     console.log(`Using enhanced prompt: "${enhancedPrompt}"`);
     
-    // Use Hugging Face text-to-image model
+    // Use Hugging Face text-to-image model with optimized parameters for line art
     const response = await hf.textToImage({
       model: 'stabilityai/stable-diffusion-xl-base-1.0',  // Using SDXL as it's more reliable
       inputs: enhancedPrompt,
       parameters: {
-        negative_prompt: 'color, shading, realistic, detailed, grayscale, complexity, photorealistic',
-        guidance_scale: 7.5,
-        num_inference_steps: 30,
+        negative_prompt: 'color, shading, realistic, textures, grayscale, complexity, photorealistic, detailed backgrounds, text, watermarks, signatures, blurry lines, overlapping elements',
+        guidance_scale: 9.0,          // Higher guidance scale for better prompt adherence
+        num_inference_steps: 50,      // More steps for higher quality
+        sampler: 'DPMSolverMultistep' // Better for clean line art
       }
     });
     

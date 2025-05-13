@@ -1,0 +1,46 @@
+{
+  "title": "America's Beginning: A Historical Coloring Adventure",
+  "description": "This coloring page introduces young learners to key symbols and figures from early American history in a simplified, age-appropriate format.",
+  "instructions": "Color each part of the picture. Use the color suggestions or choose your own colors. As you color, talk with an adult about what each item represents in American history.",
+  "content": {
+    "image": "A simple, child-friendly collage showing the American flag, the Liberty Bell, a simplified Mayflower ship, a bald eagle, and founding fathers in colonial clothing standing together.",
+    "elements": [
+      {
+        "name": "American Flag",
+        "description": "Color the stars blue and make stripes red and white"
+      },
+      {
+        "name": "Liberty Bell",
+        "description": "Color this famous bell brown or gold"
+      },
+      {
+        "name": "Mayflower Ship",
+        "description": "Color the ship that brought early settlers to America"
+      },
+      {
+        "name": "Bald Eagle",
+        "description": "America's national bird - color its head white and body brown"
+      },
+      {
+        "name": "Founding Fathers",
+        "description": "Color the clothes of these important people who helped create America"
+      }
+    ],
+    "learningFacts": [
+      "The American flag has 50 stars for 50 states",
+      "The Liberty Bell rang to announce the signing of the Declaration of Independence",
+      "The Mayflower ship brought the Pilgrims to America in 1620",
+      "The bald eagle is America's national symbol",
+      "The Founding Fathers helped write important documents for our country"
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Symbol recognition",
+    "Fine motor skills",
+    "Following directions"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}
