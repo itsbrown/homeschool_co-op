@@ -12,6 +12,7 @@ import Curriculum from "@/pages/Curriculum";
 import CurriculumDetail from "@/pages/CurriculumDetail";
 import Lessons from "@/pages/Lessons";
 import AILessonGenerator from "@/pages/AILessonGenerator";
+import AIWorksheetGenerator from "@/pages/AIWorksheetGenerator";
 import KnowledgeBase from "@/pages/KnowledgeBase";
 import KnowledgeBaseDetail from "@/pages/KnowledgeBaseDetail";
 import KnowledgeBaseEdit from "@/pages/KnowledgeBaseEdit";
@@ -45,6 +46,7 @@ function Router() {
       <Route path="/lessons" component={Lessons} />
       <Route path="/lessons/ai-generator" component={AILessonGenerator} />
       <Route path="/ai-generator/lesson" component={AILessonGenerator} />
+      <Route path="/ai-generator/worksheet" component={AIWorksheetGenerator} />
       <Route path="/ai-generator/curriculum" component={Curriculum} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/knowledge-base/:id/edit" component={KnowledgeBaseEdit} />

@@ -64,18 +64,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Status endpoint
   app.get("/api/ai/status", async (req, res) => {
     try {
-      // Dynamically import the anthropicService to check availability
+      // Dynamically import the Anthropic and OpenAI services to check availability
       const { isAnthropicAvailable } = await import("./services/anthropicService");
+      const { checkOpenAIStatus } = await import("./services/openai");
       
-      const isAvailable = isAnthropicAvailable();
+      const anthropicAvailable = isAnthropicAvailable();
+      const openaiStatus = await checkOpenAIStatus();
+      
       return res.status(200).json({
         anthropic: {
-          available: isAvailable,
-          status: isAvailable ? 'operational' : 'unavailable',
-          message: isAvailable 
+          available: anthropicAvailable,
+          status: anthropicAvailable ? 'operational' : 'unavailable',
+          message: anthropicAvailable 
             ? 'Anthropic API is available and operational' 
             : 'Anthropic API is currently unavailable, using fallback mechanisms'
-        }
+        },
+        openai: openaiStatus
       });
     } catch (error) {
       console.error('Error checking AI status:', error);
@@ -949,6 +953,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/classes", classesRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/admin", adminClassesRouter);
+  app.use("/api/activities", activitiesRouter);
   
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);

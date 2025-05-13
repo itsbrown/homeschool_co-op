@@ -1,8 +1,19 @@
-import { useState, useEffect } from "react";
+import React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "../lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
@@ -10,22 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { apiRequest } from "@/lib/queryClient";
-import { Loader2, FileText, Download } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { KnowledgeBaseSelector } from "@/components/KnowledgeBaseSelector";
+import { Loader2, AlertCircle, CheckCircle, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
+// Define types
 interface ActivityGenerationParams {
   subject: string;
   ageRange: string;
@@ -37,278 +42,525 @@ interface ActivityGenerationParams {
 
 type ActivityType = "worksheet" | "crossword" | "coloring" | "wordsearch" | "maze";
 
+// Form validation schema
+const activityFormSchema = z.object({
+  subject: z.string().min(2, { message: "Subject must be at least 2 characters." }),
+  ageRange: z.string().min(2, { message: "Age range is required." }),
+  activityType: z.string({
+    required_error: "Activity type is required."
+  }),
+  difficulty: z.string({
+    required_error: "Difficulty level is required."
+  }),
+  instructions: z.string().min(10, { message: "Instructions must be at least 10 characters." }),
+  knowledgeBaseIds: z.array(z.number()).optional().default([]),
+});
+
 export default function AIWorksheetGenerator() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const [knowledgeBaseIds, setKnowledgeBaseIds] = useState<number[]>([]);
-  const [subject, setSubject] = useState("");
-  const [ageRange, setAgeRange] = useState("6-7");
-  const [activityType, setActivityType] = useState<ActivityType>("worksheet");
-  const [difficulty, setDifficulty] = useState("beginner");
-  const [instructions, setInstructions] = useState("");
-  const [generatedActivityUrl, setGeneratedActivityUrl] = useState<string | null>(null);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  
-  // Fetch AI service status
-  const { data: aiStatus } = useQuery({
-    queryKey: ["/api/ai/status"],
+  const { toast } = useToast();
+  const [generatedActivity, setGeneratedActivity] = React.useState<any>(null);
+  const [selectedTab, setSelectedTab] = React.useState<string>("form");
+
+  // Initialize form with react-hook-form
+  const form = useForm<z.infer<typeof activityFormSchema>>({
+    resolver: zodResolver(activityFormSchema),
+    defaultValues: {
+      subject: "",
+      ageRange: "6-8",
+      activityType: "worksheet",
+      difficulty: "beginner",
+      instructions: "",
+      knowledgeBaseIds: [],
+    },
   });
 
-  // Check if AI service is available
-  const isAIAvailable = aiStatus?.anthropic?.available;
+  // Check AI services status
+  const { data: aiStatus, isLoading: checkingAIStatus } = useQuery({
+    queryKey: ['/api/ai/status'],
+  });
 
-  // Generate activity mutation
-  const generateActivityMutation = useMutation({
+  // Activity generation mutation
+  const activityMutation = useMutation({
     mutationFn: async (params: ActivityGenerationParams) => {
-      const response = await apiRequest("/api/activities/generate", {
-        method: "POST",
-        body: params,
+      const response = await apiRequest('/api/activities/generate', {
+        method: 'POST',
+        body: JSON.stringify(params),
       });
       return response;
     },
     onSuccess: (data) => {
-      setGeneratedActivityUrl(data.activityUrl);
-      toast({
-        title: "Activity Generated",
-        description: "Your activity has been successfully generated.",
-      });
+      // Handle successful generation
+      if (data.success) {
+        setGeneratedActivity(data);
+        setSelectedTab("preview");
+        toast({
+          title: "Activity Generated!",
+          description: "Your activity has been created successfully.",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Generation Failed",
+          description: data.error || "Unknown error occurred",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error) => {
+      // Handle error
+      console.error("Error generating activity:", error);
       toast({
-        title: "Generation Failed",
-        description: error.message || "Failed to generate activity. Please try again.",
+        title: "Error",
+        description: "Failed to generate activity. Please try again.",
         variant: "destructive",
       });
     },
   });
 
-  const handleGenerateActivity = () => {
-    if (!subject) {
-      toast({
-        title: "Subject Required",
-        description: "Please enter a subject for your activity.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    generateActivityMutation.mutate({
-      subject,
-      ageRange,
-      activityType,
-      difficulty,
-      instructions,
-      knowledgeBaseIds,
-    });
+  // Handle form submission
+  const onSubmit = (values: z.infer<typeof activityFormSchema>) => {
+    activityMutation.mutate(values);
   };
 
+  // Handle knowledge base selection
+  const handleKnowledgeBaseChange = (selectedIds: number[]) => {
+    form.setValue("knowledgeBaseIds", selectedIds);
+  };
+
+  // Get activity type description
   const getActivityTypeDescription = (type: ActivityType) => {
     switch (type) {
       case "worksheet":
-        return "Generate practice problems, equations, or questions based on the subject";
+        return "Standard educational worksheets with questions and exercises";
       case "crossword":
-        return "Create a crossword puzzle with subject-specific words and clues";
+        return "Crossword puzzles based on educational content";
       case "coloring":
-        return "Create coloring pages with subject-related illustrations";
+        return "Educational coloring pages with learning elements";
       case "wordsearch":
-        return "Generate a word search puzzle with hidden vocabulary words";
+        return "Word search puzzles based on subject vocabulary";
       case "maze":
-        return "Create a maze with educational checkpoints along the path";
+        return "Maze puzzles with educational checkpoints";
       default:
-        return "";
+        return "Educational activity";
     }
   };
 
-  return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">AI Worksheet & Activity Generator</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Generate Educational Activities</CardTitle>
-              <CardDescription>
-                Create customized worksheets, puzzles, and activities for your lessons
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="mb-4">
-                <Label htmlFor="subject">Subject</Label>
-                <Input
-                  id="subject"
-                  placeholder="e.g., Addition and Subtraction, Vowels and Consonants"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                />
-              </div>
-              
-              <div className="mb-4">
-                <Label htmlFor="ageRange">Age Range</Label>
-                <Select value={ageRange} onValueChange={setAgeRange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select age range" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="4-5">4-5 years (Pre-K)</SelectItem>
-                    <SelectItem value="6-7">6-7 years (K-1st Grade)</SelectItem>
-                    <SelectItem value="8-10">8-10 years (2nd-4th Grade)</SelectItem>
-                    <SelectItem value="11-13">11-13 years (5th-7th Grade)</SelectItem>
-                    <SelectItem value="14-18">14-18 years (8th-12th Grade)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <Tabs defaultValue="worksheet" value={activityType} onValueChange={(value) => setActivityType(value as ActivityType)}>
-                <Label>Activity Type</Label>
-                <TabsList className="grid grid-cols-3 mb-2">
-                  <TabsTrigger value="worksheet">Worksheets</TabsTrigger>
-                  <TabsTrigger value="crossword">Puzzles</TabsTrigger>
-                  <TabsTrigger value="coloring">Coloring Pages</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="worksheet">
-                  <div className="bg-muted/50 p-4 rounded-md mb-4">
-                    <h3 className="font-medium mb-2">Worksheet</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {getActivityTypeDescription("worksheet")}
-                    </p>
+  // Format activity content for preview
+  const renderActivityPreview = () => {
+    if (!generatedActivity) return null;
+    
+    const activity = generatedActivity.activityContent;
+    const activityType = form.getValues().activityType as ActivityType;
+    
+    return (
+      <div className="space-y-6">
+        <div className="border p-6 rounded-lg bg-white">
+          <h2 className="text-2xl font-bold mb-2">{activity.title}</h2>
+          <p className="text-gray-600 mb-4">{activity.description}</p>
+          
+          <div className="mb-4">
+            <h3 className="text-lg font-medium mb-2">Instructions:</h3>
+            <p>{activity.instructions}</p>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <span className="text-sm font-medium text-gray-500">Age Range:</span>
+              <span className="ml-2">{activity.ageRange}</span>
+            </div>
+            <div>
+              <span className="text-sm font-medium text-gray-500">Difficulty:</span>
+              <span className="ml-2">{activity.difficulty}</span>
+            </div>
+            <div>
+              <span className="text-sm font-medium text-gray-500">Estimated Time:</span>
+              <span className="ml-2">{activity.timeRequired}</span>
+            </div>
+            <div>
+              <span className="text-sm font-medium text-gray-500">Target Skills:</span>
+              <span className="ml-2">{activity.targetSkills.join(", ")}</span>
+            </div>
+          </div>
+          
+          <div className="mt-6 border-t pt-4">
+            <h3 className="text-lg font-medium mb-4">Content Preview:</h3>
+            
+            {activityType === "worksheet" && (
+              <div className="space-y-4">
+                {activity.content.questions.map((q: any, i: number) => (
+                  <div key={i} className="p-3 border rounded">
+                    <p className="font-medium">{i + 1}. {q.question}</p>
+                    {q.type === "multiple_choice" && (
+                      <div className="ml-6 mt-2 space-y-1">
+                        {q.options.map((opt: string, j: number) => (
+                          <div key={j} className="flex items-center">
+                            <div className="w-5 h-5 rounded-full border flex items-center justify-center mr-2">
+                              {String.fromCharCode(65 + j)}
+                            </div>
+                            <span>{opt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <Select value={difficulty} onValueChange={setDifficulty}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Difficulty level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="beginner">Beginner</SelectItem>
-                      <SelectItem value="intermediate">Intermediate</SelectItem>
-                      <SelectItem value="advanced">Advanced</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </TabsContent>
-                
-                <TabsContent value="crossword">
-                  <div className="bg-muted/50 p-4 rounded-md mb-4">
-                    <h3 className="font-medium mb-2">Puzzles</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Create engaging puzzles like crosswords or word searches
-                    </p>
-                  </div>
-                  <Select value={activityType} onValueChange={(value) => setActivityType(value as ActivityType)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select puzzle type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="crossword">Crossword Puzzle</SelectItem>
-                      <SelectItem value="wordsearch">Word Search</SelectItem>
-                      <SelectItem value="maze">Educational Maze</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </TabsContent>
-                
-                <TabsContent value="coloring">
-                  <div className="bg-muted/50 p-4 rounded-md mb-4">
-                    <h3 className="font-medium mb-2">Coloring Pages</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {getActivityTypeDescription("coloring")}
-                    </p>
-                  </div>
-                  <Select value={difficulty} onValueChange={setDifficulty}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Detail level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="beginner">Simple (Few details)</SelectItem>
-                      <SelectItem value="intermediate">Moderate (Some details)</SelectItem>
-                      <SelectItem value="advanced">Complex (Many details)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </TabsContent>
-              </Tabs>
-              
-              <div className="mb-4">
-                <Label htmlFor="instructions">Additional Instructions (Optional)</Label>
-                <Textarea
-                  id="instructions"
-                  placeholder="Specific topics, concepts, or instructions for the activity"
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                  rows={3}
-                />
+                ))}
               </div>
-              
-              <div className="mb-4">
-                <Label>Knowledge Base</Label>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Select knowledge bases to use for content generation
-                </p>
-                <KnowledgeBaseSelector
-                  selectedIds={knowledgeBaseIds}
-                  onChange={setKnowledgeBaseIds}
-                />
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                onClick={handleGenerateActivity} 
-                disabled={generateActivityMutation.isPending || !isAIAvailable}
-                className="w-full"
-              >
-                {generateActivityMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Activity...
-                  </>
-                ) : (
-                  "Generate Activity"
-                )}
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-        
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Generated Activities</CardTitle>
-              <CardDescription>
-                Preview and download your activities
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="min-h-[300px] flex flex-col items-center justify-center">
-              {generatedActivityUrl ? (
-                <div className="space-y-4 text-center">
-                  <div className="flex flex-col items-center space-y-2">
-                    <FileText className="h-16 w-16 text-primary" />
-                    <p className="text-sm text-muted-foreground">
-                      Your activity has been generated successfully
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Button asChild className="w-full" variant="outline">
-                      <a href={generatedActivityUrl} target="_blank" rel="noopener noreferrer">
-                        Preview Activity
-                      </a>
-                    </Button>
-                    <Button asChild className="w-full">
-                      <a href={generatedActivityUrl} download>
-                        <Download className="mr-2 h-4 w-4" />
-                        Download PDF
-                      </a>
-                    </Button>
+            )}
+            
+            {activityType === "crossword" && (
+              <div className="space-y-4">
+                <p>Crossword puzzle with {activity.content.words.length} words</p>
+                <div className="space-y-2">
+                  <h4 className="font-medium">Clues:</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {activity.content.words.map((w: any, i: number) => (
+                      <div key={i} className="p-2 border rounded">
+                        <p><span className="font-medium">{w.direction.charAt(0).toUpperCase() + w.direction.slice(1)} {i + 1}:</span> {w.clue}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ) : (
-                <div className="text-center text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                  <p>Generated activities will appear here</p>
+              </div>
+            )}
+            
+            {activityType === "coloring" && (
+              <div className="space-y-4">
+                <p className="italic">{activity.content.image}</p>
+                <div className="space-y-2">
+                  <h4 className="font-medium">Elements to Color:</h4>
+                  <ul className="list-disc list-inside">
+                    {activity.content.elements.map((el: any, i: number) => (
+                      <li key={i}>{el.name}: {el.description}</li>
+                    ))}
+                  </ul>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div className="mt-4">
+                  <h4 className="font-medium">Learning Facts:</h4>
+                  <ul className="list-disc list-inside">
+                    {activity.content.learningFacts.map((fact: string, i: number) => (
+                      <li key={i}>{fact}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+            
+            {activityType === "wordsearch" && (
+              <div className="space-y-4">
+                <p>Word search puzzle with {activity.content.words.length} words to find</p>
+                <div className="space-y-2">
+                  <h4 className="font-medium">Words to Find:</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {activity.content.words.map((word: string, i: number) => (
+                      <div key={i} className="p-2 border rounded text-center">
+                        {word}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <h4 className="font-medium">Clues:</h4>
+                  <ol className="list-decimal list-inside">
+                    {activity.content.clues.map((clue: string, i: number) => (
+                      <li key={i}>{clue}</li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            )}
+            
+            {activityType === "maze" && (
+              <div className="space-y-4">
+                <p>Maze with theme: <strong>{activity.content.theme}</strong></p>
+                <p>Complexity level: {activity.content.complexity}/10</p>
+                <div className="mt-4">
+                  <h4 className="font-medium">Educational Checkpoints:</h4>
+                  <ol className="list-decimal list-inside">
+                    {activity.content.educationalCheckpoints.map((cp: any, i: number) => (
+                      <li key={i} className="mb-2">
+                        <p><strong>Q:</strong> {cp.question}</p>
+                        <p className="ml-6"><strong>A:</strong> {cp.answer}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+    );
+  };
+
+  return (
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold mb-6">AI Worksheet Generator</h1>
+      
+      {!aiStatus?.openai?.available && !checkingAIStatus && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>AI Service Unavailable</AlertTitle>
+          <AlertDescription>
+            The OpenAI service is currently unavailable. Worksheet generation may not work properly.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {aiStatus?.openai?.available && (
+        <Alert variant="default" className="mb-6 bg-green-50 border-green-200">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertTitle>AI Service Ready</AlertTitle>
+          <AlertDescription>
+            The OpenAI service is operational and ready to generate educational materials.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="form">Create Worksheet</TabsTrigger>
+          <TabsTrigger value="preview" disabled={!generatedActivity}>Preview</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="form">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create Educational Worksheet</CardTitle>
+                  <CardDescription>
+                    Generate custom educational worksheets, puzzles, and activities with AI.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={form.control}
+                          name="subject"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Subject</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. Mathematics, Science" {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                The subject matter of the activity.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="ageRange"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Age Range</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select age range" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="3-5">Ages 3-5 (Preschool)</SelectItem>
+                                  <SelectItem value="6-8">Ages 6-8 (Early Elementary)</SelectItem>
+                                  <SelectItem value="9-11">Ages 9-11 (Upper Elementary)</SelectItem>
+                                  <SelectItem value="12-14">Ages 12-14 (Middle School)</SelectItem>
+                                  <SelectItem value="15-18">Ages 15-18 (High School)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Target age group for the activity.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={form.control}
+                          name="activityType"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Activity Type</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select activity type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="worksheet">Worksheet</SelectItem>
+                                  <SelectItem value="crossword">Crossword Puzzle</SelectItem>
+                                  <SelectItem value="coloring">Coloring Page</SelectItem>
+                                  <SelectItem value="wordsearch">Word Search</SelectItem>
+                                  <SelectItem value="maze">Maze Activity</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                {getActivityTypeDescription(form.watch("activityType") as ActivityType)}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="difficulty"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Difficulty Level</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select difficulty" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="beginner">Beginner</SelectItem>
+                                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                                  <SelectItem value="advanced">Advanced</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                The difficulty level of the activity.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <FormField
+                        control={form.control}
+                        name="instructions"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Specific Instructions</FormLabel>
+                            <FormControl>
+                              <Textarea 
+                                placeholder="e.g. Include problems about addition and subtraction, focus on animals in the Arctic..."
+                                className="min-h-[120px]"
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Provide specific instructions about what you want included in the activity.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="knowledgeBaseIds"
+                        render={() => (
+                          <FormItem>
+                            <FormLabel>Knowledge Bases (Optional)</FormLabel>
+                            <FormControl>
+                              <KnowledgeBaseSelector 
+                                selectedIds={form.watch("knowledgeBaseIds")} 
+                                onChange={handleKnowledgeBaseChange} 
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Select knowledge bases to use as reference material.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <Button 
+                        type="submit" 
+                        className="w-full"
+                        disabled={activityMutation.isPending || checkingAIStatus}
+                      >
+                        {activityMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Generate Activity
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+            </div>
+            
+            <div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>How It Works</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ol className="list-decimal list-inside space-y-4">
+                    <li>Fill in the activity details and provide specific instructions</li>
+                    <li>Optionally select knowledge bases to use as reference material</li>
+                    <li>Click "Generate Activity" to create your educational material</li>
+                    <li>Preview the generated content and download if satisfied</li>
+                  </ol>
+                  
+                  <div className="mt-6 pt-6 border-t">
+                    <h3 className="font-medium text-lg mb-3">Activity Types</h3>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="font-medium">Worksheets</h4>
+                        <p className="text-sm text-gray-600">Educational worksheets with questions and exercises</p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium">Crossword Puzzles</h4>
+                        <p className="text-sm text-gray-600">Custom puzzles based on educational content</p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium">Coloring Pages</h4>
+                        <p className="text-sm text-gray-600">Educational coloring pages with learning elements</p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium">Word Searches</h4>
+                        <p className="text-sm text-gray-600">Word puzzles based on subject vocabulary</p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium">Maze Activities</h4>
+                        <p className="text-sm text-gray-600">Maze puzzles with educational checkpoints</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="preview">
+          {generatedActivity && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">Activity Preview</h2>
+                <Button variant="outline" onClick={() => window.open(generatedActivity.filePath)}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </Button>
+              </div>
+              
+              {renderActivityPreview()}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
