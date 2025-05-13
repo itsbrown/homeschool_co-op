@@ -9,7 +9,8 @@ import {
   emergencyContacts, type EmergencyContact, type InsertEmergencyContact,
   programs, type Program, type InsertProgram,
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
-  classes, type Class, type InsertClass
+  classes, type Class, type InsertClass,
+  activities, type Activity, type InsertActivity
 } from "@shared/schema";
 
 export interface IStorage {
@@ -48,6 +49,13 @@ export interface IStorage {
   
   // Knowledge Base methods
   getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined>;
+  getKnowledgeBaseById(id: number, userId: number): Promise<KnowledgeBase | undefined>;
+  
+  // Activity methods
+  getActivityById(id: number, userId: number): Promise<Activity | undefined>;
+  getActivitiesByAuthor(authorId: number): Promise<Activity[]>;
+  createActivity(activity: InsertActivity): Promise<Activity>;
+  updateActivityDownloadCount(id: number): Promise<Activity | undefined>;
   getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]>;
   getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
   getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;

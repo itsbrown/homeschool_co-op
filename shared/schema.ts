@@ -335,6 +335,36 @@ export const programEnrollmentsRelations2 = relations(programs, ({ many }) => ({
   enrollments: many(programEnrollments)
 }));
 
+// Activities table for worksheets, puzzles, coloring pages, etc.
+export const activities = pgTable("activities", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  type: text("type", { enum: ["worksheet", "crossword", "coloring", "wordsearch", "maze"] }).notNull(),
+  content: jsonb("content").notNull(), // JSON structure depends on activity type
+  url: text("url").notNull(), // Path to the PDF or other generated file
+  ageRange: text("age_range").notNull(), // "4-5", "6-7", "8-10", "11-13", "14-18"
+  subject: text("subject").notNull(),
+  authorId: integer("author_id").notNull().references(() => users.id),
+  difficulty: text("difficulty", { enum: ["beginner", "intermediate", "advanced"] }).notNull(),
+  isPublic: boolean("is_public").default(false),
+  downloadCount: integer("download_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertActivitySchema = createInsertSchema(activities).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true, 
+  downloadCount: true
+});
+export type InsertActivity = z.infer<typeof insertActivitySchema>;
+export type Activity = typeof activities.$inferSelect;
+
+export const activitiesRelations = relations(activities, ({ one }) => ({
+  author: one(users, { fields: [activities.authorId], references: [users.id] }),
+}));
+
 // Classes table for AI-suggested pricing
 export const classes = pgTable("classes", {
   id: serial("id").primaryKey(),
