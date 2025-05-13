@@ -787,6 +787,23 @@ export default function AILessonGenerator() {
                             <Skeleton className="h-12 w-full" />
                             <Skeleton className="h-12 w-full" />
                           </div>
+                        ) : knowledgeBasesQuery.isError ? (
+                          <div className="text-center py-6 text-muted-foreground border rounded-md bg-destructive/5">
+                            <AlertCircle className="h-10 w-10 mx-auto text-destructive opacity-70" />
+                            <p className="mt-2 font-medium text-destructive">Failed to load knowledge bases</p>
+                            <p className="text-sm text-destructive/80">
+                              There was an issue loading knowledge bases. Please try refreshing the page.
+                            </p>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="mt-3"
+                              onClick={() => knowledgeBasesQuery.refetch()}
+                            >
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                              Retry
+                            </Button>
+                          </div>
                         ) : knowledgeBasesQuery.data && knowledgeBasesQuery.data.length > 0 ? (
                           <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
                             {knowledgeBasesQuery.data.map((kb) => (
@@ -842,7 +859,11 @@ export default function AILessonGenerator() {
                           <div className="text-center py-6 text-muted-foreground border rounded-md">
                             <Book className="h-10 w-10 mx-auto opacity-50" />
                             <p className="mt-2">No knowledge bases available</p>
-                            <p className="text-sm">Create knowledge bases in the Knowledge Base section</p>
+                            <p className="text-sm">
+                              <Link to="/knowledge-base" className="text-primary hover:underline">
+                                Create knowledge bases in the Knowledge Base section
+                              </Link>
+                            </p>
                           </div>
                         )}
                         <FormMessage />

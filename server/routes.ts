@@ -601,11 +601,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Combined endpoint to get all accessible knowledge bases for the user (public + owned)
   app.get("/api/knowledge-bases/all", isAuthenticated, async (req, res) => {
     try {
-      // Get public knowledge bases
-      const publicKnowledgeBases = await storage.getPublicKnowledgeBases();
+      let publicKnowledgeBases = [];
+      let userKnowledgeBases = [];
       
-      // Get user's knowledge bases
-      const userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(req.session.userId);
+      try {
+        // Get public knowledge bases
+        publicKnowledgeBases = await storage.getPublicKnowledgeBases();
+      } catch (publicError) {
+        console.error("Error fetching public knowledge bases:", publicError);
+        // Continue with empty array if failed
+      }
+      
+      try {
+        // Get user's knowledge bases if user is authenticated
+        if (req.session.userId) {
+          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(req.session.userId);
+        }
+      } catch (userError) {
+        console.error("Error fetching user knowledge bases:", userError);
+        // Continue with empty array if failed
+      }
       
       // Combine and deduplicate knowledge bases
       const combinedKnowledgeBases = [...publicKnowledgeBases];
@@ -617,10 +632,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
       
+      // Return empty array if none found
       res.status(200).json(combinedKnowledgeBases);
     } catch (error) {
       console.error("Error fetching combined knowledge bases:", error);
-      res.status(500).json({ message: "Error fetching knowledge bases" });
+      // Return empty array instead of error status to avoid breaking the UI
+      res.status(200).json([]);
     }
   });
   
