@@ -51,7 +51,7 @@ router.get('/status', async (req, res) => {
 
 /**
  * @route GET /api/image-services/test-generation
- * @desc Test image generation by creating a sample coloring page
+ * @desc Test image generation by creating a sample coloring page image only
  * @access Public
  */
 router.get('/test-generation', async (req, res) => {
