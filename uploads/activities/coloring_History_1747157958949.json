@@ -1,0 +1,50 @@
+{
+  "title": "America's Founding Symbols",
+  "description": "A beginner-friendly coloring activity featuring important symbols from America's founding period, helping students recognize and understand key American historical icons and their significance.",
+  "instructions": "Color each founding symbol using your favorite colors. As you color, discuss what each symbol means with your teacher or parent.",
+  "content": {
+    "image": "A collection of American founding symbols arranged on a page, including the Liberty Bell, American flag with 13 stars in a circle, bald eagle, Constitution document with 'We the People' visible at the top, Independence Hall, and the Statue of Liberty.",
+    "elements": [
+      {
+        "name": "Liberty Bell",
+        "description": "Color the famous cracked bell that was rung to announce the signing of the Declaration of Independence"
+      },
+      {
+        "name": "First American Flag",
+        "description": "Color the original flag with 13 stars arranged in a circle, representing the first 13 states"
+      },
+      {
+        "name": "Bald Eagle",
+        "description": "Color America's national bird, a symbol of freedom and strength"
+      },
+      {
+        "name": "Constitution",
+        "description": "Color the important document that begins with 'We the People'"
+      },
+      {
+        "name": "Independence Hall",
+        "description": "Color the building where the Declaration of Independence and Constitution were debated and signed"
+      },
+      {
+        "name": "Statue of Liberty",
+        "description": "Color this famous statue that represents freedom and welcomes people to America"
+      }
+    ],
+    "learningFacts": [
+      "The Liberty Bell rang to celebrate the reading of the Declaration of Independence in 1776",
+      "The first American flag had 13 stars for the original 13 colonies",
+      "The bald eagle became America's national symbol in 1782",
+      "The Constitution begins with the words 'We the People'",
+      "Independence Hall is in Philadelphia, Pennsylvania",
+      "Freedom and liberty were important ideas when America was founded"
+    ]
+  },
+  "targetSkills": [
+    "Historical recognition",
+    "Visual comprehension",
+    "Fine motor skills"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}

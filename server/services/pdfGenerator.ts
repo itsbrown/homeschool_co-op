@@ -14,6 +14,10 @@ const ensureDirectoryExists = async (dirPath: string) => {
   }
 };
 
+// Define standard fonts that are built into PDFKit
+const STANDARD_FONT = 'Helvetica';
+const BOLD_FONT = 'Helvetica-Bold';
+
 /**
  * Generates a PDF worksheet from an activity
  * @param activityId The ID of the activity to generate a PDF for
@@ -104,36 +108,36 @@ export const generateWorksheetPDF = async (activityId: number, userId: number): 
 
 // Helper function to create a worksheet PDF
 const createWorksheetPDF = async (doc: PDFKit.PDFDocument, content: any) => {
-  doc.fontSize(24).font('Helvetica-Bold').text(content.title, { align: 'center' });
+  doc.fontSize(24).font(BOLD_FONT).text(content.title, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(12).font('Helvetica').text(content.description, { align: 'center' });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.description, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(14).font('Helvetica-Bold').text('Instructions:', { underline: true });
-  doc.fontSize(12).font('Helvetica').text(content.instructions);
+  doc.fontSize(14).font(BOLD_FONT).text('Instructions:', { underline: true });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.instructions);
   doc.moveDown();
   
   // Add any questions or problems
   if (content.content?.questions) {
-    doc.fontSize(14).font('Helvetica-Bold').text('Questions:', { underline: true });
+    doc.fontSize(14).font(BOLD_FONT).text('Questions:', { underline: true });
     doc.moveDown();
     
     content.content.questions.forEach((question: any, index: number) => {
-      doc.fontSize(12).font('Helvetica-Bold').text(`${index + 1}. ${question.question}`);
-      doc.fontSize(10).font('Helvetica').text('Answer: _____________________________');
+      doc.fontSize(12).font(BOLD_FONT).text(`${index + 1}. ${question.question}`);
+      doc.fontSize(10).font(STANDARD_FONT).text('Answer: _____________________________');
       doc.moveDown(0.5);
     });
   }
   
   // Add any problems or exercises
   if (content.content?.problems) {
-    doc.fontSize(14).font('Helvetica-Bold').text('Problems:', { underline: true });
+    doc.fontSize(14).font(BOLD_FONT).text('Problems:', { underline: true });
     doc.moveDown();
     
     content.content.problems.forEach((problem: any, index: number) => {
-      doc.fontSize(12).font('Helvetica-Bold').text(`${index + 1}. ${problem.problem}`);
-      doc.fontSize(10).font('Helvetica').text('Work space:');
+      doc.fontSize(12).font(BOLD_FONT).text(`${index + 1}. ${problem.problem}`);
+      doc.fontSize(10).font(STANDARD_FONT).text('Work space:');
       
       // Add a box for work
       doc.rect(doc.x, doc.y, 400, 100).stroke();
@@ -144,39 +148,44 @@ const createWorksheetPDF = async (doc: PDFKit.PDFDocument, content: any) => {
   // Add footer with target skills
   doc.moveDown();
   if (content.targetSkills) {
-    doc.fontSize(10).font('Helvetica-Oblique').text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
+    doc.fontSize(10).font(STANDARD_FONT).text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
   }
 };
 
 // Helper function to create a coloring page PDF
 const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
-  doc.fontSize(24).font('Helvetica-Bold').text(content.title, { align: 'center' });
+  // Use only standard fonts to avoid issues
+  const REGULAR_FONT = 'Helvetica';
+  const BOLD_FONT = 'Helvetica-Bold';
+  
+  doc.fontSize(24).font(BOLD_FONT).text(content.title, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(12).font('Helvetica').text(content.description, { align: 'center' });
+  doc.fontSize(12).font(REGULAR_FONT).text(content.description, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(14).font('Helvetica-Bold').text('Instructions:', { underline: true });
-  doc.fontSize(12).font('Helvetica').text(content.instructions);
+  doc.fontSize(14).font(BOLD_FONT).text('Instructions:', { underline: true });
+  doc.fontSize(12).font(REGULAR_FONT).text(content.instructions);
   doc.moveDown();
   
   // Add coloring instructions
   if (content.content?.elements) {
-    doc.fontSize(14).font('Helvetica-Bold').text('Coloring Guide:', { underline: true });
+    doc.fontSize(14).font(BOLD_FONT).text('Coloring Guide:', { underline: true });
     doc.moveDown();
     
     content.content.elements.forEach((element: any) => {
-      doc.fontSize(12).font('Helvetica-Bold').text(`${element.name}:`);
-      doc.fontSize(12).font('Helvetica').text(`${element.description}`);
+      doc.fontSize(12).font(BOLD_FONT).text(`${element.name}:`);
+      doc.fontSize(12).font(REGULAR_FONT).text(`${element.description}`);
       doc.moveDown(0.5);
     });
   }
   
   // Add image description (in a real implementation, we would generate or import an actual SVG here)
   doc.moveDown();
-  doc.fontSize(12).font('Helvetica-Italic').text("Image Description:", { underline: true });
+  // Use REGULAR_FONT instead of Helvetica-Italic which is causing the error
+  doc.fontSize(12).font(REGULAR_FONT).text("Image Description:", { underline: true });
   if (content.content?.image) {
-    doc.fontSize(12).font('Helvetica').text(content.content.image);
+    doc.fontSize(12).font(REGULAR_FONT).text(content.content.image);
   }
   
   // Create a placeholder for the coloring image (in production this would be a real image)
@@ -184,7 +193,7 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   
   // Draw a placeholder frame for the coloring page
   doc.rect(100, doc.y, 400, 300).stroke();
-  doc.fontSize(14).font('Helvetica').text('Coloring Image Would Appear Here', 
+  doc.fontSize(14).font(STANDARD_FONT).text('Coloring Image Would Appear Here', 
     100 + 200 - doc.widthOfString('Coloring Image Would Appear Here') / 2, 
     doc.y + 150 - doc.currentLineHeight() / 2);
   
@@ -192,11 +201,11 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   
   // Add learning facts if available
   if (content.content?.learningFacts) {
-    doc.fontSize(14).font('Helvetica-Bold').text('Did You Know?', { underline: true });
+    doc.fontSize(14).font(BOLD_FONT).text('Did You Know?', { underline: true });
     doc.moveDown();
     
     content.content.learningFacts.forEach((fact: string, index: number) => {
-      doc.fontSize(12).font('Helvetica').text(`• ${fact}`);
+      doc.fontSize(12).font(STANDARD_FONT).text(`• ${fact}`);
       doc.moveDown(0.5);
     });
   }
@@ -204,25 +213,25 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   // Add footer with target skills
   doc.moveDown();
   if (content.targetSkills) {
-    doc.fontSize(10).font('Helvetica-Oblique').text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
+    doc.fontSize(10).font(STANDARD_FONT).text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
   }
 };
 
 // Helper function to create a crossword puzzle PDF
 const createCrosswordPDF = async (doc: PDFKit.PDFDocument, content: any) => {
-  doc.fontSize(24).font('Helvetica-Bold').text(content.title, { align: 'center' });
+  doc.fontSize(24).font(BOLD_FONT).text(content.title, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(12).font('Helvetica').text(content.description, { align: 'center' });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.description, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(14).font('Helvetica-Bold').text('Instructions:', { underline: true });
-  doc.fontSize(12).font('Helvetica').text(content.instructions);
+  doc.fontSize(14).font(BOLD_FONT).text('Instructions:', { underline: true });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.instructions);
   doc.moveDown();
   
   // Draw a placeholder for the crossword grid
   doc.rect(100, doc.y, 400, 300).stroke();
-  doc.fontSize(14).font('Helvetica').text('Crossword Puzzle Would Appear Here', 
+  doc.fontSize(14).font(STANDARD_FONT).text('Crossword Puzzle Would Appear Here', 
     100 + 200 - doc.widthOfString('Crossword Puzzle Would Appear Here') / 2, 
     doc.y + 150 - doc.currentLineHeight() / 2);
   
@@ -232,16 +241,16 @@ const createCrosswordPDF = async (doc: PDFKit.PDFDocument, content: any) => {
   if (content.content?.clues) {
     doc.addPage();
     
-    doc.fontSize(18).font('Helvetica-Bold').text('Clues', { align: 'center' });
+    doc.fontSize(18).font(BOLD_FONT).text('Clues', { align: 'center' });
     doc.moveDown();
     
     if (content.content.clues.across) {
-      doc.fontSize(14).font('Helvetica-Bold').text('Across:', { underline: true });
+      doc.fontSize(14).font(BOLD_FONT).text('Across:', { underline: true });
       doc.moveDown();
       
       Object.entries(content.content.clues.across).forEach(([number, clue]: [string, any]) => {
-        doc.fontSize(12).font('Helvetica-Bold').text(`${number}.`, { continued: true });
-        doc.fontSize(12).font('Helvetica').text(` ${clue}`);
+        doc.fontSize(12).font(BOLD_FONT).text(`${number}.`, { continued: true });
+        doc.fontSize(12).font(STANDARD_FONT).text(` ${clue}`);
         doc.moveDown(0.5);
       });
       
@@ -249,12 +258,12 @@ const createCrosswordPDF = async (doc: PDFKit.PDFDocument, content: any) => {
     }
     
     if (content.content.clues.down) {
-      doc.fontSize(14).font('Helvetica-Bold').text('Down:', { underline: true });
+      doc.fontSize(14).font(BOLD_FONT).text('Down:', { underline: true });
       doc.moveDown();
       
       Object.entries(content.content.clues.down).forEach(([number, clue]: [string, any]) => {
-        doc.fontSize(12).font('Helvetica-Bold').text(`${number}.`, { continued: true });
-        doc.fontSize(12).font('Helvetica').text(` ${clue}`);
+        doc.fontSize(12).font(BOLD_FONT).text(`${number}.`, { continued: true });
+        doc.fontSize(12).font(STANDARD_FONT).text(` ${clue}`);
         doc.moveDown(0.5);
       });
     }
@@ -263,25 +272,25 @@ const createCrosswordPDF = async (doc: PDFKit.PDFDocument, content: any) => {
   // Add footer with target skills
   doc.moveDown();
   if (content.targetSkills) {
-    doc.fontSize(10).font('Helvetica-Oblique').text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
+    doc.fontSize(10).font(STANDARD_FONT).text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
   }
 };
 
 // Helper function to create a word search PDF
 const createWordSearchPDF = async (doc: PDFKit.PDFDocument, content: any) => {
-  doc.fontSize(24).font('Helvetica-Bold').text(content.title, { align: 'center' });
+  doc.fontSize(24).font(BOLD_FONT).text(content.title, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(12).font('Helvetica').text(content.description, { align: 'center' });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.description, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(14).font('Helvetica-Bold').text('Instructions:', { underline: true });
-  doc.fontSize(12).font('Helvetica').text(content.instructions);
+  doc.fontSize(14).font(BOLD_FONT).text('Instructions:', { underline: true });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.instructions);
   doc.moveDown();
   
   // Draw a placeholder for the word search grid
   doc.rect(100, doc.y, 400, 300).stroke();
-  doc.fontSize(14).font('Helvetica').text('Word Search Grid Would Appear Here', 
+  doc.fontSize(14).font(STANDARD_FONT).text('Word Search Grid Would Appear Here', 
     100 + 200 - doc.widthOfString('Word Search Grid Would Appear Here') / 2, 
     doc.y + 150 - doc.currentLineHeight() / 2);
   
@@ -289,7 +298,7 @@ const createWordSearchPDF = async (doc: PDFKit.PDFDocument, content: any) => {
   
   // Add word list
   if (content.content?.words) {
-    doc.fontSize(14).font('Helvetica-Bold').text('Words to Find:', { underline: true });
+    doc.fontSize(14).font(BOLD_FONT).text('Words to Find:', { underline: true });
     doc.moveDown();
     
     // Create a multi-column layout for the words
@@ -302,7 +311,7 @@ const createWordSearchPDF = async (doc: PDFKit.PDFDocument, content: any) => {
         const index = i + j * wordsPerColumn;
         if (index < words.length) {
           const x = doc.x + j * 150;
-          doc.fontSize(12).font('Helvetica').text(words[index], x, doc.y);
+          doc.fontSize(12).font(STANDARD_FONT).text(words[index], x, doc.y);
         }
       }
       doc.moveDown();
@@ -312,25 +321,25 @@ const createWordSearchPDF = async (doc: PDFKit.PDFDocument, content: any) => {
   // Add footer with target skills
   doc.moveDown();
   if (content.targetSkills) {
-    doc.fontSize(10).font('Helvetica-Oblique').text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
+    doc.fontSize(10).font(STANDARD_FONT).text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
   }
 };
 
 // Helper function to create a maze PDF
 const createMazePDF = async (doc: PDFKit.PDFDocument, content: any) => {
-  doc.fontSize(24).font('Helvetica-Bold').text(content.title, { align: 'center' });
+  doc.fontSize(24).font(BOLD_FONT).text(content.title, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(12).font('Helvetica').text(content.description, { align: 'center' });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.description, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(14).font('Helvetica-Bold').text('Instructions:', { underline: true });
-  doc.fontSize(12).font('Helvetica').text(content.instructions);
+  doc.fontSize(14).font(BOLD_FONT).text('Instructions:', { underline: true });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.instructions);
   doc.moveDown();
   
   // Draw a placeholder for the maze
   doc.rect(100, doc.y, 400, 400).stroke();
-  doc.fontSize(14).font('Helvetica').text('Maze Would Appear Here', 
+  doc.fontSize(14).font(STANDARD_FONT).text('Maze Would Appear Here', 
     100 + 200 - doc.widthOfString('Maze Would Appear Here') / 2, 
     doc.y + 200 - doc.currentLineHeight() / 2);
   
@@ -338,11 +347,11 @@ const createMazePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   
   // Add any educational facts related to the maze
   if (content.content?.facts) {
-    doc.fontSize(14).font('Helvetica-Bold').text('Fun Facts:', { underline: true });
+    doc.fontSize(14).font(BOLD_FONT).text('Fun Facts:', { underline: true });
     doc.moveDown();
     
     content.content.facts.forEach((fact: string, index: number) => {
-      doc.fontSize(12).font('Helvetica').text(`• ${fact}`);
+      doc.fontSize(12).font(STANDARD_FONT).text(`• ${fact}`);
       doc.moveDown(0.5);
     });
   }
@@ -350,39 +359,39 @@ const createMazePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   // Add footer with target skills
   doc.moveDown();
   if (content.targetSkills) {
-    doc.fontSize(10).font('Helvetica-Oblique').text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
+    doc.fontSize(10).font(STANDARD_FONT).text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
   }
 };
 
 // Generic PDF for any other type of activity
 const createGenericPDF = async (doc: PDFKit.PDFDocument, content: any) => {
-  doc.fontSize(24).font('Helvetica-Bold').text(content.title, { align: 'center' });
+  doc.fontSize(24).font(BOLD_FONT).text(content.title, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(12).font('Helvetica').text(content.description, { align: 'center' });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.description, { align: 'center' });
   doc.moveDown();
   
-  doc.fontSize(14).font('Helvetica-Bold').text('Instructions:', { underline: true });
-  doc.fontSize(12).font('Helvetica').text(content.instructions);
+  doc.fontSize(14).font(BOLD_FONT).text('Instructions:', { underline: true });
+  doc.fontSize(12).font(STANDARD_FONT).text(content.instructions);
   doc.moveDown();
   
   // Add any content fields that are present
   if (content.content) {
     Object.entries(content.content).forEach(([key, value]) => {
       if (typeof value === 'string') {
-        doc.fontSize(14).font('Helvetica-Bold').text(`${key.charAt(0).toUpperCase() + key.slice(1)}:`, { underline: true });
-        doc.fontSize(12).font('Helvetica').text(value);
+        doc.fontSize(14).font(BOLD_FONT).text(`${key.charAt(0).toUpperCase() + key.slice(1)}:`, { underline: true });
+        doc.fontSize(12).font(STANDARD_FONT).text(value);
         doc.moveDown();
       } else if (Array.isArray(value)) {
-        doc.fontSize(14).font('Helvetica-Bold').text(`${key.charAt(0).toUpperCase() + key.slice(1)}:`, { underline: true });
+        doc.fontSize(14).font(BOLD_FONT).text(`${key.charAt(0).toUpperCase() + key.slice(1)}:`, { underline: true });
         value.forEach((item: any, index: number) => {
           if (typeof item === 'string') {
-            doc.fontSize(12).font('Helvetica').text(`• ${item}`);
+            doc.fontSize(12).font(STANDARD_FONT).text(`• ${item}`);
           } else if (typeof item === 'object') {
             Object.entries(item).forEach(([itemKey, itemValue]) => {
               if (typeof itemValue === 'string') {
-                doc.fontSize(12).font('Helvetica-Bold').text(`${itemKey}:`, { continued: true });
-                doc.fontSize(12).font('Helvetica').text(` ${itemValue}`);
+                doc.fontSize(12).font(BOLD_FONT).text(`${itemKey}:`, { continued: true });
+                doc.fontSize(12).font(STANDARD_FONT).text(` ${itemValue}`);
               }
             });
           }
@@ -396,6 +405,6 @@ const createGenericPDF = async (doc: PDFKit.PDFDocument, content: any) => {
   // Add footer with target skills
   doc.moveDown();
   if (content.targetSkills) {
-    doc.fontSize(10).font('Helvetica-Oblique').text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
+    doc.fontSize(10).font(STANDARD_FONT).text(`Target Skills: ${content.targetSkills.join(', ')}`, { align: 'center' });
   }
 };
