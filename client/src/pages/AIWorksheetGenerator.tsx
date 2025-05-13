@@ -81,6 +81,49 @@ export default function AIWorksheetGenerator() {
     queryKey: ['/api/ai/status'],
     queryFn: () => fetch('/api/ai/status').then(res => res.json()),
   });
+  
+  // Poll for job completion if we have a background job
+  React.useEffect(() => {
+    if (generatedActivity?.jobId && generatedActivity?.message?.includes("queued")) {
+      const pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/activities/job/${generatedActivity.jobId}`);
+          const data = await response.json();
+          
+          // Check if the job is complete
+          if (data.status === "completed" && data.result) {
+            clearInterval(pollInterval);
+            setGeneratedActivity(data.result);
+            toast({
+              title: "Activity Ready!",
+              description: "Your activity has been generated successfully.",
+              variant: "default",
+            });
+          } 
+          // Check if the job failed
+          else if (data.status === "failed") {
+            clearInterval(pollInterval);
+            toast({
+              title: "Generation Failed",
+              description: data.error || "Failed to generate activity",
+              variant: "destructive",
+            });
+            // Update with error information
+            setGeneratedActivity({
+              ...generatedActivity,
+              error: data.error || "Failed to generate the activity after multiple attempts.",
+              message: "Generation process failed."
+            });
+          }
+        } catch (error) {
+          console.error("Error polling for job status:", error);
+        }
+      }, 3000); // Poll every 3 seconds
+      
+      // Cleanup interval
+      return () => clearInterval(pollInterval);
+    }
+  }, [generatedActivity?.jobId, toast]);
 
   // Activity generation mutation
   const activityMutation = useMutation({
@@ -155,13 +198,38 @@ export default function AIWorksheetGenerator() {
   const renderActivityPreview = () => {
     if (!generatedActivity) return null;
     
+    // Check if this is a background job
+    if (generatedActivity.jobId && generatedActivity.message && generatedActivity.message.includes("queued")) {
+      return (
+        <div className="border p-6 rounded-lg bg-white">
+          <h2 className="text-2xl font-bold mb-2">Activity Generation In Progress</h2>
+          <p className="text-gray-600 mb-4">
+            {generatedActivity.message}
+          </p>
+          <div className="flex items-center gap-2 mt-4">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Processing with {generatedActivity.services?.primary}</span>
+          </div>
+          {generatedActivity.services?.fallback && (
+            <p className="text-sm text-gray-500 mt-2">
+              Fallback service ({generatedActivity.services.fallback}) available if needed
+            </p>
+          )}
+          <div className="mt-4 p-4 bg-gray-50 rounded text-sm">
+            <p className="font-medium">Job ID: {generatedActivity.jobId}</p>
+            <p className="text-xs text-gray-500 mt-1">The page will refresh when the activity is ready</p>
+          </div>
+        </div>
+      );
+    }
+    
     const activity = generatedActivity.activityContent;
     if (!activity) {
       return (
         <div className="border p-6 rounded-lg bg-white">
           <h2 className="text-2xl font-bold mb-2">Error Generating Activity</h2>
           <p className="text-gray-600 mb-4">
-            The activity could not be generated. Please try again with different parameters.
+            {generatedActivity.error || "The activity could not be generated. Please try again with different parameters."}
           </p>
           <pre className="mt-4 p-4 bg-gray-100 rounded overflow-auto text-sm">
             {JSON.stringify(generatedActivity, null, 2)}
@@ -342,7 +410,7 @@ export default function AIWorksheetGenerator() {
         )}
         
         {!checkingAIStatus && aiStatus && !aiStatus.openai?.available && aiStatus.anthropic?.available && (
-          <Alert variant="warning" className="mb-6 bg-amber-50 border-amber-200">
+          <Alert variant="default" className="mb-6 bg-amber-50 border-amber-200">
             <AlertCircle className="h-4 w-4 text-amber-600" />
             <AlertTitle>OpenAI Service Unavailable</AlertTitle>
             <AlertDescription>

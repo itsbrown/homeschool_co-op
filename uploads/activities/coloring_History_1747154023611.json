@@ -1,0 +1,46 @@
+{
+  "title": "America's Big Ideas Coloring Adventure",
+  "description": "A simple coloring page introducing young learners to basic American founding principles through child-friendly imagery and simple explanations.",
+  "instructions": "Color each picture. Ask a grown-up to read the facts to learn about America's important ideas!",
+  "content": {
+    "image": "A large outline drawing with several distinct sections: (1) A Liberty Bell in the center, (2) Children of different backgrounds holding hands in a circle, (3) A simple ballot box with a paper being inserted, (4) An eagle holding an olive branch, (5) A simple scale representing justice.",
+    "elements": [
+      {
+        "name": "Liberty Bell",
+        "description": "Color the Liberty Bell yellow or gold. It rings for freedom!"
+      },
+      {
+        "name": "Children Circle",
+        "description": "Color the children with different skin colors to show that everyone is equal"
+      },
+      {
+        "name": "Voting Box",
+        "description": "Color the voting box blue to show how we choose our leaders"
+      },
+      {
+        "name": "Peace Eagle",
+        "description": "Color the eagle brown and the olive branch green to represent peace"
+      },
+      {
+        "name": "Justice Scales",
+        "description": "Color the scales gold to show fairness for everyone"
+      }
+    ],
+    "learningFacts": [
+      "America was founded on the idea that all people are created equal",
+      "In America, people choose their leaders by voting",
+      "Freedom means people can speak their ideas",
+      "Like some ancient civilizations, America believes in justice and fairness",
+      "America's ideas about freedom began over 200 years ago"
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Civic concepts",
+    "Fine motor skills",
+    "Following directions"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}

@@ -225,6 +225,42 @@ router.post("/generate", async (req, res) => {
   }
 });
 
+// Check job status
+router.get("/job/:jobId", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    if (!jobId) {
+      return res.status(400).json({ error: 'Job ID is required' });
+    }
+    
+    const job = backgroundTaskManager.getJobStatus(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    
+    // Add additional context information to help the frontend display better messages
+    const response = {
+      ...job,
+      message: undefined
+    };
+    
+    if (job.status === 'queued') {
+      response.message = "Activity generation is queued. Please wait...";
+    } else if (job.status === 'processing' || job.status === 'running') {
+      response.message = "Activity generation is in progress. Please wait...";
+    } else if (job.status === 'failed') {
+      response.message = "Activity generation failed. Please try again with different parameters.";
+    } else if (job.status === 'completed') {
+      response.message = "Activity generation completed successfully.";
+    }
+    
+    res.json(response);
+  } catch (error) {
+    console.error("Error checking job status:", error);
+    res.status(500).json({ error: 'Failed to check job status' });
+  }
+});
+
 // Update activity download count
 router.post("/:id/download", async (req, res) => {
   try {
