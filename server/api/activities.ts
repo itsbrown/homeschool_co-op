@@ -10,6 +10,7 @@ import { generateActivityWithOCR, saveFileForOCR } from "../services/ocrActivity
 import { isDocumentAIAvailable } from "../services/documentAI";
 import * as fileUpload from "express-fileupload";
 import { UploadedFile } from "express-fileupload";
+import { processKnowledgeBases } from "../services/knowledgeBaseExtraction";
 
 const router = express.Router();
 
@@ -37,23 +38,57 @@ const ActivityGenerationSchema = z.object({
 
 type ActivityGenerationRequest = z.infer<typeof ActivityGenerationSchema>;
 
-// Fetch content from selected knowledge bases
-async function getKnowledgeBaseContent(knowledgeBaseIds: number[], userId: number): Promise<string> {
+// Fetch content from selected knowledge bases with enhanced semantic understanding
+async function getKnowledgeBaseContent(knowledgeBaseIds: number[], userId: number, subject?: string, ageRange?: string): Promise<string> {
   if (!knowledgeBaseIds || knowledgeBaseIds.length === 0) {
     return "";
   }
 
   try {
-    const contentChunks = await Promise.all(
+    // First get all knowledge bases
+    const knowledgeBases = await Promise.all(
       knowledgeBaseIds.map(async (id) => {
-        const kb = await storage.getKnowledgeBase(id);
-        if (kb) {
-          return `KNOWLEDGE BASE: ${kb.title}\nSUBJECT: ${kb.subject}\n\nCONTENT:\n${JSON.stringify(kb.metadata || {})}\n\n`;
-        }
-        return "";
+        return await storage.getKnowledgeBase(id);
       })
     );
-
+    
+    // Filter out any undefined values
+    const validKnowledgeBases = knowledgeBases.filter(kb => kb !== undefined);
+    
+    if (validKnowledgeBases.length === 0) {
+      console.warn("No valid knowledge bases found with the provided IDs");
+      return "";
+    }
+    
+    // If we have subject and age range, use enhanced processing
+    if (subject && ageRange) {
+      console.log(`Applying enhanced semantic processing for subject: ${subject}, age range: ${ageRange}`);
+      
+      try {
+        // Process knowledge bases with enhanced semantic understanding
+        const processedContent = await processKnowledgeBases(
+          validKnowledgeBases, 
+          subject,
+          ageRange
+        );
+        
+        // Return the enriched content which includes summary, entities, and questions
+        return processedContent.enrichedContent;
+      } catch (processingError) {
+        console.error("Error in semantic knowledge base processing:", processingError instanceof Error ? processingError.message : String(processingError));
+        
+        // Fall back to basic extraction if enhanced processing fails
+        console.log("Falling back to basic knowledge base extraction");
+      }
+    }
+    
+    // Basic extraction (fallback or when subject/ageRange not provided)
+    const contentChunks = validKnowledgeBases.map(kb => {
+      // Extract content from metadata or other fields
+      const kbContent = kb.metadata ? JSON.stringify(kb.metadata) : '{}';
+      return `KNOWLEDGE BASE: ${kb.title}\nSUBJECT: ${kb.subject}\n\nCONTENT:\n${kbContent}\n\n`;
+    });
+    
     return contentChunks.join("\n");
   } catch (error) {
     console.error("Error fetching knowledge base content:", error instanceof Error ? error.message : String(error));
@@ -73,8 +108,13 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
       };
     }
 
-    // Get content from knowledge bases
-    const knowledgeBaseContent = await getKnowledgeBaseContent(params.knowledgeBaseIds || [], userId);
+    // Get content from knowledge bases with enhanced semantic understanding
+    const knowledgeBaseContent = await getKnowledgeBaseContent(
+      params.knowledgeBaseIds || [], 
+      userId,
+      params.subject,
+      params.ageRange
+    );
     
     let generatedActivity: any;
     

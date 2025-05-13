@@ -1,231 +1,339 @@
+/**
+ * Anthropic AI Service
+ * Provides Claude API integration for text generation and analysis
+ */
+
 import Anthropic from '@anthropic-ai/sdk';
 
-// the newest Anthropic model is "claude-3-7-sonnet-20250219" which was released February 24, 2025
+// Initialize Anthropic client with API key from environment variables
+let anthropic: Anthropic | null = null;
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-// Text analysis for curriculum and lesson generation
-export async function generateCurriculumWithAI(prompt: string): Promise<string> {
-  try {
-    const message = await anthropic.messages.create({
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-      model: 'claude-3-7-sonnet-20250219',
+try {
+  if (process.env.ANTHROPIC_API_KEY) {
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
     });
+    console.log('Anthropic API initialized successfully, key available:', !!process.env.ANTHROPIC_API_KEY);
+  } else {
+    console.warn('Anthropic API Key not provided in environment variables');
+  }
+} catch (error) {
+  console.error('Failed to initialize Anthropic client:', error);
+}
 
-    if (message.content[0].type === 'text') {
-      return message.content[0].text;
-    } else {
-      throw new Error("Unexpected response format from Anthropic API");
+// the newest Anthropic model is "claude-3-7-sonnet-20250219" which was released February 24, 2025
+const MODEL = 'claude-3-7-sonnet-20250219';
+
+/**
+ * Class for interacting with Anthropic/Claude API
+ */
+class AnthropicService {
+  /**
+   * Check if the Anthropic client is available
+   * @returns boolean indicating availability
+   */
+  isAvailable(): boolean {
+    return !!anthropic;
+  }
+  
+  /**
+   * Generate content using Claude
+   * @param prompt The prompt to send to Claude
+   * @param returnJson Set to true to request JSON formatted response
+   * @param maxTokens Maximum tokens to generate
+   * @returns Generated content string or null if error
+   */
+  async generateContent(prompt: string, returnJson: boolean = false, maxTokens: number = 1024): Promise<string | null> {
+    if (!this.isAvailable()) {
+      console.warn('Anthropic service unavailable');
+      return null;
     }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error generating curriculum with Claude:', errorMessage);
-    throw new Error(`Failed to generate curriculum: ${errorMessage}`);
+    
+    try {
+      const systemPrompt = returnJson 
+        ? "You are a helpful assistant. Always respond in valid JSON format."
+        : "You are a helpful educational assistant that provides clear, accurate, and age-appropriate content.";
+      
+      const response = await anthropic!.messages.create({
+        model: MODEL,
+        max_tokens: maxTokens,
+        temperature: 0.7,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+      });
+      
+      if (response.content[0].type === 'text') {
+        return response.content[0].text;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error generating content with Anthropic:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Generate curriculum content with Claude
+   * @param subject Subject of the curriculum
+   * @param gradeLevel Target grade level
+   * @param learningStyles Preferred learning styles
+   * @param additionalDetails Additional curriculum details
+   * @returns Generated curriculum JSON or null if error
+   */
+  async generateCurriculum(
+    subject: string, 
+    gradeLevel: string, 
+    learningStyles: string[], 
+    additionalDetails?: string
+  ): Promise<any> {
+    const prompt = `
+    Create a comprehensive curriculum for a ${gradeLevel} course on ${subject}.
+    
+    This curriculum should accommodate the following learning styles: ${learningStyles.join(', ')}.
+    
+    Additional details: ${additionalDetails || 'None provided'}
+    
+    Format the response as a JSON object with the following structure:
+    {
+      "title": "Curriculum title",
+      "description": "Brief description",
+      "duration": "Estimated duration in weeks",
+      "objectives": ["learning objective 1", "learning objective 2"],
+      "units": [
+        {
+          "title": "Unit title",
+          "description": "Unit description",
+          "topics": ["Topic 1", "Topic 2"],
+          "activities": ["Activity 1", "Activity 2"]
+        }
+      ]
+    }
+    `;
+    
+    try {
+      const response = await this.generateContent(prompt, true, 2048);
+      if (!response) return null;
+      
+      return JSON.parse(response);
+    } catch (error) {
+      console.error('Error parsing curriculum JSON:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Summarize a piece of text for educational use
+   * @param text Text to summarize
+   * @param ageRange Target age range
+   * @param maxLength Maximum length in characters
+   * @returns Summarized text or null if error
+   */
+  async summarizeEducationalText(text: string, ageRange: string, maxLength: number = 300): Promise<string | null> {
+    const prompt = `
+    Summarize the following text for ${ageRange} year old students.
+    Make it educational, engaging, and no more than ${maxLength} characters:
+    
+    ${text}
+    `;
+    
+    return await this.generateContent(prompt, false, 512);
+  }
+  
+  /**
+   * Generate educational questions based on content
+   * @param content Text content to base questions on
+   * @param subject Subject area
+   * @param ageRange Target age range
+   * @param questionCount Number of questions to generate
+   * @returns Array of question objects or null if error
+   */
+  async generateEducationalQuestions(
+    content: string, 
+    subject: string, 
+    ageRange: string, 
+    questionCount: number = 5
+  ): Promise<any[] | null> {
+    const prompt = `
+    Based on the following content about ${subject}, create ${questionCount} educational questions 
+    appropriate for ${ageRange} year old students.
+    
+    Content:
+    ${content}
+    
+    Return the questions in this JSON format:
+    [
+      {
+        "question": "Question text",
+        "answer": "Expected answer",
+        "type": "multiple_choice OR short_answer OR true_false"
+      }
+    ]
+    `;
+    
+    try {
+      const response = await this.generateContent(prompt, true, 1024);
+      if (!response) return null;
+      
+      return JSON.parse(response);
+    } catch (error) {
+      console.error('Error parsing questions JSON:', error);
+      return null;
+    }
   }
 }
 
-// Generate a well-structured lesson plan
+// Export a singleton instance
+export const anthropicService = new AnthropicService();
+
+/**
+ * Generate a curriculum plan using Anthropic/Claude
+ * @param prompt The curriculum prompt
+ * @returns Generated curriculum plan as a JSON string
+ */
+export async function generateCurriculumWithAI(prompt: string): Promise<string> {
+  try {
+    const content = await anthropicService.generateContent(prompt, true, 3000);
+    return content || "{}";
+  } catch (error) {
+    console.error("Error generating curriculum with AI:", error);
+    throw new Error("Failed to generate curriculum with AI");
+  }
+}
+
+/**
+ * Generate a lesson plan using Anthropic/Claude
+ * @param subject The subject area
+ * @param gradeLevel The target grade level
+ * @param duration Lesson duration in minutes
+ * @param topic The lesson topic
+ * @param objectives Learning objectives
+ * @param learningStyles Learning styles to accommodate
+ * @returns Generated lesson plan as a JSON string
+ */
 export async function generateLessonPlanWithAI(
   subject: string,
   gradeLevel: string,
   duration: number,
-  learningStyles: string[],
-  objectives: string
+  topic: string,
+  objectives: string,
+  learningStyles: string[]
 ): Promise<string> {
-  const prompt = `Create a detailed lesson plan for a ${subject} class for ${gradeLevel} students.
-The lesson should be ${duration} minutes long and accommodate these learning styles: ${learningStyles.join(', ')}.
-The learning objectives are: ${objectives}
-
-Format the response as a JSON object with these fields:
-- title: string (lesson title)
-- duration: number (in minutes)
-- objectives: string[] (list of specific objectives)
-- materials: string[] (list of required materials)
-- activities: Array of objects, each with:
-  - title: string (activity name)
-  - duration: number (in minutes)
-  - description: string (detailed instructions)
-  - learningStyles: string[] (styles this activity addresses)
-- assessments: string[] (ways to assess student learning)
-- extensions: string[] (ways to extend or modify the lesson)
-
-Make the lesson engaging, interactive, and appropriate for the grade level. Ensure activities align with specified learning styles.`;
-
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
-      system: "You are an expert educational curriculum designer specializing in creating detailed lesson plans. Always provide responses in valid JSON format without explanations or markdown formatting.",
-      max_tokens: 2000,
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-    });
-
-    if (response.content[0].type === 'text') {
-      return response.content[0].text;
-    } else {
-      throw new Error("Unexpected response format from Anthropic API");
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error generating lesson plan with Claude:', errorMessage);
-    throw new Error(`Failed to generate lesson plan: ${errorMessage}`);
-  }
-}
-
-// Virtual tutor functionality
-export async function askVirtualTutor(
-  subject: string, 
-  question: string, 
-  learningLevel: string,
-  learningStyle: string,
-  outputFormat: string = "text"
-): Promise<string> {
-  // Determine if the output should be formatted as JSON
-  const isJsonOutput = outputFormat.toLowerCase().includes("json") || 
-                       outputFormat.toLowerCase().includes("structured") ||
-                       outputFormat.toLowerCase().includes("visual");
-  
-  let prompt = `I'm a ${learningLevel} student with a preference for ${learningStyle} learning. 
-I'm studying ${subject} and I have this question: ${question}`;
-
-  // Add JSON formatting instructions if needed
-  if (isJsonOutput) {
-    prompt += `\n\nPlease format your response as a valid JSON object that I can parse directly.`;
-  }
-
-  try {
-    // Create system message based on output format
-    let systemMessage = `You are a helpful, encouraging educational tutor specializing in ${subject}. 
-Tailor your explanations to ${learningLevel} students who prefer ${learningStyle} learning styles.
-Provide clear, accurate information with examples and analogies when helpful.
-Keep responses educational, engaging, and appropriate for the student's level.`;
-
-    // Add JSON-specific instructions if needed
-    if (isJsonOutput) {
-      systemMessage += `\n\nVERY IMPORTANT: You must respond with ONLY valid JSON. Do not include any explanation text, markdown formatting, 
-or any other text before or after the JSON object. The JSON must be parseable by JavaScript's JSON.parse function.
-Do not include backticks, code block markers or any other non-JSON content in your response.`;
-    }
-
-    const response = await anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
-      system: systemMessage,
-      max_tokens: 1500,
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-    });
-
-    // The response content is a structured object with multiple properties
-    if (response.content[0].type !== 'text') {
-      throw new Error("Unexpected response format from Anthropic API");
-    }
-    
-    const responseText = response.content[0].text;
-    
-    // If JSON output was requested, try to extract JSON properly
-    if (isJsonOutput) {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          // Validate it parses correctly
-          JSON.parse(jsonMatch[0]);
-          return jsonMatch[0]; // Return just the JSON part
-        } catch (parseError) {
-          console.warn('Anthropic response contained JSON-like content but failed to parse:', parseError);
-          
-          // Try to clean up the JSON
-          const cleanedJson = jsonMatch[0]
-            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-            .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
-            .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
-            .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are double-quoted
-            .replace(/:\s*'/g, ': "') // Replace single quotes with double quotes for values
-            .replace(/'\s*,/g, '",')  // Replace single quotes with double quotes for values
-            .replace(/'\s*}/g, '"}')  // Replace single quotes with double quotes for values
-            .replace(/'\s*]/g, '"]'); // Replace single quotes with double quotes for values
-            
-          try {
-            // Try parsing the cleaned JSON
-            JSON.parse(cleanedJson);
-            return cleanedJson;
-          } catch (finalParseError) {
-            console.error("Failed to parse cleaned JSON from Anthropic response:", finalParseError);
-            // Fall back to returning the original text
+    const prompt = `
+      Create a detailed lesson plan for a ${duration}-minute lesson on ${topic} for ${gradeLevel} students.
+      Subject area: ${subject}
+      Learning objectives: ${objectives}
+      Learning styles to accommodate: ${learningStyles.join(', ')}
+      
+      Format your response as a JSON object with this structure:
+      {
+        "title": "Lesson title",
+        "description": "Lesson description",
+        "duration": ${duration},
+        "objectives": ["objective 1", "objective 2"],
+        "materials": ["material 1", "material 2"],
+        "activities": [
+          {
+            "name": "Activity name",
+            "description": "Activity description",
+            "duration": 10,
+            "type": "individual|group|class"
           }
+        ],
+        "assessment": "Assessment description",
+        "differentiation": {
+          "visual": "Accommodation for visual learners",
+          "auditory": "Accommodation for auditory learners",
+          "kinesthetic": "Accommodation for kinesthetic learners"
         }
       }
-    }
+    `;
     
-    return responseText;
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error with virtual tutor:', errorMessage);
-    
-    if (isJsonOutput) {
-      // Return a minimal valid JSON if that was the expected format
-      return JSON.stringify({
-        title: "Fallback Response",
-        content: "I apologize, but the virtual tutor service is temporarily unavailable. Please try again later.",
-        error: errorMessage
-      });
-    }
-    
-    throw new Error(`Virtual tutor service unavailable: ${errorMessage}`);
+    const content = await anthropicService.generateContent(prompt, true, 2048);
+    return content || "{}";
+  } catch (error) {
+    console.error("Error generating lesson plan with AI:", error);
+    throw new Error("Failed to generate lesson plan with AI");
   }
 }
 
-// Analyze and provide feedback on student work
+/**
+ * Analyze student work and provide feedback using Anthropic/Claude
+ * @param studentWork The student's submitted work
+ * @param assignment The original assignment description
+ * @param gradeLevel The student's grade level
+ * @param rubric Optional grading rubric
+ * @returns Feedback and assessment as a JSON string
+ */
 export async function analyzeStudentWork(
-  subject: string,
+  studentWork: string,
   assignment: string,
-  studentResponse: string,
-  gradeLevel: string
+  gradeLevel: string,
+  rubric?: string
 ): Promise<string> {
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
-      system: `You are an experienced ${subject} teacher providing constructive feedback to ${gradeLevel} students.
-Focus on identifying strengths, areas for improvement, and specific suggestions to enhance learning.
-Always be encouraging, educational, and appropriate for the student's grade level.`,
-      max_tokens: 1500,
-      messages: [
-        { 
-          role: 'user', 
-          content: `Please analyze this ${gradeLevel} student's response to this ${subject} assignment:
-          
-Assignment: ${assignment}
-
-Student Response: ${studentResponse}
-
-Provide clear, specific feedback including:
-1. Strengths of the response
-2. Areas for improvement 
-3. Specific suggestions to enhance understanding
-4. Overall assessment`
-        }
-      ],
-    });
-
-    if (response.content[0].type === 'text') {
-      return response.content[0].text;
-    } else {
-      throw new Error("Unexpected response format from Anthropic API");
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error analyzing student work:', errorMessage);
-    throw new Error(`Unable to analyze student work: ${errorMessage}`);
+    const prompt = `
+      Analyze this student work for a ${gradeLevel} student and provide constructive feedback:
+      
+      ASSIGNMENT:
+      ${assignment}
+      
+      ${rubric ? `GRADING RUBRIC:\n${rubric}\n\n` : ''}
+      
+      STUDENT WORK:
+      ${studentWork}
+      
+      Format your response as a JSON object with this structure:
+      {
+        "strengths": ["strength 1", "strength 2"],
+        "areasForImprovement": ["area 1", "area 2"],
+        "suggestedNextSteps": ["step 1", "step 2"],
+        "overallFeedback": "Overall assessment and feedback",
+        "grade": "A|B|C|D|F" (if appropriate based on the rubric)
+      }
+    `;
+    
+    const content = await anthropicService.generateContent(prompt, true, 2048);
+    return content || "{}";
+  } catch (error) {
+    console.error("Error analyzing student work with AI:", error);
+    throw new Error("Failed to analyze student work with AI");
   }
 }
 
-export default {
-  generateCurriculumWithAI,
-  generateLessonPlanWithAI,
-  askVirtualTutor,
-  analyzeStudentWork
-};
+/**
+ * Virtual tutor function for answering student questions using Claude
+ * @param question The student's question
+ * @param subject The subject context
+ * @param gradeLevel The student's grade level
+ * @param previousExchange Optional previous conversation context
+ * @returns Tutor's response
+ */
+export async function askVirtualTutor(
+  question: string,
+  subject: string,
+  gradeLevel: string,
+  previousExchange?: string
+): Promise<string> {
+  try {
+    const prompt = `
+      You are acting as a helpful virtual tutor for a ${gradeLevel} student studying ${subject}.
+      Please answer their question in a clear, educational, and age-appropriate way.
+      
+      ${previousExchange ? `Previous conversation:\n${previousExchange}\n\n` : ''}
+      
+      Student question: ${question}
+      
+      Provide an answer that helps the student understand the concept rather than just giving them the answer directly.
+      Include examples where appropriate and use simple language appropriate for their grade level.
+    `;
+    
+    const response = await anthropicService.generateContent(prompt, false, 1024);
+    return response || "I'm sorry, I can't answer that question right now. Please try asking in a different way or ask another question.";
+  } catch (error) {
+    console.error("Error using virtual tutor with AI:", error);
+    return "I apologize, but I'm having trouble processing your question at the moment. Please try again later.";
+  }
+}

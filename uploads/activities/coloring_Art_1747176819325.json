@@ -1,0 +1,50 @@
+{
+  "title": "Ancient Greek Architectural Orders: A Detailed Exploration",
+  "description": "This advanced coloring activity introduces students to the three classical orders of ancient Greek architecture: Doric, Ionic, and Corinthian. Students will learn to identify the distinctive features of each architectural style while enjoying a creative, artistic experience.",
+  "instructions": "Color each architectural column according to the suggested color scheme or create your own palette. Pay close attention to the detailed elements that make each order unique. As you color, read the learning facts to understand the historical and cultural significance of each architectural style.",
+  "content": {
+    "image": "A detailed illustration showing three Greek temples side by side, each representing one of the three classical orders. The left temple features Doric columns (simple and sturdy), the middle temple shows Ionic columns (with scroll-like volutes), and the right temple displays Corinthian columns (with elaborate acanthus leaf decoration). Below each temple is a detailed close-up of each column type with labeled parts.",
+    "elements": [
+      {
+        "name": "Doric Column",
+        "description": "The simplest of the Greek orders, with a plain capital and no base. Color in earthy tones to represent its sturdy, practical nature."
+      },
+      {
+        "name": "Ionic Column",
+        "description": "Identified by its scroll-like volutes at the capital. Use blue and white tones to represent its connection to maritime Greek cities."
+      },
+      {
+        "name": "Corinthian Column",
+        "description": "The most ornate order, with acanthus leaves decorating the capital. Color with gold and rich colors to highlight its luxurious appearance."
+      },
+      {
+        "name": "Temple Structures",
+        "description": "Color the pediments, friezes, and other architectural elements in contrasting colors to highlight the structural components."
+      },
+      {
+        "name": "Background",
+        "description": "Color the sky and landscape to create a setting for these ancient structures."
+      }
+    ],
+    "learningFacts": [
+      "The Doric order was developed in mainland Greece and represents masculinity and strength.",
+      "The Ionic order originated in Ionia (present-day Turkey) and represents femininity and elegance.",
+      "The Corinthian order was the last developed and most elaborate of the three orders.",
+      "The Parthenon in Athens is the most famous example of Doric architecture.",
+      "Column proportions were carefully calculated using mathematical principles.",
+      "Greek architectural orders influenced Roman architecture and continue to inspire buildings today.",
+      "Each architectural order had specific proportions and decorative elements that architects followed.",
+      "These architectural styles spread throughout the Mediterranean as Greek culture expanded."
+    ]
+  },
+  "targetSkills": [
+    "Architecture recognition",
+    "Historical analysis",
+    "Artistic expression",
+    "Cultural appreciation",
+    "Visual discrimination"
+  ],
+  "ageRange": "9-11",
+  "difficulty": "advanced",
+  "timeRequired": "45"
+}
