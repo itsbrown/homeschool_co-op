@@ -94,7 +94,22 @@ export default function AIWorksheetGenerator() {
           // Check if the job is complete
           if (data.status === "completed" && data.result) {
             clearInterval(pollInterval);
-            setGeneratedActivity(data.result);
+            
+            // Log the result to understand the data structure
+            console.log('Job completed with result:', data.result);
+            
+            // Process the result to ensure we have the activity ID at the top level
+            const processedResult = {
+              ...data.result,
+              // The activity ID should come from data.result.data.activity.id
+              id: data.result.id || 
+                  data.result.data?.activity?.id || 
+                  (data.result.data?.activity && typeof data.result.data.activity === 'object' ? data.result.data.activity.id : null)
+            };
+            
+            console.log('Processed result with extracted ID:', processedResult);
+            setGeneratedActivity(processedResult);
+            
             toast({
               title: "Activity Ready!",
               description: "Your activity has been generated successfully.",
@@ -759,20 +774,42 @@ export default function AIWorksheetGenerator() {
                 <Button 
                   variant="outline" 
                   onClick={() => {
-                    console.log('Activity data:', generatedActivity);
+                    console.log('Activity data for PDF generation:', generatedActivity);
+                    
+                    // Try various paths to find the activity ID
                     if (generatedActivity.pdfUrl) {
+                      // Already have a PDF URL, just open it
                       window.open(generatedActivity.pdfUrl);
-                    } else if (generatedActivity.id) {
-                      generatePDF(generatedActivity.id);
-                    } else if (generatedActivity.data?.activity?.id) {
-                      // Try getting ID from nested data structure if available
-                      generatePDF(generatedActivity.data.activity.id);
                     } else {
-                      toast({
-                        title: "Error",
-                        description: "Cannot generate PDF - activity ID not found",
-                        variant: "destructive",
-                      });
+                      // Look for an ID in various locations based on the data structure
+                      let activityId = null;
+                      
+                      if (generatedActivity.id) {
+                        // Direct ID at the top level
+                        activityId = generatedActivity.id;
+                      } else if (generatedActivity.data?.activity?.id) {
+                        // Nested in data.activity
+                        activityId = generatedActivity.data.activity.id;
+                      } else if (generatedActivity.success?.data?.activity?.id) {
+                        // Might be nested in success.data.activity
+                        activityId = generatedActivity.success.data.activity.id;
+                      } else if (generatedActivity.result?.data?.activity?.id) {
+                        // Might be in result.data.activity from job result
+                        activityId = generatedActivity.result.data.activity.id;
+                      }
+                      
+                      // If we found an ID, use it
+                      if (activityId) {
+                        console.log('Found activity ID for PDF generation:', activityId);
+                        generatePDF(activityId);
+                      } else {
+                        console.error('No activity ID found in:', generatedActivity);
+                        toast({
+                          title: "Error",
+                          description: "Cannot generate PDF - activity ID not found",
+                          variant: "destructive",
+                        });
+                      }
                     }
                   }}
                   disabled={isGeneratingPdf}
