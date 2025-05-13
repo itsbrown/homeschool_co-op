@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import fileUpload from "express-fileupload";
+import path from "path";
 
 const app = express();
 // Increase the size limit to 50MB for file uploads
@@ -15,6 +16,9 @@ app.use(fileUpload({
   abortOnLimit: true,
   createParentPath: true,
 }));
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use((req, res, next) => {
   const start = Date.now();
