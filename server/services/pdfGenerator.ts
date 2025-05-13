@@ -465,7 +465,13 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
     doc.addPage();
     
     // Add a more discreet header for the facts section
-    doc.fontSize(12).font(BOLD_FONT).text('Fun Facts About American History', { align: 'center' });
+    // Use a dynamic title based on the content subject
+    if (content.title.toLowerCase().includes('american') || 
+        content.title.toLowerCase().includes('history')) {
+      doc.fontSize(12).font(BOLD_FONT).text('Fun Facts About American History', { align: 'center' });
+    } else {
+      doc.fontSize(12).font(BOLD_FONT).text(`Fun Facts About ${content.subject || 'This Topic'}`, { align: 'center' });
+    }
     doc.moveDown();
     
     // Add the facts with smaller font and more subtle formatting

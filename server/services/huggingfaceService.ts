@@ -211,10 +211,25 @@ export async function generateLineArt(
     const outputPath = path.join(uploadDir, outputFilename);
     
     // Enhance the prompt for line art generation with more specific guidance
-    const enhancedPrompt = `A simple black and white line drawing for a children's coloring page of: ${prompt}. 
-    Clear, distinct outlines with no overlapping text. All symbols must be accurately drawn (e.g., stars with 5 points, 
-    Liberty Bell with proper shape, etc). Very clean lines, no shading, high contrast outlines suitable for 
-    elementary school children to color. Make each element easily identifiable and separated from others.`;
+    // Adapt the prompt based on the content type for better results
+    let enhancedPrompt = '';
+    
+    if (prompt.toLowerCase().includes('math') || prompt.toLowerCase().includes('science')) {
+      enhancedPrompt = `A simple black and white line drawing for a children's educational coloring page of: ${prompt}. 
+      Clear, distinct outlines with labeled elements. All scientific/mathematical concepts should be accurately 
+      drawn with simple labels where appropriate. Very clean lines, no shading, high contrast outlines suitable for 
+      elementary school children to color. Make each element easily identifiable and well-spaced.`;
+    } else if (prompt.toLowerCase().includes('geography') || prompt.toLowerCase().includes('map')) {
+      enhancedPrompt = `A simple black and white line drawing for a children's educational coloring page of: ${prompt}. 
+      Clear, distinct outlines of geographical features, landmarks or maps. Major elements should be clearly 
+      defined and labeled appropriately. Very clean lines, no shading, high contrast outlines suitable for 
+      elementary school children to color. Make each element easily identifiable and well-spaced.`;
+    } else {
+      enhancedPrompt = `A simple black and white line drawing for a children's coloring page of: ${prompt}. 
+      Clear, distinct outlines with no overlapping text. All symbols must be accurately drawn (e.g., stars with 5 points, 
+      buildings with proper shapes, etc). Very clean lines, no shading, high contrast outlines suitable for 
+      elementary school children to color. Make each element easily identifiable and separated from others.`;
+    }
     
     console.log(`Using enhanced prompt: "${enhancedPrompt}"`);
     
