@@ -78,6 +78,86 @@ const WORKSHEET_TYPES = [
   { id: "math_worksheet", label: "Math Worksheet" }
 ];
 
+// Helper function to create worksheet templates based on type
+function getWorksheetTemplate(
+  type: string, 
+  subject: string, 
+  gradeLevel: string
+): { type: string; title: string; description: string; content?: string; instructions?: string } | null {
+  
+  // Base title incorporating subject and grade level
+  const baseTitle = `${subject} ${type.replace('_', ' ')} for ${gradeLevel}`;
+  
+  switch (type) {
+    case 'coloring_book':
+      return {
+        type,
+        title: `${subject} Coloring Activity`,
+        description: `A coloring book page that reinforces key ${subject} concepts through visual engagement.`,
+        instructions: `Print out this coloring page and have students color in the images while discussing key ${subject} concepts. Great for visual and kinesthetic learners.`
+      };
+      
+    case 'crossword_puzzle':
+      return {
+        type,
+        title: `${subject} Vocabulary Crossword`,
+        description: `A crossword puzzle using important ${subject} terminology appropriate for ${gradeLevel}.`,
+        instructions: `Students should complete this crossword puzzle using key vocabulary terms from the ${subject} unit. Can be done individually or in pairs.`
+      };
+      
+    case 'spot_the_difference':
+      return {
+        type,
+        title: `${subject} Spot the Difference`,
+        description: `Two similar images with subtle differences that relate to key ${subject} concepts.`,
+        instructions: `Have students identify the differences between these two images. Each difference relates to an important concept in ${subject}. Discuss why these differences matter.`
+      };
+      
+    case 'word_search':
+      return {
+        type,
+        title: `${subject} Word Search Challenge`,
+        description: `A word search puzzle containing key terminology from the ${subject} unit.`,
+        instructions: `Students should find all the hidden words related to ${subject}. After finding all words, have students define each term or use it in a sentence.`
+      };
+      
+    case 'matching_activity':
+      return {
+        type,
+        title: `${subject} Matching Exercise`,
+        description: `A two-column matching activity connecting ${subject} concepts with their definitions or examples.`,
+        instructions: `Draw lines connecting the terms in the left column with their correct matches in the right column. Discuss the connections as a class afterward.`
+      };
+      
+    case 'fill_in_the_blank':
+      return {
+        type,
+        title: `${subject} Fill-in-the-Blank Exercise`,
+        description: `A paragraph or series of sentences about ${subject} with key terms removed for students to complete.`,
+        instructions: `Fill in each blank with the appropriate ${subject} term from the word bank. Check answers as a class and discuss why each term fits in its context.`
+      };
+      
+    case 'labeling_diagram':
+      return {
+        type,
+        title: `${subject} Diagram Labeling Activity`,
+        description: `A diagram related to ${subject} that students must correctly label with provided terms.`,
+        instructions: `Label each part of the diagram using the terms provided. Be prepared to explain the function or significance of each labeled part.`
+      };
+      
+    case 'math_worksheet':
+      return {
+        type,
+        title: `${subject} Mathematical Practice`,
+        description: `A set of math problems that apply or relate to ${subject} concepts.`,
+        instructions: `Solve each problem, showing all your work. These problems demonstrate how mathematical concepts apply to ${subject}.`
+      };
+      
+    default:
+      return null;
+  }
+}
+
 interface GeneratedLesson {
   title: string;
   duration: number;
@@ -119,6 +199,7 @@ export default function AILessonGenerator() {
       duration: 45,
       objectives: "",
       learningStyles: [],
+      worksheetTypes: [],
       additionalNotes: "",
     },
   });
@@ -138,7 +219,7 @@ export default function AILessonGenerator() {
           throw new Error("AI services are currently unavailable. Please try again later.");
         }
         
-        return {
+        const result: GeneratedLesson = {
           title: data.title,
           duration: data.duration,
           objectives: [
@@ -182,6 +263,21 @@ export default function AILessonGenerator() {
             "Home learning extension activities"
           ]
         };
+        
+        // Generate worksheets if any selected
+        if (data.worksheetTypes && data.worksheetTypes.length > 0) {
+          result.worksheets = [];
+          
+          // Create worksheet for each selected type
+          data.worksheetTypes.forEach(type => {
+            const worksheetTemplate = getWorksheetTemplate(type, data.subject, data.gradeLevel);
+            if (worksheetTemplate) {
+              result.worksheets?.push(worksheetTemplate);
+            }
+          });
+        }
+        
+        return result;
       } catch (error: any) {
         console.error("Generation error:", error);
         throw new Error(error.message || "Failed to generate lesson plan");
@@ -336,6 +432,29 @@ export default function AILessonGenerator() {
             ))}
           </ul>
         </div>
+        
+        {generatedLesson.worksheets && generatedLesson.worksheets.length > 0 && (
+          <div>
+            <h3 className="text-lg font-medium">Worksheets</h3>
+            <Separator className="my-2" />
+            <div className="space-y-4">
+              {generatedLesson.worksheets.map((worksheet, i) => (
+                <Card key={i} className="overflow-hidden">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{worksheet.title}</CardTitle>
+                    <CardDescription className="text-xs">{worksheet.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pb-3">
+                    <div className="text-sm space-y-2">
+                      <div className="font-medium">Instructions:</div>
+                      <div className="text-sm text-muted-foreground">{worksheet.instructions}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
         
         <div className="flex justify-end space-x-3 pt-4">
           <Button variant="outline" onClick={() => setActiveTab("form")}>
@@ -522,6 +641,57 @@ export default function AILessonGenerator() {
                                     </FormControl>
                                     <FormLabel className="text-sm cursor-pointer">
                                       {style.label}
+                                    </FormLabel>
+                                  </FormItem>
+                                )
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="worksheetTypes"
+                    render={() => (
+                      <FormItem>
+                        <div className="mb-2">
+                          <FormLabel>Worksheet Types (Optional)</FormLabel>
+                          <FormDescription>
+                            Select the types of worksheets you want to include in the lesson
+                          </FormDescription>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {WORKSHEET_TYPES.map((type) => (
+                            <FormField
+                              key={type.id}
+                              control={form.control}
+                              name="worksheetTypes"
+                              render={({ field }) => {
+                                return (
+                                  <FormItem
+                                    key={type.id}
+                                    className="flex flex-row items-center space-x-2 space-y-0"
+                                  >
+                                    <FormControl>
+                                      <Checkbox
+                                        checked={field.value?.includes(type.id)}
+                                        onCheckedChange={(checked) => {
+                                          return checked
+                                            ? field.onChange([...(field.value || []), type.id])
+                                            : field.onChange(
+                                                field.value?.filter(
+                                                  (value) => value !== type.id
+                                                )
+                                              )
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormLabel className="text-sm cursor-pointer">
+                                      {type.label}
                                     </FormLabel>
                                   </FormItem>
                                 )
