@@ -4,6 +4,7 @@ import path from 'path';
 import { promisify } from 'util';
 import { storage } from '../storage';
 import { generateSvgForActivity } from './svgGenerator';
+import { isHuggingFaceAvailable, generateAmericanSymbolsLineArt, generateEducationalLineArt } from './huggingfaceService';
 
 // Create uploads directory if it doesn't exist
 const ensureDirectoryExists = async (dirPath: string) => {
@@ -193,9 +194,7 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   doc.moveDown();
   
   try {
-    // Import the Hugging Face service for line art generation
-    const { isHuggingFaceAvailable, generateAmericanSymbolsLineArt, generateEducationalLineArt } = require('./huggingfaceService');
-    
+    // Use the imported Hugging Face service functions
     // Determine if we should use AI-generated images
     const useAiGeneration = isHuggingFaceAvailable();
     let imagePath = '';

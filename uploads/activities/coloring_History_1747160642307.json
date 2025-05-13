@@ -1,0 +1,42 @@
+{
+  "title": "America's Birthday: The Declaration of Independence",
+  "description": "This coloring page introduces young learners to the founding of America through a simplified illustration of the signing of the Declaration of Independence. It helps students visualize this important historical moment while developing fine motor skills.",
+  "instructions": "Color the picture using crayons or colored pencils. Think about what colors might have been used in clothing during this time. Read the learning facts with a parent or teacher.",
+  "content": {
+    "image": "An easy-to-color illustration of the Continental Congress signing the Declaration of Independence. The scene shows several founding fathers gathered around a table with a large document. John Hancock is shown with a quill pen signing the document. An American flag with 13 stars is displayed in the background. The illustration has bold, clear lines appropriate for young children to color.",
+    "elements": [
+      {
+        "name": "Founding Fathers",
+        "description": "The men wearing colonial clothing"
+      },
+      {
+        "name": "Declaration of Independence",
+        "description": "The important document on the table"
+      },
+      {
+        "name": "First American Flag",
+        "description": "The flag with 13 stars in the background"
+      },
+      {
+        "name": "Independence Hall",
+        "description": "The building where they met"
+      }
+    ],
+    "learningFacts": [
+      "The Declaration of Independence was signed in 1776.",
+      "John Hancock wrote his name very large on the document.",
+      "The Declaration of Independence helped America become its own country.",
+      "The first American flag had 13 stars for the 13 original colonies.",
+      "July 4th is celebrated as America's birthday."
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Fine motor skills",
+    "Color recognition",
+    "Following instructions"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}
