@@ -341,7 +341,8 @@ export const activities = pgTable("activities", {
   title: text("title").notNull(),
   type: text("type", { enum: ["worksheet", "crossword", "coloring", "wordsearch", "maze"] }).notNull(),
   content: jsonb("content").notNull(), // JSON structure depends on activity type
-  url: text("url").notNull(), // Path to the PDF or other generated file
+  url: text("url").notNull(), // Path to the JSON data file
+  pdfUrl: text("pdf_url"), // Path to the generated PDF for printing
   ageRange: text("age_range").notNull(), // "4-5", "6-7", "8-10", "11-13", "14-18"
   subject: text("subject").notNull(),
   authorId: integer("author_id").notNull().references(() => users.id),
@@ -356,7 +357,8 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
   id: true, 
   createdAt: true, 
   updatedAt: true, 
-  downloadCount: true
+  downloadCount: true,
+  pdfUrl: true
 });
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Activity = typeof activities.$inferSelect;

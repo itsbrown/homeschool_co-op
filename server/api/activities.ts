@@ -287,4 +287,34 @@ router.post("/:id/download", async (req, res) => {
   }
 });
 
+// Generate PDF for activity
+router.post("/:id/generate-pdf", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid activity ID" });
+    }
+
+    const userId = req.session?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Import pdfGenerator service here to avoid circular imports
+    const { generateWorksheetPDF } = await import("../services/pdfGenerator");
+    
+    // Generate the PDF for the activity
+    const pdfUrl = await generateWorksheetPDF(id, userId);
+    
+    if (!pdfUrl) {
+      return res.status(500).json({ message: "Failed to generate PDF" });
+    }
+    
+    return res.json({ pdfUrl });
+  } catch (error) {
+    console.error("Error generating PDF:", error);
+    return res.status(500).json({ message: "Failed to generate PDF", error: (error as Error).message });
+  }
+});
+
 export default router;
