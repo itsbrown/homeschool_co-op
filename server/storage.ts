@@ -116,6 +116,7 @@ export class MemStorage implements IStorage {
   private programsStore: Map<number, Program>;
   private programEnrollmentsStore: Map<number, ProgramEnrollment>;
   private classesStore: Map<number, Class>;
+  private activitiesStore: Map<number, Activity>;
   
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -128,6 +129,7 @@ export class MemStorage implements IStorage {
   private programIdCounter: number;
   private programEnrollmentIdCounter: number;
   private classIdCounter: number;
+  private activityIdCounter: number;
 
   constructor() {
     this.usersStore = new Map();
@@ -141,6 +143,7 @@ export class MemStorage implements IStorage {
     this.programsStore = new Map();
     this.programEnrollmentsStore = new Map();
     this.classesStore = new Map();
+    this.activitiesStore = new Map();
     
     this.userIdCounter = 1;
     this.curriculumIdCounter = 1;
@@ -153,6 +156,7 @@ export class MemStorage implements IStorage {
     this.programIdCounter = 1;
     this.programEnrollmentIdCounter = 1;
     this.classIdCounter = 1;
+    this.activityIdCounter = 1;
     
     // Initialize with a default admin user
     
