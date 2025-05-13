@@ -86,80 +86,74 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
 
   if (!isOpen) return null;
 
-  // Simpler dialog approach that matches the original design
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Map CSV Columns to Class Fields</DialogTitle>
+          <DialogTitle>Map CSV Columns to Class Fields</DialogTitle>
           <DialogDescription>
             Select which CSV column corresponds to each class field. Required fields are marked with an asterisk (*).
           </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          {classFields.map((field) => (
-            <div key={field.key} className="flex flex-row justify-between items-start gap-4 mb-4">
-              <div className="w-1/3 text-right">
-                <div className="flex items-center justify-end">
-                  <Label htmlFor={`field-${field.key}`} className="font-medium">
-                    {field.label} {field.required && <span className="text-red-500">*</span>}
-                  </Label>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{field.description}</p>
-              </div>
-              <div className="w-2/3">
-                <Select
-                  value={mapping[field.key]}
-                  onValueChange={(value) => handleChange(field.key, value)}
-                >
-                  <SelectTrigger id={`field-${field.key}`} className="w-full">
-                    <SelectValue placeholder="Select a column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">-- Do not map --</SelectItem>
-                    {columns.map((column) => (
-                      <SelectItem key={column.name} value={column.name}>
-                        {column.name} 
-                        {column.sample && ` (sample: ${column.sample.substring(0, 30)}${column.sample.length > 30 ? '...' : ''})`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        
+        {classFields.map((field) => (
+          <div key={field.key} className="flex items-start justify-between py-2 gap-4">
+            <div className="text-right w-1/3">
+              <Label htmlFor={`field-${field.key}`} className="font-medium">
+                {field.label} {field.required && <span className="text-red-500">*</span>}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">{field.description}</p>
             </div>
-          ))}
-
-          {sampleData.length > 0 && (
-            <div className="mt-8">
-              <h3 className="font-medium text-base mb-2">Preview (first 3 rows)</h3>
-              <div className="border rounded-md overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
+            <div className="w-2/3">
+              <Select
+                value={mapping[field.key]}
+                onValueChange={(value) => handleChange(field.key, value)}
+              >
+                <SelectTrigger id={`field-${field.key}`} className="w-full">
+                  <SelectValue placeholder="Select column" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">-- Do not map --</SelectItem>
+                  {columns.map((column) => (
+                    <SelectItem key={column.name} value={column.name}>
+                      {column.name} {column.sample && `(sample: ${column.sample.substring(0, 30)}${column.sample.length > 30 ? '...' : ''})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ))}
+        
+        {sampleData.length > 0 && (
+          <div className="mt-4">
+            <h3 className="font-medium mb-2">Preview (first 3 rows)</h3>
+            <div className="border rounded-md overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {columns.map((col) => (
+                      <TableHead key={col.name}>{col.name}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sampleData.slice(0, 3).map((row, idx) => (
+                    <TableRow key={idx}>
                       {columns.map((col) => (
-                        <TableHead key={col.name}>{col.name}</TableHead>
+                        <TableCell key={col.name} className="truncate max-w-[150px]">
+                          {row[col.name]}
+                        </TableCell>
                       ))}
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sampleData.slice(0, 3).map((row, idx) => (
-                      <TableRow key={idx}>
-                        {columns.map((col) => (
-                          <TableCell key={col.name} className="max-w-[200px] truncate">
-                            {row[col.name]}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <DialogFooter className="pt-6 flex justify-end gap-2">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSubmit}>Confirm Mapping</Button>
         </DialogFooter>
