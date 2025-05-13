@@ -290,29 +290,47 @@ router.post("/:id/download", async (req, res) => {
 // Generate PDF for activity
 router.post("/:id/generate-pdf", async (req, res) => {
   try {
+    console.log('PDF generation request received');
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
+      console.error('Invalid activity ID:', req.params.id);
       return res.status(400).json({ message: "Invalid activity ID" });
     }
+    console.log('Valid activity ID:', id);
 
     // Get the user ID from the session if available, otherwise use 0 for public access
     const userId = req.session?.userId || 0;
     console.log(`PDF generation request from user ID: ${userId}`);
 
     // Import pdfGenerator service here to avoid circular imports
+    console.log('Importing pdfGenerator service...');
     const { generateWorksheetPDF } = await import("../services/pdfGenerator");
     
     // Generate the PDF for the activity
-    const pdfUrl = await generateWorksheetPDF(id, userId);
-    
-    if (!pdfUrl) {
-      return res.status(500).json({ message: "Failed to generate PDF" });
+    console.log('Calling generateWorksheetPDF...');
+    try {
+      const pdfUrl = await generateWorksheetPDF(id, userId);
+      console.log('PDF generated successfully, URL:', pdfUrl);
+      
+      if (!pdfUrl) {
+        console.error('PDF generation returned no URL');
+        return res.status(500).json({ message: "Failed to generate PDF - no URL returned" });
+      }
+      
+      return res.json({ pdfUrl });
+    } catch (pdfError) {
+      console.error("Error in PDF generation function:", pdfError);
+      return res.status(500).json({ 
+        message: "Failed to generate PDF", 
+        error: pdfError instanceof Error ? pdfError.message : String(pdfError) 
+      });
     }
-    
-    return res.json({ pdfUrl });
   } catch (error) {
-    console.error("Error generating PDF:", error);
-    return res.status(500).json({ message: "Failed to generate PDF", error: (error as Error).message });
+    console.error("Error in PDF generation endpoint:", error);
+    return res.status(500).json({ 
+      message: "Failed to generate PDF", 
+      error: error instanceof Error ? error.message : String(error) 
+    });
   }
 });
 

@@ -170,10 +170,16 @@ export default function AIWorksheetGenerator() {
   // Handle form submission
   // Generate PDF for an activity
   const generatePDF = async (activityId: number) => {
-    if (!activityId) return;
+    if (!activityId) {
+      console.error('Cannot generate PDF: No activity ID provided');
+      return;
+    }
     
+    console.log('Generating PDF for activity ID:', activityId);
     setIsGeneratingPdf(true);
+    
     try {
+      console.log('Sending PDF generation request to:', `/api/activities/${activityId}/generate-pdf`);
       const response = await fetch(`/api/activities/${activityId}/generate-pdf`, {
         method: 'POST',
         headers: {
@@ -181,6 +187,8 @@ export default function AIWorksheetGenerator() {
         },
         credentials: 'include'  // Include credentials for session cookies
       });
+      
+      console.log('PDF generation response status:', response.status);
       
       if (!response.ok) {
         console.error('PDF generation failed with status:', response.status);

@@ -1,0 +1,40 @@
+{
+  "title": "America's Founding Symbols",
+  "description": "A simple coloring page featuring key American symbols that represent freedom and democracy, designed to introduce young students to foundational American values.",
+  "instructions": "Color each part of the image using your favorite colors. As you color, think about what each symbol means for our country.",
+  "content": {
+    "image": "A collection of simple American founding symbols including the Liberty Bell, American flag, bald eagle, and Constitution document with 'We the People' visible at the top.",
+    "elements": [
+      {
+        "name": "Liberty Bell",
+        "description": "The bell that rang to announce the reading of the Declaration of Independence"
+      },
+      {
+        "name": "American Flag",
+        "description": "Our nation's flag with stars and stripes"
+      },
+      {
+        "name": "Bald Eagle",
+        "description": "America's national bird representing freedom"
+      },
+      {
+        "name": "Constitution",
+        "description": "The document that contains our country's rules"
+      }
+    ],
+    "learningFacts": [
+      "The Liberty Bell has a famous crack in it.",
+      "The American flag has 50 stars for 50 states.",
+      "The Constitution begins with the words 'We the People.'",
+      "The bald eagle became America's national symbol in 1782."
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Symbol recognition",
+    "Fine motor skills"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}
