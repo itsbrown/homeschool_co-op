@@ -1036,6 +1036,65 @@ export class MemStorage implements IStorage {
     };
     this.eventsStore.set(event5.id, event5);
   }
+  
+  // Activity methods
+  async createActivity(activity: InsertActivity): Promise<Activity> {
+    const id = this.activityIdCounter++;
+    const now = new Date();
+    
+    const newActivity: Activity = {
+      ...activity,
+      id,
+      createdAt: now,
+      updatedAt: now,
+      downloadCount: 0,
+      isPublic: activity.isPublic || false
+    };
+    
+    this.activitiesStore.set(id, newActivity);
+    return newActivity;
+  }
+  
+  async getActivityById(id: number, userId: number): Promise<Activity | undefined> {
+    const activity = this.activitiesStore.get(id);
+    
+    // Check if activity exists and is either public or owned by the user
+    if (activity && (activity.isPublic || activity.authorId === userId)) {
+      return activity;
+    }
+    
+    return undefined;
+  }
+  
+  async getActivitiesByAuthor(authorId: number): Promise<Activity[]> {
+    const activities: Activity[] = [];
+    
+    for (const activity of this.activitiesStore.values()) {
+      if (activity.authorId === authorId) {
+        activities.push(activity);
+      }
+    }
+    
+    // Sort by most recently created
+    return activities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+  
+  async updateActivityDownloadCount(id: number): Promise<Activity | undefined> {
+    const activity = this.activitiesStore.get(id);
+    
+    if (!activity) {
+      return undefined;
+    }
+    
+    const updatedActivity: Activity = {
+      ...activity,
+      downloadCount: activity.downloadCount + 1,
+      updatedAt: new Date()
+    };
+    
+    this.activitiesStore.set(id, updatedActivity);
+    return updatedActivity;
+  }
 }
 
 export const storage = new MemStorage();
