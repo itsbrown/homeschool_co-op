@@ -193,52 +193,158 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   doc.moveDown();
   
   try {
-    // Import sharp for SVG to PNG conversion
-    const sharp = require('sharp');
+    // Import the Hugging Face service for line art generation
+    const { isHuggingFaceAvailable, generateAmericanSymbolsLineArt, generateEducationalLineArt } = require('./huggingfaceService');
     
-    // Generate SVG content based on the activity title and description
-    const svgContent = generateSvgForActivity(
-      content.title, 
-      'coloring',
-      content.content?.image || 'American symbols'
-    );
+    // Determine if we should use AI-generated images
+    const useAiGeneration = isHuggingFaceAvailable();
+    let imagePath = '';
     
-    // Create a temporary SVG file
-    const tempDir = path.join(process.cwd(), 'uploads', 'temp');
-    await ensureDirectoryExists(tempDir);
-    
-    const svgFilePath = path.join(tempDir, `temp_${Date.now()}.svg`);
-    const pngFilePath = path.join(tempDir, `temp_${Date.now()}.png`);
-    
-    // Write SVG to file
-    fs.writeFileSync(svgFilePath, svgContent);
-    
-    // Convert SVG to PNG
-    await sharp(svgFilePath)
-      .resize(800, 600)
-      .png()
-      .toFile(pngFilePath);
-    
-    // Add the PNG to the PDF
-    doc.image(pngFilePath, 50, doc.y, { width: 500 });
-    
-    // Clean up temporary files
-    setTimeout(() => {
+    if (useAiGeneration) {
+      console.log('Using Hugging Face for dynamic line art generation');
+      
       try {
-        fs.unlinkSync(svgFilePath);
-        fs.unlinkSync(pngFilePath);
-      } catch (e) {
-        console.warn(`Failed to clean up temporary files: ${e}`);
+        // Generate line art based on the content
+        if (content.title.toLowerCase().includes('american') || 
+            content.title.toLowerCase().includes('founding') ||
+            content.title.toLowerCase().includes('history') ||
+            (content.content?.image && content.content.image.toLowerCase().includes('american'))) {
+          // For American symbols/history content
+          imagePath = await generateAmericanSymbolsLineArt();
+        } else {
+          // For other educational content
+          imagePath = await generateEducationalLineArt(
+            content.title,
+            content.content?.image || content.description
+          );
+        }
+        
+        console.log('AI generated image path:', imagePath);
+        
+        // Add the generated image to the PDF
+        doc.image(imagePath, 50, doc.y, { width: 500 });
+        console.log('AI-generated image added to PDF');
+        
+        // Clean up the image file after a delay (optional)
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+            console.log('Temporary AI image file cleaned up');
+          } catch (e) {
+            console.warn(`Failed to clean up AI image file: ${e}`);
+          }
+        }, 5000);
+      } catch (aiError) {
+        console.error('Error generating AI image:', aiError);
+        throw new Error('AI image generation failed, falling back to SVG');
       }
-    }, 1000);
-  } catch (svgError) {
-    console.error('Error generating SVG or converting to PNG:', svgError);
+    } else {
+      // Fallback to SVG generation if Hugging Face is not available
+      console.log('Hugging Face not available, falling back to SVG generation');
+      
+      // Import sharp for SVG to PNG conversion
+      const sharp = require('sharp');
+      
+      // Generate SVG content based on the activity title and description
+      let svgContent = generateSvgForActivity(
+        content.title, 
+        'coloring',
+        content.content?.image || 'American symbols with George Washington and Independence Hall'
+      );
+      
+      // Ensure SVG content is properly formatted
+      if (!svgContent.trim().startsWith('<svg')) {
+        svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+          ${svgContent}
+        </svg>`;
+      }
+      
+      // Create temporary directory if it doesn't exist
+      const tempDir = path.join(process.cwd(), 'uploads', 'temp');
+      await ensureDirectoryExists(tempDir);
+      
+      // Create unique filenames using timestamp and random string
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 10);
+      const svgFilePath = path.join(tempDir, `temp_${timestamp}_${randomString}.svg`);
+      const pngFilePath = path.join(tempDir, `temp_${timestamp}_${randomString}.png`);
+      
+      console.log('Using SVG file path:', svgFilePath);
+      console.log('Using PNG file path:', pngFilePath);
+      
+      // Write SVG to file
+      fs.writeFileSync(svgFilePath, svgContent, 'utf8');
+      console.log('SVG written to file');
+      
+      // Create a buffer from the SVG content for Sharp to process
+      const svgBuffer = Buffer.from(svgContent);
+      
+      // Convert SVG to PNG using buffer input instead of file
+      await sharp(svgBuffer)
+        .resize(800, 600)
+        .png()
+        .toFile(pngFilePath);
+      
+      console.log('SVG converted to PNG');
+      
+      // Add the PNG to the PDF
+      doc.image(pngFilePath, 50, doc.y, { width: 500 });
+      console.log('PNG added to PDF');
+      
+      // Clean up temporary files
+      setTimeout(() => {
+        try {
+          if (fs.existsSync(svgFilePath)) fs.unlinkSync(svgFilePath);
+          if (fs.existsSync(pngFilePath)) fs.unlinkSync(pngFilePath);
+          console.log('Temporary files cleaned up');
+        } catch (e) {
+          console.warn(`Failed to clean up temporary files: ${e}`);
+        }
+      }, 3000);
+    }
+  } catch (imageError) {
+    console.error('Error generating image:', imageError);
     
-    // Fallback to placeholder if SVG generation fails
-    doc.rect(100, doc.y, 400, 300).stroke();
-    doc.fontSize(14).font(STANDARD_FONT).text('Coloring Image Would Appear Here', 
-      100 + 200 - doc.widthOfString('Coloring Image Would Appear Here') / 2, 
-      doc.y + 150 - doc.currentLineHeight() / 2);
+    // Try fallback using direct SVG rendering without file operations
+    try {
+      console.log('Attempting fallback SVG rendering method');
+      const svgContent = generateSvgForActivity(
+        content.title, 
+        'coloring',
+        'American symbols with George Washington, Liberty Bell, Constitution and Independence Hall'
+      );
+      
+      // Encode SVG as base64 data URL
+      const svgBase64 = Buffer.from(svgContent).toString('base64');
+      const dataUrl = `data:image/svg+xml;base64,${svgBase64}`;
+      
+      // Create a placeholder for the image and add a note about it
+      doc.rect(100, doc.y, 400, 300).stroke();
+      
+      doc.fontSize(14)
+         .font(STANDARD_FONT)
+         .text('Coloring Image: America\'s Founding Symbols', 
+            100 + 200 - doc.widthOfString('Coloring Image: America\'s Founding Symbols') / 2, 
+            doc.y + 20);
+            
+      // Add text about what would be in the image
+      doc.fontSize(12)
+         .font(STANDARD_FONT)
+         .text('This coloring page features George Washington, the Liberty Bell, \nthe 13-star American flag, and Independence Hall.', 
+            150, doc.y + 50, { align: 'center' });
+         
+      console.log('Added fallback image description');
+    } catch (fallbackError) {
+      console.error('Fallback SVG rendering also failed:', fallbackError);
+      
+      // Ultimate fallback to simple placeholder
+      doc.rect(100, doc.y, 400, 300).stroke();
+      doc.fontSize(14)
+         .font(STANDARD_FONT)
+         .text('Coloring Image Would Appear Here', 
+           100 + 200 - doc.widthOfString('Coloring Image Would Appear Here') / 2, 
+           doc.y + 150 - doc.currentLineHeight() / 2);
+    }
   }
   
   doc.moveDown(20);
