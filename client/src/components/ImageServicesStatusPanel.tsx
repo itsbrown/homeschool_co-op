@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PaintBrush, Cloud, Zap } from 'lucide-react';
+import { Paintbrush, Cloud, Zap } from 'lucide-react';
 import { useImageServicesStatus } from '@/hooks/useImageServicesStatus';
 
 export default function ImageServicesStatusPanel() {
@@ -19,7 +19,7 @@ export default function ImageServicesStatusPanel() {
     <Card className="border-dashed border border-primary/30 bg-background/50">
       <CardHeader className="p-4 pb-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <PaintBrush className="h-4 w-4 text-primary" />
+          <Paintbrush className="h-4 w-4 text-primary" />
           Image Generation Services
         </CardTitle>
       </CardHeader>

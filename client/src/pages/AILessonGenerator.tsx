@@ -8,6 +8,7 @@ import { useAIStatus } from "@/hooks/useAIStatus";
 import { useToast } from "@/hooks/use-toast";
 import AppShell from "@/components/layout/AppShell";
 import AIStatusPanel from "@/components/AIStatusPanel";
+import ImageServicesStatusPanel from "@/components/ImageServicesStatusPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
@@ -549,8 +550,9 @@ export default function AILessonGenerator() {
       </div>
       
       {/* AI Status Panel */}
-      <div className="mb-6">
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         <AIStatusPanel />
+        <ImageServicesStatusPanel />
       </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
