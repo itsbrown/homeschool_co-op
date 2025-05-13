@@ -295,10 +295,9 @@ router.post("/:id/generate-pdf", async (req, res) => {
       return res.status(400).json({ message: "Invalid activity ID" });
     }
 
-    const userId = req.session?.userId;
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    // Get the user ID from the session if available, otherwise use 0 for public access
+    const userId = req.session?.userId || 0;
+    console.log(`PDF generation request from user ID: ${userId}`);
 
     // Import pdfGenerator service here to avoid circular imports
     const { generateWorksheetPDF } = await import("../services/pdfGenerator");

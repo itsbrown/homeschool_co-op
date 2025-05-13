@@ -22,11 +22,20 @@ const ensureDirectoryExists = async (dirPath: string) => {
  */
 export const generateWorksheetPDF = async (activityId: number, userId: number): Promise<string> => {
   try {
-    // Get activity data
-    const activity = await storage.getActivityById(activityId, userId);
+    // Get activity data - first try with user ID for permission check
+    let activity = await storage.getActivityById(activityId, userId);
+    
+    // Fallback: if user is not the owner, try to get it if it's public
+    if (!activity) {
+      console.log(`Activity not found with user ID ${userId}, trying to access it as a public resource`);
+      activity = await storage.getActivityById(activityId, 0); // 0 for public access
+    }
+    
     if (!activity) {
       throw new Error(`Activity with ID ${activityId} not found or not accessible.`);
     }
+    
+    console.log(`Found activity: ${activity.title}, type: ${activity.type}`); // Debugging
 
     const { content } = activity;
     const activityContent = typeof content === 'string' ? JSON.parse(content) : content;

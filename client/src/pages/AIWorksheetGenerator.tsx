@@ -178,11 +178,15 @@ export default function AIWorksheetGenerator() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
+        credentials: 'include'  // Include credentials for session cookies
       });
       
       if (!response.ok) {
-        throw new Error('Failed to generate PDF');
+        console.error('PDF generation failed with status:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error details:', errorData);
+        throw new Error(`Failed to generate PDF: ${errorData.message || response.statusText}`);
       }
       
       const data = await response.json();
