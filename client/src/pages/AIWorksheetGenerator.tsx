@@ -31,6 +31,7 @@ import ImageServicesStatusPanel from "@/components/ImageServicesStatusPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AppShell from "@/components/layout/AppShell";
 import { useToast } from "@/hooks/use-toast";
+import { useImageServicesStatus } from "@/hooks/useImageServicesStatus";
 
 // Define types
 interface ActivityGenerationParams {
@@ -64,6 +65,9 @@ export default function AIWorksheetGenerator() {
   const [generatedActivity, setGeneratedActivity] = React.useState<any>(null);
   const [selectedTab, setSelectedTab] = React.useState<string>("form");
   const [isGeneratingPdf, setIsGeneratingPdf] = React.useState<boolean>(false);
+  
+  // Get image services status for coloring pages and other image-based activities
+  const { anyServiceAvailable, isHuggingFaceAvailable, isSageMakerAvailable, preferredService, isLoading: checkingImageServices } = useImageServicesStatus();
 
   // Initialize form with react-hook-form
   const form = useForm<z.infer<typeof activityFormSchema>>({
@@ -538,6 +542,35 @@ export default function AIWorksheetGenerator() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Image service availability alerts for coloring pages and other image-dependent activities */}
+      {form.watch('activityType') === 'coloring' && !checkingImageServices && !anyServiceAvailable && (
+        <Alert variant="destructive" className="mb-6">
+          <Image className="h-4 w-4" />
+          <AlertTitle>Image Generation Services Unavailable</AlertTitle>
+          <AlertDescription>
+            Image generation services are currently unavailable. Coloring pages require image generation capabilities 
+            and will not work properly. Please try another activity type or try again later.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {form.watch('activityType') === 'coloring' && !checkingImageServices && anyServiceAvailable && 
+       ((isHuggingFaceAvailable && !isSageMakerAvailable) || (!isHuggingFaceAvailable && isSageMakerAvailable)) && (
+        <Alert variant="default" className="mb-6 bg-amber-50 border-amber-200">
+          <Image className="h-4 w-4 text-amber-600" />
+          <AlertTitle>Limited Image Generation Service</AlertTitle>
+          <AlertDescription>
+            Only one image generation service is currently available ({isHuggingFaceAvailable ? 'Hugging Face' : 'SageMaker'}). 
+            Coloring pages will be generated using the available service, but generation quality or speed may be affected.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {/* Image Services Status Panel - For image-dependent activities like coloring pages */}
+      <div className="mb-6">
+        <ImageServicesStatusPanel />
+      </div>
       
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
         <TabsList className="mb-6">
