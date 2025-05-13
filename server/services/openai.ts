@@ -12,9 +12,10 @@ export async function checkOpenAIStatus() {
     // Simple models list request to check if API key is valid
     await openai.models.list();
     return { available: true, status: "operational" };
-  } catch (error) {
-    console.error("OpenAI API key check failed:", error);
-    return { available: false, status: "error", message: error.message };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("OpenAI API key check failed:", errorMessage);
+    return { available: false, status: "error", message: errorMessage };
   }
 }
 
@@ -24,6 +25,243 @@ import { isAnthropicAvailable } from './anthropicService';
 
 // Move imports to top-level to avoid circular dependencies
 import { askVirtualTutor } from './anthropic';
+
+/**
+ * Generate a fallback educational activity when AI services are unavailable
+ * @param subject The subject of the activity
+ * @param ageRange Target age range
+ * @param activityType Type of activity to generate (worksheet, crossword, etc.)
+ * @param difficulty Difficulty level
+ * @returns A complete activity object
+ */
+function generateFallbackActivity(
+  subject: string,
+  ageRange: string,
+  activityType: string,
+  difficulty: string
+): any {
+  const capitalizedSubject = subject.charAt(0).toUpperCase() + subject.slice(1);
+  const today = new Date().toLocaleDateString();
+  
+  // Base activity structure
+  const activity = {
+    title: `${capitalizedSubject} ${activityType.charAt(0).toUpperCase() + activityType.slice(1)} Activity`,
+    description: `A ${difficulty} level ${activityType} activity about ${subject} for ${ageRange} students.`,
+    instructions: `Complete this ${activityType} activity about ${subject}.`,
+    subject: subject,
+    ageRange: ageRange,
+    difficulty: difficulty,
+    createdAt: today
+  };
+
+  // Add specific content based on activity type
+  switch (activityType.toLowerCase()) {
+    case 'worksheet':
+      return {
+        ...activity,
+        content: {
+          questions: [
+            `What are three important facts about ${subject}?`,
+            `How does ${subject} relate to everyday life?`,
+            `Why is studying ${subject} important?`
+          ],
+          resources: [
+            `${capitalizedSubject} textbook`,
+            'Educational website',
+            'Library resources'
+          ]
+        }
+      };
+      
+    case 'crossword':
+      return {
+        ...activity,
+        content: {
+          words: getMeaningfulWords(subject, 8),
+          clues: getCluesForWords(subject, 8)
+        }
+      };
+      
+    case 'coloring':
+      return {
+        ...activity,
+        content: {
+          theme: `American Symbols: Educational ${capitalizedSubject} Coloring Activity`,
+          elements: [
+            "Liberty Bell",
+            "American Flag",
+            "Bald Eagle",
+            "Constitution"
+          ],
+          description: "Color these American symbols while learning about their historical importance."
+        }
+      };
+      
+    case 'wordsearch':
+      return {
+        ...activity,
+        content: {
+          words: getMeaningfulWords(subject, 10),
+          gridSize: 10,
+          title: `${capitalizedSubject} Word Search Puzzle`
+        }
+      };
+      
+    case 'maze':
+      return {
+        ...activity,
+        content: {
+          theme: `Journey Through ${capitalizedSubject}`,
+          complexity: difficultyToNumber(difficulty),
+          educationalCheckpoints: [
+            {question: `What is a key concept in ${subject}?`, answer: "Key concept explanation"},
+            {question: `How do we apply ${subject} knowledge?`, answer: "Application example"}
+          ]
+        }
+      };
+      
+    default:
+      return {
+        ...activity,
+        content: {
+          title: `${capitalizedSubject} Learning Activity`,
+          sections: [
+            {
+              title: "Introduction",
+              content: `Learn about the fundamentals of ${subject}.`
+            },
+            {
+              title: "Practice",
+              content: `Apply your knowledge of ${subject} with these exercises.`
+            },
+            {
+              title: "Review",
+              content: `Test your understanding of ${subject}.`
+            }
+          ]
+        }
+      };
+  }
+}
+
+/**
+ * Get meaningful words related to a subject for word games
+ */
+function getMeaningfulWords(subject: string, count: number): string[] {
+  // Map of subjects to related vocabulary
+  const subjectWords: Record<string, string[]> = {
+    'math': ['addition', 'subtraction', 'multiplication', 'division', 'fraction', 'decimal', 'algebra', 'geometry', 'equation', 'number', 'pattern', 'formula'],
+    'science': ['experiment', 'hypothesis', 'observation', 'microscope', 'molecule', 'element', 'biology', 'chemistry', 'physics', 'laboratory', 'research', 'discovery'],
+    'history': ['artifact', 'century', 'civilization', 'colony', 'constitution', 'democracy', 'document', 'empire', 'freedom', 'government', 'independence', 'liberty'],
+    'english': ['vocabulary', 'grammar', 'spelling', 'sentence', 'paragraph', 'essay', 'literature', 'poetry', 'fiction', 'character', 'setting', 'plot'],
+    'geography': ['continent', 'country', 'mountain', 'ocean', 'river', 'climate', 'equator', 'hemisphere', 'latitude', 'longitude', 'map', 'compass'],
+    'art': ['painting', 'drawing', 'sculpture', 'artist', 'color', 'design', 'perspective', 'composition', 'texture', 'pattern', 'creativity', 'imagination']
+  };
+  
+  // Default words if subject isn't in our map
+  const defaultWords = ['learning', 'education', 'knowledge', 'study', 'practice', 'skill', 'concept', 'understand', 'remember', 'apply', 'create', 'evaluate'];
+  
+  // Get the appropriate word list, or use default
+  const normalizedSubject = subject.toLowerCase();
+  let wordList: string[] = [];
+  
+  for (const key in subjectWords) {
+    if (normalizedSubject.includes(key)) {
+      wordList = subjectWords[key];
+      break;
+    }
+  }
+  
+  if (wordList.length === 0) wordList = defaultWords;
+  
+  // Return either the full list or a random selection if we need fewer words
+  if (wordList.length <= count) return wordList;
+  
+  // Random selection algorithm
+  const result: string[] = [];
+  const copyList = [...wordList];
+  for (let i = 0; i < count; i++) {
+    const randomIndex = Math.floor(Math.random() * copyList.length);
+    result.push(copyList[randomIndex]);
+    copyList.splice(randomIndex, 1);
+  }
+  
+  return result;
+}
+
+/**
+ * Generate clues for a list of words
+ */
+function getCluesForWords(subject: string, count: number): string[] {
+  const words = getMeaningfulWords(subject, count);
+  
+  // Map of words to generic clues
+  const wordClues: Record<string, string> = {
+    // Math clues
+    'addition': 'The process of combining numbers to find their sum',
+    'subtraction': 'The process of finding the difference between numbers',
+    'multiplication': 'The process of repeated addition',
+    'division': 'The process of splitting into equal parts',
+    'fraction': 'A part of a whole, expressed as a numerator and denominator',
+    'decimal': 'A number expressed using a period to separate whole and fractional parts',
+    'algebra': 'Branch of mathematics using symbols to represent quantities',
+    'geometry': 'Branch of mathematics dealing with shapes and spaces',
+    'equation': 'Mathematical statement showing equality of two expressions',
+    'number': 'A mathematical value used for counting and calculation',
+    'pattern': 'A repeating arrangement or sequence',
+    'formula': 'A rule expressed with mathematical symbols',
+    
+    // Science clues
+    'experiment': 'A test or investigation to discover something unknown',
+    'hypothesis': 'A proposed explanation requiring further testing',
+    'observation': 'The act of noticing and recording information',
+    'microscope': 'Tool used to see very small objects',
+    'molecule': 'A group of atoms bonded together',
+    'element': 'Basic substance that cannot be broken down chemically',
+    'biology': 'Study of living organisms',
+    'chemistry': 'Study of matter and its transformations',
+    'physics': 'Study of matter, energy, and their interactions',
+    'laboratory': 'Place where scientific research is conducted',
+    'research': 'Systematic investigation to establish facts',
+    'discovery': 'Finding or learning something for the first time',
+    
+    // General education clues
+    'learning': 'Process of acquiring knowledge or skills',
+    'education': 'Systematic instruction to develop knowledge',
+    'knowledge': 'Facts, information, and skills acquired through experience',
+    'study': 'Devoting time to learn about a subject',
+    'practice': 'Repeated exercise to improve a skill',
+    'skill': 'Ability to do something well',
+    'concept': 'Abstract idea or general notion',
+    'understand': 'To comprehend the meaning of something',
+    'remember': 'To recall information from memory',
+    'apply': 'To put knowledge to practical use',
+    'create': 'To bring something into existence',
+    'evaluate': 'To assess or determine the value of something'
+  };
+  
+  // Generate clues for each word
+  return words.map(word => {
+    if (word in wordClues) return wordClues[word];
+    return `Related to ${subject}: ${word}`;
+  });
+}
+
+/**
+ * Convert difficulty string to numeric value
+ */
+function difficultyToNumber(difficulty: string): number {
+  switch (difficulty.toLowerCase()) {
+    case 'beginner':
+      return 3;
+    case 'intermediate':
+      return 6;
+    case 'advanced':
+      return 9;
+    default:
+      return 5;
+  }
+}
 
 // Generate text using OpenAI's GPT-4o with Anthropic fallback
 export async function generateContentWithOpenAI(
@@ -374,16 +612,7 @@ export async function generateEducationalActivity(
             
             // Create a minimal valid JSON object as fallback
             console.warn("Creating fallback JSON for activity - no JSON pattern found in Anthropic response");
-            return {
-              title: `${activityType.charAt(0).toUpperCase() + activityType.slice(1)} Activity`,
-              description: `This is a ${activityType} activity about ${subject} for ${ageRange} students.`,
-              instructions: `Follow the instructions provided by your teacher for this ${activityType} activity.`,
-              content: {
-                questions: ["What is the main topic of this lesson?"],
-                words: [subject.toLowerCase(), "learning", "education"],
-                clues: ["Main subject of study", "Process of gaining knowledge", "System of teaching"]
-              }
-            };
+            return generateFallbackActivity(subject, ageRange, activityType, difficulty);
           }
         } catch (anthropicError) {
           console.error("Anthropic direct activity generation failed:", anthropicError);
