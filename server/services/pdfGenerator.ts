@@ -87,7 +87,13 @@ export const generateWorksheetPDF = async (activityId: number, userId: number): 
     
     // Update activity with PDF URL
     const pdfUrl = `/uploads/pdf/${pdfFileName}`;
-    await storage.updateActivityPdfUrl(activityId, pdfUrl);
+    console.log(`Setting PDF URL to: ${pdfUrl}`);
+    const updatedActivity = await storage.updateActivityPdfUrl(activityId, pdfUrl);
+    if (!updatedActivity) {
+      console.error(`Failed to update activity ${activityId} with PDF URL ${pdfUrl}`);
+    } else {
+      console.log(`Successfully updated activity with PDF URL`);
+    }
     
     return pdfUrl;
   } catch (error) {
