@@ -54,25 +54,60 @@ export default function ClassesUploadPage() {
     reader.onload = (event) => {
       try {
         const csvText = event.target?.result as string;
-        const lines = csvText.split('\n');
+        // Handle different newline formats
+        const lines = csvText.split(/\r?\n/);
         
         if (lines.length < 2) {
           throw new Error("CSV file must have at least headers and one data row");
         }
         
-        // Extract headers
-        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        // Make sure we have non-empty lines
+        const nonEmptyLines = lines.filter(line => line.trim().length > 0);
+        if (nonEmptyLines.length < 2) {
+          throw new Error("CSV file must have at least headers and one data row");
+        }
+        
+        // Extract headers - first handle quoted values with commas inside
+        // This is a simplified CSV parser
+        const processLine = (line: string): string[] => {
+          const result: string[] = [];
+          let inQuotes = false;
+          let currentValue = "";
+          
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              result.push(currentValue.trim().replace(/^"|"$/g, ''));
+              currentValue = "";
+            } else {
+              currentValue += char;
+            }
+          }
+          
+          // Don't forget the last value
+          result.push(currentValue.trim().replace(/^"|"$/g, ''));
+          
+          return result;
+        };
+        
+        const headers = processLine(nonEmptyLines[0]);
+        console.log("CSV Headers:", headers);
         
         // Parse data rows (up to 10)
         const data: any[] = [];
-        for (let i = 1; i < Math.min(lines.length, 11); i++) {
-          if (!lines[i].trim()) continue;
+        for (let i = 1; i < Math.min(nonEmptyLines.length, 11); i++) {
+          const values = processLine(nonEmptyLines[i]);
           
-          const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-          
+          // Adjust values array if needed
           if (values.length !== headers.length) {
-            // Skip malformed rows
-            continue;
+            console.warn(`Row ${i} has ${values.length} fields, expected ${headers.length}. Adjusting...`);
+            
+            // Add empty fields or truncate as needed
+            while (values.length < headers.length) values.push("");
+            if (values.length > headers.length) values.length = headers.length;
           }
           
           const row: any = {};

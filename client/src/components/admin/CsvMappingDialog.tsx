@@ -37,7 +37,7 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
   // Class fields that need mapping
   const classFields: MappingField[] = [
     { key: "title", label: "Class Title", required: true, description: "The name of the class" },
-    { key: "category", label: "Category", required: true, description: "The category of the class (e.g., 'academic', 'arts', etc.)" },
+    { key: "category", label: "Category", required: false, description: "The category of the class (e.g., 'academic', 'arts', etc.)" },
     { key: "description", label: "Description", required: true, description: "Detailed description of the class" },
     { key: "price", label: "Price", required: true, description: "The price of the class" },
     { key: "startDate", label: "Start Date", required: false, description: "When the class starts" },
@@ -93,9 +93,9 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Map CSV Columns to Class Fields</DialogTitle>
+          <DialogTitle className="text-xl">Map CSV Columns to Class Fields</DialogTitle>
           <DialogDescription>
             Select which CSV column corresponds to each class field. Required fields are marked with an asterisk (*).
           </DialogDescription>
@@ -105,58 +105,70 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
           <div className="grid gap-6">
             {classFields.map(field => (
               <div key={field.key} className="grid grid-cols-3 items-center gap-4">
-                <Label htmlFor={`map-${field.key}`} className="text-right font-medium">
-                  {field.label} {field.required && <span className="text-red-500">*</span>}
-                  <p className="text-xs text-muted-foreground">{field.description}</p>
-                </Label>
-                <Select
-                  value={mapping[field.key]}
-                  onValueChange={(value) => handleMappingChange(field.key, value)}
-                >
-                  <SelectTrigger className="col-span-2">
-                    <SelectValue placeholder="Select a column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">-- Do not map --</SelectItem>
-                    {columns.map(column => (
-                      <SelectItem key={column.name} value={column.name}>
-                        {column.name} (sample: {column.sample.substring(0, 20)}{column.sample.length > 20 ? '...' : ''})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="text-right font-medium">
+                  <Label htmlFor={`map-${field.key}`}>
+                    {field.label} {field.required && <span className="text-red-500">*</span>}
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">{field.description}</p>
+                </div>
+                <div className="col-span-2">
+                  <Select
+                    value={mapping[field.key]}
+                    onValueChange={(value) => handleMappingChange(field.key, value)}
+                  >
+                    <SelectTrigger className="w-full" id={`map-${field.key}`}>
+                      <SelectValue placeholder="Select a column" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">-- Do not map --</SelectItem>
+                      {columns.map(column => (
+                        <SelectItem key={column.name} value={column.name}>
+                          {column.name} {column.sample && `(sample: ${column.sample.substring(0, 20)}${column.sample.length > 20 ? '...' : ''})`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             ))}
           </div>
 
-          <Card className="p-4">
-            <h3 className="text-sm font-medium mb-2">Preview (first 3 rows)</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {columns.map(col => (
-                    <TableHead key={col.name}>{col.name}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sampleData.slice(0, 3).map((row, idx) => (
-                  <TableRow key={idx}>
-                    {columns.map(col => (
-                      <TableCell key={col.name} className="truncate max-w-[200px]">
-                        {row[col.name]}
-                      </TableCell>
+          {sampleData.length > 0 && (
+            <Card className="p-4">
+              <h3 className="text-sm font-medium mb-2">Preview (first 3 rows)</h3>
+              <div className="overflow-auto max-h-[200px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {columns.map(col => (
+                        <TableHead key={col.name} className="px-2 py-1">{col.name}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sampleData.slice(0, 3).map((row, idx) => (
+                      <TableRow key={idx}>
+                        {columns.map(col => (
+                          <TableCell key={col.name} className="truncate max-w-[150px] px-2 py-1 text-sm">
+                            {row[col.name]}
+                          </TableCell>
+                        ))}
+                      </TableRow>
                     ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleConfirm}>Confirm Mapping & Import</Button>
+        <DialogFooter className="flex justify-end gap-2 pt-4">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirm} className="ml-2">
+            Confirm Mapping & Import
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
