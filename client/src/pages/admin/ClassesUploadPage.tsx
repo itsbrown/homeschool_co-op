@@ -24,8 +24,7 @@ export default function ClassesUploadPage() {
   const [showMappingDialog, setShowMappingDialog] = useState(false);
 
   // Check if user is admin
-  const isAdmin = user?.role === "admin";
-  if (!isAdmin) {
+  if (user?.username !== "admin") {
     setLocation("/");
     return null;
   }

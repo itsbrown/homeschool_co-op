@@ -9,22 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface CsvColumn {
@@ -101,142 +86,82 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
 
   if (!isOpen) return null;
 
+  // Simpler dialog approach that matches the original design
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Map CSV Columns to Class Fields</DialogTitle>
+          <DialogTitle className="text-xl font-bold">Map CSV Columns to Class Fields</DialogTitle>
           <DialogDescription>
             Select which CSV column corresponds to each class field. Required fields are marked with an asterisk (*).
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="space-y-4 py-4">
-          <div className="grid gap-4">
-            {classFields.map((field) => (
-              <div key={field.key} className="grid grid-cols-5 items-center gap-4">
-                <div className="col-span-2">
-                  <Label className="text-right">
+
+        <div className="space-y-4 py-2">
+          {classFields.map((field) => (
+            <div key={field.key} className="flex flex-row justify-between items-start gap-4 mb-4">
+              <div className="w-1/3 text-right">
+                <div className="flex items-center justify-end">
+                  <Label htmlFor={`field-${field.key}`} className="font-medium">
                     {field.label} {field.required && <span className="text-red-500">*</span>}
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
                   </Label>
                 </div>
-                <div className="col-span-3">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className="w-full justify-between"
-                      >
-                        {mapping[field.key] === "__none__" 
-                          ? "-- Do not map --" 
-                          : mapping[field.key] || "Select column"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0">
-                      <Command>
-                        <CommandInput placeholder="Search columns..." />
-                        <CommandEmpty>No column found.</CommandEmpty>
-                        <CommandGroup>
-                          <ScrollArea className="h-[200px]">
-                            <CommandItem
-                              value="__none__"
-                              onSelect={() => handleChange(field.key, "__none__")}
-                              className={cn(
-                                "flex items-center gap-2",
-                                mapping[field.key] === "__none__" ? "bg-accent" : ""
-                              )}
-                            >
-                              <Check
-                                className={cn(
-                                  "h-4 w-4",
-                                  mapping[field.key] === "__none__" ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              -- Do not map --
-                            </CommandItem>
-                            {columns.map((column) => (
-                              <CommandItem
-                                key={column.name}
-                                value={column.name}
-                                onSelect={() => handleChange(field.key, column.name)}
-                                className={cn(
-                                  "flex items-center gap-2",
-                                  mapping[field.key] === column.name ? "bg-accent" : ""
-                                )}
-                              >
-                                <Check
-                                  className={cn(
-                                    "h-4 w-4",
-                                    mapping[field.key] === column.name ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <div>
-                                  <div>{column.name}</div>
-                                  {column.sample && (
-                                    <div className="text-xs text-muted-foreground">
-                                      Sample: {column.sample.substring(0, 20)}
-                                      {column.sample.length > 20 ? "..." : ""}
-                                    </div>
-                                  )}
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </ScrollArea>
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                <p className="text-xs text-muted-foreground mt-1">{field.description}</p>
               </div>
-            ))}
-          </div>
-          
+              <div className="w-2/3">
+                <Select
+                  value={mapping[field.key]}
+                  onValueChange={(value) => handleChange(field.key, value)}
+                >
+                  <SelectTrigger id={`field-${field.key}`} className="w-full">
+                    <SelectValue placeholder="Select a column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">-- Do not map --</SelectItem>
+                    {columns.map((column) => (
+                      <SelectItem key={column.name} value={column.name}>
+                        {column.name} 
+                        {column.sample && ` (sample: ${column.sample.substring(0, 30)}${column.sample.length > 30 ? '...' : ''})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+
           {sampleData.length > 0 && (
-            <Card className="mt-6">
-              <CardContent className="p-4">
-                <h3 className="font-medium mb-2">Preview (first 3 rows)</h3>
-                <div className="border rounded-md overflow-auto max-h-[200px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
+            <div className="mt-8">
+              <h3 className="font-medium text-base mb-2">Preview (first 3 rows)</h3>
+              <div className="border rounded-md overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {columns.map((col) => (
+                        <TableHead key={col.name}>{col.name}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sampleData.slice(0, 3).map((row, idx) => (
+                      <TableRow key={idx}>
                         {columns.map((col) => (
-                          <TableHead key={col.name} className="px-2 py-1 text-xs font-medium">
-                            {col.name}
-                          </TableHead>
+                          <TableCell key={col.name} className="max-w-[200px] truncate">
+                            {row[col.name]}
+                          </TableCell>
                         ))}
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sampleData.slice(0, 3).map((row, idx) => (
-                        <TableRow key={idx}>
-                          {columns.map((col) => (
-                            <TableCell 
-                              key={col.name} 
-                              className="px-2 py-1 text-xs truncate max-w-[150px]"
-                            >
-                              {row[col.name]}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           )}
         </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleSubmit}>
-            Confirm Mapping
-          </Button>
+        <DialogFooter className="pt-6 flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit}>Confirm Mapping</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
