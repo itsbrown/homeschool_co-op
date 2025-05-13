@@ -1,0 +1,110 @@
+{
+  "success": true,
+  "data": {
+    "activity": {
+      "title": "America's Founding Ideas Coloring Adventure",
+      "type": "coloring",
+      "subject": "History",
+      "difficulty": "beginner",
+      "ageRange": "6-8",
+      "content": {
+        "title": "America's Founding Ideas Coloring Adventure",
+        "description": "A coloring activity that introduces young students to important symbols and ideas that helped form the United States of America.",
+        "instructions": "Color each part of the image according to the suggestions or use your own creative colors. As you color, read the facts to learn about America's founding ideas!",
+        "content": {
+          "image": "A detailed scene showing the Liberty Bell in the center, with the American flag waving above it. To the left is a simplified version of the Declaration of Independence with a quill pen beside it. To the right is a bald eagle. The background shows Independence Hall with simple outlines.",
+          "elements": [
+            {
+              "name": "Liberty Bell",
+              "description": "Color the Liberty Bell brown or bronze. This bell represents freedom and liberty."
+            },
+            {
+              "name": "American Flag",
+              "description": "Color the stripes red and white, and the star section blue with white stars."
+            },
+            {
+              "name": "Declaration of Independence",
+              "description": "Color the document light tan or yellow like old paper, with brown or black writing."
+            },
+            {
+              "name": "Bald Eagle",
+              "description": "Color the eagle's body brown, with a white head and yellow beak."
+            },
+            {
+              "name": "Independence Hall",
+              "description": "Color the building red-brown with white windows and doors."
+            }
+          ],
+          "learningFacts": [
+            "The Liberty Bell is a symbol of American independence and freedom.",
+            "The American flag's stars represent the states, and the stripes represent the original 13 colonies.",
+            "The Declaration of Independence was signed in 1776 and announced that America would be free from British rule.",
+            "The bald eagle became America's national bird and represents strength and freedom.",
+            "Independence Hall in Philadelphia is where both the Declaration of Independence and the Constitution were debated and signed."
+          ]
+        },
+        "targetSkills": [
+          "Historical awareness",
+          "Symbol recognition",
+          "Fine motor skills"
+        ],
+        "ageRange": "6-8",
+        "difficulty": "beginner",
+        "timeRequired": "20-30 minutes"
+      },
+      "url": "/uploads/activities/coloring_History_1747154430284.json",
+      "authorId": 0,
+      "isPublic": false,
+      "id": 1,
+      "createdAt": "2025-05-13T16:40:30.286Z",
+      "updatedAt": "2025-05-13T16:40:30.286Z",
+      "downloadCount": 0
+    },
+    "activityContent": {
+      "title": "America's Founding Ideas Coloring Adventure",
+      "description": "A coloring activity that introduces young students to important symbols and ideas that helped form the United States of America.",
+      "instructions": "Color each part of the image according to the suggestions or use your own creative colors. As you color, read the facts to learn about America's founding ideas!",
+      "content": {
+        "image": "A detailed scene showing the Liberty Bell in the center, with the American flag waving above it. To the left is a simplified version of the Declaration of Independence with a quill pen beside it. To the right is a bald eagle. The background shows Independence Hall with simple outlines.",
+        "elements": [
+          {
+            "name": "Liberty Bell",
+            "description": "Color the Liberty Bell brown or bronze. This bell represents freedom and liberty."
+          },
+          {
+            "name": "American Flag",
+            "description": "Color the stripes red and white, and the star section blue with white stars."
+          },
+          {
+            "name": "Declaration of Independence",
+            "description": "Color the document light tan or yellow like old paper, with brown or black writing."
+          },
+          {
+            "name": "Bald Eagle",
+            "description": "Color the eagle's body brown, with a white head and yellow beak."
+          },
+          {
+            "name": "Independence Hall",
+            "description": "Color the building red-brown with white windows and doors."
+          }
+        ],
+        "learningFacts": [
+          "The Liberty Bell is a symbol of American independence and freedom.",
+          "The American flag's stars represent the states, and the stripes represent the original 13 colonies.",
+          "The Declaration of Independence was signed in 1776 and announced that America would be free from British rule.",
+          "The bald eagle became America's national bird and represents strength and freedom.",
+          "Independence Hall in Philadelphia is where both the Declaration of Independence and the Constitution were debated and signed."
+        ]
+      },
+      "targetSkills": [
+        "Historical awareness",
+        "Symbol recognition",
+        "Fine motor skills"
+      ],
+      "ageRange": "6-8",
+      "difficulty": "beginner",
+      "timeRequired": "20-30 minutes"
+    },
+    "filePath": "/uploads/activities/coloring_History_1747154430284.json"
+  }
+}

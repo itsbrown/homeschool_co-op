@@ -56,6 +56,7 @@ export interface IStorage {
   getActivitiesByAuthor(authorId: number): Promise<Activity[]>;
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivityDownloadCount(id: number): Promise<Activity | undefined>;
+  updateActivityPdfUrl(id: number, pdfUrl: string): Promise<Activity | undefined>;
   getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]>;
   getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
   getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;
@@ -1089,6 +1090,23 @@ export class MemStorage implements IStorage {
     const updatedActivity: Activity = {
       ...activity,
       downloadCount: activity.downloadCount + 1,
+      updatedAt: new Date()
+    };
+    
+    this.activitiesStore.set(id, updatedActivity);
+    return updatedActivity;
+  }
+  
+  async updateActivityPdfUrl(id: number, pdfUrl: string): Promise<Activity | undefined> {
+    const activity = this.activitiesStore.get(id);
+    
+    if (!activity) {
+      return undefined;
+    }
+    
+    const updatedActivity: Activity = {
+      ...activity,
+      pdfUrl: pdfUrl,
       updatedAt: new Date()
     };
     
