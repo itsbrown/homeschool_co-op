@@ -31,7 +31,7 @@ export const generateSvgForActivity = (
 };
 
 /**
- * Generates a simple coloring page SVG
+ * Generates a detailed coloring page SVG with American symbols
  * @param title Title for the coloring page
  * @param description Description of the image content
  * @returns SVG string content
@@ -40,72 +40,168 @@ const generateColoringSvg = (title: string, description: string): string => {
   // Extract key elements from the description for simple shapes
   const elements = extractElementsFromDescription(description);
   
-  // Build SVG content with basic shapes representing elements
+  // Default to American symbols if no specific elements are identified
+  if (elements.length === 0) {
+    elements.push('liberty bell', 'american flag', 'eagle', 'constitution');
+  }
+  
+  // Build SVG content with educational symbols of America
   let svgContent = `
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
     <rect width="800" height="600" fill="white"/>
     <text x="400" y="30" font-family="Arial" font-size="24" text-anchor="middle" fill="black">${title}</text>
-    <text x="400" y="60" font-family="Arial" font-size="14" text-anchor="middle" fill="gray">Color the elements below!</text>
+    <text x="400" y="60" font-family="Arial" font-size="14" text-anchor="middle" fill="gray">Color these American symbols!</text>
   `;
 
-  // Add simple shapes for american symbols if the description contains them
-  if (description.toLowerCase().includes('liberty bell')) {
-    // Simple Liberty Bell
+  // Add Liberty Bell with more detail
+  if (elements.includes('liberty bell')) {
     svgContent += `
-      <g transform="translate(200, 150)">
-        <path d="M40,20 C90,20 90,20 140,20 C145,20 150,25 150,30 L150,120 C150,180 120,220 90,240 C60,220 30,180 30,120 L30,30 C30,25 35,20 40,20 Z" 
+      <g transform="translate(150, 100)">
+        <!-- Crown -->
+        <path d="M60,10 C80,0 120,0 140,10 C145,15 145,20 140,25 L140,40 L60,40 L60,25 C55,20 55,15 60,10 Z" 
               fill="none" stroke="black" stroke-width="2"/>
-        <path d="M50,20 L50,50 M130,20 L130,50" fill="none" stroke="black" stroke-width="2"/>
-        <path d="M70,240 L110,240" fill="none" stroke="black" stroke-width="4"/>
-        <text x="90" y="280" font-family="Arial" font-size="16" text-anchor="middle">Liberty Bell</text>
-      </g>
-    `;
-  }
-
-  if (description.toLowerCase().includes('american flag') || description.toLowerCase().includes('flag')) {
-    // Simple American Flag
-    svgContent += `
-      <g transform="translate(500, 150)">
-        <rect x="0" y="0" width="200" height="120" fill="none" stroke="black" stroke-width="2"/>
-        <rect x="0" y="0" width="80" height="65" fill="none" stroke="black" stroke-width="1"/>
+              
+        <!-- Bell Body -->
+        <path d="M65,40 L65,45 L135,45 L135,40 M60,45 C60,45 55,50 55,55 L55,150 C55,180 75,205 100,220 C125,205 145,180 145,150 L145,55 C145,50 140,45 140,45" 
+              fill="none" stroke="black" stroke-width="2"/>
+              
+        <!-- Yoke -->
+        <path d="M80,40 L80,70 M120,40 L120,70" fill="none" stroke="black" stroke-width="2"/>
+              
+        <!-- Crack -->
+        <path d="M100,100 L95,150 L105,170 L95,190" fill="none" stroke="black" stroke-width="1.5" stroke-dasharray="3,2"/>
+              
+        <!-- Lip -->
+        <path d="M85,220 L115,220" fill="none" stroke="black" stroke-width="3"/>
         
-        <!-- Stars (simplified) -->
-        <circle cx="20" cy="15" r="5" fill="none" stroke="black"/>
-        <circle cx="40" cy="15" r="5" fill="none" stroke="black"/>
-        <circle cx="60" cy="15" r="5" fill="none" stroke="black"/>
-        <circle cx="20" cy="35" r="5" fill="none" stroke="black"/>
-        <circle cx="40" cy="35" r="5" fill="none" stroke="black"/>
-        <circle cx="60" cy="35" r="5" fill="none" stroke="black"/>
+        <text x="100" y="250" font-family="Arial" font-size="16" text-anchor="middle">Liberty Bell (1752)</text>
+        <text x="100" y="270" font-family="Arial" font-size="12" text-anchor="middle" fill="gray">Symbol of American Independence</text>
+      </g>
+    `;
+  }
+
+  // Add American Flag with more detail
+  if (elements.includes('american flag') || elements.includes('flag')) {
+    svgContent += `
+      <g transform="translate(450, 100)">
+        <!-- Flag outline -->
+        <rect x="0" y="0" width="250" height="150" fill="none" stroke="black" stroke-width="2"/>
         
-        <!-- Stripes -->
-        <path d="M0,65 L200,65 M0,75 L200,75 M0,85 L200,85 M0,95 L200,95 M0,105 L200,105" 
-              fill="none" stroke="black" stroke-width="1"/>
-        <text x="100" y="150" font-family="Arial" font-size="16" text-anchor="middle">American Flag</text>
+        <!-- Union (blue field) -->
+        <rect x="0" y="0" width="100" height="80" fill="none" stroke="black" stroke-width="1"/>
+        
+        <!-- Stars (arranged in rows) -->
+        ${generateStarsPattern(100, 80, 5, 6)}
+        
+        <!-- 13 Stripes for the 13 original colonies -->
+        ${generateStripes(250, 150, 13)}
+        
+        <text x="125" y="180" font-family="Arial" font-size="16" text-anchor="middle">American Flag</text>
+        <text x="125" y="200" font-family="Arial" font-size="12" text-anchor="middle" fill="gray">50 stars for states, 13 stripes for original colonies</text>
       </g>
     `;
   }
 
-  if (description.toLowerCase().includes('eagle') || description.toLowerCase().includes('bald eagle')) {
-    // Simple Bald Eagle
+  // Add Bald Eagle with more detail
+  if (elements.includes('eagle') || elements.includes('bald eagle')) {
     svgContent += `
-      <g transform="translate(200, 350)">
-        <path d="M90,50 C150,30 150,80 90,60 C30,80 30,30 90,50" fill="none" stroke="black" stroke-width="2"/>
-        <circle cx="75" cy="45" r="5" fill="none" stroke="black"/>
-        <path d="M40,70 C0,90 40,110 90,90 C140,110 180,90 140,70" fill="none" stroke="black" stroke-width="2"/>
-        <text x="90" y="130" font-family="Arial" font-size="16" text-anchor="middle">Bald Eagle</text>
+      <g transform="translate(150, 320)">
+        <!-- Head -->
+        <path d="M100,30 C105,25 110,25 115,30 L120,40 C125,35 130,35 135,40 L130,45 C135,50 135,55 130,60 L115,65 C110,70 105,70 100,65 L85,60 C80,55 80,50 85,45 L80,40 C85,35 90,35 95,40 L100,30 Z" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+        
+        <!-- Eye -->
+        <circle cx="118" cy="45" r="3" fill="none" stroke="black" stroke-width="1"/>
+        
+        <!-- Beak -->
+        <path d="M130,50 C140,48 145,52 140,58 C135,55 130,55 130,60" fill="none" stroke="black" stroke-width="1.5"/>
+        
+        <!-- Body -->
+        <path d="M100,65 C90,80 85,100 100,110 C115,100 110,80 100,65" fill="none" stroke="black" stroke-width="2"/>
+        
+        <!-- Wings -->
+        <path d="M70,70 C50,80 50,100 70,110 C80,105 85,95 100,110 M130,70 C150,80 150,100 130,110 C120,105 115,95 100,110" 
+              fill="none" stroke="black" stroke-width="2"/>
+              
+        <!-- Tail feathers -->
+        <path d="M95,110 L90,140 M100,110 L100,150 M105,110 L110,140" fill="none" stroke="black" stroke-width="1.5"/>
+        
+        <text x="100" y="180" font-family="Arial" font-size="16" text-anchor="middle">Bald Eagle</text>
+        <text x="100" y="200" font-family="Arial" font-size="12" text-anchor="middle" fill="gray">National bird of the United States</text>
       </g>
     `;
   }
 
-  if (description.toLowerCase().includes('constitution') || description.toLowerCase().includes('document')) {
-    // Simple Constitution Document
+  // Add Constitution with more detail
+  if (elements.includes('constitution') || elements.includes('document')) {
     svgContent += `
-      <g transform="translate(500, 350)">
-        <rect x="30" y="30" width="140" height="180" fill="none" stroke="black" stroke-width="2"/>
-        <path d="M50,60 L150,60 M50,80 L150,80 M50,100 L150,100 M50,120 L150,120 M50,140 L150,140" 
+      <g transform="translate(450, 320)">
+        <!-- Parchment with rolled edges -->
+        <path d="M30,30 C25,30 20,35 20,40 L20,200 C20,205 25,210 30,210 L170,210 C175,210 180,205 180,200 L180,40 C180,35 175,30 170,30 L30,30 Z" 
+              fill="none" stroke="black" stroke-width="2"/>
+        
+        <!-- Rolled edges -->
+        <path d="M20,40 C15,45 15,55 20,60 M180,40 C185,45 185,55 180,60" fill="none" stroke="black" stroke-width="1.5"/>
+        
+        <!-- Title -->
+        <text x="100" y="50" font-family="Arial" font-size="10" font-weight="bold" text-anchor="middle">The Constitution</text>
+        
+        <!-- Famous opening -->
+        <text x="100" y="70" font-family="Arial" font-size="8" text-anchor="middle">We the People</text>
+        
+        <!-- Text lines -->
+        <path d="M40,80 L160,80 M40,90 L160,90 M40,100 L160,100 M40,110 L160,110 M40,120 L160,120 
+                M40,130 L160,130 M40,140 L160,140 M40,150 L160,150 M40,160 L160,160 M40,170 L160,170" 
+              fill="none" stroke="black" stroke-width="0.75"/>
+              
+        <!-- Signatures section -->
+        <path d="M40,180 L70,180 M80,180 L100,180 M110,180 L130,180 M140,180 L160,180" 
+              fill="none" stroke="black" stroke-width="0.75"/>
+        
+        <text x="100" y="230" font-family="Arial" font-size="16" text-anchor="middle">U.S. Constitution</text>
+        <text x="100" y="250" font-family="Arial" font-size="12" text-anchor="middle" fill="gray">Written in 1787</text>
+      </g>
+    `;
+  }
+
+  // Add Statue of Liberty if mentioned
+  if (elements.includes('statue of liberty')) {
+    svgContent += `
+      <g transform="translate(300, 100)">
+        <!-- Crown -->
+        <path d="M90,20 L85,40 L95,40 L100,20 L105,40 L115,40 L110,20 L120,40 L130,40 L125,20 L135,40 L145,40 L140,20 L150,40 L160,40 L155,20 L165,40 L175,40 L170,20 L180,40 L190,40 L185,20 L195,40 L200,50 L80,50 L85,40 L90,20 Z" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <!-- Face -->
+        <path d="M110,50 L110,65 C110,75 125,90 140,90 C155,90 170,75 170,65 L170,50" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <!-- Neck -->
+        <path d="M115,90 L115,100 L165,100 L165,90" fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <!-- Robe -->
+        <path d="M110,100 L90,200 L110,220 L140,220 L170,200 L170,100" 
+              fill="none" stroke="black" stroke-width="2"/>
+              
+        <!-- Tablet -->
+        <rect x="90" y="130" width="35" height="50" fill="none" stroke="black" stroke-width="1.5"/>
+        <text x="107" y="155" font-family="Arial" font-size="8" text-anchor="middle">JULY</text>
+        <text x="107" y="165" font-family="Arial" font-size="8" text-anchor="middle">IV</text>
+        <text x="107" y="175" font-family="Arial" font-size="8" text-anchor="middle">MDCCLXXVI</text>
+              
+        <!-- Torch arm -->
+        <path d="M170,110 C190,100 200,80 190,70" fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <!-- Torch -->
+        <path d="M190,70 L185,60 L195,60 L190,70 M185,60 L183,50 L197,50 L195,60 M190,50 L190,40" 
               fill="none" stroke="black" stroke-width="1"/>
-        <text x="100" y="45" font-family="Arial" font-size="10" text-anchor="middle">We the People</text>
-        <text x="100" y="230" font-family="Arial" font-size="16" text-anchor="middle">Constitution</text>
+              
+        <!-- Flame -->
+        <path d="M190,40 C185,30 195,30 190,25 C187,20 193,20 190,15" 
+              fill="none" stroke="black" stroke-width="1" stroke-dasharray="2,1"/>
+        
+        <text x="140" y="250" font-family="Arial" font-size="16" text-anchor="middle">Statue of Liberty</text>
+        <text x="140" y="270" font-family="Arial" font-size="12" text-anchor="middle" fill="gray">Gift from France in 1886</text>
       </g>
     `;
   }
@@ -114,6 +210,63 @@ const generateColoringSvg = (title: string, description: string): string => {
   svgContent += `</svg>`;
   
   return svgContent;
+};
+
+/**
+ * Helper to generate stripe pattern for flag
+ */
+const generateStripes = (width: number, height: number, count: number): string => {
+  let stripes = '';
+  const stripeHeight = height / count;
+  
+  for (let i = 0; i < count; i++) {
+    const y = i * stripeHeight;
+    stripes += `<rect x="0" y="${y}" width="${width}" height="${stripeHeight}" fill="none" stroke="black" stroke-width="0.5"/>`;
+  }
+  
+  return stripes;
+};
+
+/**
+ * Helper to generate star pattern for flag
+ */
+const generateStarsPattern = (width: number, height: number, rows: number, cols: number): string => {
+  let stars = '';
+  const starSize = 4;
+  const spacing = {
+    x: width / (cols + 1),
+    y: height / (rows + 1)
+  };
+  
+  for (let i = 1; i <= rows; i++) {
+    for (let j = 1; j <= cols; j++) {
+      const cx = j * spacing.x;
+      const cy = i * spacing.y;
+      stars += generateStar(cx, cy, starSize);
+    }
+  }
+  
+  return stars;
+};
+
+/**
+ * Helper to generate a star shape
+ */
+const generateStar = (cx: number, cy: number, size: number): string => {
+  // Five-pointed star path
+  const outerRadius = size;
+  const innerRadius = size * 0.4;
+  const points = [];
+  
+  for (let i = 0; i < 10; i++) {
+    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+    const angle = Math.PI * i / 5;
+    const x = cx + radius * Math.sin(angle);
+    const y = cy - radius * Math.cos(angle);
+    points.push(`${x},${y}`);
+  }
+  
+  return `<path d="M ${points.join(' L ')} Z" fill="none" stroke="black" stroke-width="0.5"/>`;
 };
 
 /**
