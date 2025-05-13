@@ -38,6 +38,7 @@ const formSchema = z.object({
   objectives: z.string().min(10, "Please provide learning objectives"),
   learningStyles: z.array(z.string()).min(1, "Select at least one learning style"),
   worksheetTypes: z.array(z.string()).optional(),
+  knowledgeBaseIds: z.array(z.number()).optional(),
   additionalNotes: z.string().optional(),
 });
 
@@ -189,6 +190,13 @@ export default function AILessonGenerator() {
   const { isAIAvailable, aiStatus } = useAIStatus();
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Query to fetch knowledge bases for selection
+  const knowledgeBasesQuery = useQuery<any[]>({
+    queryKey: ["/api/knowledge-bases/all"],
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -200,6 +208,7 @@ export default function AILessonGenerator() {
       objectives: "",
       learningStyles: [],
       worksheetTypes: [],
+      knowledgeBaseIds: [],
       additionalNotes: "",
     },
   });
@@ -275,6 +284,37 @@ export default function AILessonGenerator() {
               result.worksheets?.push(worksheetTemplate);
             }
           });
+        }
+        
+        // Include knowledge base references if any selected
+        if (data.knowledgeBaseIds && data.knowledgeBaseIds.length > 0) {
+          // Find the selected knowledge bases from the query data
+          const selectedKnowledgeBases = knowledgeBasesQuery.data?.filter(kb => 
+            data.knowledgeBaseIds?.includes(kb.id)
+          ) || [];
+          
+          // Include knowledge base information in the generated lesson
+          if (selectedKnowledgeBases.length > 0) {
+            result.knowledgeBases = selectedKnowledgeBases.map(kb => ({
+              id: kb.id,
+              title: kb.title,
+              subject: kb.subject,
+              difficulty: kb.difficulty
+            }));
+            
+            // Enhance the lesson content with knowledge base-specific information
+            if (result.objectives) {
+              result.objectives.push(
+                `Apply concepts from the selected knowledge bases: ${selectedKnowledgeBases.map(kb => kb.title).join(', ')}`
+              );
+            }
+            
+            if (result.materials) {
+              result.materials.push(
+                `Knowledge base resources: ${selectedKnowledgeBases.map(kb => kb.title).join(', ')}`
+              );
+            }
+          }
         }
         
         return result;
@@ -699,6 +739,85 @@ export default function AILessonGenerator() {
                             />
                           ))}
                         </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="knowledgeBaseIds"
+                    render={() => (
+                      <FormItem>
+                        <div className="mb-2">
+                          <FormLabel>Knowledge Base Resources (Optional)</FormLabel>
+                          <FormDescription>
+                            Select knowledge bases to use as reference for this lesson
+                          </FormDescription>
+                        </div>
+                        {knowledgeBasesQuery.isLoading ? (
+                          <div className="space-y-2">
+                            <Skeleton className="h-12 w-full" />
+                            <Skeleton className="h-12 w-full" />
+                          </div>
+                        ) : knowledgeBasesQuery.data && knowledgeBasesQuery.data.length > 0 ? (
+                          <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
+                            {knowledgeBasesQuery.data.map((kb) => (
+                              <FormField
+                                key={kb.id}
+                                control={form.control}
+                                name="knowledgeBaseIds"
+                                render={({ field }) => {
+                                  return (
+                                    <FormItem
+                                      key={kb.id}
+                                      className="flex items-start space-x-3 space-y-0 py-2 border-b last:border-0"
+                                    >
+                                      <FormControl>
+                                        <Checkbox
+                                          checked={field.value?.includes(kb.id)}
+                                          onCheckedChange={(checked) => {
+                                            return checked
+                                              ? field.onChange([...(field.value || []), kb.id])
+                                              : field.onChange(
+                                                  field.value?.filter(
+                                                    (value) => value !== kb.id
+                                                  )
+                                                )
+                                          }}
+                                        />
+                                      </FormControl>
+                                      <div className="space-y-1">
+                                        <FormLabel className="text-sm font-medium cursor-pointer">
+                                          {kb.title}
+                                        </FormLabel>
+                                        <div className="text-xs text-muted-foreground">
+                                          {kb.description && kb.description.length > 120 
+                                            ? `${kb.description.substring(0, 120)}...` 
+                                            : kb.description}
+                                        </div>
+                                        <div className="flex gap-1">
+                                          <Badge variant="outline" className="text-xs">
+                                            {kb.subject}
+                                          </Badge>
+                                          <Badge variant="outline" className="text-xs">
+                                            {kb.difficulty}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    </FormItem>
+                                  )
+                                }}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-6 text-muted-foreground border rounded-md">
+                            <Book className="h-10 w-10 mx-auto opacity-50" />
+                            <p className="mt-2">No knowledge bases available</p>
+                            <p className="text-sm">Create knowledge bases in the Knowledge Base section</p>
+                          </div>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
