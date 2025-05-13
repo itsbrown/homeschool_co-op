@@ -64,7 +64,23 @@ router.get('/test-generation', async (req, res) => {
     }
     
     console.log('Starting test image generation with American symbols');
+    
+    // Start timing
+    const startTime = Date.now();
+    
+    // Generate the image
     const imagePath = await generateAmericanSymbolsLineArt();
+    
+    // End timing
+    const endTime = Date.now();
+    const processingTime = (endTime - startTime) / 1000; // in seconds
+    
+    // Check cache info
+    const cacheDir = path.join(process.cwd(), 'uploads', 'cache');
+    const cacheFilename = 'american_symbols_cached.png';
+    const cachedPath = path.join(cacheDir, cacheFilename);
+    const cacheExists = fs.existsSync(cachedPath);
+    const cacheCreated = cacheExists ? fs.statSync(cachedPath).birthtime : null;
     
     // Prepare relative URL from absolute path
     const relativePath = '/uploads/images/' + path.basename(imagePath);
@@ -82,8 +98,18 @@ router.get('/test-generation', async (req, res) => {
       message: 'Test image successfully generated',
       data: {
         imagePath: relativePath,
+        imageUrl: `${req.protocol}://${req.get('host')}${relativePath}`,
         imageSize: fs.statSync(imagePath).size,
-        timestamp: new Date()
+        timestamp: new Date(),
+        processingTime: `${processingTime.toFixed(2)} seconds`,
+        imageService: 'Hugging Face Stable Diffusion',
+        cacheInfo: {
+          cacheUsed: processingTime < 1.0, // Likely used cache if very fast
+          cacheExists,
+          cachePath: cacheExists ? cachedPath : null,
+          cacheCreated: cacheCreated ? cacheCreated.toISOString() : null,
+          cacheSize: cacheExists ? fs.statSync(cachedPath).size : null
+        }
       }
     });
   } catch (error) {
