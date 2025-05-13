@@ -2,7 +2,6 @@ import { HfInference } from '@huggingface/inference';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
-import * as minimatch from 'minimatch';
 
 const writeFileAsync = promisify(fs.writeFile);
 
