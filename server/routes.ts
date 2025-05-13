@@ -598,6 +598,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Combined endpoint to get all accessible knowledge bases for the user (public + owned)
+  app.get("/api/knowledge-bases/all", isAuthenticated, async (req, res) => {
+    try {
+      // Get public knowledge bases
+      const publicKnowledgeBases = await storage.getPublicKnowledgeBases();
+      
+      // Get user's knowledge bases
+      const userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(req.session.userId);
+      
+      // Combine and deduplicate knowledge bases
+      const combinedKnowledgeBases = [...publicKnowledgeBases];
+      
+      // Add user's knowledge bases that aren't already in the list
+      userKnowledgeBases.forEach(userKb => {
+        if (!combinedKnowledgeBases.some(kb => kb.id === userKb.id)) {
+          combinedKnowledgeBases.push(userKb);
+        }
+      });
+      
+      res.status(200).json(combinedKnowledgeBases);
+    } catch (error) {
+      console.error("Error fetching combined knowledge bases:", error);
+      res.status(500).json({ message: "Error fetching knowledge bases" });
+    }
+  });
+  
   app.get("/api/knowledge-bases/:id", async (req, res) => {
     try {
       const knowledgeBaseId = parseInt(req.params.id);

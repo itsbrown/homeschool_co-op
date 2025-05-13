@@ -38,6 +38,8 @@ const adminNavigationItems = [
       { name: "Classes", href: "/admin/classes", icon: School },
       { name: "Programs", href: "/admin/programs", icon: BookOpen },
       { name: "Curricula", href: "/curriculum", icon: FileText },
+      { name: "AI Lesson Generator", href: "/ai-generator/lesson", icon: Sparkles },
+      { name: "AI Curriculum Generator", href: "/ai-generator/curriculum", icon: Brain },
       { name: "Curriculum Marketplace", href: "/admin/marketplace", icon: ShoppingBag },
     ],
   },

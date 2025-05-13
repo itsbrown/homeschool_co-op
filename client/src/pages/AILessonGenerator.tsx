@@ -179,6 +179,12 @@ interface GeneratedLesson {
     content?: string;
     instructions?: string;
   }[];
+  knowledgeBases?: {
+    id: number;
+    title: string;
+    subject: string;
+    difficulty: string;
+  }[];
 }
 
 export default function AILessonGenerator() {
@@ -191,7 +197,7 @@ export default function AILessonGenerator() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  // Query to fetch knowledge bases for selection
+  // Query to fetch knowledge bases for selection (combines public and user's knowledge bases)
   const knowledgeBasesQuery = useQuery<any[]>({
     queryKey: ["/api/knowledge-bases/all"],
     enabled: !!user,
@@ -472,6 +478,27 @@ export default function AILessonGenerator() {
             ))}
           </ul>
         </div>
+        
+        {generatedLesson.knowledgeBases && generatedLesson.knowledgeBases.length > 0 && (
+          <div>
+            <h3 className="text-lg font-medium">Knowledge Base Resources</h3>
+            <Separator className="my-2" />
+            <div className="space-y-2">
+              {generatedLesson.knowledgeBases.map((kb, i) => (
+                <div key={i} className="flex items-center space-x-2 bg-muted/30 p-2 rounded-md">
+                  <Book className="h-5 w-5 text-primary/70" />
+                  <div>
+                    <p className="text-sm font-medium">{kb.title}</p>
+                    <div className="flex gap-2 mt-1">
+                      <Badge variant="outline" className="text-xs">{kb.subject}</Badge>
+                      <Badge variant="outline" className="text-xs">{kb.difficulty}</Badge>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         
         {generatedLesson.worksheets && generatedLesson.worksheets.length > 0 && (
           <div>
