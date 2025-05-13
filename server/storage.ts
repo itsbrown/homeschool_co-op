@@ -150,6 +150,7 @@ export class MemStorage implements IStorage {
     
     // Add sample events for testing the calendar
     this.initializeSampleEvents();
+    this.initializeSampleKnowledgeBases();
     this.createUser({
       username: "admin",
       email: "admin@example.com",
@@ -760,6 +761,190 @@ export class MemStorage implements IStorage {
   
   async deleteClass(id: number): Promise<void> {
     this.classesStore.delete(id);
+  }
+  
+  // Knowledge Base methods
+  async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
+    return this.knowledgeBaseStore.get(id);
+  }
+  
+  async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
+    const publicKnowledgeBases = Array.from(this.knowledgeBaseStore.values())
+      .filter(kb => kb.isPublic)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
+    return limit ? publicKnowledgeBases.slice(0, limit) : publicKnowledgeBases;
+  }
+  
+  async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
+    return Array.from(this.knowledgeBaseStore.values())
+      .filter(kb => kb.isPublic && kb.subject.toLowerCase() === subject.toLowerCase())
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+  
+  async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
+    return Array.from(this.knowledgeBaseStore.values())
+      .filter(kb => kb.authorId === authorId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+  
+  async createKnowledgeBase(knowledgeBaseData: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase> {
+    const id = this.knowledgeBaseIdCounter++;
+    const now = new Date();
+    
+    const newKnowledgeBase: KnowledgeBase = {
+      ...knowledgeBaseData,
+      id,
+      createdAt: now,
+      updatedAt: now,
+      downloadCount: 0,
+      purchasedBy: []
+    };
+    
+    this.knowledgeBaseStore.set(id, newKnowledgeBase);
+    return newKnowledgeBase;
+  }
+  
+  async updateKnowledgeBase(id: number, updateData: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = this.knowledgeBaseStore.get(id);
+    if (!knowledgeBase) return undefined;
+    
+    const updatedKnowledgeBase: KnowledgeBase = {
+      ...knowledgeBase,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    
+    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
+    return updatedKnowledgeBase;
+  }
+  
+  async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = this.knowledgeBaseStore.get(id);
+    if (!knowledgeBase) return undefined;
+    
+    const updatedKnowledgeBase: KnowledgeBase = {
+      ...knowledgeBase,
+      downloadCount: knowledgeBase.downloadCount + 1,
+      updatedAt: new Date()
+    };
+    
+    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
+    return updatedKnowledgeBase;
+  }
+  
+  async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = this.knowledgeBaseStore.get(id);
+    if (!knowledgeBase) return undefined;
+    
+    // Check if user has already purchased
+    if (knowledgeBase.purchasedBy.includes(userId)) {
+      return knowledgeBase;
+    }
+    
+    const updatedKnowledgeBase: KnowledgeBase = {
+      ...knowledgeBase,
+      purchasedBy: [...knowledgeBase.purchasedBy, userId],
+      updatedAt: new Date()
+    };
+    
+    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
+    return updatedKnowledgeBase;
+  }
+  
+  async deleteKnowledgeBase(id: number): Promise<void> {
+    this.knowledgeBaseStore.delete(id);
+  }
+  
+  // Helper method to initialize sample knowledge bases
+  private initializeSampleKnowledgeBases(): void {
+    // Sample knowledge base 1: Mathematics
+    const kb1: KnowledgeBase = {
+      id: this.knowledgeBaseIdCounter++,
+      title: "Elementary Math Fundamentals",
+      description: "A comprehensive resource covering key elementary math concepts including addition, subtraction, multiplication, division, fractions, and basic geometry.",
+      subject: "Mathematics",
+      difficulty: "Beginner",
+      authorId: 1, // Admin user
+      price: 0, // Free
+      files: [{ url: "/kb/math-fundamentals.pdf", type: "pdf", name: "Math Fundamentals Guide" }],
+      metadata: { 
+        tags: ["math", "elementary", "arithmetic", "geometry"], 
+        objectives: ["Master basic arithmetic operations", "Understand fractions", "Learn introductory geometry"]
+      },
+      isPublic: true,
+      downloadCount: 45,
+      purchasedBy: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.knowledgeBaseStore.set(kb1.id, kb1);
+    
+    // Sample knowledge base 2: Science
+    const kb2: KnowledgeBase = {
+      id: this.knowledgeBaseIdCounter++,
+      title: "Introduction to Physical Science",
+      description: "An overview of fundamental physical science topics including forces, motion, energy, simple machines, and basic physics concepts.",
+      subject: "Science",
+      difficulty: "Intermediate",
+      authorId: 2, // Sarah (educator user)
+      price: 0, // Free
+      files: [{ url: "/kb/physical-science.pdf", type: "pdf", name: "Physical Science Handbook" }],
+      metadata: { 
+        tags: ["science", "physics", "energy", "forces"], 
+        objectives: ["Understand Newton's laws", "Explore energy transformation", "Learn about simple machines"]
+      },
+      isPublic: true,
+      downloadCount: 32,
+      purchasedBy: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.knowledgeBaseStore.set(kb2.id, kb2);
+    
+    // Sample knowledge base 3: Language Arts
+    const kb3: KnowledgeBase = {
+      id: this.knowledgeBaseIdCounter++,
+      title: "Creative Writing Techniques",
+      description: "A collection of creative writing strategies, prompts, and examples to inspire and guide student writing across different genres.",
+      subject: "Language Arts",
+      difficulty: "Intermediate",
+      authorId: 2, // Sarah (educator user)
+      price: 500, // $5.00
+      files: [{ url: "/kb/creative-writing.pdf", type: "pdf", name: "Creative Writing Manual" }],
+      metadata: { 
+        tags: ["writing", "creativity", "storytelling", "language arts"], 
+        objectives: ["Develop narrative writing skills", "Build character development techniques", "Master descriptive language"]
+      },
+      isPublic: true,
+      downloadCount: 18,
+      purchasedBy: [1, 5], // Some users have purchased this
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.knowledgeBaseStore.set(kb3.id, kb3);
+    
+    // Sample knowledge base 4: History
+    const kb4: KnowledgeBase = {
+      id: this.knowledgeBaseIdCounter++,
+      title: "Ancient Civilizations",
+      description: "An exploration of major ancient civilizations including Egypt, Greece, Rome, China, and Mesopotamia, with timelines, key figures, and cultural highlights.",
+      subject: "History",
+      difficulty: "Advanced",
+      authorId: 1, // Admin user
+      price: 0, // Free
+      files: [{ url: "/kb/ancient-civilizations.pdf", type: "pdf", name: "Ancient Civilizations Resource" }],
+      metadata: { 
+        tags: ["history", "ancient", "civilizations", "world history"], 
+        objectives: ["Compare ancient civilizations", "Understand historical timelines", "Explore cultural achievements"]
+      },
+      isPublic: true,
+      downloadCount: 27,
+      purchasedBy: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.knowledgeBaseStore.set(kb4.id, kb4);
   }
   
   // Helper method to initialize sample events for the calendar
