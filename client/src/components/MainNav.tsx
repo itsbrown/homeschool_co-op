@@ -40,7 +40,7 @@ export function MainNav({
         Lessons
       </Link>
       <Link
-        to="/ai-lesson-generator"
+        to="/lessons/ai-generator"
         className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
       >
         AI Lesson Generator

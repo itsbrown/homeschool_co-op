@@ -121,7 +121,7 @@ export default function EducatorDashboard() {
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-4">
                 <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
-                  <Link href="/ai-lesson-generator">
+                  <Link href="/lessons/ai-generator">
                     <BookOpen className="h-5 w-5 mb-1" />
                     <span>Generate Lesson</span>
                   </Link>
@@ -181,7 +181,7 @@ export default function EducatorDashboard() {
                   <Link href="/marketplace">Browse Marketplace</Link>
                 </Button>
                 <Button asChild>
-                  <Link href="/ai-lesson-generator">Generate New Lesson</Link>
+                  <Link href="/lessons/ai-generator">Generate New Lesson</Link>
                 </Button>
               </div>
             </CardContent>
