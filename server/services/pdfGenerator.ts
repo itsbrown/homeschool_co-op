@@ -4,7 +4,11 @@ import path from 'path';
 import { promisify } from 'util';
 import { storage } from '../storage';
 import { generateSvgForActivity } from './svgGenerator';
-import { isHuggingFaceAvailable, generateAmericanSymbolsLineArt, generateEducationalLineArt } from './huggingfaceService';
+import { 
+  isImageGenerationAvailable, 
+  generateAmericanSymbolsLineArt, 
+  generateEducationalLineArt 
+} from './imageGenerationService';
 
 // Create uploads directory if it doesn't exist
 const ensureDirectoryExists = async (dirPath: string) => {
@@ -194,13 +198,13 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   doc.moveDown();
   
   try {
-    // Use the imported Hugging Face service functions
+    // Use the imported image generation service functions
     // Determine if we should use AI-generated images
-    const useAiGeneration = isHuggingFaceAvailable();
+    const useAiGeneration = isImageGenerationAvailable();
     let imagePath = '';
     
     if (useAiGeneration) {
-      console.log('Using Hugging Face for dynamic line art generation');
+      console.log('Using AI service for dynamic line art generation');
       
       try {
         // Generate line art based on the content
@@ -238,8 +242,8 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
         throw new Error('AI image generation failed, falling back to SVG');
       }
     } else {
-      // Fallback to SVG generation if Hugging Face is not available
-      console.log('Hugging Face not available, falling back to SVG generation');
+      // Fallback to SVG generation if no image service (Hugging Face or SageMaker) is available
+      console.log('No image generation service available (Hugging Face or SageMaker), falling back to SVG generation');
       
       // Import sharp for SVG to PNG conversion
       const sharp = require('sharp');
