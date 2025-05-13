@@ -1,0 +1,270 @@
+﻿Add OCR Processing with Google Cloud Document AI
+* Setup: Integrate Document AI’s Enterprise Document OCR into your platform to process uploaded documents, books, and images.
+* Extract Text: Use OCR to extract text from PDFs, scanned books, and images, converting them into a format Claude can process.
+2. Update Content Generation Pipeline
+* Enhance /ai/src/generate_activities.py: Add logic to process OCR-extracted text and generate lessons, worksheets, and curricula.
+Example Update:
+python
+Copy
+import sys
+import json
+from elasticsearch import Elasticsearch
+import requests
+
+
+es = Elasticsearch(['http://localhost:9200'])
+
+
+def process_document(file_path):
+    # Call Document AI OCR (simplified example)
+    ocr_response = requests.post('https://your-document-ai-endpoint/ocr', files={'file': open(file_path, 'rb')})
+    return ocr_response.json()['text']
+
+
+def generate_activity(age, subject, activity_type, ocr_text=None):
+    # Use OCR-extracted text if provided
+    content = ocr_text if ocr_text else ''
+    if not content:
+        search_result = es.search(index='knowledge_base', body={
+            'query': {
+                'bool': {
+                    'must': [
+                        {'match': {'subject': subject}},
+                        {'range': {'difficulty': {'gte': 'easy', 'lte': 'medium'}}}
+                    ]
+                }
+            }
+        })
+        content = search_result['hits']['hits'][0]['_source']['text'] if search_result['hits']['hits'] else 'Default content'
+
+
+    # Generate coloring guide for history theme
+    coloring_guide = []
+    if subject.lower() == 'history' and activity_type == 'coloring':
+        coloring_guide = [
+            {'element': 'George Washington', 'instruction': 'America’s first president in his general’s uniform.'},
+            {'element': 'Liberty Bell', 'instruction': 'Famous bell with a crack, rung for independence.'},
+            {'element': 'Original American Flag', 'instruction': 'Flag with 13 stars arranged in a circle.'},
+            {'element': 'Independence Hall', 'instruction': 'Building where the Declaration was signed.'},
+        ]
+
+
+    # Generate a lesson plan based on the content
+    lesson_plan = {
+        'title': f'Introduction to {subject}',
+        'objectives': [f'Understand key {subject} concepts', 'Engage in hands-on activities'],
+        'activities': [
+            {'type': 'discussion', 'description': f'Discuss the following: {content[:200]}...'},
+            {'type': 'worksheet', 'description': 'Answer comprehension questions based on the text.'}
+        ]
+    }
+
+
+    # Generate a worksheet
+    worksheet = {
+        'questions': [
+            {'question': f'What does the following text describe? {content[:100]}...', 'answer': 'To be filled by teacher'}
+        ]
+    }
+
+
+    return {
+        'coloring_guide': coloring_guide,
+        'facts': [
+            'The United States became a country in 1776.',
+            'George Washington led American soldiers.',
+            'The Liberty Bell is a symbol of freedom.',
+            'The first American flag had 13 stars.'
+        ],
+        'lesson_plan': lesson_plan,
+        'worksheet': worksheet
+    }
+
+
+if __name__ == '__main__':
+    data = json.loads(sys.argv[1])
+    ocr_text = process_document(data.get('file_path')) if data.get('file_path') else None
+    result = generate_activity(data['age'], data['subject'], data['activityType'], ocr_text)
+*     print(json.dumps(result))
+
+Update /server/src/routes/activities.js: Include the lesson plan and worksheet in the PDF output, alongside the coloring page.
+javascript
+Copy
+router.post('/generate', auth(['admin', 'educator']), async (req, res) => {
+  const { age, subject, activityType, file_path } = req.body;
+  if (!age || !subject || !activityType) {
+    return res.status(400).json({ message: 'Age, subject, and activity type are required' });
+  }
+  const subjectMap = { 'math': 'Mathematics', 'science': 'Science', 'history': 'History' };
+  const mappedSubject = subjectMap[subject.toLowerCase()] || subject;
+
+
+  const job = await activityQueue.add({ age, subject: mappedSubject, activityType, file_path });
+  job.on('failed', (err) => {
+    res.status(500).json({ message: 'Activity generation failed', error: err });
+  });
+  job.on('completed', async (result) => {
+    const activity = result;
+    const doc = new PDFDocument({ size: 'A4', margin: 20 });
+    let buffers = [];
+    doc.on('data', buffers.push.bind(buffers));
+    doc.on('end', async () => {
+      const pdfData = Buffer.concat(buffers);
+      const key = `activities/${activityType}-${Date.now()}.pdf`;
+      await s3.upload({
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: key,
+        Body: pdfData,
+        ContentType: 'application/pdf',
+      }).promise();
+      const downloadLink = s3.getSignedUrl('getObject', {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: key,
+        Expires: 3600,
+      });
+      const activityRecord = new Activity({
+        type: activityType,
+        url: downloadLink,
+        subject: mappedSubject,
+        ageRange: age,
+      });
+      await activityRecord.save();
+      await axios.post('http://localhost:3000/api/email/send', {
+        email: 'user@example.com',
+        subject: 'Activity Generated',
+        message: `Your ${activityType} is ready: ${downloadLink}`,
+      });
+    });
+
+
+    // Child-friendly PDF design for coloring page
+    let yPosition = 30;
+    if (activityType === 'coloring') {
+      doc.font('Helvetica-Bold').fontSize(20).text("America's Birthday: Founding Heroes", 50, yPosition, { align: 'center' });
+      yPosition += 30;
+      doc.font('Helvetica').fontSize(12).text('Colored by: ___________________', 50, yPosition, { align: 'center' });
+
+
+      // Draw a fun border
+      doc.lineWidth(2).rect(20, 20, 555, 802).stroke();
+
+
+      // Instructions
+      yPosition += 30;
+      doc.fontSize(14).text('Instructions:', 50, yPosition);
+      yPosition += 20;
+      doc.fontSize(12).text('• Color the different elements of America’s founding story.', 50, yPosition);
+      yPosition += 20;
+      doc.text('• Read the learning facts with an adult to learn more!', 50, yPosition);
+      yPosition += 20;
+
+
+      // Coloring Guide
+      doc.fontSize(14).text('Coloring Guide:', 50, yPosition);
+      yPosition += 20;
+      activity.coloring_guide.forEach(item => {
+        doc.fontSize(12).text(`• ${item.element}: ${item.instruction}`, 50, yPosition);
+        yPosition += 20;
+      });
+
+
+      // Generate and embed the coloring image
+      let imageData;
+      try {
+        const imageResponse = await axios.post('https://your-sagemaker-endpoint/invocations', {
+          prompt: 'A simplified cartoon-style scene for young children showing George Washington in his general’s uniform, the Liberty Bell with a crack, an American flag with 13 stars in a circle, and Independence Hall in Philadelphia, black-and-white line art',
+          negative_prompt: 'color, shading, realistic, complex details',
+          steps: 50,
+          cfg_scale: 7.5,
+        }, { responseType: 'arraybuffer' });
+        imageData = imageResponse.data;
+        const imageKey = `coloring-images/history-${Date.now()}.png`;
+        await s3.upload({
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: imageKey,
+          Body: imageData,
+          ContentType: 'image/png',
+        }).promise();
+      } catch (err) {
+        console.error('Image generation failed:', err);
+        doc.fontSize(12).text('Coloring image unavailable. Please try again later.', 50, yPosition + 20);
+        doc.end();
+        return;
+      }
+
+
+      const pageHeight = 842;
+      const imageHeight = 300;
+      const factsHeight = activity.facts.length * 20 + 40;
+      const remainingSpace = pageHeight - yPosition - factsHeight - 60;
+      const adjustedImageHeight = Math.min(imageHeight, remainingSpace);
+      doc.image(imageData, 50, yPosition + 20, { width: 500, height: adjustedImageHeight });
+
+
+      yPosition += adjustedImageHeight + 40;
+      doc.fontSize(14).text('Did You Know?', 50, yPosition);
+      yPosition += 20;
+      activity.facts.forEach(fact => {
+        doc.fontSize(12).text(`• ${fact}`, 50, yPosition);
+        yPosition += 20;
+      });
+    }
+
+
+    // Add lesson plan and worksheet if requested
+    if (activity.lesson_plan) {
+      doc.addPage();
+      yPosition = 30;
+      doc.font('Helvetica-Bold').fontSize(20).text(activity.lesson_plan.title, 50, yPosition, { align: 'center' });
+      yPosition += 30;
+      doc.fontSize(14).text('Objectives:', 50, yPosition);
+      yPosition += 20;
+      activity.lesson_plan.objectives.forEach(obj => {
+        doc.fontSize(12).text(`• ${obj}`, 50, yPosition);
+        yPosition += 20;
+      });
+      doc.fontSize(14).text('Activities:', 50, yPosition);
+      yPosition += 20;
+      activity.lesson_plan.activities.forEach(act => {
+        doc.fontSize(12).text(`• ${act.type}: ${act.description}`, 50, yPosition);
+        yPosition += 20;
+      });
+    }
+
+
+    if (activity.worksheet) {
+      doc.addPage();
+      yPosition = 30;
+      doc.font('Helvetica-Bold').fontSize(20).text('Worksheet', 50, yPosition, { align: 'center' });
+      yPosition += 30;
+      doc.fontSize(14).text('Questions:', 50, yPosition);
+      yPosition += 20;
+      activity.worksheet.questions.forEach(q => {
+        doc.fontSize(12).text(`• ${q.question}`, 50, yPosition);
+        yPosition += 20;
+        doc.text(`  Answer: ${q.answer}`, 50, yPosition);
+        yPosition += 20;
+      });
+    }
+
+
+    doc.end();
+  });
+  res.json({ message: 'Activity generation queued', jobId: job.id });
+   * });
+
+Test the Updated Functionality
+      * Generate a Comprehensive PDF:
+bash
+Copy
+curl -X POST http://localhost:3000/api/activities/generate -H "Content-Type: application/json" -H "Authorization: Bearer your_jwt_token" -d '{"age":"6-8","subject":"history","activityType":"coloring","file_path":"path/to/history_book.pdf"}'
+
+      * Verify the Output:
+         * Download the generated PDF from the returned downloadLink.
+         * Confirm the PDF includes:
+         * A coloring page with the image (George Washington, Liberty Bell, American flag, Independence Hall).
+         * A lesson plan section with objectives and activities based on the OCR-extracted text.
+         * A worksheet section with comprehension questions derived from the document content.
+         * Check that the layout fits within the page boundaries, with no cutoff.
+Conclusion
+By integrating Google Cloud Document AI’s Enterprise Document OCR with Claude 3.7-Sonnet, your platform can scan uploaded documents, books, and images, extract text, and generate lessons, worksheets, and unique curricula with in-depth activities. This solution leverages Claude’s strength in educational content generation and Document AI’s robust OCR capabilities, ensuring a seamless workflow for creating materials for the Tycoons class at ASA. Alternatives like Monsha AI and Eduaide.Ai are viable if you prefer a more integrated educational tool, but they may require additional setup or have limitations with OCR for complex scans. If you need further customization (e.g., specific activity types, advanced OCR features), let me know!

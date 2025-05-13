@@ -6,8 +6,22 @@ import { storage } from "../storage";
 import { checkOpenAIStatus, generateEducationalActivity } from "../services/openai";
 import { InsertActivity } from "../../shared/schema";
 import backgroundTaskManager from "../services/backgroundTasks";
+import { generateActivityWithOCR, saveFileForOCR } from "../services/ocrActivityGenerator";
+import { isDocumentAIAvailable } from "../services/documentAI";
+import * as fileUpload from "express-fileupload";
 
 const router = express.Router();
+
+// Configure file upload middleware
+router.use(fileUpload.default({
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max file size
+  },
+  abortOnLimit: true,
+  useTempFiles: true,
+  tempFileDir: path.join(process.cwd(), 'uploads', 'temp'),
+  createParentPath: true,
+}));
 
 // Schema for activity generation request
 const ActivityGenerationSchema = z.object({
@@ -17,6 +31,7 @@ const ActivityGenerationSchema = z.object({
   difficulty: z.string(),
   instructions: z.string(),
   knowledgeBaseIds: z.array(z.number()).optional().default([]),
+  useOCR: z.boolean().optional().default(false),
 });
 
 type ActivityGenerationRequest = z.infer<typeof ActivityGenerationSchema>;
@@ -46,7 +61,7 @@ async function getKnowledgeBaseContent(knowledgeBaseIds: number[], userId: numbe
 }
 
 // Generate activity using AI
-async function generateActivity(params: ActivityGenerationRequest, userId: number) {
+async function generateActivity(params: ActivityGenerationRequest, userId: number, filePath?: string) {
   try {
     // Check OpenAI status
     const openaiStatus = await checkOpenAIStatus();
@@ -60,15 +75,35 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
     // Get content from knowledge bases
     const knowledgeBaseContent = await getKnowledgeBaseContent(params.knowledgeBaseIds || [], userId);
     
-    // Generate activity using OpenAI
-    const generatedActivity = await generateEducationalActivity(
-      params.subject,
-      params.ageRange,
-      params.activityType,
-      params.difficulty,
-      params.instructions,
-      knowledgeBaseContent
-    );
+    // Check if OCR should be used
+    if (params.useOCR && filePath) {
+      console.log(`Generating activity with OCR processing from file: ${filePath}`);
+      
+      // Generate activity using OCR-extracted text and OpenAI
+      const generatedActivity = await generateActivityWithOCR(
+        params.subject,
+        params.ageRange,
+        params.activityType,
+        params.difficulty,
+        params.instructions,
+        filePath,
+        knowledgeBaseContent
+      );
+      
+      return generatedActivity;
+    } else {
+      // Standard activity generation without OCR
+      const generatedActivity = await generateEducationalActivity(
+        params.subject,
+        params.ageRange,
+        params.activityType,
+        params.difficulty,
+        params.instructions,
+        knowledgeBaseContent
+      );
+      
+      return generatedActivity;
+    }
 
     // Create a folder for storing generated activities if it doesn't exist
     const uploadsDir = path.join(process.cwd(), "uploads");
