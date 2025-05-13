@@ -14,6 +14,7 @@ import aiPricingRouter from "./api/ai-pricing";
 import adminClassesRouter from "./api/admin-classes";
 import classesRouter from "./api/classes";
 import activitiesRouter from "./api/activities";
+import imageServicesRouter from "./api/image-services";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -960,6 +961,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/admin", adminClassesRouter);
   app.use("/api/activities", activitiesRouter);
+  app.use("/api/image-services", imageServicesRouter);
   
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);
