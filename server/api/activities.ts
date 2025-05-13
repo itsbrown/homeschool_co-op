@@ -159,6 +159,9 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// Import Anthropic Service
+import { isAnthropicAvailable } from "../services/anthropicService";
+
 // Generate activity
 router.post("/generate", async (req, res) => {
   try {
@@ -174,13 +177,21 @@ router.post("/generate", async (req, res) => {
       });
     }
 
-    // Check OpenAI status
+    // Check both AI services (OpenAI and Anthropic)
     const openaiStatus = await checkOpenAIStatus();
-    if (!openaiStatus.available) {
+    const anthropicAvailable = isAnthropicAvailable();
+    
+    // If both services are unavailable, return error
+    if (!openaiStatus.available && !anthropicAvailable) {
       return res.status(503).json({ 
         success: false, 
-        error: "OpenAI service is not available. Please check your API key." 
+        error: "AI services are not available. Please check your API keys." 
       });
+    }
+    
+    // If OpenAI is unavailable but Anthropic is available, inform user about fallback
+    if (!openaiStatus.available && anthropicAvailable) {
+      console.log("OpenAI service unavailable. Will use Anthropic/Claude as fallback.");
     }
 
     // Queue the activity generation as a background task
@@ -189,15 +200,28 @@ router.post("/generate", async (req, res) => {
       userId
     });
 
-    // Return immediately with the job ID
+    // Return immediately with the job ID and service info
     return res.json({
       success: true,
       jobId,
-      message: "Activity generation has been queued and will be processed in the background."
+      services: {
+        primary: openaiStatus.available ? "openai" : "anthropic",
+        fallback: openaiStatus.available && anthropicAvailable ? "anthropic" : null,
+        status: openaiStatus.available ? "using_primary" : "using_fallback"
+      },
+      message: openaiStatus.available 
+        ? "Activity generation has been queued and will be processed in the background."
+        : "Activity generation has been queued using our fallback AI service (Anthropic/Claude)."
     });
   } catch (error) {
     console.error("Error queuing activity generation:", error);
-    return res.status(500).json({ message: "Failed to queue activity generation" });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return res.status(500).json({ 
+      success: false,
+      message: "Failed to queue activity generation", 
+      error: errorMessage,
+      suggestion: "Please try again later or contact support."
+    });
   }
 });
 
