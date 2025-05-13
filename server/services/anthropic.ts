@@ -15,10 +15,15 @@ export async function generateCurriculumWithAI(prompt: string): Promise<string> 
       model: 'claude-3-7-sonnet-20250219',
     });
 
-    return message.content[0].text;
-  } catch (error) {
-    console.error('Error generating curriculum with Claude:', error);
-    throw new Error(`Failed to generate curriculum: ${error.message}`);
+    if (message.content[0].type === 'text') {
+      return message.content[0].text;
+    } else {
+      throw new Error("Unexpected response format from Anthropic API");
+    }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Error generating curriculum with Claude:', errorMessage);
+    throw new Error(`Failed to generate curriculum: ${errorMessage}`);
   }
 }
 
@@ -59,10 +64,15 @@ Make the lesson engaging, interactive, and appropriate for the grade level. Ensu
       ],
     });
 
-    return response.content[0].text;
-  } catch (error) {
-    console.error('Error generating lesson plan with Claude:', error);
-    throw new Error(`Failed to generate lesson plan: ${error.message}`);
+    if (response.content[0].type === 'text') {
+      return response.content[0].text;
+    } else {
+      throw new Error("Unexpected response format from Anthropic API");
+    }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Error generating lesson plan with Claude:', errorMessage);
+    throw new Error(`Failed to generate lesson plan: ${errorMessage}`);
   }
 }
 
@@ -196,10 +206,15 @@ Provide clear, specific feedback including:
       ],
     });
 
-    return response.content[0].text;
-  } catch (error) {
-    console.error('Error analyzing student work:', error);
-    throw new Error(`Unable to analyze student work: ${error.message}`);
+    if (response.content[0].type === 'text') {
+      return response.content[0].text;
+    } else {
+      throw new Error("Unexpected response format from Anthropic API");
+    }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Error analyzing student work:', errorMessage);
+    throw new Error(`Unable to analyze student work: ${errorMessage}`);
   }
 }
 

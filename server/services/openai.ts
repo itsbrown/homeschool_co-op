@@ -493,8 +493,9 @@ export async function generateEducationalActivity(
         console.warn("Creating fallback educational activity for: " + subject + " - " + activityType);
         return generateFallbackActivity(subject, ageRange, activityType, difficulty);
       }
-    } catch (openaiError) {
-      console.error("OpenAI service failed (with fallback attempts):", openaiError);
+    } catch (openaiError: unknown) {
+      const errorMessage = openaiError instanceof Error ? openaiError.message : String(openaiError);
+      console.error("OpenAI service failed (with fallback attempts):", errorMessage);
       
       // If everything failed with OpenAI, try direct Anthropic integration
       if (isAnthropicAvailable()) {
@@ -622,7 +623,8 @@ export async function generateEducationalActivity(
         }
       } else {
         // If Anthropic is not available as a fallback, propagate the original error
-        throw new Error(`Failed to generate ${activityType}: ${openaiError.message}. Anthropic fallback is not available.`);
+        const errorMessage = openaiError instanceof Error ? openaiError.message : String(openaiError);
+        throw new Error(`Failed to generate ${activityType}: ${errorMessage}. Anthropic fallback is not available.`);
       }
     }
   } catch (error) {
