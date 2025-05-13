@@ -279,13 +279,14 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
         // Always use the most appropriate image generation function based on content
         // No longer restricting to only American symbols/history
         
-        // If it's explicitly about American history/symbols, use the specialized function
-        if (content.title.toLowerCase().includes('american symbols') || 
+        // Only use the American symbols generator for content explicitly about American founding symbols
+        if ((content.title.toLowerCase().includes('american symbols') || content.title.toLowerCase().includes('founding symbols')) && 
             (content.content?.image && 
-             content.content.image.toLowerCase().includes('american symbols') &&
              (content.content.image.toLowerCase().includes('liberty bell') || 
-              content.content.image.toLowerCase().includes('washington')))) {
-          // Specifically for American symbols/history content that matches key elements
+              content.content.image.toLowerCase().includes('washington') ||
+              content.content.image.toLowerCase().includes('american flag') ||
+              content.content.image.toLowerCase().includes('independence hall')))) {
+          // Specifically for American symbols/history content that matches all key elements
           console.log('Using specialized American symbols image generator');
           imagePath = await generateAmericanSymbolsLineArt();
         } else {
@@ -356,10 +357,11 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
       const sharp = require('sharp');
       
       // Generate SVG content based on the activity title and description
+      // Use the actual content description, not a hardcoded American symbols fallback
       let svgContent = generateSvgForActivity(
         content.title, 
         'coloring',
-        content.content?.image || 'American symbols with George Washington and Independence Hall'
+        content.content?.image || content.description || content.title
       );
       
       // Ensure SVG content is properly formatted
