@@ -31,8 +31,9 @@ export default function Header({ onMenuClick }: HeaderProps) {
       <Button
         variant="ghost"
         size="icon"
-        className="md:hidden mr-4"
+        className="mr-4"
         onClick={onMenuClick}
+        title="Toggle navigation menu"
       >
         <Menu className="h-5 w-5" />
         <span className="sr-only">Toggle menu</span>
