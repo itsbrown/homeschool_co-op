@@ -37,6 +37,7 @@ const formSchema = z.object({
   duration: z.coerce.number().min(15, "Duration must be at least 15 minutes").max(180, "Duration cannot exceed 180 minutes"),
   objectives: z.string().min(10, "Please provide learning objectives"),
   learningStyles: z.array(z.string()).min(1, "Select at least one learning style"),
+  worksheetTypes: z.array(z.string()).optional(),
   additionalNotes: z.string().optional(),
 });
 
@@ -66,6 +67,17 @@ const LEARNING_STYLES = [
   { id: "solitary", label: "Solitary" }
 ];
 
+const WORKSHEET_TYPES = [
+  { id: "coloring_book", label: "Coloring Book" },
+  { id: "crossword_puzzle", label: "Crossword Puzzle" },
+  { id: "spot_the_difference", label: "Spot the Difference" },
+  { id: "word_search", label: "Word Search" },
+  { id: "matching_activity", label: "Matching Activity" },
+  { id: "fill_in_the_blank", label: "Fill in the Blank" },
+  { id: "labeling_diagram", label: "Labeling Diagram" },
+  { id: "math_worksheet", label: "Math Worksheet" }
+];
+
 interface GeneratedLesson {
   title: string;
   duration: number;
@@ -79,6 +91,13 @@ interface GeneratedLesson {
   }[];
   assessments: string[];
   extensions: string[];
+  worksheets?: {
+    type: string;
+    title: string;
+    description: string;
+    content?: string;
+    instructions?: string;
+  }[];
 }
 
 export default function AILessonGenerator() {
