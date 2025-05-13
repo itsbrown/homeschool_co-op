@@ -148,17 +148,23 @@ export function AdminClassesPage() {
 
   // Navigate to create new class
   const handleCreateClass = () => {
-    setLocation("/admin/classes/new");
+    console.log("Creating new class");
+    // Force a full page navigation rather than using setLocation
+    window.location.href = "/admin/classes/new";
   };
 
   // Navigate to edit class
   const handleEditClass = (id: number) => {
-    setLocation(`/admin/classes/edit/${id}`);
+    console.log("Editing class:", id);
+    // Force a full page navigation rather than using setLocation
+    window.location.href = `/admin/classes/edit/${id}`;
   };
   
   // Navigate to CSV upload page
   const handleNavigateToUpload = () => {
-    setLocation("/admin/classes/upload");
+    console.log("Navigating to CSV upload");
+    // Force a full page navigation rather than using setLocation
+    window.location.href = "/admin/classes/upload";
   };
 
   return (
