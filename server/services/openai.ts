@@ -83,17 +83,58 @@ function generateFallbackActivity(
       };
       
     case 'coloring':
+      // Create subject-appropriate elements instead of hardcoding American symbols
+      let elements = [];
+      let description = "";
+      
+      // Generate subject-appropriate content
+      if (subject.toLowerCase().includes("math") || subject.toLowerCase() === "mathematics") {
+        elements = ["Numbers", "Shapes", "Math Symbols", "Graphs"];
+        description = `Color these ${capitalizedSubject} elements to help understand mathematical concepts.`;
+      } 
+      else if (subject.toLowerCase().includes("science")) {
+        elements = ["Plants", "Animals", "Lab Equipment", "Planet Earth"];
+        description = `Color these ${capitalizedSubject} elements to learn about scientific concepts.`;
+      }
+      else if (subject.toLowerCase().includes("geography")) {
+        elements = ["Mountains", "Rivers", "Oceans", "Map"];
+        description = `Color these geographical features to learn about ${capitalizedSubject}.`;
+      }
+      else if (subject.toLowerCase().includes("language") || subject.toLowerCase().includes("english")) {
+        elements = ["Books", "Letters", "Writing Tools", "Communication Symbols"];
+        description = `Color these ${capitalizedSubject} elements to enhance literacy skills.`;
+      }
+      else if (subject.toLowerCase().includes("history")) {
+        // Only use American history elements if specifically about America
+        if (subject.toLowerCase().includes("america")) {
+          elements = ["Historical Figures", "Important Buildings", "Timeline Events", "National Symbols"];
+          description = `Color these American historical elements to learn about important events and figures.`;
+        } else {
+          elements = ["Historical Figures", "Important Buildings", "Timeline Events", "Cultural Artifacts"];
+          description = `Color these ${capitalizedSubject} elements to learn about important events and figures.`;
+        }
+      }
+      else if (subject.toLowerCase().includes("art")) {
+        elements = ["Paintbrush", "Canvas", "Color Palette", "Sculptures"];
+        description = `Color these ${capitalizedSubject} tools and elements to explore creativity.`;
+      }
+      else {
+        // Generic educational elements if we can't categorize the subject
+        elements = [
+          `${capitalizedSubject} Concept 1`,
+          `${capitalizedSubject} Concept 2`,
+          `${capitalizedSubject} Element 1`,
+          `${capitalizedSubject} Element 2`
+        ];
+        description = `Color these ${capitalizedSubject} elements while learning about this educational topic.`;
+      }
+      
       return {
         ...activity,
         content: {
-          theme: `American Symbols: Educational ${capitalizedSubject} Coloring Activity`,
-          elements: [
-            "Liberty Bell",
-            "American Flag",
-            "Bald Eagle",
-            "Constitution"
-          ],
-          description: "Color these American symbols while learning about their historical importance."
+          theme: `Educational ${capitalizedSubject} Coloring Activity`,
+          elements: elements,
+          description: description
         }
       };
       

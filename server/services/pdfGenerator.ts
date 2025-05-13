@@ -246,13 +246,13 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
     const text = `${content.title} ${content.description || ''} ${content.content?.image || ''}`.toLowerCase();
     
     // Create a generic coloring guide based on the content
-    const elements = [];
+    const elements: string[] = [];
     
     // Try to extract names of people, objects, or concepts from the title/description
     const titleWords = content.title.split(' ');
     const namePattern = /^[A-Z][a-z]+/; // Simple pattern to identify proper nouns
     
-    titleWords.forEach(word => {
+    titleWords.forEach((word: string) => {
       if (namePattern.test(word) && word.length > 3) {
         elements.push(word);
       }
@@ -292,7 +292,7 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
     else {
       // Use elements from the title if we extracted any
       if (elements.length > 0) {
-        elements.forEach(element => {
+        elements.forEach((element: string) => {
           doc.fontSize(12).font(BOLD_FONT).text(`${element}:`);
           doc.fontSize(12).font(REGULAR_FONT).text(`Color this element based on historical accuracy or your imagination`);
           doc.moveDown(0.5);
