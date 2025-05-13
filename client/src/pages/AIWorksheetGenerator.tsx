@@ -172,6 +172,11 @@ export default function AIWorksheetGenerator() {
   const generatePDF = async (activityId: number) => {
     if (!activityId) {
       console.error('Cannot generate PDF: No activity ID provided');
+      toast({
+        title: "Error",
+        description: "Unable to generate PDF - missing activity ID",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -179,7 +184,15 @@ export default function AIWorksheetGenerator() {
     setIsGeneratingPdf(true);
     
     try {
+      // Add a delay to ensure the UI updates before the request
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       console.log('Sending PDF generation request to:', `/api/activities/${activityId}/generate-pdf`);
+      toast({
+        title: "Processing",
+        description: "Generating PDF, please wait...",
+      });
+      
       const response = await fetch(`/api/activities/${activityId}/generate-pdf`, {
         method: 'POST',
         headers: {
@@ -188,7 +201,7 @@ export default function AIWorksheetGenerator() {
         credentials: 'include'  // Include credentials for session cookies
       });
       
-      console.log('PDF generation response status:', response.status);
+      console.log('PDF generation response status:', response.status, 'statusText:', response.statusText);
       
       if (!response.ok) {
         console.error('PDF generation failed with status:', response.status);
@@ -216,11 +229,21 @@ export default function AIWorksheetGenerator() {
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
+      
+      let errorMessage = "Failed to generate PDF. Please try again.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       toast({
-        title: "Error",
-        description: "Failed to generate PDF. Please try again.",
+        title: "Error Generating PDF",
+        description: errorMessage,
         variant: "destructive",
       });
+      
+      // Log additional debugging information
+      console.log('PDF generation attempt failed for activity ID:', generatedActivity?.id);
+      console.log('Activity data:', generatedActivity);
     } finally {
       setIsGeneratingPdf(false);
     }
