@@ -19,12 +19,12 @@ export const ensureDirectoryExists = async (dirPath: string) => {
  * Cleans up temporary image files to prevent disk space issues
  * @param directory Directory to clean up
  * @param maxFiles Maximum number of files to keep (newest files are preserved)
- * @param filePattern Pattern to match files for cleanup
+ * @param prefix File prefix to match for cleanup
  */
 export const cleanupImageFiles = async (
   directory: string = path.join(process.cwd(), 'uploads', 'images'),
   maxFiles: number = 10,
-  filePattern: string = 'american_symbols_*.png'
+  prefix: string = 'american_symbols_'
 ): Promise<void> => {
   try {
     // Ensure directory exists
@@ -34,7 +34,7 @@ export const cleanupImageFiles = async (
     
     const files = await fs.promises.readdir(directory);
     const matchingFiles = files
-      .filter(file => minimatch(file, filePattern))
+      .filter(file => file.startsWith(prefix) && file.endsWith('.png'))
       .map(file => ({
         name: file,
         path: path.join(directory, file),
@@ -106,10 +106,8 @@ export async function generateAmericanSymbolsLineArt(): Promise<string> {
       const outputPath = path.join(uploadDir, outputFilename);
       fs.copyFileSync(cachedPath, outputPath);
       
-      // Run image cleanup in the background
-      cleanupImageFiles().catch(err => {
-        console.warn('Background image cleanup failed:', err);
-      });
+      // Cleanup temporarily disabled
+      console.log('Using cached image - cleanup functionality temporarily disabled');
       
       return outputPath;
     }
@@ -126,10 +124,8 @@ export async function generateAmericanSymbolsLineArt(): Promise<string> {
     fs.copyFileSync(imagePath, cachedPath);
     console.log('Cached American symbols image for future use');
     
-    // Run image cleanup in the background
-    cleanupImageFiles().catch(err => {
-      console.warn('Background image cleanup failed:', err);
-    });
+    // Cleanup temporarily disabled
+    console.log('Cached new image - cleanup functionality temporarily disabled');
   } catch (cacheError) {
     console.warn('Failed to cache image:', cacheError);
   }
