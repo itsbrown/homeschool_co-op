@@ -22,6 +22,9 @@ export async function checkOpenAIStatus() {
 import { generateCurriculumWithAI } from './anthropic';
 import { isAnthropicAvailable } from './anthropicService';
 
+// Move imports to top-level to avoid circular dependencies
+import { askVirtualTutor } from './anthropic';
+
 // Generate text using OpenAI's GPT-4o with Anthropic fallback
 export async function generateContentWithOpenAI(
   prompt: string,
@@ -31,6 +34,7 @@ export async function generateContentWithOpenAI(
 ): Promise<string> {
   let currentRetry = 0;
   
+  // First try OpenAI with retries
   while (currentRetry <= retries) {
     try {
       const options: any = {
@@ -48,31 +52,20 @@ export async function generateContentWithOpenAI(
       
       return response.choices[0].message.content || "";
     } catch (error) {
-      console.error(`Error generating content with OpenAI (attempt ${currentRetry + 1}/${retries + 1}):`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`Error generating content with OpenAI (attempt ${currentRetry + 1}/${retries + 1}):`, errorMessage);
       
-      // Check if this is a rate limit error (429)
-      const isRateLimit = error.status === 429 || 
-        (error.message && error.message.includes('429')) || 
-        (error.error && error.error.type === 'insufficient_quota');
+      // Try to determine if this is a rate limit error (429)
+      const isRateLimit = 
+        (error && typeof error === 'object' && 'status' in error && error.status === 429) || 
+        (errorMessage.includes('429')) || 
+        (error && typeof error === 'object' && 'error' in error && 
+          typeof error.error === 'object' && error.error && 
+          'type' in error.error && error.error.type === 'insufficient_quota');
       
       // If we've exhausted retries or it's not a rate limit issue, try Anthropic as fallback
       if (currentRetry >= retries || !isRateLimit) {
-        // Before giving up, check if Anthropic is available as a fallback
-        if (isAnthropicAvailable()) {
-          console.log("OpenAI API quota exceeded or unavailable. Attempting fallback to Anthropic/Claude...");
-          try {
-            // Use Anthropic's Claude API as a fallback
-            const claudeResponse = await generateCurriculumWithAI(prompt);
-            console.log("Successfully generated content using Anthropic/Claude fallback");
-            return claudeResponse;
-          } catch (anthropicError) {
-            console.error("Anthropic fallback failed:", anthropicError);
-            throw new Error(`Failed to generate content with both OpenAI and Anthropic: ${error.message}`);
-          }
-        } else {
-          // If Anthropic is not available either, give up and throw the original error
-          throw new Error(`Failed to generate content: ${error.message}`);
-        }
+        break; // Break out of the retry loop and try the fallback
       }
       
       // If it's a rate limit error and we have retries left, exponential backoff
@@ -82,13 +75,48 @@ export async function generateContentWithOpenAI(
         await new Promise(resolve => setTimeout(resolve, delay));
         currentRetry++;
       } else {
-        throw new Error(`Failed to generate content: ${error.message}`);
+        break; // Break out of the retry loop and try the fallback
       }
     }
   }
   
-  // This should never be reached due to the throw in the catch block
-  throw new Error("Failed to generate content after multiple attempts");
+  // If we've reached here, all OpenAI attempts failed - try Anthropic as fallback
+  if (isAnthropicAvailable()) {
+    console.log("OpenAI API quota exceeded or unavailable. Attempting fallback to Anthropic/Claude...");
+    try {
+      // For regular text generation, use generateCurriculumWithAI
+      if (responseFormat === "text") {
+        console.log("Using Anthropic curriculum generation for text content");
+        const claudeResponse = await generateCurriculumWithAI(prompt);
+        console.log("Successfully generated content using Anthropic/Claude fallback");
+        return claudeResponse;
+      } 
+      // For JSON objects, use Claude with a system message to format as JSON
+      else if (responseFormat === "json_object") {
+        console.log("Using Anthropic virtual tutor for JSON content");
+        // Use the virtual tutor with instructions to format as JSON
+        const jsonPrompt = `${prompt}\n\nIMPORTANT: Format your response as a valid JSON object without any explanations or additional text.`;
+        const claudeResponse = await askVirtualTutor("education", jsonPrompt, "advanced", "structured");
+        console.log("Successfully generated JSON using Anthropic/Claude fallback");
+        
+        // Extract JSON from the response
+        const jsonMatch = claudeResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return jsonMatch[0];
+        }
+        
+        // If no JSON detected, return the raw response
+        return claudeResponse;
+      }
+    } catch (anthropicError) {
+      const errorMessage = anthropicError instanceof Error ? anthropicError.message : String(anthropicError);
+      console.error("Anthropic fallback failed:", errorMessage);
+      throw new Error(`Failed to generate content with both OpenAI and Anthropic: ${errorMessage}`);
+    }
+  }
+  
+  // If Anthropic is not available either, give up with an error
+  throw new Error(`Failed to generate content: OpenAI API quota exceeded and Anthropic fallback is not available.`);
 }
 
 // Generate structured content for educational activities
@@ -188,30 +216,69 @@ export async function generateEducationalActivity(
         console.log("Attempting direct Anthropic integration for activity generation...");
         try {
           // Using Anthropic directly for educational activity generation
-          // Import necessary functions
-          const { askVirtualTutor } = await import('./anthropic');
+          // We now import askVirtualTutor at the top to avoid circular dependencies
           
           // Create a specialized prompt for Anthropic
           const anthropicPrompt = `
+          You are a professional educator with expertise in creating educational content.
+          
           Generate a ${difficulty} difficulty ${activityType} about ${subject} for students in the ${ageRange} age range.
           
           Specific instructions: ${instructions}
           
           Reference material: ${knowledgeBaseContent}
           
-          Format the response as a valid JSON object following this structure exactly:
+          Format the response ONLY as a valid JSON object following this structure exactly:
           {
             "title": "Title for the ${activityType}",
             "description": "Description of the ${activityType}",
             "instructions": "Instructions for completing the ${activityType}",
-            "content": {}, // Content structure for ${activityType}
+            "content": {}, // See content structure details below
             "targetSkills": ["skill1", "skill2"],
             "ageRange": "${ageRange}",
             "difficulty": "${difficulty}",
             "timeRequired": "Time in minutes"
           }
           
-          For ${activityType}, the content structure should be appropriate.
+          For the content structure based on activity type:
+          
+          - worksheet: {
+              "questions": [
+                {"question": "Question text", "type": "multiple_choice|short_answer|true_false|matching", "answer": "correct answer", "options": ["option1", "option2"] }
+              ],
+              "answerKey": true or false (whether to include answer key)
+            }
+          
+          - crossword: {
+              "words": [
+                {"word": "word", "clue": "clue for the word", "row": number, "col": number, "direction": "across|down"}
+              ],
+              "size": {"width": number, "height": number}
+            }
+          
+          - coloring: {
+              "image": "detailed textual description of the image to color",
+              "elements": [
+                {"name": "part of the image", "description": "description of what to color"}
+              ],
+              "learningFacts": ["educational fact 1", "educational fact 2"]
+            }
+          
+          - wordsearch: {
+              "words": ["word1", "word2", "word3"],
+              "gridSize": {"width": number, "height": number},
+              "clues": ["clue for word1", "clue for word2", "clue for word3"]
+            }
+          
+          - maze: {
+              "theme": "theme of the maze",
+              "complexity": number (1-10),
+              "educationalCheckpoints": [
+                {"question": "Question at checkpoint", "answer": "Answer"}
+              ]
+            }
+          
+          I need ONLY the JSON object as a response, with no additional explanation or text. The content must be educational, age-appropriate, and engaging for ${ageRange} students.
           `;
           
           // Use the askVirtualTutor function which is designed for educational content
