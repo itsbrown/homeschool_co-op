@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
@@ -963,6 +963,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);
+  
+  // Serve uploaded files (including PDFs)
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   
   const httpServer = createServer(app);
   return httpServer;
