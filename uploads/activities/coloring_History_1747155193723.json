@@ -1,0 +1,40 @@
+{
+  "title": "Ancient Wonders of the World",
+  "description": "A coloring journey through important ancient civilizations that helps young learners discover how people lived long ago and the amazing things they built.",
+  "instructions": "Color each part of the image using your favorite colors. As you color, ask a grown-up to read you the fun facts about these ancient places!",
+  "content": {
+    "image": "A simplified landscape showing four ancient civilization elements: an Egyptian pyramid with a sphinx, a Greek temple with columns, a section of the Great Wall of China, and a Roman aqueduct. Each is clearly separated and drawn with bold, simple outlines appropriate for young children to color.",
+    "elements": [
+      {
+        "name": "Egyptian Pyramid",
+        "description": "Color the giant triangle-shaped building and the sphinx (lion with a human face) in front of it"
+      },
+      {
+        "name": "Greek Temple",
+        "description": "Color the building with tall columns and a triangular roof"
+      },
+      {
+        "name": "Great Wall",
+        "description": "Color the long wall that stretches across the hills"
+      },
+      {
+        "name": "Roman Aqueduct",
+        "description": "Color the bridge-like structure with arches that carried water"
+      }
+    ],
+    "learningFacts": [
+      "The pyramids in Egypt were built over 4,500 years ago!",
+      "Ancient Greeks built beautiful temples to honor their gods and goddesses",
+      "The Great Wall of China is so long you could walk on it for months",
+      "Romans built aqueducts to bring fresh water to their cities"
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Cultural appreciation",
+    "Fine motor skills"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}
