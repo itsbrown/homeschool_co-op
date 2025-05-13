@@ -129,8 +129,8 @@ export const uploadFileToStorage = async (
     await file.makePublic();
     return `https://storage.googleapis.com/${bucketName}/${destinationPath}`;
   } catch (error) {
-    console.error('Error uploading file to Google Cloud Storage:', error);
-    throw new Error(`File upload failed: ${error.message || 'Unknown error'}`);
+    console.error('Error uploading file to Google Cloud Storage:', error instanceof Error ? error.message : String(error));
+    throw new Error(`File upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 
@@ -188,8 +188,8 @@ export const extractTextFromDocument = async (filePath: string): Promise<string>
     
     return extractedText;
   } catch (error) {
-    console.error('Error extracting text from document:', error);
-    throw new Error(`Text extraction failed: ${error.message || 'Unknown error'}`);
+    console.error('Error extracting text from document:', error instanceof Error ? error.message : String(error));
+    throw new Error(`Text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 
