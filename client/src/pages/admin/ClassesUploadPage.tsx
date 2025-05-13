@@ -50,6 +50,7 @@ export default function ClassesUploadPage() {
   };
   
   const parseCsvFile = (file: File) => {
+    console.log("Parsing CSV file:", file.name, file.size);
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -149,7 +150,8 @@ export default function ClassesUploadPage() {
       setFile(null);
     };
     
-    reader.readAsText(file); // Read the selected file, not the class file member variable
+    console.log("Reading file:", file.name);
+    reader.readAsText(file);
   };
 
   const handleMappingConfirm = async (mapping: Record<string, string>) => {

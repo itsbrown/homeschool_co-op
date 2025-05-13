@@ -9,9 +9,23 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card } from "@/components/ui/card";
 
 interface CsvColumn {
   name: string;
@@ -34,7 +48,7 @@ interface CsvMappingDialogProps {
 }
 
 export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfirm }: CsvMappingDialogProps) {
-  // Class fields that need mapping
+  // Define database fields
   const classFields: MappingField[] = [
     { key: "title", label: "Class Title", required: true, description: "The name of the class" },
     { key: "category", label: "Category", required: false, description: "The category of the class (e.g., 'academic', 'arts', etc.)" },
@@ -47,36 +61,32 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
     { key: "instructorName", label: "Instructor", required: false, description: "Name of the instructor" },
   ];
 
-  // Initialize mapping state
+  // Initialize mapping with smart default suggestions
   const [mapping, setMapping] = useState<Record<string, string>>(() => {
     const initialMapping: Record<string, string> = {};
     
-    // Try to auto-map fields based on similarity
     classFields.forEach(field => {
+      // Try to find matching column by name similarity
       const match = columns.find(col => 
         col.name.toLowerCase().includes(field.key.toLowerCase()) ||
         field.label.toLowerCase().includes(col.name.toLowerCase())
       );
       
-      if (match) {
-        initialMapping[field.key] = match.name;
-      } else {
-        initialMapping[field.key] = "__none__";
-      }
+      initialMapping[field.key] = match ? match.name : "__none__";
     });
     
     return initialMapping;
   });
 
-  const handleMappingChange = (field: string, columnName: string) => {
+  const handleChange = (field: string, value: string) => {
     setMapping(prev => ({
       ...prev,
-      [field]: columnName
+      [field]: value
     }));
   };
 
-  const handleConfirm = () => {
-    // Validate required fields are mapped
+  const handleSubmit = () => {
+    // Check required fields
     const missingRequired = classFields
       .filter(field => field.required && (mapping[field.key] === "__none__" || !mapping[field.key]))
       .map(field => field.label);
@@ -92,82 +102,140 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
   if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">Map CSV Columns to Class Fields</DialogTitle>
+          <DialogTitle>Map CSV Columns to Class Fields</DialogTitle>
           <DialogDescription>
             Select which CSV column corresponds to each class field. Required fields are marked with an asterisk (*).
           </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-6 py-4">
-          <div className="grid gap-6">
-            {classFields.map(field => (
-              <div key={field.key} className="grid grid-cols-3 items-center gap-4">
-                <div className="text-right font-medium">
-                  <Label htmlFor={`map-${field.key}`}>
-                    {field.label} {field.required && <span className="text-red-500">*</span>}
-                  </Label>
-                  <p className="text-xs text-muted-foreground mt-1">{field.description}</p>
-                </div>
+        
+        <div className="space-y-4 py-4">
+          <div className="grid gap-4">
+            {classFields.map((field) => (
+              <div key={field.key} className="grid grid-cols-5 items-center gap-4">
                 <div className="col-span-2">
-                  <Select
-                    value={mapping[field.key]}
-                    onValueChange={(value) => handleMappingChange(field.key, value)}
-                  >
-                    <SelectTrigger className="w-full" id={`map-${field.key}`}>
-                      <SelectValue placeholder="Select a column" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">-- Do not map --</SelectItem>
-                      {columns.map(column => (
-                        <SelectItem key={column.name} value={column.name}>
-                          {column.name} {column.sample && `(sample: ${column.sample.substring(0, 20)}${column.sample.length > 20 ? '...' : ''})`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-right">
+                    {field.label} {field.required && <span className="text-red-500">*</span>}
+                    <p className="text-xs text-muted-foreground">{field.description}</p>
+                  </Label>
+                </div>
+                <div className="col-span-3">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between"
+                      >
+                        {mapping[field.key] === "__none__" 
+                          ? "-- Do not map --" 
+                          : mapping[field.key] || "Select column"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput placeholder="Search columns..." />
+                        <CommandEmpty>No column found.</CommandEmpty>
+                        <CommandGroup>
+                          <ScrollArea className="h-[200px]">
+                            <CommandItem
+                              value="__none__"
+                              onSelect={() => handleChange(field.key, "__none__")}
+                              className={cn(
+                                "flex items-center gap-2",
+                                mapping[field.key] === "__none__" ? "bg-accent" : ""
+                              )}
+                            >
+                              <Check
+                                className={cn(
+                                  "h-4 w-4",
+                                  mapping[field.key] === "__none__" ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              -- Do not map --
+                            </CommandItem>
+                            {columns.map((column) => (
+                              <CommandItem
+                                key={column.name}
+                                value={column.name}
+                                onSelect={() => handleChange(field.key, column.name)}
+                                className={cn(
+                                  "flex items-center gap-2",
+                                  mapping[field.key] === column.name ? "bg-accent" : ""
+                                )}
+                              >
+                                <Check
+                                  className={cn(
+                                    "h-4 w-4",
+                                    mapping[field.key] === column.name ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <div>
+                                  <div>{column.name}</div>
+                                  {column.sample && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Sample: {column.sample.substring(0, 20)}
+                                      {column.sample.length > 20 ? "..." : ""}
+                                    </div>
+                                  )}
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </ScrollArea>
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             ))}
           </div>
-
+          
           {sampleData.length > 0 && (
-            <Card className="p-4">
-              <h3 className="text-sm font-medium mb-2">Preview (first 3 rows)</h3>
-              <div className="overflow-auto max-h-[200px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {columns.map(col => (
-                        <TableHead key={col.name} className="px-2 py-1">{col.name}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sampleData.slice(0, 3).map((row, idx) => (
-                      <TableRow key={idx}>
-                        {columns.map(col => (
-                          <TableCell key={col.name} className="truncate max-w-[150px] px-2 py-1 text-sm">
-                            {row[col.name]}
-                          </TableCell>
+            <Card className="mt-6">
+              <CardContent className="p-4">
+                <h3 className="font-medium mb-2">Preview (first 3 rows)</h3>
+                <div className="border rounded-md overflow-auto max-h-[200px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {columns.map((col) => (
+                          <TableHead key={col.name} className="px-2 py-1 text-xs font-medium">
+                            {col.name}
+                          </TableHead>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {sampleData.slice(0, 3).map((row, idx) => (
+                        <TableRow key={idx}>
+                          {columns.map((col) => (
+                            <TableCell 
+                              key={col.name} 
+                              className="px-2 py-1 text-xs truncate max-w-[150px]"
+                            >
+                              {row[col.name]}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
             </Card>
           )}
         </div>
 
-        <DialogFooter className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} className="ml-2">
-            Confirm Mapping & Import
+          <Button type="button" onClick={handleSubmit}>
+            Confirm Mapping
           </Button>
         </DialogFooter>
       </DialogContent>
