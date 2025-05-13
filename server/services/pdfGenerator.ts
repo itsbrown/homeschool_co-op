@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 import { storage } from '../storage';
+import { generateSvgForActivity } from './svgGenerator';
 
 // Create uploads directory if it doesn't exist
 const ensureDirectoryExists = async (dirPath: string) => {
@@ -188,14 +189,42 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
     doc.fontSize(12).font(REGULAR_FONT).text(content.content.image);
   }
   
-  // Create a placeholder for the coloring image (in production this would be a real image)
+  // Create the coloring image using SVG generator
   doc.moveDown();
   
-  // Draw a placeholder frame for the coloring page
-  doc.rect(100, doc.y, 400, 300).stroke();
-  doc.fontSize(14).font(STANDARD_FONT).text('Coloring Image Would Appear Here', 
-    100 + 200 - doc.widthOfString('Coloring Image Would Appear Here') / 2, 
-    doc.y + 150 - doc.currentLineHeight() / 2);
+  try {
+    // Generate SVG content based on the activity title and description
+    const svgContent = generateSvgForActivity(
+      content.title, 
+      'coloring',
+      content.content?.image || 'American symbols'
+    );
+    
+    // Create a temporary SVG file
+    const svgFilePath = path.join(process.cwd(), 'uploads', 'temp', `temp_${Date.now()}.svg`);
+    await ensureDirectoryExists(path.dirname(svgFilePath));
+    fs.writeFileSync(svgFilePath, svgContent);
+    
+    // Add the SVG to the PDF
+    doc.image(svgFilePath, 50, doc.y, { width: 500 });
+    
+    // Clean up temporary file
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(svgFilePath);
+      } catch (e) {
+        console.warn(`Failed to clean up temporary SVG file: ${e}`);
+      }
+    }, 1000);
+  } catch (svgError) {
+    console.error('Error generating SVG:', svgError);
+    
+    // Fallback to placeholder if SVG generation fails
+    doc.rect(100, doc.y, 400, 300).stroke();
+    doc.fontSize(14).font(STANDARD_FONT).text('Coloring Image Would Appear Here', 
+      100 + 200 - doc.widthOfString('Coloring Image Would Appear Here') / 2, 
+      doc.y + 150 - doc.currentLineHeight() / 2);
+  }
   
   doc.moveDown(20);
   
@@ -229,11 +258,40 @@ const createCrosswordPDF = async (doc: PDFKit.PDFDocument, content: any) => {
   doc.fontSize(12).font(STANDARD_FONT).text(content.instructions);
   doc.moveDown();
   
-  // Draw a placeholder for the crossword grid
-  doc.rect(100, doc.y, 400, 300).stroke();
-  doc.fontSize(14).font(STANDARD_FONT).text('Crossword Puzzle Would Appear Here', 
-    100 + 200 - doc.widthOfString('Crossword Puzzle Would Appear Here') / 2, 
-    doc.y + 150 - doc.currentLineHeight() / 2);
+  // Generate and add the crossword SVG
+  try {
+    // Generate SVG content based on the activity title
+    const svgContent = generateSvgForActivity(
+      content.title, 
+      'crossword',
+      ''
+    );
+    
+    // Create a temporary SVG file
+    const svgFilePath = path.join(process.cwd(), 'uploads', 'temp', `temp_${Date.now()}.svg`);
+    await ensureDirectoryExists(path.dirname(svgFilePath));
+    fs.writeFileSync(svgFilePath, svgContent);
+    
+    // Add the SVG to the PDF
+    doc.image(svgFilePath, 50, doc.y, { width: 500 });
+    
+    // Clean up temporary file
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(svgFilePath);
+      } catch (e) {
+        console.warn(`Failed to clean up temporary SVG file: ${e}`);
+      }
+    }, 1000);
+  } catch (svgError) {
+    console.error('Error generating crossword SVG:', svgError);
+    
+    // Fallback to placeholder if SVG generation fails
+    doc.rect(100, doc.y, 400, 300).stroke();
+    doc.fontSize(14).font(STANDARD_FONT).text('Crossword Puzzle Would Appear Here', 
+      100 + 200 - doc.widthOfString('Crossword Puzzle Would Appear Here') / 2, 
+      doc.y + 150 - doc.currentLineHeight() / 2);
+  }
   
   doc.moveDown(20);
   
@@ -288,11 +346,40 @@ const createWordSearchPDF = async (doc: PDFKit.PDFDocument, content: any) => {
   doc.fontSize(12).font(STANDARD_FONT).text(content.instructions);
   doc.moveDown();
   
-  // Draw a placeholder for the word search grid
-  doc.rect(100, doc.y, 400, 300).stroke();
-  doc.fontSize(14).font(STANDARD_FONT).text('Word Search Grid Would Appear Here', 
-    100 + 200 - doc.widthOfString('Word Search Grid Would Appear Here') / 2, 
-    doc.y + 150 - doc.currentLineHeight() / 2);
+  // Generate and add the word search SVG
+  try {
+    // Generate SVG content based on the activity title
+    const svgContent = generateSvgForActivity(
+      content.title, 
+      'wordsearch',
+      ''
+    );
+    
+    // Create a temporary SVG file
+    const svgFilePath = path.join(process.cwd(), 'uploads', 'temp', `temp_${Date.now()}.svg`);
+    await ensureDirectoryExists(path.dirname(svgFilePath));
+    fs.writeFileSync(svgFilePath, svgContent);
+    
+    // Add the SVG to the PDF
+    doc.image(svgFilePath, 50, doc.y, { width: 500 });
+    
+    // Clean up temporary file
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(svgFilePath);
+      } catch (e) {
+        console.warn(`Failed to clean up temporary SVG file: ${e}`);
+      }
+    }, 1000);
+  } catch (svgError) {
+    console.error('Error generating word search SVG:', svgError);
+    
+    // Fallback to placeholder if SVG generation fails
+    doc.rect(100, doc.y, 400, 300).stroke();
+    doc.fontSize(14).font(STANDARD_FONT).text('Word Search Grid Would Appear Here', 
+      100 + 200 - doc.widthOfString('Word Search Grid Would Appear Here') / 2, 
+      doc.y + 150 - doc.currentLineHeight() / 2);
+  }
   
   doc.moveDown(20);
   
@@ -337,11 +424,40 @@ const createMazePDF = async (doc: PDFKit.PDFDocument, content: any) => {
   doc.fontSize(12).font(STANDARD_FONT).text(content.instructions);
   doc.moveDown();
   
-  // Draw a placeholder for the maze
-  doc.rect(100, doc.y, 400, 400).stroke();
-  doc.fontSize(14).font(STANDARD_FONT).text('Maze Would Appear Here', 
-    100 + 200 - doc.widthOfString('Maze Would Appear Here') / 2, 
-    doc.y + 200 - doc.currentLineHeight() / 2);
+  // Generate and add the maze SVG
+  try {
+    // Generate SVG content based on the activity title
+    const svgContent = generateSvgForActivity(
+      content.title, 
+      'maze',
+      ''
+    );
+    
+    // Create a temporary SVG file
+    const svgFilePath = path.join(process.cwd(), 'uploads', 'temp', `temp_${Date.now()}.svg`);
+    await ensureDirectoryExists(path.dirname(svgFilePath));
+    fs.writeFileSync(svgFilePath, svgContent);
+    
+    // Add the SVG to the PDF
+    doc.image(svgFilePath, 50, doc.y, { width: 500 });
+    
+    // Clean up temporary file
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(svgFilePath);
+      } catch (e) {
+        console.warn(`Failed to clean up temporary SVG file: ${e}`);
+      }
+    }, 1000);
+  } catch (svgError) {
+    console.error('Error generating maze SVG:', svgError);
+    
+    // Fallback to placeholder if SVG generation fails
+    doc.rect(100, doc.y, 400, 400).stroke();
+    doc.fontSize(14).font(STANDARD_FONT).text('Maze Would Appear Here', 
+      100 + 200 - doc.widthOfString('Maze Would Appear Here') / 2, 
+      doc.y + 200 - doc.currentLineHeight() / 2);
+  }
   
   doc.moveDown(25);
   

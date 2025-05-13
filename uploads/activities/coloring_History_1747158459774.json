@@ -1,0 +1,46 @@
+{
+  "title": "American Founding Symbols Coloring Adventure",
+  "description": "A fun coloring activity that introduces young students to important symbols and ideas from America's founding period.",
+  "instructions": "Color each part of the picture according to the suggestions or use your own creative colors! As you color, think about what each symbol means for our country.",
+  "content": {
+    "image": "A large outlined drawing showing several American founding symbols arranged in a friendly, cartoon-style scene. The Liberty Bell is in the center, with the American flag waving behind it. To the left is a bald eagle holding an olive branch and arrows. To the right is the Constitution document with 'We the People' visible at the top. At the bottom is a simple outline of Independence Hall.",
+    "elements": [
+      {
+        "name": "Liberty Bell",
+        "description": "Color the Liberty Bell brown. This bell rang to announce the signing of the Declaration of Independence."
+      },
+      {
+        "name": "American Flag",
+        "description": "Color the stripes red and white, and the star section blue with white stars."
+      },
+      {
+        "name": "Bald Eagle",
+        "description": "Color the eagle's body brown, but make its head and tail white to show it's our national bird!"
+      },
+      {
+        "name": "Constitution",
+        "description": "Color the Constitution paper a light yellow or tan to make it look old and important."
+      },
+      {
+        "name": "Independence Hall",
+        "description": "Color Independence Hall with red bricks and white windows. This is where our country's founders met."
+      }
+    ],
+    "learningFacts": [
+      "The Liberty Bell is a symbol of American independence.",
+      "The American flag has 13 stripes for the original colonies and 50 stars for our states.",
+      "The bald eagle represents strength and freedom.",
+      "The Constitution begins with 'We the People' because the government works for the citizens.",
+      "Independence Hall in Philadelphia is where both the Declaration of Independence and Constitution were debated and signed."
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Symbol recognition",
+    "Fine motor skills",
+    "Reading comprehension"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20 minutes"
+}
