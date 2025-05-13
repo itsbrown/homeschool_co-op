@@ -112,28 +112,8 @@ export async function generateLineArtSageMaker(
   } catch (error) {
     console.error('Error generating line art with SageMaker:', error);
     
-    // Create a fallback SVG as a last resort
-    try {
-      console.log('Generating fallback SVG due to SageMaker error');
-      const uploadDir = path.join(process.cwd(), 'uploads', 'images');
-      await ensureDirectoryExists(uploadDir);
-      
-      const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
-        <rect x="50" y="50" width="700" height="500" fill="none" stroke="black" stroke-width="2"/>
-        <text x="400" y="300" font-family="Arial" font-size="24" text-anchor="middle">
-          Coloring Image: ${prompt}
-        </text>
-        <text x="400" y="340" font-family="Arial" font-size="16" text-anchor="middle">
-          (SageMaker image generation failed, please try again)
-        </text>
-      </svg>`;
-      
-      const fallbackPath = path.join(uploadDir, `fallback_sagemaker_${Date.now()}.svg`);
-      await writeFileAsync(fallbackPath, fallbackSvg);
-      return fallbackPath;
-    } catch (fallbackError) {
-      console.error('Even fallback SVG creation failed:', fallbackError);
-      throw new Error(`Failed to generate any image via SageMaker: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    // Throw the error to be handled by the calling function
+    // This allows the imageGenerationService to fallback to Hugging Face if available
+    throw new Error(`SageMaker image generation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

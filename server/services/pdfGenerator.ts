@@ -337,6 +337,15 @@ const createColoringPagePDF = async (doc: PDFKit.PDFDocument, content: any) => {
       // Fallback to SVG generation if no image service (Hugging Face or SageMaker) is available
       console.log('No image generation service available (Hugging Face or SageMaker), falling back to SVG generation');
       
+      // Add a notice about image service unavailability
+      doc.moveDown();
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('red')
+         .text('Note: Authentic image generation service is not available.', { align: 'center' });
+      doc.fontSize(10).font('Helvetica').fillColor('red')
+         .text('Contact your administrator to enable Hugging Face or SageMaker API for image generation.', { align: 'center' });
+      doc.moveDown();
+      doc.fillColor('black');
+      
       // Import sharp for SVG to PNG conversion
       const sharp = require('sharp');
       
