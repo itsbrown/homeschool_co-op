@@ -40,10 +40,16 @@ export function MainNav({
         Lessons
       </Link>
       <Link
-        to="/lessons/ai-generator"
+        to="/ai-generator/lesson"
         className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
       >
         AI Lesson Generator
+      </Link>
+      <Link
+        to="/ai-generator/curriculum"
+        className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+      >
+        AI Curriculum Generator
       </Link>
       <Link
         to="/knowledge-base"

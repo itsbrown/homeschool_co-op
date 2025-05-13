@@ -44,6 +44,8 @@ function Router() {
       <Route path="/curriculum/:id" component={CurriculumDetail} />
       <Route path="/lessons" component={Lessons} />
       <Route path="/lessons/ai-generator" component={AILessonGenerator} />
+      <Route path="/ai-generator/lesson" component={AILessonGenerator} />
+      <Route path="/ai-generator/curriculum" component={Curriculum} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/knowledge-base/:id/edit" component={KnowledgeBaseEdit} />
       <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
