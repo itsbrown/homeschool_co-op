@@ -28,6 +28,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { KnowledgeBaseSelector } from "@/components/KnowledgeBaseSelector";
 import { Loader2, AlertCircle, CheckCircle, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AppShell from "@/components/layout/AppShell";
 import { useToast } from "@/hooks/use-toast";
 
 // Define types
@@ -298,18 +299,19 @@ export default function AIWorksheetGenerator() {
   };
 
   return (
-    <div className="container mx-auto py-6">
-      <h1 className="text-3xl font-bold mb-6">AI Worksheet Generator</h1>
-      
-      {!checkingAIStatus && aiStatus && !aiStatus.openai?.available && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>AI Service Unavailable</AlertTitle>
-          <AlertDescription>
-            The OpenAI service is currently unavailable. Worksheet generation may not work properly.
-          </AlertDescription>
-        </Alert>
-      )}
+    <AppShell>
+      <div className="container mx-auto py-6">
+        <h1 className="text-3xl font-bold mb-6">AI Worksheet Generator</h1>
+        
+        {!checkingAIStatus && aiStatus && !aiStatus.openai?.available && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>AI Service Unavailable</AlertTitle>
+            <AlertDescription>
+              The OpenAI service is currently unavailable. Worksheet generation may not work properly.
+            </AlertDescription>
+          </Alert>
+        )}
       
       {!checkingAIStatus && aiStatus && aiStatus.openai?.available && (
         <Alert variant="default" className="mb-6 bg-green-50 border-green-200">
@@ -565,6 +567,7 @@ export default function AIWorksheetGenerator() {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </AppShell>
   );
 }
