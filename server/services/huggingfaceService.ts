@@ -2,9 +2,18 @@ import { HfInference } from '@huggingface/inference';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
-import { ensureDirectoryExists } from './pdfGenerator';
 
 const writeFileAsync = promisify(fs.writeFile);
+
+// Helper function to ensure a directory exists
+export const ensureDirectoryExists = async (dirPath: string) => {
+  try {
+    await fs.promises.mkdir(dirPath, { recursive: true });
+  } catch (error) {
+    console.error(`Error creating directory ${dirPath}:`, error);
+    throw error;
+  }
+};
 
 // Initialize Hugging Face client
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
@@ -41,10 +50,11 @@ export async function generateLineArt(
     // Enhance the prompt for line art generation
     const enhancedPrompt = `A simple black and white line drawing for a children's coloring page of: ${prompt}. Clean lines, no shading, suitable for coloring by young children.`;
     
+    console.log(`Using enhanced prompt: "${enhancedPrompt}"`);
+    
     // Use Hugging Face text-to-image model
-    // For line art specifically we're using the scribble-diffusion model
-    const imageBlob = await hf.textToImage({
-      model: 'timbrooks/instruct-pix2pix',
+    const response = await hf.textToImage({
+      model: 'stabilityai/stable-diffusion-xl-base-1.0',  // Using SDXL as it's more reliable
       inputs: enhancedPrompt,
       parameters: {
         negative_prompt: 'color, shading, realistic, detailed, grayscale, complexity, photorealistic',
@@ -53,8 +63,40 @@ export async function generateLineArt(
       }
     });
     
-    // Convert blob to buffer
-    const buffer = Buffer.from(await imageBlob.arrayBuffer());
+    // Handle different response types from Hugging Face
+    let buffer;
+    
+    if (Buffer.isBuffer(response)) {
+      // Already a buffer
+      buffer = response;
+    } else if (typeof response === 'string') {
+      // Base64 string
+      if (response.startsWith('data:')) {
+        // Remove the data URL prefix
+        const base64Data = response.split(',')[1];
+        buffer = Buffer.from(base64Data, 'base64');
+      } else {
+        buffer = Buffer.from(response, 'base64');
+      }
+    } else {
+      // For other response types (like Blob), we'll need to use node-fetch or similar
+      // This is a simplified version
+      console.log('Response type:', typeof response);
+      
+      // If response has arrayBuffer method, use it
+      if (response && typeof response === 'object' && 'arrayBuffer' in response && 
+          typeof response.arrayBuffer === 'function') {
+        try {
+          const arrayBuffer = await response.arrayBuffer();
+          buffer = Buffer.from(arrayBuffer);
+        } catch (error) {
+          console.error('Error converting response to buffer:', error);
+          throw new Error('Failed to convert image response to buffer');
+        }
+      } else {
+        throw new Error(`Unsupported response type: ${typeof response}`);
+      }
+    }
     
     // Write image to file
     await writeFileAsync(outputPath, buffer);
@@ -63,7 +105,7 @@ export async function generateLineArt(
     return outputPath;
   } catch (error) {
     console.error('Error generating line art:', error);
-    throw new Error(`Failed to generate line art: ${error.message}`);
+    throw new Error(`Failed to generate line art: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
