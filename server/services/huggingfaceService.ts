@@ -2,6 +2,7 @@ import { HfInference } from '@huggingface/inference';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
+import * as minimatch from 'minimatch';
 
 const writeFileAsync = promisify(fs.writeFile);
 
@@ -12,6 +13,55 @@ export const ensureDirectoryExists = async (dirPath: string) => {
   } catch (error) {
     console.error(`Error creating directory ${dirPath}:`, error);
     throw error;
+  }
+};
+
+/**
+ * Cleans up temporary image files to prevent disk space issues
+ * @param directory Directory to clean up
+ * @param maxFiles Maximum number of files to keep (newest files are preserved)
+ * @param filePattern Pattern to match files for cleanup
+ */
+export const cleanupImageFiles = async (
+  directory: string = path.join(process.cwd(), 'uploads', 'images'),
+  maxFiles: number = 10,
+  filePattern: string = 'american_symbols_*.png'
+): Promise<void> => {
+  try {
+    // Ensure directory exists
+    if (!fs.existsSync(directory)) {
+      return;
+    }
+    
+    const files = await fs.promises.readdir(directory);
+    const matchingFiles = files
+      .filter(file => minimatch(file, filePattern))
+      .map(file => ({
+        name: file,
+        path: path.join(directory, file),
+        stats: fs.statSync(path.join(directory, file))
+      }))
+      .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime()); // newest first
+    
+    if (matchingFiles.length <= maxFiles) {
+      return; // No cleanup needed
+    }
+    
+    // Delete older files beyond the maximum limit
+    const filesToDelete = matchingFiles.slice(maxFiles);
+    for (const file of filesToDelete) {
+      try {
+        await fs.promises.unlink(file.path);
+        console.log(`Cleaned up old image file: ${file.name}`);
+      } catch (unlinkError) {
+        console.warn(`Failed to delete old image file ${file.name}:`, unlinkError);
+      }
+    }
+    
+    console.log(`Image cleanup complete. Kept ${maxFiles} newest files, deleted ${filesToDelete.length} old files.`);
+  } catch (error) {
+    console.warn('Error during image cleanup:', error);
+    // Non-critical operation, don't throw error
   }
 };
 
@@ -57,6 +107,11 @@ export async function generateAmericanSymbolsLineArt(): Promise<string> {
       const outputPath = path.join(uploadDir, outputFilename);
       fs.copyFileSync(cachedPath, outputPath);
       
+      // Run image cleanup in the background
+      cleanupImageFiles().catch(err => {
+        console.warn('Background image cleanup failed:', err);
+      });
+      
       return outputPath;
     }
   } catch (cacheError) {
@@ -71,6 +126,11 @@ export async function generateAmericanSymbolsLineArt(): Promise<string> {
   try {
     fs.copyFileSync(imagePath, cachedPath);
     console.log('Cached American symbols image for future use');
+    
+    // Run image cleanup in the background
+    cleanupImageFiles().catch(err => {
+      console.warn('Background image cleanup failed:', err);
+    });
   } catch (cacheError) {
     console.warn('Failed to cache image:', cacheError);
   }
