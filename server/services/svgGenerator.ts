@@ -40,9 +40,21 @@ const generateColoringSvg = (title: string, description: string): string => {
   // Extract key elements from the description for simple shapes
   const elements = extractElementsFromDescription(description);
   
-  // Default to American symbols if no specific elements are identified
+  // Create appropriate educational elements based on the title and description
   if (elements.length === 0) {
-    elements.push('liberty bell', 'american flag', 'eagle', 'constitution');
+    // Check the topic from title and description to add appropriate elements
+    const lowerTitle = title.toLowerCase();
+    const lowerDesc = description.toLowerCase();
+    
+    if (lowerTitle.includes('founding') || 
+        lowerTitle.includes('america') && lowerTitle.includes('symbol') ||
+        lowerDesc.includes('founding') ||
+        (lowerDesc.includes('america') && lowerDesc.includes('symbol'))) {
+      // Only use American symbols for content explicitly about American symbols
+      elements.push('liberty bell', 'american flag', 'eagle', 'constitution');
+    }
+    // Otherwise we'll create a generic educational illustration
+    // based on the content rather than defaulting to American symbols
   }
   
   // Add specific elements based on title or description
@@ -62,13 +74,22 @@ const generateColoringSvg = (title: string, description: string): string => {
     }
   }
   
-  // Build SVG content with educational symbols of America
+  // Build SVG content with appropriate educational illustration
   let svgContent = `
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
     <rect width="800" height="600" fill="white"/>
     <text x="400" y="30" font-family="Arial" font-size="24" text-anchor="middle" fill="black">${title}</text>
-    <text x="400" y="60" font-family="Arial" font-size="14" text-anchor="middle" fill="gray">Color these American symbols!</text>
   `;
+  
+  // Add appropriate subtitle based on content
+  if (elements.includes('liberty bell') || elements.includes('american flag') || elements.includes('eagle') || 
+      elements.includes('constitution') || elements.includes('george washington')) {
+    svgContent += `<text x="400" y="60" font-family="Arial" font-size="14" text-anchor="middle" fill="gray">Color these American historical symbols!</text>`;
+  } else if (title.toLowerCase().includes('minister') || description.toLowerCase().includes('minister')) {
+    svgContent += `<text x="400" y="60" font-family="Arial" font-size="14" text-anchor="middle" fill="gray">Color this historical figure!</text>`;
+  } else {
+    svgContent += `<text x="400" y="60" font-family="Arial" font-size="14" text-anchor="middle" fill="gray">Color this educational illustration!</text>`;
+  }
 
   // Add Liberty Bell with more detail
   if (elements.includes('liberty bell')) {
@@ -288,10 +309,225 @@ const generateColoringSvg = (title: string, description: string): string => {
     `;
   }
   
+  // Add science illustration if science-related keywords are found
+  if (elements.some(el => ['planet', 'solar system', 'atom', 'cell', 'microscope', 'telescope', 
+                          'biology', 'chemistry', 'physics', 'experiment', 'laboratory'].includes(el))) {
+    svgContent += generateScienceIllustration();
+  }
+  
+  // Add math illustration if math-related keywords are found
+  if (elements.some(el => ['triangle', 'square', 'rectangle', 'circle', 'geometry', 'algebra',
+                          'equation', 'number', 'fraction', 'decimal'].includes(el))) {
+    svgContent += generateMathIllustration();
+  }
+  
+  // Add geography illustration if geography-related keywords are found
+  if (elements.some(el => ['map', 'globe', 'continent', 'country', 'mountain', 'river',
+                          'ocean', 'compass rose', 'latitude', 'longitude'].includes(el))) {
+    svgContent += generateGeographyIllustration();
+  }
+  
+  // If no specific elements were illustrated, add a generic educational illustration
+  if (!svgContent.includes('<g transform=')) {
+    if (title.toLowerCase().includes('science') || description.toLowerCase().includes('science')) {
+      svgContent += generateScienceIllustration();
+    } else if (title.toLowerCase().includes('math') || description.toLowerCase().includes('math')) {
+      svgContent += generateMathIllustration();
+    } else if (title.toLowerCase().includes('geography') || description.toLowerCase().includes('geography')) {
+      svgContent += generateGeographyIllustration();
+    } else {
+      svgContent += generateGenericEducationalIllustration(title, description);
+    }
+  }
+  
   // Close the SVG
   svgContent += `</svg>`;
   
   return svgContent;
+};
+
+/**
+ * Generate a science-themed illustration
+ * @returns SVG string content
+ */
+const generateScienceIllustration = (): string => {
+  return `
+    <g transform="translate(250, 150)">
+      <!-- Microscope -->
+      <g transform="translate(0, 0)">
+        <!-- Base -->
+        <path d="M50,200 L100,200 L110,170 L40,170 Z" fill="none" stroke="black" stroke-width="1.5"/>
+        <!-- Arm -->
+        <path d="M75,170 L75,80" fill="none" stroke="black" stroke-width="2"/>
+        <!-- Eyepiece -->
+        <path d="M60,80 L90,80 L85,50 L65,50 Z" fill="none" stroke="black" stroke-width="1.5"/>
+        <!-- Objective -->
+        <path d="M65,120 L85,120 L85,150 L65,150 Z" fill="none" stroke="black" stroke-width="1.5"/>
+        <circle cx="75" cy="135" r="5" fill="none" stroke="black" stroke-width="1"/>
+        <text x="75" y="225" font-family="Arial" font-size="14" text-anchor="middle">Microscope</text>
+      </g>
+      
+      <!-- Atom -->
+      <g transform="translate(200, 20)">
+        <!-- Electron orbits -->
+        <ellipse cx="75" cy="75" rx="70" ry="25" fill="none" stroke="black" stroke-width="1" transform="rotate(0 75 75)"/>
+        <ellipse cx="75" cy="75" rx="70" ry="25" fill="none" stroke="black" stroke-width="1" transform="rotate(60 75 75)"/>
+        <ellipse cx="75" cy="75" rx="70" ry="25" fill="none" stroke="black" stroke-width="1" transform="rotate(120 75 75)"/>
+        <!-- Nucleus -->
+        <circle cx="75" cy="75" r="15" fill="none" stroke="black" stroke-width="1.5"/>
+        <!-- Electrons -->
+        <circle cx="145" cy="75" r="5" fill="none" stroke="black" stroke-width="1"/>
+        <circle cx="40" cy="97" r="5" fill="none" stroke="black" stroke-width="1"/>
+        <circle cx="40" cy="53" r="5" fill="none" stroke="black" stroke-width="1"/>
+        <text x="75" y="135" font-family="Arial" font-size="14" text-anchor="middle">Atom</text>
+      </g>
+    </g>
+  `;
+};
+
+/**
+ * Generate a math-themed illustration
+ * @returns SVG string content
+ */
+const generateMathIllustration = (): string => {
+  return `
+    <g transform="translate(200, 150)">
+      <!-- Geometric shapes -->
+      <g transform="translate(0, 0)">
+        <!-- Square -->
+        <rect x="20" y="20" width="80" height="80" fill="none" stroke="black" stroke-width="1.5"/>
+        <text x="60" y="120" font-family="Arial" font-size="14" text-anchor="middle">Square</text>
+      </g>
+      
+      <!-- Triangle -->
+      <g transform="translate(150, 0)">
+        <path d="M60,20 L20,100 L100,100 Z" fill="none" stroke="black" stroke-width="1.5"/>
+        <text x="60" y="120" font-family="Arial" font-size="14" text-anchor="middle">Triangle</text>
+      </g>
+      
+      <!-- Circle -->
+      <g transform="translate(300, 0)">
+        <circle cx="60" cy="60" r="40" fill="none" stroke="black" stroke-width="1.5"/>
+        <text x="60" y="120" font-family="Arial" font-size="14" text-anchor="middle">Circle</text>
+      </g>
+      
+      <!-- Mathematical equation -->
+      <g transform="translate(150, 150)">
+        <text x="0" y="0" font-family="Arial" font-size="20" text-anchor="middle">a² + b² = c²</text>
+        <text x="0" y="25" font-family="Arial" font-size="14" text-anchor="middle">Pythagorean Theorem</text>
+      </g>
+    </g>
+  `;
+};
+
+/**
+ * Generate a geography-themed illustration
+ * @returns SVG string content
+ */
+const generateGeographyIllustration = (): string => {
+  return `
+    <g transform="translate(250, 150)">
+      <!-- Simple globe -->
+      <g transform="translate(0, 0)">
+        <!-- Globe outline -->
+        <circle cx="75" cy="75" r="70" fill="none" stroke="black" stroke-width="2"/>
+        
+        <!-- Latitude lines -->
+        <path d="M5,75 L145,75" fill="none" stroke="black" stroke-width="1"/>
+        <path d="M15,40 L135,40" fill="none" stroke="black" stroke-width="1"/>
+        <path d="M15,110 L135,110" fill="none" stroke="black" stroke-width="1"/>
+        
+        <!-- Longitude lines -->
+        <path d="M75,5 L75,145" fill="none" stroke="black" stroke-width="1"/>
+        <path d="M40,15 C40,50 40,100 40,135" fill="none" stroke="black" stroke-width="1"/>
+        <path d="M110,15 C110,50 110,100 110,135" fill="none" stroke="black" stroke-width="1"/>
+        
+        <!-- Continents rough outline -->
+        <path d="M60,40 C70,35 80,35 90,40 C95,50 95,60 90,70 C80,75 70,75 60,70 C55,60 55,50 60,40 Z" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+        <path d="M40,70 C50,65 60,65 70,70 C75,80 75,90 70,100 C60,105 50,105 40,100 C35,90 35,80 40,70 Z" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+        <path d="M80,85 C90,80 100,80 110,85 C115,95 115,105 110,115 C100,120 90,120 80,115 C75,105 75,95 80,85 Z" 
+              fill="none" stroke="black" stroke-width="1.5"/>
+              
+        <text x="75" y="165" font-family="Arial" font-size="14" text-anchor="middle">World Globe</text>
+      </g>
+      
+      <!-- Compass -->
+      <g transform="translate(200, 20)">
+        <!-- Compass circle -->
+        <circle cx="40" cy="40" r="35" fill="none" stroke="black" stroke-width="1.5"/>
+        
+        <!-- Compass points -->
+        <text x="40" y="15" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle">N</text>
+        <text x="40" y="70" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle">S</text>
+        <text x="70" y="42" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle">E</text>
+        <text x="10" y="42" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle">W</text>
+        
+        <!-- Direction arrows -->
+        <path d="M40,20 L40,5 M37,8 L40,5 L43,8" fill="none" stroke="black" stroke-width="1"/>
+        <path d="M40,60 L40,75 M37,72 L40,75 L43,72" fill="none" stroke="black" stroke-width="1"/>
+        <path d="M60,40 L75,40 M72,37 L75,40 L72,43" fill="none" stroke="black" stroke-width="1"/>
+        <path d="M20,40 L5,40 M8,37 L5,40 L8,43" fill="none" stroke="black" stroke-width="1"/>
+        
+        <text x="40" y="95" font-family="Arial" font-size="14" text-anchor="middle">Compass</text>
+      </g>
+    </g>
+  `;
+};
+
+/**
+ * Generate a generic educational illustration based on title and description
+ * @param title Title of the activity
+ * @param description Description of the image content
+ * @returns SVG string content
+ */
+const generateGenericEducationalIllustration = (title: string, description: string): string => {
+  // Determine the likely subject area from title and description
+  const text = (title + ' ' + description).toLowerCase();
+  
+  if (text.includes('science') || text.includes('biology') || text.includes('chemistry') || 
+      text.includes('physics') || text.includes('nature') || text.includes('animal') || 
+      text.includes('plant') || text.includes('experiment')) {
+    return generateScienceIllustration();
+  }
+  
+  if (text.includes('math') || text.includes('geometry') || text.includes('algebra') || 
+      text.includes('number') || text.includes('equation') || text.includes('calculation')) {
+    return generateMathIllustration();
+  }
+  
+  if (text.includes('geography') || text.includes('map') || text.includes('world') || 
+      text.includes('country') || text.includes('continent') || text.includes('earth')) {
+    return generateGeographyIllustration();
+  }
+  
+  // Default to a simple educational scene with books, pencils, and a globe
+  return `
+    <g transform="translate(250, 150)">
+      <!-- Stack of books -->
+      <g transform="translate(0, 50)">
+        <rect x="0" y="0" width="120" height="20" fill="none" stroke="black" stroke-width="1.5"/>
+        <rect x="10" y="-20" width="120" height="20" fill="none" stroke="black" stroke-width="1.5"/>
+        <rect x="-10" y="20" width="120" height="20" fill="none" stroke="black" stroke-width="1.5"/>
+        <text x="60" y="55" font-family="Arial" font-size="14" text-anchor="middle">Books</text>
+      </g>
+      
+      <!-- Pencil -->
+      <g transform="translate(200, 30)">
+        <path d="M0,0 L100,0 L100,10 L0,10 Z" fill="none" stroke="black" stroke-width="1.5"/>
+        <path d="M0,0 L0,10 L-15,5 Z" fill="none" stroke="black" stroke-width="1.5"/>
+        <text x="50" y="30" font-family="Arial" font-size="14" text-anchor="middle">Pencil</text>
+      </g>
+      
+      <!-- Apple -->
+      <g transform="translate(150, 80)">
+        <circle cx="20" cy="20" r="15" fill="none" stroke="black" stroke-width="1.5"/>
+        <path d="M20,5 C25,0 30,5 25,10" fill="none" stroke="black" stroke-width="1.5"/>
+        <text x="20" y="50" font-family="Arial" font-size="14" text-anchor="middle">Apple</text>
+      </g>
+    </g>
+  `;
 };
 
 /**
@@ -357,18 +593,61 @@ const generateStar = (cx: number, cy: number, size: number): string => {
  * @returns Array of key elements found
  */
 const extractElementsFromDescription = (description: string): string[] => {
-  const keywords = [
+  // American historical keywords
+  const americanKeywords = [
     'liberty bell', 'american flag', 'flag', 'eagle', 'bald eagle', 
-    'constitution', 'document', 'independence hall', 'statue of liberty'
+    'constitution', 'document', 'independence hall', 'statue of liberty',
+    'george washington', 'washington', 'founding fathers'
+  ];
+  
+  // STEM/Science keywords
+  const scienceKeywords = [
+    'planet', 'solar system', 'atom', 'cell', 'microscope', 'telescope',
+    'biology', 'chemistry', 'physics', 'experiment', 'laboratory',
+    'dinosaur', 'fossil', 'volcano', 'earthquake', 'weather', 'climate',
+    'environment', 'ecosystem', 'animal', 'plant', 'mineral', 'rock'
+  ];
+  
+  // Math keywords
+  const mathKeywords = [
+    'triangle', 'square', 'rectangle', 'circle', 'geometry', 'algebra',
+    'equation', 'number', 'fraction', 'decimal', 'percent', 'statistics',
+    'graph', 'chart', 'measurement', 'ruler', 'compass', 'protractor'
+  ];
+  
+  // Geography keywords
+  const geographyKeywords = [
+    'map', 'globe', 'continent', 'country', 'city', 'mountain', 'river',
+    'ocean', 'sea', 'lake', 'desert', 'forest', 'jungle', 'tundra',
+    'north america', 'south america', 'europe', 'asia', 'africa', 'australia',
+    'antarctica', 'compass rose', 'latitude', 'longitude'
+  ];
+  
+  // Combine all keywords
+  const allKeywords = [
+    ...americanKeywords,
+    ...scienceKeywords,
+    ...mathKeywords,
+    ...geographyKeywords
   ];
   
   const elements: string[] = [];
+  const lowerDescription = description.toLowerCase();
   
-  keywords.forEach(keyword => {
-    if (description.toLowerCase().includes(keyword)) {
+  allKeywords.forEach(keyword => {
+    if (lowerDescription.includes(keyword)) {
       elements.push(keyword);
     }
   });
+  
+  // Special case for historical figures
+  if (lowerDescription.includes('minister') || 
+      lowerDescription.includes('president') ||
+      lowerDescription.includes('leader') ||
+      lowerDescription.includes('king') ||
+      lowerDescription.includes('queen')) {
+    elements.push('historical figure');
+  }
   
   return elements;
 };
