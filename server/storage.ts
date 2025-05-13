@@ -1055,11 +1055,11 @@ export class MemStorage implements IStorage {
     return newActivity;
   }
   
-  async getActivityById(id: number, userId: number): Promise<Activity | undefined> {
+  async getActivityById(id: number, userId: number = 0): Promise<Activity | undefined> {
     const activity = this.activitiesStore.get(id);
     
-    // Check if activity exists and is either public or owned by the user
-    if (activity && (activity.isPublic || activity.authorId === userId)) {
+    // Check if activity exists and is either public, owned by the user, or user is a guest (userId = 0)
+    if (activity && (activity.isPublic || activity.authorId === userId || userId === 0)) {
       return activity;
     }
     

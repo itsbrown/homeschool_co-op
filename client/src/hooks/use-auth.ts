@@ -20,9 +20,7 @@ export function useAuth() {
   });
 
   const logout = async () => {
-    await apiRequest("/api/auth/logout", {
-      method: "POST",
-    });
+    await apiRequest("POST", "/api/auth/logout");
     // Force reload to clear client state
     window.location.href = "/login";
   };
