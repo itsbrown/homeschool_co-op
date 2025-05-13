@@ -47,6 +47,7 @@ function Router() {
       <Route path="/lessons/ai-generator" component={AILessonGenerator} />
       <Route path="/ai-generator/lesson" component={AILessonGenerator} />
       <Route path="/ai-generator/worksheet" component={AIWorksheetGenerator} />
+      <Route path="/ai-generator/activity" component={AIWorksheetGenerator} />
       <Route path="/ai-generator/curriculum" component={Curriculum} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/knowledge-base/:id/edit" component={KnowledgeBaseEdit} />

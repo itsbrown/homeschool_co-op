@@ -949,6 +949,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
   app.delete('/api/enrollments/:id', isAuthenticated, hasRole(['admin']), programEnrollmentsApi.deleteEnrollment);
 
+  // Register the combined knowledge base endpoint
+  app.get("/api/knowledge-base/combined", async (req, res) => {
+    const knowledgeBaseApi = await import("./api/knowledge-base");
+    return knowledgeBaseApi.getCombinedKnowledgeBases(req, res);
+  });
+  
   // Register API routers
   app.use("/api/classes", classesRouter);
   app.use("/api/ai", aiPricingRouter);

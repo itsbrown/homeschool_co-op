@@ -179,3 +179,46 @@ export const recordPurchase = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error recording purchase" });
   }
 };
+
+/**
+ * Get combined knowledge bases (public + user's own)
+ * This endpoint provides both public knowledge bases and the
+ * authenticated user's own knowledge bases in a single list
+ */
+export const getCombinedKnowledgeBases = async (req: Request, res: Response) => {
+  try {
+    let publicKnowledgeBases = [];
+    let userKnowledgeBases = [];
+    
+    try {
+      // Get public knowledge bases
+      publicKnowledgeBases = await storage.getPublicKnowledgeBases();
+    } catch (error) {
+      console.error("Error fetching public knowledge bases:", error);
+    }
+    
+    // Get user's own knowledge bases if authenticated
+    if (req.session?.userId) {
+      try {
+        userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(req.session.userId);
+      } catch (error) {
+        console.error("Error fetching user knowledge bases:", error);
+      }
+    }
+    
+    // Combine both sets, removing duplicates
+    const combinedKnowledgeBases = [...publicKnowledgeBases];
+    
+    // Add user's own knowledge bases that aren't already in the array
+    for (const kb of userKnowledgeBases) {
+      if (!publicKnowledgeBases.some(p => p.id === kb.id)) {
+        combinedKnowledgeBases.push(kb);
+      }
+    }
+    
+    res.status(200).json(combinedKnowledgeBases);
+  } catch (error) {
+    console.error("Error fetching combined knowledge bases:", error);
+    res.status(500).json({ message: "Error fetching knowledge bases" });
+  }
+};
