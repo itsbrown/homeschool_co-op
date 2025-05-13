@@ -109,7 +109,7 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
                 value={mapping[field.key]}
                 onValueChange={(value) => handleChange(field.key, value)}
               >
-                <SelectTrigger id={`field-${field.key}`} className="w-full">
+                <SelectTrigger id={`field-${field.key}`} className="w-full bg-white">
                   <SelectValue placeholder="Select column" />
                 </SelectTrigger>
                 <SelectContent>
