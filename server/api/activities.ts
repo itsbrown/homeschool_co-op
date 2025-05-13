@@ -302,6 +302,15 @@ router.post("/:id/generate-pdf", async (req, res) => {
     const userId = req.session?.userId || 0;
     console.log(`PDF generation request from user ID: ${userId}`);
 
+    // Check if the activity exists before attempting to generate a PDF
+    const activity = await storage.getActivityById(id, userId);
+    if (!activity) {
+      console.error(`Activity ${id} not found or not accessible by user ${userId}`);
+      return res.status(404).json({ message: "Activity not found or not accessible" });
+    }
+    
+    console.log(`Found activity: ${activity.title}, preparing to generate PDF...`);
+
     // Import pdfGenerator service here to avoid circular imports
     console.log('Importing pdfGenerator service...');
     const { generateWorksheetPDF } = await import("../services/pdfGenerator");
@@ -315,6 +324,14 @@ router.post("/:id/generate-pdf", async (req, res) => {
       if (!pdfUrl) {
         console.error('PDF generation returned no URL');
         return res.status(500).json({ message: "Failed to generate PDF - no URL returned" });
+      }
+      
+      // Double-check that the URL was stored with the activity
+      const updatedActivity = await storage.getActivityById(id, userId);
+      if (!updatedActivity?.pdfUrl) {
+        console.warn(`PDF URL (${pdfUrl}) was not properly saved to activity`);
+      } else {
+        console.log(`Confirmed PDF URL saved: ${updatedActivity.pdfUrl}`);
       }
       
       return res.json({ pdfUrl });

@@ -1101,8 +1101,11 @@ export class MemStorage implements IStorage {
     const activity = this.activitiesStore.get(id);
     
     if (!activity) {
+      console.error(`Activity with ID ${id} not found for PDF URL update`);
       return undefined;
     }
+    
+    console.log(`Updating activity ${id} with PDF URL: ${pdfUrl}`);
     
     const updatedActivity: Activity = {
       ...activity,
@@ -1111,6 +1114,8 @@ export class MemStorage implements IStorage {
     };
     
     this.activitiesStore.set(id, updatedActivity);
+    console.log(`Activity ${id} successfully updated with PDF URL`);
+    
     return updatedActivity;
   }
 }
