@@ -62,6 +62,7 @@ export default function AIWorksheetGenerator() {
   const { toast } = useToast();
   const [generatedActivity, setGeneratedActivity] = React.useState<any>(null);
   const [selectedTab, setSelectedTab] = React.useState<string>("form");
+  const [isGeneratingPdf, setIsGeneratingPdf] = React.useState<boolean>(false);
 
   // Initialize form with react-hook-form
   const form = useForm<z.infer<typeof activityFormSchema>>({
@@ -167,6 +168,52 @@ export default function AIWorksheetGenerator() {
   });
 
   // Handle form submission
+  // Generate PDF for an activity
+  const generatePDF = async (activityId: number) => {
+    if (!activityId) return;
+    
+    setIsGeneratingPdf(true);
+    try {
+      const response = await fetch(`/api/activities/${activityId}/generate-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF');
+      }
+      
+      const data = await response.json();
+      if (data.pdfUrl) {
+        // Update the generatedActivity with the PDF URL
+        setGeneratedActivity((prev: any) => ({
+          ...prev,
+          pdfUrl: data.pdfUrl
+        }));
+        
+        toast({
+          title: "PDF Generated",
+          description: "Your PDF is ready to download",
+          variant: "default",
+        });
+        
+        // Open the PDF in a new tab
+        window.open(data.pdfUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const onSubmit = (values: z.infer<typeof activityFormSchema>) => {
     activityMutation.mutate(values);
   };
@@ -664,9 +711,13 @@ export default function AIWorksheetGenerator() {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Activity Preview</h2>
-                <Button variant="outline" onClick={() => window.open(generatedActivity.filePath)}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => generatedActivity.pdfUrl ? window.open(generatedActivity.pdfUrl) : generatePDF(generatedActivity.id)}
+                  disabled={isGeneratingPdf}
+                >
                   <Download className="mr-2 h-4 w-4" />
-                  Download
+                  {isGeneratingPdf ? "Generating PDF..." : (generatedActivity.pdfUrl ? "Download PDF" : "Generate PDF")}
                 </Button>
               </div>
               
