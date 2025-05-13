@@ -27,7 +27,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sparkles, Lightbulb, ArrowRight, Book, Clock, Brain, Target } from "lucide-react";
+import { Sparkles, Lightbulb, ArrowRight, Book, Clock, Brain, Target, AlertCircle, RefreshCw } from "lucide-react";
+import { Link } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 
 const formSchema = z.object({
