@@ -126,14 +126,16 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
         ))}
         
         {sampleData.length > 0 && (
-          <div className="mt-4">
-            <h3 className="font-medium mb-2">Preview (first 3 rows)</h3>
-            <div className="border rounded-md overflow-x-auto">
+          <div className="mt-6">
+            <h3 className="text-base font-medium mb-2">Preview (first 3 rows)</h3>
+            <div className="border rounded-md overflow-x-auto max-h-[200px]">
               <Table>
                 <TableHeader>
                   <TableRow>
                     {columns.map((col) => (
-                      <TableHead key={col.name}>{col.name}</TableHead>
+                      <TableHead key={col.name} className="whitespace-nowrap text-xs font-medium">
+                        {col.name}
+                      </TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
@@ -141,7 +143,7 @@ export function CsvMappingDialog({ isOpen, columns, sampleData, onClose, onConfi
                   {sampleData.slice(0, 3).map((row, idx) => (
                     <TableRow key={idx}>
                       {columns.map((col) => (
-                        <TableCell key={col.name} className="truncate max-w-[150px]">
+                        <TableCell key={col.name} className="whitespace-nowrap text-xs truncate max-w-[150px]">
                           {row[col.name]}
                         </TableCell>
                       ))}

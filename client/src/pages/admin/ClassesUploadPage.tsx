@@ -7,14 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, FileSpreadsheet, Upload, Check, AlertCircle } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/useAuth";
+import { User } from "@/lib/types";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CsvMappingDialog } from "@/components/admin/CsvMappingDialog";
 
 export default function ClassesUploadPage() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
@@ -24,7 +25,7 @@ export default function ClassesUploadPage() {
   const [showMappingDialog, setShowMappingDialog] = useState(false);
 
   // Check if user is admin
-  if (!user || user.username !== "admin") {
+  if (!isAuthenticated || !user || user.role !== "admin") {
     setLocation("/");
     return null;
   }
