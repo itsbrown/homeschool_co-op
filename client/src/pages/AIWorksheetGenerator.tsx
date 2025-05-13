@@ -78,16 +78,20 @@ export default function AIWorksheetGenerator() {
   // Check AI services status
   const { data: aiStatus, isLoading: checkingAIStatus } = useQuery({
     queryKey: ['/api/ai/status'],
+    queryFn: () => fetch('/api/ai/status').then(res => res.json()),
   });
 
   // Activity generation mutation
   const activityMutation = useMutation({
     mutationFn: async (params: ActivityGenerationParams) => {
-      const response = await apiRequest('/api/activities/generate', {
+      const response = await fetch('/api/activities/generate', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(params),
       });
-      return response;
+      return response.json();
     },
     onSuccess: (data) => {
       // Handle successful generation
