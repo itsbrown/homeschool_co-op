@@ -226,6 +226,11 @@ class BackgroundTaskManager extends EventEmitter {
     return this.tasks.get(jobId);
   }
   
+  // Get job result (alias for getJobStatus for better semantic clarity)
+  getJobResult(jobId: string): { status: string, result?: JobResult } | undefined {
+    return this.getJobStatus(jobId);
+  }
+  
   // Clean up old completed jobs (can be called periodically)
   cleanupCompletedJobs(olderThanHours = 24) {
     const cutoffTime = Date.now() - (olderThanHours * 60 * 60 * 1000);

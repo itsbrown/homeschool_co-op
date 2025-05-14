@@ -241,14 +241,19 @@ router.post("/generate", async (req, res) => {
     // Start background activity generation
     const jobId = `activity_gen_${Date.now()}`;
     backgroundTaskManager.createJob(jobId, "activity_generation", async () => {
-      const result = await generateActivity(params, userId, ocrFilePath);
-      const activityId = result?.activity?.id || null;
-      console.log('Activity generation completed with result:', JSON.stringify({
-        success: true,
-        activityId,
-        hasActivity: !!result?.activity
-      }));
-      return result;
+      try {
+        const result = await generateActivity(params, userId, ocrFilePath);
+        const activityId = result && 'activity' in result ? result.activity?.id : null;
+        console.log('Activity generation completed with result:', JSON.stringify({
+          success: true,
+          activityId,
+          hasActivity: result && 'activity' in result ? !!result.activity : false
+        }));
+        return result;
+      } catch (err) {
+        console.error('Error in activity generation job:', err);
+        return { success: false, error: String(err) };
+      }
     });
 
     // Check for immediate completion (this can happen during testing or low load)
@@ -364,6 +369,76 @@ router.get("/job/:jobId", (req, res) => {
 });
 
 // Document AI status endpoint
+// Get activity ID directly for a job
+router.get("/job/:jobId/activity-id", (req, res) => {
+  const { jobId } = req.params;
+  
+  if (!jobId) {
+    return res.status(400).json({
+      success: false,
+      error: "Job ID is required",
+    });
+  }
+  
+  try {
+    const jobStatus = backgroundTaskManager.getJobStatus(jobId);
+    
+    if (!jobStatus) {
+      return res.status(404).json({
+        success: false,
+        error: "Job not found",
+      });
+    }
+    
+    if (jobStatus.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        error: "Job not completed yet",
+      });
+    }
+    
+    // Extract activity ID from various possible locations
+    let activityId = null;
+    
+    // Check all possible paths where the activity ID might be located
+    if (jobStatus.result?.activity?.id) {
+      activityId = jobStatus.result.activity.id;
+    } else if (jobStatus.result?.id) {
+      activityId = jobStatus.result.id;
+    } else if (jobStatus.result?.activityId) {
+      activityId = jobStatus.result.activityId;
+    } else if (jobStatus.result?.data?.activity?.id) {
+      activityId = jobStatus.result.data.activity.id;
+    } else if (jobStatus.result?.data?.id) {
+      activityId = jobStatus.result.data.id;
+    } else if (jobStatus.result?.data?.activityId) {
+      activityId = jobStatus.result.data.activityId;
+    }
+    
+    // If we found an ID, return it
+    if (activityId !== null) {
+      return res.json({
+        success: true,
+        activityId
+      });
+    } else {
+      // If no ID was found, return a more detailed error
+      return res.status(404).json({
+        success: false,
+        error: "Activity ID not found in job result",
+        resultKeys: jobStatus.result ? Object.keys(jobStatus.result) : [],
+        dataKeys: jobStatus.result?.data ? Object.keys(jobStatus.result.data) : []
+      });
+    }
+  } catch (error) {
+    console.error('Error getting activity ID from job:', error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to extract activity ID"
+    });
+  }
+});
+
 router.get("/ocr-status", (_req, res) => {
   const available = isDocumentAIAvailable();
   

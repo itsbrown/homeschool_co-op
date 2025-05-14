@@ -857,25 +857,54 @@ export default function AIWorksheetGenerator() {
                           console.log('Found ID in result.data.activityId property:', activityId);
                         }
                         
-                        // Last resort - if we have a jobId, try to get the latest job result directly
+                        // Last resort - if we have a jobId, try to get the activity ID directly from our dedicated endpoint
                         if (!activityId && generatedActivity.jobId) {
                           try {
-                            const fetchJobResult = async () => {
-                              const response = await fetch(`/api/activities/job/${generatedActivity.jobId}`);
+                            const fetchActivityId = async () => {
+                              console.log('Attempting to fetch activity ID directly using job ID:', generatedActivity.jobId);
+                              // First try our dedicated endpoint
+                              const response = await fetch(`/api/activities/job/${generatedActivity.jobId}/activity-id`);
                               if (response.ok) {
-                                const jobData = await response.json();
+                                const data = await response.json();
+                                if (data.success && data.activityId) {
+                                  activityId = data.activityId;
+                                  console.log('Successfully retrieved activity ID from dedicated endpoint:', activityId);
+                                  // Immediately use the activity ID now that we have it
+                                  generatePDF(activityId);
+                                  return;
+                                } else {
+                                  console.log('Dedicated endpoint responded but no activity ID found');
+                                }
+                              }
+                              
+                              // Fall back to the regular job status endpoint
+                              const jobResponse = await fetch(`/api/activities/job/${generatedActivity.jobId}`);
+                              if (jobResponse.ok) {
+                                const jobData = await jobResponse.json();
+                                
+                                // Log the entire job data to debug
+                                console.log('Job status response:', jobData);
+                                
                                 if (jobData.result?.activity?.id) {
                                   activityId = jobData.result.activity.id;
                                   console.log('Retrieved activity ID from job API:', activityId);
+                                  generatePDF(activityId);
+                                } else if (jobData.id) {
+                                  activityId = jobData.id;
+                                  console.log('Retrieved activity ID from job API id field:', activityId);
+                                  generatePDF(activityId);
                                 }
                               }
                             };
-                            // Using an IIFE to handle the async operation
-                            (async () => {
-                              await fetchJobResult();
-                            })();
+                            
+                            // Execute the fetch
+                            fetchActivityId();
+                            
+                            // Since we're handling the generatePDF call in the async function,
+                            // return here to prevent the normal flow from continuing
+                            return;
                           } catch (error) {
-                            console.error('Error fetching job result:', error);
+                            console.error('Error fetching activity ID:', error);
                           }
                         }
                       }
