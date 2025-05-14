@@ -1,0 +1,23 @@
+{
+  "title": "Antoinette Brown Blackwell",
+  "description": "A comprehensive resource about Antoinette Brown Blackwell, the first woman to be ordained as a mainstream Protestant minister in the United States and a prominent women's rights activist and social reformer.",
+  "subject": "History",
+  "difficulty": "Intermediate",
+  "price": 0,
+  "files": [
+    {
+      "url": "/kb/antoinette-brown-blackwell.pdf",
+      "type": "pdf",
+      "name": "Antoinette Brown Blackwell Biography"
+    }
+  ],
+  "metadata": {
+    "tags": ["history", "women's rights", "religion", "social reform"],
+    "objectives": [
+      "Learn about one of America's first female ministers",
+      "Understand her contributions to women's rights",
+      "Explore 19th century social reform movements"
+    ]
+  },
+  "isPublic": true
+}
