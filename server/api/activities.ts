@@ -235,7 +235,13 @@ router.post("/generate", async (req, res) => {
     // Start background activity generation
     const jobId = `activity_gen_${Date.now()}`;
     backgroundTaskManager.createJob(jobId, "activity_generation", async () => {
-      return await generateActivity(params, userId, ocrFilePath);
+      const result = await generateActivity(params, userId, ocrFilePath);
+      console.log('Activity generation completed with result:', JSON.stringify({
+        success: true,
+        activityId: result?.activity?.id || null,
+        hasActivity: !!result?.activity
+      }));
+      return result;
     });
 
     res.json({
@@ -291,11 +297,19 @@ router.get("/job/:jobId", (req, res) => {
       message = `Job status: ${jobStatus.status}`;
   }
   
+  // Extract the activity ID if available and include it in the response
+  let id = null;
+  if (jobStatus.status === "completed" && jobStatus.result?.data?.activity?.id) {
+    id = jobStatus.result.data.activity.id;
+    console.log('Found activity ID in job result:', id);
+  }
+  
   res.json({
     success: true,
     status: jobStatus.status,
     message,
     result: jobStatus.result,
+    id
   });
 });
 

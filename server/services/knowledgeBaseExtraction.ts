@@ -125,18 +125,31 @@ export async function generateQuestions(
         "answer": "Expected answer here",
         "type": "comprehension" or "knowledge" or "application"
       }
-    ]`;
+    ]
+    
+    Your response should be a valid JSON array only, with no other text or code blocks.`;
     
     const questionsJson = await anthropicService.generateContent(prompt, true);
     
     if (questionsJson) {
       try {
-        const questions = JSON.parse(questionsJson);
+        // Clean up the response to handle markdown code blocks that Anthropic sometimes returns
+        let cleanedJson = questionsJson;
+        
+        // Check if the response is wrapped in markdown code blocks (```json ... ```)
+        const jsonBlockMatch = questionsJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonBlockMatch && jsonBlockMatch[1]) {
+          cleanedJson = jsonBlockMatch[1].trim();
+        }
+        
+        // Parse the cleaned JSON
+        const questions = JSON.parse(cleanedJson);
         if (Array.isArray(questions) && questions.length > 0) {
           return questions;
         }
       } catch (parseError) {
         console.error('Error parsing generated questions:', parseError);
+        console.error('Raw response:', questionsJson.substring(0, 200) + '...');
       }
     }
     
