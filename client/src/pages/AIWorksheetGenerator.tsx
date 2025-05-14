@@ -832,6 +832,23 @@ export default function AIWorksheetGenerator() {
                         activityId = generatedActivity.result.data.activity.id;
                       }
                       
+                      // New: Check if the ID is directly in the generatedActivity object from the job API
+                      // This field is explicitly added by our server-side code
+                      if (!activityId && typeof generatedActivity === 'object') {
+                        console.log('Looking in additional locations for activity ID');
+                        // Check for ID in direct properties or in result object
+                        if (generatedActivity.id) {
+                          activityId = generatedActivity.id;
+                          console.log('Found ID in direct property:', activityId);
+                        } else if (generatedActivity.result?.id) {
+                          activityId = generatedActivity.result.id;
+                          console.log('Found ID in result property:', activityId);
+                        } else if (generatedActivity.result?.data?.id) {
+                          activityId = generatedActivity.result.data.id;
+                          console.log('Found ID in result.data property:', activityId);
+                        }
+                      }
+                      
                       // If we found an ID, use it
                       if (activityId) {
                         console.log('Found activity ID for PDF generation:', activityId);

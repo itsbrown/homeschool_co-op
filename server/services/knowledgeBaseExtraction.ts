@@ -133,19 +133,14 @@ export async function generateQuestions(
     
     if (questionsJson) {
       try {
-        // Clean up the response to handle markdown code blocks that Anthropic sometimes returns
-        let cleanedJson = questionsJson;
+        // Use our utility function to safely parse the JSON response
+        const { safeJsonParse } = require('../utils/jsonHelpers');
+        const questions = safeJsonParse(questionsJson);
         
-        // Check if the response is wrapped in markdown code blocks (```json ... ```)
-        const jsonBlockMatch = questionsJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (jsonBlockMatch && jsonBlockMatch[1]) {
-          cleanedJson = jsonBlockMatch[1].trim();
-        }
-        
-        // Parse the cleaned JSON
-        const questions = JSON.parse(cleanedJson);
         if (Array.isArray(questions) && questions.length > 0) {
           return questions;
+        } else {
+          console.error('Questions parsed successfully but resulted in invalid format:', questions);
         }
       } catch (parseError) {
         console.error('Error parsing generated questions:', parseError);
