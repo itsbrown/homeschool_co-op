@@ -133,9 +133,17 @@ export async function generateQuestions(
     
     if (questionsJson) {
       try {
-        // Use our utility function to safely parse the JSON response
-        const { safeJsonParse } = require('../utils/jsonHelpers');
-        const questions = safeJsonParse(questionsJson);
+        // Try to extract JSON array from the response
+        let cleanedJson = questionsJson;
+        
+        // Check if the response is wrapped in markdown code blocks (```json ... ```)
+        const jsonBlockMatch = questionsJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonBlockMatch && jsonBlockMatch[1]) {
+          cleanedJson = jsonBlockMatch[1].trim();
+        }
+        
+        // Parse the cleaned JSON
+        const questions = JSON.parse(cleanedJson);
         
         if (Array.isArray(questions) && questions.length > 0) {
           return questions;

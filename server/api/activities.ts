@@ -177,12 +177,18 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
 
     const savedActivity = await storage.createActivity(activityData);
 
-    return {
+    // Make sure to explicitly format the result with easy-to-find activity ID
+    const result = {
       success: true,
       activity: savedActivity,
       activityContent: generatedActivity,
-      filePath: `/uploads/activities/${filename}`
+      filePath: `/uploads/activities/${filename}`,
+      id: savedActivity.id // Explicitly include the ID at the top level
     };
+    
+    console.log(`Activity generated with ID: ${savedActivity.id}, returning structured result`);
+    
+    return result;
   } catch (error) {
     console.error("Error generating activity:", error instanceof Error ? error.message : String(error));
     return {
@@ -299,9 +305,37 @@ router.get("/job/:jobId", (req, res) => {
   
   // Extract the activity ID if available and include it in the response
   let id = null;
-  if (jobStatus.status === "completed" && jobStatus.result?.data?.activity?.id) {
-    id = jobStatus.result.data.activity.id;
-    console.log('Found activity ID in job result:', id);
+  
+  // Look in multiple locations for the activity ID based on different response structures
+  if (jobStatus.status === "completed") {
+    if (jobStatus.result?.data?.activity?.id) {
+      id = jobStatus.result.data.activity.id;
+      console.log('Found activity ID in job result data.activity:', id);
+    } else if (jobStatus.result?.activity?.id) {
+      id = jobStatus.result.activity.id;
+      console.log('Found activity ID in job result activity:', id);
+    } else if (jobStatus.result?.data) {
+      // The activity object structure might be directly in the data property
+      const result = jobStatus.result.data;
+      if (result.activity?.id) {
+        id = result.activity.id;
+        console.log('Found activity ID in result.data.activity:', id);
+      }
+    }
+  }
+  
+  // Debug what's coming from the activity generation
+  if (jobStatus.status === "completed") {
+    console.log('Job complete. Response structure keys:', 
+      Object.keys(jobStatus.result || {}),
+      'Data keys:', Object.keys(jobStatus.result?.data || {}),
+      'Activity keys:', Object.keys(jobStatus.result?.activity || {})
+    );
+    
+    // Inspect nested activity object if it exists
+    if (jobStatus.result?.data?.activity) {
+      console.log('Activity found in result.data.activity, keys:', Object.keys(jobStatus.result.data.activity));
+    }
   }
   
   res.json({

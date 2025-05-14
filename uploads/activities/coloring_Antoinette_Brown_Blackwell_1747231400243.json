@@ -1,0 +1,48 @@
+{
+  "title": "Antoinette Brown Blackwell: America's First Woman Minister",
+  "description": "This coloring page introduces students to Antoinette Brown Blackwell, the first ordained female minister in America and an important women's rights activist from the 1800s. Students will learn about her pioneering achievements while engaging in a creative coloring activity.",
+  "instructions": "Color this historical scene showing Antoinette Brown Blackwell. Read the learning facts below to learn more about this important historical figure as you color. Use the color suggestions or choose your own colors to bring this scene to life!",
+  "content": {
+    "image": "A detailed portrait of Antoinette Brown Blackwell standing at a pulpit in 19th century clothing (long dress with a high collar), with a Bible open before her. She has her hair styled in the fashion of the 1850s (parted in the middle and pulled back). Behind her is a simple church interior with wooden pews and a window showing people gathered to hear her speak. A small banner at the bottom reads '1853: First Woman Ordained as Minister in America.'",
+    "elements": [
+      {
+        "name": "Antoinette",
+        "description": "Antoinette is wearing a dark-colored dress typical of the 1850s with a white collar."
+      },
+      {
+        "name": "Bible",
+        "description": "The open Bible on the pulpit."
+      },
+      {
+        "name": "Church interior",
+        "description": "The wooden pulpit, pews, and simple church walls."
+      },
+      {
+        "name": "Window scene",
+        "description": "People of different ages gathered to hear her speak."
+      },
+      {
+        "name": "Banner",
+        "description": "The informational banner at the bottom of the image."
+      }
+    ],
+    "learningFacts": [
+      "Antoinette Brown Blackwell lived from 1825 to 1921 - almost 96 years!",
+      "In 1853, she became the first woman ordained as a minister in the United States.",
+      "She was a powerful public speaker who fought for women's right to vote.",
+      "Antoinette also spoke out against slavery when it was still legal in America.",
+      "She wrote books explaining why women deserved equal rights and opportunities.",
+      "At that time, many people thought women shouldn't speak in public or have professional careers.",
+      "Her courage helped change how society viewed women's roles and abilities."
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Fine motor skills",
+    "Reading comprehension",
+    "Women's history"
+  ],
+  "ageRange": "9-11",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}

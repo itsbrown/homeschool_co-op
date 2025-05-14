@@ -21,6 +21,8 @@ interface JobResult {
   success: boolean;
   data?: any;
   error?: string;
+  activity?: any; // Support for direct access to activity object
+  id?: number;    // Support for direct access to ID
 }
 
 // Type definition for job types
