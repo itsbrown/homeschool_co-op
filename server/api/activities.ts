@@ -242,19 +242,35 @@ router.post("/generate", async (req, res) => {
     const jobId = `activity_gen_${Date.now()}`;
     backgroundTaskManager.createJob(jobId, "activity_generation", async () => {
       const result = await generateActivity(params, userId, ocrFilePath);
+      const activityId = result?.activity?.id || null;
       console.log('Activity generation completed with result:', JSON.stringify({
         success: true,
-        activityId: result?.activity?.id || null,
+        activityId,
         hasActivity: !!result?.activity
       }));
       return result;
     });
 
-    res.json({
-      success: true,
-      message: "Activity generation job started",
-      jobId,
-    });
+    // Check for immediate completion (this can happen during testing or low load)
+    const jobResult = backgroundTaskManager.getJobResult(jobId);
+    
+    // For immediately completed jobs, include the activity ID in the initial response
+    if (jobResult && jobResult.status === 'completed' && jobResult.result?.activity?.id) {
+      res.json({
+        success: true,
+        message: "Activity generation job completed",
+        jobId,
+        activityId: jobResult.result.activity.id,
+        id: jobResult.result.activity.id, // Include both formats for backwards compatibility
+      });
+    } else {
+      res.json({
+        success: true, 
+        message: "Activity generation job started",
+        jobId,
+        id: null, // Include at least a null ID so client can distinguish absence
+      });
+    }
   } catch (error) {
     console.error("Error in activity generation endpoint:", error instanceof Error ? error.message : String(error));
     res.status(500).json({

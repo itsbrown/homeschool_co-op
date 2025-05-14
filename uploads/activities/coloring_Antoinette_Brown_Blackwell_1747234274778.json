@@ -1,0 +1,52 @@
+{
+  "title": "Antoinette Brown Blackwell: America's First Woman Minister",
+  "description": "This coloring page depicts Antoinette Brown Blackwell, a pioneering woman who became the first ordained female Protestant minister in America. Students will learn about her achievements while engaging in a creative coloring activity.",
+  "instructions": "Color this historical portrait of Antoinette Brown Blackwell. Read the learning facts around the border of the image to learn about her important contributions to women's rights and religious history. Use the color key as a guide or choose your own colors!",
+  "content": {
+    "image": "A portrait of Antoinette Brown Blackwell wearing 19th century clothing with her hair parted in the middle and pulled back. She has a thoughtful expression and is standing at a pulpit with a Bible. The background shows a church interior with pews and stained glass windows. Around the border are decorative frames containing facts about her life and achievements.",
+    "elements": [
+      {
+        "name": "Antoinette",
+        "description": "Color her face with a natural skin tone"
+      },
+      {
+        "name": "Dress",
+        "description": "Color her period-appropriate dark dress from the 1800s"
+      },
+      {
+        "name": "Bible",
+        "description": "Color the Bible she holds as she was the first woman minister"
+      },
+      {
+        "name": "Church interior",
+        "description": "Color the church background with wooden pews and pulpit"
+      },
+      {
+        "name": "Stained glass windows",
+        "description": "Add colorful designs to the church windows"
+      },
+      {
+        "name": "Fact borders",
+        "description": "Color the decorative frames around each fact about her life"
+      }
+    ],
+    "learningFacts": [
+      "Antoinette Brown Blackwell (1825-1921) was the first woman ordained as a Protestant minister in America in 1853",
+      "She was one of the first American women to earn a college degree",
+      "Antoinette fought for women's right to vote and equal rights",
+      "She was both a religious leader and a published author",
+      "She balanced her career with raising five daughters",
+      "Antoinette lived during a time when women couldn't vote and had limited opportunities",
+      "Her courage helped change people's views about what women could accomplish"
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Fine motor skills",
+    "Reading comprehension",
+    "Women's history"
+  ],
+  "ageRange": "9-11",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}
