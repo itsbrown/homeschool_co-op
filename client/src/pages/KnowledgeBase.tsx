@@ -136,6 +136,19 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  // Function to manually refresh knowledge base data
+  const refreshKnowledgeBases = () => {
+    // Manual refetch of all knowledge base data
+    publicKnowledgeBasesQuery.refetch();
+    if (user) {
+      myKnowledgeBasesQuery.refetch();
+    }
+    toast({
+      title: "Refreshing",
+      description: "Updating knowledge base data...",
+    });
+  };
+
   const handleDownload = async (id: number) => {
     try {
       console.log("Starting download with direct fetch");
@@ -228,17 +241,32 @@ export default function KnowledgeBasePage() {
           <div>
             <p className="text-muted-foreground">Discover, share, and learn with educational resources</p>
           </div>
-          {user && (
+          <div className="flex space-x-2">
             <Button 
-              onClick={() => {
-                console.log("Create button clicked, setting dialog state to true");
-                setShowCreateDialog(true);
-              }}
-              id="create-knowledge-base-button"
+              variant="outline"
+              onClick={refreshKnowledgeBases}
+              title="Refresh knowledge base data"
             >
-              <PlusCircle className="mr-2 h-4 w-4" /> Create New
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+                <path d="M16 21h5v-5"></path>
+              </svg>
+              Refresh
             </Button>
-          )}
+            {user && (
+              <Button 
+                onClick={() => {
+                  console.log("Create button clicked, setting dialog state to true");
+                  setShowCreateDialog(true);
+                }}
+                id="create-knowledge-base-button"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" /> Create New
+              </Button>
+            )}
+          </div>
         </div>
 
       <div className="flex flex-col gap-4 md:flex-row mb-6">
