@@ -1,0 +1,46 @@
+{
+  "title": "Antoinette Brown Blackwell: America's First Woman Minister",
+  "description": "This coloring page introduces children to Antoinette Brown Blackwell, the first woman ordained as a minister in the United States. Students will learn about this important historical figure while developing fine motor skills and creativity.",
+  "instructions": "Color the picture of Antoinette Brown Blackwell and the scenes showing her important work. Read the learning facts with an adult and discuss why she was important in history.",
+  "content": {
+    "image": "A portrait of Antoinette Brown Blackwell in the center wearing 1800s-style clothing with her hair pulled back. Around her are smaller scenes showing her preaching at a pulpit, writing at a desk, and standing with other early women's rights supporters. The background includes a church building and books representing her writings.",
+    "elements": [
+      {
+        "name": "Antoinette Brown Blackwell",
+        "description": "Color her dress in dark colors typical of the 1800s, perhaps dark blue or brown"
+      },
+      {
+        "name": "Church pulpit",
+        "description": "Color the wooden pulpit brown and the Bible on it black"
+      },
+      {
+        "name": "Writing desk",
+        "description": "Color the desk brown and the papers white"
+      },
+      {
+        "name": "Books",
+        "description": "Color the books different colors to show she wrote many important things"
+      },
+      {
+        "name": "Church building",
+        "description": "Color the church with gray stones and a brown door"
+      }
+    ],
+    "learningFacts": [
+      "Antoinette Brown Blackwell lived in the 1800s when women had fewer rights than men",
+      "She became the first woman minister in America in 1853",
+      "She wrote books and gave speeches about equality",
+      "She helped change people's ideas about what jobs women could do",
+      "She was brave and spoke up when something wasn't fair"
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Fine motor skills",
+    "Reading comprehension",
+    "Gender equality understanding"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "intermediate",
+  "timeRequired": "20"
+}
