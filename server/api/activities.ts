@@ -244,11 +244,20 @@ router.post("/generate", async (req, res) => {
       try {
         const result = await generateActivity(params, userId, ocrFilePath);
         const activityId = result && 'activity' in result ? result.activity?.id : null;
+        
+        // Log the result with extracted activity ID
         console.log('Activity generation completed with result:', JSON.stringify({
           success: true,
           activityId,
           hasActivity: result && 'activity' in result ? !!result.activity : false
         }));
+        
+        // If the result doesn't have an explicit activityId field, add it to make it easier to find
+        if (activityId && result && typeof result === 'object') {
+          // Add the activityId field directly to the result for easier access
+          (result as any).activityId = activityId;
+        }
+        
         return result;
       } catch (err) {
         console.error('Error in activity generation job:', err);
@@ -260,14 +269,37 @@ router.post("/generate", async (req, res) => {
     const jobResult = backgroundTaskManager.getJobResult(jobId);
     
     // For immediately completed jobs, include the activity ID in the initial response
-    if (jobResult && jobResult.status === 'completed' && jobResult.result?.activity?.id) {
-      res.json({
-        success: true,
-        message: "Activity generation job completed",
-        jobId,
-        activityId: jobResult.result.activity.id,
-        id: jobResult.result.activity.id, // Include both formats for backwards compatibility
-      });
+    if (jobResult && jobResult.status === 'completed') {
+      // Try to extract activity ID from various possible locations
+      let activityId = null;
+      
+      if (jobResult.result?.activity?.id) {
+        activityId = jobResult.result.activity.id;
+      } else if (jobResult.result?.id) {
+        activityId = jobResult.result.id;
+      } else if (jobResult.result?.activityId) {
+        activityId = (jobResult.result as any).activityId;
+      } else if (jobResult.result?.data?.activity?.id) {
+        activityId = jobResult.result.data.activity.id;
+      }
+      
+      if (activityId) {
+        console.log('Immediately returning activity ID:', activityId);
+        res.json({
+          success: true,
+          message: "Activity generation job completed",
+          jobId,
+          activityId,
+          id: activityId, // Include both formats for backwards compatibility
+        });
+      } else {
+        res.json({
+          success: true,
+          message: "Activity generation job completed but no ID found",
+          jobId,
+          id: null,
+        });
+      }
     } else {
       res.json({
         success: true, 
@@ -335,12 +367,24 @@ router.get("/job/:jobId", (req, res) => {
     } else if (jobStatus.result?.activity?.id) {
       id = jobStatus.result.activity.id;
       console.log('Found activity ID in job result activity:', id);
+    } else if (jobStatus.result?.id) {
+      id = jobStatus.result.id;
+      console.log('Found activity ID in job result id:', id);
+    } else if (jobStatus.result && 'activityId' in jobStatus.result) {
+      id = (jobStatus.result as any).activityId;
+      console.log('Found activity ID in job result activityId:', id);
     } else if (jobStatus.result?.data) {
       // The activity object structure might be directly in the data property
       const result = jobStatus.result.data;
       if (result.activity?.id) {
         id = result.activity.id;
         console.log('Found activity ID in result.data.activity:', id);
+      } else if (result.id) {
+        id = result.id;
+        console.log('Found activity ID in result.data.id:', id);
+      } else if (typeof result === 'object' && 'activityId' in result) {
+        id = (result as any).activityId;
+        console.log('Found activity ID in result.data.activityId:', id);
       }
     }
   }
@@ -364,7 +408,8 @@ router.get("/job/:jobId", (req, res) => {
     status: jobStatus.status,
     message,
     result: jobStatus.result,
-    id
+    id,
+    activityId: id // Include both id and activityId for consistent naming
   });
 });
 
@@ -405,14 +450,14 @@ router.get("/job/:jobId/activity-id", (req, res) => {
       activityId = jobStatus.result.activity.id;
     } else if (jobStatus.result?.id) {
       activityId = jobStatus.result.id;
-    } else if (jobStatus.result?.activityId) {
-      activityId = jobStatus.result.activityId;
+    } else if (jobStatus.result && 'activityId' in jobStatus.result) {
+      activityId = (jobStatus.result as any).activityId;
     } else if (jobStatus.result?.data?.activity?.id) {
       activityId = jobStatus.result.data.activity.id;
     } else if (jobStatus.result?.data?.id) {
       activityId = jobStatus.result.data.id;
-    } else if (jobStatus.result?.data?.activityId) {
-      activityId = jobStatus.result.data.activityId;
+    } else if (jobStatus.result?.data && typeof jobStatus.result.data === 'object' && 'activityId' in jobStatus.result.data) {
+      activityId = (jobStatus.result.data as any).activityId;
     }
     
     // If we found an ID, return it
