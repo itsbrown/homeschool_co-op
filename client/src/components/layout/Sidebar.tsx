@@ -133,10 +133,25 @@ export default function Sidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
 
+  // Default navigation for guests and unassigned users
+  const guestNavigationItems = [
+    {
+      title: "Main",
+      items: [
+        { name: "Dashboard", href: "/dashboard", icon: Home },
+        { name: "AI Worksheet Generator", href: "/ai-generator/worksheet", icon: FileText },
+        { name: "AI Lesson Generator", href: "/ai-generator/lesson", icon: Sparkles },
+        { name: "AI Curriculum Generator", href: "/ai-generator/curriculum", icon: Brain },
+        { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
+      ],
+    },
+  ];
+
   // Get the appropriate navigation items based on user role
   const getRoleNavigationItems = () => {
     if (!user || !user.role) {
-      return [];
+      // Return guest navigation for unauthenticated users
+      return guestNavigationItems;
     }
 
     switch (user.role) {
@@ -203,20 +218,29 @@ export default function Sidebar() {
       <div className="flex items-center p-4 border-t border-sidebar-border">
         <div className="flex-shrink-0">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-            {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+            {user?.name ? user.name.charAt(0).toUpperCase() : "G"}
           </div>
         </div>
-        <div className="ml-3 min-w-0 flex-1">
-          <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.name || "User"}</p>
-          <p className="text-xs text-muted-foreground truncate capitalize">{user?.role || "User"}</p>
-        </div>
-        <button
-          onClick={() => logout()}
-          className="ml-auto text-muted-foreground hover:text-sidebar-primary"
-          aria-label="Log out"
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
+        {user ? (
+          <>
+            <div className="ml-3 min-w-0 flex-1">
+              <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name || user.username || "User"}</p>
+              <p className="text-xs text-muted-foreground truncate capitalize">{user.role || "User"}</p>
+            </div>
+            <button
+              onClick={() => logout()}
+              className="ml-auto text-muted-foreground hover:text-sidebar-primary"
+              aria-label="Log out"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </>
+        ) : (
+          <div className="ml-3 min-w-0 flex-1">
+            <p className="text-sm font-medium text-sidebar-foreground truncate">Guest User</p>
+            <p className="text-xs text-muted-foreground truncate">Demo Mode</p>
+          </div>
+        )}
       </div>
     </div>
   );
