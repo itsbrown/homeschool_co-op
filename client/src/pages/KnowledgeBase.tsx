@@ -32,12 +32,14 @@ export default function KnowledgeBasePage() {
   const publicKnowledgeBasesQuery = useQuery<KnowledgeBase[]>({
     queryKey: ["/api/knowledge-bases/public"],
     refetchOnWindowFocus: false,
+    staleTime: 0, // This ensures data is always refetched
   });
 
   const myKnowledgeBasesQuery = useQuery<KnowledgeBase[]>({
     queryKey: ["/api/knowledge-bases/author/me"],
     enabled: !!user,
     refetchOnWindowFocus: false,
+    staleTime: 0, // This ensures data is always refetched
   });
 
   const filteredPublicKnowledgeBases = publicKnowledgeBasesQuery.data?.filter(kb => {
