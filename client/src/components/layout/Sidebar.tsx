@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import {
   Home,
@@ -236,10 +236,19 @@ export default function Sidebar() {
             </button>
           </>
         ) : (
-          <div className="ml-3 min-w-0 flex-1">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">Guest User</p>
-            <p className="text-xs text-muted-foreground truncate">Demo Mode</p>
-          </div>
+          <>
+            <div className="ml-3 min-w-0 flex-1">
+              <p className="text-sm font-medium text-sidebar-foreground truncate">Guest User</p>
+              <p className="text-xs text-muted-foreground truncate">Demo Mode</p>
+            </div>
+            <Link 
+              href="/login"
+              className="ml-auto text-muted-foreground hover:text-sidebar-primary"
+              aria-label="Log in"
+            >
+              <User className="h-5 w-5" />
+            </Link>
+          </>
         )}
       </div>
     </div>

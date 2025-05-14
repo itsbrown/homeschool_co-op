@@ -120,6 +120,52 @@ export default function Login() {
               </Button>
             </form>
           </Form>
+          
+          <div className="mt-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Test Accounts (use password: "password")</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  form.setValue('username', 'admin');
+                  form.setValue('password', 'password');
+                }}
+              >
+                Admin
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  form.setValue('username', 'educator');
+                  form.setValue('password', 'password');
+                }}
+              >
+                Educator
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  form.setValue('username', 'parent');
+                  form.setValue('password', 'password');
+                }}
+              >
+                Parent
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  form.setValue('username', 'learner');
+                  form.setValue('password', 'password');
+                }}
+              >
+                Learner
+              </Button>
+            </div>
+          </div>
         </CardContent>
         <CardFooter className="flex flex-col">
           <div className="text-sm text-center text-muted-foreground">
