@@ -840,12 +840,43 @@ export default function AIWorksheetGenerator() {
                         if (generatedActivity.id) {
                           activityId = generatedActivity.id;
                           console.log('Found ID in direct property:', activityId);
+                        } else if (generatedActivity.activityId) {
+                          activityId = generatedActivity.activityId;
+                          console.log('Found ID in activityId property:', activityId);
                         } else if (generatedActivity.result?.id) {
                           activityId = generatedActivity.result.id;
                           console.log('Found ID in result property:', activityId);
+                        } else if (generatedActivity.result?.activityId) {
+                          activityId = generatedActivity.result.activityId;
+                          console.log('Found ID in result.activityId property:', activityId);
                         } else if (generatedActivity.result?.data?.id) {
                           activityId = generatedActivity.result.data.id;
                           console.log('Found ID in result.data property:', activityId);
+                        } else if (generatedActivity.result?.data?.activityId) {
+                          activityId = generatedActivity.result.data.activityId;
+                          console.log('Found ID in result.data.activityId property:', activityId);
+                        }
+                        
+                        // Last resort - if we have a jobId, try to get the latest job result directly
+                        if (!activityId && generatedActivity.jobId) {
+                          try {
+                            const fetchJobResult = async () => {
+                              const response = await fetch(`/api/activities/job/${generatedActivity.jobId}`);
+                              if (response.ok) {
+                                const jobData = await response.json();
+                                if (jobData.result?.activity?.id) {
+                                  activityId = jobData.result.activity.id;
+                                  console.log('Retrieved activity ID from job API:', activityId);
+                                }
+                              }
+                            };
+                            // Using an IIFE to handle the async operation
+                            (async () => {
+                              await fetchJobResult();
+                            })();
+                          } catch (error) {
+                            console.error('Error fetching job result:', error);
+                          }
                         }
                       }
                       
