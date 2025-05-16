@@ -151,8 +151,8 @@ export function AdminClassesPage() {
   // Navigate to create new class
   const handleCreateClass = () => {
     console.log("Creating new class");
-    // Use setLocation for navigation within the React app instead of full page refresh
-    setLocation("/admin/classes/new");
+    // Use absolute path to ensure correct navigation
+    window.location.href = "/admin/classes/new";
   };
 
   // Navigate to edit class
