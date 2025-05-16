@@ -243,14 +243,6 @@ export default function EnrollmentAssistant() {
   
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[70vh] p-4 bg-background/95">
-      {/* Logo and Assistant Name */}
-      <div className="mb-8 text-center">
-        <div className="flex items-center justify-center mb-3">
-          <Bot className="h-8 w-8 text-primary mr-2" />
-          <span className="text-2xl font-semibold">Enrollment Assistant</span>
-        </div>
-      </div>
-      
       {/* Messages Area - Only show when conversation has started */}
       {messages.length > 0 && (
         <div className="w-full max-w-2xl mx-auto text-center mb-8">
