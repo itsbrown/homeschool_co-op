@@ -85,7 +85,7 @@ export default function EnrollmentAssistant() {
       // Send message to AI assistant
       const response = await apiRequest("POST", "/api/ai/enrollment-assistant", {
         message: inputMessage,
-        childrenIds: children?.map((child: any) => child.id) || [],
+        childrenIds: Array.isArray(children) ? children.map((child: any) => child.id) : [],
         history: messages.map(msg => ({
           role: msg.role,
           content: msg.content
