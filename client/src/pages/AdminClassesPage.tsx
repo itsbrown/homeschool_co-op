@@ -89,13 +89,21 @@ export function AdminClassesPage() {
     refetch
   } = useQuery({
     queryKey: ['/api/admin-classes/classes', page, search, category],
+    // Direct use of the default fetcher doesn't work correctly here
+    // We need to manually handle the response and parse the JSON
     queryFn: async () => {
       try {
-        const response = await apiRequest("GET", `/api/admin-classes/classes?page=${page}&limit=10${search ? `&search=${search}` : ""}${category ? `&category=${category}` : ""}`);
+        // Manually fetch and parse the data instead of using the default fetcher
+        const response = await fetch(`/api/admin-classes/classes?page=${page}&limit=10${search ? `&search=${search}` : ""}${category ? `&category=${category}` : ""}`, {
+          credentials: "include"
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
         const responseData = await response.json();
         console.log("Classes data from API:", responseData);
-        console.log("Classes array:", responseData.classes); 
-        console.log("First class details:", responseData.classes[0]);
         
         if (!responseData.classes) {
           console.error("Missing 'classes' property in API response:", responseData);
@@ -109,9 +117,6 @@ export function AdminClassesPage() {
     },
     enabled: !!isAdmin,
   });
-  
-  console.log("Current classesData in component:", classesData);
-  console.log("Classes condition check:", classesData?.classes?.length > 0);
 
   // Handle class deletion
   const handleDeleteClass = async (id: number) => {

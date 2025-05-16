@@ -146,15 +146,19 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
       });
 
       // Invalidate the classes query to refresh the list
+      // Note: This is the correct path that matches our query key in AdminClassesPage.tsx
+      await queryClient.invalidateQueries({ queryKey: ['/api/admin-classes/classes'] });
+      
+      // Also invalidate any other related keys to be safe
+      await queryClient.invalidateQueries({ queryKey: ['/api/admin-classes'] });
       await queryClient.invalidateQueries({ queryKey: ['/api/admin/classes'] });
       
-      // Small delay to ensure the query is properly invalidated before redirecting
-      setTimeout(() => {
-        // Call the onSuccess callback if provided
-        if (onSuccess) {
-          onSuccess();
-        }
-      }, 300);
+      console.log("Cache invalidated for classes queries");
+      
+      // Call the onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (error: any) {
       console.error("Error creating class:", error);
       toast({
