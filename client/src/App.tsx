@@ -28,6 +28,7 @@ import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
 import ChildrenPage from "./pages/ChildrenPage";
 import ChildProfileEditPage from "./pages/ChildProfileEditPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
+import ClassCreationPage from "./pages/admin/ClassCreationPage";
 import ClassesPage from "./pages/ClassesPage";
 import CalendarPage from "./pages/CalendarPage";
 import ProgramsBrowseRedirect from "./pages/ProgramsBrowseRedirect";
@@ -73,8 +74,9 @@ function Router() {
       
       {/* Admin routes */}
       <Route path="/admin/classes" component={AdminClassesPage} />
+      <Route path="/admin/classes/new" component={ClassCreationPage} />
       <Route path="/admin/classes/upload" component={ClassesUploadPage} />
-      <Route path="/admin/classes/:rest*" component={AdminClassesPage} />
+      <Route path="/admin/classes/edit/:id" component={ClassCreationPage} />
       <Route path="/admin/programs" component={Dashboard} />
       <Route path="/admin/programs/:rest*" component={Dashboard} />
       <Route path="/admin/users" component={Dashboard} />
