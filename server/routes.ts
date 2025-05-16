@@ -951,6 +951,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/enrollments', isAuthenticated, programEnrollmentsApi.createEnrollment);
   app.put('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
   app.delete('/api/enrollments/:id', isAuthenticated, hasRole(['admin']), programEnrollmentsApi.deleteEnrollment);
+  
+  // AI Enrollment Assistant endpoint
+  app.post('/api/ai/enrollment-assistant', isAuthenticated, processEnrollmentMessage);
 
   // Register the combined knowledge base endpoint
   app.get("/api/knowledge-base/combined", async (req, res) => {

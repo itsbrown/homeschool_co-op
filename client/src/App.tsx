@@ -31,6 +31,7 @@ import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import ClassesPage from "./pages/ClassesPage";
 import CalendarPage from "./pages/CalendarPage";
 import ProgramsBrowseRedirect from "./pages/ProgramsBrowseRedirect";
+import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/useAuth";
 import AIStatusProvider from "@/contexts/AIStatusContext";
@@ -68,6 +69,7 @@ function Router() {
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />
       <Route path="/children/:id/edit" component={ChildProfileEditPage} />
       <Route path="/calendar" component={CalendarPage} />
+      <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
       
       {/* Admin routes */}
       <Route path="/admin/classes" component={AdminClassesPage} />

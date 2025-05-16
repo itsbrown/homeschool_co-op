@@ -38,15 +38,15 @@ export default function EnrollmentAssistant() {
   const queryClient = useQueryClient();
   
   // Fetch user's children
-  const { data: children } = useQuery({
+  const { data: children = [] } = useQuery({
     queryKey: ["/api/children"],
     enabled: isAuthenticated && user?.role === "parent",
   });
   
   // Fetch available programs
-  const { data: programs } = useQuery({
+  const { data: programs = [] } = useQuery({
     queryKey: ["/api/programs"],
-    select: (data: any) => data.filter((program: any) => program.isPublished),
+    select: (data: any[]) => data.filter((program: any) => program.isPublished),
   });
   
   // Initial welcome message from assistant
