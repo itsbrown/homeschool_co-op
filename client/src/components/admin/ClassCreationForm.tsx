@@ -146,12 +146,15 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
       });
 
       // Invalidate the classes query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/classes'] });
-
-      // Call the onSuccess callback if provided
-      if (onSuccess) {
-        onSuccess();
-      }
+      await queryClient.invalidateQueries({ queryKey: ['/api/admin/classes'] });
+      
+      // Small delay to ensure the query is properly invalidated before redirecting
+      setTimeout(() => {
+        // Call the onSuccess callback if provided
+        if (onSuccess) {
+          onSuccess();
+        }
+      }, 300);
     } catch (error: any) {
       console.error("Error creating class:", error);
       toast({
