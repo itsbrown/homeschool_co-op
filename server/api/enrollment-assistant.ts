@@ -122,14 +122,14 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
       ? `AVAILABLE PROGRAMS:\n${programs.map(program => 
           `Program ID: ${program.id}
            Title: ${program.title}
-           Description: ${program.description}
+           Description: ${program.description || 'No description provided'}
            Age Range: ${program.ageRange || 'All ages'}
            Category: ${program.category || 'General'}
-           Instructor: ${program.instructorName}
-           Schedule: ${program.schedule || 'Flexible'}
-           Location: ${program.location || 'Online'}
-           Capacity: ${program.capacity} students
-           Enrollment Status: ${program.isEnrollmentOpen ? 'Open' : 'Closed'}`
+           Start Date: ${program.startDate ? new Date(program.startDate).toLocaleDateString() : 'Not specified'}
+           End Date: ${program.endDate ? new Date(program.endDate).toLocaleDateString() : 'Not specified'}
+           Price: $${program.price || 0}
+           Max Capacity: ${program.maxCapacity || 'Unlimited'} students
+           Enrollment Status: ${program.isPublished ? 'Open' : 'Closed'}`
         ).join('\n\n')}`
       : 'No programs are currently available.';
     
