@@ -90,13 +90,28 @@ export function AdminClassesPage() {
   } = useQuery({
     queryKey: ['/api/admin-classes/classes', page, search, category],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/api/admin-classes/classes?page=${page}&limit=10${search ? `&search=${search}` : ""}${category ? `&category=${category}` : ""}`);
-      const responseJson = await response.json();
-      console.log("Classes data from API:", responseJson);
-      return responseJson;
+      try {
+        const response = await apiRequest("GET", `/api/admin-classes/classes?page=${page}&limit=10${search ? `&search=${search}` : ""}${category ? `&category=${category}` : ""}`);
+        const responseData = await response.json();
+        console.log("Classes data from API:", responseData);
+        console.log("Classes array:", responseData.classes); 
+        console.log("First class details:", responseData.classes[0]);
+        
+        if (!responseData.classes) {
+          console.error("Missing 'classes' property in API response:", responseData);
+          return { classes: [], page: 1, limit: 10, totalCount: 0, totalPages: 0 };
+        }
+        return responseData;
+      } catch (error) {
+        console.error("Error fetching classes:", error);
+        throw error;
+      }
     },
     enabled: !!isAdmin,
   });
+  
+  console.log("Current classesData in component:", classesData);
+  console.log("Classes condition check:", classesData?.classes?.length > 0);
 
   // Handle class deletion
   const handleDeleteClass = async (id: number) => {
