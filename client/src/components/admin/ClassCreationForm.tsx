@@ -110,8 +110,8 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
     setIsSubmitting(true);
 
     try {
-      // The admin-classes router is mounted at /api/admin
-      const endpoint = initialData ? `/api/admin/classes/${initialData.id}` : "/api/admin/classes";
+      // The admin-classes router is mounted at /api/admin-classes
+      const endpoint = initialData ? `/api/admin-classes/classes/${initialData.id}` : "/api/admin-classes/classes";
       const method = initialData ? "PATCH" : "POST";
       
       // Create an object that matches the expected insertClassSchema
