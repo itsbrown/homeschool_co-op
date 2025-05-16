@@ -110,8 +110,9 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
     setIsSubmitting(true);
 
     try {
+      // The admin-classes router is mounted at /api/admin
       const endpoint = initialData ? `/api/admin/classes/${initialData.id}` : "/api/admin/classes";
-      const method = initialData ? "PUT" : "POST";
+      const method = initialData ? "PATCH" : "POST";
       
       const response = await apiRequest(method, endpoint, {
         ...data,
