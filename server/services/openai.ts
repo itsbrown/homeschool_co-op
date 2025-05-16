@@ -21,7 +21,6 @@ export async function checkOpenAIStatus() {
 
 // Import Anthropic service for fallback
 import { generateCurriculumWithAI } from './anthropic';
-import { isAnthropicAvailable } from './anthropicService';
 
 // Move imports to top-level to avoid circular dependencies
 import { askVirtualTutor } from './anthropic';
