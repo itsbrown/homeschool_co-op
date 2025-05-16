@@ -243,8 +243,20 @@ export default function EnrollmentAssistant() {
   
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[70vh] p-4 bg-background/95">
-      {/* Messages Area - Only show when conversation has started */}
-      {messages.length > 0 && (
+      {/* Messages Area - Only show when conversation has started and no messages have been exchanged yet */}
+      {messages.length === 1 && (
+        <div className="w-full max-w-2xl mx-auto text-center mb-8">
+          <div className="text-2xl font-medium mb-2">{messages[0].content.split('\n')[0]}</div>
+          {messages[0].content.split('\n').length > 1 && (
+            <div className="text-xl text-muted-foreground">
+              {messages[0].content.split('\n').slice(1).join('\n')}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* If conversation has more messages, show just the latest response at the top */}
+      {messages.length > 1 && (
         <div className="w-full max-w-2xl mx-auto text-center mb-8">
           <div className="text-2xl font-medium mb-2">{messages[messages.length - 1].content.split('\n')[0]}</div>
           {messages[messages.length - 1].content.split('\n').length > 1 && (
@@ -299,43 +311,6 @@ export default function EnrollmentAssistant() {
           </div>
         </div>
       </div>
-      
-      {/* Conversation History - Only show when multiple messages exist */}
-      {messages.length > 1 && (
-        <div className="w-full max-w-2xl mx-auto mt-8 border-t pt-6">
-          <div className="space-y-4 max-h-[400px] overflow-y-auto p-4">
-            {messages.map((message, index) => (
-              <div 
-                key={message.id}
-                className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {message.role !== 'user' && (
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-primary text-primary-foreground">AI</AvatarFallback>
-                  </Avatar>
-                )}
-                
-                <div className={`px-4 py-2 rounded-lg max-w-[80%] ${
-                  message.role === 'user' 
-                    ? 'bg-primary/10 text-foreground border border-primary/20' 
-                    : message.role === 'system'
-                      ? 'bg-muted border border-muted-foreground/10' 
-                      : 'bg-muted/50 border border-muted-foreground/10'
-                }`}>
-                  <p className="whitespace-pre-wrap">{message.content}</p>
-                </div>
-                
-                {message.role === 'user' && (
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-secondary">{user?.username?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
-                  </Avatar>
-                )}
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-      )}
       
       {/* Sample Prompts - Show only at the beginning */}
       {messages.length <= 1 && (
