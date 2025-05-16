@@ -34,6 +34,7 @@ const classFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().min(1, "Description is required"),
   subject: z.string().min(1, "Subject is required"),
+  category: z.enum(["academic", "arts", "music", "sports", "stem", "language", "coding", "cooking", "crafts", "other"]),
   gradeLevel: z.string().min(1, "Grade level is required"),
   ageRange: z.string().min(1, "Age range is required"),
   startDate: z.string().min(1, "Start date is required"),
@@ -73,6 +74,7 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
         title: "",
         description: "",
         subject: "",
+        category: "academic",
         gradeLevel: "",
         ageRange: "",
         startDate: "",
@@ -222,6 +224,40 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
               </Select>
               <FormDescription>
                 The primary subject area of the class
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Category */}
+        <FormField
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Category</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="academic">Academic</SelectItem>
+                  <SelectItem value="arts">Arts</SelectItem>
+                  <SelectItem value="music">Music</SelectItem>
+                  <SelectItem value="sports">Sports</SelectItem>
+                  <SelectItem value="stem">STEM</SelectItem>
+                  <SelectItem value="language">Language</SelectItem>
+                  <SelectItem value="coding">Coding</SelectItem>
+                  <SelectItem value="cooking">Cooking</SelectItem>
+                  <SelectItem value="crafts">Crafts</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                The category this class belongs to
               </FormDescription>
               <FormMessage />
             </FormItem>
