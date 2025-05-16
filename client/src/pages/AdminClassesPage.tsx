@@ -75,9 +75,11 @@ export function AdminClassesPage() {
   const isAdmin = user?.role === "admin";
 
   // If not admin, redirect to home
-  if (!isLoading && !isAdmin) {
-    setLocation("/");
-  }
+  useEffect(() => {
+    if (!isLoading && !isAdmin) {
+      setLocation("/");
+    }
+  }, [isLoading, isAdmin, setLocation]);
 
   // Fetch classes data with filters
   const {
