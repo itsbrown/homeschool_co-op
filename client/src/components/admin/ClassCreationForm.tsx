@@ -114,14 +114,24 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
       const endpoint = initialData ? `/api/admin/classes/${initialData.id}` : "/api/admin/classes";
       const method = initialData ? "PATCH" : "POST";
       
-      const response = await apiRequest(method, endpoint, {
-        ...data,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
-        // Convert string numbers to actual numbers
+      // Create an object that matches the expected insertClassSchema
+      const classData = {
+        title: data.title,
+        description: data.description,
+        category: data.category,
         price: parseFloat(data.price.toString()),
         capacity: parseInt(data.capacity.toString(), 10),
-      });
+        location: data.location,
+        startDate: data.startDate ? data.startDate : null,
+        endDate: data.endDate ? data.endDate : null,
+        categoryName: "Spring 2025",
+        isPublished: data.isPublished,
+        instructorName: user.username || "Instructor"
+      };
+
+      console.log("Submitting class data:", classData);
+      
+      const response = await apiRequest(method, endpoint, classData);
 
       if (!response.ok) {
         const errorData = await response.json();
