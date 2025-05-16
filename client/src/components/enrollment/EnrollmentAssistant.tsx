@@ -4,11 +4,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, SendIcon, Bot, User } from "lucide-react";
+import { Loader2, SendIcon, Bot, User, Sparkles, Search, Brain, ArrowUp } from "lucide-react";
 
 // Types for messages
 type MessageRole = "user" | "assistant" | "system";
@@ -65,7 +65,7 @@ export default function EnrollmentAssistant() {
       const initialMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: `Hi there! I'm your enrollment assistant. I can help you find and enroll in the perfect programs for your child. How can I assist you today?`,
+        content: `Good afternoon, ${user?.username || "parent"}.\nHow can I help you today?`,
         timestamp: new Date()
       };
       setMessages([initialMessage]);
@@ -219,92 +219,151 @@ export default function EnrollmentAssistant() {
     }
   };
   
+  // Sample prompts
+  const samplePrompts = [
+    "Register my child for summer camp",
+    "Find program recommendations for my 8-year-old who loves science",
+    "What enrichment classes do you have for a 10-year-old?",
+    "Help me find affordable art classes",
+    "Register my child Sophia for music lessons"
+  ];
+
   if (!isAuthenticated) {
     return (
-      <Card className="w-full max-w-3xl mx-auto">
-        <CardHeader>
-          <CardTitle>Enrollment Assistant</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>Please log in to use the enrollment assistant.</p>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={() => window.location.href = "/login"}>
-            Login
-          </Button>
-        </CardFooter>
-      </Card>
+      <div className="w-full flex flex-col items-center justify-center min-h-[70vh] p-4">
+        <Bot className="h-12 w-12 text-primary mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Enrollment Assistant</h2>
+        <p className="text-center mb-8 text-muted-foreground">Please log in to use the enrollment assistant.</p>
+        <Button onClick={() => window.location.href = "/login"} size="lg">
+          Login
+        </Button>
+      </div>
     );
   }
   
   return (
-    <Card className="w-full max-w-3xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-primary" />
-          Enrollment Assistant
-        </CardTitle>
-      </CardHeader>
-      
-      <CardContent className="p-4">
-        <div className="h-[400px] overflow-y-auto p-4 border rounded-md mb-4">
-          {messages.map((message) => (
-            <div 
-              key={message.id} 
-              className={`flex gap-3 mb-4 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              {message.role !== 'user' && (
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground">AI</AvatarFallback>
-                </Avatar>
-              )}
-              
-              <div className={`px-4 py-2 rounded-lg max-w-[80%] ${
-                message.role === 'user' 
-                  ? 'bg-primary text-primary-foreground' 
-                  : message.role === 'system'
-                    ? 'bg-muted' 
-                    : 'bg-muted/50'
-              }`}>
-                <p className="whitespace-pre-wrap">{message.content}</p>
-                <div className="text-xs opacity-50 mt-1">
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
-              
-              {message.role === 'user' && (
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-secondary">{user?.name?.charAt(0) || 'U'}</AvatarFallback>
-                </Avatar>
-              )}
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
+    <div className="w-full flex flex-col items-center justify-center min-h-[70vh] p-4 bg-background/95">
+      {/* Logo and Assistant Name */}
+      <div className="mb-8 text-center">
+        <div className="flex items-center justify-center mb-3">
+          <Bot className="h-8 w-8 text-primary mr-2" />
+          <span className="text-2xl font-semibold">Enrollment Assistant</span>
         </div>
-        
-        <div className="flex gap-2">
-          <Textarea
+      </div>
+      
+      {/* Messages Area - Only show when conversation has started */}
+      {messages.length > 0 && (
+        <div className="w-full max-w-2xl mx-auto text-center mb-8">
+          <div className="text-2xl font-medium mb-2">{messages[messages.length - 1].content.split('\n')[0]}</div>
+          {messages[messages.length - 1].content.split('\n').length > 1 && (
+            <div className="text-xl text-muted-foreground">
+              {messages[messages.length - 1].content.split('\n').slice(1).join('\n')}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Input Area */}
+      <div className="w-full max-w-2xl mx-auto">
+        <div className="relative">
+          <Input
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about programs or enrollment..."
-            className="min-h-[60px]"
+            placeholder="What do you want to know?"
+            className="pr-12 py-6 text-base rounded-full border-muted-foreground/20"
             disabled={isLoading}
           />
-          <Button 
-            onClick={handleSendMessage} 
-            size="icon" 
-            className="h-[60px] w-[60px]" 
-            disabled={isLoading || !inputMessage.trim()}
-          >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <SendIcon className="h-5 w-5" />
-            )}
-          </Button>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted"
+              disabled={isLoading}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted"
+              disabled={isLoading}
+            >
+              <Brain className="h-4 w-4" />
+            </Button>
+            <Button 
+              onClick={handleSendMessage} 
+              variant="ghost"
+              size="icon" 
+              className="h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary" 
+              disabled={isLoading || !inputMessage.trim()}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      
+      {/* Conversation History - Only show when multiple messages exist */}
+      {messages.length > 1 && (
+        <div className="w-full max-w-2xl mx-auto mt-8 border-t pt-6">
+          <div className="space-y-4 max-h-[400px] overflow-y-auto p-4">
+            {messages.map((message, index) => (
+              <div 
+                key={message.id}
+                className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                {message.role !== 'user' && (
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-primary text-primary-foreground">AI</AvatarFallback>
+                  </Avatar>
+                )}
+                
+                <div className={`px-4 py-2 rounded-lg max-w-[80%] ${
+                  message.role === 'user' 
+                    ? 'bg-primary/10 text-foreground border border-primary/20' 
+                    : message.role === 'system'
+                      ? 'bg-muted border border-muted-foreground/10' 
+                      : 'bg-muted/50 border border-muted-foreground/10'
+                }`}>
+                  <p className="whitespace-pre-wrap">{message.content}</p>
+                </div>
+                
+                {message.role === 'user' && (
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-secondary">{user?.username?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
+                  </Avatar>
+                )}
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+      )}
+      
+      {/* Sample Prompts - Show only at the beginning */}
+      {messages.length <= 1 && (
+        <div className="w-full max-w-2xl mx-auto mt-8 flex flex-wrap justify-center gap-2">
+          {samplePrompts.map((prompt, index) => (
+            <Button 
+              key={index}
+              variant="outline" 
+              size="sm"
+              className="text-xs bg-background hover:bg-muted/30 border border-muted-foreground/20"
+              onClick={() => {
+                setInputMessage(prompt);
+                setTimeout(() => handleSendMessage(), 100);
+              }}
+            >
+              {prompt}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
