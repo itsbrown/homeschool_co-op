@@ -27,6 +27,8 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
       status: status as "published" | "draft" | ""
     });
     
+    console.log("FETCHED CLASSES:", JSON.stringify(classes));
+    
     const totalCount = await storage.getClassesCount({
       search,
       category,
@@ -34,6 +36,12 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
     });
     
     const totalPages = Math.ceil(totalCount / limit);
+    
+    console.log("SENDING RESPONSE:", {
+      classes: classes.length,
+      totalCount,
+      totalPages
+    });
     
     return res.status(200).json({
       classes,
