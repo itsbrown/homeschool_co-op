@@ -26,17 +26,18 @@ const messageSchema = z.object({
 
 // System prompt for the AI assistant
 const SYSTEM_PROMPT = `You are an AI enrollment assistant for an educational platform. 
-Your goal is to help parents find suitable programs for their children and assist with the enrollment process.
+Your goal is to help parents find suitable programs for their children and assist with the enrollment and registration process.
 
 AVAILABLE INFORMATION:
 1. The parent's children and their details
 2. Available educational programs
 
 TASKS YOU CAN PERFORM:
-1. Recommend programs based on a child's age, interests, and learning style
-2. Answer questions about programs (schedule, curriculum, cost, etc.)
-3. Guide the enrollment process and create enrollment requests
-4. Provide information about existing enrollments
+1. Register new children in the system
+2. Recommend programs based on a child's age, interests, and learning style
+3. Answer questions about programs (schedule, curriculum, cost, etc.)
+4. Guide the enrollment process and create enrollment requests
+5. Provide information about existing enrollments
 
 CONVERSATION GUIDELINES:
 - Be helpful, friendly, and conversational
@@ -44,12 +45,14 @@ CONVERSATION GUIDELINES:
 - When recommending programs, explain why they might be a good fit
 - If a request cannot be fulfilled, explain why and suggest alternatives
 - When enrollment is requested, confirm details before proceeding
+- When registering a child, ask for all necessary information if not provided
 
 RESPONSE FORMAT:
 Your responses should be friendly, concise, and focused on helping the parent.
 If you need to perform a specific action like enrollment or recommendation, include the action details in a structured format.
 
 ACTIONS:
+- To register a new child: [REGISTER_CHILD: firstName: John, lastName: Doe, birthdate: 2015-05-15, gradeLevel: 4, interests: science,math, learningStyle: visual]
 - To enroll a child in a program: [ENROLL: Child ID: 123, Program ID: 456]
 - To recommend programs: [RECOMMEND: science, art]
 - To view children: [VIEW_CHILDREN]
@@ -177,10 +180,61 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
     // Parse potential actions from the AI response
     const action = parseActionFromResponse(aiResponse);
     
+    // Process actions that require database operations
+    let processedAction = action;
+    
+    if (action && action.type === "register_child") {
+      try {
+        // Get the parent user
+        const user = await storage.getUser(req.session.userId);
+        
+        if (!user || user.role !== "parent") {
+          return res.status(403).json({ 
+            message: "Only parents can register children",
+            aiResponse
+          });
+        }
+        
+        // Format the child data for registration
+        const childData = {
+          firstName: action.firstName,
+          lastName: action.lastName,
+          birthdate: action.birthdate,
+          gradeLevel: action.gradeLevel,
+          parentId: user.id,
+          interests: action.interests,
+          learningStyle: action.learningStyle || null,
+          specialNeeds: action.specialNeeds || null,
+          // These can be updated later
+          school: null,
+          allergies: null,
+          medicalInfo: null,
+          profileImage: null
+        };
+        
+        // Create the child in the database
+        const newChild = await storage.createChild(childData);
+        
+        // Update the action with the new child ID
+        processedAction = {
+          ...action,
+          childId: newChild.id,
+          success: true
+        };
+      } catch (error) {
+        console.error("Error registering child:", error);
+        processedAction = {
+          ...action,
+          success: false,
+          error: "Failed to register child in the database"
+        };
+      }
+    }
+    
     // Return response
     return res.json({
       message: aiResponse,
-      action: action
+      action: processedAction
     });
     
   } catch (error) {
@@ -198,6 +252,33 @@ function parseActionFromResponse(response: string): any {
   const recommendPattern = /\[\s*RECOMMEND\s*:\s*(.*?)\s*\]/i;
   const viewChildrenPattern = /\[\s*VIEW_CHILDREN\s*\]/i;
   const viewProgramsPattern = /\[\s*VIEW_PROGRAMS\s*(?::\s*(.*?))?\s*\]/i;
+  const registerChildPattern = /\[\s*REGISTER_CHILD\s*:\s*firstName\s*:\s*(.*?)\s*,\s*lastName\s*:\s*(.*?)\s*,\s*birthdate\s*:\s*([\d-]+)\s*,\s*gradeLevel\s*:\s*(\d+|[a-zA-Z]+)\s*(?:,\s*interests\s*:\s*(.*?))?\s*(?:,\s*learningStyle\s*:\s*(.*?))?\s*(?:,\s*specialNeeds\s*:\s*(.*?))?\s*\]/i;
+  
+  // Check for child registration action
+  const registerChildMatch = response.match(registerChildPattern);
+  if (registerChildMatch) {
+    // Parse interests if provided
+    const interestsStr = registerChildMatch[5] || '';
+    const interests = interestsStr.split(',').map(i => i.trim()).filter(i => i);
+
+    // Parse grade level - could be a number or string
+    let gradeLevel = registerChildMatch[4];
+    // Try to convert to number if it's numeric
+    if (/^\d+$/.test(gradeLevel)) {
+      gradeLevel = parseInt(gradeLevel).toString();
+    }
+    
+    return {
+      type: "register_child",
+      firstName: registerChildMatch[1],
+      lastName: registerChildMatch[2],
+      birthdate: registerChildMatch[3],
+      gradeLevel: gradeLevel,
+      interests: interests,
+      learningStyle: registerChildMatch[6] || 'not specified',
+      specialNeeds: registerChildMatch[7] || ''
+    };
+  }
   
   // Check for enrollment action
   const enrollMatch = response.match(enrollPattern);

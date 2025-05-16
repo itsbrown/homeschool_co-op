@@ -21,11 +21,21 @@ interface Message {
 }
 
 interface EnrollmentAction {
-  type: "view_programs" | "enroll" | "view_children" | "recommend";
+  type: "view_programs" | "enroll" | "view_children" | "recommend" | "register_child";
   programId?: number;
   childId?: number;
   interestArea?: string;
   ageRange?: string;
+  // Fields for child registration
+  firstName?: string;
+  lastName?: string;
+  birthdate?: string;
+  gradeLevel?: string;
+  interests?: string[];
+  learningStyle?: string;
+  specialNeeds?: string;
+  success?: boolean;
+  error?: string;
 }
 
 export default function EnrollmentAssistant() {
@@ -132,6 +142,32 @@ export default function EnrollmentAssistant() {
   
   const handleAssistantAction = async (action: EnrollmentAction) => {
     switch (action.type) {
+      case "register_child":
+        // The child was already registered on the server side
+        if (action.success) {
+          const successMessage: Message = {
+            id: Date.now().toString(),
+            role: "system",
+            content: `✅ Successfully registered ${action.firstName} ${action.lastName} in the system with ID: ${action.childId}!`,
+            timestamp: new Date()
+          };
+          
+          setMessages(prev => [...prev, successMessage]);
+          
+          // Refresh the children list
+          queryClient.invalidateQueries({ queryKey: ["/api/children"] });
+        } else {
+          const errorMessage: Message = {
+            id: Date.now().toString(),
+            role: "system",
+            content: `❌ There was an error registering the child: ${action.error || 'Unknown error'}`,
+            timestamp: new Date()
+          };
+          
+          setMessages(prev => [...prev, errorMessage]);
+        }
+        break;
+        
       case "enroll":
         if (action.programId && action.childId) {
           try {
