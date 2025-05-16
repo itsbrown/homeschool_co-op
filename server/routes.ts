@@ -966,6 +966,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/classes", classesRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/admin", adminClassesRouter);
+  app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/activities", activitiesRouter);
   app.use("/api/image-services", imageServicesRouter);
   app.use("/api/ocr-test", ocrTestRouter);
