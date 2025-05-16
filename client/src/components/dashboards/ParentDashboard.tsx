@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Sparkles, Bot } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function ParentDashboard() {
@@ -36,6 +36,12 @@ export default function ParentDashboard() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Parent Dashboard</h1>
         <div className="flex gap-2">
+          <Button asChild variant="default" className="bg-primary/90 hover:bg-primary">
+            <Link href="/enrollment-assistant">
+              <Bot className="mr-2 h-4 w-4" />
+              AI Enrollment Assistant
+            </Link>
+          </Button>
           <Button asChild>
             <Link href="/children/register">
               <PlusCircle className="mr-2 h-4 w-4" />
@@ -159,16 +165,17 @@ export default function ParentDashboard() {
                 <CardDescription>Common parent tasks</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-4">
+                <Button variant="default" asChild className="h-24 flex flex-col gap-2 w-full bg-primary/90 hover:bg-primary">
+                  <Link href="/enrollment-assistant">
+                    <Bot className="h-6 w-6 mb-1" />
+                    <span>AI Enrollment Assistant</span>
+                    <span className="text-xs mt-1 opacity-80">Register & find programs</span>
+                  </Link>
+                </Button>
                 <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
                   <Link href="/children">
                     <User className="h-5 w-5 mb-1" />
                     <span>My Children</span>
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
-                  <Link href="/schedule">
-                    <Calendar className="h-5 w-5 mb-1" />
-                    <span>Calendar</span>
                   </Link>
                 </Button>
                 <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
