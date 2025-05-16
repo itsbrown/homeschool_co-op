@@ -89,7 +89,12 @@ export function AdminClassesPage() {
     refetch
   } = useQuery({
     queryKey: ['/api/admin-classes/classes', page, search, category],
-    queryFn: () => apiRequest("GET", `/api/admin-classes/classes?page=${page}&limit=10${search ? `&search=${search}` : ""}${category ? `&category=${category}` : ""}`),
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/admin-classes/classes?page=${page}&limit=10${search ? `&search=${search}` : ""}${category ? `&category=${category}` : ""}`);
+      const responseJson = await response.json();
+      console.log("Classes data from API:", responseJson);
+      return responseJson;
+    },
     enabled: !!isAdmin,
   });
 
