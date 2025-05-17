@@ -96,17 +96,17 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
   const processedInitialData = initialData ? {
     title: initialData.title || "",
     description: initialData.description || "",
-    // When editing, use stored subject or empty string if not found
-    subject: initialData.subject || (classId ? "mathematics" : ""),
+    // When editing, use stored subject or fallback if not found
+    subject: initialData.subject || "mathematics",
     category: initialData.category || "academic",
-    // When editing, use stored gradeLevel or default if not found
-    gradeLevel: initialData.gradeLevel || (classId ? "elementary" : ""),
-    // When editing, use stored ageRange or default if not found
-    ageRange: initialData.ageRange || (classId ? "6-10 years" : ""),
+    // When editing, use stored gradeLevel or fallback if not found
+    gradeLevel: initialData.gradeLevel || "elementary",
+    // When editing, use stored ageRange or fallback if not found
+    ageRange: initialData.ageRange || "6-10 years",
     startDate: initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "",
     endDate: initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "",
-    // When editing, use stored schedule or default if not found
-    schedule: initialData.schedule || (classId ? "Mondays and Wednesdays, 3-4pm" : ""),
+    // When editing, use stored schedule or fallback if not found
+    schedule: initialData.schedule || "Mondays and Wednesdays, 3-4pm",
     location: initialData.location || "",
     // Fix price display - convert to string with proper formatting
     price: initialData.price ? (parseFloat(initialData.price.toString()) / 100).toFixed(2) : "0.00",
@@ -187,11 +187,12 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const classData = {
         title: data.title,
         description: data.description,
-        subject: data.subject || "", // Ensure we send an empty string and not undefined
+        // Explicitly include custom fields regardless of whether they're in the schema
+        subject: data.subject || "", 
         category: data.category,
-        gradeLevel: data.gradeLevel || "", // Ensure we send an empty string and not undefined
-        ageRange: data.ageRange || "", // Ensure we send an empty string and not undefined
-        schedule: data.schedule || "", // Ensure we send an empty string and not undefined
+        gradeLevel: data.gradeLevel || "",
+        ageRange: data.ageRange || "",
+        schedule: data.schedule || "",
         // Store price in cents to match database schema
         price: priceInCents,
         capacity: parseInt(data.capacity.toString(), 10),
@@ -206,6 +207,9 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         instructorId: parseInt(data.instructorId),
         instructorName: instructorName
       };
+      
+      // Log the submitted data for debugging
+      console.log("Submitting form data with custom fields:", classData);
 
       console.log("Submitting class data:", classData);
       
