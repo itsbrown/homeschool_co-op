@@ -29,12 +29,19 @@ export function formatDate(dateString: string): string {
 
 /**
  * Format currency
+ * @param amount The amount to format (in cents)
+ * @param inCents Whether the amount is in cents (true) or dollars (false)
  */
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number, inCents: boolean = true): string {
+  // Convert from cents to dollars if needed
+  const dollars = inCents ? amount / 100 : amount;
+  
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-  }).format(amount);
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(dollars);
 }
 
 /**
