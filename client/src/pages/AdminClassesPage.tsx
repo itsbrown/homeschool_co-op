@@ -328,27 +328,27 @@ export function AdminClassesPage() {
                                           <div className="flex items-center gap-1 text-xs">
                                             <Calendar className="h-3 w-3" />
                                             <div>
-                                              {formatDate(classItem.startDate)} - {formatDate(classItem.endDate)}
+                                              {classItem.startDate ? formatDate(classItem.startDate) : 'N/A'} - {classItem.endDate ? formatDate(classItem.endDate) : 'N/A'}
                                             </div>
                                           </div>
                                         </TableCell>
                                         <TableCell>
                                           <div className="flex items-center gap-1">
                                             <DollarSign className="h-3 w-3" />
-                                            {classItem.price.toFixed(2)}
+                                            {typeof classItem.price === 'number' ? classItem.price.toFixed(2) : parseFloat(String(classItem.price || 0)).toFixed(2)}
                                           </div>
                                         </TableCell>
                                         <TableCell>
                                           <div className="flex items-center gap-1">
                                             <Users className="h-3 w-3" />
-                                            {classItem.enrollmentCount || 0}/{classItem.capacity}
+                                            {classItem.enrollmentCount || 0}/{classItem.maxEnrollment || classItem.capacity || 20}
                                           </div>
                                         </TableCell>
                                         <TableCell>
                                           <Badge
-                                            variant={classItem.isPublished ? "default" : "secondary"}
+                                            variant={classItem.isPublished || classItem.status === 'published' ? "default" : "secondary"}
                                           >
-                                            {classItem.isPublished ? "Published" : "Draft"}
+                                            {classItem.isPublished || classItem.status === 'published' ? "Published" : "Draft"}
                                           </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
