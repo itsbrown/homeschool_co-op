@@ -186,8 +186,8 @@ export function SimpleClassesPage() {
                     </td>
                     <td style={styles.td}>{classItem.category || 'General'}</td>
                     <td style={styles.td}>
-                      {classItem.startDate ? new Date(classItem.startDate).toLocaleDateString('en-US') : 'N/A'} - 
-                      {classItem.endDate ? new Date(classItem.endDate).toLocaleDateString('en-US') : 'N/A'}
+                      {classItem.startDate ? formatDate(classItem.startDate) : 'N/A'} - 
+                      {classItem.endDate ? formatDate(classItem.endDate) : 'N/A'}
                     </td>
                     <td style={styles.td}>${((classItem.price || 0) / 100).toFixed(2)}</td>
                     <td style={styles.td}>

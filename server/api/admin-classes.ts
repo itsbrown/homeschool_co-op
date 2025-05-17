@@ -304,21 +304,21 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
     const validatedData = insertClassSchema.partial().parse(standardFields);
     
     // Get the existing class data to compare prices
-    let existingClass = null;
+    let existingClassData = null;
     if (useFileStorage) {
-      existingClass = classStorage.getClassById(id);
+      existingClassData = classStorage.getClassById(id);
     } else {
       try {
-        existingClass = await classesDb.getClassById(id);
+        existingClassData = await classesDb.getClassById(id);
       } catch (error) {
         console.error("Error fetching existing class for price comparison:", error);
       }
     }
     
     // Fix the price if needed to prevent multiplication issues
-    if (validatedData.price && existingClass?.price) {
+    if (validatedData.price && existingClassData?.price) {
       const newPrice = validatedData.price;
-      const oldPrice = existingClass.price;
+      const oldPrice = existingClassData.price;
       const ratio = newPrice / oldPrice;
       
       console.log("Price comparison:", {
