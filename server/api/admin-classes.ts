@@ -315,24 +315,31 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       }
     }
     
-    // Fix the price if needed to prevent multiplication issues
-    if (validatedData.price && existingClassData?.price) {
-      const newPrice = validatedData.price;
-      const oldPrice = existingClassData.price;
-      const ratio = newPrice / oldPrice;
+    // Always respect the price entered in the form
+    // The form should be the source of truth, not the database
+    if (validatedData.price !== undefined) {
+      // Price from the form is in dollars, convert to cents for storage
+      console.log("Form provided price (dollars):", validatedData.price);
       
-      console.log("Price comparison:", {
-        newPrice,
-        oldPrice,
-        ratio
-      });
-      
-      // If the new price is approximately 100x the old price (indicating double conversion)
-      // Use the old price instead
-      if (ratio > 90 && ratio < 110) {
-        console.log("Price conversion detected! Using original price:", oldPrice);
-        validatedData.price = oldPrice;
+      // If price is already a very large number (indicating it's already in cents)
+      // leave it as is, otherwise multiply by 100 to convert to cents
+      if (validatedData.price < 10000) {
+        console.log("Converting price to cents:", validatedData.price * 100);
+        validatedData.price = validatedData.price * 100;
       }
+    }
+    
+    // Process dates to ensure consistent formatting
+    if (validatedData.startDate) {
+      // Ensure the date is stored in ISO format without time component
+      // This prevents timezone shifts affecting the displayed date
+      const startDate = new Date(validatedData.startDate);
+      validatedData.startDate = startDate.toISOString().split('T')[0];
+    }
+    
+    if (validatedData.endDate) {
+      const endDate = new Date(validatedData.endDate);
+      validatedData.endDate = endDate.toISOString().split('T')[0];
     }
     
     // Add the custom fields back to the validated data object
