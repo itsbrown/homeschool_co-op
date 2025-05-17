@@ -98,6 +98,7 @@ export async function getClasses(options: {
 export async function getClassesCount(options: { 
   search?: string;
   category?: string;
+  status?: string;
 }): Promise<number> {
   try {
     let query = 'SELECT COUNT(*) FROM classes';
@@ -294,6 +295,7 @@ export async function createClassesTable(): Promise<void> {
         instructor_id INTEGER NOT NULL,
         instructor_name VARCHAR(255),
         is_published BOOLEAN DEFAULT FALSE,
+        status VARCHAR(50) DEFAULT 'published',
         start_date TIMESTAMP,
         end_date TIMESTAMP,
         enrollment_count INTEGER DEFAULT 0,
