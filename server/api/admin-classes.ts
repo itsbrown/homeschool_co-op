@@ -30,6 +30,52 @@ import { parse } from "csv-parse";
 
 const router = Router();
 
+// Get educators (for assigning to classes)
+router.get("/educators", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    // For now, we'll use the test users since we're working without a database
+    const educators = [
+      { id: 1, name: "Admin User", username: "admin", role: "admin" },
+      { id: 2, name: "Educator User", username: "educator", role: "educator" },
+      { id: 3, name: "Jane Smith", username: "jsmith", role: "educator" },
+      { id: 4, name: "Michael Davis", username: "mdavis", role: "educator" }
+    ];
+    
+    res.json({ educators });
+  } catch (error) {
+    console.error("Error fetching educators:", error);
+    res.status(500).json({ message: "Failed to fetch educators" });
+  }
+});
+
+// Get a specific class by ID
+router.get("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid class ID" });
+    }
+
+    await getStorage();
+    
+    let classData;
+    if (useFileStorage) {
+      classData = classStorage.getClassById(id);
+    } else {
+      classData = await classesDb.getClassById(id);
+    }
+
+    if (!classData) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    res.json(classData);
+  } catch (error) {
+    console.error("Error fetching class details:", error);
+    res.status(500).json({ message: "Failed to fetch class details" });
+  }
+});
+
 // Get all classes (with pagination and filters)
 router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
   try {
