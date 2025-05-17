@@ -42,10 +42,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     session({
       secret: process.env.SESSION_SECRET || "your-secret-key",
       resave: false,
-      saveUninitialized: false,
+      saveUninitialized: true,
       cookie: { 
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        secure: false, // Allow non-HTTPS for development
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true
       }
     })
   );

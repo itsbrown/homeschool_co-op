@@ -84,6 +84,7 @@ router.post("/register", async (req, res) => {
 // Login
 router.post("/login", async (req, res) => {
   try {
+    console.log('Login attempt for:', req.body.username);
     const { username, password } = req.body;
     
     if (!username || !password) {
@@ -135,15 +136,20 @@ router.post("/login", async (req, res) => {
       }
     };
     
+    console.log(`Checking test accounts for ${username}`);
+    
     // Check if this is a test account and password matches "password"
-    if (username in testAccounts && password === 'password') {
+    if (testAccounts[username] && password === 'password') {
       const user = testAccounts[username];
       
       // Set session data
       req.session.userId = user.id;
       req.session.userRole = user.role;
       
-      console.log(`Test account login: ${username} (${user.role})`);
+      console.log(`Test account login successful: ${username} (${user.role})`);
+      
+      // Save session data immediately
+      await new Promise((resolve) => req.session.save(resolve));
       
       return res.status(200).json({
         message: `Login successful (test ${user.role})`,
@@ -151,11 +157,13 @@ router.post("/login", async (req, res) => {
       });
     }
     
-    const user = await storage.getUserByUsername(username);
-    if (!user) {
-      console.log('User not found:', username);
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+    // Only try database if test accounts don't match
+    try {
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        console.log('User not found:', username);
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
     
     const passwordValid = await bcrypt.compare(password, user.password);
     if (!passwordValid) {
@@ -190,8 +198,16 @@ router.post("/logout", (req, res) => {
 });
 
 // Get current user
-router.get("/me", isAuthenticated, async (req, res) => {
+router.get("/me", async (req, res) => {
   try {
+    console.log('Session check in /me endpoint:', req.session);
+    
+    // First check if user is authenticated
+    if (!req.session || !req.session.userId) {
+      console.log('No session or userId found in session');
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    
     // Define test user accounts for easy access
     const testAccounts = {
       1: {
@@ -240,13 +256,14 @@ router.get("/me", isAuthenticated, async (req, res) => {
     if (req.session.userId && req.session.userId <= 4) {
       const testUser = testAccounts[req.session.userId];
       if (testUser) {
-        console.log(`Test user data requested: ${testUser.username} (${testUser.role})`);
+        console.log(`Test user data returned: ${testUser.username} (${testUser.role})`);
         return res.status(200).json(testUser);
       }
     }
     
     // Try using database for real users
     try {
+      console.log('Trying to fetch user from database, ID:', req.session.userId);
       const user = await storage.getUser(req.session.userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
