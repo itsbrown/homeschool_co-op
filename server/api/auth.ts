@@ -84,76 +84,91 @@ router.post("/register", async (req, res) => {
 // Login
 router.post("/login", async (req, res) => {
   try {
-    console.log('Login attempt for:', req.body.username);
+    console.log('Login attempt details:', { username: req.body.username, password: req.body.password ? '(provided)' : '(missing)' });
     const { username, password } = req.body;
     
     if (!username || !password) {
       return res.status(400).json({ message: "Username and password are required" });
     }
     
-    // Special case for testing multiple accounts
-    // Use hardcoded accounts since database connection is unreliable
-    const testAccounts = {
-      'admin': {
-        id: 1,
-        name: 'Admin User',
-        username: 'admin',
-        email: 'admin@example.com',
-        role: 'admin',
-        avatar: null,
-        subscription: 'premium',
-        createdAt: new Date()
-      },
-      'educator': {
-        id: 2,
-        name: 'Test Educator',
-        username: 'educator',
-        email: 'educator@example.com',
-        role: 'educator',
-        avatar: null,
-        subscription: 'educator',
-        createdAt: new Date()
-      },
-      'parent': {
-        id: 3,
-        name: 'Test Parent',
-        username: 'parent',
-        email: 'parent@example.com',
-        role: 'parent',
-        avatar: null,
-        subscription: 'family',
-        createdAt: new Date()
-      },
-      'learner': {
-        id: 4,
-        name: 'Test Learner',
-        username: 'learner',
-        email: 'learner@example.com',
-        role: 'learner',
-        avatar: null,
-        subscription: 'free',
-        createdAt: new Date()
+    // HARDCODED TEST ACCOUNTS - NO DATABASE NEEDED
+    if ((username === 'admin' || username === 'educator' || username === 'parent' || username === 'learner') && password === 'password') {
+      console.log(`Login attempt with test account: ${username}`);
+      
+      let userData;
+      if (username === 'admin') {
+        userData = {
+          id: 1,
+          name: 'Admin User',
+          username: 'admin',
+          email: 'admin@example.com', 
+          role: 'admin',
+          avatar: null,
+          subscription: 'premium',
+          createdAt: new Date()
+        };
+      } else if (username === 'educator') {
+        userData = {
+          id: 2,
+          name: 'Test Educator',
+          username: 'educator',
+          email: 'educator@example.com',
+          role: 'educator',
+          avatar: null,
+          subscription: 'educator',
+          createdAt: new Date()
+        };
+      } else if (username === 'parent') {
+        userData = {
+          id: 3,
+          name: 'Test Parent',
+          username: 'parent',
+          email: 'parent@example.com',
+          role: 'parent',
+          avatar: null,
+          subscription: 'family',
+          createdAt: new Date()
+        };
+      } else if (username === 'learner') {
+        userData = {
+          id: 4,
+          name: 'Test Learner',
+          username: 'learner',
+          email: 'learner@example.com',
+          role: 'learner',
+          avatar: null,
+          subscription: 'free',
+          createdAt: new Date()
+        };
       }
-    };
-    
-    console.log(`Checking test accounts for ${username}`);
-    
-    // Check if this is a test account and password matches "password"
-    if (testAccounts[username] && password === 'password') {
-      const user = testAccounts[username];
       
       // Set session data
-      req.session.userId = user.id;
-      req.session.userRole = user.role;
-      
-      console.log(`Test account login successful: ${username} (${user.role})`);
-      
+      console.log('Setting session data for user:', userData);
+      req.session.userId = userData.id;
+      req.session.userRole = userData.role;
+
       // Save session data immediately
-      await new Promise((resolve) => req.session.save(resolve));
+      try {
+        await new Promise((resolve, reject) => {
+          req.session.save((err) => {
+            if (err) {
+              console.error('Session save error:', err);
+              reject(err);
+            } else {
+              console.log('Session saved successfully');
+              resolve();
+            }
+          });
+        });
+      } catch (sessionError) {
+        console.error('Error saving session:', sessionError);
+      }
+      
+      console.log('Session after save:', req.session);
       
       return res.status(200).json({
-        message: `Login successful (test ${user.role})`,
-        user: user
+        message: `Login successful (test ${userData.role})`,
+        user: userData
       });
     }
     
@@ -201,6 +216,7 @@ router.post("/logout", (req, res) => {
 router.get("/me", async (req, res) => {
   try {
     console.log('Session check in /me endpoint:', req.session);
+    console.log('Cookies received:', req.headers.cookie);
     
     // First check if user is authenticated
     if (!req.session || !req.session.userId) {
@@ -208,9 +224,12 @@ router.get("/me", async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
     
-    // Define test user accounts for easy access
-    const testAccounts = {
-      1: {
+    // HARD-CODED TEST ACCOUNTS - NO DATABASE NEEDED
+    console.log('User ID from session:', req.session.userId);
+    
+    // Directly check which test account to return based on session ID
+    if (req.session.userId === 1) {
+      const adminUser = {
         id: 1,
         name: 'Admin User',
         username: 'admin',
@@ -219,8 +238,12 @@ router.get("/me", async (req, res) => {
         avatar: null,
         subscription: 'premium',
         createdAt: new Date()
-      },
-      2: {
+      };
+      console.log('Returning admin user profile');
+      return res.status(200).json(adminUser);
+    } 
+    else if (req.session.userId === 2) {
+      const educatorUser = {
         id: 2,
         name: 'Test Educator',
         username: 'educator',
@@ -229,8 +252,12 @@ router.get("/me", async (req, res) => {
         avatar: null,
         subscription: 'educator',
         createdAt: new Date()
-      },
-      3: {
+      };
+      console.log('Returning educator user profile');
+      return res.status(200).json(educatorUser);
+    }
+    else if (req.session.userId === 3) {
+      const parentUser = {
         id: 3,
         name: 'Test Parent',
         username: 'parent',
@@ -239,8 +266,12 @@ router.get("/me", async (req, res) => {
         avatar: null,
         subscription: 'family',
         createdAt: new Date()
-      },
-      4: {
+      };
+      console.log('Returning parent user profile');
+      return res.status(200).json(parentUser);
+    }
+    else if (req.session.userId === 4) {
+      const learnerUser = {
         id: 4,
         name: 'Test Learner',
         username: 'learner',
@@ -249,16 +280,9 @@ router.get("/me", async (req, res) => {
         avatar: null,
         subscription: 'free',
         createdAt: new Date()
-      }
-    };
-    
-    // Special case for test users (1-4)
-    if (req.session.userId && req.session.userId <= 4) {
-      const testUser = testAccounts[req.session.userId];
-      if (testUser) {
-        console.log(`Test user data returned: ${testUser.username} (${testUser.role})`);
-        return res.status(200).json(testUser);
-      }
+      };
+      console.log('Returning learner user profile');
+      return res.status(200).json(learnerUser);
     }
     
     // Try using database for real users
