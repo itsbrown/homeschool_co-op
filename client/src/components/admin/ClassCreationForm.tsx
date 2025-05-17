@@ -42,7 +42,12 @@ const classFormSchema = z.object({
   endDate: z.string().min(1, "End date is required"),
   schedule: z.string().min(1, "Schedule is required"),
   location: z.string().optional(),
-  price: z.string().transform(val => parseFloat(val)),
+  price: z.string().transform(val => {
+    // Convert to float, and round to 2 decimal places to avoid precision issues
+    const numValue = parseFloat(val);
+    if (isNaN(numValue)) return 0;
+    return Number((Math.round(numValue * 100) / 100).toFixed(2));
+  }),
   capacity: z.string().transform(val => parseInt(val, 10)),
   isPublished: z.boolean().default(false),
   isOnline: z.boolean().default(false),
@@ -99,7 +104,8 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     endDate: initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "",
     schedule: initialData.schedule || "",
     location: initialData.location || "",
-    price: (initialData.price || 0).toString(),
+    // Fix price display - convert to string with proper formatting
+    price: initialData.price ? parseFloat(initialData.price.toString()).toFixed(2) : "0.00",
     capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
     isPublished: initialData.isPublished || initialData.status === "published" || false,
     isOnline: initialData.isOnline || initialData.location === "Online" || false,
@@ -169,14 +175,22 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const classData = {
         title: data.title,
         description: data.description,
+        subject: data.subject,
         category: data.category,
-        price: parseFloat(data.price.toString()),
+        gradeLevel: data.gradeLevel,
+        ageRange: data.ageRange,
+        schedule: data.schedule,
+        // Ensure price is a proper number value
+        price: Number(parseFloat(data.price).toFixed(2)),
         capacity: parseInt(data.capacity.toString(), 10),
         location: data.location,
         startDate: data.startDate ? data.startDate : null,
         endDate: data.endDate ? data.endDate : null,
         categoryName: "Spring 2025",
         isPublished: data.isPublished,
+        hasMaterials: data.hasMaterials,
+        materials: data.materials,
+        isOnline: data.isOnline,
         instructorId: parseInt(data.instructorId),
         instructorName: instructorName
       };
