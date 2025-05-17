@@ -120,7 +120,28 @@ router.get("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid class ID" });
     }
     
-    const classItem = classStorage.getClassById(id);
+    // Determine which storage system to use
+    await getStorage();
+    
+    let classItem;
+    
+    if (useFileStorage) {
+      // Use file-based storage
+      console.log("Using file-based storage to get class by ID");
+      classItem = classStorage.getClassById(id);
+    } else {
+      // Try to use database storage
+      console.log("Using database storage to get class by ID");
+      try {
+        classItem = await classesDb.getClassById(id);
+      } catch (dbError) {
+        console.error("Database operation failed, falling back to file storage:", dbError);
+        
+        // Fall back to file storage
+        classItem = classStorage.getClassById(id);
+      }
+    }
+    
     if (!classItem) {
       return res.status(404).json({ message: "Class not found" });
     }
@@ -128,7 +149,7 @@ router.get("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
     return res.status(200).json(classItem);
   } catch (error) {
     console.error("Error fetching class:", error);
-    return res.status(500).json({ message: "Error fetching class" });
+    return res.status(500).json({ message: "Error fetching class", error: String(error) });
   }
 });
 
@@ -222,8 +243,27 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
     // Partial validation of request body (allow partial updates)
     const validatedData = insertClassSchema.partial().parse(req.body);
     
-    // Update class using file-based storage
-    const updatedClass = classStorage.updateClass(id, validatedData);
+    // Determine which storage system to use
+    await getStorage();
+    
+    let updatedClass;
+    
+    if (useFileStorage) {
+      // Update class using file-based storage
+      console.log("Using file-based storage to update class");
+      updatedClass = classStorage.updateClass(id, validatedData);
+    } else {
+      // Try to use database storage
+      console.log("Using database storage to update class");
+      try {
+        updatedClass = await classesDb.updateClass(id, validatedData);
+      } catch (dbError) {
+        console.error("Database operation failed, falling back to file storage:", dbError);
+        
+        // Fall back to file storage
+        updatedClass = classStorage.updateClass(id, validatedData);
+      }
+    }
     
     return res.status(200).json(updatedClass);
   } catch (error) {
@@ -247,8 +287,27 @@ router.delete("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid class ID" });
     }
     
-    // Get existing class using file-based storage
-    const existingClass = classStorage.getClassById(id);
+    // Determine which storage system to use
+    await getStorage();
+    
+    let existingClass;
+    
+    if (useFileStorage) {
+      // Get existing class using file-based storage
+      console.log("Using file-based storage to get class for deletion");
+      existingClass = classStorage.getClassById(id);
+    } else {
+      // Try to use database storage
+      console.log("Using database storage to get class for deletion");
+      try {
+        existingClass = await classesDb.getClassById(id);
+      } catch (dbError) {
+        console.error("Database operation failed, falling back to file storage:", dbError);
+        
+        // Fall back to file storage
+        existingClass = classStorage.getClassById(id);
+      }
+    }
     if (!existingClass) {
       return res.status(404).json({ message: "Class not found" });
     }
@@ -260,8 +319,23 @@ router.delete("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       return res.status(403).json({ message: "Not authorized to delete this class" });
     }
     
-    // Delete class using file-based storage
-    classStorage.deleteClass(id);
+    // Delete class using the appropriate storage method
+    if (useFileStorage) {
+      // Delete using file-based storage
+      console.log("Using file-based storage to delete class");
+      classStorage.deleteClass(id);
+    } else {
+      // Try to use database storage
+      console.log("Using database storage to delete class");
+      try {
+        await classesDb.deleteClass(id);
+      } catch (dbError) {
+        console.error("Database operation failed, falling back to file storage:", dbError);
+        
+        // Fall back to file storage
+        classStorage.deleteClass(id);
+      }
+    }
     
     return res.status(200).json({ message: "Class deleted successfully" });
   } catch (error) {
