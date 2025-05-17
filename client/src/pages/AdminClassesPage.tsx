@@ -120,6 +120,8 @@ export function AdminClassesPage() {
           console.error("Missing 'classes' property in API response:", responseData);
           return { classes: [], page: 1, limit: 10, totalCount: 0, totalPages: 0 };
         }
+        console.log("Final classes data being returned:", responseData);
+        console.log("Classes array length:", responseData.classes.length);
         return responseData;
       } catch (error) {
         console.error("Error fetching classes:", error);
@@ -291,9 +293,12 @@ export function AdminClassesPage() {
                                 </p>
                               </div>
                             </div>
-                          ) : classesData?.classes?.length > 0 ? (
-                            // Data loaded
+                          ) : (
+                            // Data loaded - simplified rendering
                             <>
+                              {console.log("Rendering class data:", classesData)}
+                              <pre className="text-xs text-red-500">Debug: {JSON.stringify(classesData, null, 2)}</pre>
+                              
                               <div className="rounded-md border">
                                 <Table>
                                   <TableHeader>
@@ -308,7 +313,7 @@ export function AdminClassesPage() {
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
-                                    {classesData.classes.map((classItem: any) => (
+                                    {classesData?.classes?.map((classItem: any) => (
                                       <TableRow key={classItem.id}>
                                         <TableCell className="font-medium">
                                           <div className="space-y-1">
