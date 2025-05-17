@@ -340,7 +340,7 @@ router.delete("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
     return res.status(200).json({ message: "Class deleted successfully" });
   } catch (error) {
     console.error("Error deleting class:", error);
-    return res.status(500).json({ message: "Error deleting class" });
+    return res.status(500).json({ message: "Error deleting class", error: String(error) });
   }
 });
 
@@ -416,8 +416,27 @@ router.post("/classes/upload", isAuthenticated, isAdmin, async (req, res) => {
         continue; // Skip this row
       }
       
-      // Create the class
-      const newClass = await storage.createClass(classData);
+      // Determine which storage system to use
+      await getStorage();
+      
+      let newClass;
+      
+      if (useFileStorage) {
+        // Create class using file-based storage
+        console.log("Using file-based storage to create class from CSV");
+        newClass = classStorage.createClass(classData);
+      } else {
+        // Try to use database storage
+        console.log("Using database storage to create class from CSV");
+        try {
+          newClass = await classesDb.createClass(classData);
+        } catch (dbError) {
+          console.error("Database operation failed, falling back to file storage:", dbError);
+          
+          // Fall back to file storage
+          newClass = classStorage.createClass(classData);
+        }
+      }
       importedClasses.push(newClass);
     }
     
