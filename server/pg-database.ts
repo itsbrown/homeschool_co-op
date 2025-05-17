@@ -13,16 +13,64 @@ const connectWithRetry = async (maxRetries = 5, retryDelay = 5000) => {
         return;
       }
       
-      // Parse connection string components manually to handle special characters
-      const connectionString = process.env.DATABASE_URL;
+      // Parse URL manually without using URL constructor
+      let connectionString = process.env.DATABASE_URL;
       
-      // Create connection pool
-      const newPool = new Pool({
-        connectionString,
-        ssl: {
-          rejectUnauthorized: false
+      // Handle connection string directly, bypassing URL parsing
+      // For PostgreSQL URL with special characters, extract components directly
+      try {
+        // Extract the protocol, username, password, host, port, and database
+        if (connectionString && connectionString.startsWith('postgresql://')) {
+          // Remove protocol
+          const withoutProtocol = connectionString.replace('postgresql://', '');
+          
+          // Split by @ to separate credentials from host
+          const atIndex = withoutProtocol.indexOf('@');
+          if (atIndex !== -1) {
+            const credentials = withoutProtocol.substring(0, atIndex);
+            const hostPart = withoutProtocol.substring(atIndex + 1);
+            
+            // Get username and password
+            const colonIndex = credentials.indexOf(':');
+            if (colonIndex !== -1) {
+              const username = credentials.substring(0, colonIndex);
+              const password = credentials.substring(colonIndex + 1);
+              
+              // Create a proper connection config directly
+              const newPool = new Pool({
+                user: username,
+                password: password,
+                host: hostPart.split(':')[0],
+                port: parseInt(hostPart.split(':')[1].split('/')[0], 10),
+                database: hostPart.split('/')[1],
+                ssl: {
+                  rejectUnauthorized: false
+                }
+              });
+              
+              console.log("Using direct connection configuration");
+              return newPool;
+            }
+          }
         }
-      });
+        
+        // Fallback to standard connection string if parsing fails
+        console.log("Using standard connection string");
+        return new Pool({
+          connectionString,
+          ssl: {
+            rejectUnauthorized: false
+          }
+        });
+      } catch (parseError) {
+        console.error('Error parsing database URL:', parseError);
+        return new Pool({
+          connectionString,
+          ssl: {
+            rejectUnauthorized: false
+          }
+        });
+      }
       
       // Test connection
       const res = await newPool.query('SELECT NOW()');

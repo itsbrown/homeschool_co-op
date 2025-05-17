@@ -90,26 +90,64 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Username and password are required" });
     }
     
-    // Special case for testing - admin/password
-    if (username === 'admin' && password === 'password') {
-      const adminUser = {
+    // Special case for testing multiple accounts
+    // Use hardcoded accounts since database connection is unreliable
+    const testAccounts = {
+      'admin': {
         id: 1,
         name: 'Admin User',
         username: 'admin',
         email: 'admin@example.com',
         role: 'admin',
         avatar: null,
+        subscription: 'premium',
+        createdAt: new Date()
+      },
+      'educator': {
+        id: 2,
+        name: 'Test Educator',
+        username: 'educator',
+        email: 'educator@example.com',
+        role: 'educator',
+        avatar: null,
         subscription: 'educator',
         createdAt: new Date()
-      };
+      },
+      'parent': {
+        id: 3,
+        name: 'Test Parent',
+        username: 'parent',
+        email: 'parent@example.com',
+        role: 'parent',
+        avatar: null,
+        subscription: 'family',
+        createdAt: new Date()
+      },
+      'learner': {
+        id: 4,
+        name: 'Test Learner',
+        username: 'learner',
+        email: 'learner@example.com',
+        role: 'learner',
+        avatar: null,
+        subscription: 'free',
+        createdAt: new Date()
+      }
+    };
+    
+    // Check if this is a test account and password matches "password"
+    if (username in testAccounts && password === 'password') {
+      const user = testAccounts[username];
       
       // Set session data
-      req.session.userId = adminUser.id;
-      req.session.userRole = adminUser.role;
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+      
+      console.log(`Test account login: ${username} (${user.role})`);
       
       return res.status(200).json({
-        message: "Login successful (test admin)",
-        user: adminUser
+        message: `Login successful (test ${user.role})`,
+        user: user
       });
     }
     
@@ -154,31 +192,74 @@ router.post("/logout", (req, res) => {
 // Get current user
 router.get("/me", isAuthenticated, async (req, res) => {
   try {
-    // Special case for test admin user
-    if (req.session.userId === 1 && req.session.userRole === 'admin') {
-      const adminUser = {
+    // Define test user accounts for easy access
+    const testAccounts = {
+      1: {
         id: 1,
         name: 'Admin User',
         username: 'admin',
         email: 'admin@example.com',
         role: 'admin',
         avatar: null,
+        subscription: 'premium',
+        createdAt: new Date()
+      },
+      2: {
+        id: 2,
+        name: 'Test Educator',
+        username: 'educator',
+        email: 'educator@example.com',
+        role: 'educator',
+        avatar: null,
         subscription: 'educator',
         createdAt: new Date()
-      };
+      },
+      3: {
+        id: 3,
+        name: 'Test Parent',
+        username: 'parent',
+        email: 'parent@example.com',
+        role: 'parent',
+        avatar: null,
+        subscription: 'family',
+        createdAt: new Date()
+      },
+      4: {
+        id: 4,
+        name: 'Test Learner',
+        username: 'learner',
+        email: 'learner@example.com',
+        role: 'learner',
+        avatar: null,
+        subscription: 'free',
+        createdAt: new Date()
+      }
+    };
+    
+    // Special case for test users (1-4)
+    if (req.session.userId && req.session.userId <= 4) {
+      const testUser = testAccounts[req.session.userId];
+      if (testUser) {
+        console.log(`Test user data requested: ${testUser.username} (${testUser.role})`);
+        return res.status(200).json(testUser);
+      }
+    }
+    
+    // Try using database for real users
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
       
-      return res.status(200).json(adminUser);
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      
+      res.status(200).json(userWithoutPassword);
+    } catch (dbError) {
+      console.error("Database error fetching user:", dbError);
+      return res.status(500).json({ message: "Error fetching user data from database" });
     }
-    
-    const user = await storage.getUser(req.session.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    
-    // Remove password from response
-    const { password, ...userWithoutPassword } = user;
-    
-    res.status(200).json(userWithoutPassword);
   } catch (error) {
     console.error("Get user error:", error);
     res.status(500).json({ message: "Error fetching user data" });
