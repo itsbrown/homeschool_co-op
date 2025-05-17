@@ -37,19 +37,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const { initializeDatabase } = await import('./init-db');
   await initializeDatabase();
   
-  // Configure session middleware
-  app.use(
-    session({
-      secret: process.env.SESSION_SECRET || "your-secret-key",
-      resave: false,
-      saveUninitialized: true,
-      cookie: { 
-        secure: false, // Allow non-HTTPS for development
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        httpOnly: true
-      }
-    })
-  );
+  // Configure session using the dedicated configuration
+  const { configureSession, testUsers } = await import('./config/session');
+  configureSession(app);
   
   // Middleware to check authentication
   const isAuthenticated = (req, res, next) => {
@@ -146,18 +136,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Username and password are required" });
       }
       
-      const user = await storage.getUserByUsername(username);
-      if (!user) {
-        console.log("User not found:", username);
-        return res.status(401).json({ message: "Invalid credentials" });
+      // HARDCODED TEST ACCOUNTS - Try these first before database
+      if (password === "password") {
+        if (username === "admin") {
+          console.log("Admin test account login success");
+          req.session.userId = 1;
+          req.session.userRole = "admin";
+          
+          await new Promise<void>((resolve) => {
+            req.session.save((err) => {
+              if (err) console.error("Session save error:", err);
+              resolve();
+            });
+          });
+          
+          console.log("Session saved, admin ID:", req.session.userId);
+          
+          return res.status(200).json({ 
+            message: "Login successful (test admin)", 
+            user: testUsers.admin
+          });
+        } 
+        else if (username === "educator") {
+          console.log("Educator test account login success");
+          req.session.userId = 2;
+          req.session.userRole = "educator";
+          
+          await new Promise<void>((resolve) => {
+            req.session.save((err) => {
+              if (err) console.error("Session save error:", err);
+              resolve();
+            });
+          });
+          
+          return res.status(200).json({ 
+            message: "Login successful (test educator)", 
+            user: testUsers.educator
+          });
+        }
+        else if (username === "parent") {
+          console.log("Parent test account login success");
+          req.session.userId = 3;
+          req.session.userRole = "parent";
+          
+          await new Promise<void>((resolve) => {
+            req.session.save((err) => {
+              if (err) console.error("Session save error:", err);
+              resolve();
+            });
+          });
+          
+          return res.status(200).json({ 
+            message: "Login successful (test parent)", 
+            user: testUsers.parent
+          });
+        }
+        else if (username === "learner") {
+          console.log("Learner test account login success");
+          req.session.userId = 4;
+          req.session.userRole = "learner";
+          
+          await new Promise<void>((resolve) => {
+            req.session.save((err) => {
+              if (err) console.error("Session save error:", err);
+              resolve();
+            });
+          });
+          
+          return res.status(200).json({ 
+            message: "Login successful (test learner)", 
+            user: testUsers.learner
+          });
+        }
       }
-      
-      console.log("User found, checking password");
-      
-      // Test direct comparison for test accounts with password "password"
-      const testAccounts = ["admin", "learner", "parent", "educator"];
-      if (testAccounts.includes(username) && password === "password") {
-        console.log(`Test account login success for ${username}`);
+            
+      // If not a test account, try database
+      try {
+        const user = await storage.getUserByUsername(username);
+        if (!user) {
+          console.log("User not found:", username);
+          return res.status(401).json({ message: "Invalid credentials" });
+        }
+        
+        console.log("User found, checking password");
+        
+        const passwordValid = await bcrypt.compare(password, user.password);
+        console.log("Password valid:", passwordValid);
+        
+        if (!passwordValid) {
+          return res.status(401).json({ message: "Invalid credentials" });
+        }
         
         // Set session data
         req.session.userId = user.id;
@@ -166,24 +234,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Remove password from response
         const { password: _, ...userWithoutPassword } = user;
         
-        return res.status(200).json({ message: "Login successful", user: userWithoutPassword });
+        res.status(200).json({ message: "Login successful", user: userWithoutPassword });
+      } catch (dbError) {
+        console.error("Database login error:", dbError);
+        return res.status(500).json({ message: "Error during login - Database issue" });
       }
-      
-      const passwordValid = await bcrypt.compare(password, user.password);
-      console.log("Password valid:", passwordValid);
-      
-      if (!passwordValid) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-      
-      // Set session data
-      req.session.userId = user.id;
-      req.session.userRole = user.role;
-      
-      // Remove password from response
-      const { password: _, ...userWithoutPassword } = user;
-      
-      res.status(200).json({ message: "Login successful", user: userWithoutPassword });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Error during login" });
@@ -199,18 +254,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
   
-  app.get("/api/auth/me", isAuthenticated, async (req, res) => {
+  app.get("/api/auth/me", async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      console.log('Session check in /me endpoint:', req.session);
+      
+      if (!req.session || !req.session.userId) {
+        console.log('No session or userId found in session');
+        return res.status(401).json({ message: "Unauthorized" });
       }
       
-      // Remove password from response
-      const { password, ...userWithoutPassword } = user;
+      // Test accounts (1-4) - return directly without database lookup
+      if (req.session.userId === 1) {
+        console.log('Returning admin user profile');
+        return res.status(200).json(testUsers.admin);
+      } 
+      else if (req.session.userId === 2) {
+        console.log('Returning educator user profile');
+        return res.status(200).json(testUsers.educator);
+      }
+      else if (req.session.userId === 3) {
+        console.log('Returning parent user profile');
+        return res.status(200).json(testUsers.parent);
+      }
+      else if (req.session.userId === 4) {
+        console.log('Returning learner user profile');
+        return res.status(200).json(testUsers.learner);
+      }
       
-      res.status(200).json(userWithoutPassword);
+      // Only try database for non-test accounts
+      try {
+        const user = await storage.getUser(req.session.userId);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        
+        // Remove password from response
+        const { password, ...userWithoutPassword } = user;
+        
+        res.status(200).json(userWithoutPassword);
+      } catch (dbError) {
+        console.error("Database error fetching user:", dbError);
+        return res.status(500).json({ message: "Error fetching user data from database" });
+      }
     } catch (error) {
+      console.error("Error in /me endpoint:", error);
       res.status(500).json({ message: "Error fetching user data" });
     }
   });
