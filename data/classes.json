@@ -40,7 +40,7 @@
     "title": "Creative Writing Workshop",
     "description": "Develop storytelling skills and unleash creativity through guided writing exercises and collaborative projects.",
     "category": "Language Arts",
-    "price": 75.00,
+    "price": 75,
     "location": "Hybrid",
     "instructorId": 2,
     "startDate": "2025-07-01T15:30:00.000Z",
@@ -52,5 +52,24 @@
     "status": "published",
     "createdAt": "2025-05-03T09:45:00.000Z",
     "updatedAt": "2025-05-03T09:45:00.000Z"
+  },
+  {
+    "title": "Macaroni",
+    "description": "The Macaroni class (ages 6 months to 3 years) introduces our youngest learners to a nurturing academic environment that fosters curiosity, sensory exploration and early social skills. In addition to their lessons on numbers, letters, colors and syllables, your children will enjoy a morning full of play, music and movement, obstacle courses, tumbling, classical stories and so much more in just 3 hours, 3 days a week. With day to day consistency and rhythm, your tots will benefit from a well rounded routine at ASA, created with exceptional educational activities and quality arts & crafts. Our co-op has been meticulously planned out with intention and purpose. Designed for homeschooling families, this program balances learning and living, preparing children for a lifelong love of discovery. ",
+    "categoryName": "Spring 2025",
+    "category": "academic",
+    "startDate": "2025-09-08T00:00:00.000Z",
+    "endDate": "2025-11-14T00:00:00.000Z",
+    "capacity": 10,
+    "location": "Brighton",
+    "instructorName": "admin",
+    "price": 110000,
+    "isPublished": true,
+    "instructorId": 1,
+    "id": 4,
+    "createdAt": "2025-05-17T04:05:40.133Z",
+    "updatedAt": "2025-05-17T04:05:40.133Z",
+    "enrollmentCount": 0,
+    "status": "published"
   }
 ]
