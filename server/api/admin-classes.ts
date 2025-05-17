@@ -18,13 +18,14 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
     const category = (req.query.category as string) || "";
     const status = (req.query.status as string) || "";
     
-    // Get classes from storage
+    // Get classes from storage - using database implementation
+    const offset = (page - 1) * limit;
     const classes = await storage.getClasses({
-      page,
       limit,
+      offset,
       search,
       category,
-      status: status as "published" | "draft" | ""
+      status: status
     });
     
     console.log("FETCHED CLASSES:", JSON.stringify(classes));
@@ -32,7 +33,7 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
     const totalCount = await storage.getClassesCount({
       search,
       category,
-      status: status as "published" | "draft" | ""
+      status
     });
     
     const totalPages = Math.ceil(totalCount / limit);
