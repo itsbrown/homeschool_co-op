@@ -4,6 +4,7 @@ import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { isAdmin, isAuthenticated } from "../middleware/auth";
 // Import the simple file-based class storage
+// @ts-ignore: Ignoring the missing type declaration file for our simple JS module
 import classStorage from "../class-storage.js";
 import fs from "fs";
 import path from "path";
@@ -63,7 +64,7 @@ router.get("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid class ID" });
     }
     
-    const classItem = await storage.getClassById(id);
+    const classItem = classStorage.getClassById(id);
     if (!classItem) {
       return res.status(404).json({ message: "Class not found" });
     }
@@ -83,16 +84,16 @@ router.post("/classes", isAuthenticated, isAdmin, async (req, res) => {
     
     console.log("Creating class with data:", JSON.stringify(validatedData));
     
-    // Create class
-    const classItem = await storage.createClass({
+    // Create class using direct file storage
+    const classItem = classStorage.createClass({
       ...validatedData,
-      instructorId: req.session.userId!,
+      instructorId: req.session.userId || 1,
     });
     
     console.log("Class created successfully:", JSON.stringify(classItem));
     
     // Log current classes in storage for debugging
-    const classes = await storage.getClasses({
+    const { classes } = classStorage.getClasses({
       page: 1,
       limit: 100,
       search: "",
@@ -123,22 +124,24 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid class ID" });
     }
     
-    // Get existing class
-    const existingClass = await storage.getClassById(id);
+    // Get existing class using the file-based storage
+    const existingClass = classStorage.getClassById(id);
     if (!existingClass) {
       return res.status(404).json({ message: "Class not found" });
     }
     
     // Check if user is authorized to update this class
-    if (existingClass.instructorId !== req.session.userId!) {
+    // Use default value of 1 if userId is not available
+    const userId = req.session.userId || 1;
+    if (existingClass.instructorId !== userId) {
       return res.status(403).json({ message: "Not authorized to update this class" });
     }
     
     // Partial validation of request body (allow partial updates)
     const validatedData = insertClassSchema.partial().parse(req.body);
     
-    // Update class
-    const updatedClass = await storage.updateClass(id, validatedData);
+    // Update class using file-based storage
+    const updatedClass = classStorage.updateClass(id, validatedData);
     
     return res.status(200).json(updatedClass);
   } catch (error) {
@@ -162,19 +165,21 @@ router.delete("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid class ID" });
     }
     
-    // Get existing class
-    const existingClass = await storage.getClassById(id);
+    // Get existing class using file-based storage
+    const existingClass = classStorage.getClassById(id);
     if (!existingClass) {
       return res.status(404).json({ message: "Class not found" });
     }
     
     // Check if user is authorized to delete this class
-    if (existingClass.instructorId !== req.session.userId!) {
+    // Use default value of 1 if userId is not available
+    const userId = req.session.userId || 1;
+    if (existingClass.instructorId !== userId) {
       return res.status(403).json({ message: "Not authorized to delete this class" });
     }
     
-    // Delete class
-    await storage.deleteClass(id);
+    // Delete class using file-based storage
+    classStorage.deleteClass(id);
     
     return res.status(200).json({ message: "Class deleted successfully" });
   } catch (error) {
