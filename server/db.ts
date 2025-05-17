@@ -1,10 +1,6 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '../shared/schema';
-import ws from 'ws';
-
-// Configure neon to use websockets
-neonConfig.webSocketConstructor = ws;
 
 // Create a PostgreSQL connection pool
 const pool = new Pool({

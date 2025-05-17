@@ -1,7 +1,6 @@
 // This file handles the database URL from Replit-provisioned PostgreSQL
-// We construct the URL from individual environment variables to avoid encoding issues
-export const DATABASE_URL = process.env.PGHOST 
-  ? `postgresql://${process.env.PGUSER}:${encodeURIComponent(process.env.PGPASSWORD as string)}@${process.env.PGHOST}:${process.env.PGPORT}/${process.env.PGDATABASE}`
-  : process.env.DATABASE_URL;
+// We use the provided DATABASE_URL directly to ensure compatibility with Neon database
+export const DATABASE_URL = process.env.DATABASE_URL as string;
 
-console.log("Using database URL:", DATABASE_URL ? DATABASE_URL.replace(/:[^:@]+@/, ':****@') : 'Not set');
+// Don't log the full URL for security reasons
+console.log("Database connection configured:", DATABASE_URL ? "Yes" : "No");
