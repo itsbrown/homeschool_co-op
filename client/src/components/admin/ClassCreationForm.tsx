@@ -180,8 +180,33 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const selectedEducator = educators.find(edu => edu.id.toString() === data.instructorId);
       const instructorName = selectedEducator ? selectedEducator.name : (user.username || "Instructor");
       
-      // Convert price from dollars to cents for storage (database stores in cents)
-      const priceInCents = Math.round(parseFloat(data.price || "0") * 100);
+      // Check if we're updating an existing class (editing mode)
+      // If in edit mode and the price already has a large value, it's likely already in cents
+      // so we don't want to multiply by 100 again
+      let priceInCents;
+      
+      if (classId && initialData?.price) {
+        // For existing classes, check if price is already in cents (large value)
+        const currentPrice = parseFloat(data.price || "0");
+        const originalPrice = parseFloat(initialData.price.toString()) / 100;
+        
+        if (Math.abs(currentPrice - originalPrice) < 1) {
+          // If price hasn't changed significantly, use directly as is 
+          // (avoid multiplying by 100 again)
+          priceInCents = Math.round(parseFloat(data.price || "0") * 100);
+        } else {
+          // If price has changed significantly, assume it's a new dollar amount
+          priceInCents = Math.round(parseFloat(data.price || "0") * 100);
+        }
+      } else {
+        // For new classes, convert dollars to cents
+        priceInCents = Math.round(parseFloat(data.price || "0") * 100);
+      }
+      
+      console.log("Price conversion:", {
+        inputPrice: data.price,
+        convertedPrice: priceInCents
+      });
       
       // Create an object that matches the expected insertClassSchema
       const classData = {
@@ -197,8 +222,9 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         price: priceInCents,
         capacity: parseInt(data.capacity.toString(), 10),
         location: data.location || "",
-        startDate: data.startDate ? data.startDate : null,
-        endDate: data.endDate ? data.endDate : null,
+        // Ensure dates are properly formatted with timezone handling
+        startDate: data.startDate ? new Date(data.startDate).toISOString() : null,
+        endDate: data.endDate ? new Date(data.endDate).toISOString() : null,
         categoryName: "Spring 2025",
         isPublished: data.isPublished,
         hasMaterials: data.hasMaterials,

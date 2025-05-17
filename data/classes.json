@@ -60,7 +60,7 @@
     "category": "academic",
     "subject": "Early Childhood Education",
     "gradeLevel": "pre-k",
-    "ageRange": "6 months - 3 years", 
+    "ageRange": "6 months - 3 years",
     "schedule": "Monday, Wednesday, Friday 9am-12pm",
     "startDate": "2025-09-08T00:00:00.000Z",
     "endDate": "2025-11-14T00:00:00.000Z",
@@ -72,7 +72,7 @@
     "instructorId": 1,
     "id": 4,
     "createdAt": "2025-05-17T04:05:40.133Z",
-    "updatedAt": "2025-05-17T04:59:38.862Z",
+    "updatedAt": "2025-05-17T12:38:09.549Z",
     "enrollmentCount": 0,
     "status": "published"
   }
