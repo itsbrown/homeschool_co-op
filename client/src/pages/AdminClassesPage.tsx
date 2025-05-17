@@ -340,7 +340,9 @@ export function AdminClassesPage() {
                                         <TableCell>
                                           <div className="flex items-center gap-1">
                                             <DollarSign className="h-3 w-3" />
-                                            {typeof classItem.price === 'number' ? classItem.price.toFixed(2) : parseFloat(String(classItem.price || 0)).toFixed(2)}
+                                            ${typeof classItem.price === 'number' 
+                                              ? (classItem.price / 100).toFixed(2) 
+                                              : (parseFloat(String(classItem.price || 0)) / 100).toFixed(2)}
                                           </div>
                                         </TableCell>
                                         <TableCell>

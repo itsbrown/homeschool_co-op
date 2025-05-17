@@ -195,7 +195,7 @@ export function SimpleClassesPage() {
                       {classItem.startDate ? formatDate(classItem.startDate) : 'N/A'} - 
                       {classItem.endDate ? formatDate(classItem.endDate) : 'N/A'}
                     </td>
-                    <td style={styles.td}>${(classItem.price || 0).toFixed(2)}</td>
+                    <td style={styles.td}>${((classItem.price || 0) / 100).toFixed(2)}</td>
                     <td style={styles.td}>
                       {classItem.enrollmentCount || 0}/{classItem.maxEnrollment || classItem.capacity || 20}
                     </td>

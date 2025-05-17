@@ -63,12 +63,12 @@
     "capacity": 10,
     "location": "Brighton",
     "instructorName": "Admin User",
-    "price": 109997,
+    "price": 110003,
     "isPublished": true,
     "instructorId": 1,
     "id": 4,
     "createdAt": "2025-05-17T04:05:40.133Z",
-    "updatedAt": "2025-05-17T04:32:31.623Z",
+    "updatedAt": "2025-05-17T04:44:11.204Z",
     "enrollmentCount": 0,
     "status": "published"
   }
