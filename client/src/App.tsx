@@ -21,7 +21,7 @@ import Checkout from "@/pages/Checkout";
 import CheckoutSuccess from "@/pages/CheckoutSuccess";
 import { RegistrationPage } from "@/pages/RegistrationPage";
 import { ProgramsPage } from "@/pages/ProgramsPage";
-import { AdminClassesPage } from "./pages/AdminClassesPage";
+import { SimpleClassesPage } from "./pages/SimpleClassesPage";
 import ChildRegistrationPage from "./pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
@@ -73,7 +73,7 @@ function Router() {
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
       
       {/* Admin routes */}
-      <Route path="/admin/classes" component={AdminClassesPage} />
+      <Route path="/admin/classes" component={SimpleClassesPage} />
       <Route path="/admin/classes/new" component={ClassCreationPage} />
       <Route path="/admin/classes/upload" component={ClassesUploadPage} />
       <Route path="/admin/classes/edit/:id" component={ClassCreationPage} />
