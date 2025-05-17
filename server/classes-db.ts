@@ -292,6 +292,12 @@ export async function incrementClassEnrollment(id: number): Promise<Class | unde
 // Function to create the classes table if it doesn't exist
 export async function createClassesTable(): Promise<void> {
   try {
+    // Check if pool is available and has query method
+    if (!pool || typeof pool.query !== 'function') {
+      console.log('Database pool not available, skipping table creation');
+      return;
+    }
+    
     const query = `
       CREATE TABLE IF NOT EXISTS classes (
         id SERIAL PRIMARY KEY,
@@ -318,6 +324,8 @@ export async function createClassesTable(): Promise<void> {
     console.log('Classes table created or already exists');
   } catch (error) {
     console.error('Error creating classes table:', error);
-    throw error;
+    // Don't throw the error here to allow falling back to file-based storage
+    // Instead, indicate that we should use file-based storage
+    console.log('Will use file-based storage for classes');
   }
 }

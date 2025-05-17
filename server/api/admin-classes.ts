@@ -3,8 +3,27 @@ import { z } from "zod";
 import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { isAdmin, isAuthenticated } from "../middleware/auth";
-// Import the TypeScript version of our file-based class storage
+// Import both storage options for classes
 import { classStorage } from "../class-storage";
+import * as classesDb from "../classes-db";
+
+// Flag to track which storage system we're using
+let useFileStorage = true;
+
+// Function to determine which storage to use
+const getStorage = async () => {
+  try {
+    // Try to get a class from the database
+    await classesDb.getClassById(1);
+    // If successful, use database storage
+    useFileStorage = false;
+    return { useFileStorage };
+  } catch (err) {
+    // If error, use file storage
+    useFileStorage = true;
+    return { useFileStorage };
+  }
+};
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
@@ -19,20 +38,58 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
     const search = (req.query.search as string) || "";
     const category = (req.query.category as string) || "";
     const status = (req.query.status as string) || "";
+
+    // Determine which storage system to use
+    await getStorage();
     
-    // Use the dedicated file-based class storage implementation
-    const offset = (page - 1) * limit;
-    const result = classStorage.getClasses({
-      page,
-      limit,
-      search,
-      category,
-      status
-    });
-    
-    const { classes, totalCount } = result;
-    
-    const totalPages = Math.ceil(totalCount / limit);
+    let classes = [];
+    let totalCount = 0;
+    let totalPages = 0;
+
+    if (useFileStorage) {
+      // Use the dedicated file-based class storage implementation
+      console.log("Using file-based storage for classes");
+      const result = classStorage.getClasses({
+        page,
+        limit,
+        search,
+        category,
+        status
+      });
+      
+      classes = result.classes;
+      totalCount = result.totalCount;
+      totalPages = result.totalPages;
+    } else {
+      // Use database storage if available
+      console.log("Using database storage for classes");
+      try {
+        classes = await classesDb.getClasses({
+          page,
+          limit,
+          search,
+          category,
+          status,
+        });
+        totalCount = await classesDb.getClassesCount({ search, category, status });
+        totalPages = Math.ceil(totalCount / limit);
+      } catch (dbError) {
+        console.error("Database operation failed, falling back to file storage:", dbError);
+        
+        // Fall back to file storage if database operation fails
+        const result = classStorage.getClasses({
+          page,
+          limit,
+          search,
+          category,
+          status
+        });
+        
+        classes = result.classes;
+        totalCount = result.totalCount;
+        totalPages = result.totalPages;
+      }
+    }
     
     console.log("FETCHED CLASSES:", JSON.stringify(classes));
     
@@ -47,11 +104,11 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
       page,
       limit,
       totalCount,
-      totalPages: totalPages
+      totalPages
     });
   } catch (error) {
     console.error("Error fetching classes:", error);
-    return res.status(500).json({ message: "Error fetching classes" });
+    return res.status(500).json({ message: "Error fetching classes", error: String(error) });
   }
 });
 
@@ -83,11 +140,37 @@ router.post("/classes", isAuthenticated, isAdmin, async (req, res) => {
     
     console.log("Creating class with data:", JSON.stringify(validatedData));
     
-    // Create class using direct file storage
-    const classItem = classStorage.createClass({
-      ...validatedData,
-      instructorId: req.session.userId || 1,
-    });
+    // Determine which storage system to use
+    await getStorage();
+    
+    let classItem;
+    const instructorId = req.session.userId || 1;
+    
+    if (useFileStorage) {
+      // Create class using direct file storage
+      console.log("Using file-based storage to create class");
+      classItem = classStorage.createClass({
+        ...validatedData,
+        instructorId,
+      });
+    } else {
+      // Try to use database storage
+      console.log("Using database storage to create class");
+      try {
+        classItem = await classesDb.createClass({
+          ...validatedData,
+          instructorId,
+        });
+      } catch (dbError) {
+        console.error("Database operation failed, falling back to file storage:", dbError);
+        
+        // Fall back to file storage
+        classItem = classStorage.createClass({
+          ...validatedData,
+          instructorId,
+        });
+      }
+    }
     
     console.log("Class created successfully:", JSON.stringify(classItem));
     
@@ -111,7 +194,7 @@ router.post("/classes", isAuthenticated, isAdmin, async (req, res) => {
     }
     
     console.error("Error creating class:", error);
-    return res.status(500).json({ message: "Error creating class" });
+    return res.status(500).json({ message: "Error creating class", error: String(error) });
   }
 });
 

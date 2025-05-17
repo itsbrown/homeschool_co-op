@@ -3,39 +3,55 @@ import { Pool } from 'pg';
 // Create connection to PostgreSQL database with components to handle special characters
 let pool: Pool;
 
-try {
-  if (process.env.DATABASE_URL) {
-    // Try to parse the URL manually to handle special characters better
-    const url = new URL(process.env.DATABASE_URL);
-    
-    pool = new Pool({
-      user: url.username,
-      password: decodeURIComponent(url.password),
-      host: url.hostname,
-      port: parseInt(url.port || '5432'),
-      database: url.pathname.split('/')[1],
-      ssl: {
-        rejectUnauthorized: false
+const connectWithRetry = async (maxRetries = 5, retryDelay = 5000) => {
+  let retries = maxRetries;
+  
+  while (retries > 0) {
+    try {
+      if (!process.env.DATABASE_URL) {
+        console.log('No DATABASE_URL provided, using default or file-based storage');
+        return;
       }
-    });
-    
-    // Test database connection in a non-blocking way
-    pool.query('SELECT NOW()')
-      .then(res => {
-        console.log('Database connected successfully at:', res.rows[0].now);
-      })
-      .catch(err => {
-        console.error('Error connecting to database, falling back to file-based storage:', err.message);
+      
+      // Parse connection string components manually to handle special characters
+      const connectionString = process.env.DATABASE_URL;
+      
+      // Create connection pool
+      const newPool = new Pool({
+        connectionString,
+        ssl: {
+          rejectUnauthorized: false
+        }
       });
-  } else {
-    console.log('No DATABASE_URL provided, falling back to file-based storage');
-    // Create a dummy pool object for type compatibility
-    pool = {} as Pool;
+      
+      // Test connection
+      const res = await newPool.query('SELECT NOW()');
+      console.log('Database connected successfully at:', res.rows[0].now);
+      
+      // Assign the working pool
+      pool = newPool;
+      return;
+    } catch (err) {
+      console.error(`Database connection attempt failed (${maxRetries - retries + 1}/${maxRetries}):`, err);
+      retries--;
+      
+      if (retries === 0) {
+        console.error('All connection attempts failed, falling back to file-based storage');
+        // Initialize empty pool for type compatibility
+        pool = {} as Pool;
+        return;
+      }
+      
+      console.log(`Retrying in ${retryDelay/1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
   }
-} catch (error) {
-  console.error('Error initializing database connection, falling back to file-based storage:', error);
-  // Create a dummy pool object for type compatibility
+};
+
+// Initialize pool
+connectWithRetry().catch(err => {
+  console.error('Error in connection retry logic:', err);
   pool = {} as Pool;
-}
+});
 
 export { pool };
