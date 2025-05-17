@@ -180,9 +180,11 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const selectedEducator = educators.find(edu => edu.id.toString() === data.instructorId);
       const instructorName = selectedEducator ? selectedEducator.name : (user.username || "Instructor");
       
-      // Use directly the price entered in the form
-      // No need for complex conversion logic that could cause issues
-      const priceInCents = Math.round(parseFloat(data.price || "0") * 100);
+      // For the price, we need to check if it's already in cents
+      // If the price is over 10000, it's likely already in cents (from form display)
+      const inputPrice = parseFloat(data.price || "0");
+      const priceInCents = inputPrice > 10000 ? inputPrice : Math.round(inputPrice * 100);
+      console.log('Price calculation:', { inputPrice, priceInCents });
       
       console.log("Price conversion:", {
         inputPrice: data.price,
