@@ -104,16 +104,24 @@ function getClassById(id: number): Class | undefined {
 }
 
 // Create a new class
-function createClass(classData: InsertClass & { instructorId: number }): Class {
+function createClass(classData: InsertClass & { instructorId: number } & Record<string, any>): Class {
   const classes = loadClasses();
   
-  const newClass: Class = {
+  // Log the data being saved for debugging
+  console.log('Creating class with data (in class-storage):', JSON.stringify(classData, null, 2));
+  
+  const newClass: Class & Record<string, any> = {
     ...classData,
     id: classIdCounter++,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     enrollmentCount: 0,
-    status: classData.status || 'published'
+    status: classData.status || 'published',
+    // Explicitly include custom fields that might not be in the schema
+    subject: classData.subject || '',
+    gradeLevel: classData.gradeLevel || '',
+    ageRange: classData.ageRange || '',
+    schedule: classData.schedule || ''
   };
   
   classes.push(newClass);
@@ -123,7 +131,7 @@ function createClass(classData: InsertClass & { instructorId: number }): Class {
 }
 
 // Update an existing class
-function updateClass(id: number, classData: Partial<InsertClass>): Class | undefined {
+function updateClass(id: number, classData: Partial<InsertClass> & Record<string, any>): Class | undefined {
   const classes = loadClasses();
   const index = classes.findIndex(c => c.id === id);
   
@@ -131,9 +139,21 @@ function updateClass(id: number, classData: Partial<InsertClass>): Class | undef
     return undefined;
   }
   
+  // Log the data being saved for debugging
+  console.log('Updating class with data (in class-storage):', JSON.stringify(classData, null, 2));
+  
+  // Preserve custom fields that aren't in the schema
+  const existingFields = { ...classes[index] };
+  
+  // Create the updated class with all fields preserved
   const updatedClass = {
-    ...classes[index],
+    ...existingFields,
     ...classData,
+    // Explicitly handle the custom fields from the form that aren't in the schema
+    subject: classData.subject !== undefined ? classData.subject : existingFields.subject,
+    gradeLevel: classData.gradeLevel !== undefined ? classData.gradeLevel : existingFields.gradeLevel,
+    ageRange: classData.ageRange !== undefined ? classData.ageRange : existingFields.ageRange,
+    schedule: classData.schedule !== undefined ? classData.schedule : existingFields.schedule,
     updatedAt: new Date().toISOString()
   };
   
