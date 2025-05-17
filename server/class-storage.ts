@@ -1,5 +1,6 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { Class, InsertClass } from '@shared/schema';
 
 // Directory for storing data
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -19,10 +20,10 @@ if (!fs.existsSync(CLASSES_FILE)) {
 let classIdCounter = 1;
 
 // Load classes from file
-function loadClasses() {
+function loadClasses(): Class[] {
   try {
     const data = fs.readFileSync(CLASSES_FILE, 'utf-8');
-    const classes = JSON.parse(data);
+    const classes = JSON.parse(data) as Class[];
     
     // Update ID counter based on existing classes
     if (classes.length > 0) {
@@ -38,7 +39,7 @@ function loadClasses() {
 }
 
 // Save classes to file
-function saveClasses(classes) {
+function saveClasses(classes: Class[]): void {
   try {
     fs.writeFileSync(CLASSES_FILE, JSON.stringify(classes, null, 2));
   } catch (error) {
@@ -47,7 +48,19 @@ function saveClasses(classes) {
 }
 
 // Get all classes with filtering and pagination
-function getClasses({ page = 1, limit = 10, search = '', category = '', status = '' }) {
+function getClasses({ 
+  page = 1, 
+  limit = 10, 
+  search = '', 
+  category = '', 
+  status = '' 
+}: { 
+  page: number; 
+  limit: number; 
+  search?: string; 
+  category?: string; 
+  status?: string 
+}): { classes: Class[]; totalCount: number; totalPages: number } {
   let classes = loadClasses();
   
   // Apply filters
@@ -68,7 +81,7 @@ function getClasses({ page = 1, limit = 10, search = '', category = '', status =
   }
   
   // Sort by date (newest first)
-  classes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  classes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   
   // Get total count before pagination
   const totalCount = classes.length;
@@ -85,16 +98,16 @@ function getClasses({ page = 1, limit = 10, search = '', category = '', status =
 }
 
 // Get a class by ID
-function getClassById(id) {
+function getClassById(id: number): Class | undefined {
   const classes = loadClasses();
   return classes.find(c => c.id === id);
 }
 
 // Create a new class
-function createClass(classData) {
+function createClass(classData: InsertClass & { instructorId: number }): Class {
   const classes = loadClasses();
   
-  const newClass = {
+  const newClass: Class = {
     ...classData,
     id: classIdCounter++,
     createdAt: new Date().toISOString(),
@@ -110,12 +123,12 @@ function createClass(classData) {
 }
 
 // Update an existing class
-function updateClass(id, classData) {
+function updateClass(id: number, classData: Partial<InsertClass>): Class | undefined {
   const classes = loadClasses();
   const index = classes.findIndex(c => c.id === id);
   
   if (index === -1) {
-    return null;
+    return undefined;
   }
   
   const updatedClass = {
@@ -131,7 +144,7 @@ function updateClass(id, classData) {
 }
 
 // Delete a class
-function deleteClass(id) {
+function deleteClass(id: number): boolean {
   const classes = loadClasses();
   const filteredClasses = classes.filter(c => c.id !== id);
   
@@ -143,14 +156,10 @@ function deleteClass(id) {
   return true;
 }
 
-// Create a default export with all methods
-const classStorage = {
+export const classStorage = {
   getClasses,
   getClassById,
   createClass,
   updateClass,
   deleteClass
 };
-
-module.exports = classStorage;
-module.exports.default = classStorage;

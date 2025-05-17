@@ -3,9 +3,8 @@ import { z } from "zod";
 import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { isAdmin, isAuthenticated } from "../middleware/auth";
-// Import the simple file-based class storage
-// @ts-ignore: Ignoring the missing type declaration file for our simple JS module
-import classStorage from "../class-storage.js";
+// Import the TypeScript version of our file-based class storage
+import { classStorage } from "../class-storage";
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
