@@ -82,11 +82,25 @@ router.post("/classes", isAuthenticated, isAdmin, async (req, res) => {
     // Validate request body
     const validatedData = insertClassSchema.parse(req.body);
     
+    console.log("Creating class with data:", JSON.stringify(validatedData));
+    
     // Create class
     const classItem = await storage.createClass({
       ...validatedData,
       instructorId: req.session.userId!,
     });
+    
+    console.log("Class created successfully:", JSON.stringify(classItem));
+    
+    // Log current classes in storage for debugging
+    const classes = await storage.getClasses({
+      page: 1,
+      limit: 100,
+      search: "",
+      category: "",
+      status: ""
+    });
+    console.log("All classes after creation:", JSON.stringify(classes));
     
     return res.status(201).json(classItem);
   } catch (error) {
