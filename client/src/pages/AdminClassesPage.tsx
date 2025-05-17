@@ -5,7 +5,7 @@ import { useAuth } from "../hooks/use-auth";
 import { ClassCreationForm } from "../components/admin/ClassCreationForm";
 import { Route, Switch, useLocation } from "wouter";
 import { apiRequest } from "../lib/queryClient";
-import { formatDate } from "../lib/utils";
+import { formatDate, formatCurrency } from "../lib/utils";
 import { useToast } from "../hooks/use-toast";
 
 import {

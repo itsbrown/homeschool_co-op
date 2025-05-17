@@ -171,25 +171,28 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const selectedEducator = educators.find(edu => edu.id.toString() === data.instructorId);
       const instructorName = selectedEducator ? selectedEducator.name : (user.username || "Instructor");
       
+      // Convert price from dollars to cents for storage (database stores in cents)
+      const priceInCents = Math.round(parseFloat(data.price || "0") * 100);
+      
       // Create an object that matches the expected insertClassSchema
       const classData = {
         title: data.title,
         description: data.description,
-        subject: data.subject,
+        subject: data.subject || "", // Ensure we send an empty string and not undefined
         category: data.category,
-        gradeLevel: data.gradeLevel,
-        ageRange: data.ageRange,
-        schedule: data.schedule,
-        // Ensure price is a proper number value
-        price: Number(parseFloat(data.price).toFixed(2)),
+        gradeLevel: data.gradeLevel || "", // Ensure we send an empty string and not undefined
+        ageRange: data.ageRange || "", // Ensure we send an empty string and not undefined
+        schedule: data.schedule || "", // Ensure we send an empty string and not undefined
+        // Store price in cents to match database schema
+        price: priceInCents,
         capacity: parseInt(data.capacity.toString(), 10),
-        location: data.location,
+        location: data.location || "",
         startDate: data.startDate ? data.startDate : null,
         endDate: data.endDate ? data.endDate : null,
         categoryName: "Spring 2025",
         isPublished: data.isPublished,
         hasMaterials: data.hasMaterials,
-        materials: data.materials,
+        materials: data.materials || "",
         isOnline: data.isOnline,
         instructorId: parseInt(data.instructorId),
         instructorName: instructorName
