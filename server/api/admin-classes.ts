@@ -20,8 +20,9 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
     const category = (req.query.category as string) || "";
     const status = (req.query.status as string) || "";
     
-    // Get classes from our simple file-based implementation
-    const { classes, totalCount, totalPages } = classStorage.getClasses({
+    // Use the dedicated file-based class storage implementation
+    const offset = (page - 1) * limit;
+    const result = classStorage.getClasses({
       page,
       limit,
       search,
@@ -29,9 +30,11 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
       status
     });
     
-    console.log("FETCHED CLASSES:", JSON.stringify(classes));
+    const { classes, totalCount } = result;
     
     const totalPages = Math.ceil(totalCount / limit);
+    
+    console.log("FETCHED CLASSES:", JSON.stringify(classes));
     
     console.log("SENDING RESPONSE:", {
       classes: classes.length,
@@ -44,7 +47,7 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
       page,
       limit,
       totalCount,
-      totalPages
+      totalPages: totalPages
     });
   } catch (error) {
     console.error("Error fetching classes:", error);
