@@ -180,28 +180,9 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const selectedEducator = educators.find(edu => edu.id.toString() === data.instructorId);
       const instructorName = selectedEducator ? selectedEducator.name : (user.username || "Instructor");
       
-      // Check if we're updating an existing class (editing mode)
-      // If in edit mode and the price already has a large value, it's likely already in cents
-      // so we don't want to multiply by 100 again
-      let priceInCents;
-      
-      if (classId && initialData?.price) {
-        // For existing classes, check if price is already in cents (large value)
-        const currentPrice = parseFloat(data.price || "0");
-        const originalPrice = parseFloat(initialData.price.toString()) / 100;
-        
-        if (Math.abs(currentPrice - originalPrice) < 1) {
-          // If price hasn't changed significantly, use directly as is 
-          // (avoid multiplying by 100 again)
-          priceInCents = Math.round(parseFloat(data.price || "0") * 100);
-        } else {
-          // If price has changed significantly, assume it's a new dollar amount
-          priceInCents = Math.round(parseFloat(data.price || "0") * 100);
-        }
-      } else {
-        // For new classes, convert dollars to cents
-        priceInCents = Math.round(parseFloat(data.price || "0") * 100);
-      }
+      // Use directly the price entered in the form
+      // No need for complex conversion logic that could cause issues
+      const priceInCents = Math.round(parseFloat(data.price || "0") * 100);
       
       console.log("Price conversion:", {
         inputPrice: data.price,
