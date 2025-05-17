@@ -1123,4 +1123,8 @@ export class MemStorage implements IStorage {
 import { DatabaseStorage } from "./dbStorage";
 
 // Use the database storage implementation instead of memory storage
-export const storage = new DatabaseStorage();
+import { FileStorage } from './file-storage';
+
+// Use FileStorage for reliable persistence
+// This ensures that classes data is stored reliably without database configuration issues
+export const storage = new FileStorage();
