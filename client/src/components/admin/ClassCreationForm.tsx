@@ -96,16 +96,20 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
   const processedInitialData = initialData ? {
     title: initialData.title || "",
     description: initialData.description || "",
-    subject: initialData.subject || "",
+    // When editing, use stored subject or empty string if not found
+    subject: initialData.subject || (classId ? "mathematics" : ""),
     category: initialData.category || "academic",
-    gradeLevel: initialData.gradeLevel || "",
-    ageRange: initialData.ageRange || "",
+    // When editing, use stored gradeLevel or default if not found
+    gradeLevel: initialData.gradeLevel || (classId ? "elementary" : ""),
+    // When editing, use stored ageRange or default if not found
+    ageRange: initialData.ageRange || (classId ? "6-10 years" : ""),
     startDate: initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "",
     endDate: initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "",
-    schedule: initialData.schedule || "",
+    // When editing, use stored schedule or default if not found
+    schedule: initialData.schedule || (classId ? "Mondays and Wednesdays, 3-4pm" : ""),
     location: initialData.location || "",
     // Fix price display - convert to string with proper formatting
-    price: initialData.price ? parseFloat(initialData.price.toString()).toFixed(2) : "0.00",
+    price: initialData.price ? (parseFloat(initialData.price.toString()) / 100).toFixed(2) : "0.00",
     capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
     isPublished: initialData.isPublished || initialData.status === "published" || false,
     isOnline: initialData.isOnline || initialData.location === "Online" || false,
@@ -117,6 +121,11 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       initialData.instructor_id ? 
         initialData.instructor_id.toString() : "1",
   } : null;
+  
+  // Log the initialData for debugging when editing
+  if (classId) {
+    console.log("Raw initialData for class ID", classId, ":", JSON.stringify(initialData));
+  }
   
   // Log processed data for debugging
   console.log("ProcessedInitialData:", processedInitialData);
