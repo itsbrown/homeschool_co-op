@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useLocation } from 'wouter';
+import { formatDate } from '../lib/utils';
 
 // Basic styles for the simple classes list
 const styles = {
@@ -59,14 +60,7 @@ const styles = {
   }
 };
 
-// Format date helper
-const formatDate = (dateStr: string) => {
-  try {
-    return new Date(dateStr).toLocaleDateString();
-  } catch (error) {
-    return 'Invalid date';
-  }
-};
+// Using the formatDate function from utils.ts
 
 export function SimpleClassesPage() {
   const { user, isLoading } = useAuth();
