@@ -62,13 +62,13 @@
     "endDate": "2025-11-14T00:00:00.000Z",
     "capacity": 10,
     "location": "Brighton",
-    "instructorName": "admin",
+    "instructorName": "Admin User",
     "price": 110000,
     "isPublished": true,
     "instructorId": 1,
     "id": 4,
     "createdAt": "2025-05-17T04:05:40.133Z",
-    "updatedAt": "2025-05-17T04:05:40.133Z",
+    "updatedAt": "2025-05-17T04:23:15.161Z",
     "enrollmentCount": 0,
     "status": "published"
   }

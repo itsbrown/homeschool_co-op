@@ -279,11 +279,15 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       return res.status(404).json({ message: "Class not found" });
     }
     
-    // Check if user is authorized to update this class
-    // Use default value of 1 if userId is not available
-    const userId = req.session.userId || 1;
-    if (existingClass.instructorId !== userId) {
-      return res.status(403).json({ message: "Not authorized to update this class" });
+    // For admin users, allow updating any class regardless of instructor
+    // This is needed for the admin to assign different educators to classes
+    const userRole = req.session.userRole;
+    if (userRole !== 'admin') {
+      // Check if user is authorized to update this class (only for non-admin users)
+      const userId = req.session.userId || 1;
+      if (existingClass.instructorId !== userId) {
+        return res.status(403).json({ message: "Not authorized to update this class" });
+      }
     }
     
     // Partial validation of request body (allow partial updates)
@@ -291,6 +295,15 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
     
     // Determine which storage system to use
     await getStorage();
+    
+    // Ensure instructorId is a number if provided
+    if (validatedData.instructorId) {
+      validatedData.instructorId = parseInt(validatedData.instructorId.toString(), 10);
+      console.log("Instructor ID assigned:", validatedData.instructorId);
+    }
+    
+    // Log the update data for debugging
+    console.log("Updating class with data:", JSON.stringify(validatedData, null, 2));
     
     let updatedClass;
     
@@ -310,6 +323,9 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
         updatedClass = classStorage.updateClass(id, validatedData);
       }
     }
+    
+    // Log the result
+    console.log("Class updated successfully:", JSON.stringify(updatedClass, null, 2));
     
     return res.status(200).json(updatedClass);
   } catch (error) {
