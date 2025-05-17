@@ -105,9 +105,14 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     isOnline: initialData.isOnline || initialData.location === "Online" || false,
     hasMaterials: initialData.hasMaterials || false,
     materials: initialData.materials || "",
-    instructorId: (initialData.instructorId || "1").toString(),
+    // Convert instructor ID to string - check for different potential formats
+    instructorId: initialData.instructorId ? 
+      initialData.instructorId.toString() : 
+      initialData.instructor_id ? 
+        initialData.instructor_id.toString() : "1",
   } : null;
   
+  // Log processed data for debugging
   console.log("ProcessedInitialData:", processedInitialData);
 
   // Default values based on initialData or set defaults
@@ -501,7 +506,11 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
           render={({ field }) => (
             <FormItem>
               <FormLabel>Instructor</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select 
+                onValueChange={field.onChange} 
+                value={field.value}
+                defaultValue={field.value}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select an instructor" />
