@@ -1,6 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { Class, InsertClass } from '@shared/schema';
+
+// Get directory paths for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Directory for storing data
 const DATA_DIR = path.join(__dirname, '../data');
@@ -50,7 +56,6 @@ function saveClasses(classes: Class[]): void {
 // Get all classes with filtering, sorting, and pagination
 export async function getClasses(options: { 
   limit?: number; 
-  offset?: number;
   page?: number;
   search?: string;
   category?: string;
@@ -101,8 +106,8 @@ export async function getClasses(options: {
     }
     
     // Apply pagination
-    if (options.limit) {
-      const start = options.page ? (options.page - 1) * options.limit : (options.offset || 0);
+    if (options.limit && options.page) {
+      const start = (options.page - 1) * options.limit;
       classes = classes.slice(start, start + options.limit);
     }
     

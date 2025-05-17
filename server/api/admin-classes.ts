@@ -3,6 +3,8 @@ import { z } from "zod";
 import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { isAdmin, isAuthenticated } from "../middleware/auth";
+// Import the simple file-based class storage
+import classStorage from "../class-storage.js";
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
@@ -18,23 +20,16 @@ router.get("/classes", isAuthenticated, isAdmin, async (req, res) => {
     const category = (req.query.category as string) || "";
     const status = (req.query.status as string) || "";
     
-    // Get classes from storage - using database implementation
-    const offset = (page - 1) * limit;
-    const classes = await storage.getClasses({
+    // Get classes from our simple file-based implementation
+    const { classes, totalCount, totalPages } = classStorage.getClasses({
+      page,
       limit,
-      offset,
-      search,
-      category,
-      status: status
-    });
-    
-    console.log("FETCHED CLASSES:", JSON.stringify(classes));
-    
-    const totalCount = await storage.getClassesCount({
       search,
       category,
       status
     });
+    
+    console.log("FETCHED CLASSES:", JSON.stringify(classes));
     
     const totalPages = Math.ceil(totalCount / limit);
     
