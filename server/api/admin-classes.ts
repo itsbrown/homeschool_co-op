@@ -303,6 +303,38 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
     // Partial validation of standard fields (allow partial updates)
     const validatedData = insertClassSchema.partial().parse(standardFields);
     
+    // Get the existing class data to compare prices
+    let existingClass = null;
+    if (useFileStorage) {
+      existingClass = classStorage.getClassById(id);
+    } else {
+      try {
+        existingClass = await classesDb.getClassById(id);
+      } catch (error) {
+        console.error("Error fetching existing class for price comparison:", error);
+      }
+    }
+    
+    // Fix the price if needed to prevent multiplication issues
+    if (validatedData.price && existingClass?.price) {
+      const newPrice = validatedData.price;
+      const oldPrice = existingClass.price;
+      const ratio = newPrice / oldPrice;
+      
+      console.log("Price comparison:", {
+        newPrice,
+        oldPrice,
+        ratio
+      });
+      
+      // If the new price is approximately 100x the old price (indicating double conversion)
+      // Use the old price instead
+      if (ratio > 90 && ratio < 110) {
+        console.log("Price conversion detected! Using original price:", oldPrice);
+        validatedData.price = oldPrice;
+      }
+    }
+    
     // Add the custom fields back to the validated data object
     const updateData = {
       ...validatedData,
