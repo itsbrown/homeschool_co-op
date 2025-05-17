@@ -105,7 +105,18 @@ export function AdminClassesPage() {
         const responseData = await response.json();
         console.log("Classes data from API:", responseData);
         
-        if (!responseData.classes) {
+        // Check if we received classes data in the expected format
+        if (!responseData.classes && Array.isArray(responseData)) {
+          // If the API returned an array directly, transform it into the expected format
+          console.log("Converting array response to expected format");
+          return { 
+            classes: responseData, 
+            page: page, 
+            limit: 10, 
+            totalCount: responseData.length,
+            totalPages: Math.ceil(responseData.length / 10)
+          };
+        } else if (!responseData.classes) {
           console.error("Missing 'classes' property in API response:", responseData);
           return { classes: [], page: 1, limit: 10, totalCount: 0, totalPages: 0 };
         }
