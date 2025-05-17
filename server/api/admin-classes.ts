@@ -290,37 +290,56 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       }
     }
     
-    // Partial validation of request body (allow partial updates)
-    const validatedData = insertClassSchema.partial().parse(req.body);
+    // Extract all fields from the request body, not just the ones in the schema
+    // This allows us to pass through custom fields that aren't part of the database schema
+    const { 
+      subject, 
+      gradeLevel, 
+      ageRange, 
+      schedule,
+      ...standardFields
+    } = req.body;
+
+    // Partial validation of standard fields (allow partial updates)
+    const validatedData = insertClassSchema.partial().parse(standardFields);
+    
+    // Add the custom fields back to the validated data object
+    const updateData = {
+      ...validatedData,
+      subject,
+      gradeLevel,
+      ageRange,
+      schedule
+    };
     
     // Determine which storage system to use
     await getStorage();
     
     // Ensure instructorId is a number if provided
-    if (validatedData.instructorId) {
-      validatedData.instructorId = parseInt(validatedData.instructorId.toString(), 10);
-      console.log("Instructor ID assigned:", validatedData.instructorId);
+    if (updateData.instructorId) {
+      updateData.instructorId = parseInt(updateData.instructorId.toString(), 10);
+      console.log("Instructor ID assigned:", updateData.instructorId);
     }
     
     // Log the update data for debugging
-    console.log("Updating class with data:", JSON.stringify(validatedData, null, 2));
+    console.log("Updating class with data:", JSON.stringify(updateData, null, 2));
     
     let updatedClass;
     
     if (useFileStorage) {
       // Update class using file-based storage
       console.log("Using file-based storage to update class");
-      updatedClass = classStorage.updateClass(id, validatedData);
+      updatedClass = classStorage.updateClass(id, updateData);
     } else {
       // Try to use database storage
       console.log("Using database storage to update class");
       try {
-        updatedClass = await classesDb.updateClass(id, validatedData);
+        updatedClass = await classesDb.updateClass(id, updateData);
       } catch (dbError) {
         console.error("Database operation failed, falling back to file storage:", dbError);
         
         // Fall back to file storage
-        updatedClass = classStorage.updateClass(id, validatedData);
+        updatedClass = classStorage.updateClass(id, updateData);
       }
     }
     
