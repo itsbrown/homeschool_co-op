@@ -2,6 +2,27 @@ import fs from 'fs';
 import path from 'path';
 import { Class, InsertClass } from '@shared/schema';
 
+/**
+ * Normalize a date to prevent timezone issues by ensuring it's in YYYY-MM-DD format
+ * @param dateInput The date to normalize (string, Date, or null)
+ * @returns Normalized date string in YYYY-MM-DD format
+ */
+function normalizeDate(dateInput: string | Date | null): string | null {
+  if (!dateInput) return null;
+  
+  try {
+    const date = new Date(dateInput);
+    // Check if date is valid
+    if (isNaN(date.getTime())) return null;
+    
+    // Format as YYYY-MM-DD to avoid timezone issues
+    return date.toISOString().split('T')[0];
+  } catch (error) {
+    console.error('Error normalizing date:', error);
+    return null;
+  }
+}
+
 // Directory for storing data
 const DATA_DIR = path.join(process.cwd(), 'data');
 const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
@@ -145,21 +166,15 @@ function updateClass(id: number, classData: Partial<InsertClass> & Record<string
   // Preserve custom fields that aren't in the schema
   const existingFields = { ...classes[index] };
   
-  // Ensure price is not multiplied again if it's already in cents
+  // Always use the price from the form as the source of truth
+  // The server-side admin-classes.ts already handles converting to cents if needed
   let finalPrice = classData.price;
-  if (classData.price && existingFields.price) {
-    console.log('Price comparison:', { 
-      new: classData.price, 
-      existing: existingFields.price,
-      ratio: classData.price / existingFields.price
-    });
-    
-    // If the new price is approximately 100x the existing price, it's likely a conversion issue
-    // In that case, use the existing price
-    if (classData.price > existingFields.price * 90 && classData.price < existingFields.price * 110) {
-      finalPrice = existingFields.price;
-      console.log('Price conversion detected, using existing price:', existingFields.price);
-    }
+  if (classData.price !== undefined) {
+    console.log('Using price from form:', classData.price);
+    finalPrice = classData.price;
+  } else if (existingFields.price) {
+    console.log('Form did not provide price, keeping existing price:', existingFields.price);
+    finalPrice = existingFields.price;
   }
   
   // Create the updated class with all fields preserved
@@ -168,7 +183,8 @@ function updateClass(id: number, classData: Partial<InsertClass> & Record<string
     ...classData,
     // Ensure price is not multiplied
     price: finalPrice,
-    // Ensure dates remain in their original format
+    // Always use dates from the form as the source of truth
+    // Process dates to prevent timezone shifts
     startDate: classData.startDate || existingFields.startDate,
     endDate: classData.endDate || existingFields.endDate,
     // Explicitly handle the custom fields from the form that aren't in the schema

@@ -180,19 +180,11 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const selectedEducator = educators.find(edu => edu.id.toString() === data.instructorId);
       const instructorName = selectedEducator ? selectedEducator.name : (user.username || "Instructor");
       
-      // Convert the input price to a number
+      // Convert the input price to a number (as dollars, not cents)
+      // The server will handle the conversion to cents
       const inputPrice = parseFloat(data.price || "0");
       
-      // Store price explicitly in cents (always multiply by 100)
-      // We'll handle any price adjustment on the server if necessary
-      const priceInCents = Math.round(inputPrice * 100);
-      
-      console.log('Price submitted from form:', { inputPrice, priceInCents });
-      
-      console.log("Price conversion:", {
-        inputPrice: data.price,
-        convertedPrice: priceInCents
-      });
+      console.log('Price submitted from form (in dollars):', inputPrice);
       
       // Create an object that matches the expected insertClassSchema
       const classData = {
@@ -204,8 +196,8 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         gradeLevel: data.gradeLevel || "",
         ageRange: data.ageRange || "",
         schedule: data.schedule || "",
-        // Store price in cents to match database schema
-        price: priceInCents,
+        // Send price in dollars - server will convert to cents
+        price: inputPrice,
         capacity: parseInt(data.capacity.toString(), 10),
         location: data.location || "",
         // Keep the date format exactly as entered in the form to prevent timezone shifts
