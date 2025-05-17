@@ -13,13 +13,20 @@ let useFileStorage = true;
 // Function to determine which storage to use
 const getStorage = async () => {
   try {
-    // Try to get a class from the database
-    await classesDb.getClassById(1);
+    // Check if the database pool is available
+    if (!global.dbPool || !global.dbPool.query) {
+      console.log('Database pool not available, using file storage');
+      useFileStorage = true;
+      return { useFileStorage };
+    }
+    
     // If successful, use database storage
     useFileStorage = false;
+    console.log('Database pool available, using database storage');
     return { useFileStorage };
   } catch (err) {
     // If error, use file storage
+    console.log('Error checking database, using file storage:', err);
     useFileStorage = true;
     return { useFileStorage };
   }
