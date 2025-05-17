@@ -205,9 +205,9 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         price: priceInCents,
         capacity: parseInt(data.capacity.toString(), 10),
         location: data.location || "",
-        // Ensure dates are properly formatted with timezone handling
-        startDate: data.startDate ? new Date(data.startDate).toISOString() : null,
-        endDate: data.endDate ? new Date(data.endDate).toISOString() : null,
+        // Keep the date format exactly as entered in the form to prevent timezone shifts
+        startDate: data.startDate || null,
+        endDate: data.endDate || null,
         categoryName: "Spring 2025",
         isPublished: data.isPublished,
         hasMaterials: data.hasMaterials,
