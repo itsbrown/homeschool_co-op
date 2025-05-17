@@ -33,6 +33,10 @@ declare module "express-session" {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize database tables
+  const { initializeDatabase } = await import('./init-db');
+  await initializeDatabase();
+  
   // Configure session middleware
   app.use(
     session({

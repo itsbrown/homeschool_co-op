@@ -20,9 +20,11 @@ export async function getClassById(id: number): Promise<Class | undefined> {
 
 export async function getClasses(options: { 
   limit?: number; 
-  offset?: number; 
+  offset?: number;
+  page?: number;
   search?: string;
   category?: string;
+  status?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }): Promise<Class[]> {
@@ -63,7 +65,14 @@ export async function getClasses(options: {
       queryParams.push(options.limit);
       query += ` LIMIT $${queryParams.length}`;
       
-      if (options.offset) {
+      // Support for page-based pagination
+      if (options.page) {
+        const offset = (options.page - 1) * options.limit;
+        queryParams.push(offset);
+        query += ` OFFSET $${queryParams.length}`;
+      }
+      // Direct offset if provided
+      else if (options.offset) {
         queryParams.push(options.offset);
         query += ` OFFSET $${queryParams.length}`;
       }
