@@ -44,6 +44,11 @@ export async function getClasses(options: {
     if (options.category) {
       queryParams.push(options.category);
       conditions.push(`category = $${queryParams.length}`);
+    // Add status filter
+    if (options.status) {
+      queryParams.push(options.status);
+      conditions.push(`status = $${queryParams.length}`);
+    }
     }
     
     // Add WHERE clause if we have conditions
@@ -110,6 +115,11 @@ export async function getClassesCount(options: {
       queryParams.push(`%${options.search}%`);
       queryParams.push(`%${options.search}%`);
       conditions.push(`(title ILIKE $${queryParams.length - 1} OR description ILIKE $${queryParams.length})`);
+    }
+    // Add status filter
+    if (options.status) {
+      queryParams.push(options.status);
+      conditions.push(`status = $${queryParams.length}`);
     }
     
     // Add category condition
