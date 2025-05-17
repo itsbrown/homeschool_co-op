@@ -48,6 +48,7 @@ const classFormSchema = z.object({
   isOnline: z.boolean().default(false),
   hasMaterials: z.boolean().default(false),
   materials: z.string().optional(),
+  instructorId: z.string().min(1, "Instructor is required"),
 });
 
 type ClassFormValues = z.infer<typeof classFormSchema>;
@@ -55,40 +56,108 @@ type ClassFormValues = z.infer<typeof classFormSchema>;
 interface ClassCreationFormProps {
   onSuccess?: () => void;
   initialData?: any;
+  classId?: number;
 }
 
-export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormProps) {
+export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCreationFormProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Define type for educator
+  interface Educator {
+    id: number;
+    name: string;
+    username: string;
+    role: string;
+  }
+  
+  const [educators, setEducators] = useState<Educator[]>([]);
+  
+  // Fetch educators for dropdown
+  useEffect(() => {
+    const fetchEducators = async () => {
+      try {
+        const response = await fetch('/api/admin-classes/educators', {
+          credentials: "include"
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.educators && Array.isArray(data.educators)) {
+            setEducators(data.educators);
+            console.log("Educators loaded:", data.educators);
+          } else {
+            console.error("Invalid educators data format:", data);
+            // Provide some default educators if the API fails
+            setEducators([
+              { id: 1, name: "Admin User", username: "admin", role: "admin" },
+              { id: 2, name: "Educator User", username: "educator", role: "educator" }
+            ]);
+          }
+        } else {
+          console.error("Failed to fetch educators:", response.statusText);
+          // Provide some default educators if the API fails
+          setEducators([
+            { id: 1, name: "Admin User", username: "admin", role: "admin" },
+            { id: 2, name: "Educator User", username: "educator", role: "educator" }
+          ]);
+        }
+      } catch (error) {
+        console.error("Error fetching educators:", error);
+        // Provide some default educators if the API fails
+        setEducators([
+          { id: 1, name: "Admin User", username: "admin", role: "admin" },
+          { id: 2, name: "Educator User", username: "educator", role: "educator" }
+        ]);
+      }
+    };
+    
+    fetchEducators();
+  }, []);
+
+  // Process initialData to ensure all fields are properly formatted for the form
+  const processedInitialData = initialData ? {
+    title: initialData.title || "",
+    description: initialData.description || "",
+    subject: initialData.subject || "",
+    category: initialData.category || "academic",
+    gradeLevel: initialData.gradeLevel || "",
+    ageRange: initialData.ageRange || "",
+    startDate: initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "",
+    endDate: initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "",
+    schedule: initialData.schedule || "",
+    location: initialData.location || "",
+    price: (initialData.price || 0).toString(),
+    capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
+    isPublished: initialData.isPublished || initialData.status === "published" || false,
+    isOnline: initialData.isOnline || initialData.location === "Online" || false,
+    hasMaterials: initialData.hasMaterials || false,
+    materials: initialData.materials || "",
+    instructorId: (initialData.instructorId || "1").toString(),
+  } : null;
+  
+  console.log("ProcessedInitialData:", processedInitialData);
 
   // Default values based on initialData or set defaults
-  const defaultValues: Partial<ClassFormValues> = initialData
-    ? {
-        ...initialData,
-        price: initialData.price?.toString() || "0",
-        capacity: initialData.capacity?.toString() || "20",
-        startDate: initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "",
-        endDate: initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "",
-      }
-    : {
-        title: "",
-        description: "",
-        subject: "",
-        category: "academic",
-        gradeLevel: "",
-        ageRange: "",
-        startDate: "",
-        endDate: "",
-        schedule: "",
-        location: "",
-        price: "0",
-        capacity: "20",
-        isPublished: false,
-        isOnline: false,
-        hasMaterials: false,
-        materials: "",
-      };
+  const defaultValues: Partial<ClassFormValues> = processedInitialData || {
+    title: "",
+    description: "",
+    subject: "",
+    category: "academic",
+    gradeLevel: "",
+    ageRange: "",
+    startDate: "",
+    endDate: "",
+    schedule: "",
+    location: "",
+    price: "0",
+    capacity: "20",
+    isPublished: false,
+    isOnline: false,
+    hasMaterials: false,
+    materials: "",
+    instructorId: "1",
+  };
 
   const form = useForm<ClassFormValues>({
     resolver: zodResolver(classFormSchema),
@@ -112,8 +181,12 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
 
     try {
       // The admin-classes router is mounted at /api/admin-classes
-      const endpoint = initialData ? `/api/admin-classes/classes/${initialData.id}` : "/api/admin-classes/classes";
-      const method = initialData ? "PATCH" : "POST";
+      const endpoint = classId ? `/api/admin-classes/classes/${classId}` : "/api/admin-classes/classes";
+      const method = classId ? "PATCH" : "POST";
+      
+      // Find instructor name based on selected ID
+      const selectedEducator = educators.find(edu => edu.id.toString() === data.instructorId);
+      const instructorName = selectedEducator ? selectedEducator.name : (user.username || "Instructor");
       
       // Create an object that matches the expected insertClassSchema
       const classData = {
@@ -127,7 +200,8 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
         endDate: data.endDate ? data.endDate : null,
         categoryName: "Spring 2025",
         isPublished: data.isPublished,
-        instructorName: user.username || "Instructor"
+        instructorId: parseInt(data.instructorId),
+        instructorName: instructorName
       };
 
       console.log("Submitting class data:", classData);
@@ -442,6 +516,35 @@ export function ClassCreationForm({ onSuccess, initialData }: ClassCreationFormP
               </FormControl>
               <FormDescription>
                 Where the class will be held (leave blank if online)
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Instructor Selection */}
+        <FormField
+          control={form.control}
+          name="instructorId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Instructor</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an instructor" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {educators.map((educator) => (
+                    <SelectItem key={educator.id} value={educator.id.toString()}>
+                      {educator.name} ({educator.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Assign an instructor to this class
               </FormDescription>
               <FormMessage />
             </FormItem>
