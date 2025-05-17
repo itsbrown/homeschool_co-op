@@ -1,1 +1,56 @@
-[]
+[
+  {
+    "id": 1,
+    "title": "American History for Young Learners",
+    "description": "An interactive class exploring key events and figures in American History through engaging activities and discussions.",
+    "category": "History",
+    "price": 89.99,
+    "location": "Online",
+    "instructorId": 1,
+    "startDate": "2025-06-01T14:00:00.000Z",
+    "endDate": "2025-08-15T14:00:00.000Z",
+    "enrollmentCount": 12,
+    "maxEnrollment": 25,
+    "imageUrl": null,
+    "syllabus": "Weekly modules covering Colonial America, The American Revolution, Civil War, World Wars, and Modern America.",
+    "status": "published",
+    "createdAt": "2025-05-01T08:30:00.000Z",
+    "updatedAt": "2025-05-01T08:30:00.000Z"
+  },
+  {
+    "id": 2,
+    "title": "Introduction to Coding for Kids",
+    "description": "A fun beginner-friendly class teaching the basics of programming through games and interactive projects.",
+    "category": "Technology",
+    "price": 99.99,
+    "location": "Online",
+    "instructorId": 2,
+    "startDate": "2025-06-15T13:00:00.000Z",
+    "endDate": "2025-07-30T13:00:00.000Z",
+    "enrollmentCount": 18,
+    "maxEnrollment": 20,
+    "imageUrl": null,
+    "syllabus": "Introduction to coding concepts, variables, loops, conditionals, and creating simple games.",
+    "status": "published",
+    "createdAt": "2025-05-02T10:15:00.000Z",
+    "updatedAt": "2025-05-02T10:15:00.000Z"
+  },
+  {
+    "id": 3,
+    "title": "Creative Writing Workshop",
+    "description": "Develop storytelling skills and unleash creativity through guided writing exercises and collaborative projects.",
+    "category": "Language Arts",
+    "price": 75.00,
+    "location": "Hybrid",
+    "instructorId": 2,
+    "startDate": "2025-07-01T15:30:00.000Z",
+    "endDate": "2025-08-20T15:30:00.000Z",
+    "enrollmentCount": 8,
+    "maxEnrollment": 15,
+    "imageUrl": null,
+    "syllabus": "Character development, plot structure, setting, dialogue, and completing a short story.",
+    "status": "published",
+    "createdAt": "2025-05-03T09:45:00.000Z",
+    "updatedAt": "2025-05-03T09:45:00.000Z"
+  }
+]
