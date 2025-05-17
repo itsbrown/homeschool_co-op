@@ -145,10 +145,32 @@ function updateClass(id: number, classData: Partial<InsertClass> & Record<string
   // Preserve custom fields that aren't in the schema
   const existingFields = { ...classes[index] };
   
+  // Ensure price is not multiplied again if it's already in cents
+  let finalPrice = classData.price;
+  if (classData.price && existingFields.price) {
+    console.log('Price comparison:', { 
+      new: classData.price, 
+      existing: existingFields.price,
+      ratio: classData.price / existingFields.price
+    });
+    
+    // If the new price is approximately 100x the existing price, it's likely a conversion issue
+    // In that case, use the existing price
+    if (classData.price > existingFields.price * 90 && classData.price < existingFields.price * 110) {
+      finalPrice = existingFields.price;
+      console.log('Price conversion detected, using existing price:', existingFields.price);
+    }
+  }
+  
   // Create the updated class with all fields preserved
   const updatedClass = {
     ...existingFields,
     ...classData,
+    // Ensure price is not multiplied
+    price: finalPrice,
+    // Ensure dates remain in their original format
+    startDate: classData.startDate || existingFields.startDate,
+    endDate: classData.endDate || existingFields.endDate,
     // Explicitly handle the custom fields from the form that aren't in the schema
     subject: classData.subject !== undefined ? classData.subject : existingFields.subject,
     gradeLevel: classData.gradeLevel !== undefined ? classData.gradeLevel : existingFields.gradeLevel,
