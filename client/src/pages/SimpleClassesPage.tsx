@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useLocation } from 'wouter';
-import { formatDate } from '../lib/utils';
+import { formatDate, formatCurrency } from '@/lib/utils';
 
 // Basic styles for the simple classes list
 const styles = {
@@ -189,7 +189,7 @@ export function SimpleClassesPage() {
                       {classItem.startDate ? formatDate(classItem.startDate) : 'N/A'} - 
                       {classItem.endDate ? formatDate(classItem.endDate) : 'N/A'}
                     </td>
-                    <td style={styles.td}>${((classItem.price || 0) / 100).toFixed(2)}</td>
+                    <td style={styles.td}>{formatCurrency(classItem.price || 0)}</td>
                     <td style={styles.td}>
                       {classItem.enrollmentCount || 0}/{classItem.maxEnrollment || classItem.capacity || 20}
                     </td>
