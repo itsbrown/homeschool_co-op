@@ -1,22 +1,24 @@
-import { 
-  users, type User, type InsertUser, 
-  curricula, type Curriculum, type InsertCurriculum, 
-  lessons, type Lesson, type InsertLesson, 
-  events, type Event, type InsertEvent, 
-  marketplaceItems, type MarketplaceItem, type InsertMarketplaceItem,
-  knowledgeBases, type KnowledgeBase, type InsertKnowledgeBase,
-  children, type Child, type InsertChild,
-  emergencyContacts, type EmergencyContact, type InsertEmergencyContact,
-  programs, type Program, type InsertProgram,
-  programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
-  classes, type Class, type InsertClass,
-  activities, type Activity, type InsertActivity
-} from "@shared/schema";
+import { eq, and, desc, asc, like, or, sql } from 'drizzle-orm';
+import { db } from './db';
+import { IStorage } from './storage';
+import {
+  User, InsertUser, users,
+  Class, InsertClass, classes,
+  KnowledgeBase, InsertKnowledgeBase, knowledgeBases,
+  Curriculum, InsertCurriculum, curricula,
+  Activity, InsertActivity, activities,
+  Lesson, InsertLesson, lessons,
+  Program, InsertProgram, programs,
+  ProgramEnrollment, InsertProgramEnrollment, programEnrollments,
+  Child, InsertChild, children,
+  EmergencyContact, InsertEmergencyContact, emergencyContacts,
+  Event, InsertEvent, events,
+  MarketplaceItem, InsertMarketplaceItem, marketplaceItems
+} from '../shared/schema';
 
-import { eq, like, and, or, desc, asc, sql } from "drizzle-orm";
-import { db } from "./db";
-import { IStorage } from "./storage";
-
+/**
+ * DatabaseStorage - Implements IStorage using PostgreSQL and Drizzle ORM
+ */
 export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
@@ -35,8 +37,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const [createdUser] = await db.insert(users).values(user).returning();
-    return createdUser;
+    const [newUser] = await db.insert(users).values(user).returning();
+    return newUser;
   }
 
   // Curriculum methods
@@ -46,18 +48,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCurriculaByAuthor(authorId: number): Promise<Curriculum[]> {
-    return db.select().from(curricula).where(eq(curricula.authorId, authorId));
+    return await db.select().from(curricula).where(eq(curricula.authorId, authorId));
   }
 
   async createCurriculum(curriculum: InsertCurriculum): Promise<Curriculum> {
-    const [createdCurriculum] = await db.insert(curricula).values(curriculum).returning();
-    return createdCurriculum;
+    const [newCurriculum] = await db.insert(curricula).values(curriculum).returning();
+    return newCurriculum;
   }
 
   async updateCurriculum(id: number, curriculum: Partial<InsertCurriculum>): Promise<Curriculum | undefined> {
     const [updatedCurriculum] = await db
       .update(curricula)
-      .set({ ...curriculum, updatedAt: new Date() })
+      .set(curriculum)
       .where(eq(curricula.id, id))
       .returning();
     return updatedCurriculum;
@@ -65,113 +67,104 @@ export class DatabaseStorage implements IStorage {
 
   // Class methods
   async getClassById(id: number): Promise<Class | undefined> {
-    const [classItem] = await db.select().from(classes).where(eq(classes.id, id));
-    return classItem;
+    const [cls] = await db.select().from(classes).where(eq(classes.id, id));
+    return cls;
   }
 
   async getClassesByInstructor(instructorId: number): Promise<Class[]> {
-    return db.select().from(classes).where(eq(classes.instructorId, instructorId));
+    return await db.select().from(classes).where(eq(classes.instructorId, instructorId));
   }
 
   async getClasses(options: { 
-    page: number; 
-    limit: number; 
-    search?: string; 
-    category?: string; 
-    status?: "published" | "draft" | "" 
+    limit?: number; 
+    offset?: number; 
+    search?: string;
+    category?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }): Promise<Class[]> {
-    const { page, limit, search = "", category = "", status = "" } = options;
+    let query = db.select().from(classes);
     
-    // Build filters
-    const filters = [];
-    
-    if (search) {
-      filters.push(
+    // Apply search filter
+    if (options.search) {
+      query = query.where(
         or(
-          like(classes.title, `%${search}%`),
-          like(classes.description, `%${search}%`)
+          like(classes.title, `%${options.search}%`),
+          like(classes.description, `%${options.search}%`)
         )
       );
     }
     
-    if (category) {
-      filters.push(eq(classes.category, category));
+    // Apply category filter
+    if (options.category) {
+      query = query.where(eq(classes.category, options.category));
     }
     
-    if (status === "published") {
-      filters.push(eq(classes.isPublished, true));
-    } else if (status === "draft") {
-      filters.push(eq(classes.isPublished, false));
+    // Apply sorting
+    if (options.sortBy) {
+      const sortColumn = classes[options.sortBy as keyof typeof classes] || classes.createdAt;
+      query = query.orderBy(
+        options.sortOrder === 'asc' 
+          ? asc(sortColumn) 
+          : desc(sortColumn)
+      );
+    } else {
+      // Default sort by createdAt desc
+      query = query.orderBy(desc(classes.createdAt));
     }
     
     // Apply pagination
-    const offset = (page - 1) * limit;
-    
-    const query = db.select()
-      .from(classes)
-      .orderBy(desc(classes.createdAt))
-      .limit(limit)
-      .offset(offset);
-    
-    // Add filters if any exist
-    if (filters.length > 0) {
-      query.where(and(...filters));
+    if (options.limit) {
+      query = query.limit(options.limit);
+      if (options.offset) {
+        query = query.offset(options.offset);
+      }
     }
     
-    return query;
+    return await query;
   }
 
   async getClassesCount(options: { 
-    search?: string; 
-    category?: string; 
-    status?: "published" | "draft" | "" 
+    search?: string;
+    category?: string;
   }): Promise<number> {
-    const { search = "", category = "", status = "" } = options;
+    let query = db.select({ count: sql`count(*)` }).from(classes);
     
-    // Build filters
-    const filters = [];
-    
-    if (search) {
-      filters.push(
+    // Apply search filter
+    if (options.search) {
+      query = query.where(
         or(
-          like(classes.title, `%${search}%`),
-          like(classes.description, `%${search}%`)
+          like(classes.title, `%${options.search}%`),
+          like(classes.description, `%${options.search}%`)
         )
       );
     }
     
-    if (category) {
-      filters.push(eq(classes.category, category));
+    // Apply category filter
+    if (options.category) {
+      query = query.where(eq(classes.category, options.category));
     }
     
-    if (status === "published") {
-      filters.push(eq(classes.isPublished, true));
-    } else if (status === "draft") {
-      filters.push(eq(classes.isPublished, false));
-    }
-    
-    // Count total results
-    const query = db.select({ count: sql<number>`COUNT(*)` })
-      .from(classes);
-    
-    // Add filters if any exist
-    if (filters.length > 0) {
-      query.where(and(...filters));
-    }
-    
-    const [result] = await query;
-    return result?.count || 0;
+    const result = await query;
+    return Number(result[0]?.count || 0);
   }
 
   async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
-    const [createdClass] = await db.insert(classes).values(classData).returning();
-    return createdClass;
+    const [newClass] = await db.insert(classes).values({
+      ...classData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newClass;
   }
 
   async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
     const [updatedClass] = await db
       .update(classes)
-      .set({ ...classData, updatedAt: new Date() })
+      .set({
+        ...classData,
+        updatedAt: new Date()
+      })
       .where(eq(classes.id, id))
       .returning();
     return updatedClass;
@@ -184,9 +177,9 @@ export class DatabaseStorage implements IStorage {
   async incrementClassEnrollment(id: number): Promise<Class | undefined> {
     const [updatedClass] = await db
       .update(classes)
-      .set({ 
-        enrollmentCount: sql`${classes.enrollmentCount} + 1`, 
-        updatedAt: new Date() 
+      .set({
+        enrollmentCount: sql`${classes.enrollmentCount} + 1`,
+        updatedAt: new Date()
       })
       .where(eq(classes.id, id))
       .returning();
@@ -200,36 +193,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getKnowledgeBaseByTitle(title: string): Promise<KnowledgeBase | undefined> {
-    const [knowledgeBase] = await db.select().from(knowledgeBases)
-      .where(eq(knowledgeBases.title, title));
+    const [knowledgeBase] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.title, title));
     return knowledgeBase;
   }
 
   async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
-    return db.select().from(knowledgeBases).where(eq(knowledgeBases.authorId, authorId));
+    return await db.select().from(knowledgeBases).where(eq(knowledgeBases.authorId, authorId));
   }
 
   async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
-    return db.select().from(knowledgeBases)
-      .where(eq(sql`LOWER(${knowledgeBases.subject})`, subject.toLowerCase()));
+    return await db.select().from(knowledgeBases).where(eq(knowledgeBases.subject, subject));
   }
 
   async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
-    const query = db.select()
-      .from(knowledgeBases)
-      .where(eq(knowledgeBases.isPublic, true))
-      .orderBy(desc(knowledgeBases.createdAt));
+    let query = db.select().from(knowledgeBases).where(eq(knowledgeBases.isPublic, true));
     
     if (limit) {
-      query.limit(limit);
+      query = query.limit(limit);
     }
     
-    return query;
+    return await query;
   }
 
   async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
-    const [knowledgeBase] = await db.insert(knowledgeBases)
-      .values({ ...insertKnowledgeBase, downloadCount: 0 })
+    const [knowledgeBase] = await db
+      .insert(knowledgeBases)
+      .values({
+        ...insertKnowledgeBase,
+        downloadCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
       .returning();
     return knowledgeBase;
   }
@@ -237,7 +231,10 @@ export class DatabaseStorage implements IStorage {
   async updateKnowledgeBase(id: number, updateData: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
     const [updatedKnowledgeBase] = await db
       .update(knowledgeBases)
-      .set({ ...updateData, updatedAt: new Date() })
+      .set({
+        ...updateData,
+        updatedAt: new Date()
+      })
       .where(eq(knowledgeBases.id, id))
       .returning();
     return updatedKnowledgeBase;
@@ -246,34 +243,44 @@ export class DatabaseStorage implements IStorage {
   async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
     const [updatedKnowledgeBase] = await db
       .update(knowledgeBases)
-      .set({ 
-        downloadCount: sql`${knowledgeBases.downloadCount} + 1`, 
-        updatedAt: new Date() 
+      .set({
+        downloadCount: sql`${knowledgeBases.downloadCount} + 1`,
+        updatedAt: new Date()
       })
       .where(eq(knowledgeBases.id, id))
       .returning();
     return updatedKnowledgeBase;
   }
 
-  // Programs methods
+  // Program methods
   async getProgram(id: number): Promise<Program | undefined> {
     const [program] = await db.select().from(programs).where(eq(programs.id, id));
     return program;
   }
 
   async getProgramsByOrganizer(organizerId: number): Promise<Program[]> {
-    return db.select().from(programs).where(eq(programs.organizerId, organizerId));
+    return await db.select().from(programs).where(eq(programs.organizerId, organizerId));
   }
 
   async createProgram(program: InsertProgram): Promise<Program> {
-    const [createdProgram] = await db.insert(programs).values(program).returning();
-    return createdProgram;
+    const [newProgram] = await db
+      .insert(programs)
+      .values({
+        ...program,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newProgram;
   }
 
   async updateProgram(id: number, program: Partial<InsertProgram>): Promise<Program | undefined> {
     const [updatedProgram] = await db
       .update(programs)
-      .set({ ...program, updatedAt: new Date() })
+      .set({
+        ...program,
+        updatedAt: new Date()
+      })
       .where(eq(programs.id, id))
       .returning();
     return updatedProgram;
@@ -290,22 +297,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProgramEnrollmentsByParent(parentId: number): Promise<ProgramEnrollment[]> {
-    return db.select().from(programEnrollments).where(eq(programEnrollments.parentId, parentId));
+    return await db.select().from(programEnrollments).where(eq(programEnrollments.parentId, parentId));
   }
 
   async getProgramEnrollmentsByProgram(programId: number): Promise<ProgramEnrollment[]> {
-    return db.select().from(programEnrollments).where(eq(programEnrollments.programId, programId));
+    return await db.select().from(programEnrollments).where(eq(programEnrollments.programId, programId));
   }
 
   async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
-    const [createdEnrollment] = await db.insert(programEnrollments).values(enrollment).returning();
-    return createdEnrollment;
+    const [newEnrollment] = await db
+      .insert(programEnrollments)
+      .values({
+        ...enrollment,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newEnrollment;
   }
 
   async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
     const [updatedEnrollment] = await db
       .update(programEnrollments)
-      .set({ ...enrollment, updatedAt: new Date() })
+      .set({
+        ...enrollment,
+        updatedAt: new Date()
+      })
       .where(eq(programEnrollments.id, id))
       .returning();
     return updatedEnrollment;
@@ -322,18 +339,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChildrenByParent(parentId: number): Promise<Child[]> {
-    return db.select().from(children).where(eq(children.parentId, parentId));
+    return await db.select().from(children).where(eq(children.parentId, parentId));
   }
 
   async createChild(child: InsertChild): Promise<Child> {
-    const [createdChild] = await db.insert(children).values(child).returning();
-    return createdChild;
+    const [newChild] = await db
+      .insert(children)
+      .values({
+        ...child,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newChild;
   }
 
   async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
     const [updatedChild] = await db
       .update(children)
-      .set({ ...child, updatedAt: new Date() })
+      .set({
+        ...child,
+        updatedAt: new Date()
+      })
       .where(eq(children.id, id))
       .returning();
     return updatedChild;
@@ -350,18 +377,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEmergencyContactsByParent(parentId: number): Promise<EmergencyContact[]> {
-    return db.select().from(emergencyContacts).where(eq(emergencyContacts.parentId, parentId));
+    return await db.select().from(emergencyContacts).where(eq(emergencyContacts.parentId, parentId));
   }
 
   async createEmergencyContact(contact: InsertEmergencyContact): Promise<EmergencyContact> {
-    const [createdContact] = await db.insert(emergencyContacts).values(contact).returning();
-    return createdContact;
+    const [newContact] = await db
+      .insert(emergencyContacts)
+      .values({
+        ...contact,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newContact;
   }
 
   async updateEmergencyContact(id: number, contact: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
     const [updatedContact] = await db
       .update(emergencyContacts)
-      .set({ ...contact, updatedAt: new Date() })
+      .set({
+        ...contact,
+        updatedAt: new Date()
+      })
       .where(eq(emergencyContacts.id, id))
       .returning();
     return updatedContact;
@@ -370,7 +407,7 @@ export class DatabaseStorage implements IStorage {
   async deleteEmergencyContact(id: number): Promise<void> {
     await db.delete(emergencyContacts).where(eq(emergencyContacts.id, id));
   }
-  
+
   // Activity methods
   async getActivity(id: number): Promise<Activity | undefined> {
     const [activity] = await db.select().from(activities).where(eq(activities.id, id));
@@ -378,18 +415,44 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActivitiesByType(activityType: string): Promise<Activity[]> {
-    return db.select().from(activities).where(eq(activities.activityType, activityType));
+    return await db.select().from(activities).where(eq(activities.activityType, activityType));
+  }
+
+  async getActivitiesByAuthor(authorId: number): Promise<Activity[]> {
+    return await db.select().from(activities).where(eq(activities.authorId, authorId));
   }
 
   async createActivity(activity: InsertActivity): Promise<Activity> {
-    const [createdActivity] = await db.insert(activities).values(activity).returning();
-    return createdActivity;
+    const [newActivity] = await db
+      .insert(activities)
+      .values({
+        ...activity,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newActivity;
   }
 
   async updateActivity(id: number, activity: Partial<InsertActivity>): Promise<Activity | undefined> {
     const [updatedActivity] = await db
       .update(activities)
-      .set({ ...activity, updatedAt: new Date() })
+      .set({
+        ...activity,
+        updatedAt: new Date()
+      })
+      .where(eq(activities.id, id))
+      .returning();
+    return updatedActivity;
+  }
+
+  async updateActivityDownloadCount(id: number): Promise<Activity | undefined> {
+    const [updatedActivity] = await db
+      .update(activities)
+      .set({
+        downloadCount: sql`${activities.downloadCount} + 1`,
+        updatedAt: new Date()
+      })
       .where(eq(activities.id, id))
       .returning();
     return updatedActivity;
@@ -398,7 +461,7 @@ export class DatabaseStorage implements IStorage {
   async deleteActivity(id: number): Promise<void> {
     await db.delete(activities).where(eq(activities.id, id));
   }
-  
+
   // Lesson methods
   async getLesson(id: number): Promise<Lesson | undefined> {
     const [lesson] = await db.select().from(lessons).where(eq(lessons.id, id));
@@ -406,22 +469,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLessonsByCurriculum(curriculumId: number): Promise<Lesson[]> {
-    return db.select().from(lessons).where(eq(lessons.curriculumId, curriculumId));
+    return await db.select().from(lessons).where(eq(lessons.curriculumId, curriculumId));
   }
 
   async getLessonsByAuthor(authorId: number): Promise<Lesson[]> {
-    return db.select().from(lessons).where(eq(lessons.authorId, authorId));
+    return await db.select().from(lessons).where(eq(lessons.authorId, authorId));
   }
 
   async createLesson(lesson: InsertLesson): Promise<Lesson> {
-    const [createdLesson] = await db.insert(lessons).values(lesson).returning();
-    return createdLesson;
+    const [newLesson] = await db
+      .insert(lessons)
+      .values({
+        ...lesson,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newLesson;
   }
 
   async updateLesson(id: number, lesson: Partial<InsertLesson>): Promise<Lesson | undefined> {
     const [updatedLesson] = await db
       .update(lessons)
-      .set({ ...lesson, updatedAt: new Date() })
+      .set({
+        ...lesson,
+        updatedAt: new Date()
+      })
       .where(eq(lessons.id, id))
       .returning();
     return updatedLesson;
@@ -434,17 +507,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEventsByOrganizer(organizerId: number): Promise<Event[]> {
-    return db.select().from(events).where(eq(events.organizerId, organizerId));
+    return await db.select().from(events).where(eq(events.organizerId, organizerId));
   }
 
   async getUpcomingEvents(userId: number): Promise<Event[]> {
     const now = new Date();
-    return db.select()
+    return await db
+      .select()
       .from(events)
       .where(
         and(
           eq(events.organizerId, userId),
-          sql`${events.startDate} > ${now}`
+          sql`${events.endDate} >= ${now}`
         )
       )
       .orderBy(asc(events.startDate))
@@ -452,47 +526,64 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllEvents(userId: number): Promise<Event[]> {
-    return db.select()
+    return await db
+      .select()
       .from(events)
       .where(eq(events.organizerId, userId))
-      .orderBy(desc(events.startDate));
+      .orderBy(asc(events.startDate));
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {
-    const [createdEvent] = await db.insert(events).values(event).returning();
-    return createdEvent;
+    const [newEvent] = await db
+      .insert(events)
+      .values({
+        ...event,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newEvent;
   }
 
-  // Marketplace methods
+  // Marketplace Item methods
   async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
     const [item] = await db.select().from(marketplaceItems).where(eq(marketplaceItems.id, id));
     return item;
   }
 
   async getMarketplaceItemsBySeller(sellerId: number): Promise<MarketplaceItem[]> {
-    return db.select().from(marketplaceItems).where(eq(marketplaceItems.sellerId, sellerId));
+    return await db.select().from(marketplaceItems).where(eq(marketplaceItems.sellerId, sellerId));
   }
 
   async getTopSellingItems(limit: number): Promise<MarketplaceItem[]> {
-    return db.select()
+    return await db
+      .select()
       .from(marketplaceItems)
-      .where(eq(marketplaceItems.isActive, true))
       .orderBy(desc(marketplaceItems.salesCount))
       .limit(limit);
   }
 
   async createMarketplaceItem(item: InsertMarketplaceItem): Promise<MarketplaceItem> {
-    const [createdItem] = await db.insert(marketplaceItems).values(item).returning();
-    return createdItem;
+    const [newItem] = await db
+      .insert(marketplaceItems)
+      .values({
+        ...item,
+        salesCount: 0,
+        revenue: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newItem;
   }
 
   async updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<MarketplaceItem | undefined> {
     const [updatedItem] = await db
       .update(marketplaceItems)
-      .set({ 
+      .set({
         salesCount: sql`${marketplaceItems.salesCount} + ${sales}`,
         revenue: sql`${marketplaceItems.revenue} + ${revenue}`,
-        updatedAt: new Date() 
+        updatedAt: new Date()
       })
       .where(eq(marketplaceItems.id, id))
       .returning();
