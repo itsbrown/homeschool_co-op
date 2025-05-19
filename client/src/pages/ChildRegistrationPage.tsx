@@ -28,8 +28,7 @@ const childFormSchema = z.object({
   specialNeeds: z.string().optional().nullable(),
   allergies: z.string().optional().nullable(),
   medicalInfo: z.string().optional().nullable(),
-  learningStyle: z.string().optional().nullable(),
-  interests: z.array(z.string()).optional().nullable(),
+  // These fields are removed from the form but will be set to null in the submission
   profileImage: z.string().optional().nullable(),
 });
 
@@ -73,8 +72,6 @@ export default function ChildRegistrationPage() {
       specialNeeds: "",
       allergies: "",
       medicalInfo: "",
-      learningStyle: null,
-      interests: [],
       profileImage: null,
     },
   });
@@ -82,8 +79,15 @@ export default function ChildRegistrationPage() {
   const onSubmit = async (data: ChildFormValues) => {
     setIsSubmitting(true);
     try {
-      // Store the form data in sessionStorage for confirmation page
-      sessionStorage.setItem('childRegistrationData', JSON.stringify(data));
+      // Add missing fields with null values that were removed from the form
+      const completeData = {
+        ...data,
+        interests: null,
+        learningStyle: null
+      };
+      
+      // Store the complete data in sessionStorage for confirmation page
+      sessionStorage.setItem('childRegistrationData', JSON.stringify(completeData));
       
       // Navigate to confirmation page
       setLocation("/children/register/confirm");

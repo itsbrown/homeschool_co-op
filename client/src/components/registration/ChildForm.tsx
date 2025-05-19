@@ -25,9 +25,6 @@ export const childFormSchema = z.object({
   specialNeeds: z.string().optional().nullable(),
   allergies: z.string().optional().nullable(),
   medicalInfo: z.string().optional().nullable(),
-  // Add these fields that are expected by the server
-  learningStyle: z.string().optional().nullable(),
-  interests: z.array(z.string()).optional().nullable(),
   profileImage: z.string().optional().nullable(),
 });
 
@@ -64,16 +61,23 @@ export function ChildForm({ defaultValues, onSuccess, childId }: ChildFormProps)
   const onSubmit = async (data: ChildFormValues) => {
     setIsSubmitting(true);
     try {
+      // Add missing fields with null values
+      const completeData = {
+        ...data,
+        interests: null,
+        learningStyle: null
+      };
+      
       if (childId) {
         // Update existing child
-        await apiRequest("PATCH", `/api/children/${childId}`, data);
+        await apiRequest("PATCH", `/api/children/${childId}`, completeData);
         toast({
           title: "Success",
           description: "Child information updated successfully",
         });
       } else {
         // Create new child
-        await apiRequest("POST", "/api/children", data);
+        await apiRequest("POST", "/api/children", completeData);
         toast({
           title: "Success",
           description: "Child added successfully",
