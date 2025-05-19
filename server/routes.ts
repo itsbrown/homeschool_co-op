@@ -16,6 +16,7 @@ import classesRouter from "./api/classes";
 import activitiesRouter from "./api/activities";
 import imageServicesRouter from "./api/image-services";
 import ocrTestRouter from "./api/ocr-test";
+import schoolsRouter from "./api/schools";
 import { processEnrollmentMessage } from "./api/enrollment-assistant";
 import archiver from 'archiver';
 import fs from 'fs';
@@ -1062,6 +1063,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/activities", activitiesRouter);
   app.use("/api/image-services", imageServicesRouter);
   app.use("/api/ocr-test", ocrTestRouter);
+  app.use("/api/schools", schoolsRouter);
   
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);
