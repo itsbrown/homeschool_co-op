@@ -329,17 +329,16 @@ router.patch("/classes/:id", isAuthenticated, isAdmin, async (req, res) => {
       }
     }
     
-    // Process dates to ensure consistent formatting
+    // For dates, we'll use the exact string values from the form without any conversion
+    // This prevents timezone issues entirely by avoiding Date object conversions
     if (validatedData.startDate) {
-      // Ensure the date is stored in ISO format without time component
-      // This prevents timezone shifts affecting the displayed date
-      const startDate = new Date(validatedData.startDate);
-      validatedData.startDate = startDate.toISOString().split('T')[0];
+      // Keep the date exactly as it was entered in the form
+      validatedData.startDate = String(validatedData.startDate);
     }
     
     if (validatedData.endDate) {
-      const endDate = new Date(validatedData.endDate);
-      validatedData.endDate = endDate.toISOString().split('T')[0];
+      // Keep the date exactly as it was entered in the form
+      validatedData.endDate = String(validatedData.endDate);
     }
     
     // Add the custom fields back to the validated data object
