@@ -79,35 +79,47 @@ export function SimpleClassesPage() {
     }
   }, [isLoading, isAdmin, setLocation]);
 
-  // Fetch classes
+  // Fetch classes function - can be reused for refresh
+  const fetchClasses = () => {
+    setIsLoadingClasses(true);
+    fetch('/api/admin-classes/classes', { 
+      credentials: 'include',
+      // Add cache-busting parameter to force a fresh request
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Classes data from API:', data);
+        if (Array.isArray(data)) {
+          setClasses(data);
+        } else if (data.classes && Array.isArray(data.classes)) {
+          setClasses(data.classes);
+        } else {
+          console.error('Unexpected data format:', data);
+          setError('Received unexpected data format from server');
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching classes:', err);
+        setError('Failed to load classes. Please try again.');
+      })
+      .finally(() => {
+        setIsLoadingClasses(false);
+      });
+  };
+  
+  // Fetch classes on component mount or when admin status changes
   useEffect(() => {
     if (isAdmin) {
-      setIsLoadingClasses(true);
-      fetch('/api/admin-classes/classes', { credentials: 'include' })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(data => {
-          console.log('Classes data from API:', data);
-          if (Array.isArray(data)) {
-            setClasses(data);
-          } else if (data.classes && Array.isArray(data.classes)) {
-            setClasses(data.classes);
-          } else {
-            console.error('Unexpected data format:', data);
-            setError('Received unexpected data format from server');
-          }
-        })
-        .catch(err => {
-          console.error('Error fetching classes:', err);
-          setError('Failed to load classes. Please try again.');
-        })
-        .finally(() => {
-          setIsLoadingClasses(false);
-        });
+      fetchClasses();
     }
   }, [isAdmin]);
 
@@ -152,6 +164,13 @@ export function SimpleClassesPage() {
         onClick={() => setLocation('/admin/classes/upload')}
       >
         Import Classes (CSV)
+      </button>
+      
+      <button 
+        style={{...styles.button, backgroundColor: '#10b981'}}
+        onClick={fetchClasses}
+      >
+        Refresh Classes
       </button>
       
       {error && <div style={styles.errorMessage}>{error}</div>}
