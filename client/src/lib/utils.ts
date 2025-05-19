@@ -10,10 +10,18 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Formats a date string into a human-readable format
+ * Handles date strings without timezone conversions
  */
 export function formatDate(dateString: string): string {
   if (!dateString) return '';
   
+  // For standard ISO dates (YYYY-MM-DD), parse directly without timezone adjustments
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
+    return `${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}/${year}`;
+  }
+  
+  // For other date formats, use the Date object but add timezone offset
   const date = new Date(dateString);
   
   // Check if date is invalid
