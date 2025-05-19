@@ -20,6 +20,7 @@
     "@neondatabase/serverless": "^0.10.4",
     "@nlpjs/core": "^5.0.0-alpha.5",
     "@nlpjs/lang-en": "^5.0.0-alpha.5",
+    "@notionhq/client": "^3.0.1",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-aspect-ratio": "^1.1.3",
