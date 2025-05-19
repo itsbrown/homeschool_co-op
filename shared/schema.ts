@@ -9,7 +9,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role", { enum: ["learner", "parent", "educator", "admin"] }).default("learner").notNull(),
+  role: text("role", { enum: ["learner", "parent", "educator", "admin", "school_admin"] }).default("learner").notNull(),
   name: text("name").notNull(),
   avatar: text("avatar"),
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),
@@ -21,14 +21,164 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // Define user relations
-export const usersRelations = relations(users, ({ many }) => ({
+// Schools/Co-ops table
+export const schools = pgTable("schools", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type", { enum: ["school", "co-op", "homeschool_group", "other"] }).notNull(),
+  adminId: integer("admin_id").notNull().references(() => users.id),
+  address: text("address"),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  zipCode: text("zip_code").notNull(),
+  phoneNumber: text("phone_number"),
+  email: text("email").notNull(),
+  website: text("website"),
+  logo: text("logo"), 
+  description: text("description"),
+  foundedYear: integer("founded_year"),
+  accreditation: text("accreditation"),
+  enrollmentSize: integer("enrollment_size"),
+  isVerified: boolean("is_verified").default(false).notNull(),
+  status: text("status", { enum: ["pending", "active", "inactive", "suspended"] }).default("pending").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSchoolSchema = createInsertSchema(schools)
+  .omit({ id: true, createdAt: true, updatedAt: true, adminId: true, isVerified: true })
+  .extend({
+    // Set default values for nullable fields
+    address: z.string().nullable().default(null),
+    phoneNumber: z.string().nullable().default(null),
+    website: z.string().nullable().default(null),
+    logo: z.string().nullable().default(null),
+    description: z.string().nullable().default(null),
+    foundedYear: z.number().nullable().default(null),
+    accreditation: z.string().nullable().default(null),
+    enrollmentSize: z.number().nullable().default(null),
+  });
+export type InsertSchool = z.infer<typeof insertSchoolSchema>;
+export type School = typeof schools.$inferSelect;
+
+// School-Student relationship table (for students affiliated with a school)
+export const schoolStudents = pgTable("school_students", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  childId: integer("child_id").notNull().references(() => children.id),
+  enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
+  grade: text("grade").notNull(),
+  status: text("status", { enum: ["active", "inactive", "graduated", "transferred"] }).default("active").notNull(),
+  studentId: text("student_id"), // School's internal ID for the student
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSchoolStudentSchema = createInsertSchema(schoolStudents)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    // Set default values for nullable fields
+    studentId: z.string().nullable().default(null),
+    notes: z.string().nullable().default(null),
+  });
+export type InsertSchoolStudent = z.infer<typeof insertSchoolStudentSchema>;
+export type SchoolStudent = typeof schoolStudents.$inferSelect;
+
+// School-Staff relationship table (for teachers/staff of a school)
+export const schoolStaff = pgTable("school_staff", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  role: text("role", { enum: ["teacher", "administrator", "staff", "other"] }).notNull(),
+  position: text("position").notNull(), // specific job title
+  department: text("department"),
+  startDate: timestamp("start_date").defaultNow().notNull(),
+  endDate: timestamp("end_date"), // null if currently employed
+  isActive: boolean("is_active").default(true).notNull(),
+  permissions: jsonb("permissions").default({}).notNull(), // JSON object for granular permissions
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSchoolStaffSchema = createInsertSchema(schoolStaff)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    // Set default values for nullable fields
+    department: z.string().nullable().default(null),
+    endDate: z.date().nullable().default(null),
+  });
+export type InsertSchoolStaff = z.infer<typeof insertSchoolStaffSchema>;
+export type SchoolStaff = typeof schoolStaff.$inferSelect;
+
+// School classes specifically created for a school
+export const schoolClasses = pgTable("school_classes", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  subject: text("subject").notNull(),
+  gradeLevel: text("grade_level").notNull(),
+  teacherId: integer("teacher_id").references(() => users.id),
+  academicYear: text("academic_year").notNull(), // e.g., "2024-2025"
+  semester: text("semester"), // Fall, Spring, etc.
+  schedule: jsonb("schedule").notNull(), // JSON object with schedule details
+  location: text("location"),
+  maxEnrollment: integer("max_enrollment").notNull(),
+  currentEnrollment: integer("current_enrollment").default(0).notNull(),
+  curriculumId: integer("curriculum_id").references(() => curricula.id),
+  status: text("status", { enum: ["draft", "active", "completed", "cancelled"] }).default("draft").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSchoolClassSchema = createInsertSchema(schoolClasses)
+  .omit({ id: true, createdAt: true, updatedAt: true, currentEnrollment: true })
+  .extend({
+    // Set default values for nullable fields
+    description: z.string().nullable().default(null),
+    teacherId: z.number().nullable().default(null),
+    semester: z.string().nullable().default(null),
+    location: z.string().nullable().default(null),
+    curriculumId: z.number().nullable().default(null),
+  });
+export type InsertSchoolClass = z.infer<typeof insertSchoolClassSchema>;
+export type SchoolClass = typeof schoolClasses.$inferSelect;
+
+// Class enrollments for school classes
+export const schoolClassEnrollments = pgTable("school_class_enrollments", {
+  id: serial("id").primaryKey(),
+  classId: integer("class_id").notNull().references(() => schoolClasses.id),
+  studentId: integer("student_id").notNull().references(() => schoolStudents.id),
+  enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
+  grade: text("grade"), // final grade for the class
+  status: text("status", { enum: ["enrolled", "completed", "withdrawn", "failed"] }).default("enrolled").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSchoolClassEnrollmentSchema = createInsertSchema(schoolClassEnrollments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    // Set default values for nullable fields
+    grade: z.string().nullable().default(null),
+    notes: z.string().nullable().default(null),
+  });
+export type InsertSchoolClassEnrollment = z.infer<typeof insertSchoolClassEnrollmentSchema>;
+export type SchoolClassEnrollment = typeof schoolClassEnrollments.$inferSelect;
+
+// Update user relations to include schools
+export const usersRelations = relations(users, ({ many, one }) => ({
   curricula: many(curricula),
   lessons: many(lessons),
   events: many(events),
   marketplaceItems: many(marketplaceItems),
   knowledgeBases: many(knowledgeBases),
   children: many(children),
-  emergencyContacts: many(emergencyContacts)
+  emergencyContacts: many(emergencyContacts),
+  administeredSchools: many(schools),
+  schoolStaffPositions: many(schoolStaff)
 }));
 
 // Children table for parent registration

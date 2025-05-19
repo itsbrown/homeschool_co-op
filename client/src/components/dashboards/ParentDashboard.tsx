@@ -14,6 +14,8 @@ export default function ParentDashboard() {
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
     queryKey: ["/api/children"],
     queryFn: () => fetch("/api/children").then(res => res.json()).catch(() => []),
+    // Ensure we always have an array, even if the API returns something else
+    select: (data) => Array.isArray(data) ? data : [],
   });
 
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
