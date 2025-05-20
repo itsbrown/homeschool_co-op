@@ -213,7 +213,7 @@ export default function KnowledgeBasePage() {
   }
 
   // Filter knowledge bases based on search query and filters
-  const filteredKnowledgeBases = knowledgeBases.filter(kb => {
+  const filteredKnowledgeBases = knowledgeBases ? knowledgeBases.filter(kb => {
     const matchesSearch = searchQuery === "" || 
       kb.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       kb.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -231,12 +231,12 @@ export default function KnowledgeBasePage() {
     if (activeTab === "drafts") return matchesSearch && matchesSubject && matchesGradeLevel && matchesStatus && kb.status === "Draft";
     
     return false;
-  });
+  }) : [];
 
   // Get unique subjects, grade levels, and statuses for filters
-  const subjects = [...new Set(knowledgeBases.map(kb => kb.subjectArea))];
+  const subjects = knowledgeBases ? [...new Set(knowledgeBases.map(kb => kb.subjectArea))] : [];
   const gradeLevels = ["K-2", "3-5", "6-8", "9-12"];
-  const statuses = [...new Set(knowledgeBases.map(kb => kb.status))];
+  const statuses = knowledgeBases ? [...new Set(knowledgeBases.map(kb => kb.status))] : [];
 
   return (
     <SchoolAdminLayout pageTitle="Knowledge Base">
@@ -353,7 +353,10 @@ export default function KnowledgeBasePage() {
                               </Badge>
                               <Badge 
                                 variant="outline" 
-                                className={`bg-${VISIBILITY_COLORS[kb.visibility]}-100 text-${VISIBILITY_COLORS[kb.visibility]}-800 border-${VISIBILITY_COLORS[kb.visibility]}-200`}
+                                className={kb.visibility === "Public" ? "bg-green-100 text-green-800 border-green-200" :
+                                  kb.visibility === "School" ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                  kb.visibility === "Private" ? "bg-gray-100 text-gray-800 border-gray-200" :
+                                  "bg-gray-100 text-gray-800 border-gray-200"}
                               >
                                 {kb.visibility}
                               </Badge>
