@@ -17,6 +17,7 @@ import activitiesRouter from "./api/activities";
 import imageServicesRouter from "./api/image-services";
 import ocrTestRouter from "./api/ocr-test";
 import schoolsRouter from "./api/schools";
+import schoolAdminRouter from "./api/school-admin";
 import { processEnrollmentMessage } from "./api/enrollment-assistant";
 import archiver from 'archiver';
 import fs from 'fs';

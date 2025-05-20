@@ -42,6 +42,16 @@ export const testUsers = {
     avatar: null,
     subscription: 'free',
     createdAt: new Date()
+  },
+  schoolAdmin: {
+    id: 5,
+    name: 'School Administrator',
+    username: 'schooladmin',
+    email: 'school@example.com',
+    role: 'schoolAdmin',
+    avatar: null,
+    subscription: 'premium',
+    createdAt: new Date()
   }
 };
 
