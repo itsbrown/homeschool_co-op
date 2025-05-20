@@ -102,16 +102,28 @@ router.get("/classes", requireSchoolAdmin, async (req, res) => {
     
     const schoolId = userSchools[0].id;
     
-    // Get all classes (will need to be filtered for schoolId in a real implementation)
-    const classes = classStorage.getClasses({
+    // Get all classes
+    const allClasses = classStorage.getClasses({
       page: parseInt(req.query.page as string) || 1,
-      limit: parseInt(req.query.limit as string) || 20,
+      limit: parseInt(req.query.limit as string) || 100, // Higher limit to get all school classes
       search: req.query.search as string || '',
       category: req.query.category as string || '',
       status: req.query.status as string || ''
     });
     
-    res.json(classes);
+    // Filter to only include classes for this school
+    const schoolClasses = allClasses.items.filter(cls => cls.schoolId === schoolId);
+    
+    console.log(`Found ${schoolClasses.length} classes for school ID ${schoolId}`);
+    
+    // Return the filtered classes
+    res.json({
+      items: schoolClasses,
+      total: schoolClasses.length,
+      page: 1,
+      limit: schoolClasses.length,
+      totalPages: 1
+    });
   } catch (error) {
     console.error("Error fetching school classes:", error);
     res.status(500).json({ message: "Error fetching school classes" });

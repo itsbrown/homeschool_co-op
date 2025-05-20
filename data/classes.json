@@ -75,5 +75,27 @@
     "updatedAt": "2025-05-19T20:53:25.495Z",
     "enrollmentCount": 0,
     "status": "published"
+  },
+  {
+    "title": "Seekers Extended Day",
+    "description": "The Seekers class (grades 3–5) deepens classical education with a focus on spelling, history, and financial literacy. Montessori-inspired, hands-on activities develop critical thinking and civic responsibility, preparing students for a life of freedom and intellectual growth in a parent-driven educational model.",
+    "category": "other",
+    "gradeLevel": "elementary",
+    "startDate": "2025-09-08",
+    "endDate": "2025-11-14",
+    "schedule": "Monday, Wednesday, Friday 9am-2pm",
+    "capacity": 10,
+    "location": "Brighton",
+    "instructorName": "Chelsey Fraiser",
+    "price": 1100,
+    "status": "upcoming",
+    "schoolId": 1,
+    "instructorId": 5,
+    "enrollmentCount": 0,
+    "createdAt": "2025-05-20T13:22:55.372Z",
+    "updatedAt": "2025-05-20T13:22:55.372Z",
+    "id": 5,
+    "subject": "",
+    "ageRange": ""
   }
 ]

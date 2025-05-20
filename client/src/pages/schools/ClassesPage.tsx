@@ -122,10 +122,9 @@ export default function SchoolClassesPage() {
   const [gradeLevelFilter, setGradeLevelFilter] = useState("");
   const [activeTab, setActiveTab] = useState("list");
 
-  // Fetch classes for the school (using sample data for now)
-  const { data: classes, isLoading, error } = useQuery({
-    queryKey: ['/api/schools/classes'],
-    queryFn: () => Promise.resolve(sampleClasses),
+  // Fetch classes for the school from the API
+  const { data: classes, isLoading, error, refetch } = useQuery({
+    queryKey: ['/api/school-admin/classes'],
   });
 
   if (isLoading) {
@@ -162,23 +161,26 @@ export default function SchoolClassesPage() {
     );
   }
 
+  // Get the classes data array
+  const classesData = classes?.items || [];
+  
   // Filter classes based on search query and filters
-  const filteredClasses = classes?.filter(cls => {
+  const filteredClasses = classesData.filter(cls => {
     const matchesSearch = searchQuery === "" || 
       cls.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      cls.instructor.toLowerCase().includes(searchQuery.toLowerCase());
+      (cls.instructorName && cls.instructorName.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const matchesCategory = categoryFilter === "" || cls.category === categoryFilter;
-    const matchesStatus = statusFilter === "" || cls.status === statusFilter;
-    const matchesGradeLevel = gradeLevelFilter === "" || cls.gradeLevel === gradeLevelFilter;
+    const matchesCategory = categoryFilter === "" || categoryFilter === "all-categories" || cls.category === categoryFilter;
+    const matchesStatus = statusFilter === "" || statusFilter === "all-statuses" || cls.status === statusFilter;
+    const matchesGradeLevel = gradeLevelFilter === "" || gradeLevelFilter === "all-grades" || cls.gradeLevel === gradeLevelFilter;
     
     return matchesSearch && matchesCategory && matchesStatus && matchesGradeLevel;
-  }) || [];
+  });
 
   // Get unique categories, statuses, and grade levels for filters
-  const categories = classes ? [...new Set(classes.map(cls => cls.category))] : [];
-  const statuses = classes ? [...new Set(classes.map(cls => cls.status))] : [];
-  const gradeLevels = classes ? [...new Set(classes.map(cls => cls.gradeLevel))] : [];
+  const categories = classesData.length > 0 ? [...new Set(classesData.map(cls => cls.category))] : [];
+  const statuses = classesData.length > 0 ? [...new Set(classesData.map(cls => cls.status))] : [];
+  const gradeLevels = classesData.length > 0 ? [...new Set(classesData.map(cls => cls.gradeLevel))] : [];
 
   // Helper function to get color styles from status
   const getStatusStyles = (status: string) => {
