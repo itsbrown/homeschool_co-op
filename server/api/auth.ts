@@ -92,6 +92,7 @@ router.post("/login", async (req, res) => {
     }
     
     // HARDCODED TEST ACCOUNTS - NO DATABASE NEEDED
+    console.log(`Checking credentials for: ${username}`);
     if ((username === 'admin' || username === 'educator' || username === 'parent' || username === 'learner' || username === 'schooladmin') && password === 'password') {
       console.log(`Login attempt with test account: ${username}`);
       
