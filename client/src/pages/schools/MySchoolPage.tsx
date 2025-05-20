@@ -1,16 +1,15 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, School, MapPin, Phone, Mail, Globe, Calendar, Users } from "lucide-react";
+import { Loader2, MapPin, Phone, Mail, Globe, School as SchoolIcon, Calendar, Users, BookOpen, ChevronLeft, Menu } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// Using relative path for dashboard layout
-import DashboardLayout from '../../components/layout/DashboardLayout';
+import { cn } from "@/lib/utils";
 
 // School data interface
 interface SchoolData {
@@ -36,6 +35,108 @@ interface SchoolData {
   updatedAt: string | Date;
 }
 
+// Simple Dashboard Layout Component
+const SimpleDashboard = ({ children, pageTitle }: { children: React.ReactNode; pageTitle: string }) => {
+  const [location] = useLocation();
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  
+  // School admin navigation
+  const schoolNavItems = [
+    {
+      title: 'My School',
+      href: '/schools/my-school',
+      icon: <SchoolIcon className="h-5 w-5" />,
+    },
+    {
+      title: 'Classes',
+      href: '/schools/classes',
+      icon: <Calendar className="h-5 w-5" />,
+    },
+    {
+      title: 'Staff',
+      href: '/schools/staff',
+      icon: <Users className="h-5 w-5" />,
+    },
+    {
+      title: 'Students',
+      href: '/schools/students',
+      icon: <Users className="h-5 w-5" />,
+    },
+    {
+      title: 'Knowledge Base',
+      href: '/schools/knowledge-base',
+      icon: <BookOpen className="h-5 w-5" />,
+    },
+  ];
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <div className={cn(
+        "bg-white shadow-lg transition-all duration-300 flex flex-col",
+        sidebarOpen ? "w-64" : "w-16"
+      )}>
+        {/* Sidebar header */}
+        <div className="p-4 flex items-center justify-between border-b">
+          {sidebarOpen && (
+            <h2 className="text-xl font-bold">School Admin</h2>
+          )}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleSidebar}
+            className="ml-auto"
+          >
+            {sidebarOpen ? <ChevronLeft className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+        </div>
+        
+        {/* Sidebar content */}
+        <div className="flex-1 overflow-y-auto py-4 px-3">
+          <nav className="space-y-2">
+            {schoolNavItems.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center px-2 py-3 rounded-lg transition-colors",
+                  location === item.href
+                    ? "bg-primary text-white"
+                    : "text-gray-700 hover:bg-gray-100",
+                  !sidebarOpen && "justify-center"
+                )}
+              >
+                {item.icon}
+                {sidebarOpen && <span className="ml-3">{item.title}</span>}
+              </a>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Page header */}
+        <header className="bg-white shadow-sm z-10">
+          <div className="px-4 py-3 flex items-center">
+            <h1 className="text-2xl font-semibold text-gray-800">{pageTitle}</h1>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto p-4 bg-gray-50">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+// Main school page component
 export default function MySchoolPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -52,8 +153,8 @@ export default function MySchoolPage() {
   useEffect(() => {
     if (error) {
       toast({
-        title: "Error loading school information",
-        description: "There was a problem loading your school information. Please try again later.",
+        title: "Error fetching school data",
+        description: "There was an error loading your school information.",
         variant: "destructive",
       });
     }
@@ -61,193 +162,205 @@ export default function MySchoolPage() {
 
   if (isLoading) {
     return (
-      <DashboardLayout pageTitle="My School">
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="ml-2 text-lg">Loading school information...</span>
+      <SimpleDashboard pageTitle="My School">
+        <div className="h-full flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2">Loading school information...</span>
         </div>
-      </DashboardLayout>
+      </SimpleDashboard>
     );
   }
 
-  // If no school is found, show registration prompt
   if (!school) {
     return (
-      <DashboardLayout pageTitle="Register School">
-        <div className="max-w-4xl mx-auto p-6">
+      <SimpleDashboard pageTitle="My School">
+        <div className="max-w-3xl mx-auto my-8">
           <Card>
             <CardHeader>
-              <CardTitle>Welcome, School Administrator</CardTitle>
+              <CardTitle>No School Found</CardTitle>
               <CardDescription>
-                You haven't registered a school yet
+                You don't have any schools associated with your account.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col items-center space-y-6 py-8">
-              <School className="w-24 h-24 text-muted-foreground" />
-              <div className="text-center space-y-2">
-                <h3 className="text-xl font-medium">Register Your School or Co-op</h3>
-                <p className="text-muted-foreground">
-                  To get started, you'll need to register your school or homeschool co-op in our system.
-                  This will allow you to manage classes, staff, and students.
-                </p>
-              </div>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Please register a school or contact an administrator for assistance.
+              </p>
             </CardContent>
-            <CardFooter className="flex justify-center">
-              <Link href="/schools/register">
-                <Button size="lg">Register School/Co-op</Button>
-              </Link>
+            <CardFooter>
+              <Button asChild>
+                <Link href="/schools/register">Register a School</Link>
+              </Button>
             </CardFooter>
           </Card>
         </div>
-      </DashboardLayout>
+      </SimpleDashboard>
     );
   }
 
   return (
-    <DashboardLayout pageTitle={`${school.name || 'My School'}`}>
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="flex flex-col md:flex-row gap-6 mb-8">
-          <div className="w-full md:w-1/3">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center">
-                  <Avatar className="w-24 h-24 mb-4">
-                    <AvatarImage src={school.logo || ''} alt={school.name} />
-                    <AvatarFallback className="text-xl">{school.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <h2 className="text-2xl font-bold text-center mb-2">{school.name}</h2>
-                  <Badge variant="outline" className="mb-4">{school.type}</Badge>
-                  <p className="text-muted-foreground text-center mb-6">{school.description}</p>
-                  
-                  <div className="w-full space-y-3">
+    <SimpleDashboard pageTitle={school.name}>
+      <div className="max-w-6xl mx-auto my-8">
+        {/* School Overview Card */}
+        <Card className="mb-8">
+          <CardHeader className="pb-3">
+            <div className="flex items-center space-x-4">
+              <Avatar className="h-16 w-16">
+                {school.logo ? (
+                  <AvatarImage src={school.logo} alt={school.name} />
+                ) : (
+                  <AvatarFallback className="text-lg">
+                    {school.name?.substring(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              <div>
+                <CardTitle className="text-2xl">{school.name}</CardTitle>
+                <div className="flex items-center mt-1 space-x-2">
+                  <Badge variant="secondary">{school.type}</Badge>
+                  <Badge variant={school.status === "active" ? "success" : "default"}>
+                    {school.status.charAt(0).toUpperCase() + school.status.slice(1)}
+                  </Badge>
+                  {school.isVerified && <Badge variant="outline">Verified</Badge>}
+                </div>
+              </div>
+            </div>
+            <CardDescription className="pt-4">
+              {school.description}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="overview" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-4 w-full justify-start">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="details">Details</TabsTrigger>
+                <TabsTrigger value="stats">Statistics</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="overview" className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Contact Information */}
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-lg">Contact Information</h3>
+                    
                     {school.address && (
-                      <div className="flex items-center">
-                        <MapPin className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <span className="text-sm">{school.address}, {school.city}, {school.state} {school.zipCode}</span>
+                      <div className="flex items-start space-x-2">
+                        <MapPin className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                        <div>
+                          <p>{school.address}</p>
+                          <p>{school.city}, {school.state} {school.zipCode}</p>
+                        </div>
                       </div>
                     )}
+                    
                     {school.phoneNumber && (
-                      <div className="flex items-center">
-                        <Phone className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <span className="text-sm">{school.phoneNumber}</span>
+                      <div className="flex items-center space-x-2">
+                        <Phone className="h-5 w-5 text-muted-foreground" />
+                        <span>{school.phoneNumber}</span>
                       </div>
                     )}
+                    
                     {school.email && (
-                      <div className="flex items-center">
-                        <Mail className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <span className="text-sm">{school.email}</span>
+                      <div className="flex items-center space-x-2">
+                        <Mail className="h-5 w-5 text-muted-foreground" />
+                        <span>{school.email}</span>
                       </div>
                     )}
+                    
                     {school.website && (
-                      <div className="flex items-center">
-                        <Globe className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <a href={school.website} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
-                          {school.website.replace(/^https?:\/\//, '')}
+                      <div className="flex items-center space-x-2">
+                        <Globe className="h-5 w-5 text-muted-foreground" />
+                        <a 
+                          href={school.website.startsWith("http") ? school.website : `https://${school.website}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {school.website}
                         </a>
                       </div>
                     )}
+                  </div>
+                  
+                  {/* School Details */}
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-lg">School Details</h3>
+                    
                     {school.foundedYear && (
-                      <div className="flex items-center">
-                        <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <span className="text-sm">Founded in {school.foundedYear}</span>
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="h-5 w-5 text-muted-foreground" />
+                        <span>Founded in {school.foundedYear}</span>
+                      </div>
+                    )}
+                    
+                    {school.accreditation && (
+                      <div className="flex items-start space-x-2">
+                        <Badge variant="outline">{school.accreditation}</Badge>
+                      </div>
+                    )}
+                    
+                    {school.enrollmentSize && (
+                      <div className="flex items-center space-x-2">
+                        <Users className="h-5 w-5 text-muted-foreground" />
+                        <span>{school.enrollmentSize} enrolled students</span>
                       </div>
                     )}
                   </div>
                 </div>
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full" asChild>
-                  <Link href="/schools/edit">Edit School Information</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-          
-          <div className="w-full md:w-2/3">
-            <Card className="h-full">
-              <CardHeader>
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid grid-cols-3 mb-4">
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="stats">Statistics</TabsTrigger>
-                    <TabsTrigger value="activity">Recent Activity</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </CardHeader>
-              <CardContent>
-                <TabsContent value="overview" className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card>
-                      <CardContent className="pt-6 flex flex-col items-center">
-                        <Users className="w-8 h-8 text-primary mb-2" />
-                        <div className="text-2xl font-bold">24</div>
-                        <div className="text-sm text-muted-foreground">Staff Members</div>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="pt-6 flex flex-col items-center">
-                        <School className="w-8 h-8 text-primary mb-2" />
-                        <div className="text-2xl font-bold">12</div>
-                        <div className="text-sm text-muted-foreground">Classes</div>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="pt-6 flex flex-col items-center">
-                        <Users className="w-8 h-8 text-primary mb-2" />
-                        <div className="text-2xl font-bold">156</div>
-                        <div className="text-sm text-muted-foreground">Students</div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                  
+              </TabsContent>
+              
+              <TabsContent value="details">
+                <div className="prose max-w-none">
+                  <h3>About {school.name}</h3>
+                  <p>{school.description || "No detailed description available."}</p>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="stats">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Card>
-                    <CardHeader>
-                      <CardTitle>Quick Actions</CardTitle>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">Classes</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Button variant="outline" asChild>
-                          <Link href="/schools/classes/new">Add New Class</Link>
-                        </Button>
-                        <Button variant="outline" asChild>
-                          <Link href="/schools/staff/invite">Invite Staff Member</Link>
-                        </Button>
-                        <Button variant="outline" asChild>
-                          <Link href="/schools/students/register">Register Student</Link>
-                        </Button>
-                        <Button variant="outline" asChild>
-                          <Link href="/calendar">View School Calendar</Link>
-                        </Button>
-                      </div>
+                      <p className="text-3xl font-bold">12</p>
+                      <p className="text-sm text-muted-foreground">Active classes</p>
                     </CardContent>
                   </Card>
-                </TabsContent>
-                
-                <TabsContent value="stats">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">School Statistics</h3>
-                    <p className="text-muted-foreground">
-                      Detailed statistics about enrollment, class attendance, and performance 
-                      will be displayed here. This feature is coming soon.
-                    </p>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="activity">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Recent Activity</h3>
-                    <p className="text-muted-foreground">
-                      A timeline of recent activities at your school will be displayed here.
-                      This includes new enrollments, class schedules, and staff updates.
-                      This feature is coming soon.
-                    </p>
-                  </div>
-                </TabsContent>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                  
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">Students</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold">{school.enrollmentSize || "0"}</p>
+                      <p className="text-sm text-muted-foreground">Total enrollment</p>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">Staff</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold">5</p>
+                      <p className="text-sm text-muted-foreground">Active staff members</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+          <CardFooter className="border-t pt-4 flex justify-between">
+            <Button variant="outline" onClick={() => refetch()}>
+              Refresh Data
+            </Button>
+            <Button>
+              Edit School Information
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
-    </DashboardLayout>
+    </SimpleDashboard>
   );
 }
