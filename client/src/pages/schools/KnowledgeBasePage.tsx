@@ -493,7 +493,7 @@ export default function KnowledgeBasePage() {
 
               <CardFooter className="flex justify-between items-center border-t px-6 py-4">
                 <div className="text-sm text-muted-foreground">
-                  Showing {filteredKnowledgeBases.length} of {knowledgeBases.length} knowledge bases
+                  Showing {filteredKnowledgeBases.length} of {knowledgeBases ? knowledgeBases.length : 0} knowledge bases
                 </div>
                 <div>
                   <Button variant="outline" size="sm" onClick={() => {

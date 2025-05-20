@@ -429,7 +429,7 @@ export default function StudentsPage() {
                     <div className="space-y-6">
                       {gradeLevelFilter === "" ? (
                         gradeLevels.map(grade => {
-                          const gradeStudents = students.filter(s => s.gradeLevel === grade);
+                          const gradeStudents = students ? students.filter(s => s.gradeLevel === grade) : [];
                           return (
                             <div key={grade} className="space-y-2">
                               <h3 className="text-lg font-medium flex items-center">
