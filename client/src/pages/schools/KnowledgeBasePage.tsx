@@ -299,7 +299,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Subject" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Subjects</SelectItem>
+                        <SelectItem value="all-subjects">All Subjects</SelectItem>
                         {subjects.map((subject) => (
                           <SelectItem key={subject} value={subject}>{subject}</SelectItem>
                         ))}

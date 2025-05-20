@@ -237,7 +237,7 @@ export default function StudentsPage() {
                         <SelectValue placeholder="Grade Level" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Grades</SelectItem>
+                        <SelectItem value="all-grades">All Grades</SelectItem>
                         {gradeLevels.map((grade) => (
                           <SelectItem key={grade} value={grade}>Grade {grade}</SelectItem>
                         ))}
@@ -249,7 +249,7 @@ export default function StudentsPage() {
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Statuses</SelectItem>
+                        <SelectItem value="all-statuses">All Statuses</SelectItem>
                         {statuses.map((status) => (
                           <SelectItem key={status} value={status}>{status}</SelectItem>
                         ))}
