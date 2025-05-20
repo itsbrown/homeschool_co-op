@@ -95,6 +95,7 @@ const parentNavigationItems = [
       { name: "Programs", href: "/programs", icon: Award },
       { name: "Enrollment Assistant", href: "/enrollment-assistant", icon: Sparkles },
       { name: "Learning Marketplace", href: "/marketplace", icon: ShoppingBag },
+      { name: "Register School/Co-op", href: "/schools/register", icon: Building },
     ],
   },
   {
