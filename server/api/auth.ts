@@ -92,9 +92,17 @@ router.post("/login", async (req, res) => {
     }
     
     // HARDCODED TEST ACCOUNTS - NO DATABASE NEEDED
-    console.log(`Checking credentials for: ${username}`);
-    if ((username === 'admin' || username === 'educator' || username === 'parent' || username === 'learner' || username === 'schooladmin') && password === 'password') {
-      console.log(`Login attempt with test account: ${username}`);
+    console.log(`Checking credentials for user: "${username}" with password: "${password}" (hardcoded test accounts)`);
+    
+    // Direct test account login - simplify the logic
+    if (password === 'password' && 
+       (username === 'admin' || 
+        username === 'educator' || 
+        username === 'parent' || 
+        username === 'learner' || 
+        username === 'schooladmin')) {
+        
+      console.log(`Login attempt with test account successful: ${username}`);
       
       let userData;
       if (username === 'admin') {
@@ -184,11 +192,17 @@ router.post("/login", async (req, res) => {
       });
     }
     
+    // If we reach this point, it means the user either:
+    // 1. Provided incorrect credentials for a test account
+    // 2. Is trying to use a database account
+    
+    console.log(`Test account login failed, trying database lookup for: ${username}`);
+    
     // Only try database if test accounts don't match
     try {
       const user = await storage.getUserByUsername(username);
       if (!user) {
-        console.log('User not found:', username);
+        console.log('User not found in database:', username);
         return res.status(401).json({ message: "Invalid credentials" });
       }
     
