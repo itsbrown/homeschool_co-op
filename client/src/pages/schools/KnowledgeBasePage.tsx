@@ -42,7 +42,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 // Sample knowledge base data (will be replaced with API data)
 const sampleKnowledgeBases = [
@@ -239,7 +239,7 @@ export default function KnowledgeBasePage() {
   const statuses = [...new Set(knowledgeBases.map(kb => kb.status))];
 
   return (
-    <DashboardLayout>
+    <SchoolAdminLayout pageTitle="Knowledge Base">
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex flex-col space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
@@ -343,7 +343,11 @@ export default function KnowledgeBasePage() {
                             <div className="flex flex-wrap gap-2 mb-2">
                               <Badge 
                                 variant="outline" 
-                                className={`bg-${STATUS_COLORS[kb.status]}-100 text-${STATUS_COLORS[kb.status]}-800 border-${STATUS_COLORS[kb.status]}-200`}
+                                className={kb.status === "Published" ? "bg-green-100 text-green-800 border-green-200" :
+                                  kb.status === "Draft" ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
+                                  kb.status === "Archived" ? "bg-gray-100 text-gray-800 border-gray-200" :
+                                  kb.status === "Under Review" ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                  "bg-gray-100 text-gray-800 border-gray-200"}
                               >
                                 {kb.status}
                               </Badge>
@@ -504,6 +508,6 @@ export default function KnowledgeBasePage() {
           </Tabs>
         </div>
       </div>
-    </DashboardLayout>
+    </SchoolAdminLayout>
   );
 }
