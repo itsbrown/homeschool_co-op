@@ -29,7 +29,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 // Sample class data (will be replaced with API data)
 const sampleClasses = [
@@ -130,18 +130,18 @@ export default function SchoolClassesPage() {
 
   if (isLoading) {
     return (
-      <DashboardLayout>
+      <SchoolAdminLayout pageTitle="Classes">
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading classes...</span>
         </div>
-      </DashboardLayout>
+      </SchoolAdminLayout>
     );
   }
 
   if (error) {
     return (
-      <DashboardLayout>
+      <SchoolAdminLayout pageTitle="Classes - Error">
         <div className="max-w-4xl mx-auto p-6">
           <Card>
             <CardHeader>
@@ -158,7 +158,7 @@ export default function SchoolClassesPage() {
             </CardFooter>
           </Card>
         </div>
-      </DashboardLayout>
+      </SchoolAdminLayout>
     );
   }
 
@@ -181,7 +181,7 @@ export default function SchoolClassesPage() {
   const gradeLevels = [...new Set(classes.map(cls => cls.gradeLevel))];
 
   return (
-    <DashboardLayout>
+    <SchoolAdminLayout pageTitle="Classes">
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex flex-col space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">

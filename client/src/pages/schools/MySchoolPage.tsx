@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, MapPin, Phone, Mail, Globe, School as SchoolIcon, Calendar, Users, BookOpen, ChevronLeft, Menu } from "lucide-react";
+import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 
 // School data interface
 interface SchoolData {
@@ -34,107 +34,6 @@ interface SchoolData {
   createdAt: string;
   updatedAt: string | Date;
 }
-
-// Simple Dashboard Layout Component
-const SimpleDashboard = ({ children, pageTitle }: { children: React.ReactNode; pageTitle: string }) => {
-  const [location] = useLocation();
-  const [sidebarOpen, setSidebarOpen] = React.useState(true);
-  
-  // School admin navigation
-  const schoolNavItems = [
-    {
-      title: 'My School',
-      href: '/schools/my-school',
-      icon: <SchoolIcon className="h-5 w-5" />,
-    },
-    {
-      title: 'Classes',
-      href: '/schools/classes',
-      icon: <Calendar className="h-5 w-5" />,
-    },
-    {
-      title: 'Staff',
-      href: '/schools/staff',
-      icon: <Users className="h-5 w-5" />,
-    },
-    {
-      title: 'Students',
-      href: '/schools/students',
-      icon: <Users className="h-5 w-5" />,
-    },
-    {
-      title: 'Knowledge Base',
-      href: '/schools/knowledge-base',
-      icon: <BookOpen className="h-5 w-5" />,
-    },
-  ];
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className={cn(
-        "bg-white shadow-lg transition-all duration-300 flex flex-col",
-        sidebarOpen ? "w-64" : "w-16"
-      )}>
-        {/* Sidebar header */}
-        <div className="p-4 flex items-center justify-between border-b">
-          {sidebarOpen && (
-            <h2 className="text-xl font-bold">School Admin</h2>
-          )}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleSidebar}
-            className="ml-auto"
-          >
-            {sidebarOpen ? <ChevronLeft className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
-        </div>
-        
-        {/* Sidebar content */}
-        <div className="flex-1 overflow-y-auto py-4 px-3">
-          <nav className="space-y-2">
-            {schoolNavItems.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center px-2 py-3 rounded-lg transition-colors",
-                  location === item.href
-                    ? "bg-primary text-white"
-                    : "text-gray-700 hover:bg-gray-100",
-                  !sidebarOpen && "justify-center"
-                )}
-              >
-                {item.icon}
-                {sidebarOpen && <span className="ml-3">{item.title}</span>}
-              </a>
-            ))}
-          </nav>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Page header */}
-        <header className="bg-white shadow-sm z-10">
-          <div className="px-4 py-3 flex items-center">
-            <h1 className="text-2xl font-semibold text-gray-800">{pageTitle}</h1>
-          </div>
-        </header>
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 bg-gray-50">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
-};
 
 // Main school page component
 export default function MySchoolPage() {
@@ -162,18 +61,18 @@ export default function MySchoolPage() {
 
   if (isLoading) {
     return (
-      <SimpleDashboard pageTitle="My School">
+      <SchoolAdminLayout pageTitle="My School">
         <div className="h-full flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <span className="ml-2">Loading school information...</span>
         </div>
-      </SimpleDashboard>
+      </SchoolAdminLayout>
     );
   }
 
   if (!school) {
     return (
-      <SimpleDashboard pageTitle="My School">
+      <SchoolAdminLayout pageTitle="My School">
         <div className="max-w-3xl mx-auto my-8">
           <Card>
             <CardHeader>
@@ -194,12 +93,12 @@ export default function MySchoolPage() {
             </CardFooter>
           </Card>
         </div>
-      </SimpleDashboard>
+      </SchoolAdminLayout>
     );
   }
 
   return (
-    <SimpleDashboard pageTitle={school.name}>
+    <SchoolAdminLayout pageTitle={school.name}>
       <div className="max-w-6xl mx-auto my-8">
         {/* School Overview Card */}
         <Card className="mb-8">
@@ -218,7 +117,7 @@ export default function MySchoolPage() {
                 <CardTitle className="text-2xl">{school.name}</CardTitle>
                 <div className="flex items-center mt-1 space-x-2">
                   <Badge variant="secondary">{school.type}</Badge>
-                  <Badge variant={school.status === "active" ? "success" : "default"}>
+                  <Badge variant={school.status === "active" ? "outline" : "default"}>
                     {school.status.charAt(0).toUpperCase() + school.status.slice(1)}
                   </Badge>
                   {school.isVerified && <Badge variant="outline">Verified</Badge>}
@@ -361,6 +260,6 @@ export default function MySchoolPage() {
           </CardFooter>
         </Card>
       </div>
-    </SimpleDashboard>
+    </SchoolAdminLayout>
   );
 }
