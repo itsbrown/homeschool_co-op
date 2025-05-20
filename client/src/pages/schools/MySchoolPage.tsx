@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import DashboardLayout from '@/components/layout/DashboardLayout';
+// Using relative path for dashboard layout
+import DashboardLayout from '../../components/layout/DashboardLayout';
 
 // School data interface
 interface SchoolData {
@@ -41,9 +42,11 @@ export default function MySchoolPage() {
   const [activeTab, setActiveTab] = useState("overview");
   
   // Fetch the school information for the logged-in school admin
-  const { data: school, isLoading, error, refetch } = useQuery({
-    queryKey: ['/api/schools/my-school'],
+  const { data: school, isLoading, error, refetch } = useQuery<SchoolData>({
+    queryKey: ['/api/school-admin/my-school'],
     enabled: !!user,
+    staleTime: 60000, // 1 minute stale time
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
 
   useEffect(() => {

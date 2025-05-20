@@ -192,8 +192,13 @@ export default function Login() {
           </div>
           <div className="mt-4 border-t pt-4 w-full">
             <Link href="/school-admin-login">
-              <Button variant="secondary" className="w-full">
+              <Button variant="secondary" className="w-full mb-2">
                 Sign in as School Admin
+              </Button>
+            </Link>
+            <Link href="/schools/my-school">
+              <Button variant="outline" className="w-full">
+                Go to My School Dashboard
               </Button>
             </Link>
           </div>
