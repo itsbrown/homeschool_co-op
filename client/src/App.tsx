@@ -26,6 +26,8 @@ import { SimpleClassesPage } from "./pages/SimpleClassesPage";
 import StaffInvitePage from "./pages/schools/StaffInvitePage";
 import StaffPositionsPage from "./pages/schools/StaffPositionsPage";
 import KnowledgeBaseCreationPage from "./pages/schools/KnowledgeBaseCreationPage";
+import RolesAndPermissionsPage from "./pages/admin/RolesAndPermissionsPage";
+import FeaturesOverviewPage from "./pages/admin/FeaturesOverviewPage";
 import ChildRegistrationPage from "./pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
@@ -109,6 +111,8 @@ function Router() {
       <Route path="/admin/classes" component={SimpleClassesPage} />
       <Route path="/admin/classes/new" component={ClassCreationPage} />
       <Route path="/admin/classes/upload" component={ClassesUploadPage} />
+      <Route path="/admin/roles" component={RolesAndPermissionsPage} />
+      <Route path="/admin/features" component={FeaturesOverviewPage} />
       <Route path="/admin/classes/edit/:id" component={ClassCreationPage} />
       <Route path="/admin/programs" component={Dashboard} />
       <Route path="/admin/programs/:rest*" component={Dashboard} />
