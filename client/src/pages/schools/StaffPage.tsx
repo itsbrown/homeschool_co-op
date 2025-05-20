@@ -198,6 +198,11 @@ export default function StaffPage() {
                   Invite Staff
                 </Button>
               </Link>
+              <Link href="/schools/staff/positions">
+                <Button variant="outline">
+                  Manage Positions
+                </Button>
+              </Link>
             </div>
           </div>
 
