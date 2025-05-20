@@ -91,16 +91,50 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Username and password are required" });
     }
     
-    // HARDCODED TEST ACCOUNTS - NO DATABASE NEEDED
-    console.log(`Checking credentials for user: "${username}" with password: "${password}" (hardcoded test accounts)`);
+    // Special case for schooladmin
+    if (username === 'schooladmin' && password === 'password') {
+      console.log('School Admin login successful');
+      
+      const schoolAdminUser = {
+        id: 5,
+        name: 'School Administrator',
+        username: 'schooladmin',
+        email: 'school@example.com',
+        role: 'schoolAdmin',
+        avatar: null,
+        subscription: 'premium',
+        createdAt: new Date()
+      };
+      
+      // Set session data
+      req.session.userId = schoolAdminUser.id;
+      req.session.userRole = schoolAdminUser.role;
+      
+      // Save session data immediately
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Session save error:', err);
+            reject(err);
+          } else {
+            console.log('School Admin session saved successfully');
+            resolve();
+          }
+        });
+      });
+      
+      return res.status(200).json({
+        message: "School Admin login successful",
+        user: schoolAdminUser
+      });
+    }
     
-    // Direct test account login - simplify the logic
+    // HARDCODED TEST ACCOUNTS - NO DATABASE NEEDED
     if (password === 'password' && 
        (username === 'admin' || 
         username === 'educator' || 
         username === 'parent' || 
-        username === 'learner' || 
-        username === 'schooladmin')) {
+        username === 'learner')) {
         
       console.log(`Login attempt with test account successful: ${username}`);
       
@@ -147,17 +181,6 @@ router.post("/login", async (req, res) => {
           role: 'learner',
           avatar: null,
           subscription: 'free',
-          createdAt: new Date()
-        };
-      } else if (username === 'schooladmin') {
-        userData = {
-          id: 5,
-          name: 'School Administrator',
-          username: 'schooladmin',
-          email: 'school@example.com',
-          role: 'schoolAdmin',
-          avatar: null,
-          subscription: 'premium',
           createdAt: new Date()
         };
       }
