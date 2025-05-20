@@ -1,286 +1,246 @@
-import { Link, useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth";
-import { cn } from "@/lib/utils";
-import {
+import { useState } from 'react';
+import { Link, useLocation } from 'wouter';
+import { useAuth } from '@/hooks/useAuth';
+import { cn } from '@/lib/utils';
+import { 
+  School, 
+  BookOpen, 
+  Users, 
+  GraduationCap, 
+  Calendar, 
+  Settings, 
+  Database,
+  Menu,
+  X,
   Home,
-  BookOpen,
-  ShoppingBag,
-  Users,
-  Calendar,
-  Mail,
-  BarChart2,
-  DollarSign,
-  User,
   LogOut,
-  GraduationCap,
-  Sparkles,
-  Layers,
-  Brain,
-  Library,
-  Settings,
-  School,
-  UserPlus,
-  Briefcase,
-  FileText,
-  Award,
-  Clock,
-  Building,
-  CreditCard,
-} from "lucide-react";
+  User,
+  LucideIcon
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { apiRequest } from '@/lib/queryClient';
 
-// Admin navigation items
-const adminNavigationItems = [
+// Sidebar navigation items for school admins
+const schoolNavItems: {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+  subitems?: { title: string; href: string }[];
+}[] = [
   {
-    title: "Main",
-    items: [
-      { name: "Dashboard", href: "/dashboard", icon: Home },
-      { name: "Users", href: "/admin/users", icon: Users },
-      { name: "Classes", href: "/admin/classes", icon: School },
-      { name: "Programs", href: "/admin/programs", icon: BookOpen },
-      { name: "Curricula", href: "/curriculum", icon: FileText },
-      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
-      { name: "AI Lesson Generator", href: "/ai-generator/lesson", icon: Sparkles },
-      { name: "AI Worksheet Generator", href: "/ai-generator/worksheet", icon: FileText },
-      { name: "AI Curriculum Generator", href: "/ai-generator/curriculum", icon: Brain },
-      { name: "Curriculum Marketplace", href: "/admin/marketplace", icon: ShoppingBag },
-      { name: "Register School/Co-op", href: "/schools/register", icon: Building },
-    ],
+    title: 'Dashboard',
+    href: '/schools/dashboard',
+    icon: Home,
   },
   {
-    title: "Management",
-    items: [
-      { name: "Calendar", href: "/calendar", icon: Calendar },
-      { name: "Analytics", href: "/admin/analytics", icon: BarChart2 },
-      { name: "Payments", href: "/admin/payments", icon: CreditCard },
-      { name: "Settings", href: "/admin/settings", icon: Settings },
-    ],
-  },
-];
-
-// Educator navigation items
-const educatorNavigationItems = [
-  {
-    title: "Main",
-    items: [
-      { name: "Dashboard", href: "/dashboard", icon: Home },
-      { name: "My Classes", href: "/educator/classes", icon: School },
-      { name: "Curricula", href: "/curriculum", icon: BookOpen },
-      { name: "Lessons", href: "/lessons", icon: GraduationCap },
-      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
-      { name: "AI Lesson Generator", href: "/ai-generator/lesson", icon: Sparkles },
-      { name: "AI Worksheet Generator", href: "/ai-generator/worksheet", icon: FileText },
-      { name: "AI Curriculum Generator", href: "/ai-generator/curriculum", icon: Brain },
-      { name: "Lesson Marketplace", href: "/educator/marketplace", icon: ShoppingBag },
-    ],
+    title: 'My School',
+    href: '/schools/my-school',
+    icon: School,
   },
   {
-    title: "Management",
-    items: [
-      { name: "Calendar", href: "/calendar", icon: Calendar },
-      { name: "Students", href: "/educator/students", icon: Users },
-      { name: "Reports", href: "/educator/reports", icon: FileText },
-      { name: "Community", href: "/community", icon: Building },
-    ],
-  },
-];
-
-// Parent navigation items
-const parentNavigationItems = [
-  {
-    title: "Main",
-    items: [
-      { name: "Dashboard", href: "/dashboard", icon: Home },
-      { name: "My Children", href: "/children", icon: Users },
-      { name: "Register Child", href: "/children/register", icon: UserPlus },
-      { name: "Programs", href: "/programs", icon: Award },
-      { name: "Enrollment Assistant", href: "/enrollment-assistant", icon: Sparkles },
-      { name: "Learning Marketplace", href: "/marketplace", icon: ShoppingBag },
-    ],
+    title: 'Classes',
+    href: '/schools/classes',
+    icon: BookOpen,
   },
   {
-    title: "Management",
-    items: [
-      { name: "Calendar", href: "/calendar", icon: Calendar },
-      { name: "Enrollments", href: "/enrollments", icon: FileText },
-      { name: "Payments", href: "/payments", icon: CreditCard },
-      { name: "Messages", href: "/messages", icon: Mail },
-    ],
-  },
-];
-
-// Learner navigation items
-const learnerNavigationItems = [
-  {
-    title: "Main",
-    items: [
-      { name: "Dashboard", href: "/dashboard", icon: Home },
-      { name: "My Courses", href: "/learner/courses", icon: BookOpen },
-      { name: "Assignments", href: "/learner/assignments", icon: FileText },
-      { name: "Progress", href: "/learner/progress", icon: Award },
-      { name: "Learning Resources", href: "/learner/resources", icon: Library },
-      { name: "Virtual Tutor", href: "/tutor", icon: User },
-    ],
+    title: 'Staff',
+    href: '/schools/staff',
+    icon: Users,
   },
   {
-    title: "Tools",
-    items: [
-      { name: "Calendar", href: "/calendar", icon: Calendar },
-      { name: "Community", href: "/community", icon: Users },
-      { name: "Resources", href: "/learner/resources", icon: Briefcase },
-    ],
-  },
-];
-
-// School Admin navigation items
-const schoolAdminNavigationItems = [
-  {
-    title: "Main",
-    items: [
-      { name: "Dashboard", href: "/dashboard", icon: Home },
-      { name: "My School", href: "/schools/my-school", icon: Building },
-      { name: "Register School/Co-op", href: "/schools/register", icon: Building },
-      { name: "School Classes", href: "/schools/classes", icon: School },
-      { name: "Staff Management", href: "/schools/staff", icon: Users },
-      { name: "Students", href: "/schools/students", icon: GraduationCap },
-      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
-    ],
+    title: 'Students',
+    href: '/schools/students',
+    icon: GraduationCap,
   },
   {
-    title: "Management",
-    items: [
-      { name: "Calendar", href: "/calendar", icon: Calendar },
-      { name: "Reports", href: "/schools/reports", icon: BarChart2 },
-      { name: "Settings", href: "/schools/settings", icon: Settings },
-    ],
+    title: 'Knowledge Base',
+    href: '/schools/knowledge-base',
+    icon: Database,
+  },
+  {
+    title: 'Calendar',
+    href: '/schools/calendar',
+    icon: Calendar,
+  },
+  {
+    title: 'Settings',
+    href: '/schools/settings',
+    icon: Settings,
   },
 ];
 
 export default function Sidebar() {
   const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Default navigation for guests and unassigned users
-  const guestNavigationItems = [
-    {
-      title: "Main",
-      items: [
-        { name: "Dashboard", href: "/dashboard", icon: Home },
-        { name: "AI Worksheet Generator", href: "/ai-generator/worksheet", icon: FileText },
-        { name: "AI Lesson Generator", href: "/ai-generator/lesson", icon: Sparkles },
-        { name: "AI Curriculum Generator", href: "/ai-generator/curriculum", icon: Brain },
-        { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
-      ],
-    },
-  ];
+  const toggleSidebar = () => {
+    setIsCollapsed(!isCollapsed);
+  };
 
-  // Get the appropriate navigation items based on user role
-  const getRoleNavigationItems = () => {
-    if (!user || !user.role) {
-      // Return guest navigation for unauthenticated users
-      return guestNavigationItems;
-    }
-
-    // Check role as string to avoid type issues
-    const role = user.role as string;
-    
-    if (role === "admin") {
-      return adminNavigationItems;
-    } else if (role === "educator") {
-      return educatorNavigationItems;
-    } else if (role === "parent") {
-      return parentNavigationItems;
-    } else if (role === "learner") {
-      return learnerNavigationItems;
-    } else if (role === "schoolAdmin") {
-      return schoolAdminNavigationItems;
-    } else {
-      // Default navigation as fallback
-      return parentNavigationItems;
+  const handleLogout = async () => {
+    try {
+      await apiRequest('POST', '/api/auth/logout');
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
   };
 
-  const navigationItems = getRoleNavigationItems();
-
   return (
-    <div className="flex flex-col w-64 bg-sidebar border-r border-sidebar-border h-screen">
-      {/* Logo and brand */}
-      <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
-        <span className="text-xl font-semibold text-sidebar-primary">LearnSphere</span>
-      </div>
-
-      {/* Navigation links */}
-      <nav className="flex-1 overflow-y-auto">
-        {navigationItems.map((section) => (
-          <div key={section.title} className="py-4">
-            <div className="px-4 pb-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                {section.title}
-              </p>
-            </div>
-            <div className="space-y-1">
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = location === item.href || 
-                                (item.href !== "/dashboard" && location.startsWith(item.href));
-                
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center px-4 py-2 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-primary"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary"
-                    )}
-                  >
-                    <Icon className="h-5 w-5 mr-3" aria-hidden="true" />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* User profile */}
-      <div className="flex items-center p-4 border-t border-sidebar-border">
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-            {user?.name ? user.name.charAt(0).toUpperCase() : "G"}
+    <>
+      <div 
+        className={cn(
+          "hidden md:flex h-screen flex-col border-r transition-all duration-300",
+          isCollapsed ? "w-[70px]" : "w-64"
+        )}
+      >
+        <div className="flex h-14 items-center border-b px-3">
+          <div className={cn(
+            "flex items-center justify-between w-full",
+            isCollapsed ? "justify-center" : "justify-between"
+          )}>
+            {!isCollapsed && (
+              <Link href="/">
+                <span className="font-bold text-xl">ASA Platform</span>
+              </Link>
+            )}
+            <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+              {isCollapsed ? <Menu /> : <X />}
+            </Button>
           </div>
         </div>
-        {user ? (
-          <>
-            <div className="ml-3 min-w-0 flex-1">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name || user.username || "User"}</p>
-              <p className="text-xs text-muted-foreground truncate capitalize">{user.role || "User"}</p>
+        
+        <div className="flex-1 overflow-auto py-2">
+          <nav className="grid gap-1 px-2">
+            {schoolNavItems.map((item) => {
+              const isActive = location === item.href || location.startsWith(`${item.href}/`);
+              
+              return (
+                <Link key={item.href} href={item.href}>
+                  <a
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 transition-all",
+                      isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+                      isCollapsed ? "justify-center" : "justify-start"
+                    )}
+                  >
+                    <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
+                    {!isCollapsed && <span>{item.title}</span>}
+                  </a>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+        
+        <div className="border-t p-4">
+          {isAuthenticated && user && (
+            <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
+              {!isCollapsed && (
+                <div className="flex items-center gap-2">
+                  <div className="rounded-full bg-primary/10 p-1">
+                    <User className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">School Admin</div>
+                    <div className="text-xs text-muted-foreground">Administrator</div>
+                  </div>
+                </div>
+              )}
+              
+              <Button 
+                variant="ghost" 
+                size={isCollapsed ? "icon" : "sm"} 
+                onClick={handleLogout}
+                className={isCollapsed ? "ml-0" : "ml-auto"}
+              >
+                <LogOut className="h-4 w-4" />
+                {!isCollapsed && <span className="ml-1">Logout</span>}
+              </Button>
             </div>
-            <button
-              onClick={() => logout()}
-              className="ml-auto text-muted-foreground hover:text-sidebar-primary"
-              aria-label="Log out"
-            >
-              <LogOut className="h-5 w-5" />
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="ml-3 min-w-0 flex-1">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">Guest User</p>
-              <p className="text-xs text-muted-foreground truncate">Demo Mode</p>
-            </div>
-            <Link 
-              href="/login"
-              className="ml-auto text-muted-foreground hover:text-sidebar-primary"
-              aria-label="Log in"
-            >
-              <User className="h-5 w-5" />
-            </Link>
-          </>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      
+      {/* Mobile sidebar button */}
+      <Button 
+        variant="outline" 
+        size="icon" 
+        className="absolute top-4 left-4 z-50 md:hidden"
+        onClick={toggleSidebar}
+      >
+        <Menu className="h-6 w-6" />
+      </Button>
+      
+      {/* Mobile sidebar drawer */}
+      {!isCollapsed && (
+        <div className="md:hidden fixed inset-0 z-40 bg-background/80 backdrop-blur-sm" onClick={toggleSidebar}>
+          <div 
+            className="fixed inset-y-0 left-0 z-50 w-3/4 max-w-xs bg-background border-r shadow-lg" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-14 items-center border-b px-4">
+              <Link href="/">
+                <span className="font-bold text-xl">ASA Platform</span>
+              </Link>
+              <Button variant="ghost" size="icon" className="ml-auto" onClick={toggleSidebar}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            
+            <div className="py-4">
+              <nav className="grid gap-1 px-2">
+                {schoolNavItems.map((item) => {
+                  const isActive = location === item.href || location.startsWith(`${item.href}/`);
+                  
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <a
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 transition-all",
+                          isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+                        )}
+                        onClick={toggleSidebar}
+                      >
+                        <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
+                        <span>{item.title}</span>
+                      </a>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+            
+            <div className="border-t p-4 mt-auto">
+              {isAuthenticated && user && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-primary/10 p-1">
+                      <User className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">School Admin</div>
+                      <div className="text-xs text-muted-foreground">Administrator</div>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleLogout}
+                    className="ml-auto"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span className="ml-1">Logout</span>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
