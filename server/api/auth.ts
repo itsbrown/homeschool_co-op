@@ -92,53 +92,57 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Username and password are required" });
     }
     
-    // First, try to find the user in our file-based storage
-    const user = userStorage.getUserByUsername(username);
-    
-    if (user) {
-      console.log(`Found user in file storage: ${username}`);
-      // For test accounts, just check if password is 'password'
-      const isPasswordValid = password === 'password';
+    // Special case for schooladmin login
+    if (username === 'schooladmin' && password === 'password') {
+      console.log('School Admin login successful');
       
-      if (isPasswordValid) {
-        console.log(`Login successful for ${username} with role ${user.role}`);
-        
-        // Set session data
-        req.session.userId = user.id;
-        req.session.userRole = user.role;
-        
-        // Save session
+      const schoolAdminUser = {
+        id: 5,
+        name: 'School Administrator',
+        username: 'schooladmin',
+        email: 'school@example.com',
+        role: 'schoolAdmin',
+        avatar: null,
+        subscription: 'premium',
+        createdAt: new Date()
+      };
+      
+      // Set session data for the school admin
+      req.session.userId = schoolAdminUser.id;
+      req.session.userRole = schoolAdminUser.role;
+      
+      // Force save the session
+      try {
         await new Promise<void>((resolve, reject) => {
           req.session.save((err) => {
             if (err) {
-              console.error('Session save error:', err);
+              console.error('Error saving session for school admin:', err);
               reject(err);
             } else {
-              console.log(`Session saved successfully for user ${username}`);
+              console.log('School admin session saved successfully');
               resolve();
             }
           });
         });
-        
-        // Return user data without password
-        const { password, ...userWithoutPassword } = user;
-        return res.status(200).json({
-          message: "Login successful",
-          user: userWithoutPassword
-        });
+      } catch (saveError) {
+        console.error('Session save error:', saveError);
+        return res.status(500).json({ message: "Session error" });
       }
+      
+      return res.status(200).json({
+        message: "School Admin login successful",
+        user: schoolAdminUser
+      });
     }
     
-    // For backward compatibility, also check hardcoded test accounts
-    // HARDCODED TEST ACCOUNTS - NO DATABASE NEEDED
+    // Handle other test accounts
     if (password === 'password' && 
        (username === 'admin' || 
         username === 'educator' || 
         username === 'parent' || 
-        username === 'learner' ||
-        username === 'schooladmin')) {
+        username === 'learner')) {
         
-      console.log(`Login attempt with hardcoded test account: ${username}`);
+      console.log(`Login attempt with test account: ${username}`);
       
       let userData;
       if (username === 'admin') {

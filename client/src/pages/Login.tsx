@@ -190,6 +190,13 @@ export default function Login() {
               Forgot your password?
             </a>
           </div>
+          <div className="mt-4 border-t pt-4 w-full">
+            <Link href="/school-admin-login">
+              <Button variant="secondary" className="w-full">
+                Sign in as School Admin
+              </Button>
+            </Link>
+          </div>
         </CardFooter>
       </Card>
     </div>
