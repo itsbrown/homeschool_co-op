@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../db";
 import { schools, users, insertSchoolSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { schoolStorage } from "../school-storage";
 
 const router = Router();
 
@@ -24,52 +25,32 @@ router.post("/", async (req, res) => {
     }
 
     // Set user as school admin
-    const newSchool = {
-      ...validatedData.data,
-      adminId: session.userId,
-      status: "pending",
-      isVerified: false,
-    };
-
-    // Check if user is already an admin of another school
-    const existingSchool = await db.query.schools.findFirst({
-      where: eq(schools.adminId, session.userId),
-    });
-
-    if (existingSchool) {
+    const schoolData = validatedData.data;
+    
+    // Check if user is already an admin of another school in file storage
+    const existingSchools = schoolStorage.getSchoolsByAdminId(session.userId);
+    if (existingSchools.length > 0) {
       return res.status(400).json({
         message: "You are already registered as an administrator of a school",
       });
     }
-
-    // Also check if a school with the same name already exists
-    const schoolWithSameName = await db.query.schools.findFirst({
-      where: eq(schools.name, newSchool.name),
-    });
-
+    
+    // Check if a school with the same name already exists in file storage
+    const allSchools = schoolStorage.getSchools();
+    const schoolWithSameName = allSchools.find(s => s.name === schoolData.name);
+    
     if (schoolWithSameName) {
       return res.status(400).json({
         message: "A school with this name is already registered",
       });
     }
-
-    // Get user's role
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
+    
+    // Create school in file storage
+    const createdSchool = schoolStorage.createSchool({
+      ...schoolData,
+      adminId: session.userId
     });
-
-    // Update user role to school_admin if not already an admin
-    if (user && user.role !== "admin") {
-      await db.update(users)
-        .set({ role: "school_admin" })
-        .where(eq(users.id, session.userId));
-    }
-
-    // Insert school into database
-    const [createdSchool] = await db.insert(schools)
-      .values(newSchool)
-      .returning();
-
+    
     return res.status(201).json({
       message: "School registration submitted successfully",
       school: createdSchool,
