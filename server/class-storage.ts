@@ -219,5 +219,6 @@ export const classStorage = {
   getClassById,
   createClass,
   updateClass,
-  deleteClass
+  deleteClass,
+  loadClasses
 };

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { schoolStorage } from "../school-storage";
 import { classStorage } from "../class-storage";
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 
@@ -102,8 +104,11 @@ router.get("/classes", requireSchoolAdmin, async (req, res) => {
     
     const schoolId = userSchools[0].id;
     
-    // Get raw classes from storage
-    const allClasses = classStorage.loadClasses();
+    // Get raw classes from storage 
+    // Read directly from the file system to ensure we get the latest data
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
+    const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
     
     // Filter to only include classes for this school
     const schoolClasses = allClasses.filter(cls => Number(cls.schoolId) === Number(schoolId));
