@@ -467,7 +467,11 @@ export default function StudentsPage() {
                                         <TableCell>
                                           <Badge 
                                             variant="outline" 
-                                            className={`bg-${STATUS_COLORS[student.status]}-100 text-${STATUS_COLORS[student.status]}-800 border-${STATUS_COLORS[student.status]}-200`}
+                                            className={student.status === "Active" ? "bg-green-100 text-green-800 border-green-200" :
+                                              student.status === "Inactive" ? "bg-red-100 text-red-800 border-red-200" :
+                                              student.status === "Transfer" ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                              student.status === "Graduated" ? "bg-purple-100 text-purple-800 border-purple-200" :
+                                              "bg-yellow-100 text-yellow-800 border-yellow-200"}
                                           >
                                             {student.status}
                                           </Badge>
@@ -522,7 +526,11 @@ export default function StudentsPage() {
                                     <TableCell>
                                       <Badge 
                                         variant="outline" 
-                                        className={`bg-${STATUS_COLORS[student.status]}-100 text-${STATUS_COLORS[student.status]}-800 border-${STATUS_COLORS[student.status]}-200`}
+                                        className={student.status === "Active" ? "bg-green-100 text-green-800 border-green-200" :
+                                          student.status === "Inactive" ? "bg-red-100 text-red-800 border-red-200" :
+                                          student.status === "Transfer" ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                          student.status === "Graduated" ? "bg-purple-100 text-purple-800 border-purple-200" :
+                                          "bg-yellow-100 text-yellow-800 border-yellow-200"}
                                       >
                                         {student.status}
                                       </Badge>

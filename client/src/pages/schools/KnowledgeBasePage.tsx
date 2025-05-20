@@ -180,18 +180,18 @@ export default function KnowledgeBasePage() {
 
   if (isLoading) {
     return (
-      <DashboardLayout>
+      <SchoolAdminLayout pageTitle="Knowledge Base - Loading">
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading knowledge bases...</span>
         </div>
-      </DashboardLayout>
+      </SchoolAdminLayout>
     );
   }
 
   if (error) {
     return (
-      <DashboardLayout>
+      <SchoolAdminLayout pageTitle="Knowledge Base - Error">
         <div className="max-w-4xl mx-auto p-6">
           <Card>
             <CardHeader>
@@ -208,7 +208,7 @@ export default function KnowledgeBasePage() {
             </CardFooter>
           </Card>
         </div>
-      </DashboardLayout>
+      </SchoolAdminLayout>
     );
   }
 
