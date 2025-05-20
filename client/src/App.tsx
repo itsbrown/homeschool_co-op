@@ -25,6 +25,7 @@ import { ProgramsPage } from "@/pages/ProgramsPage";
 import { SimpleClassesPage } from "./pages/SimpleClassesPage";
 import StaffInvitePage from "./pages/schools/StaffInvitePage";
 import StaffPositionsPage from "./pages/schools/StaffPositionsPage";
+import KnowledgeBaseCreationPage from "./pages/schools/KnowledgeBaseCreationPage";
 import ChildRegistrationPage from "./pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
@@ -102,6 +103,7 @@ function Router() {
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
       <Route path="/schools/students" component={StudentsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
+      <Route path="/schools/knowledge-base/new" component={KnowledgeBaseCreationPage} />
       
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />
