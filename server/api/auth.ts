@@ -92,7 +92,7 @@ router.post("/login", async (req, res) => {
     }
     
     // HARDCODED TEST ACCOUNTS - NO DATABASE NEEDED
-    if ((username === 'admin' || username === 'educator' || username === 'parent' || username === 'learner') && password === 'password') {
+    if ((username === 'admin' || username === 'educator' || username === 'parent' || username === 'learner' || username === 'schooladmin') && password === 'password') {
       console.log(`Login attempt with test account: ${username}`);
       
       let userData;
@@ -138,6 +138,17 @@ router.post("/login", async (req, res) => {
           role: 'learner',
           avatar: null,
           subscription: 'free',
+          createdAt: new Date()
+        };
+      } else if (username === 'schooladmin') {
+        userData = {
+          id: 5,
+          name: 'School Administrator',
+          username: 'schooladmin',
+          email: 'school@example.com',
+          role: 'schoolAdmin',
+          avatar: null,
+          subscription: 'premium',
           createdAt: new Date()
         };
       }
@@ -283,6 +294,20 @@ router.get("/me", async (req, res) => {
       };
       console.log('Returning learner user profile');
       return res.status(200).json(learnerUser);
+    }
+    else if (req.session.userId === 5) {
+      const schoolAdminUser = {
+        id: 5,
+        name: 'School Administrator',
+        username: 'schooladmin',
+        email: 'school@example.com',
+        role: 'schoolAdmin',
+        avatar: null,
+        subscription: 'premium',
+        createdAt: new Date()
+      };
+      console.log('Returning school admin user profile');
+      return res.status(200).json(schoolAdminUser);
     }
     
     // Try using database for real users

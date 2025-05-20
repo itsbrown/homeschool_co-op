@@ -15,8 +15,8 @@ router.post("/", async (req, res) => {
       return res.status(401).json({ message: "You must be logged in to register a school" });
     }
     
-    // Admin-only permission check
-    if (session.userRole !== 'admin') {
+    // Check if user has permission to register schools (admin or schoolAdmin)
+    if (session.userRole !== 'admin' && session.userRole !== 'schoolAdmin') {
       return res.status(403).json({ message: "Only administrators can register schools" });
     }
 

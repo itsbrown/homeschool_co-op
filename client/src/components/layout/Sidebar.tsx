@@ -131,6 +131,30 @@ const learnerNavigationItems = [
   },
 ];
 
+// School Admin navigation items
+const schoolAdminNavigationItems = [
+  {
+    title: "Main",
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: Home },
+      { name: "My School", href: "/schools/my-school", icon: Building },
+      { name: "Register School/Co-op", href: "/schools/register", icon: Building },
+      { name: "School Classes", href: "/schools/classes", icon: School },
+      { name: "Staff Management", href: "/schools/staff", icon: Users },
+      { name: "Students", href: "/schools/students", icon: GraduationCap },
+      { name: "Knowledge Base", href: "/knowledge-base", icon: Library },
+    ],
+  },
+  {
+    title: "Management",
+    items: [
+      { name: "Calendar", href: "/calendar", icon: Calendar },
+      { name: "Reports", href: "/schools/reports", icon: BarChart2 },
+      { name: "Settings", href: "/schools/settings", icon: Settings },
+    ],
+  },
+];
+
 export default function Sidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
@@ -165,6 +189,8 @@ export default function Sidebar() {
         return parentNavigationItems;
       case "learner":
         return learnerNavigationItems;
+      case "schoolAdmin":
+        return schoolAdminNavigationItems;
       default:
         // Default navigation as fallback
         return parentNavigationItems;
