@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { storage } from "../storage";
 import { insertUserSchema } from "@shared/schema";
 import { sendWelcomeEmail, sendVerificationEmail } from "../services/emailService";
+import { userStorage } from "../users-storage";
 
 const router = Router();
 
@@ -84,59 +85,60 @@ router.post("/register", async (req, res) => {
 // Login
 router.post("/login", async (req, res) => {
   try {
-    console.log('Login attempt details:', { username: req.body.username, password: req.body.password ? '(provided)' : '(missing)' });
+    console.log('Login attempt for user:', req.body.username);
     const { username, password } = req.body;
     
     if (!username || !password) {
       return res.status(400).json({ message: "Username and password are required" });
     }
     
-    // Special case for schooladmin
-    if (username === 'schooladmin' && password === 'password') {
-      console.log('School Admin login successful');
+    // First, try to find the user in our file-based storage
+    const user = userStorage.getUserByUsername(username);
+    
+    if (user) {
+      console.log(`Found user in file storage: ${username}`);
+      // For test accounts, just check if password is 'password'
+      const isPasswordValid = password === 'password';
       
-      const schoolAdminUser = {
-        id: 5,
-        name: 'School Administrator',
-        username: 'schooladmin',
-        email: 'school@example.com',
-        role: 'schoolAdmin',
-        avatar: null,
-        subscription: 'premium',
-        createdAt: new Date()
-      };
-      
-      // Set session data
-      req.session.userId = schoolAdminUser.id;
-      req.session.userRole = schoolAdminUser.role;
-      
-      // Save session data immediately
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error('Session save error:', err);
-            reject(err);
-          } else {
-            console.log('School Admin session saved successfully');
-            resolve();
-          }
+      if (isPasswordValid) {
+        console.log(`Login successful for ${username} with role ${user.role}`);
+        
+        // Set session data
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+        
+        // Save session
+        await new Promise<void>((resolve, reject) => {
+          req.session.save((err) => {
+            if (err) {
+              console.error('Session save error:', err);
+              reject(err);
+            } else {
+              console.log(`Session saved successfully for user ${username}`);
+              resolve();
+            }
+          });
         });
-      });
-      
-      return res.status(200).json({
-        message: "School Admin login successful",
-        user: schoolAdminUser
-      });
+        
+        // Return user data without password
+        const { password, ...userWithoutPassword } = user;
+        return res.status(200).json({
+          message: "Login successful",
+          user: userWithoutPassword
+        });
+      }
     }
     
+    // For backward compatibility, also check hardcoded test accounts
     // HARDCODED TEST ACCOUNTS - NO DATABASE NEEDED
     if (password === 'password' && 
        (username === 'admin' || 
         username === 'educator' || 
         username === 'parent' || 
-        username === 'learner')) {
+        username === 'learner' ||
+        username === 'schooladmin')) {
         
-      console.log(`Login attempt with test account successful: ${username}`);
+      console.log(`Login attempt with hardcoded test account: ${username}`);
       
       let userData;
       if (username === 'admin') {
@@ -181,6 +183,17 @@ router.post("/login", async (req, res) => {
           role: 'learner',
           avatar: null,
           subscription: 'free',
+          createdAt: new Date()
+        };
+      } else if (username === 'schooladmin') {
+        userData = {
+          id: 5,
+          name: 'School Administrator',
+          username: 'schooladmin',
+          email: 'school@example.com',
+          role: 'schoolAdmin',
+          avatar: null,
+          subscription: 'premium',
           createdAt: new Date()
         };
       }
@@ -348,6 +361,22 @@ router.get("/me", async (req, res) => {
       return res.status(200).json(schoolAdminUser);
     }
     
+    // Special case for School Admin
+    if (req.session.userId === 5) {
+      const schoolAdminUser = {
+        id: 5,
+        name: 'School Administrator',
+        username: 'schooladmin',
+        email: 'school@example.com',
+        role: 'schoolAdmin',
+        avatar: null,
+        subscription: 'premium',
+        createdAt: new Date()
+      };
+      console.log('Returning school admin user profile');
+      return res.status(200).json(schoolAdminUser);
+    }
+      
     // Try using database for real users
     try {
       console.log('Trying to fetch user from database, ID:', req.session.userId);
