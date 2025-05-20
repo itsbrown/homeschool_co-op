@@ -23,6 +23,7 @@ import CheckoutSuccess from "@/pages/CheckoutSuccess";
 import { RegistrationPage } from "@/pages/RegistrationPage";
 import { ProgramsPage } from "@/pages/ProgramsPage";
 import { SimpleClassesPage } from "./pages/SimpleClassesPage";
+import StaffInvitePage from "./pages/schools/StaffInvitePage";
 import ChildRegistrationPage from "./pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
@@ -96,6 +97,7 @@ function Router() {
       <Route path="/schools/classes/new" component={SchoolClassCreationPage} />
       <Route path="/schools/classes/:id/edit" component={SchoolClassCreationPage} />
       <Route path="/schools/staff" component={StaffPage} />
+      <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/students" component={StudentsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       
