@@ -1,0 +1,351 @@
+import React from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { apiRequest } from "@/lib/queryClient";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
+import { Loader2 } from "lucide-react";
+
+// Form schema for class creation
+const classFormSchema = z.object({
+  title: z.string().min(3, "Class title must be at least 3 characters long"),
+  description: z.string().min(10, "Please provide a detailed description of at least 10 characters"),
+  category: z.string().min(1, "Please select a category"),
+  gradeLevel: z.string().min(1, "Please select a grade level"),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().min(1, "End date is required"),
+  schedule: z.string().min(1, "Schedule information is required"),
+  capacity: z.coerce.number().int().min(1, "Capacity must be at least 1"),
+  location: z.string().min(1, "Location is required"),
+  instructorName: z.string().min(1, "Instructor name is required"),
+  price: z.coerce.number().min(0, "Price cannot be negative"),
+  status: z.string().min(1, "Please select a status"),
+});
+
+type ClassFormValues = z.infer<typeof classFormSchema>;
+
+export default function SchoolClassCreationPage() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Set up form with validation
+  const form = useForm<ClassFormValues>({
+    resolver: zodResolver(classFormSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      category: "",
+      gradeLevel: "",
+      startDate: "",
+      endDate: "",
+      schedule: "",
+      capacity: 10,
+      location: "",
+      instructorName: "",
+      price: 0,
+      status: "upcoming",
+    },
+  });
+
+  // Create class mutation
+  const createClassMutation = useMutation({
+    mutationFn: (data: ClassFormValues) => {
+      return apiRequest("POST", "/api/school-admin/classes", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Class created successfully",
+        description: "Your new class has been added to the system.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
+      navigate("/schools/classes");
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to create class",
+        description: "There was an error creating your class. Please try again.",
+        variant: "destructive",
+      });
+      console.error("Class creation error:", error);
+    },
+  });
+
+  // Handle form submission
+  const onSubmit = (data: ClassFormValues) => {
+    createClassMutation.mutate(data);
+  };
+
+  return (
+    <SchoolAdminLayout pageTitle="Create New Class">
+      <div className="container py-6">
+        <Card className="max-w-4xl mx-auto">
+          <CardHeader>
+            <CardTitle>Create New Class</CardTitle>
+            <CardDescription>Add a new class to your school's offerings</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="title"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Class Title*</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Introduction to American History" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category*</FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="mathematics">Mathematics</SelectItem>
+                            <SelectItem value="science">Science</SelectItem>
+                            <SelectItem value="history">History</SelectItem>
+                            <SelectItem value="language-arts">Language Arts</SelectItem>
+                            <SelectItem value="foreign-language">Foreign Language</SelectItem>
+                            <SelectItem value="arts">Arts</SelectItem>
+                            <SelectItem value="physical-education">Physical Education</SelectItem>
+                            <SelectItem value="computer-science">Computer Science</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description*</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="Provide a detailed description of the class..." 
+                          rows={5}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="gradeLevel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Grade Level*</FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select grade level" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="elementary">Elementary (K-5)</SelectItem>
+                            <SelectItem value="middle">Middle School (6-8)</SelectItem>
+                            <SelectItem value="high">High School (9-12)</SelectItem>
+                            <SelectItem value="k-12">All Grades (K-12)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Status*</FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="upcoming">Upcoming</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="startDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Date*</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="endDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Date*</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="schedule"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Schedule*</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Mondays and Wednesdays, 3:00 PM - 4:30 PM" />
+                      </FormControl>
+                      <FormDescription>
+                        Specify the days and times when this class will meet
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid gap-6 sm:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="capacity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Capacity*</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} min={1} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price ($)*</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} min={0} step=".01" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="location"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Location*</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Room 101" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="instructorName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Instructor Name*</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Jane Smith" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <CardFooter className="flex justify-between px-0 pb-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate("/schools/classes")}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit"
+                    disabled={createClassMutation.isPending}
+                  >
+                    {createClassMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Create Class
+                  </Button>
+                </CardFooter>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      </div>
+    </SchoolAdminLayout>
+  );
+}

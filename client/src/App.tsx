@@ -42,6 +42,7 @@ import NotFound from "@/pages/not-found";
 import MySchoolPage from "./pages/schools/MySchoolPage";
 import SchoolEditPage from "./pages/schools/SchoolEditPage";
 import SchoolClassesPage from "./pages/schools/ClassesPage";
+import SchoolClassCreationPage from "./pages/schools/SchoolClassCreationPage";
 import StaffPage from "./pages/schools/StaffPage";
 import StudentsPage from "./pages/schools/StudentsPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
@@ -92,6 +93,7 @@ function Router() {
       <Route path="/schools/my-school" component={MySchoolPage} />
       <Route path="/schools/my-school/edit" component={SchoolEditPage} />
       <Route path="/schools/classes" component={SchoolClassesPage} />
+      <Route path="/schools/classes/new" component={SchoolClassCreationPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/students" component={StudentsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />

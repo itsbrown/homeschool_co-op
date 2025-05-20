@@ -210,6 +210,41 @@ router.get("/students", requireSchoolAdmin, async (req, res) => {
   }
 });
 
+// Create a new class for a school
+router.post("/classes", requireSchoolAdmin, async (req, res) => {
+  try {
+    // Get the school(s) administered by this user
+    const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId || 0);
+    
+    if (userSchools.length === 0) {
+      return res.status(404).json({ message: "No schools found for this administrator" });
+    }
+    
+    const schoolId = userSchools[0].id;
+    
+    // Prepare class data with school ID
+    const classData = {
+      ...req.body,
+      schoolId: schoolId,
+      instructorId: req.session.userId || 0,
+      enrollmentCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    // Create the class
+    const newClass = classStorage.createClass(classData);
+    
+    return res.status(201).json({
+      message: "Class created successfully",
+      class: newClass
+    });
+  } catch (error) {
+    console.error("Error creating class:", error);
+    return res.status(500).json({ message: "Server error while creating class" });
+  }
+});
+
 // Update school information for a school admin
 router.patch("/schools/:id", requireSchoolAdmin, async (req, res) => {
   try {
