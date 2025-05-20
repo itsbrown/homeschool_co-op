@@ -254,8 +254,8 @@ export default function MySchoolPage() {
             <Button variant="outline" onClick={() => refetch()}>
               Refresh Data
             </Button>
-            <Button>
-              Edit School Information
+            <Button asChild>
+              <Link href="/schools/my-school/edit">Edit School Information</Link>
             </Button>
           </CardFooter>
         </Card>

@@ -231,7 +231,7 @@ export default function SchoolClassesPage() {
                         <SelectValue placeholder="Category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Categories</SelectItem>
+                        <SelectItem value="all-categories">All Categories</SelectItem>
                         {categories.map((category) => (
                           <SelectItem key={category} value={category}>{category}</SelectItem>
                         ))}
@@ -243,7 +243,7 @@ export default function SchoolClassesPage() {
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Statuses</SelectItem>
+                        <SelectItem value="all-statuses">All Statuses</SelectItem>
                         {statuses.map((status) => (
                           <SelectItem key={status} value={status}>{status}</SelectItem>
                         ))}
@@ -255,7 +255,7 @@ export default function SchoolClassesPage() {
                         <SelectValue placeholder="Grade Level" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Grades</SelectItem>
+                        <SelectItem value="all-grades">All Grades</SelectItem>
                         {gradeLevels.map((grade) => (
                           <SelectItem key={grade} value={grade}>{grade}</SelectItem>
                         ))}

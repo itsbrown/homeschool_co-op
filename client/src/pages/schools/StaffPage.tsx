@@ -30,7 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 // Sample staff data (will be replaced with API data)
 const sampleStaff = [
@@ -132,18 +132,18 @@ export default function StaffPage() {
 
   if (isLoading) {
     return (
-      <DashboardLayout>
+      <SchoolAdminLayout pageTitle="Staff Management">
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading staff information...</span>
         </div>
-      </DashboardLayout>
+      </SchoolAdminLayout>
     );
   }
 
   if (error) {
     return (
-      <DashboardLayout>
+      <SchoolAdminLayout pageTitle="Staff Management - Error">
         <div className="max-w-4xl mx-auto p-6">
           <Card>
             <CardHeader>
@@ -160,12 +160,12 @@ export default function StaffPage() {
             </CardFooter>
           </Card>
         </div>
-      </DashboardLayout>
+      </SchoolAdminLayout>
     );
   }
 
   // Filter staff based on search query and filters
-  const filteredStaff = staff.filter(member => {
+  const filteredStaff = staff?.filter(member => {
     const matchesSearch = searchQuery === "" || 
       member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase());
@@ -175,15 +175,15 @@ export default function StaffPage() {
     const matchesStatus = statusFilter === "" || member.status === statusFilter;
     
     return matchesSearch && matchesRole && matchesDepartment && matchesStatus;
-  });
+  }) || [];
 
   // Get unique roles, departments, and statuses for filters
-  const roles = [...new Set(staff.map(member => member.role))];
-  const departments = [...new Set(staff.map(member => member.department))];
-  const statuses = [...new Set(staff.map(member => member.status))];
+  const roles = staff ? [...new Set(staff.map(member => member.role))] : [];
+  const departments = staff ? [...new Set(staff.map(member => member.department))] : [];
+  const statuses = staff ? [...new Set(staff.map(member => member.status))] : [];
 
   return (
-    <DashboardLayout>
+    <SchoolAdminLayout pageTitle="Staff Management">
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex flex-col space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
@@ -229,7 +229,7 @@ export default function StaffPage() {
                         <SelectValue placeholder="Role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Roles</SelectItem>
+                        <SelectItem value="all-roles">All Roles</SelectItem>
                         {roles.map((role) => (
                           <SelectItem key={role} value={role}>{role}</SelectItem>
                         ))}
@@ -241,7 +241,7 @@ export default function StaffPage() {
                         <SelectValue placeholder="Department" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Departments</SelectItem>
+                        <SelectItem value="all-departments">All Departments</SelectItem>
                         {departments.map((department) => (
                           <SelectItem key={department} value={department}>{department}</SelectItem>
                         ))}
@@ -253,7 +253,7 @@ export default function StaffPage() {
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Statuses</SelectItem>
+                        <SelectItem value="all-statuses">All Statuses</SelectItem>
                         {statuses.map((status) => (
                           <SelectItem key={status} value={status}>{status}</SelectItem>
                         ))}
@@ -312,7 +312,10 @@ export default function StaffPage() {
                               <TableCell>
                                 <Badge 
                                   variant="outline" 
-                                  className={`bg-${STATUS_COLORS[member.status]}-100 text-${STATUS_COLORS[member.status]}-800 border-${STATUS_COLORS[member.status]}-200`}
+                                  className={`bg-opacity-15 border border-opacity-30 ${member.status === "Active" ? "bg-green-100 text-green-800 border-green-200" : 
+                                    member.status === "On Leave" ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
+                                    member.status === "Inactive" ? "bg-red-100 text-red-800 border-red-200" :
+                                    "bg-blue-100 text-blue-800 border-blue-200"}`}
                                 >
                                   {member.status}
                                 </Badge>
@@ -375,7 +378,10 @@ export default function StaffPage() {
                             <div className="flex justify-end">
                               <Badge 
                                 variant="outline" 
-                                className={`bg-${STATUS_COLORS[member.status]}-100 text-${STATUS_COLORS[member.status]}-800 border-${STATUS_COLORS[member.status]}-200`}
+                                className={`bg-opacity-15 border border-opacity-30 ${member.status === "Active" ? "bg-green-100 text-green-800 border-green-200" : 
+                                    member.status === "On Leave" ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
+                                    member.status === "Inactive" ? "bg-red-100 text-red-800 border-red-200" :
+                                    "bg-blue-100 text-blue-800 border-blue-200"}`}
                               >
                                 {member.status}
                               </Badge>
@@ -383,44 +389,40 @@ export default function StaffPage() {
                             <div className="flex flex-col items-center mt-2">
                               <Avatar className="w-24 h-24 mb-3">
                                 <AvatarImage src={member.avatar} />
-                                <AvatarFallback className="text-xl">{member.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                                <AvatarFallback className="text-2xl">{member.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                               </Avatar>
                               <CardTitle className="text-xl">{member.name}</CardTitle>
-                              <CardDescription className="text-sm">{member.role} - {member.department}</CardDescription>
+                              <CardDescription>{member.role} - {member.department}</CardDescription>
                             </div>
                           </CardHeader>
                           <CardContent className="text-center pb-2">
-                            <div className="space-y-2 text-sm">
+                            <div className="space-y-2">
                               <div className="flex items-center justify-center">
                                 <Mail className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <span>{member.email}</span>
+                                <span className="text-sm">{member.email}</span>
                               </div>
                               <div className="flex items-center justify-center">
                                 <Phone className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <span>{member.phone}</span>
+                                <span className="text-sm">{member.phone}</span>
                               </div>
-                              {member.subjects.length > 0 && (
-                                <div className="flex flex-wrap justify-center gap-1 mt-1">
-                                  {member.subjects.map(subject => (
-                                    <Badge key={subject} variant="secondary" className="mt-1">{subject}</Badge>
-                                  ))}
-                                </div>
-                              )}
+                              <div className="text-sm text-muted-foreground">
+                                Joined {new Date(member.joinDate).toLocaleDateString()}
+                              </div>
                             </div>
                           </CardContent>
                           <CardFooter className="flex justify-center gap-2 pt-2">
-                            <Button variant="outline" size="sm" asChild>
+                            <Button size="sm" variant="outline">
                               <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
                             </Button>
-                            <Button variant="outline" size="sm" asChild>
+                            <Button size="sm" variant="outline">
                               <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
                             </Button>
                           </CardFooter>
                         </Card>
                       ))
                     ) : (
-                      <div className="col-span-full text-center py-12 text-muted-foreground">
-                        <p>No staff members found. Try adjusting your search or filters.</p>
+                      <div className="col-span-full flex items-center justify-center p-6 text-muted-foreground">
+                        No staff members found. Try adjusting your search or filters.
                       </div>
                     )}
                   </div>
@@ -428,48 +430,47 @@ export default function StaffPage() {
               </TabsContent>
 
               <TabsContent value="org">
-                <CardContent className="py-12 text-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-12 h-12 mx-auto text-muted-foreground mb-4"
-                  >
-                    <rect width="18" height="18" x="3" y="3" rx="2" />
-                    <path d="M3 9h18" />
-                    <path d="M9 21V9" />
-                  </svg>
-                  <h3 className="text-lg font-medium">Organization Chart Coming Soon</h3>
-                  <p className="text-muted-foreground max-w-md mx-auto mt-2">
-                    The organization chart will display the hierarchical structure of your staff.
-                    Check back soon for this feature.
-                  </p>
+                <CardContent>
+                  <div className="p-6 min-h-[300px] flex items-center justify-center flex-col">
+                    <div className="mb-4">
+                      <svg
+                        className="h-12 w-12 text-primary opacity-70"
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-medium">Organization Chart Coming Soon</h3>
+                    <p className="text-muted-foreground mt-2 text-center">
+                      The organizational chart view for visualizing your school's staff hierarchy is currently in development.
+                    </p>
+                  </div>
                 </CardContent>
               </TabsContent>
 
-              <CardFooter className="flex justify-between items-center border-t px-6 py-4">
-                <div className="text-sm text-muted-foreground">
-                  Showing {filteredStaff.length} of {staff.length} staff members
-                </div>
+              <CardFooter className="flex justify-between border-t pt-6">
+                <Button variant="outline" size="sm">
+                  Export Staff List
+                </Button>
                 <div>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setSearchQuery("");
-                    setRoleFilter("");
-                    setDepartmentFilter("");
-                    setStatusFilter("");
-                  }}>
-                    Reset Filters
-                  </Button>
+                  <span className="text-sm text-muted-foreground mr-4">
+                    {filteredStaff.length} of {staff?.length || 0} staff members
+                  </span>
                 </div>
               </CardFooter>
             </Card>
           </Tabs>
         </div>
       </div>
-    </DashboardLayout>
+    </SchoolAdminLayout>
   );
 }
