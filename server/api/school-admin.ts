@@ -102,30 +102,36 @@ router.get("/classes", requireSchoolAdmin, async (req, res) => {
     
     const schoolId = userSchools[0].id;
     
-    // Get all classes
-    const allClasses = classStorage.getClasses({
-      page: parseInt(req.query.page as string) || 1,
-      limit: parseInt(req.query.limit as string) || 100, // Higher limit to get all school classes
-      search: req.query.search as string || '',
-      category: req.query.category as string || '',
-      status: req.query.status as string || ''
-    });
-    
-    // Access the items array if it exists, otherwise use the full response
-    // This handles both file-based storage and database responses
-    const classItems = allClasses.items || allClasses;
+    // Get raw classes from storage
+    const allClasses = classStorage.loadClasses();
     
     // Filter to only include classes for this school
-    const schoolClasses = Array.isArray(classItems) 
-      ? classItems.filter(cls => cls.schoolId === schoolId) 
-      : [];
+    const schoolClasses = allClasses.filter(cls => Number(cls.schoolId) === Number(schoolId));
     
-    console.log(`Found ${schoolClasses.length} classes for school ID ${schoolId}`);
+    console.log(`Found ${schoolClasses.length} classes for school ID ${schoolId} (direct access)`);
+    
+    // Apply additional filters if needed
+    let filteredClasses = schoolClasses;
+    if (req.query.search) {
+      const searchTerm = (req.query.search as string).toLowerCase();
+      filteredClasses = filteredClasses.filter(cls => 
+        cls.title.toLowerCase().includes(searchTerm) || 
+        (cls.description && cls.description.toLowerCase().includes(searchTerm))
+      );
+    }
+    
+    if (req.query.category && req.query.category !== "all-categories") {
+      filteredClasses = filteredClasses.filter(cls => cls.category === req.query.category);
+    }
+    
+    if (req.query.status && req.query.status !== "all-statuses") {
+      filteredClasses = filteredClasses.filter(cls => cls.status === req.query.status);
+    }
     
     // Return the filtered classes
     res.json({
-      items: schoolClasses,
-      total: schoolClasses.length,
+      items: filteredClasses,
+      total: filteredClasses.length,
       page: 1,
       limit: schoolClasses.length,
       totalPages: 1
