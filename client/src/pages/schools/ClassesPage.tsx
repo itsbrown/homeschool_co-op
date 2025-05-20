@@ -106,7 +106,7 @@ const sampleClasses = [
 ];
 
 // Sample class states for filtering
-const STATUS_COLORS = {
+const STATUS_COLORS: Record<string, string> = {
   "Active": "green",
   "Upcoming": "blue",
   "Completed": "gray",
@@ -163,7 +163,7 @@ export default function SchoolClassesPage() {
   }
 
   // Filter classes based on search query and filters
-  const filteredClasses = classes.filter(cls => {
+  const filteredClasses = classes?.filter(cls => {
     const matchesSearch = searchQuery === "" || 
       cls.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cls.instructor.toLowerCase().includes(searchQuery.toLowerCase());
@@ -173,12 +173,18 @@ export default function SchoolClassesPage() {
     const matchesGradeLevel = gradeLevelFilter === "" || cls.gradeLevel === gradeLevelFilter;
     
     return matchesSearch && matchesCategory && matchesStatus && matchesGradeLevel;
-  });
+  }) || [];
 
   // Get unique categories, statuses, and grade levels for filters
-  const categories = [...new Set(classes.map(cls => cls.category))];
-  const statuses = [...new Set(classes.map(cls => cls.status))];
-  const gradeLevels = [...new Set(classes.map(cls => cls.gradeLevel))];
+  const categories = classes ? [...new Set(classes.map(cls => cls.category))] : [];
+  const statuses = classes ? [...new Set(classes.map(cls => cls.status))] : [];
+  const gradeLevels = classes ? [...new Set(classes.map(cls => cls.gradeLevel))] : [];
+
+  // Helper function to get color styles from status
+  const getStatusStyles = (status: string) => {
+    const baseColor = STATUS_COLORS[status] || "gray";
+    return `bg-${baseColor}-100 text-${baseColor}-800 border-${baseColor}-200`;
+  };
 
   return (
     <SchoolAdminLayout pageTitle="Classes">
@@ -285,7 +291,11 @@ export default function SchoolClassesPage() {
                               <TableCell>
                                 <Badge 
                                   variant="outline" 
-                                  className={`bg-${STATUS_COLORS[cls.status]}-100 text-${STATUS_COLORS[cls.status]}-800 border-${STATUS_COLORS[cls.status]}-200`}
+                                  className={`bg-opacity-15 border border-opacity-30 ${cls.status === "Active" ? "bg-green-100 text-green-800 border-green-200" : 
+                                    cls.status === "Upcoming" ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                    cls.status === "Completed" ? "bg-gray-100 text-gray-800 border-gray-200" :
+                                    cls.status === "Canceled" ? "bg-red-100 text-red-800 border-red-200" :
+                                    "bg-yellow-100 text-yellow-800 border-yellow-200"}`}
                                 >
                                   {cls.status}
                                 </Badge>
@@ -337,7 +347,11 @@ export default function SchoolClassesPage() {
                             <div className="flex justify-between items-start">
                               <Badge 
                                 variant="outline" 
-                                className={`bg-${STATUS_COLORS[cls.status]}-100 text-${STATUS_COLORS[cls.status]}-800 border-${STATUS_COLORS[cls.status]}-200`}
+                                className={`bg-opacity-15 border border-opacity-30 ${cls.status === "Active" ? "bg-green-100 text-green-800 border-green-200" : 
+                                  cls.status === "Upcoming" ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                  cls.status === "Completed" ? "bg-gray-100 text-gray-800 border-gray-200" :
+                                  cls.status === "Canceled" ? "bg-red-100 text-red-800 border-red-200" :
+                                  "bg-yellow-100 text-yellow-800 border-yellow-200"}`}
                               >
                                 {cls.status}
                               </Badge>
@@ -379,15 +393,19 @@ export default function SchoolClassesPage() {
                           </CardContent>
                           <CardFooter className="pt-2">
                             <div className="w-full flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">Grades {cls.gradeLevel}</span>
-                              <span className="text-sm font-medium">{cls.enrollmentCount}/{cls.maxEnrollment} enrolled</span>
+                              <span className="text-sm text-muted-foreground">
+                                Enrolled: {cls.enrollmentCount}/{cls.maxEnrollment}
+                              </span>
+                              <Button size="sm" variant="outline">
+                                <Link href={`/schools/classes/${cls.id}`}>View Details</Link>
+                              </Button>
                             </div>
                           </CardFooter>
                         </Card>
                       ))
                     ) : (
-                      <div className="col-span-full text-center py-12 text-muted-foreground">
-                        <p>No classes found. Try adjusting your search or filters.</p>
+                      <div className="col-span-full flex items-center justify-center p-6 text-muted-foreground">
+                        No classes found. Try adjusting your search or filters.
                       </div>
                     )}
                   </div>
@@ -395,28 +413,31 @@ export default function SchoolClassesPage() {
               </TabsContent>
 
               <TabsContent value="calendar">
-                <CardContent className="py-12 text-center">
-                  <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium">Calendar View Coming Soon</h3>
-                  <p className="text-muted-foreground max-w-md mx-auto mt-2">
-                    The calendar view will allow you to see all your classes scheduled throughout the semester.
-                    Check back soon for this feature.
-                  </p>
+                <CardContent>
+                  <div className="p-6 min-h-[300px] flex items-center justify-center flex-col">
+                    <div className="mb-4">
+                      <Calendar className="h-12 w-12 text-primary opacity-70" />
+                    </div>
+                    <h3 className="text-xl font-medium">Calendar View Coming Soon</h3>
+                    <p className="text-muted-foreground mt-2 text-center">
+                      The calendar view for scheduling and visualizing classes is currently in development.
+                    </p>
+                  </div>
                 </CardContent>
               </TabsContent>
 
-              <CardFooter className="flex justify-between items-center border-t px-6 py-4">
-                <div className="text-sm text-muted-foreground">
-                  Showing {filteredClasses.length} of {classes.length} classes
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm">
-                    <FileDown className="h-4 w-4 mr-1" />
-                    Export
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Filter className="h-4 w-4 mr-1" />
-                    Reset Filters
+              <CardFooter className="flex justify-between border-t pt-6">
+                <Button variant="outline" size="sm">
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Export Class List
+                </Button>
+                <div>
+                  <span className="text-sm text-muted-foreground mr-4">
+                    {filteredClasses.length} of {classes?.length || 0} classes
+                  </span>
+                  <Button>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add New Class
                   </Button>
                 </div>
               </CardFooter>
@@ -424,6 +445,6 @@ export default function SchoolClassesPage() {
           </Tabs>
         </div>
       </div>
-    </DashboardLayout>
+    </SchoolAdminLayout>
   );
 }
