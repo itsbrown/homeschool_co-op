@@ -43,6 +43,7 @@ const adminNavigationItems = [
       { name: "AI Worksheet Generator", href: "/ai-generator/worksheet", icon: FileText },
       { name: "AI Curriculum Generator", href: "/ai-generator/curriculum", icon: Brain },
       { name: "Curriculum Marketplace", href: "/admin/marketplace", icon: ShoppingBag },
+      { name: "Register School/Co-op", href: "/schools/register", icon: Building },
     ],
   },
   {
