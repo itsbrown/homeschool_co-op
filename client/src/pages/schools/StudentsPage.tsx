@@ -165,7 +165,7 @@ export default function StudentsPage() {
   }
 
   // Filter students based on search query and filters
-  const filteredStudents = students.filter(student => {
+  const filteredStudents = students ? students.filter(student => {
     const matchesSearch = searchQuery === "" || 
       student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.parentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -175,11 +175,11 @@ export default function StudentsPage() {
     const matchesStatus = statusFilter === "" || student.status === statusFilter;
     
     return matchesSearch && matchesGradeLevel && matchesStatus;
-  });
+  }) : [];
 
   // Get unique grade levels and statuses for filters
-  const gradeLevels = [...new Set(students.map(student => student.gradeLevel))];
-  const statuses = [...new Set(students.map(student => student.status))];
+  const gradeLevels = students ? Array.from(new Set(students.map(student => student.gradeLevel))) : [];
+  const statuses = students ? Array.from(new Set(students.map(student => student.status))) : [];
 
   // Sort grade levels numerically
   gradeLevels.sort((a, b) => parseInt(a) - parseInt(b));
@@ -315,7 +315,11 @@ export default function StudentsPage() {
                               <TableCell>
                                 <Badge 
                                   variant="outline" 
-                                  className={`bg-${STATUS_COLORS[student.status]}-100 text-${STATUS_COLORS[student.status]}-800 border-${STATUS_COLORS[student.status]}-200`}
+                                  className={student.status === "Active" ? "bg-green-100 text-green-800 border-green-200" :
+                                    student.status === "Inactive" ? "bg-red-100 text-red-800 border-red-200" :
+                                    student.status === "Transfer" ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                    student.status === "Graduated" ? "bg-purple-100 text-purple-800 border-purple-200" :
+                                    "bg-yellow-100 text-yellow-800 border-yellow-200"}
                                 >
                                   {student.status}
                                 </Badge>
@@ -366,7 +370,11 @@ export default function StudentsPage() {
                             <div className="flex justify-between items-start">
                               <Badge 
                                 variant="outline" 
-                                className={`bg-${STATUS_COLORS[student.status]}-100 text-${STATUS_COLORS[student.status]}-800 border-${STATUS_COLORS[student.status]}-200`}
+                                className={student.status === "Active" ? "bg-green-100 text-green-800 border-green-200" :
+                                  student.status === "Inactive" ? "bg-red-100 text-red-800 border-red-200" :
+                                  student.status === "Transfer" ? "bg-blue-100 text-blue-800 border-blue-200" :
+                                  student.status === "Graduated" ? "bg-purple-100 text-purple-800 border-purple-200" :
+                                  "bg-yellow-100 text-yellow-800 border-yellow-200"}
                               >
                                 {student.status}
                               </Badge>
@@ -554,6 +562,6 @@ export default function StudentsPage() {
           </Tabs>
         </div>
       </div>
-    </DashboardLayout>
+    </SchoolAdminLayout>
   );
 }
