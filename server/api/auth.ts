@@ -92,42 +92,53 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Username and password are required" });
     }
     
-    // Special case for schooladmin login
+    // Special case for schooladmin login - the case is important! We need exact match
     if (username === 'schooladmin' && password === 'password') {
-      console.log('School Admin login successful');
+      console.log('School Admin login attempt successful');
       
+      // Create hardcoded School Admin user
       const schoolAdminUser = {
         id: 5,
         name: 'School Administrator',
         username: 'schooladmin',
         email: 'school@example.com',
-        role: 'schoolAdmin',
+        role: 'schoolAdmin', // Must exactly match what's used in schema.ts
         avatar: null,
         subscription: 'premium',
         createdAt: new Date()
       };
       
-      // Set session data for the school admin
+      // Store user data in session
       req.session.userId = schoolAdminUser.id;
       req.session.userRole = schoolAdminUser.role;
       
-      // Force save the session
-      try {
-        await new Promise<void>((resolve, reject) => {
-          req.session.save((err) => {
-            if (err) {
-              console.error('Error saving session for school admin:', err);
-              reject(err);
-            } else {
-              console.log('School admin session saved successfully');
-              resolve();
-            }
-          });
+      // Debug session information
+      console.log('Session before save:', {
+        sessionID: req.sessionID,
+        cookie: req.session.cookie,
+        userId: req.session.userId,
+        userRole: req.session.userRole
+      });
+      
+      // Force save the session with proper error handling
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Error saving session for school admin:', err);
+            reject(err);
+          } else {
+            console.log('School admin session saved successfully');
+            resolve();
+          }
         });
-      } catch (saveError) {
-        console.error('Session save error:', saveError);
-        return res.status(500).json({ message: "Session error" });
-      }
+      });
+      
+      console.log('Session after save:', {
+        sessionID: req.sessionID,
+        cookie: req.session.cookie,
+        userId: req.session.userId,
+        userRole: req.session.userRole
+      });
       
       return res.status(200).json({
         message: "School Admin login successful",

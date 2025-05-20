@@ -1,43 +1,91 @@
-import { useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function SchoolAdminLogin() {
-  const { login } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const autoLogin = async () => {
-      try {
-        await login("schooladmin", "password");
+  const handleManualLogin = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await apiRequest('POST', '/api/auth/login', {
+        username: 'schooladmin',
+        password: 'password'
+      });
+      
+      if (response.ok) {
         toast({
           title: "Login successful",
-          description: "You have been automatically logged in as a School Administrator.",
+          description: "You have been logged in as a School Administrator.",
         });
         setLocation("/dashboard");
-      } catch (error) {
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || "Login failed");
         toast({
           title: "Login failed",
-          description: "Could not automatically log in as School Administrator. Please try again.",
+          description: errorData.message || "Could not log in as School Administrator.",
           variant: "destructive",
         });
-        setLocation("/login");
       }
-    };
-
-    autoLogin();
-  }, [login, setLocation, toast]);
+    } catch (error) {
+      setError("Could not connect to server");
+      toast({
+        title: "Connection error",
+        description: "Could not connect to the server. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-secondary">
-      <div className="flex items-center justify-center space-x-2 mb-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <h1 className="text-2xl font-bold">Logging in as School Administrator...</h1>
+      <div className="flex flex-col items-center justify-center space-y-4 mb-6">
+        <h1 className="text-2xl font-bold">School Administrator Login</h1>
+        <p className="text-muted-foreground">
+          This page allows you to access the School Administrator interface.
+        </p>
       </div>
-      <p className="text-muted-foreground">Please wait while we sign you in automatically.</p>
+      
+      {error && (
+        <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-md max-w-md">
+          <p>{error}</p>
+        </div>
+      )}
+      
+      <Button 
+        onClick={handleManualLogin} 
+        disabled={loading} 
+        size="lg"
+        className="min-w-[200px]"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Logging in...
+          </>
+        ) : (
+          "Login as School Admin"
+        )}
+      </Button>
+      
+      <Button
+        variant="outline"
+        className="mt-4"
+        onClick={() => setLocation("/login")}
+      >
+        Back to Login Page
+      </Button>
     </div>
   );
 }
