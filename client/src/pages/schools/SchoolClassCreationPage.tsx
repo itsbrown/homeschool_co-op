@@ -1,6 +1,6 @@
-import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import React, { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -35,9 +35,14 @@ type ClassFormValues = z.infer<typeof classFormSchema>;
 
 export default function SchoolClassCreationPage() {
   const [, navigate] = useLocation();
+  const params = useParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isEditMode, setIsEditMode] = useState(false);
 
+  // Get class ID from URL if in edit mode
+  const classId = params.id ? parseInt(params.id, 10) : undefined;
+  
   // Set up form with validation
   const form = useForm<ClassFormValues>({
     resolver: zodResolver(classFormSchema),
@@ -56,6 +61,45 @@ export default function SchoolClassCreationPage() {
       status: "upcoming",
     },
   });
+
+  // Fetch class data if in edit mode
+  const { data: classData, isLoading: isLoadingClass } = useQuery({
+    queryKey: ["/api/school-admin/classes", classId],
+    queryFn: () => 
+      apiRequest("GET", `/api/school-admin/classes/${classId}`)
+        .then(res => res.json()),
+    enabled: !!classId, // Only run if classId exists
+  });
+
+  // Update form when class data is loaded
+  useEffect(() => {
+    if (classData && classId) {
+      setIsEditMode(true);
+      
+      // Format dates properly for the form
+      const startDate = classData.startDate ? 
+        new Date(classData.startDate).toISOString().split('T')[0] : 
+        "";
+      const endDate = classData.endDate ? 
+        new Date(classData.endDate).toISOString().split('T')[0] : 
+        "";
+      
+      form.reset({
+        title: classData.title || "",
+        description: classData.description || "",
+        category: classData.category || "",
+        gradeLevel: classData.gradeLevel || "",
+        startDate,
+        endDate,
+        schedule: classData.schedule || "",
+        capacity: classData.capacity || 10,
+        location: classData.location || "",
+        instructorName: classData.instructorName || "",
+        price: classData.price || 0,
+        status: classData.status || "upcoming",
+      });
+    }
+  }, [classData, classId, form]);
 
   // Create class mutation
   const createClassMutation = useMutation({
@@ -80,18 +124,61 @@ export default function SchoolClassCreationPage() {
     },
   });
 
+  // Update class mutation
+  const updateClassMutation = useMutation({
+    mutationFn: (data: ClassFormValues) => {
+      return apiRequest("PUT", `/api/school-admin/classes/${classId}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Class updated successfully",
+        description: "Your class has been updated.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
+      navigate("/schools/classes");
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to update class",
+        description: "There was an error updating your class. Please try again.",
+        variant: "destructive",
+      });
+      console.error("Class update error:", error);
+    },
+  });
+
   // Handle form submission
   const onSubmit = (data: ClassFormValues) => {
-    createClassMutation.mutate(data);
+    if (isEditMode && classId) {
+      updateClassMutation.mutate(data);
+    } else {
+      createClassMutation.mutate(data);
+    }
   };
 
+  // Show loading state when fetching class data
+  if (classId && isLoadingClass) {
+    return (
+      <SchoolAdminLayout pageTitle="Loading Class...">
+        <div className="container py-6 h-[80vh] flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading class data...</span>
+        </div>
+      </SchoolAdminLayout>
+    );
+  }
+
   return (
-    <SchoolAdminLayout pageTitle="Create New Class">
+    <SchoolAdminLayout pageTitle={isEditMode ? "Edit Class" : "Create New Class"}>
       <div className="container py-6">
         <Card className="max-w-4xl mx-auto">
           <CardHeader>
-            <CardTitle>Create New Class</CardTitle>
-            <CardDescription>Add a new class to your school's offerings</CardDescription>
+            <CardTitle>{isEditMode ? "Edit Class" : "Create New Class"}</CardTitle>
+            <CardDescription>
+              {isEditMode 
+                ? "Update the information for this class" 
+                : "Add a new class to your school's offerings"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>

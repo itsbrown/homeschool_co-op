@@ -94,6 +94,7 @@ function Router() {
       <Route path="/schools/my-school/edit" component={SchoolEditPage} />
       <Route path="/schools/classes" component={SchoolClassesPage} />
       <Route path="/schools/classes/new" component={SchoolClassCreationPage} />
+      <Route path="/schools/classes/:id/edit" component={SchoolClassCreationPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/students" component={StudentsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
