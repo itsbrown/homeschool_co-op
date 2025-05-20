@@ -210,6 +210,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             user: testUsers.learner
           });
         }
+        else if (username === "schooladmin") {
+          console.log("School Admin test account login success");
+          req.session.userId = 5;
+          req.session.userRole = "schoolAdmin";
+          
+          console.log("Setting School Admin session data...");
+          
+          await new Promise<void>((resolve) => {
+            req.session.save((err) => {
+              if (err) console.error("Session save error for School Admin:", err);
+              resolve();
+            });
+          });
+          
+          console.log("Session saved successfully for School Admin, userId:", req.session.userId);
+          
+          return res.status(200).json({ 
+            message: "Login successful (School Admin)", 
+            user: testUsers.schoolAdmin
+          });
+        }
       }
             
       // If not a test account, try database
