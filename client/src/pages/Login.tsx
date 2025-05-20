@@ -164,6 +164,17 @@ export default function Login() {
               >
                 Learner
               </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="col-span-2" 
+                onClick={() => {
+                  form.setValue('username', 'schooladmin');
+                  form.setValue('password', 'password');
+                }}
+              >
+                School Admin
+              </Button>
             </div>
           </div>
         </CardContent>
