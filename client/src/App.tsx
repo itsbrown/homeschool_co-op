@@ -37,6 +37,13 @@ import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
 import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
 import NotFound from "@/pages/not-found";
+
+// School Admin pages
+import MySchoolPage from "./pages/schools/MySchoolPage";
+import SchoolClassesPage from "./pages/schools/ClassesPage";
+import StaffPage from "./pages/schools/StaffPage";
+import StudentsPage from "./pages/schools/StudentsPage";
+import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import { AuthProvider } from "@/hooks/useAuth";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
@@ -79,6 +86,13 @@ function Router() {
       {/* School/Co-op registration routes */}
       <Route path="/schools/register" component={SchoolRegistrationPage} />
       <Route path="/schools/register/confirm" component={SchoolRegistrationConfirmationPage} />
+      
+      {/* School Admin routes */}
+      <Route path="/schools/my-school" component={MySchoolPage} />
+      <Route path="/schools/classes" component={SchoolClassesPage} />
+      <Route path="/schools/staff" component={StaffPage} />
+      <Route path="/schools/students" component={StudentsPage} />
+      <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />
