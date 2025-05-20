@@ -180,20 +180,22 @@ export default function Sidebar() {
       return guestNavigationItems;
     }
 
-    switch (user.role) {
-      case "admin":
-        return adminNavigationItems;
-      case "educator":
-        return educatorNavigationItems;
-      case "parent":
-        return parentNavigationItems;
-      case "learner":
-        return learnerNavigationItems;
-      case "schoolAdmin":
-        return schoolAdminNavigationItems;
-      default:
-        // Default navigation as fallback
-        return parentNavigationItems;
+    // Check role as string to avoid type issues
+    const role = user.role as string;
+    
+    if (role === "admin") {
+      return adminNavigationItems;
+    } else if (role === "educator") {
+      return educatorNavigationItems;
+    } else if (role === "parent") {
+      return parentNavigationItems;
+    } else if (role === "learner") {
+      return learnerNavigationItems;
+    } else if (role === "schoolAdmin") {
+      return schoolAdminNavigationItems;
+    } else {
+      // Default navigation as fallback
+      return parentNavigationItems;
     }
   };
 

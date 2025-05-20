@@ -9,7 +9,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role", { enum: ["learner", "parent", "educator", "admin", "school_admin"] }).default("learner").notNull(),
+  role: text("role", { enum: ["learner", "parent", "educator", "admin", "schoolAdmin"] }).default("learner").notNull(),
   name: text("name").notNull(),
   avatar: text("avatar"),
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),

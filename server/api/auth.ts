@@ -361,21 +361,7 @@ router.get("/me", async (req, res) => {
       return res.status(200).json(schoolAdminUser);
     }
     
-    // Special case for School Admin
-    if (req.session.userId === 5) {
-      const schoolAdminUser = {
-        id: 5,
-        name: 'School Administrator',
-        username: 'schooladmin',
-        email: 'school@example.com',
-        role: 'schoolAdmin',
-        avatar: null,
-        subscription: 'premium',
-        createdAt: new Date()
-      };
-      console.log('Returning school admin user profile');
-      return res.status(200).json(schoolAdminUser);
-    }
+
       
     // Try using database for real users
     try {
