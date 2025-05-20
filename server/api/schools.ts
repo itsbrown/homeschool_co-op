@@ -159,17 +159,26 @@ router.patch("/:id", async (req, res) => {
       delete updateData.isVerified;
     }
 
-    const [updatedSchool] = await db.update(schools)
-      .set({ 
-        ...updateData,
-        updatedAt: new Date(), 
-      })
-      .where(eq(schools.id, schoolId))
-      .returning();
-
+    // Update in database if available
+    let updatedSchool;
+    try {
+      [updatedSchool] = await db.update(schools)
+        .set({ 
+          ...updateData,
+          updatedAt: new Date(), 
+        })
+        .where(eq(schools.id, schoolId))
+        .returning();
+    } catch (dbError) {
+      console.error("Database update failed, falling back to file storage:", dbError);
+    }
+    
+    // Also update in file-based storage since that's what the UI uses
+    const fileUpdatedSchool = schoolStorage.updateSchool(schoolId, updateData);
+    
     return res.json({
       message: "School updated successfully",
-      school: updatedSchool,
+      school: updatedSchool || fileUpdatedSchool,
     });
   } catch (error) {
     console.error("Error updating school:", error);
