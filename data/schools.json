@@ -15,10 +15,10 @@
     "foundedYear": 2025,
     "accreditation": "Private Membership Association",
     "enrollmentSize": 75,
-    "adminId": 1,
-    "status": "pending",
-    "isVerified": false,
+    "adminId": 5,
+    "status": "active",
+    "isVerified": true,
     "createdAt": "2025-05-20T03:25:23.589Z",
-    "updatedAt": "2025-05-20T03:25:23.589Z"
+    "updatedAt": "2025-05-20T12:03:20.350Z"
   }
 ]

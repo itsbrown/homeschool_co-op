@@ -118,18 +118,20 @@ export default function Sidebar() {
               const isActive = location === item.href || location.startsWith(`${item.href}/`);
               
               return (
-                <Link key={item.href} href={item.href}>
-                  <a
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 transition-all",
-                      isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
-                      isCollapsed ? "justify-center" : "justify-start"
-                    )}
-                  >
-                    <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
-                    {!isCollapsed && <span>{item.title}</span>}
-                  </a>
-                </Link>
+                <div key={item.href}>
+                  <Link href={item.href}>
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                        isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+                        isCollapsed ? "justify-center" : "justify-start"
+                      )}
+                    >
+                      <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
+                      {!isCollapsed && <span>{item.title}</span>}
+                    </div>
+                  </Link>
+                </div>
               );
             })}
           </nav>
@@ -196,18 +198,20 @@ export default function Sidebar() {
                   const isActive = location === item.href || location.startsWith(`${item.href}/`);
                   
                   return (
-                    <Link key={item.href} href={item.href}>
-                      <a
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 transition-all",
-                          isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
-                        )}
-                        onClick={toggleSidebar}
-                      >
-                        <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
-                        <span>{item.title}</span>
-                      </a>
-                    </Link>
+                    <div key={item.href}>
+                      <Link href={item.href}>
+                        <div
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                            isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+                          )}
+                          onClick={toggleSidebar}
+                        >
+                          <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
+                          <span>{item.title}</span>
+                        </div>
+                      </Link>
+                    </div>
                   );
                 })}
               </nav>
