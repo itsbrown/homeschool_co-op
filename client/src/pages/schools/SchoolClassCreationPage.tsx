@@ -420,12 +420,12 @@ export default function SchoolClassCreationPage() {
                   </Button>
                   <Button 
                     type="submit"
-                    disabled={createClassMutation.isPending}
+                    disabled={isEditMode ? updateClassMutation.isPending : createClassMutation.isPending}
                   >
-                    {createClassMutation.isPending && (
+                    {(isEditMode ? updateClassMutation.isPending : createClassMutation.isPending) && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Create Class
+                    {isEditMode ? "Update Class" : "Create Class"}
                   </Button>
                 </CardFooter>
               </form>

@@ -92,6 +92,92 @@ router.get("/my-school", requireSchoolAdmin, async (req, res) => {
   }
 });
 
+// Get single class by ID
+router.get("/classes/:id", requireSchoolAdmin, async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id, 10);
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: "Invalid class ID format" });
+    }
+    
+    // Get the class from storage
+    const classItem = classStorage.getClassById(classId);
+    
+    if (!classItem) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+    
+    // Get the school(s) administered by this user
+    const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId || 0);
+    
+    if (userSchools.length === 0) {
+      return res.status(404).json({ message: "No schools found for this administrator" });
+    }
+    
+    const schoolId = userSchools[0].id;
+    
+    // Verify that the class belongs to this school
+    if (Number(classItem.schoolId) !== Number(schoolId)) {
+      return res.status(403).json({ message: "You don't have permission to access this class" });
+    }
+    
+    // Return the class
+    res.json(classItem);
+  } catch (error) {
+    console.error("Error fetching class:", error);
+    res.status(500).json({ message: "Error fetching class" });
+  }
+});
+
+// Update class by ID
+router.put("/classes/:id", requireSchoolAdmin, async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id, 10);
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: "Invalid class ID format" });
+    }
+    
+    // Get the class from storage
+    const existingClass = classStorage.getClassById(classId);
+    
+    if (!existingClass) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+    
+    // Get the school(s) administered by this user
+    const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId || 0);
+    
+    if (userSchools.length === 0) {
+      return res.status(404).json({ message: "No schools found for this administrator" });
+    }
+    
+    const schoolId = userSchools[0].id;
+    
+    // Verify that the class belongs to this school
+    if (Number(existingClass.schoolId) !== Number(schoolId)) {
+      return res.status(403).json({ message: "You don't have permission to update this class" });
+    }
+    
+    // Update the class
+    const updatedClass = classStorage.updateClass(classId, {
+      ...req.body,
+      schoolId: schoolId // Ensure the school ID doesn't change
+    });
+    
+    if (!updatedClass) {
+      return res.status(500).json({ message: "Failed to update class" });
+    }
+    
+    console.log(`Class ${classId} updated successfully for school ${schoolId}`);
+    
+    // Return the updated class
+    res.json(updatedClass);
+  } catch (error) {
+    console.error("Error updating class:", error);
+    res.status(500).json({ message: "Error updating class" });
+  }
+});
+
 // Get classes for the school
 router.get("/classes", requireSchoolAdmin, async (req, res) => {
   try {
