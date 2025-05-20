@@ -1,0 +1,522 @@
+import React, { useState } from "react";
+import { useLocation } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2, Plus, Edit, Trash2, Check, X, ArrowLeft } from "lucide-react";
+
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+
+// Sample staff positions (will be replaced with API data)
+const initialPositions = [
+  {
+    id: 1,
+    title: "Teacher",
+    description: "Responsible for classroom instruction and student assessment",
+    isDefault: true
+  },
+  {
+    id: 2,
+    title: "Department Head",
+    description: "Oversees curriculum and teachers in a specific subject area",
+    isDefault: true
+  },
+  {
+    id: 3,
+    title: "Administrator",
+    description: "Handles administrative duties and school operations",
+    isDefault: true
+  },
+  {
+    id: 4,
+    title: "Teacher Assistant",
+    description: "Supports teachers in classroom management and instruction",
+    isDefault: false
+  },
+  {
+    id: 5,
+    title: "Guidance Counselor",
+    description: "Provides academic and personal counseling to students",
+    isDefault: false
+  }
+];
+
+// Form schema for creating/editing positions
+const positionFormSchema = z.object({
+  title: z.string().min(1, "Position title is required"),
+  description: z.string().optional(),
+  isDefault: z.boolean().default(false)
+});
+
+type PositionFormValues = z.infer<typeof positionFormSchema>;
+
+export default function StaffPositionsPage() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editingPosition, setEditingPosition] = useState<null | number>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [deletePosition, setDeletePosition] = useState<null | number>(null);
+
+  // Get staff positions
+  const { data: positions, isLoading } = useQuery({
+    queryKey: ['/api/school-admin/staff-positions'],
+    // Mock API response for now
+    queryFn: () => Promise.resolve(initialPositions),
+  });
+
+  // Form for editing position in-line
+  const editForm = useForm<PositionFormValues>({
+    resolver: zodResolver(positionFormSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      isDefault: false
+    }
+  });
+
+  // Form for adding new position
+  const addForm = useForm<PositionFormValues>({
+    resolver: zodResolver(positionFormSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      isDefault: false
+    }
+  });
+
+  // Setup mutation for updating positions
+  const updatePositionMutation = useMutation({
+    mutationFn: (data: PositionFormValues & { id: number }) => {
+      // Mock API call - would be replaced with real API call
+      console.log("Updating position:", data);
+      return Promise.resolve(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff-positions'] });
+      toast({
+        title: "Position updated",
+        description: "The staff position has been updated successfully."
+      });
+      setEditingPosition(null);
+    },
+    onError: () => {
+      toast({
+        title: "Update failed",
+        description: "There was an error updating the position. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Setup mutation for adding positions
+  const addPositionMutation = useMutation({
+    mutationFn: (data: PositionFormValues) => {
+      // Mock API call - would be replaced with real API call
+      console.log("Adding position:", data);
+      return Promise.resolve({ ...data, id: Date.now() });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff-positions'] });
+      toast({
+        title: "Position added",
+        description: "The new staff position has been added successfully."
+      });
+      setShowAddDialog(false);
+      addForm.reset();
+    },
+    onError: () => {
+      toast({
+        title: "Add failed",
+        description: "There was an error adding the position. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Setup mutation for deleting positions
+  const deletePositionMutation = useMutation({
+    mutationFn: (id: number) => {
+      // Mock API call - would be replaced with real API call
+      console.log("Deleting position:", id);
+      return Promise.resolve(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff-positions'] });
+      toast({
+        title: "Position deleted",
+        description: "The staff position has been deleted successfully."
+      });
+      setDeletePosition(null);
+    },
+    onError: () => {
+      toast({
+        title: "Delete failed",
+        description: "There was an error deleting the position. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Handle edit button click
+  const handleEditClick = (position: any) => {
+    editForm.reset({
+      title: position.title,
+      description: position.description || "",
+      isDefault: position.isDefault
+    });
+    setEditingPosition(position.id);
+  };
+
+  // Handle saving edited position
+  const handleSaveEdit = (id: number) => {
+    editForm.handleSubmit((data) => {
+      updatePositionMutation.mutate({ ...data, id });
+    })();
+  };
+
+  // Handle adding a new position
+  const handleAddPosition = (data: PositionFormValues) => {
+    addPositionMutation.mutate(data);
+  };
+
+  // Handle deleting a position
+  const handleDeleteClick = (id: number) => {
+    setDeletePosition(id);
+  };
+
+  const confirmDelete = () => {
+    if (deletePosition) {
+      deletePositionMutation.mutate(deletePosition);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <SchoolAdminLayout pageTitle="Staff Positions">
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-2 text-lg">Loading staff positions...</span>
+        </div>
+      </SchoolAdminLayout>
+    );
+  }
+
+  return (
+    <SchoolAdminLayout pageTitle="Staff Positions">
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="flex flex-col space-y-6">
+          {/* Header and back button */}
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => navigate('/schools/staff')} 
+                className="mr-2"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back to Staff
+              </Button>
+            </div>
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold">Staff Positions</h1>
+                <p className="text-muted-foreground">Manage the staff positions for your school</p>
+              </div>
+              <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Position
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Staff Position</DialogTitle>
+                    <DialogDescription>
+                      Create a new position type for your school staff.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <Form {...addForm}>
+                    <form onSubmit={addForm.handleSubmit(handleAddPosition)} className="space-y-4">
+                      <FormField
+                        control={addForm.control}
+                        name="title"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Position Title*</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="e.g., Science Coordinator" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={addForm.control}
+                        name="description"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Description</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                placeholder="Brief description of responsibilities"
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Optional: Provide a short description of this position's duties
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={addForm.control}
+                        name="isDefault"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                            <div className="space-y-0.5">
+                              <FormLabel>Default Position</FormLabel>
+                              <FormDescription>
+                                Make this a default position that cannot be deleted
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <DialogFooter>
+                        <DialogClose asChild>
+                          <Button type="button" variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button 
+                          type="submit" 
+                          disabled={addPositionMutation.isPending}
+                        >
+                          {addPositionMutation.isPending && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          Add Position
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <Separator className="my-4" />
+          </div>
+          
+          {/* Information callout */}
+          <Alert>
+            <AlertTitle>About Staff Positions</AlertTitle>
+            <AlertDescription>
+              Staff positions define the roles that staff members can have in your school. 
+              You can customize the position titles to match your school's structure. 
+              Default positions cannot be deleted but can be renamed.
+            </AlertDescription>
+          </Alert>
+          
+          {/* Positions table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Staff Positions</CardTitle>
+              <CardDescription>
+                View and manage all available position types for your staff
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Position Title</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {positions && positions.length > 0 ? (
+                    positions.map((position) => (
+                      <TableRow key={position.id}>
+                        <TableCell>
+                          {editingPosition === position.id ? (
+                            <FormField
+                              control={editForm.control}
+                              name="title"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          ) : (
+                            <span className="font-medium">{position.title}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editingPosition === position.id ? (
+                            <FormField
+                              control={editForm.control}
+                              name="description"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          ) : (
+                            position.description || "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editingPosition === position.id ? (
+                            <FormField
+                              control={editForm.control}
+                              name="isDefault"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Switch
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      disabled={position.isDefault}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          ) : (
+                            <span className={position.isDefault ? "text-blue-600 font-medium" : ""}>
+                              {position.isDefault ? "Default" : "Custom"}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {editingPosition === position.id ? (
+                            <div className="flex justify-end space-x-2">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setEditingPosition(null)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="default" 
+                                size="sm" 
+                                onClick={() => handleSaveEdit(position.id)}
+                                disabled={updatePositionMutation.isPending}
+                              >
+                                {updatePositionMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Check className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end space-x-2">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleEditClick(position)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              {!position.isDefault && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className="text-red-500 hover:text-red-700"
+                                  onClick={() => handleDeleteClick(position.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-6">
+                        No staff positions found. Click the "Add Position" button to create one.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deletePosition} onOpenChange={(open) => !open && setDeletePosition(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this position? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDelete}
+              disabled={deletePositionMutation.isPending}
+            >
+              {deletePositionMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Delete Position
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </SchoolAdminLayout>
+  );
+}
