@@ -1086,6 +1086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/image-services", imageServicesRouter);
   app.use("/api/ocr-test", ocrTestRouter);
   app.use("/api/schools", schoolsRouter);
+  app.use("/api/school-admin", schoolAdminRouter);
   
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);

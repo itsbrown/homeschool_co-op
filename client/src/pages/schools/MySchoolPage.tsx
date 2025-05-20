@@ -11,6 +11,30 @@ import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
+// School data interface
+interface SchoolData {
+  id: number;
+  name: string;
+  type: string;
+  address?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phoneNumber?: string;
+  email?: string;
+  website?: string;
+  logo?: string | null;
+  description?: string;
+  foundedYear?: number;
+  accreditation?: string | null;
+  enrollmentSize?: number;
+  adminId: number;
+  status: string;
+  isVerified: boolean;
+  createdAt: string;
+  updatedAt: string | Date;
+}
+
 export default function MySchoolPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -34,7 +58,7 @@ export default function MySchoolPage() {
 
   if (isLoading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout pageTitle="My School">
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading school information...</span>
@@ -46,7 +70,7 @@ export default function MySchoolPage() {
   // If no school is found, show registration prompt
   if (!school) {
     return (
-      <DashboardLayout>
+      <DashboardLayout pageTitle="Register School">
         <div className="max-w-4xl mx-auto p-6">
           <Card>
             <CardHeader>
@@ -77,7 +101,7 @@ export default function MySchoolPage() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout pageTitle={`${school.name || 'My School'}`}>
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex flex-col md:flex-row gap-6 mb-8">
           <div className="w-full md:w-1/3">
