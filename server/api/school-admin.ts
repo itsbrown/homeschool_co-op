@@ -210,7 +210,47 @@ router.get("/students", requireSchoolAdmin, async (req, res) => {
   }
 });
 
-// Get knowledge bases for the school
+// Update school information for a school admin
+router.patch("/schools/:id", requireSchoolAdmin, async (req, res) => {
+  try {
+    const schoolId = parseInt(req.params.id);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID" });
+    }
+
+    // Get the school being edited
+    const school = schoolStorage.getSchoolById(schoolId);
+    
+    if (!school) {
+      return res.status(404).json({ message: "School not found" });
+    }
+    
+    // Verify the current user is the admin of this school
+    if (school.adminId !== req.session.userId && req.session.userRole !== "admin") {
+      return res.status(403).json({ message: "You do not have permission to update this school" });
+    }
+    
+    // Don't allow updating certain fields like adminId, status, isVerified unless admin
+    const updateData = { ...req.body };
+    if (req.session.userRole !== "admin") {
+      delete updateData.adminId;
+      delete updateData.status;
+      delete updateData.isVerified;
+    }
+    
+    // Update the school in file storage
+    const updatedSchool = schoolStorage.updateSchool(schoolId, updateData);
+    
+    return res.json({
+      message: "School updated successfully",
+      school: updatedSchool,
+    });
+  } catch (error) {
+    console.error("Error updating school:", error);
+    return res.status(500).json({ message: "Server error while updating school" });
+  }
+});
+
 router.get("/knowledge-bases", requireSchoolAdmin, async (req, res) => {
   try {
     // Get the school(s) administered by this user

@@ -251,7 +251,16 @@ export default function MySchoolPage() {
             </Tabs>
           </CardContent>
           <CardFooter className="border-t pt-4 flex justify-between">
-            <Button variant="outline" onClick={() => refetch()}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                refetch();
+                toast({
+                  title: "Refreshing data",
+                  description: "The school information is being refreshed.",
+                });
+              }}
+            >
               Refresh Data
             </Button>
             <Button asChild>
