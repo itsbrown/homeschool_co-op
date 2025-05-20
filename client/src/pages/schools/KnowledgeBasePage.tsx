@@ -311,7 +311,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Grade Level" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Grades</SelectItem>
+                        <SelectItem value="all-grades">All Grades</SelectItem>
                         {gradeLevels.map((gradeLevel) => (
                           <SelectItem key={gradeLevel} value={gradeLevel}>{gradeLevel}</SelectItem>
                         ))}
@@ -323,7 +323,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Statuses</SelectItem>
+                        <SelectItem value="all-statuses">All Statuses</SelectItem>
                         {statuses.map((status) => (
                           <SelectItem key={status} value={status}>{status}</SelectItem>
                         ))}
