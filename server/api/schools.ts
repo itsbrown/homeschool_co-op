@@ -14,6 +14,9 @@ router.post("/", async (req, res) => {
     if (!session?.userId) {
       return res.status(401).json({ message: "You must be logged in to register a school" });
     }
+    
+    // Allow any authenticated user to register a school (not just admin)
+    // This is intentional to make the feature available to all users
 
     // Validate the request body
     const validatedData = insertSchoolSchema.safeParse(req.body);
