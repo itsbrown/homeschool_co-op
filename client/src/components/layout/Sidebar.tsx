@@ -71,7 +71,6 @@ const educatorNavigationItems = [
       { name: "AI Worksheet Generator", href: "/ai-generator/worksheet", icon: FileText },
       { name: "AI Curriculum Generator", href: "/ai-generator/curriculum", icon: Brain },
       { name: "Lesson Marketplace", href: "/educator/marketplace", icon: ShoppingBag },
-      { name: "Register School/Co-op", href: "/schools/register", icon: Building },
     ],
   },
   {
@@ -96,7 +95,6 @@ const parentNavigationItems = [
       { name: "Programs", href: "/programs", icon: Award },
       { name: "Enrollment Assistant", href: "/enrollment-assistant", icon: Sparkles },
       { name: "Learning Marketplace", href: "/marketplace", icon: ShoppingBag },
-      { name: "Register School/Co-op", href: "/schools/register", icon: Building },
     ],
   },
   {

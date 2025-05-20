@@ -10,13 +10,15 @@ const router = Router();
 router.post("/", async (req, res) => {
   const { session } = req;
   try {
-    // Check if user is authenticated
+    // Check if user is authenticated and is an admin
     if (!session?.userId) {
       return res.status(401).json({ message: "You must be logged in to register a school" });
     }
     
-    // Allow any authenticated user to register a school (not just admin)
-    // This is intentional to make the feature available to all users
+    // Admin-only permission check
+    if (session.userRole !== 'admin') {
+      return res.status(403).json({ message: "Only administrators can register schools" });
+    }
 
     // Validate the request body
     const validatedData = insertSchoolSchema.safeParse(req.body);
