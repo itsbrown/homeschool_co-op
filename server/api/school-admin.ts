@@ -111,8 +111,14 @@ router.get("/classes", requireSchoolAdmin, async (req, res) => {
       status: req.query.status as string || ''
     });
     
+    // Access the items array if it exists, otherwise use the full response
+    // This handles both file-based storage and database responses
+    const classItems = allClasses.items || allClasses;
+    
     // Filter to only include classes for this school
-    const schoolClasses = allClasses.items.filter(cls => cls.schoolId === schoolId);
+    const schoolClasses = Array.isArray(classItems) 
+      ? classItems.filter(cls => cls.schoolId === schoolId) 
+      : [];
     
     console.log(`Found ${schoolClasses.length} classes for school ID ${schoolId}`);
     
