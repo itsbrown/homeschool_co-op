@@ -5,10 +5,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Sparkles, Bot } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 
 export default function ParentDashboard() {
-  const { user } = useAuth();
+  const { user } = useFirebaseAuth();
   const [activeTab, setActiveTab] = useState("overview");
 
   // Fetch children data
