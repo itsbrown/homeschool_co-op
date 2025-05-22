@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { ProgramList } from "@/components/registration/ProgramList";
 import { ProgramEnrollmentForm } from "@/components/registration/ProgramEnrollmentForm";
@@ -288,13 +288,14 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 export default function ProgramsParentPage() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const isAdmin = user?.role === 'admin';
 
-  // Redirect if not authenticated
-  if (!isAuthenticated && !isLoading) {
-    setLocation('/login');
-    return null;
-  }
+  // Redirect if not authenticated using useEffect instead of during render
+  React.useEffect(() => {
+    if (!isAuthenticated && !isLoading) {
+      setLocation('/login');
+    }
+  }, [isAuthenticated, isLoading, setLocation]);
 
   // Show loading state while checking authentication
   if (isLoading) {
