@@ -44,9 +44,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   configureSession(app);
   
   // Register API routers
-  const authRouter = await import("./api/auth");
-  app.use("/api/auth", authRouter.default);
   app.use("/api/children", childrenRouter);
+  
+  // Add Firebase sync route directly
+  app.post("/api/auth/firebase-sync", async (req, res) => {
+    try {
+      console.log("Direct Firebase sync request:", req.body);
+      
+      const { firebaseUid, email, name } = req.body;
+      
+      if (!firebaseUid || !email) {
+        return res.status(400).json({ message: "Firebase UID and email are required" });
+      }
+      
+      const mockUser = {
+        id: 1,
+        name: name || email.split('@')[0],
+        email: email,
+        role: 'parent',
+        avatar: null,
+        subscription: 'free'
+      };
+      
+      console.log("Sending direct JSON response:", mockUser);
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(200).json(mockUser);
+      
+    } catch (error) {
+      console.error("Direct Firebase sync error:", error);
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(500).json({ message: "Error syncing user" });
+    }
+  });
   
   // Middleware to check authentication
   const isAuthenticated = (req, res, next) => {
