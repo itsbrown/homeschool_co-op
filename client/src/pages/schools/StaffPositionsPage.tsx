@@ -71,6 +71,13 @@ const positionFormSchema = z.object({
 
 type PositionFormValues = z.infer<typeof positionFormSchema>;
 
+type Position = {
+  id: number;
+  title: string;
+  description: string;
+  isDefault: boolean;
+};
+
 export default function StaffPositionsPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -78,22 +85,17 @@ export default function StaffPositionsPage() {
   const [editingPosition, setEditingPosition] = useState<null | number>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [deletePosition, setDeletePosition] = useState<null | number>(null);
+  
+  // For inline editing
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editIsDefault, setEditIsDefault] = useState(false);
 
   // Get staff positions
   const { data: positions, isLoading } = useQuery({
     queryKey: ['/api/school-admin/staff-positions'],
     // Mock API response for now
     queryFn: () => Promise.resolve(initialPositions),
-  });
-
-  // Form for editing position in-line
-  const editForm = useForm<PositionFormValues>({
-    resolver: zodResolver(positionFormSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      isDefault: false
-    }
   });
 
   // Form for adding new position
@@ -108,7 +110,7 @@ export default function StaffPositionsPage() {
 
   // Setup mutation for updating positions
   const updatePositionMutation = useMutation({
-    mutationFn: (data: PositionFormValues & { id: number }) => {
+    mutationFn: (data: Position) => {
       // Mock API call - would be replaced with real API call
       console.log("Updating position:", data);
       return Promise.resolve(data);
@@ -180,20 +182,32 @@ export default function StaffPositionsPage() {
   });
 
   // Handle edit button click
-  const handleEditClick = (position: any) => {
-    editForm.reset({
-      title: position.title,
-      description: position.description || "",
-      isDefault: position.isDefault
-    });
+  const handleEditClick = (position: Position) => {
+    setEditTitle(position.title);
+    setEditDescription(position.description || "");
+    setEditIsDefault(position.isDefault);
     setEditingPosition(position.id);
   };
 
   // Handle saving edited position
   const handleSaveEdit = (id: number) => {
-    editForm.handleSubmit((data) => {
-      updatePositionMutation.mutate({ ...data, id });
-    })();
+    if (editTitle.trim() === "") {
+      toast({
+        title: "Validation error",
+        description: "Position title is required",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const updatedPosition = {
+      id,
+      title: editTitle,
+      description: editDescription,
+      isDefault: editIsDefault
+    };
+    
+    updatePositionMutation.mutate(updatedPosition);
   };
 
   // Handle adding a new position
@@ -373,57 +387,42 @@ export default function StaffPositionsPage() {
                       <TableRow key={position.id}>
                         <TableCell>
                           {editingPosition === position.id ? (
-                            <FormField
-                              control={editForm.control}
-                              name="title"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
+                            <div className="flex flex-col space-y-2">
+                              <Input
+                                value={editTitle}
+                                onChange={(e) => setEditTitle(e.target.value)}
+                                placeholder="Position Title"
+                              />
+                              {editTitle.trim() === "" && (
+                                <p className="text-sm text-red-500">Position title is required</p>
                               )}
-                            />
+                            </div>
                           ) : (
                             <span className="font-medium">{position.title}</span>
                           )}
                         </TableCell>
                         <TableCell>
                           {editingPosition === position.id ? (
-                            <FormField
-                              control={editForm.control}
-                              name="description"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
+                            <div className="flex flex-col space-y-2">
+                              <Input
+                                value={editDescription}
+                                onChange={(e) => setEditDescription(e.target.value)}
+                                placeholder="Description"
+                              />
+                            </div>
                           ) : (
                             position.description || "-"
                           )}
                         </TableCell>
                         <TableCell>
                           {editingPosition === position.id ? (
-                            <FormField
-                              control={editForm.control}
-                              name="isDefault"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Switch
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                      disabled={position.isDefault}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
+                            <div className="flex items-center">
+                              <Switch
+                                checked={editIsDefault}
+                                onCheckedChange={(value) => setEditIsDefault(value)}
+                                disabled={position.isDefault}
+                              />
+                            </div>
                           ) : (
                             <span className={position.isDefault ? "text-blue-600 font-medium" : ""}>
                               {position.isDefault ? "Default" : "Custom"}
@@ -433,18 +432,18 @@ export default function StaffPositionsPage() {
                         <TableCell className="text-right">
                           {editingPosition === position.id ? (
                             <div className="flex justify-end space-x-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => setEditingPosition(null)}
                               >
                                 <X className="h-4 w-4" />
                               </Button>
-                              <Button 
-                                variant="default" 
-                                size="sm" 
+                              <Button
+                                variant="default"
+                                size="sm"
                                 onClick={() => handleSaveEdit(position.id)}
-                                disabled={updatePositionMutation.isPending}
+                                disabled={editTitle.trim() === "" || updatePositionMutation.isPending}
                               >
                                 {updatePositionMutation.isPending ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -455,18 +454,17 @@ export default function StaffPositionsPage() {
                             </div>
                           ) : (
                             <div className="flex justify-end space-x-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => handleEditClick(position)}
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
                               {!position.isDefault && (
-                                <Button 
-                                  variant="ghost" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
-                                  className="text-red-500 hover:text-red-700"
                                   onClick={() => handleDeleteClick(position.id)}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -480,7 +478,16 @@ export default function StaffPositionsPage() {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-6">
-                        No staff positions found. Click the "Add Position" button to create one.
+                        <p className="text-muted-foreground">No positions found</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => setShowAddDialog(true)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add your first position
+                        </Button>
                       </TableCell>
                     </TableRow>
                   )}
@@ -492,21 +499,21 @@ export default function StaffPositionsPage() {
       </div>
 
       {/* Delete confirmation dialog */}
-      <Dialog open={!!deletePosition} onOpenChange={(open) => !open && setDeletePosition(null)}>
+      <Dialog open={deletePosition !== null} onOpenChange={(open) => !open && setDeletePosition(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogTitle>Delete Position</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete this position? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
+            <Button variant="outline" onClick={() => setDeletePosition(null)}>
+              Cancel
+            </Button>
             <Button 
               variant="destructive" 
-              onClick={confirmDelete}
+              onClick={confirmDelete} 
               disabled={deletePositionMutation.isPending}
             >
               {deletePositionMutation.isPending && (
