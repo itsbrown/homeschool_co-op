@@ -31,57 +31,67 @@ router.post("/register", async (req, res) => {
   try {
     console.log("Registration attempt with data:", req.body.email);
     
+    // Validate the user data against our schema
+    if (!req.body.email || !req.body.password || !req.body.name) {
+      return res.status(400).json({ message: "Email, password, and name are required" });
+    }
+    
     // Use email as username - this is a key change!
-    const testUserData = {
+    const userData = {
       username: req.body.email, // Use email as the username
       email: req.body.email,
       password: req.body.password,
       name: req.body.name,
       role: req.body.role || "parent",
-      subscription: req.body.subscription || "free"
+      subscription: req.body.subscription || "free",
+      avatar: null // Add avatar field as null for consistency
     };
     
-    console.log("Using email as username:", testUserData.email);
+    console.log("Using email as username:", userData.email);
     
     // Check if email/username already exists
-    const existingUser = await storage.getUserByUsername(testUserData.email);
+    const existingUser = await storage.getUserByUsername(userData.username);
     if (existingUser) {
-      console.log("Email already exists as a username:", testUserData.email);
+      console.log("Email already exists as a username:", userData.email);
       return res.status(400).json({ message: "Email already exists" });
     }
     
     // Check for existing email
-    const existingEmail = await storage.getUserByEmail(testUserData.email);
+    const existingEmail = await storage.getUserByEmail(userData.email);
     if (existingEmail) {
-      console.log("Email already exists:", testUserData.email);
+      console.log("Email already exists:", userData.email);
       return res.status(400).json({ message: "Email already exists" });
     }
     
     // Hash password
     console.log("Hashing password...");
-    const hashedPassword = await bcrypt.hash(testUserData.password, 10);
+    const hashedPassword = await bcrypt.hash(userData.password, 10);
     console.log("Password hashed successfully");
     
     // Create the user with a direct and simple approach
-    const newUser = {
-      ...testUserData,
+    const insertUserData = {
+      ...userData,
       password: hashedPassword
     };
     
     console.log("Creating user with data:", { 
-      email: newUser.email,
-      name: newUser.name,
-      role: newUser.role
+      username: insertUserData.username,
+      email: insertUserData.email,
+      name: insertUserData.name,
+      role: insertUserData.role
     });
     
     try {
-      // Directly create the user
-      const user = await storage.createUser(newUser);
+      // Directly create the user with the proper InsertUser format
+      const user = await storage.createUser(insertUserData);
       console.log("User created successfully with ID:", user.id);
       
-      // Remove password from response
+      // Create a copy to avoid mutating the original
       const userWithoutPassword = { ...user };
-      delete userWithoutPassword.password;
+      // Safe delete that checks if property exists first
+      if ('password' in userWithoutPassword) {
+        delete userWithoutPassword.password;
+      }
       
       // Set up the session
       req.session.userId = user.id;
@@ -98,7 +108,7 @@ router.post("/register", async (req, res) => {
       console.error("Error creating user:", createError);
       return res.status(500).json({ 
         message: "Failed to create user account",
-        error: createError.message 
+        error: createError.message || "Unknown error" 
       });
     }
   } catch (error) {
