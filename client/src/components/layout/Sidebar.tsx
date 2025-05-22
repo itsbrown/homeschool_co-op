@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useAuth } from '@/hooks/useAuth';
+import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 import { cn } from '@/lib/utils';
 import { 
   School, 
@@ -72,7 +72,7 @@ const schoolNavItems: {
 
 export default function Sidebar() {
   const [location] = useLocation();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useFirebaseAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleSidebar = () => {
