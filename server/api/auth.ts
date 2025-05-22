@@ -29,11 +29,11 @@ export const hasRole = (roles: string[]) => {
 // Register a new user
 router.post("/register", async (req, res) => {
   try {
-    console.log("Registration attempt with data:", req.body.username);
+    console.log("Registration attempt with data:", req.body.email);
     
-    // Create a fixed set of known good values for testing
+    // Use email as username - this is a key change!
     const testUserData = {
-      username: req.body.username,
+      username: req.body.email, // Use email as the username
       email: req.body.email,
       password: req.body.password,
       name: req.body.name,
@@ -41,23 +41,21 @@ router.post("/register", async (req, res) => {
       subscription: req.body.subscription || "free"
     };
     
-    // Validate the user data - skip for simpler testing
-    // If this validation is failing, we'll bypass it
-    // const validatedData = insertUserSchema.parse(testUserData);
+    console.log("Using email as username:", testUserData.email);
     
-    // Check if user already exists
-    const existingUser = await storage.getUserByUsername(testUserData.username);
+    // Check if email/username already exists
+    const existingUser = await storage.getUserByUsername(testUserData.email);
     if (existingUser) {
-      console.log("Username already exists:", testUserData.username);
-      return res.status(400).json({ message: "Username already exists" });
+      console.log("Email already exists as a username:", testUserData.email);
+      return res.status(400).json({ message: "Email already exists" });
     }
     
-    // Skip email check for simpler testing - the email check might be failing
-    // const existingEmail = await storage.getUserByEmail(testUserData.email);
-    // if (existingEmail) {
-    //   console.log("Email already exists:", testUserData.email);
-    //   return res.status(400).json({ message: "Email already exists" });
-    // }
+    // Check for existing email
+    const existingEmail = await storage.getUserByEmail(testUserData.email);
+    if (existingEmail) {
+      console.log("Email already exists:", testUserData.email);
+      return res.status(400).json({ message: "Email already exists" });
+    }
     
     // Hash password
     console.log("Hashing password...");
@@ -70,8 +68,8 @@ router.post("/register", async (req, res) => {
       password: hashedPassword
     };
     
-    console.log("Creating user with fixed data:", { 
-      username: newUser.username,
+    console.log("Creating user with data:", { 
+      email: newUser.email,
       name: newUser.name,
       role: newUser.role
     });

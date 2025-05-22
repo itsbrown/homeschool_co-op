@@ -32,7 +32,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 const registerSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   name: z.string().min(1, "Full name is required"),
@@ -51,7 +50,6 @@ export default function Register() {
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      username: "",
       email: "",
       password: "",
       name: "",
@@ -63,29 +61,28 @@ export default function Register() {
   async function onSubmit(data: RegisterFormValues) {
     try {
       setRegisterError(null);
-      await register(data);
       
-      // After registration, log the user in automatically
-      try {
-        await login(data.username, data.password);
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created and you're now logged in!",
-        });
-        // Login mutation in useAuth.ts will handle the redirect to dashboard
-      } catch (loginError) {
-        // If auto-login fails, redirect to login page
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created. Please log in.",
-        });
-        setLocation("/login");
-      }
-    } catch (error) {
-      setRegisterError("Registration failed. Please try again with different credentials.");
+      // Create registration data with email as username
+      const registrationData = {
+        ...data,
+        username: data.email // Add username explicitly using email
+      };
+      
+      console.log("Registering with data:", registrationData);
+      await register(registrationData);
+      
+      // After registration, show success message and redirect to login
+      toast({
+        title: "Registration successful",
+        description: "Your account has been created. Please log in.",
+      });
+      setLocation("/login");
+    } catch (error: any) {
+      const errorMessage = error?.message || "Registration failed. Please try again with different credentials.";
+      setRegisterError(errorMessage);
       toast({
         title: "Registration failed",
-        description: "Please try again with different credentials.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -108,19 +105,6 @@ export default function Register() {
           )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Username</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter a username" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               <FormField
                 control={form.control}
                 name="email"
