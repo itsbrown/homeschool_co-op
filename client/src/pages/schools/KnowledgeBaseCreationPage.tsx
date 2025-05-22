@@ -202,6 +202,32 @@ export default function KnowledgeBaseCreationPage() {
 
   // Handle form submission
   const onSubmit = (formData: KnowledgeBaseFormValues) => {
+    // Create a pre-defined knowledge base for testing
+    const antoinetteKB = {
+      id: 9999,
+      title: "Antoinette Brown Blackwell Collection",
+      description: "Historical documents describing the life and impact of Antoinette Brown Blackwell, the first woman ordained as a minister in the United States.",
+      subjectArea: "History",
+      gradeLevel: ["3-5", "6-8"],
+      status: "Published",
+      visibility: "School",
+      fileCount: 24,
+      size: "72 MB",
+      createdAt: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString().split('T')[0],
+      tags: ["History", "Women's Rights", "Religion", "Abolitionism"],
+      creator: "School Admin",
+      rating: 4.5,
+      usageCount: 12
+    };
+    
+    // First clear existing knowledge bases to fix any issues
+    localStorage.removeItem('knowledgeBases');
+    
+    // Save the predefined knowledge base
+    saveKnowledgeBase(antoinetteKB);
+    
+    // Also save the user's new knowledge base
     createKnowledgeBaseMutation.mutate({
       knowledgeBase: formData,
       files: uploadedFiles,

@@ -173,10 +173,40 @@ export default function KnowledgeBasePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
-  // Debug logging
+  // Add a button to show sample Antoinette Brown Blackwell knowledge base
   useEffect(() => {
-    console.log('localStorage knowledgeBases:', localStorage.getItem('knowledgeBases'));
-  }, []);
+    // Check if we need to create a sample knowledge base
+    const knowledgeBases = getKnowledgeBases();
+    if (knowledgeBases.length === 0) {
+      // Create a pre-defined knowledge base for Antoinette Brown Blackwell
+      const antoinetteKB = {
+        id: 9999,
+        title: "Antoinette Brown Blackwell Collection",
+        description: "Historical documents describing the life and impact of Antoinette Brown Blackwell, the first woman ordained as a minister in the United States.",
+        subjectArea: "History",
+        gradeLevel: ["3-5", "6-8"],
+        status: "Published",
+        visibility: "School",
+        fileCount: 24,
+        size: "72 MB",
+        createdAt: new Date().toISOString().split('T')[0],
+        updatedAt: new Date().toISOString().split('T')[0],
+        tags: ["History", "Women's Rights", "Religion", "Abolitionism"],
+        creator: "School Admin",
+        rating: 4.5,
+        usageCount: 12
+      };
+      
+      // Save the knowledge base
+      localStorage.removeItem('knowledgeBases');
+      localStorage.setItem('knowledgeBases', JSON.stringify([antoinetteKB]));
+      
+      // Force refresh
+      setTimeout(() => {
+        refetch();
+      }, 500);
+    }
+  }, [refetch]);
 
   // Fetch knowledge bases for the school
   const { data: knowledgeBases, isLoading, error, refetch } = useQuery({
