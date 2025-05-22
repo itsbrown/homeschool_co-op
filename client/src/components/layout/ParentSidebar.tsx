@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useAuth } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   items: {
@@ -58,7 +58,7 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
 }
 
 export default function ParentSidebar() {
-  const { user } = useAuth();
+  const { user } = useFirebaseAuth();
   const [isOpen, setIsOpen] = React.useState(false);
   
   // Parent navigation items

@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import AdminDashboard from "./AdminDashboard";
 import EducatorDashboard from "./EducatorDashboard";
 import ParentDashboard from "./ParentDashboard";
@@ -7,7 +7,7 @@ import LearnerDashboard from "./LearnerDashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function RoleDashboard() {
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { user, isLoading, isAuthenticated } = useFirebaseAuth();
   
   if (isLoading) {
     return <DashboardSkeleton />;
