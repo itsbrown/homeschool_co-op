@@ -174,17 +174,44 @@ export default function KnowledgeBaseDetailsPage() {
   const handleFileDownload = (file: File) => {
     toast({
       title: "Download Started",
-      description: `Downloading "${file.name}" (${file.size})`,
+      description: `Preparing "${file.name}" (${file.size})`,
     });
     
-    // In a real application, this would trigger an actual download
-    // For this prototype, we'll show a success message after a brief delay
+    // Create a dummy content blob for the download
+    // In a real app, this would be the actual file content from the server
+    const dummyContent = `This is a placeholder file for ${file.name}.\n\n` +
+      `Description: ${file.description}\n` +
+      `Type: ${file.type}\n` +
+      `Size: ${file.size}\n` +
+      `Upload Date: ${file.uploadedAt}\n` +
+      `Tags: ${file.tags.join(', ')}\n\n` +
+      `This file is part of the Antoinette Brown Blackwell Collection.`;
+    
+    // Create a blob from the content
+    const blob = new Blob([dummyContent], { type: 'text/plain' });
+    
+    // Create a URL for the blob
+    const url = URL.createObjectURL(blob);
+    
+    // Create an anchor element for download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    
+    // Trigger the download
+    a.click();
+    
+    // Clean up
     setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
       toast({
         title: "Download Complete",
         description: `"${file.name}" has been downloaded successfully.`,
       });
-    }, 1500);
+    }, 500);
   };
   
   // Function to handle bulk downloads
@@ -194,13 +221,35 @@ export default function KnowledgeBaseDetailsPage() {
       description: "Preparing all files for download. This may take a moment.",
     });
     
-    // Simulate a longer download time for multiple files
+    // Create content for our zip manifest file
+    const manifestContent = "Antoinette Brown Blackwell Collection\n\n" +
+      "Files included in this package:\n" +
+      files.map(file => `- ${file.name} (${file.size}): ${file.description}`).join('\n') + 
+      "\n\nDownloaded on: " + new Date().toLocaleString();
+    
+    // Create a manifest text file
+    const manifestBlob = new Blob([manifestContent], { type: 'text/plain' });
+    const manifestUrl = URL.createObjectURL(manifestBlob);
+    
+    // Create an anchor element for download
+    const a = document.createElement('a');
+    a.href = manifestUrl;
+    a.download = "Antoinette_Brown_Blackwell_Collection_Manifest.txt";
+    document.body.appendChild(a);
+    
+    // Trigger the download
+    a.click();
+    
+    // Clean up
     setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(manifestUrl);
+      
       toast({
         title: "Download Complete",
-        description: "All files have been downloaded as a ZIP archive.",
+        description: "The collection manifest has been downloaded. In a real application, this would be a complete ZIP archive.",
       });
-    }, 2500);
+    }, 500);
   };
   
   // Fetch knowledge base details based on ID
