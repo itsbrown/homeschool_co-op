@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { 
   Loader2, 
@@ -172,13 +172,21 @@ export default function KnowledgeBasePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
+  // Debug logging
+  useEffect(() => {
+    console.log('localStorage knowledgeBases:', localStorage.getItem('knowledgeBases'));
+  }, []);
+
   // Fetch knowledge bases for the school
   const { data: knowledgeBases, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/schools/knowledge-bases'],
     queryFn: async () => {
       // For now, combine sample data with any locally stored knowledge bases
       const localKbs = JSON.parse(localStorage.getItem('knowledgeBases') || '[]');
-      return [...sampleKnowledgeBases, ...localKbs];
+      console.log('Local knowledge bases loaded:', localKbs);
+      const combined = [...sampleKnowledgeBases, ...localKbs];
+      console.log('Combined knowledge bases:', combined);
+      return combined;
     },
     refetchOnMount: true,
     refetchOnWindowFocus: true,
