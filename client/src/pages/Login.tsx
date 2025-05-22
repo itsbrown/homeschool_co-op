@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  username: z.string().min(1, "Email is required"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -86,9 +86,9 @@ export default function Login() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Username</FormLabel>
+                    <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter your username" {...field} />
+                      <Input type="email" placeholder="Enter your email" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -128,7 +128,7 @@ export default function Login() {
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  form.setValue('username', 'admin');
+                  form.setValue('username', 'admin@example.com');
                   form.setValue('password', 'password');
                 }}
               >
@@ -138,7 +138,7 @@ export default function Login() {
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  form.setValue('username', 'educator');
+                  form.setValue('username', 'educator@example.com');
                   form.setValue('password', 'password');
                 }}
               >
@@ -148,7 +148,7 @@ export default function Login() {
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  form.setValue('username', 'parent');
+                  form.setValue('username', 'parent@example.com');
                   form.setValue('password', 'password');
                 }}
               >
@@ -158,7 +158,7 @@ export default function Login() {
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  form.setValue('username', 'learner');
+                  form.setValue('username', 'learner@example.com');
                   form.setValue('password', 'password');
                 }}
               >
@@ -169,7 +169,7 @@ export default function Login() {
                 size="sm" 
                 className="col-span-2" 
                 onClick={() => {
-                  form.setValue('username', 'schooladmin');
+                  form.setValue('username', 'school@example.com');
                   form.setValue('password', 'password');
                 }}
               >
