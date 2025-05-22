@@ -82,33 +82,61 @@ router.post("/register", async (req, res) => {
     });
     
     try {
-      // Directly create the user with the proper InsertUser format
-      const user = await storage.createUser(insertUserData);
-      console.log("User created successfully with ID:", user.id);
+      // Add detailed logging for the data we're passing to storage
+      console.log("Attempting to create user with data structure:", JSON.stringify({
+        username: insertUserData.username,
+        email: insertUserData.email,
+        name: insertUserData.name,
+        role: insertUserData.role,
+        subscription: insertUserData.subscription,
+        hasPasswordHash: !!insertUserData.password,
+        avatar: insertUserData.avatar
+      }));
       
-      // Create a copy to avoid mutating the original
-      const userWithoutPassword = { ...user };
-      // Safe delete that checks if property exists first
-      if ('password' in userWithoutPassword) {
-        delete userWithoutPassword.password;
+      // Use the file-based userStorage instead of the MemStorage
+      try {
+        // Create the user with our alternative file-based storage
+        const user = userStorage.createUser(insertUserData);
+        console.log("User created successfully with file storage, ID:", user.id);
+        
+        // Create a copy to avoid mutating the original
+        const userWithoutPassword = { ...user };
+        // Safe delete that checks if property exists first
+        if ('password' in userWithoutPassword) {
+          delete userWithoutPassword.password;
+        }
+        
+        // Set up the session
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+        
+        console.log("User session created with ID:", user.id);
+        
+        // Send welcome email (mock)
+        try {
+          sendWelcomeEmail(user.email, user.name);
+        } catch (emailError) {
+          console.log("Could not send welcome email, continuing anyway:", emailError);
+        }
+        
+        // Return success
+        return res.status(201).json({ 
+          message: "User created successfully", 
+          user: userWithoutPassword 
+        });
+      } catch (innerError) {
+        // More detailed error logging
+        console.error("Inner error creating user:", innerError);
+        console.error("Error stack:", innerError?.stack);
+        throw innerError; // Re-throw to be caught by outer catch
       }
-      
-      // Set up the session
-      req.session.userId = user.id;
-      req.session.userRole = user.role;
-      
-      console.log("User session created with ID:", user.id);
-      
-      // Return success
-      return res.status(201).json({ 
-        message: "User created successfully", 
-        user: userWithoutPassword 
-      });
     } catch (createError) {
       console.error("Error creating user:", createError);
+      console.error("Error type:", typeof createError);
+      console.error("Error properties:", Object.keys(createError || {}));
       return res.status(500).json({ 
         message: "Failed to create user account",
-        error: createError.message || "Unknown error" 
+        error: createError?.message || "Unknown error" 
       });
     }
   } catch (error) {
