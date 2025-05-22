@@ -91,6 +91,8 @@ function Router() {
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />
       <Route path="/children/:id/edit" component={ChildProfileEditPage} />
       <Route path="/calendar" component={CalendarPage} />
+      <Route path="/schedule" component={SchedulePage} />
+      <Route path="/payments" component={PaymentsPage} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
       
       {/* School/Co-op registration routes */}
