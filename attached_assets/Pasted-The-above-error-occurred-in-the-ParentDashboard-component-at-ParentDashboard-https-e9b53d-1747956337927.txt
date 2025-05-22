@@ -1,0 +1,21 @@
+The above error occurred in the <ParentDashboard> component:
+
+    at ParentDashboard (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/dashboards/ParentDashboard.tsx?t=1747956274657:28:20)
+    at RoleDashboard (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/dashboards/RoleDashboard.tsx?t=1747956274657:26:48)
+    at div
+    at main
+    at div
+    at div
+    at ParentAppShell (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/layout/ParentAppShell.tsx?t=1747955765462:18:42)
+    at Dashboard (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/Dashboard.tsx?t=1747956274657:27:61)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=69c07ccf:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=69c07ccf:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?t=1747956274657&v=NQIdvqg3NUiyR6iVg_kNW:75:42)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2M7HY3UG.js?v=69c07ccf:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=69c07ccf:64:5)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=69c07ccf:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.

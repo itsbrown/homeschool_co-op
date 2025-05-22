@@ -153,7 +153,7 @@ export default function ParentDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {upcomingEventsData?.slice(0, 3).map((event, index) => (
+                    {(Array.isArray(upcomingEventsData) ? upcomingEventsData : []).slice(0, 3).map((event, index) => (
                       <div key={index} className="flex justify-between items-center p-4 border rounded-lg">
                         <div>
                           <h3 className="font-medium">{event.title}</h3>
