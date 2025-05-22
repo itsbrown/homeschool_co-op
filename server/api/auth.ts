@@ -412,16 +412,16 @@ router.get("/me", async (req, res) => {
 // Firebase user sync endpoint
 router.post("/firebase-sync", async (req, res) => {
   try {
-    console.log("Firebase sync request:", req.body);
+    console.log("Firebase sync request received:", req.body);
     
     const { firebaseUid, email, name } = req.body;
     
     if (!firebaseUid || !email) {
+      console.log("Missing required fields:", { firebaseUid: !!firebaseUid, email: !!email });
       return res.status(400).json({ message: "Firebase UID and email are required" });
     }
     
-    // For now, return a simple parent user profile
-    // This bypasses the complex user creation logic that's causing issues
+    // Return a simple parent user profile
     const mockUser = {
       id: 1,
       name: name || email.split('@')[0],
@@ -431,11 +431,13 @@ router.post("/firebase-sync", async (req, res) => {
       subscription: 'free'
     };
     
-    console.log("Returning Firebase user profile:", mockUser);
+    console.log("Sending JSON response:", mockUser);
+    res.setHeader('Content-Type', 'application/json');
     return res.status(200).json(mockUser);
     
   } catch (error) {
     console.error("Firebase sync error:", error);
+    res.setHeader('Content-Type', 'application/json');
     return res.status(500).json({ message: "Error syncing user" });
   }
 });
