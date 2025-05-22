@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation } from "wouter";
 import AppShell from "@/components/layout/AppShell";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 import FamilySchedule from "@/components/schedule/FamilySchedule";
 import { useAuth } from "@/hooks/useAuth";
 

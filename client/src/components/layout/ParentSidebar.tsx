@@ -34,24 +34,24 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
   return (
     <nav className={cn("flex space-x-2 lg:flex-col lg:space-x-0 lg:space-y-1", className)} {...props}>
       {items.map((item) => (
-        <Link key={item.href} href={item.href}>
-          <a
-            className={cn(
-              "group flex items-center rounded-md px-3 py-2.5 font-medium hover:bg-accent hover:text-accent-foreground",
-              location === item.href ? "bg-accent text-accent-foreground" : "text-muted-foreground"
-            )}
-          >
-            <div className="flex items-center">
-              <span className="mr-2 h-5 w-5">{item.icon}</span>
-              <span>{item.title}</span>
-            </div>
-            {item.badge && (
-              <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                {item.badge}
-              </span>
-            )}
-          </a>
-        </Link>
+        <a
+          key={item.href}
+          href={item.href}
+          className={cn(
+            "group flex items-center rounded-md px-3 py-2.5 font-medium hover:bg-accent hover:text-accent-foreground",
+            location === item.href ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+          )}
+        >
+          <div className="flex items-center">
+            <span className="mr-2 h-5 w-5">{item.icon}</span>
+            <span>{item.title}</span>
+          </div>
+          {item.badge && (
+            <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+              {item.badge}
+            </span>
+          )}
+        </a>
       ))}
     </nav>
   );
