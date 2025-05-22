@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Upload, ArrowLeft, Plus, X, Info } from "lucide-react";
 
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
@@ -35,7 +34,6 @@ const knowledgeBaseFormSchema = z.object({
   subjectArea: z.string().min(1, "Subject area is required"),
   gradeLevel: z.array(z.string()).min(1, "At least one grade level must be selected"),
   visibility: z.enum(["Private", "School", "Public"]),
-  tags: z.string().optional(),
   status: z.enum(["Draft", "Published"]),
 });
 
@@ -80,7 +78,6 @@ export default function KnowledgeBaseCreationPage() {
       subjectArea: "",
       gradeLevel: [],
       visibility: "School",
-      tags: "",
       status: "Draft",
     },
   });
@@ -148,9 +145,12 @@ export default function KnowledgeBaseCreationPage() {
 
   // Set up mutation for creating a knowledge base
   const createKnowledgeBaseMutation = useMutation({
-    mutationFn: async (data: KnowledgeBaseFormValues & { files: File[], tags: string[] }) => {
+    mutationFn: async (data: { knowledgeBase: KnowledgeBaseFormValues, files: File[], tags: string[] }) => {
       // In a real implementation, this would be a multipart form data post to upload files
-      console.log("Creating knowledge base with data:", data);
+      console.log("Creating knowledge base with data:", {
+        ...data.knowledgeBase,
+        tags: data.tags
+      });
       console.log("Uploading files:", data.files);
       
       // Simulate API call
@@ -160,12 +160,13 @@ export default function KnowledgeBaseCreationPage() {
         }, 2000);
       });
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast({
         title: "Knowledge Base Created",
         description: "Your knowledge base has been created successfully.",
       });
-      navigate(`/schools/knowledge-base/${data.id}`);
+      // Navigate back to the knowledge base list
+      navigate('/schools/knowledge-base');
     },
     onError: () => {
       toast({
@@ -178,14 +179,11 @@ export default function KnowledgeBaseCreationPage() {
 
   // Handle form submission
   const onSubmit = (formData: KnowledgeBaseFormValues) => {
-    // Combine form data with files and tags
-    const submitData = {
-      ...formData,
+    createKnowledgeBaseMutation.mutate({
+      knowledgeBase: formData,
       files: uploadedFiles,
-      tags: tags,
-    };
-    
-    createKnowledgeBaseMutation.mutate(submitData);
+      tags: tags
+    });
   };
 
   return (
@@ -405,13 +403,14 @@ export default function KnowledgeBaseCreationPage() {
                         type="button" 
                         variant="ghost" 
                         onClick={addTag}
-                        disabled={!tagInput.trim()}
+                        className="ml-2"
                       >
-                        <Plus className="h-4 w-4" />
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
                       </Button>
                     </div>
                     <FormDescription>
-                      Add tags to help others find this knowledge base
+                      Tags help users find your knowledge base. Add topics, themes, or keywords.
                     </FormDescription>
                   </div>
                   
@@ -420,23 +419,26 @@ export default function KnowledgeBaseCreationPage() {
                     name="status"
                     render={({ field }) => (
                       <FormItem className="space-y-3">
-                        <FormLabel>Status*</FormLabel>
+                        <FormLabel>Status</FormLabel>
                         <FormControl>
                           <RadioGroup
                             onValueChange={field.onChange}
                             defaultValue={field.value}
-                            className="flex flex-col space-y-1"
+                            className="flex items-center space-x-4"
                           >
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="Draft" id="status-draft" />
-                              <Label htmlFor="status-draft">Draft (Save as work in progress)</Label>
+                              <Label htmlFor="status-draft">Draft</Label>
                             </div>
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="Published" id="status-published" />
-                              <Label htmlFor="status-published">Published (Make available immediately)</Label>
+                              <Label htmlFor="status-published">Published</Label>
                             </div>
                           </RadioGroup>
                         </FormControl>
+                        <FormDescription>
+                          Draft knowledge bases are only visible to you until published
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -444,7 +446,6 @@ export default function KnowledgeBaseCreationPage() {
                 </CardContent>
               </Card>
               
-              {/* File Upload Section */}
               <Card>
                 <CardHeader>
                   <CardTitle>Upload Files</CardTitle>
@@ -501,13 +502,13 @@ export default function KnowledgeBaseCreationPage() {
                                 </p>
                               </div>
                             </div>
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
                               onClick={() => removeFile(index)}
                             >
-                              <X className="h-4 w-4 text-muted-foreground" />
+                              <X className="h-4 w-4" />
                             </Button>
                           </div>
                         ))}
@@ -515,9 +516,9 @@ export default function KnowledgeBaseCreationPage() {
                     </div>
                   )}
                   
-                  <Alert>
+                  <Alert variant="outline">
                     <Info className="h-4 w-4" />
-                    <AlertTitle>File Upload Note</AlertTitle>
+                    <AlertTitle>Important</AlertTitle>
                     <AlertDescription>
                       Files will be uploaded when you save the knowledge base. You can add more files later.
                     </AlertDescription>
@@ -525,7 +526,7 @@ export default function KnowledgeBaseCreationPage() {
                 </CardContent>
               </Card>
               
-              <div className="flex justify-between">
+              <div className="flex justify-end space-x-4">
                 <Button 
                   type="button" 
                   variant="outline" 
@@ -534,7 +535,7 @@ export default function KnowledgeBaseCreationPage() {
                   Cancel
                 </Button>
                 <Button 
-                  type="submit" 
+                  type="submit"
                   disabled={createKnowledgeBaseMutation.isPending}
                 >
                   {createKnowledgeBaseMutation.isPending && (
