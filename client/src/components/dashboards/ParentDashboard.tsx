@@ -11,6 +11,7 @@ export default function ParentDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Fetch children data
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
     queryKey: ["/api/children"],
     queryFn: () => fetch("/api/children").then(res => res.json()).catch(() => []),
@@ -18,6 +19,7 @@ export default function ParentDashboard() {
     select: (data) => Array.isArray(data) ? data : [],
   });
 
+  // Fetch enrollments data
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/enrollments"],
     queryFn: () => {
@@ -26,6 +28,15 @@ export default function ParentDashboard() {
       return fetch(`/api/enrollments?childIds=${childIds.join(',')}`).then(res => res.json()).catch(() => []);
     },
     enabled: !!childrenData,
+  });
+  
+  // Fetch payment data for overview
+  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
+    queryKey: ["/api/payments/summary"],
+    queryFn: () => 
+      fetch("/api/payments/summary")
+        .then(res => res.json())
+        .catch(() => ({ pendingCount: 0 })),
   });
 
   const { data: upcomingEventsData, isLoading: eventsLoading } = useQuery({
@@ -116,7 +127,9 @@ export default function ParentDashboard() {
                 <CardTitle className="text-sm font-medium">Payments</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">0</div>
+                <div className="text-2xl font-bold">
+                  {paymentsLoading ? "Loading..." : paymentsData?.pendingCount || 0}
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Pending payments
                 </p>

@@ -9,6 +9,8 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import SchoolAdminLogin from "@/pages/SchoolAdminLogin";
 import Dashboard from "@/pages/Dashboard";
+import PaymentsPage from "@/pages/PaymentsPage";
+import SchedulePage from "@/pages/SchedulePage";
 import Curriculum from "@/pages/Curriculum";
 import CurriculumDetail from "@/pages/CurriculumDetail";
 import Lessons from "@/pages/Lessons";
