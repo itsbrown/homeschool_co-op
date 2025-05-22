@@ -24,6 +24,7 @@ import Checkout from "@/pages/Checkout";
 import CheckoutSuccess from "@/pages/CheckoutSuccess";
 import { RegistrationPage } from "@/pages/RegistrationPage";
 import { ProgramsPage } from "@/pages/ProgramsPage";
+import ProgramsParentPage from "@/pages/ProgramsParentPage";
 import { SimpleClassesPage } from "./pages/SimpleClassesPage";
 import StaffInvitePage from "./pages/schools/StaffInvitePage";
 import StaffPositionsPage from "./pages/schools/StaffPositionsPage";
@@ -34,6 +35,7 @@ import ChildRegistrationPage from "./pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
 import ChildrenPage from "./pages/ChildrenPage";
+import ChildrenViewPage from "./pages/children/ChildrenViewPage";
 import ChildProfileEditPage from "./pages/ChildProfileEditPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import ClassCreationPage from "./pages/admin/ClassCreationPage";
@@ -82,10 +84,11 @@ function Router() {
       
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
-      <Route path="/programs" component={ProgramsPage} />
+      <Route path="/programs" component={ProgramsParentPage} />
       <Route path="/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/classes" component={ClassesPage} />
       <Route path="/children" component={ChildrenPage} />
+      <Route path="/children/view" component={ChildrenViewPage} />
       <Route path="/children/register" component={ChildRegistrationPage} />
       <Route path="/children/register/confirm" component={ChildRegistrationConfirmation} />
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />

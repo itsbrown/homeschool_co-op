@@ -188,10 +188,10 @@ export default function ParentDashboard() {
                   </Link>
                 </Button>
                 <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
-                  <Link href="/children/view">
+                  <a href="/children/view">
                     <User className="h-5 w-5 mb-1" />
                     <span>My Children</span>
-                  </Link>
+                  </a>
                 </Button>
                 <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
                   <Link href="/enrollments">
