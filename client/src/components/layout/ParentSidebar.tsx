@@ -113,11 +113,9 @@ export default function ParentSidebar() {
           <div className="flex h-full flex-col justify-between">
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <Link href="/dashboard">
-                  <a className="flex items-center gap-2 font-semibold">
-                    <span className="text-xl">LearnSphere</span>
-                  </a>
-                </Link>
+                <a href="/dashboard" className="flex items-center gap-2 font-semibold">
+                  <span className="text-xl">LearnSphere</span>
+                </a>
                 <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
                   <X className="h-5 w-5" />
                 </Button>
@@ -140,10 +138,10 @@ export default function ParentSidebar() {
               </div>
               
               <Button variant="outline" className="w-full" asChild>
-                <Link href="/api/logout">
+                <a href="/api/logout">
                   <LogOut className="mr-2 h-4 w-4" />
                   Log Out
-                </Link>
+                </a>
               </Button>
             </div>
           </div>
@@ -154,11 +152,9 @@ export default function ParentSidebar() {
       <div className="hidden border-r bg-background lg:block">
         <div className="flex h-screen flex-col p-4">
           <div className="flex items-center gap-2 px-2 py-4">
-            <Link href="/dashboard">
-              <a className="flex items-center gap-2 font-semibold">
-                <span className="text-xl">LearnSphere</span>
-              </a>
-            </Link>
+            <a href="/dashboard" className="flex items-center gap-2 font-semibold">
+              <span className="text-xl">LearnSphere</span>
+            </a>
           </div>
           
           <ScrollArea className="flex-1 py-4">
@@ -179,10 +175,10 @@ export default function ParentSidebar() {
             </div>
             
             <Button variant="outline" className="w-full" asChild>
-              <Link href="/api/logout">
+              <a href="/api/logout">
                 <LogOut className="mr-2 h-4 w-4" />
                 Log Out
-              </Link>
+              </a>
             </Button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation } from "wouter";
 import AppShell from "@/components/layout/AppShell";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 import PaymentManagement from "@/components/payments/PaymentManagement";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -42,7 +43,7 @@ export default function PaymentsPage() {
   }
   
   return (
-    <AppShell>
+    <ParentAppShell>
       <div className="container mx-auto p-4">
         <div className="mb-8">
           <h1 className="text-2xl font-bold mb-2">Payment Management</h1>
@@ -53,6 +54,6 @@ export default function PaymentsPage() {
         
         <PaymentManagement />
       </div>
-    </AppShell>
+    </ParentAppShell>
   );
 }

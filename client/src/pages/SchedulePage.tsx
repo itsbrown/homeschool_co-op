@@ -43,10 +43,10 @@ export default function SchedulePage() {
   }
   
   return (
-    <AppShell>
+    <ParentAppShell>
       <div className="container mx-auto p-4">
         <FamilySchedule />
       </div>
-    </AppShell>
+    </ParentAppShell>
   );
 }
