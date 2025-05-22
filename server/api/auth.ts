@@ -5,6 +5,7 @@ import { storage } from "../storage";
 import { insertUserSchema } from "@shared/schema";
 import { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService";
 import { userStorage } from "../users-storage";
+const directUserStorage = require('../direct-user-storage');
 
 const router = Router();
 
@@ -26,124 +27,85 @@ export const hasRole = (roles: string[]) => {
   };
 };
 
-// Register a new user
+// Register a new user (simplified approach)
 router.post("/register", async (req, res) => {
   try {
-    console.log("Registration attempt with data:", req.body.email);
+    console.log("Registration attempt with data:", req.body);
     
-    // Validate the user data against our schema
+    // Validate required fields
     if (!req.body.email || !req.body.password || !req.body.name) {
       return res.status(400).json({ message: "Email, password, and name are required" });
     }
     
-    // Use email as username - this is a key change!
+    // Use email as username for convenience
     const userData = {
-      username: req.body.email, // Use email as the username
+      username: req.body.email,
       email: req.body.email,
       password: req.body.password,
       name: req.body.name,
       role: req.body.role || "parent",
       subscription: req.body.subscription || "free",
-      avatar: null // Add avatar field as null for consistency
+      avatar: null
     };
     
-    console.log("Using email as username:", userData.email);
+    console.log("Preparing user data with email:", userData.email);
     
-    // Check if email/username already exists
-    const existingUser = await storage.getUserByUsername(userData.username);
-    if (existingUser) {
-      console.log("Email already exists as a username:", userData.email);
-      return res.status(400).json({ message: "Email already exists" });
-    }
-    
-    // Check for existing email
-    const existingEmail = await storage.getUserByEmail(userData.email);
-    if (existingEmail) {
-      console.log("Email already exists:", userData.email);
-      return res.status(400).json({ message: "Email already exists" });
-    }
-    
-    // Hash password
+    // Hash the password
     console.log("Hashing password...");
-    const hashedPassword = await bcrypt.hash(userData.password, 10);
-    console.log("Password hashed successfully");
-    
-    // Create the user with a direct and simple approach
-    const insertUserData = {
-      ...userData,
-      password: hashedPassword
-    };
-    
-    console.log("Creating user with data:", { 
-      username: insertUserData.username,
-      email: insertUserData.email,
-      name: insertUserData.name,
-      role: insertUserData.role
-    });
-    
     try {
-      // Add detailed logging for the data we're passing to storage
-      console.log("Attempting to create user with data structure:", JSON.stringify({
-        username: insertUserData.username,
-        email: insertUserData.email,
-        name: insertUserData.name,
-        role: insertUserData.role,
-        subscription: insertUserData.subscription,
-        hasPasswordHash: !!insertUserData.password,
-        avatar: insertUserData.avatar
-      }));
+      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      userData.password = hashedPassword;
+      console.log("Password hashed successfully");
+    } catch (hashError) {
+      console.error("Failed to hash password:", hashError);
+      return res.status(500).json({ message: "Error during registration process" });
+    }
+    
+    // Use our direct file storage approach
+    try {
+      console.log("Calling direct user storage");
+      const user = directUserStorage.createNewUser(userData);
+      console.log("User successfully created with ID:", user.id);
       
-      // Use the file-based userStorage instead of the MemStorage
+      // Create a sanitized version for the response
+      const userWithoutPassword = { ...user };
+      delete userWithoutPassword.password;
+      
+      // Set up session
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+      
+      // Save session explicitly
+      req.session.save((err) => {
+        if (err) {
+          console.error("Error saving session:", err);
+        } else {
+          console.log("Session saved successfully");
+        }
+      });
+      
+      // Send welcome email
       try {
-        // Create the user with our alternative file-based storage
-        const user = userStorage.createUser(insertUserData);
-        console.log("User created successfully with file storage, ID:", user.id);
-        
-        // Create a copy to avoid mutating the original
-        const userWithoutPassword = { ...user };
-        // Safe delete that checks if property exists first
-        if ('password' in userWithoutPassword) {
-          delete userWithoutPassword.password;
-        }
-        
-        // Set up the session
-        req.session.userId = user.id;
-        req.session.userRole = user.role;
-        
-        console.log("User session created with ID:", user.id);
-        
-        // Send welcome email (mock)
-        try {
-          sendWelcomeEmail(user.email, user.name);
-        } catch (emailError) {
-          console.log("Could not send welcome email, continuing anyway:", emailError);
-        }
-        
-        // Return success
-        return res.status(201).json({ 
-          message: "User created successfully", 
-          user: userWithoutPassword 
-        });
-      } catch (innerError) {
-        // More detailed error logging
-        console.error("Inner error creating user:", innerError);
-        console.error("Error stack:", innerError?.stack);
-        throw innerError; // Re-throw to be caught by outer catch
+        sendWelcomeEmail(user.email, user.name);
+      } catch (emailError) {
+        console.log("Email sending failed, but continuing:", emailError);
       }
-    } catch (createError) {
-      console.error("Error creating user:", createError);
-      console.error("Error type:", typeof createError);
-      console.error("Error properties:", Object.keys(createError || {}));
+      
+      return res.status(201).json({
+        message: "User registered successfully",
+        user: userWithoutPassword
+      });
+    } catch (storageError) {
+      console.error("Storage error during registration:", storageError);
       return res.status(500).json({ 
-        message: "Failed to create user account",
-        error: createError?.message || "Unknown error" 
+        message: "Registration failed", 
+        error: storageError.message || "Unknown error" 
       });
     }
   } catch (error) {
-    console.error("Registration error:", error);
+    console.error("Unexpected registration error:", error);
     return res.status(500).json({ 
-      message: "Error creating user", 
-      error: error.message 
+      message: "Error creating user"
     });
   }
 });
