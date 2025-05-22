@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Upload, ArrowLeft, Plus, X, Info } from "lucide-react";
+import { saveKnowledgeBase } from "@/lib/storage";
 
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,9 +173,8 @@ export default function KnowledgeBaseCreationPage() {
         usageCount: 0
       };
       
-      // Store in localStorage to persist between sessions
-      const existingKbs = JSON.parse(localStorage.getItem('knowledgeBases') || '[]');
-      localStorage.setItem('knowledgeBases', JSON.stringify([...existingKbs, newKnowledgeBase]));
+      // Store using our storage utility
+      saveKnowledgeBase(newKnowledgeBase);
       
       // Simulate API call delay
       return new Promise<{ id: number }>((resolve) => {

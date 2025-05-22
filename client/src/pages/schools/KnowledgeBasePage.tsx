@@ -15,6 +15,7 @@ import {
   Star,
   ChevronDown
 } from "lucide-react";
+import { getKnowledgeBases } from "@/lib/storage";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -182,7 +183,7 @@ export default function KnowledgeBasePage() {
     queryKey: ['/api/schools/knowledge-bases'],
     queryFn: async () => {
       // For now, combine sample data with any locally stored knowledge bases
-      const localKbs = JSON.parse(localStorage.getItem('knowledgeBases') || '[]');
+      const localKbs = getKnowledgeBases();
       console.log('Local knowledge bases loaded:', localKbs);
       const combined = [...sampleKnowledgeBases, ...localKbs];
       console.log('Combined knowledge bases:', combined);
@@ -190,6 +191,7 @@ export default function KnowledgeBasePage() {
     },
     refetchOnMount: true,
     refetchOnWindowFocus: true,
+    staleTime: 0, // Always refetch when component mounts
   });
 
   if (isLoading) {
@@ -231,10 +233,12 @@ export default function KnowledgeBasePage() {
     const matchesSearch = searchQuery === "" || 
       kb.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       kb.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      kb.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+      (kb.tags && Array.isArray(kb.tags) && kb.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())));
     
     const matchesSubject = subjectFilter === "" || kb.subjectArea === subjectFilter;
-    const matchesGradeLevel = gradeLevelFilter === "" || kb.gradeLevel.some(gl => gl.includes(gradeLevelFilter));
+    const matchesGradeLevel = gradeLevelFilter === "" || 
+      (kb.gradeLevel && Array.isArray(kb.gradeLevel) && 
+        kb.gradeLevel.some(gl => gl.includes(gradeLevelFilter)));
     const matchesStatus = statusFilter === "" || kb.status === statusFilter;
     
     // Filter by tab
