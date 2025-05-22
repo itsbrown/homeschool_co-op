@@ -28,8 +28,16 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 
+// Define the position type
+interface Position {
+  id: number;
+  title: string;
+  description: string;
+  isDefault: boolean;
+}
+
 // Sample staff positions (will be replaced with API data)
-const initialPositions = [
+const initialPositions: Position[] = [
   {
     id: 1,
     title: "Teacher",
@@ -65,18 +73,11 @@ const initialPositions = [
 // Form schema for creating/editing positions
 const positionFormSchema = z.object({
   title: z.string().min(1, "Position title is required"),
-  description: z.string().optional(),
+  description: z.string().default(""),
   isDefault: z.boolean().default(false)
 });
 
 type PositionFormValues = z.infer<typeof positionFormSchema>;
-
-type Position = {
-  id: number;
-  title: string;
-  description: string;
-  isDefault: boolean;
-};
 
 export default function StaffPositionsPage() {
   const [, navigate] = useLocation();
@@ -91,11 +92,14 @@ export default function StaffPositionsPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editIsDefault, setEditIsDefault] = useState(false);
 
+  // State to manage staff positions locally
+  const [staffPositions, setStaffPositions] = useState<Position[]>(initialPositions);
+  
   // Get staff positions
   const { data: positions, isLoading } = useQuery({
     queryKey: ['/api/school-admin/staff-positions'],
-    // Mock API response for now
-    queryFn: () => Promise.resolve(initialPositions),
+    queryFn: () => Promise.resolve(staffPositions),
+    enabled: true
   });
 
   // Form for adding new position
@@ -111,8 +115,11 @@ export default function StaffPositionsPage() {
   // Setup mutation for updating positions
   const updatePositionMutation = useMutation({
     mutationFn: (data: Position) => {
-      // Mock API call - would be replaced with real API call
       console.log("Updating position:", data);
+      // Update local state directly
+      setStaffPositions(current => 
+        current.map(pos => pos.id === data.id ? data : pos)
+      );
       return Promise.resolve(data);
     },
     onSuccess: () => {
@@ -135,9 +142,16 @@ export default function StaffPositionsPage() {
   // Setup mutation for adding positions
   const addPositionMutation = useMutation({
     mutationFn: (data: PositionFormValues) => {
-      // Mock API call - would be replaced with real API call
-      console.log("Adding position:", data);
-      return Promise.resolve({ ...data, id: Date.now() });
+      const newPosition: Position = { 
+        id: Date.now(), 
+        title: data.title,
+        description: data.description || "",
+        isDefault: data.isDefault 
+      };
+      
+      // Add to local state directly
+      setStaffPositions(current => [...current, newPosition]);
+      return Promise.resolve(newPosition);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff-positions'] });
@@ -160,8 +174,9 @@ export default function StaffPositionsPage() {
   // Setup mutation for deleting positions
   const deletePositionMutation = useMutation({
     mutationFn: (id: number) => {
-      // Mock API call - would be replaced with real API call
       console.log("Deleting position:", id);
+      // Remove from local state directly
+      setStaffPositions(current => current.filter(pos => pos.id !== id));
       return Promise.resolve(id);
     },
     onSuccess: () => {
@@ -200,10 +215,10 @@ export default function StaffPositionsPage() {
       return;
     }
     
-    const updatedPosition = {
+    const updatedPosition: Position = {
       id,
       title: editTitle,
-      description: editDescription,
+      description: editDescription || "",
       isDefault: editIsDefault
     };
     
