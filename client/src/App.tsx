@@ -153,14 +153,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AIStatusProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </AIStatusProvider>
-      </AuthProvider>
+      <AIStatusProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AIStatusProvider>
     </QueryClientProvider>
   );
 }
