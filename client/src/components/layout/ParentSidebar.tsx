@@ -69,7 +69,7 @@ export default function ParentSidebar() {
       icon: <Home className="h-5 w-5" />,
     },
     {
-      href: "/children",
+      href: "/children/view",
       title: "My Children",
       icon: <Users className="h-5 w-5" />,
     },
