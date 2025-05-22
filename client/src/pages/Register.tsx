@@ -62,21 +62,25 @@ export default function Register() {
     try {
       setRegisterError(null);
       
-      // Create registration data with email as username
-      const registrationData = {
-        ...data,
-        username: data.email // Add username explicitly using email
-      };
+      console.log("Registering with Firebase:", data);
+      const result = await registerWithEmail(data.email, data.password, data.name, data.role);
       
-      console.log("Registering with data:", registrationData);
-      await register(registrationData);
-      
-      // After registration, show success message and redirect to login
-      toast({
-        title: "Registration successful",
-        description: "Your account has been created. Please log in.",
-      });
-      setLocation("/login");
+      if (result.success) {
+        // After registration, show success message and redirect to login
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created. Please log in.",
+        });
+        setLocation("/login");
+      } else {
+        const errorMessage = result.error || "Registration failed. Please try again with different credentials.";
+        setRegisterError(errorMessage);
+        toast({
+          title: "Registration failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } catch (error: any) {
       const errorMessage = error?.message || "Registration failed. Please try again with different credentials.";
       setRegisterError(errorMessage);
