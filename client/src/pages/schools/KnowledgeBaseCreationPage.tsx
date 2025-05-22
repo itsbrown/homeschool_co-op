@@ -153,11 +153,34 @@ export default function KnowledgeBaseCreationPage() {
       });
       console.log("Uploading files:", data.files);
       
-      // Simulate API call
+      // Create a new knowledge base record
+      const newKnowledgeBase = {
+        id: Math.floor(Math.random() * 10000),
+        title: data.knowledgeBase.title,
+        description: data.knowledgeBase.description,
+        subjectArea: data.knowledgeBase.subjectArea,
+        gradeLevel: data.knowledgeBase.gradeLevel,
+        status: data.knowledgeBase.status,
+        visibility: data.knowledgeBase.visibility,
+        fileCount: data.files.length,
+        size: `${Math.round(data.files.reduce((acc, file) => acc + file.size, 0) / 1024 / 1024)} MB`,
+        createdAt: new Date().toISOString().split('T')[0],
+        updatedAt: new Date().toISOString().split('T')[0],
+        tags: data.tags.length > 0 ? data.tags : ["Learning Resources"],
+        creator: "School Admin",
+        rating: 0,
+        usageCount: 0
+      };
+      
+      // Store in localStorage to persist between sessions
+      const existingKbs = JSON.parse(localStorage.getItem('knowledgeBases') || '[]');
+      localStorage.setItem('knowledgeBases', JSON.stringify([...existingKbs, newKnowledgeBase]));
+      
+      // Simulate API call delay
       return new Promise<{ id: number }>((resolve) => {
         setTimeout(() => {
-          resolve({ id: Math.floor(Math.random() * 1000) });
-        }, 2000);
+          resolve({ id: newKnowledgeBase.id });
+        }, 1000);
       });
     },
     onSuccess: () => {

@@ -172,10 +172,16 @@ export default function KnowledgeBasePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
-  // Fetch knowledge bases for the school (using sample data for now)
-  const { data: knowledgeBases, isLoading, error } = useQuery({
+  // Fetch knowledge bases for the school
+  const { data: knowledgeBases, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/schools/knowledge-bases'],
-    queryFn: () => Promise.resolve(sampleKnowledgeBases),
+    queryFn: async () => {
+      // For now, combine sample data with any locally stored knowledge bases
+      const localKbs = JSON.parse(localStorage.getItem('knowledgeBases') || '[]');
+      return [...sampleKnowledgeBases, ...localKbs];
+    },
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading) {
