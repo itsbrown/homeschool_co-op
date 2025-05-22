@@ -286,11 +286,11 @@ export default function KnowledgeBasePage() {
       kb.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (kb.tags && Array.isArray(kb.tags) && kb.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())));
     
-    const matchesSubject = subjectFilter === "" || kb.subjectArea === subjectFilter;
-    const matchesGradeLevel = gradeLevelFilter === "" || 
+    const matchesSubject = (subjectFilter === "" || subjectFilter === "all-subjects") || kb.subjectArea === subjectFilter;
+    const matchesGradeLevel = (gradeLevelFilter === "" || gradeLevelFilter === "all-grades") || 
       (kb.gradeLevel && Array.isArray(kb.gradeLevel) && 
         kb.gradeLevel.some(gl => gl.includes(gradeLevelFilter)));
-    const matchesStatus = statusFilter === "" || kb.status === statusFilter;
+    const matchesStatus = (statusFilter === "" || statusFilter === "all-statuses") || kb.status === statusFilter;
     
     // Filter by tab
     if (activeTab === "all") return matchesSearch && matchesSubject && matchesGradeLevel && matchesStatus;
@@ -368,7 +368,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Subject" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Subjects</SelectItem>
+                        <SelectItem value="all-subjects">All Subjects</SelectItem>
                         {subjects.map((subject) => (
                           <SelectItem key={subject} value={subject}>{subject}</SelectItem>
                         ))}
@@ -380,7 +380,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Grade Level" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Grades</SelectItem>
+                        <SelectItem value="all-grades">All Grades</SelectItem>
                         {gradeLevels.map((gradeLevel) => (
                           <SelectItem key={gradeLevel} value={gradeLevel}>{gradeLevel}</SelectItem>
                         ))}
@@ -392,7 +392,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Statuses</SelectItem>
+                        <SelectItem value="all-statuses">All Statuses</SelectItem>
                         {statuses.map((status) => (
                           <SelectItem key={status} value={status}>{status}</SelectItem>
                         ))}
