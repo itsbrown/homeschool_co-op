@@ -15,7 +15,6 @@ import {
   Star,
   ChevronDown
 } from "lucide-react";
-import { getKnowledgeBases } from "@/lib/storage";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -172,13 +171,24 @@ export default function KnowledgeBasePage() {
   const [gradeLevelFilter, setGradeLevelFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [activeTab, setActiveTab] = useState("all");
-
-  // Add a button to show sample Antoinette Brown Blackwell knowledge base
+  
+  // Initialize the Antoinette Brown Blackwell record if not already present
   useEffect(() => {
-    // Check if we need to create a sample knowledge base
-    const knowledgeBases = getKnowledgeBases();
-    if (knowledgeBases.length === 0) {
-      // Create a pre-defined knowledge base for Antoinette Brown Blackwell
+    // Check if localStorage has the Antoinette Brown Blackwell record
+    const existingData = localStorage.getItem('knowledgeBases');
+    let hasAntoinette = false;
+    
+    if (existingData) {
+      try {
+        const knowledgeBases = JSON.parse(existingData);
+        hasAntoinette = knowledgeBases.some(kb => kb.title.includes("Antoinette Brown Blackwell"));
+      } catch (e) {
+        console.error('Error parsing knowledge bases:', e);
+      }
+    }
+    
+    // If Antoinette record doesn't exist, create it
+    if (!hasAntoinette) {
       const antoinetteKB = {
         id: 9999,
         title: "Antoinette Brown Blackwell Collection",
@@ -197,24 +207,35 @@ export default function KnowledgeBasePage() {
         usageCount: 12
       };
       
-      // Save the knowledge base
-      localStorage.removeItem('knowledgeBases');
-      localStorage.setItem('knowledgeBases', JSON.stringify([antoinetteKB]));
-      
-      // Force refresh
-      setTimeout(() => {
-        refetch();
-      }, 500);
+      // Save to localStorage (either as a new array or append to existing)
+      try {
+        const knowledgeBases = existingData ? JSON.parse(existingData) : [];
+        knowledgeBases.push(antoinetteKB);
+        localStorage.setItem('knowledgeBases', JSON.stringify(knowledgeBases));
+        console.log('Added Antoinette Brown Blackwell knowledge base');
+      } catch (e) {
+        console.error('Error saving knowledge base:', e);
+        localStorage.setItem('knowledgeBases', JSON.stringify([antoinetteKB]));
+      }
     }
-  }, [refetch]);
+  }, []);
 
   // Fetch knowledge bases for the school
   const { data: knowledgeBases, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/schools/knowledge-bases'],
     queryFn: async () => {
       // For now, combine sample data with any locally stored knowledge bases
-      const localKbs = getKnowledgeBases();
-      console.log('Local knowledge bases loaded:', localKbs);
+      let localKbs = [];
+      try {
+        const storedData = localStorage.getItem('knowledgeBases');
+        if (storedData) {
+          localKbs = JSON.parse(storedData);
+          console.log('Local knowledge bases loaded:', localKbs);
+        }
+      } catch (e) {
+        console.error('Error parsing knowledge bases:', e);
+      }
+      
       const combined = [...sampleKnowledgeBases, ...localKbs];
       console.log('Combined knowledge bases:', combined);
       return combined;
@@ -282,9 +303,9 @@ export default function KnowledgeBasePage() {
   }) : [];
 
   // Get unique subjects, grade levels, and statuses for filters
-  const subjects = knowledgeBases ? [...new Set(knowledgeBases.map(kb => kb.subjectArea))] : [];
+  const subjects = knowledgeBases ? Array.from(new Set(knowledgeBases.map(kb => kb.subjectArea))) : [];
   const gradeLevels = ["K-2", "3-5", "6-8", "9-12"];
-  const statuses = knowledgeBases ? [...new Set(knowledgeBases.map(kb => kb.status))] : [];
+  const statuses = knowledgeBases ? Array.from(new Set(knowledgeBases.map(kb => kb.status))) : [];
 
   return (
     <SchoolAdminLayout pageTitle="Knowledge Base">
@@ -347,7 +368,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Subject" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all-subjects">All Subjects</SelectItem>
+                        <SelectItem value="">All Subjects</SelectItem>
                         {subjects.map((subject) => (
                           <SelectItem key={subject} value={subject}>{subject}</SelectItem>
                         ))}
@@ -359,7 +380,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Grade Level" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all-grades">All Grades</SelectItem>
+                        <SelectItem value="">All Grades</SelectItem>
                         {gradeLevels.map((gradeLevel) => (
                           <SelectItem key={gradeLevel} value={gradeLevel}>{gradeLevel}</SelectItem>
                         ))}
@@ -371,7 +392,7 @@ export default function KnowledgeBasePage() {
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all-statuses">All Statuses</SelectItem>
+                        <SelectItem value="">All Statuses</SelectItem>
                         {statuses.map((status) => (
                           <SelectItem key={status} value={status}>{status}</SelectItem>
                         ))}
@@ -409,7 +430,7 @@ export default function KnowledgeBasePage() {
                                 {kb.visibility}
                               </Badge>
                               <Badge variant="secondary">{kb.subjectArea}</Badge>
-                              {kb.gradeLevel.map((grade, i) => (
+                              {kb.gradeLevel && kb.gradeLevel.map((grade, i) => (
                                 <Badge key={i} variant="outline">Grades {grade}</Badge>
                               ))}
                             </div>
@@ -417,7 +438,7 @@ export default function KnowledgeBasePage() {
                             <p className="text-muted-foreground mb-4">{kb.description}</p>
                             
                             <div className="flex flex-wrap gap-1 mb-4">
-                              {kb.tags.map((tag, i) => (
+                              {kb.tags && kb.tags.map((tag, i) => (
                                 <Badge key={i} variant="outline" className="bg-secondary/30">{tag}</Badge>
                               ))}
                             </div>
@@ -433,55 +454,31 @@ export default function KnowledgeBasePage() {
                               </div>
                               <div className="flex items-center">
                                 <Clock className="w-4 h-4 mr-1" />
-                                <span>Updated {new Date(kb.updatedAt).toLocaleDateString()}</span>
+                                <span>Updated {kb.updatedAt}</span>
+                              </div>
+                              <div className="flex items-center">
+                                <Eye className="w-4 h-4 mr-1" />
+                                <span>{kb.usageCount} uses</span>
                               </div>
                               {kb.rating > 0 && (
                                 <div className="flex items-center">
-                                  <Star className="w-4 h-4 mr-1 text-yellow-500" />
-                                  <span>{kb.rating.toFixed(1)}</span>
-                                </div>
-                              )}
-                              {kb.usageCount > 0 && (
-                                <div className="flex items-center">
-                                  <Eye className="w-4 h-4 mr-1" />
-                                  <span>{kb.usageCount} uses</span>
+                                  <Star className="w-4 h-4 mr-1 text-yellow-500 fill-yellow-500" />
+                                  <span>{kb.rating}</span>
                                 </div>
                               )}
                             </div>
                           </div>
-
-                          <div className="md:w-1/3 bg-muted/20 p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l">
+                          
+                          <div className="md:w-1/3 bg-muted/20 p-6 flex flex-col justify-between">
                             <div>
-                              <p className="text-sm mb-2">Created by:</p>
-                              <p className="font-medium mb-4">{kb.creator}</p>
-                              
-                              <Accordion type="single" collapsible className="mb-4">
-                                <AccordionItem value="details">
-                                  <AccordionTrigger>Details</AccordionTrigger>
-                                  <AccordionContent>
-                                    <div className="space-y-2 text-sm">
-                                      <div>
-                                        <span className="font-medium">Created:</span> {new Date(kb.createdAt).toLocaleDateString()}
-                                      </div>
-                                      <div>
-                                        <span className="font-medium">Last Updated:</span> {new Date(kb.updatedAt).toLocaleDateString()}
-                                      </div>
-                                      <div>
-                                        <span className="font-medium">File Count:</span> {kb.fileCount}
-                                      </div>
-                                      <div>
-                                        <span className="font-medium">Size:</span> {kb.size}
-                                      </div>
-                                    </div>
-                                  </AccordionContent>
-                                </AccordionItem>
-                              </Accordion>
+                              <p className="text-sm font-medium mb-1">Created by</p>
+                              <p className="text-muted-foreground mb-6">{kb.creator}</p>
                             </div>
                             
-                            <div className="flex flex-col gap-2 mt-4">
-                              <Button variant="default" asChild>
+                            <div className="space-y-3">
+                              <Button className="w-full" asChild>
                                 <Link href={`/schools/knowledge-base/${kb.id}`}>
-                                  View Contents
+                                  View Details
                                 </Link>
                               </Button>
                               
@@ -492,28 +489,32 @@ export default function KnowledgeBasePage() {
                                     <ChevronDown className="ml-2 h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuItem>
-                                    <Link href={`/schools/knowledge-base/${kb.id}/edit`}>Edit Details</Link>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem>
-                                    <Link href={`/schools/knowledge-base/${kb.id}/upload`}>Upload Files</Link>
-                                  </DropdownMenuItem>
+                                <DropdownMenuContent align="end" className="w-[200px]">
                                   <DropdownMenuItem>
                                     <Download className="mr-2 h-4 w-4" />
-                                    <span>Download All</span>
+                                    Download All Files
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem>
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Browse Files
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem>
-                                    <Link href={`/schools/knowledge-base/${kb.id}/share`}>Share Settings</Link>
+                                    <Tag className="mr-2 h-4 w-4" />
+                                    Edit Tags
                                   </DropdownMenuItem>
-                                  {kb.status === "Draft" ? (
-                                    <DropdownMenuItem className="text-green-600">Publish</DropdownMenuItem>
-                                  ) : (
-                                    <DropdownMenuItem className="text-yellow-600">Unpublish</DropdownMenuItem>
+                                  {kb.status !== "Published" && (
+                                    <DropdownMenuItem>
+                                      <Upload className="mr-2 h-4 w-4" />
+                                      Publish
+                                    </DropdownMenuItem>
                                   )}
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-red-600">Archive</DropdownMenuItem>
+                                  {kb.status === "Published" && (
+                                    <DropdownMenuItem>
+                                      <Upload className="mr-2 h-4 w-4" />
+                                      Unpublish
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -523,38 +524,23 @@ export default function KnowledgeBasePage() {
                     ))
                   ) : (
                     <div className="text-center py-12">
-                      <Database className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-medium">No Knowledge Bases Found</h3>
-                      <p className="text-muted-foreground max-w-md mx-auto mt-2">
-                        No knowledge bases match your current filters. Try adjusting your search criteria or create a new knowledge base.
+                      <Database className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <h3 className="text-lg font-medium mb-2">No knowledge bases found</h3>
+                      <p className="text-muted-foreground mb-6">
+                        {searchQuery || subjectFilter || gradeLevelFilter || statusFilter || activeTab !== "all" 
+                          ? "No results match your current filters. Try adjusting your search criteria."
+                          : "Start by creating a new knowledge base or importing existing resources."}
                       </p>
-                      <Button className="mt-4" asChild>
+                      <Button asChild>
                         <Link href="/schools/knowledge-base/new">
                           <PlusCircle className="mr-2 h-4 w-4" />
-                          Create New Knowledge Base
+                          Create Knowledge Base
                         </Link>
                       </Button>
                     </div>
                   )}
                 </div>
               </CardContent>
-
-              <CardFooter className="flex justify-between items-center border-t px-6 py-4">
-                <div className="text-sm text-muted-foreground">
-                  Showing {filteredKnowledgeBases.length} of {knowledgeBases ? knowledgeBases.length : 0} knowledge bases
-                </div>
-                <div>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setSearchQuery("");
-                    setSubjectFilter("");
-                    setGradeLevelFilter("");
-                    setStatusFilter("");
-                    setActiveTab("all");
-                  }}>
-                    Reset Filters
-                  </Button>
-                </div>
-              </CardFooter>
             </Card>
           </Tabs>
         </div>
