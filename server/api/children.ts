@@ -77,4 +77,75 @@ router.get("/:id", isParent, (req: Request, res: Response) => {
   res.json(child);
 });
 
+// Register a new child
+router.post("/", isParent, (req: Request, res: Response) => {
+  try {
+    const { firstName, lastName, birthdate, gradeLevel, gender, interests, learningStyle, specialNeeds, allergies, notes } = req.body;
+    
+    // Validate required fields
+    if (!firstName || !lastName || !birthdate || !gradeLevel) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+    
+    // For simplicity in this test implementation, we'll just generate a random ID
+    // In a real application, this would be handled by the database
+    const newChildId = Math.floor(Math.random() * 10000) + 100;
+    
+    // Calculate age from birthdate
+    const birthDate = new Date(birthdate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    // Create the new child object
+    const newChild = {
+      id: newChildId,
+      name: `${firstName} ${lastName}`,
+      age,
+      gender: gender || "Not specified",
+      gradeLevel,
+      parentId: req.session.userId,
+      interests: interests || [],
+      learningStyle: learningStyle || "Not specified",
+      specialNeeds: specialNeeds || null,
+      allergies: allergies || null,
+      notes: notes || null,
+      enrollments: []
+    };
+    
+    // In a real application, we would save this to the database
+    
+    // Return success response
+    return res.status(200).json({
+      message: "Child registered successfully",
+      id: newChildId,
+      child: newChild
+    });
+  } catch (error) {
+    console.error("Error registering child:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// Update a child's information
+router.patch("/:id", isParent, (req: Request, res: Response) => {
+  try {
+    const childId = parseInt(req.params.id);
+    
+    // In a real application, we would update the child in the database
+    // For this test implementation, we'll just return success
+    
+    return res.status(200).json({
+      message: "Child updated successfully",
+      id: childId
+    });
+  } catch (error) {
+    console.error("Error updating child:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 export default router;
