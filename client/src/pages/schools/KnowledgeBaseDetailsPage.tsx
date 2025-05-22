@@ -141,7 +141,7 @@ const sampleFiles = [
 ];
 
 // File type icons mapping
-const fileTypeIcons = {
+const fileTypeIcons: Record<string, React.ReactNode> = {
   "PDF": <FileText className="h-10 w-10 text-red-500" />,
   "Document": <FileText className="h-10 w-10 text-blue-500" />,
   "Image": <FileText className="h-10 w-10 text-green-500" />,
@@ -151,6 +151,16 @@ const fileTypeIcons = {
   "Other": <FileText className="h-10 w-10 text-gray-500" />,
 };
 
+interface File {
+  id: number;
+  name: string;
+  type: string;
+  size: string;
+  uploadedAt: string;
+  tags: string[];
+  description: string;
+}
+
 export default function KnowledgeBaseDetailsPage() {
   const { id } = useParams();
   const { toast } = useToast();
@@ -159,6 +169,39 @@ export default function KnowledgeBaseDetailsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [fileTypeFilter, setFileTypeFilter] = useState("all-types");
   const [tagFilter, setTagFilter] = useState("all-tags");
+  
+  // Function to handle file downloads
+  const handleFileDownload = (file: File) => {
+    toast({
+      title: "Download Started",
+      description: `Downloading "${file.name}" (${file.size})`,
+    });
+    
+    // In a real application, this would trigger an actual download
+    // For this prototype, we'll show a success message after a brief delay
+    setTimeout(() => {
+      toast({
+        title: "Download Complete",
+        description: `"${file.name}" has been downloaded successfully.`,
+      });
+    }, 1500);
+  };
+  
+  // Function to handle bulk downloads
+  const handleBulkDownload = () => {
+    toast({
+      title: "Bulk Download Started",
+      description: "Preparing all files for download. This may take a moment.",
+    });
+    
+    // Simulate a longer download time for multiple files
+    setTimeout(() => {
+      toast({
+        title: "Download Complete",
+        description: "All files have been downloaded as a ZIP archive.",
+      });
+    }, 2500);
+  };
   
   // Fetch knowledge base details based on ID
   const { data: knowledgeBase, isLoading, error } = useQuery({
@@ -317,7 +360,7 @@ export default function KnowledgeBaseDetailsPage() {
                   <Edit className="mr-2 h-4 w-4" />
                   Edit Details
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={handleBulkDownload}>
                   <Download className="mr-2 h-4 w-4" />
                   Download All Files
                 </DropdownMenuItem>
@@ -451,7 +494,7 @@ export default function KnowledgeBaseDetailsPage() {
                           <Share className="mr-2 h-4 w-4" />
                           Share
                         </Button>
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button variant="outline" className="w-full justify-start" onClick={handleBulkDownload}>
                           <Download className="mr-2 h-4 w-4" />
                           Download All
                         </Button>
@@ -577,7 +620,7 @@ export default function KnowledgeBaseDetailsPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleFileDownload(file)}>
                                   <Download className="mr-2 h-4 w-4" />
                                   Download
                                 </DropdownMenuItem>
@@ -631,7 +674,7 @@ export default function KnowledgeBaseDetailsPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleFileDownload(file)}>
                                   <Download className="mr-2 h-4 w-4" />
                                   Download
                                 </DropdownMenuItem>
