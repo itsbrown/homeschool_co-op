@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DashboardShell } from "../components/ui/dashboard-shell";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useAuth } from "../hooks/use-auth";
 import { ProgramList } from "../components/registration/ProgramList";
 import { ProgramEnrollmentForm } from "../components/registration/ProgramEnrollmentForm";
