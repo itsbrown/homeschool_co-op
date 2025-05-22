@@ -467,18 +467,18 @@ export default function KnowledgeBaseCreationPage() {
                     <p className="text-sm text-muted-foreground mb-4">
                       or click to browse from your computer
                     </p>
-                    <Input
-                      type="file"
-                      multiple
-                      className="hidden"
-                      id="file-upload"
-                      onChange={handleFileChange}
-                    />
-                    <Label htmlFor="file-upload">
+                    <div className="relative inline-block">
+                      <input
+                        type="file"
+                        multiple
+                        className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+                        id="file-upload"
+                        onChange={handleFileChange}
+                      />
                       <Button type="button" variant="outline">
                         Select Files
                       </Button>
-                    </Label>
+                    </div>
                     <p className="text-xs text-muted-foreground mt-4">
                       Supported file types: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, JPG, PNG, MP4
                     </p>
