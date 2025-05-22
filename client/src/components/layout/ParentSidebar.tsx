@@ -58,7 +58,7 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
 }
 
 export default function ParentSidebar() {
-  const { user } = useFirebaseAuth();
+  const { user, logout } = useFirebaseAuth();
   const [isOpen, setIsOpen] = React.useState(false);
   
   // Parent navigation items
@@ -137,11 +137,13 @@ export default function ParentSidebar() {
                 </div>
               </div>
               
-              <Button variant="outline" className="w-full" asChild>
-                <a href="/api/logout">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Log Out
-                </a>
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => logout()}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Log Out
               </Button>
             </div>
           </div>
