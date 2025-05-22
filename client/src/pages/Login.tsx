@@ -24,188 +24,249 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { FaGoogle } from "react-icons/fa";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, User, BookOpen, Users } from "lucide-react";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Email is required"),
+  email: z.string().email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginForm = z.infer<typeof loginSchema>;
 
-export default function Login() {
-  const { login, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
+export default function LoginFirebase() {
+  const { loginWithEmail, loginWithGoogle, isLoading, error } = useFirebaseAuth();
   const { toast } = useToast();
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const [, navigate] = useLocation();
+  const [showPassword, setShowPassword] = useState(false);
 
-  const form = useForm<LoginFormValues>({
+  const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      username: "",
+      email: "",
       password: "",
     },
   });
 
-  async function onSubmit(data: LoginFormValues) {
+  const onSubmit = async (data: LoginForm) => {
     try {
-      setLoginError(null);
-      await login(data.username, data.password);
-      toast({
-        title: "Login successful",
-        description: "Welcome back to LearnSphere!",
-      });
-      setLocation("/dashboard");
+      const result = await loginWithEmail(data.email, data.password);
+      if (result.success) {
+        toast({
+          title: "Welcome back!",
+          description: "You've successfully logged in.",
+        });
+        navigate("/");
+      } else {
+        toast({
+          title: "Login failed",
+          description: result.error || "Please check your email and password",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      setLoginError("Invalid username or password. Please try again.");
       toast({
-        title: "Login failed",
-        description: "Invalid username or password. Please try again.",
+        title: "Error",
+        description: "An unexpected error occurred",
         variant: "destructive",
       });
     }
-  }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await loginWithGoogle();
+      if (result.success) {
+        toast({
+          title: "Welcome!",
+          description: "You've successfully logged in with Google.",
+        });
+        navigate("/");
+      } else {
+        toast({
+          title: "Google login failed",
+          description: result.error || "Please try again",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Google login failed",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Test accounts for easy access
+  const testAccounts = [
+    { role: "Parent", email: "parent@test.com", icon: User },
+    { role: "Educator", email: "educator@test.com", icon: BookOpen },
+    { role: "School Admin", email: "schooladmin@test.com", icon: Users },
+  ];
+
+  const handleTestLogin = (email: string) => {
+    form.setValue("email", email);
+    form.setValue("password", "testpassword");
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-secondary p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">LearnSphere</CardTitle>
-          <CardDescription className="text-center">
-            Enter your credentials to sign in to your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loginError && (
-            <div className="mb-4 p-3 bg-destructive/10 text-destructive text-sm rounded-md">
-              {loginError}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full">
+        <Card className="shadow-xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold text-gray-800">
+              Welcome Back
+            </CardTitle>
+            <CardDescription>
+              Sign in to your Adaptive Learning Platform account
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-6">
+            {/* Google Login Button */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+            >
+              <FaGoogle className="mr-2 h-4 w-4" />
+              Continue with Google
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or continue with email
+                </span>
+              </div>
             </div>
-          )}
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="Enter your email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="Enter your password"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-              >
-                {isLoading ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-          </Form>
-          
-          <div className="mt-6">
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">Test Accounts (use password: "password")</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  form.setValue('username', 'admin@example.com');
-                  form.setValue('password', 'password');
-                }}
-              >
-                Admin
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  form.setValue('username', 'educator@example.com');
-                  form.setValue('password', 'password');
-                }}
-              >
-                Educator
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  form.setValue('username', 'parent@example.com');
-                  form.setValue('password', 'password');
-                }}
-              >
-                Parent
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  form.setValue('username', 'learner@example.com');
-                  form.setValue('password', 'password');
-                }}
-              >
-                Learner
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="col-span-2" 
-                onClick={() => {
-                  form.setValue('username', 'school@example.com');
-                  form.setValue('password', 'password');
-                }}
-              >
-                School Admin
-              </Button>
+
+            {/* Email/Password Form */}
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="Enter your email"
+                          {...field}
+                          disabled={isLoading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Enter your password"
+                            {...field}
+                            disabled={isLoading}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                            disabled={isLoading}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Signing in..." : "Sign In"}
+                </Button>
+              </form>
+            </Form>
+
+            {/* Test Accounts */}
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600 text-center">
+                Quick access for testing:
+              </p>
+              <div className="grid gap-2">
+                {testAccounts.map((account) => {
+                  const Icon = account.icon;
+                  return (
+                    <Button
+                      key={account.role}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => handleTestLogin(account.email)}
+                      disabled={isLoading}
+                    >
+                      <Icon className="mr-2 h-4 w-4" />
+                      {account.role} Account
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-col">
-          <div className="text-sm text-center text-muted-foreground">
-            Don't have an account?{" "}
-            <Link href="/register" className="text-primary hover:underline">
-              Sign up
-            </Link>
-          </div>
-          <div className="mt-2 text-xs text-center text-muted-foreground">
-            <a href="#" className="text-primary hover:underline">
-              Forgot your password?
-            </a>
-          </div>
-          <div className="mt-4 border-t pt-4 w-full">
-            <Link href="/school-admin-login">
-              <Button variant="secondary" className="w-full mb-2">
-                Sign in as School Admin
-              </Button>
-            </Link>
-            <Link href="/schools/my-school">
-              <Button variant="outline" className="w-full">
-                Go to My School Dashboard
-              </Button>
-            </Link>
-          </div>
-        </CardFooter>
-      </Card>
+
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                {error}
+              </div>
+            )}
+          </CardContent>
+
+          <CardFooter className="text-center">
+            <div className="w-full space-y-2">
+              <p className="text-sm text-gray-600">
+                Don't have an account?{" "}
+                <Link href="/register">
+                  <Button variant="link" className="p-0 h-auto">
+                    Sign up
+                  </Button>
+                </Link>
+              </p>
+              <p className="text-sm text-gray-600">
+                <Link href="/forgot-password">
+                  <Button variant="link" className="p-0 h-auto">
+                    Forgot your password?
+                  </Button>
+                </Link>
+              </p>
+            </div>
+          </CardFooter>
+        </Card>
+      </div>
     </div>
   );
 }
