@@ -56,13 +56,27 @@ import StaffPage from "./pages/schools/StaffPage";
 import StudentsPage from "./pages/schools/StudentsPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
-import { AuthProvider } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
+  const { isAuthenticated, isLoading } = useFirebaseAuth();
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      {isAuthenticated ? (
+        <Route path="/" component={Dashboard} />
+      ) : (
+        <Route path="/" component={Login} />
+      )}
       <Route path="/login" component={Login} />
       <Route path="/school-admin-login" component={SchoolAdminLogin} />
       <Route path="/register" component={Register} />
