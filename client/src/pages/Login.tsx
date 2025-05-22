@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { FaGoogle } from "react-icons/fa";
 import { Eye, EyeOff, User, BookOpen, Users } from "lucide-react";
+import { FirebaseDebug } from "@/components/FirebaseDebug";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
