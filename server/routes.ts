@@ -43,6 +43,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const { configureSession, testUsers } = await import('./config/session');
   configureSession(app);
   
+  // Register API routers
+  app.use("/api/children", childrenRouter);
+  
   // Middleware to check authentication
   const isAuthenticated = (req, res, next) => {
     if (req.session.userId) {
