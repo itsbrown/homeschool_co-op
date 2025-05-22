@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import {
@@ -21,7 +21,9 @@ import {
   Grid,
   Search,
   ChevronDown,
-  FileUp
+  FileUp,
+  X,
+  Check
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +47,18 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 
 // Sample file data for the knowledge base
 const sampleFiles = [
@@ -151,7 +165,7 @@ const fileTypeIcons: Record<string, React.ReactNode> = {
   "Other": <FileText className="h-10 w-10 text-gray-500" />,
 };
 
-interface File {
+interface KnowledgeBaseFile {
   id: number;
   name: string;
   type: string;
@@ -169,6 +183,97 @@ export default function KnowledgeBaseDetailsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [fileTypeFilter, setFileTypeFilter] = useState("all-types");
   const [tagFilter, setTagFilter] = useState("all-tags");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState<any[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setUploadingFiles(Array.from(e.target.files));
+    }
+  };
+  
+  // Handle file upload button click
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+  
+  // Remove a file from the upload list
+  const removeFile = (index: number) => {
+    setUploadingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  // Simulate file upload process
+  const uploadFiles = () => {
+    if (uploadingFiles.length === 0) return;
+    
+    setIsUploading(true);
+    setUploadProgress(0);
+    
+    // Simulate progress
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setTimeout(() => {
+            setIsUploading(false);
+            
+            // Create new file objects to add to our sample files
+            const newFiles = uploadingFiles.map((file, index) => ({
+              id: sampleFiles.length + index + 1,
+              name: file.name,
+              type: getFileType(file.name),
+              size: formatFileSize(file.size),
+              uploadedAt: new Date().toISOString().split('T')[0],
+              tags: ["Newly Uploaded", "User Content"],
+              description: `User uploaded file: ${file.name}`
+            }));
+            
+            // Add files to the knowledge base (in a real app, this would be done via API)
+            sampleFiles.push(...newFiles);
+            
+            // Clear uploaded files and close dialog
+            setUploadingFiles([]);
+            setUploadOpen(false);
+            
+            toast({
+              title: "Files Uploaded Successfully",
+              description: `${uploadingFiles.length} files have been added to the knowledge base.`,
+            });
+          }, 500);
+          return 100;
+        }
+        return prev + (Math.random() * 15);
+      });
+    }, 300);
+  };
+  
+  // Helper function to determine file type based on extension
+  const getFileType = (filename: string): string => {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    
+    if (['pdf'].includes(ext)) return 'PDF';
+    if (['doc', 'docx', 'txt', 'rtf'].includes(ext)) return 'Document';
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'].includes(ext)) return 'Image';
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'Archive';
+    if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) return 'Audio';
+    if (['mp4', 'avi', 'mov', 'wmv', 'webm'].includes(ext)) return 'Video';
+    
+    return 'Other';
+  };
+  
+  // Helper function to format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    else if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    else return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  };
   
   // Function to handle file downloads
   const handleFileDownload = (file: File) => {
@@ -387,6 +492,124 @@ export default function KnowledgeBaseDetailsPage() {
 
   return (
     <SchoolAdminLayout pageTitle={`Knowledge Base - ${knowledgeBase.title}`}>
+      {/* Hidden file input for uploads */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        multiple
+        onChange={handleFileSelect}
+      />
+      
+      {/* File upload dialog */}
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload Files</DialogTitle>
+            <DialogDescription>
+              Add files to the {knowledgeBase.title} knowledge base.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {uploadingFiles.length === 0 ? (
+              <div 
+                className="border-2 border-dashed rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={handleUploadClick}
+              >
+                <FileUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">Click to select files</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  or drag and drop files here
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  PDF, Word, Images, and other document formats accepted
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-medium">
+                    {uploadingFiles.length} {uploadingFiles.length === 1 ? 'file' : 'files'} selected
+                  </h3>
+                  <Button variant="outline" size="sm" onClick={handleUploadClick}>
+                    Add More
+                  </Button>
+                </div>
+                
+                <ScrollArea className="h-[200px] rounded-md border p-2">
+                  <div className="space-y-2">
+                    {uploadingFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {file.name.endsWith('.pdf') ? (
+                            <FileText className="h-8 w-8 text-red-500" />
+                          ) : file.name.match(/\.(doc|docx|txt|rtf)$/i) ? (
+                            <FileText className="h-8 w-8 text-blue-500" />
+                          ) : file.name.match(/\.(jpg|jpeg|png|gif|bmp|svg)$/i) ? (
+                            <FileText className="h-8 w-8 text-green-500" />
+                          ) : (
+                            <FileText className="h-8 w-8 text-gray-500" />
+                          )}
+                          <div className="truncate">
+                            <p className="font-medium truncate">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => removeFile(index)}
+                          disabled={isUploading}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                
+                {isUploading && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Uploading...</span>
+                      <span>{Math.round(uploadProgress)}%</span>
+                    </div>
+                    <Progress value={uploadProgress} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setUploadOpen(false)}
+              disabled={isUploading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={uploadFiles}
+              disabled={uploadingFiles.length === 0 || isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload {uploadingFiles.length} {uploadingFiles.length === 1 ? 'file' : 'files'}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="max-w-7xl mx-auto p-6">
         <div className="flex flex-col space-y-6">
           <div className="flex items-center gap-4 mb-2">
@@ -535,7 +758,7 @@ export default function KnowledgeBaseDetailsPage() {
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground mb-2">Quick Actions</h4>
                       <div className="space-y-2">
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button variant="outline" className="w-full justify-start" onClick={() => setUploadOpen(true)}>
                           <FilePlus className="mr-2 h-4 w-4" />
                           Add Files
                         </Button>
@@ -629,7 +852,7 @@ export default function KnowledgeBaseDetailsPage() {
                     <p className="text-sm text-muted-foreground">
                       {filteredFiles.length} {filteredFiles.length === 1 ? "file" : "files"} found
                     </p>
-                    <Button size="sm">
+                    <Button size="sm" onClick={() => setUploadOpen(true)}>
                       <FileUp className="mr-2 h-4 w-4" />
                       Upload Files
                     </Button>
@@ -644,7 +867,7 @@ export default function KnowledgeBaseDetailsPage() {
                           ? "No files match your current filters. Try adjusting your search criteria."
                           : "This knowledge base doesn't have any files yet. Upload some files to get started."}
                       </p>
-                      <Button>
+                      <Button onClick={() => setUploadOpen(true)}>
                         <FileUp className="mr-2 h-4 w-4" />
                         Upload Files
                       </Button>
