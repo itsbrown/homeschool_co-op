@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ interface SchoolData {
 
 // Main school page component
 export default function MySchoolPage() {
-  const { user } = useAuth();
+  const { user } = useFirebaseAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
   
