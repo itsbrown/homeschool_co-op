@@ -19,6 +19,8 @@ export interface IStorage {
   getAllCurricula(): Promise<Curriculum[]>;
   getAllKnowledgeBases(): Promise<KnowledgeBase[]>;
   getAllActivities(): Promise<Activity[]>;
+  getAllPayments(): Promise<Payment[]>;
+  getAllEnrollments(): Promise<Enrollment[]>;
   
   // User methods
   getUser(id: number): Promise<User | undefined>;

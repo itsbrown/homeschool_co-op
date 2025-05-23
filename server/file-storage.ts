@@ -355,4 +355,20 @@ export class FileStorage implements IStorage {
   async deleteClass(id: number): Promise<void> {
     await fileDb.deleteClass(id);
   }
+  
+  async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
+    return fileDb.getAllKnowledgeBases();
+  }
+
+  async getAllActivities(): Promise<Activity[]> {
+    return fileDb.getAllActivities();
+  }
+
+  async getAllPayments(): Promise<Payment[]> {
+    return fileDb.getAllPayments();
+  }
+
+  async getAllEnrollments(): Promise<ProgramEnrollment[]> {
+    return fileDb.getAllEnrollments();
+  }
 }
