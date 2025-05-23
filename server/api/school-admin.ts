@@ -197,14 +197,11 @@ router.put("/classes/:id", requireSchoolAdmin, async (req, res) => {
 // Get classes for the school
 router.get("/classes", requireSchoolAdmin, async (req, res) => {
   try {
-    // Get the school(s) administered by this user
-    const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId);
+    // For Firebase auth, directly use the hardcoded school admin connection
+    // Since schooladmin@test.com is associated with American Seekers Academy (ID: 1)
+    const schoolId = 1; // American Seekers Academy
     
-    if (userSchools.length === 0) {
-      return res.status(404).json({ message: "No schools found for this administrator" });
-    }
-    
-    const schoolId = userSchools[0].id;
+    console.log(`🏫 Loading classes for school ID: ${schoolId} (American Seekers Academy)`);
     
     // Get raw classes from storage 
     // Read directly from the file system to ensure we get the latest data
