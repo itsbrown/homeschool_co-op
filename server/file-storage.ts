@@ -13,41 +13,96 @@ import {
   Class, InsertClass,
   Activity, InsertActivity
 } from '@shared/schema';
-
 import * as fileDb from './file-db';
+
+// Validation error class
+class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+// Validation utilities
+const validateId = (id: number) => {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new ValidationError('Invalid ID: must be a positive integer');
+  }
+};
+
+const validateEmail = (email: string) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new ValidationError('Invalid email format');
+  }
+};
+
+const validateString = (value: string, field: string, maxLength = 255) => {
+  if (!value || typeof value !== 'string' || value.trim().length === 0) {
+    throw new ValidationError(`${field} is required`);
+  }
+  if (value.length > maxLength) {
+    throw new ValidationError(`${field} must be less than ${maxLength} characters`);
+  }
+};
+
+const validateDate = (date: Date) => {
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    throw new ValidationError('Invalid date');
+  }
+};
 
 export class FileStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
+    validateId(id);
     return fileDb.getUser(id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
+    validateString(username, 'Username');
     return fileDb.getUserByUsername(username);
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
+    validateEmail(email);
     return fileDb.getUserByEmail(email);
   }
 
   async createUser(user: InsertUser): Promise<User> {
+    validateString(user.username, 'Username');
+    validateEmail(user.email);
+    validateString(user.password, 'Password', 72);
+    validateString(user.name, 'Name');
+    if (user.avatar) validateString(user.avatar, 'Avatar URL');
     return fileDb.createUser(user);
   }
 
   // Curriculum methods  
   async getCurriculum(id: number): Promise<Curriculum | undefined> {
+    validateId(id);
     return fileDb.getCurriculum(id);
   }
 
   async getCurriculaByAuthor(authorId: number): Promise<Curriculum[]> {
+    validateId(authorId);
     return fileDb.getCurriculaByAuthor(authorId);
   }
 
   async createCurriculum(curriculum: InsertCurriculum): Promise<Curriculum> {
+    validateString(curriculum.title, 'Title');
+    validateString(curriculum.subject, 'Subject');
+    validateString(curriculum.gradeLevel, 'Grade Level');
+    if (curriculum.description) validateString(curriculum.description, 'Description', 1000);
     return fileDb.createCurriculum(curriculum);
   }
 
   async updateCurriculum(id: number, curriculum: Partial<InsertCurriculum>): Promise<Curriculum | undefined> {
+    validateId(id);
+    if (curriculum.title) validateString(curriculum.title, 'Title');
+    if (curriculum.subject) validateString(curriculum.subject, 'Subject');
+    if (curriculum.gradeLevel) validateString(curriculum.gradeLevel, 'Grade Level');
+    if (curriculum.description) validateString(curriculum.description, 'Description', 1000);
     return fileDb.updateCurriculum(id, curriculum);
   }
 
