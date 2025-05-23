@@ -60,6 +60,62 @@ function getUserByEmail(email: string): User | undefined {
 }
 
 /**
+ * Initialize default test accounts
+ */
+function initializeTestAccounts(): void {
+  const users = loadUsers();
+  
+  // Test accounts
+  const testAccounts = [
+    {
+      name: 'Parent Test User',
+      username: 'parent@test.com',
+      email: 'parent@test.com',
+      password: '$2b$10$abc123', // hashed 'password123'
+      role: 'parent' as const,
+      avatar: null,
+      subscription: 'free' as const
+    },
+    {
+      name: 'School Admin Test User',
+      username: 'schooladmin@test.com',
+      email: 'schooladmin@test.com',
+      password: '$2b$10$abc123', // hashed 'password123'
+      role: 'schoolAdmin' as const,
+      avatar: null,
+      subscription: 'free' as const
+    },
+    {
+      name: 'Educator Test User',
+      username: 'educator@test.com',
+      email: 'educator@test.com',
+      password: '$2b$10$abc123', // hashed 'password123'
+      role: 'educator' as const,
+      avatar: null,
+      subscription: 'free' as const
+    },
+    {
+      name: 'Admin Test User',
+      username: 'admin@test.com',
+      email: 'admin@test.com',
+      password: '$2b$10$abc123', // hashed 'password123'
+      role: 'admin' as const,
+      avatar: null,
+      subscription: 'free' as const
+    }
+  ];
+  
+  // Only add accounts that don't already exist
+  testAccounts.forEach(testAccount => {
+    const existingUser = users.find(user => user.email === testAccount.email);
+    if (!existingUser) {
+      createUser(testAccount);
+      console.log(`Created test account: ${testAccount.email} (${testAccount.role})`);
+    }
+  });
+}
+
+/**
  * Create a user
  */
 function createUser(userData: Omit<User, 'id' | 'createdAt'>): User {
