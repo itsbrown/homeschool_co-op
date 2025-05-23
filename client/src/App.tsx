@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import RoleSelection from "@/pages/RoleSelection";
 import SchoolAdminLogin from "@/pages/SchoolAdminLogin";
 import Dashboard from "@/pages/Dashboard";
 import PaymentsPage from "@/pages/PaymentsPage";
@@ -80,6 +81,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/school-admin-login" component={SchoolAdminLogin} />
       <Route path="/register" component={Register} />
+      <Route path="/role-selection" component={RoleSelection} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/curriculum" component={Curriculum} />
       <Route path="/curriculum/:id" component={CurriculumDetail} />
