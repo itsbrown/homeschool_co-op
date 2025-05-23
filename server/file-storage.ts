@@ -16,10 +16,6 @@ import {
 
 import * as fileDb from './file-db';
 
-/**
- * FileStorage - Implements IStorage using file-based persistence
- * This is a simpler alternative to the database implementation that doesn't require database configuration
- */
 export class FileStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
@@ -27,307 +23,252 @@ export class FileStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getUserByUsername(username);
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getUserByEmail(email);
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createUser(user);
   }
 
-  // Curriculum methods
+  // Curriculum methods  
   async getCurriculum(id: number): Promise<Curriculum | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getCurriculum(id);
   }
 
   async getCurriculaByAuthor(authorId: number): Promise<Curriculum[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getCurriculaByAuthor(authorId);
   }
 
   async createCurriculum(curriculum: InsertCurriculum): Promise<Curriculum> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createCurriculum(curriculum);
   }
 
   async updateCurriculum(id: number, curriculum: Partial<InsertCurriculum>): Promise<Curriculum | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateCurriculum(id, curriculum);
   }
 
   // Lesson methods
   async getLesson(id: number): Promise<Lesson | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getLesson(id);
   }
 
   async getLessonsByCurriculum(curriculumId: number): Promise<Lesson[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getLessonsByCurriculum(curriculumId);
   }
 
   async getLessonsByAuthor(authorId: number): Promise<Lesson[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getLessonsByAuthor(authorId);
   }
 
   async createLesson(lesson: InsertLesson): Promise<Lesson> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createLesson(lesson);
   }
 
   async updateLesson(id: number, lesson: Partial<InsertLesson>): Promise<Lesson | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateLesson(id, lesson);
   }
 
   // Event methods
   async getEvent(id: number): Promise<Event | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getEvent(id);
   }
 
   async getEventsByOrganizer(organizerId: number): Promise<Event[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getEventsByOrganizer(organizerId);
   }
 
   async getUpcomingEvents(userId: number): Promise<Event[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getUpcomingEvents(userId);
   }
 
   async getAllEvents(userId: number): Promise<Event[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getAllEvents(userId);
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createEvent(event);
   }
 
   // Marketplace methods
   async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getMarketplaceItem(id);
   }
 
   async getMarketplaceItemsBySeller(sellerId: number): Promise<MarketplaceItem[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getMarketplaceItemsBySeller(sellerId);
   }
 
   async getTopSellingItems(limit: number): Promise<MarketplaceItem[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getTopSellingItems(limit);
   }
 
   async createMarketplaceItem(item: InsertMarketplaceItem): Promise<MarketplaceItem> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createMarketplaceItem(item);
   }
 
   async updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<MarketplaceItem | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateMarketplaceItemStats(id, sales, revenue);
   }
 
   // Knowledge Base methods
   async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getKnowledgeBase(id);
   }
 
   async getKnowledgeBaseById(id: number, userId: number): Promise<KnowledgeBase | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getKnowledgeBaseById(id, userId);
+  }
+
+  async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
+    return fileDb.getKnowledgeBasesByAuthor(authorId);
+  }
+
+  async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
+    return fileDb.getKnowledgeBasesBySubject(subject);
+  }
+
+  async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
+    return fileDb.getPublicKnowledgeBases(limit);
+  }
+
+  async createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
+    return fileDb.createKnowledgeBase(knowledgeBase);
+  }
+
+  async updateKnowledgeBase(id: number, knowledgeBase: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
+    return fileDb.updateKnowledgeBase(id, knowledgeBase);
+  }
+
+  async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
+    return fileDb.incrementDownloadCount(id);
+  }
+
+  async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
+    return fileDb.addPurchaser(id, userId);
   }
 
   // Activity methods
   async getActivityById(id: number, userId: number): Promise<Activity | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getActivityById(id, userId);
   }
 
   async getActivitiesByAuthor(authorId: number): Promise<Activity[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getActivitiesByAuthor(authorId);
   }
 
   async createActivity(activity: InsertActivity): Promise<Activity> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createActivity(activity);
   }
 
   async updateActivityDownloadCount(id: number): Promise<Activity | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateActivityDownloadCount(id);
   }
 
   async updateActivityPdfUrl(id: number, pdfUrl: string): Promise<Activity | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
-  }
-
-  async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
-  }
-
-  async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
-  }
-
-  async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
-  }
-
-  async createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
-  }
-
-  async updateKnowledgeBase(id: number, knowledgeBase: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
-  }
-
-  async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
-  }
-
-  async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateActivityPdfUrl(id, pdfUrl);
   }
 
   // Child methods
   async getChildById(id: number): Promise<Child | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getChildById(id);
   }
 
   async getChildrenByParentId(parentId: number): Promise<Child[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getChildrenByParentId(parentId);
   }
 
   async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createChild(child);
   }
 
   async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateChild(id, child);
   }
 
   async deleteChild(id: number): Promise<void> {
-    // Not implemented yet - using in-memory storage
+    await fileDb.deleteChild(id);
   }
 
   // Emergency Contact methods
   async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getEmergencyContactById(id);
   }
 
   async getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getEmergencyContactsByUserId(userId);
   }
 
   async createEmergencyContact(contact: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createEmergencyContact(contact);
   }
 
   async updateEmergencyContact(id: number, contact: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateEmergencyContact(id, contact);
   }
 
   async deleteEmergencyContact(id: number): Promise<void> {
-    // Not implemented yet - using in-memory storage
+    await fileDb.deleteEmergencyContact(id);
   }
 
   // Program methods
   async getProgramById(id: number): Promise<Program | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getProgramById(id);
   }
 
   async getPublishedPrograms(category?: string, gradeLevel?: string): Promise<Program[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getPublishedPrograms(category, gradeLevel);
   }
 
   async getProgramsByInstructorId(instructorId: number): Promise<Program[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getProgramsByInstructorId(instructorId);
   }
 
   async createProgram(program: InsertProgram & { instructorId: number }): Promise<Program> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createProgram(program);
   }
 
   async updateProgram(id: number, program: Partial<InsertProgram>): Promise<Program | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateProgram(id, program);
   }
 
   async deleteProgram(id: number): Promise<void> {
-    // Not implemented yet - using in-memory storage
+    await fileDb.deleteProgram(id);
   }
 
   // Program Enrollment methods
   async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.getProgramEnrollmentById(id);
   }
 
   async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getEnrollmentsByChildIds(childIds);
   }
 
   async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {
-    // Not implemented yet - using in-memory storage
-    return [];
+    return fileDb.getEnrollmentsByProgramId(programId);
   }
 
   async getEnrollmentCountForProgram(programId: number): Promise<number> {
-    // Not implemented yet - using in-memory storage
-    return 0;
+    return fileDb.getEnrollmentCountForProgram(programId);
   }
 
   async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
-    // Not implemented yet - using in-memory storage
-    throw new Error('Method not implemented.');
+    return fileDb.createProgramEnrollment(enrollment);
   }
 
   async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
-    // Not implemented yet - using in-memory storage
-    return undefined;
+    return fileDb.updateProgramEnrollment(id, enrollment);
   }
 
   async deleteProgramEnrollment(id: number): Promise<void> {
-    // Not implemented yet - using in-memory storage
+    await fileDb.deleteProgramEnrollment(id);
   }
 
-  // Class methods - implemented using file-based storage
+  // Class methods - already implemented
   async getClassById(id: number): Promise<Class | undefined> {
     return fileDb.getClassById(id);
   }
