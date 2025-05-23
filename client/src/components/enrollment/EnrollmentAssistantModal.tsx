@@ -132,15 +132,21 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     }
 
     setTimeout(() => {
-      setMessages(prev => [...prev, response]);
+      setMessages(prev => {
+        const newMessages = [...prev, response];
+        // Auto-scroll to bottom after state update
+        setTimeout(() => {
+          const scrollArea = document.querySelector('[data-radix-scroll-area-viewport]');
+          if (scrollArea) {
+            scrollArea.scrollTo({
+              top: scrollArea.scrollHeight,
+              behavior: 'smooth'
+            });
+          }
+        }, 50);
+        return newMessages;
+      });
       setIsTyping(false);
-      // Auto-scroll to bottom
-      setTimeout(() => {
-        const scrollArea = document.querySelector('[data-radix-scroll-area-viewport]');
-        if (scrollArea) {
-          scrollArea.scrollTop = scrollArea.scrollHeight;
-        }
-      }, 100);
     }, 800);
   };
 
