@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import fileUpload from "express-fileupload";
 import path from "path";
+import { backupService } from './services/backupService';
 
 const app = express();
 // Increase the size limit to 50MB for file uploads
@@ -78,7 +79,11 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
+  }, async () => {
     log(`serving on port ${port}`);
+
+    // Initialize and start backup service
+    await backupService.init();
+    backupService.startAutomaticBackups(24); // Backup every 24 hours
   });
 })();

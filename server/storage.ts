@@ -14,6 +14,12 @@ import {
 } from "@shared/schema";
 
 export interface IStorage {
+  // Methods for backup
+  getAllUsers(): Promise<User[]>;
+  getAllCurricula(): Promise<Curriculum[]>;
+  getAllKnowledgeBases(): Promise<KnowledgeBase[]>;
+  getAllActivities(): Promise<Activity[]>;
+  
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
