@@ -8,11 +8,21 @@ export async function initializeDatabase() {
     console.log('Initializing database...');
     
     // Ensure data directory exists for file-based storage
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-      console.log('Created data directory for file-based storage');
-    }
+    // Ensure all required data directories exist
+    const dirs = [
+      path.join(process.cwd(), 'data'),
+      path.join(process.cwd(), 'data/users'),
+      path.join(process.cwd(), 'data/knowledge-bases'),
+      path.join(process.cwd(), 'data/activities'),
+      path.join(process.cwd(), 'data/programs')
+    ];
+    
+    dirs.forEach(dir => {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        console.log(`Created directory: ${dir}`);
+      }
+    });
     
     try {
       // Try to create classes table in database

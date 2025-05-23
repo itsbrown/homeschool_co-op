@@ -1127,4 +1127,14 @@ import { FileStorage } from './file-storage';
 
 // Use FileStorage for reliable persistence
 // This ensures that classes data is stored reliably without database configuration issues
-export const storage = new FileStorage();
+// Initialize storage with fallback mechanism
+export const storage = (() => {
+  try {
+    console.log('Initializing persistent storage...');
+    return new FileStorage();
+  } catch (error) {
+    console.error('Error initializing file storage:', error);
+    console.warn('Falling back to memory storage - DATA WILL NOT PERSIST');
+    return new MemStorage();
+  }
+})();
