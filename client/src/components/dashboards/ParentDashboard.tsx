@@ -49,12 +49,6 @@ export default function ParentDashboard() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Parent Dashboard</h1>
         <div className="flex gap-2">
-          <Button asChild variant="default" className="bg-primary/90 hover:bg-primary">
-            <Link href="/enrollment-assistant">
-              <Bot className="mr-2 h-4 w-4" />
-              AI Enrollment Assistant
-            </Link>
-          </Button>
           <Button asChild>
             <Link href="/children/register">
               <PlusCircle className="mr-2 h-4 w-4" />
@@ -77,11 +71,15 @@ export default function ParentDashboard() {
       </div>
 
       <Tabs defaultValue="overview" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="children">Children</TabsTrigger>
           <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
+          <TabsTrigger value="ai-assistant">
+            <Bot className="mr-1 h-4 w-4" />
+            AI Assistant
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -309,7 +307,97 @@ export default function ParentDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="ai-assistant" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="h-5 w-5" />
+                AI Enrollment Assistant
+              </CardTitle>
+              <CardDescription>
+                Get personalized help finding the perfect programs for your children
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button 
+                  variant="outline" 
+                  className="h-auto p-4 text-left flex flex-col items-start gap-2"
+                  asChild
+                >
+                  <Link href="/enrollment-assistant">
+                    <span className="font-medium">Find Programs for My Child</span>
+                    <span className="text-sm text-muted-foreground">
+                      "I'm looking for STEM programs for my 8-year-old daughter who loves building things"
+                    </span>
+                  </Link>
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="h-auto p-4 text-left flex flex-col items-start gap-2"
+                  asChild
+                >
+                  <Link href="/enrollment-assistant">
+                    <span className="font-medium">Compare Program Options</span>
+                    <span className="text-sm text-muted-foreground">
+                      "What's the difference between the morning and afternoon art classes?"
+                    </span>
+                  </Link>
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="h-auto p-4 text-left flex flex-col items-start gap-2"
+                  asChild
+                >
+                  <Link href="/enrollment-assistant">
+                    <span className="font-medium">Get Scheduling Help</span>
+                    <span className="text-sm text-muted-foreground">
+                      "Can you help me coordinate classes for two children with different interests?"
+                    </span>
+                  </Link>
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="h-auto p-4 text-left flex flex-col items-start gap-2"
+                  asChild
+                >
+                  <Link href="/enrollment-assistant">
+                    <span className="font-medium">Budget Planning</span>
+                    <span className="text-sm text-muted-foreground">
+                      "What programs fit within my $200/month budget for both kids?"
+                    </span>
+                  </Link>
+                </Button>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                <h4 className="font-medium text-blue-900 mb-2">How the AI Assistant Helps:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Personalized program recommendations based on your child's age and interests</li>
+                  <li>• Schedule optimization to avoid conflicts</li>
+                  <li>• Budget-friendly options within your price range</li>
+                  <li>• Answers to specific questions about classes and instructors</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Floating AI Assistant Button - Fixed Position */}
+      <Button
+        asChild
+        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
+      >
+        <Link href="/enrollment-assistant">
+          <Bot className="h-6 w-6" />
+          <span className="sr-only">AI Enrollment Assistant</span>
+        </Link>
+      </Button>
     </div>
   );
 }
