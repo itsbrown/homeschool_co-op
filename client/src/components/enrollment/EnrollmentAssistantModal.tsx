@@ -55,46 +55,26 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
   const processUserMessage = async (userInput: string) => {
     setIsTyping(true);
     
-    // Smart parsing for registration intent
-    const isRegistrationIntent = userInput.toLowerCase().includes('register') ||
-                                userInput.toLowerCase().includes('add') ||
-                                userInput.toLowerCase().includes('new child') ||
-                                userInput.toLowerCase().includes('sign up');
+    const lowerInput = userInput.toLowerCase();
     
-    // Extract child information from natural language
-    const ageMatch = userInput.match(/(\d+)[-\s]?year[-\s]?old|age\s*(\d+)/i);
-    const nameMatch = userInput.match(/(?:my|named|called)\s+([A-Za-z]+)/i);
-    const genderMatch = userInput.match(/(boy|girl|son|daughter|he|she|him|her)/i);
+    // Check for registration intent
+    const isRegistrationIntent = lowerInput.includes('register') ||
+                                lowerInput.includes('add') ||
+                                lowerInput.includes('new child') ||
+                                lowerInput.includes('sign up');
     
     let response = "";
-    let shouldShowRegistration = false;
 
-    if (isRegistrationIntent) {
-      if (registrationData) {
-        // Continue existing registration flow
-        response = await handleRegistrationStep(userInput, registrationData);
-      } else {
-        // Start new registration
-        const newRegData: any = {};
-        
-        if (ageMatch) {
-          newRegData.age = parseInt(ageMatch[1] || ageMatch[2]);
-        }
-        if (nameMatch) {
-          newRegData.firstName = nameMatch[1];
-        }
-        if (genderMatch) {
-          const genderText = genderMatch[1].toLowerCase();
-          if (['daughter', 'girl', 'she', 'her'].includes(genderText)) {
-            newRegData.gender = 'Female';
-          } else if (['son', 'boy', 'he', 'him'].includes(genderText)) {
-            newRegData.gender = 'Male';
-          }
-        }
-        
+    if (isRegistrationIntent || registrationData) {
+      // We're in registration mode
+      if (!registrationData) {
+        // Start new registration - extract initial info
+        const newRegData = extractChildInfo(userInput);
         setRegistrationData(newRegData);
-        shouldShowRegistration = true;
         response = buildRegistrationResponse(newRegData);
+      } else {
+        // Continue registration with additional info
+        response = await handleRegistrationStep(userInput, registrationData);
       }
     } else {
       // General enrollment assistance
@@ -107,12 +87,57 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
         content: response,
         sender: "assistant",
         timestamp: new Date(),
-        registrationData: shouldShowRegistration ? registrationData : undefined
+        registrationData: registrationData
       };
       
       setMessages(prev => [...prev, assistantMessage]);
       setIsTyping(false);
     }, 1500);
+  };
+
+  const extractChildInfo = (input: string) => {
+    const data: any = {};
+    
+    // Extract name - look for various patterns
+    const namePatterns = [
+      /(?:her name is|his name is|name is|called|named)\s+([A-Za-z\s]+?)(?:\s+(?:she's|he's|and|,))/i,
+      /([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+(?:she's|he's|is))/,
+      /^([A-Z][a-z]+\s+[A-Z][a-z]+)/  // Names at start of message
+    ];
+    
+    for (const pattern of namePatterns) {
+      const match = input.match(pattern);
+      if (match) {
+        const fullName = match[1].trim();
+        const nameParts = fullName.split(' ');
+        data.firstName = nameParts[0];
+        if (nameParts.length > 1) {
+          data.lastName = nameParts.slice(1).join(' ');
+        }
+        break;
+      }
+    }
+    
+    // Extract age
+    const ageMatch = input.match(/(?:she's|he's|is|age)\s*(\d+)|(\d+)\s*(?:years?\s*old|and)/i);
+    if (ageMatch) {
+      data.age = parseInt(ageMatch[1] || ageMatch[2]);
+    }
+    
+    // Extract grade
+    const gradeMatch = input.match(/(?:grade|starting|in)\s*(?:the\s*)?(\d+)(?:st|nd|rd|th)?\s*grade/i);
+    if (gradeMatch) {
+      data.gradeLevel = gradeMatch[1];
+    }
+    
+    // Detect gender from pronouns and context
+    if (input.match(/\b(?:she|her|daughter|girl)\b/i)) {
+      data.gender = 'Female';
+    } else if (input.match(/\b(?:he|his|him|son|boy)\b/i)) {
+      data.gender = 'Male';
+    }
+    
+    return data;
   };
 
   const buildRegistrationResponse = (regData: any) => {
@@ -144,52 +169,12 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
   };
 
   const handleRegistrationStep = async (input: string, currentData: any) => {
-    const updatedData = { ...currentData };
-    
-    // Parse additional information
-    const nameMatch = input.match(/(?:name is|called|named)\s+([A-Za-z\s]+)/i);
-    const ageMatch = input.match(/(?:age|years? old)\s*(?:is\s*)?(\d+)|(\d+)\s*years? old/i);
-    const gradeMatch = input.match(/(?:grade|class)\s*(\d+|kindergarten|pre-?k)/i);
-    const genderMatch = input.match(/(male|female|boy|girl)/i);
-    
-    if (nameMatch) {
-      const fullName = nameMatch[1].trim();
-      const nameParts = fullName.split(' ');
-      updatedData.firstName = nameParts[0];
-      if (nameParts.length > 1) {
-        updatedData.lastName = nameParts.slice(1).join(' ');
-      }
-    }
-    
-    if (ageMatch) {
-      updatedData.age = parseInt(ageMatch[1] || ageMatch[2]);
-    }
-    
-    if (gradeMatch) {
-      updatedData.gradeLevel = gradeMatch[1];
-    }
-    
-    if (genderMatch) {
-      const gender = genderMatch[1].toLowerCase();
-      updatedData.gender = gender === 'male' || gender === 'boy' ? 'Male' : 'Female';
-    }
-    
-    // Look for interests
-    const interests = [];
-    const interestWords = ['art', 'science', 'math', 'reading', 'sports', 'music', 'dance', 'building', 'crafts', 'nature', 'technology'];
-    for (const interest of interestWords) {
-      if (input.toLowerCase().includes(interest)) {
-        interests.push(interest);
-      }
-    }
-    if (interests.length > 0) {
-      updatedData.interests = interests.join(', ');
-    }
-    
+    // Merge current data with any new info from this message
+    const updatedData = { ...currentData, ...extractChildInfo(input) };
     setRegistrationData(updatedData);
     
     // Check if we have enough info to register
-    const hasRequiredInfo = updatedData.firstName && updatedData.age && updatedData.gender;
+    const hasRequiredInfo = updatedData.firstName && updatedData.age;
     
     if (hasRequiredInfo && (input.toLowerCase().includes('register') || input.toLowerCase().includes('yes') || input.toLowerCase().includes('submit'))) {
       // Attempt registration
@@ -198,7 +183,7 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
           firstName: updatedData.firstName,
           lastName: updatedData.lastName || '',
           age: updatedData.age,
-          gender: updatedData.gender,
+          gender: updatedData.gender || '',
           gradeLevel: updatedData.gradeLevel || '',
           interests: updatedData.interests || '',
           medicalInfo: '',
@@ -211,6 +196,9 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
       } catch (error) {
         return `I'm sorry, there was an issue completing the registration. Please try again or use the regular registration form. The error was: ${error}`;
       }
+    } else if (hasRequiredInfo) {
+      // We have basic info, ask if they want to register
+      return `Perfect! I have the information I need for ${updatedData.firstName}:\n\n• **Name:** ${updatedData.firstName} ${updatedData.lastName || ''}\n• **Age:** ${updatedData.age}\n• **Grade:** ${updatedData.gradeLevel || 'Not specified'}\n• **Gender:** ${updatedData.gender || 'Not specified'}\n\nWould you like me to register ${updatedData.firstName} now? Just say "yes" or "register" and I'll complete the registration!`;
     } else {
       return buildRegistrationResponse(updatedData);
     }
