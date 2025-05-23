@@ -412,28 +412,43 @@ router.get("/me", async (req, res) => {
 // Firebase user sync endpoint
 router.post("/firebase-sync", async (req, res) => {
   try {
-    console.log("Firebase sync request received:", req.body);
+    console.log("Direct Firebase sync request:", req.body);
     
-    const { firebaseUid, email, name } = req.body;
+    const { firebaseUid, email, name, role } = req.body;
     
     if (!firebaseUid || !email) {
       console.log("Missing required fields:", { firebaseUid: !!firebaseUid, email: !!email });
       return res.status(400).json({ message: "Firebase UID and email are required" });
     }
     
-    // Return a simple parent user profile
-    const mockUser = {
-      id: 1,
+    // Check for special test accounts
+    let userRole = role || 'parent'; // Default to parent if no role provided
+    let userId = 1; // Default ID
+    
+    // Handle specific test accounts with proper roles
+    if (email === 'schooladmin@test.com') {
+      userRole = 'admin';
+      userId = 1;
+    } else if (email === 'educator@test.com') {
+      userRole = 'educator';  
+      userId = 2;
+    } else if (email === 'parent@test.com') {
+      userRole = 'parent';
+      userId = 3;
+    }
+    
+    const userData = {
+      id: userId,
       name: name || email.split('@')[0],
       email: email,
-      role: 'parent',
+      role: userRole,
       avatar: null,
-      subscription: 'free'
+      subscription: userRole === 'admin' ? 'premium' : 'free'
     };
     
-    console.log("Sending JSON response:", mockUser);
+    console.log("Sending direct JSON response:", userData);
     res.setHeader('Content-Type', 'application/json');
-    return res.status(200).json(mockUser);
+    return res.status(200).json(userData);
     
   } catch (error) {
     console.error("Firebase sync error:", error);
