@@ -44,6 +44,13 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
   const [registrationData, setRegistrationData] = useState<any>({});
   
   const queryClient = useQueryClient();
+
+  // Initialize conversation when modal opens
+  React.useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      initializeConversation();
+    }
+  }, [isOpen]);
   
   // Child registration mutation
   const registerChildMutation = useMutation({
@@ -541,6 +548,30 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     return response;
   };
 
+  const extractChildInfo = (input: string) => {
+    // Simple extraction logic for child information
+    const info: any = {};
+    
+    // Extract name patterns
+    const nameMatch = input.match(/(?:name is|called|named)\s+([A-Za-z\s]+)/i);
+    if (nameMatch) {
+      const fullName = nameMatch[1].trim();
+      const nameParts = fullName.split(' ');
+      info.firstName = nameParts[0];
+      if (nameParts.length > 1) info.lastName = nameParts.slice(1).join(' ');
+    }
+    
+    // Extract age
+    const ageMatch = input.match(/(\d+)\s*(?:years?\s*old|yrs?\s*old)/i);
+    if (ageMatch) info.age = parseInt(ageMatch[1]);
+    
+    // Extract grade
+    const gradeMatch = input.match(/(?:grade|year)\s*(\d+|kindergarten|k)/i);
+    if (gradeMatch) info.gradeLevel = gradeMatch[1];
+    
+    return info;
+  };
+
   const handleRegistrationStep = async (input: string, currentData: any) => {
     // Merge current data with any new info from this message
     const updatedData = { ...currentData, ...extractChildInfo(input) };
@@ -609,7 +640,8 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     setMessages(prev => [...prev, newUserMessage]);
     setInputMessage("");
     
-    await processUserMessage(newUserMessage.content);
+    // Handle the user input through the action system
+    handleAction('text_input', newUserMessage.content);
   };
 
   const handlePromptClick = (prompt: string) => {
