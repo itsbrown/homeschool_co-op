@@ -14,6 +14,11 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
 
   const schoolNavItems = [
     {
+      title: "Dashboard",
+      href: "/dashboard",
+      icon: <Home className="h-5 w-5" />,
+    },
+    {
       title: "My School",
       href: "/schools/my-school",
       icon: <School className="h-5 w-5" />,
