@@ -102,6 +102,40 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
           ))}
         </nav>
       </div>
+
+      {/* User Profile Section - matches main sidebar */}
+      {isAuthenticated && user && (
+        <div className="border-t border-gray-200 p-3">
+          {!isCollapsed && (
+            <div className="flex items-center space-x-3 mb-3">
+              <div className="flex-shrink-0">
+                <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center">
+                  <User className="h-4 w-4 text-white" />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {user.name || user.email}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  School Administrator
+                </p>
+              </div>
+            </div>
+          )}
+          <Button
+            onClick={handleLogout}
+            variant="ghost"
+            className={cn(
+              "w-full flex items-center text-gray-700 hover:bg-red-50 hover:text-red-600",
+              isCollapsed ? "justify-center px-2" : "justify-start px-2"
+            )}
+          >
+            <LogOut className="h-4 w-4" />
+            {!isCollapsed && <span className="ml-2">Logout</span>}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
