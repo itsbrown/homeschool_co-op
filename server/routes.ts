@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { nlpService } from "./nlp-service";
 import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
@@ -1132,8 +1133,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
   app.delete('/api/enrollments/:id', isAuthenticated, hasRole(['admin']), programEnrollmentsApi.deleteEnrollment);
   
-  // AI Enrollment Assistant endpoint
-  app.post('/api/ai/enrollment-assistant', isAuthenticated, processEnrollmentMessage);
+  // AI Enrollment Assistant with NLP endpoint
+  app.post('/api/ai/enrollment-assistant', isAuthenticated, async (req, res) => {
+    try {
+      const { message } = req.body;
+      
+      // Use Google Cloud NLP to understand the user's intent
+      const nlpAnalysis = await nlpService.analyzeUserInput(message);
+      
+      // Extract relevant information from the message
+      const extractedInfo = nlpService.extractChildInfo(message, nlpAnalysis.entities);
+      
+      // Generate intelligent response based on intent and sentiment
+      let responseMessage = '';
+      
+      switch (nlpAnalysis.intent) {
+        case 'register_child':
+          responseMessage = generateRegistrationResponse(extractedInfo, nlpAnalysis);
+          break;
+        case 'find_programs':
+          responseMessage = generateProgramResponse(extractedInfo, nlpAnalysis);
+          break;
+        case 'schedule_inquiry':
+          responseMessage = generateScheduleResponse(nlpAnalysis);
+          break;
+        case 'cost_inquiry':
+          responseMessage = generateCostResponse(nlpAnalysis);
+          break;
+        default:
+          responseMessage = generateGeneralResponse(nlpAnalysis);
+      }
+      
+      res.json({
+        response: responseMessage,
+        analysis: nlpAnalysis,
+        extractedInfo
+      });
+      
+    } catch (error) {
+      console.error('NLP Analysis Error:', error);
+      res.status(500).json({ 
+        error: 'Failed to process message',
+        response: "I'm here to help! Could you tell me more about what you're looking for?"
+      });
+    }
+  });
+
+  // Smart response generation functions for conversational AI
+  function generateRegistrationResponse(extractedInfo: any, analysis: any): string {
+    const sentiment = analysis.sentiment;
+    let response = '';
+    
+    if (sentiment === 'positive') {
+      response = "That's wonderful! I'd love to help you register your child. ";
+    } else if (sentiment === 'negative') {
+      response = "I understand this process can be overwhelming. Don't worry, I'm here to make it easy! ";
+    } else {
+      response = "I'm happy to help you with child registration! ";
+    }
+    
+    if (extractedInfo.firstName) {
+      response += `I see you mentioned ${extractedInfo.firstName}. `;
+    }
+    
+    if (extractedInfo.age) {
+      response += `At ${extractedInfo.age} years old, there are some great programs available! `;
+    }
+    
+    response += "To get started, I'll need some basic information. What's your child's full name and age?";
+    
+    return response;
+  }
+  
+  function generateProgramResponse(extractedInfo: any, analysis: any): string {
+    const keywords = analysis.keywords.join(', ');
+    let response = "Great question about our programs! ";
+    
+    if (keywords.includes('art') || keywords.includes('creative')) {
+      response += "We have fantastic art and creative programs that kids absolutely love! ";
+    } else if (keywords.includes('math') || keywords.includes('science')) {
+      response += "Our STEM programs are designed to make learning fun and engaging! ";
+    } else if (keywords.includes('sport') || keywords.includes('physical')) {
+      response += "Our physical education and sports programs help kids stay active and healthy! ";
+    }
+    
+    if (extractedInfo.age) {
+      response += `For a ${extractedInfo.age}-year-old, I'd recommend checking out our age-appropriate options. `;
+    }
+    
+    response += "Would you like me to show you programs by age group or by subject area?";
+    
+    return response;
+  }
+  
+  function generateScheduleResponse(analysis: any): string {
+    const sentiment = analysis.sentiment;
+    let response = '';
+    
+    if (sentiment === 'positive') {
+      response = "I'm excited to help you plan your schedule! ";
+    } else {
+      response = "Let me help you find the perfect timing for your family! ";
+    }
+    
+    response += "Our programs run throughout the week with flexible scheduling options. ";
+    response += "Are you looking for weekday classes, weekend activities, or specific time slots?";
+    
+    return response;
+  }
+  
+  function generateCostResponse(analysis: any): string {
+    let response = "I understand budget is an important consideration for families. ";
+    response += "We offer various pricing options and payment plans to make our programs accessible. ";
+    response += "Many of our programs also offer sibling discounts and scholarship opportunities. ";
+    response += "Would you like me to show you our pricing structure or discuss financial assistance options?";
+    
+    return response;
+  }
+  
+  function generateGeneralResponse(analysis: any): string {
+    const sentiment = analysis.sentiment;
+    let response = '';
+    
+    if (sentiment === 'positive') {
+      response = "Thank you for reaching out! I'm here to help with anything you need. ";
+    } else if (sentiment === 'negative') {
+      response = "I'm sorry if you're having concerns. I'm here to help address any questions or issues. ";
+    } else {
+      response = "Hello! I'm your enrollment assistant and I'm here to help. ";
+    }
+    
+    response += "I can assist with child registration, finding programs, scheduling, costs, and any other questions about our educational opportunities. ";
+    response += "What would you like to know more about?";
+    
+    return response;
+  }
 
   // Register the combined knowledge base endpoint
   app.get("/api/knowledge-base/combined", async (req, res) => {
