@@ -134,6 +134,13 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     setTimeout(() => {
       setMessages(prev => [...prev, response]);
       setIsTyping(false);
+      // Auto-scroll to bottom
+      setTimeout(() => {
+        const scrollArea = document.querySelector('[data-radix-scroll-area-viewport]');
+        if (scrollArea) {
+          scrollArea.scrollTop = scrollArea.scrollHeight;
+        }
+      }, 100);
     }, 800);
   };
 
@@ -273,14 +280,38 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     const zipMatch = address.match(/\b\d{5}(-\d{4})?\b/);
     const zipCode = zipMatch ? zipMatch[0] : '';
     
-    setConversationState('register_school_selection');
-    return {
-      id: Date.now().toString(),
-      content: `Perfect! Now I need to know which school you're registering for. What's your zip code so I can find nearby schools?`,
-      sender: "assistant",
-      timestamp: new Date(),
-      actions: [{ type: 'input', label: 'Zip Code', placeholder: zipCode || 'Enter your zip code (e.g., 12345)' }]
-    };
+    if (zipCode) {
+      // Automatically use extracted zip code and show schools
+      const updatedData = {
+        ...registrationData,
+        zipCode: zipCode
+      };
+      setRegistrationData(updatedData);
+      
+      setConversationState('register_choose_school');
+      return {
+        id: Date.now().toString(),
+        content: `Perfect! I found your zip code **${zipCode}** from your address. Here are the schools in your area. Which school are you registering for?`,
+        sender: "assistant",
+        timestamp: new Date(),
+        actions: [
+          { type: 'button', label: '🏫 American Seekers Academy', value: 'school_1' },
+          { type: 'button', label: '🏛️ Liberty Learning Co-op', value: 'school_2' },
+          { type: 'button', label: '📚 Heritage Homeschool Group', value: 'school_3' },
+          { type: 'button', label: '🎓 Wisdom Academy', value: 'school_4' },
+          { type: 'input', label: 'Other School', placeholder: 'Enter school name if not listed' }
+        ]
+      };
+    } else {
+      setConversationState('register_school_selection');
+      return {
+        id: Date.now().toString(),
+        content: `Perfect! Now I need to know which school you're registering for. What's your zip code so I can find nearby schools?`,
+        sender: "assistant",
+        timestamp: new Date(),
+        actions: [{ type: 'input', label: 'Zip Code', placeholder: 'Enter your zip code (e.g., 12345)' }]
+      };
+    }
   };
 
   const handleSchoolSelectionInput = async (zipCode: string): Promise<Message> => {
