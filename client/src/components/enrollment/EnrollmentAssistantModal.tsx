@@ -99,6 +99,12 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
       case 'register_home_address':
         response = await handleHomeAddressInput(userInput!);
         break;
+      case 'register_school_selection':
+        response = await handleSchoolSelectionInput(userInput!);
+        break;
+      case 'register_choose_school':
+        response = await handleSchoolChoiceSelection(userInput || actionValue);
+        break;
       case 'register_emergency_contact1':
         response = await handleEmergencyContact1Input(userInput!);
         break;
@@ -256,10 +262,82 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     };
     setRegistrationData(updatedData);
     
+    // Extract zip code from address for school matching
+    const zipMatch = address.match(/\b\d{5}(-\d{4})?\b/);
+    const zipCode = zipMatch ? zipMatch[0] : '';
+    
+    setConversationState('register_school_selection');
+    return {
+      id: Date.now().toString(),
+      content: `Perfect! Now I need to know which school you're registering for. What's your zip code so I can find nearby schools?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [{ type: 'input', label: 'Zip Code', placeholder: zipCode || 'Enter your zip code (e.g., 12345)' }]
+    };
+  };
+
+  const handleSchoolSelectionInput = async (zipCode: string): Promise<Message> => {
+    const updatedData = {
+      ...registrationData,
+      zipCode: zipCode
+    };
+    setRegistrationData(updatedData);
+    
+    // In a real implementation, you would fetch schools by zip code
+    // For now, showing sample schools
+    setConversationState('register_choose_school');
+    return {
+      id: Date.now().toString(),
+      content: `Great! Here are the schools in your area (${zipCode}). Which school are you registering for?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [
+        { type: 'button', label: '🏫 American Seekers Academy', value: 'school_1' },
+        { type: 'button', label: '🏛️ Liberty Learning Co-op', value: 'school_2' },
+        { type: 'button', label: '📚 Heritage Homeschool Group', value: 'school_3' },
+        { type: 'button', label: '🎓 Wisdom Academy', value: 'school_4' },
+        { type: 'input', label: 'Other School', placeholder: 'Enter school name if not listed' }
+      ]
+    };
+  };
+
+  const handleSchoolChoiceSelection = async (schoolChoice: string): Promise<Message> => {
+    let schoolName = '';
+    let schoolId = null;
+    
+    switch (schoolChoice) {
+      case 'school_1':
+        schoolName = 'American Seekers Academy';
+        schoolId = 1;
+        break;
+      case 'school_2':
+        schoolName = 'Liberty Learning Co-op';
+        schoolId = 2;
+        break;
+      case 'school_3':
+        schoolName = 'Heritage Homeschool Group';
+        schoolId = 3;
+        break;
+      case 'school_4':
+        schoolName = 'Wisdom Academy';
+        schoolId = 4;
+        break;
+      default:
+        schoolName = schoolChoice; // Custom school name entered
+        schoolId = null;
+    }
+    
+    const updatedData = {
+      ...registrationData,
+      selectedSchool: schoolName,
+      selectedSchoolId: schoolId
+    };
+    setRegistrationData(updatedData);
+    
     setConversationState('register_emergency_contact1');
     return {
       id: Date.now().toString(),
-      content: `Now I need emergency contact information. Who should we contact first in case of an emergency?`,
+      content: `Excellent! You've selected **${schoolName}**. Now I need emergency contact information. Who should we contact first in case of an emergency?`,
       sender: "assistant",
       timestamp: new Date(),
       actions: [{ type: 'input', label: 'Emergency Contact 1 (Name & Phone)', placeholder: 'e.g., Grandma Sarah - (555) 123-4567' }]
@@ -342,7 +420,7 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
   const showRegistrationConfirmation = async (): Promise<Message> => {
     return {
       id: Date.now().toString(),
-      content: `Perfect! Let me confirm all the details:\n\n**Child Information:**\n• **Name:** ${registrationData.firstName} ${registrationData.lastName}\n• **Age:** ${registrationData.age}\n• **Gender:** ${registrationData.gender}\n• **Grade:** ${registrationData.gradeLevel}\n\n**Contact Information:**\n• **Parent Phone:** ${registrationData.parentPhone}\n• **Home Address:** ${registrationData.homeAddress}\n• **Emergency Contact 1:** ${registrationData.emergencyContact1}\n• **Emergency Contact 2:** ${registrationData.emergencyContact2}\n\n**Medical/Special Needs:**\n• **Medical Info:** ${registrationData.medicalInfo || 'None'}\n• **Caregiver:** ${registrationData.caregiverInfo || 'None'}\n\nShould I register ${registrationData.firstName} with this information?`,
+      content: `Perfect! Let me confirm all the details:\n\n**Child Information:**\n• **Name:** ${registrationData.firstName} ${registrationData.lastName}\n• **Age:** ${registrationData.age}\n• **Gender:** ${registrationData.gender}\n• **Grade:** ${registrationData.gradeLevel}\n\n**School Selection:**\n• **School:** ${registrationData.selectedSchool}\n• **Zip Code:** ${registrationData.zipCode}\n\n**Contact Information:**\n• **Parent Phone:** ${registrationData.parentPhone}\n• **Home Address:** ${registrationData.homeAddress}\n• **Emergency Contact 1:** ${registrationData.emergencyContact1}\n• **Emergency Contact 2:** ${registrationData.emergencyContact2}\n\n**Medical/Special Needs:**\n• **Medical Info:** ${registrationData.medicalInfo || 'None'}\n• **Caregiver:** ${registrationData.caregiverInfo || 'None'}\n\nShould I register ${registrationData.firstName} at ${registrationData.selectedSchool} with this information?`,
       sender: "assistant",
       timestamp: new Date(),
       actions: [
