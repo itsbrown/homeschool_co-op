@@ -93,6 +93,24 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
       case 'register_child_grade':
         response = await handleChildGradeInput(userInput!);
         break;
+      case 'register_parent_contact':
+        response = await handleParentContactInput(userInput!);
+        break;
+      case 'register_home_address':
+        response = await handleHomeAddressInput(userInput!);
+        break;
+      case 'register_emergency_contact1':
+        response = await handleEmergencyContact1Input(userInput!);
+        break;
+      case 'register_emergency_contact2':
+        response = await handleEmergencyContact2Input(userInput!);
+        break;
+      case 'register_medical_info':
+        response = await handleMedicalInfoInput(userInput || actionValue);
+        break;
+      case 'register_caregiver_info':
+        response = await handleCaregiverInfoInput(userInput || actionValue);
+        break;
       case 'register_child_confirm':
         response = await handleRegistrationConfirmation(actionValue);
         break;
@@ -204,10 +222,127 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     };
     setRegistrationData(updatedData);
     
-    setConversationState('register_child_confirm');
+    setConversationState('register_parent_contact');
     return {
       id: Date.now().toString(),
-      content: `Perfect! Let me confirm the details:\n\n• **Name:** ${updatedData.firstName} ${updatedData.lastName}\n• **Age:** ${updatedData.age}\n• **Gender:** ${updatedData.gender}\n• **Grade:** ${updatedData.gradeLevel}\n\nShould I register ${updatedData.firstName} now?`,
+      content: `Great! Now I need some contact information. What's the best phone number to reach you?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [{ type: 'input', label: 'Parent Phone Number', placeholder: 'Enter your phone number' }]
+    };
+  };
+
+  const handleParentContactInput = async (phone: string): Promise<Message> => {
+    const updatedData = {
+      ...registrationData,
+      parentPhone: phone
+    };
+    setRegistrationData(updatedData);
+    
+    setConversationState('register_home_address');
+    return {
+      id: Date.now().toString(),
+      content: `Perfect! What's your home address?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [{ type: 'input', label: 'Home Address', placeholder: 'Enter your full home address' }]
+    };
+  };
+
+  const handleHomeAddressInput = async (address: string): Promise<Message> => {
+    const updatedData = {
+      ...registrationData,
+      homeAddress: address
+    };
+    setRegistrationData(updatedData);
+    
+    setConversationState('register_emergency_contact1');
+    return {
+      id: Date.now().toString(),
+      content: `Now I need emergency contact information. Who should we contact first in case of an emergency?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [{ type: 'input', label: 'Emergency Contact 1 (Name & Phone)', placeholder: 'e.g., Grandma Sarah - (555) 123-4567' }]
+    };
+  };
+
+  const handleEmergencyContact1Input = async (contact1: string): Promise<Message> => {
+    const updatedData = {
+      ...registrationData,
+      emergencyContact1: contact1
+    };
+    setRegistrationData(updatedData);
+    
+    setConversationState('register_emergency_contact2');
+    return {
+      id: Date.now().toString(),
+      content: `And who should we contact as a second emergency contact?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [{ type: 'input', label: 'Emergency Contact 2 (Name & Phone)', placeholder: 'e.g., Uncle Mike - (555) 987-6543' }]
+    };
+  };
+
+  const handleEmergencyContact2Input = async (contact2: string): Promise<Message> => {
+    const updatedData = {
+      ...registrationData,
+      emergencyContact2: contact2
+    };
+    setRegistrationData(updatedData);
+    
+    setConversationState('register_medical_info');
+    return {
+      id: Date.now().toString(),
+      content: `Does ${registrationData.firstName} have any allergies, medical conditions, or special needs we should know about?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [
+        { type: 'button', label: 'No special needs', value: 'no_special_needs' },
+        { type: 'input', label: 'Medical/Special Needs Info', placeholder: 'Describe any allergies, conditions, or special needs' }
+      ]
+    };
+  };
+
+  const handleMedicalInfoInput = async (medicalInfo: string): Promise<Message> => {
+    const updatedData = {
+      ...registrationData,
+      medicalInfo: medicalInfo === 'no_special_needs' ? 'None' : medicalInfo
+    };
+    setRegistrationData(updatedData);
+    
+    if (medicalInfo !== 'no_special_needs' && medicalInfo.toLowerCase().includes('special need')) {
+      setConversationState('register_caregiver_info');
+      return {
+        id: Date.now().toString(),
+        content: `Will there be a special needs caregiver accompanying ${registrationData.firstName}? If so, what's their name and when will they be present?`,
+        sender: "assistant",
+        timestamp: new Date(),
+        actions: [
+          { type: 'button', label: 'No caregiver needed', value: 'no_caregiver' },
+          { type: 'input', label: 'Caregiver Info', placeholder: 'Name and schedule (e.g., Jane Doe - Mondays & Wednesdays)' }
+        ]
+      };
+    } else {
+      setConversationState('register_child_confirm');
+      return await showRegistrationConfirmation();
+    }
+  };
+
+  const handleCaregiverInfoInput = async (caregiverInfo: string): Promise<Message> => {
+    const updatedData = {
+      ...registrationData,
+      caregiverInfo: caregiverInfo === 'no_caregiver' ? 'None' : caregiverInfo
+    };
+    setRegistrationData(updatedData);
+    
+    setConversationState('register_child_confirm');
+    return await showRegistrationConfirmation();
+  };
+
+  const showRegistrationConfirmation = async (): Promise<Message> => {
+    return {
+      id: Date.now().toString(),
+      content: `Perfect! Let me confirm all the details:\n\n**Child Information:**\n• **Name:** ${registrationData.firstName} ${registrationData.lastName}\n• **Age:** ${registrationData.age}\n• **Gender:** ${registrationData.gender}\n• **Grade:** ${registrationData.gradeLevel}\n\n**Contact Information:**\n• **Parent Phone:** ${registrationData.parentPhone}\n• **Home Address:** ${registrationData.homeAddress}\n• **Emergency Contact 1:** ${registrationData.emergencyContact1}\n• **Emergency Contact 2:** ${registrationData.emergencyContact2}\n\n**Medical/Special Needs:**\n• **Medical Info:** ${registrationData.medicalInfo || 'None'}\n• **Caregiver:** ${registrationData.caregiverInfo || 'None'}\n\nShould I register ${registrationData.firstName} with this information?`,
       sender: "assistant",
       timestamp: new Date(),
       actions: [
@@ -227,9 +362,11 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
           gender: registrationData.gender,
           gradeLevel: registrationData.gradeLevel || '',
           interests: '',
-          medicalInfo: '',
-          emergencyContact: '',
-          specialNeeds: ''
+          medicalInfo: registrationData.medicalInfo || '',
+          emergencyContact: `${registrationData.emergencyContact1 || ''} | ${registrationData.emergencyContact2 || ''}`,
+          specialNeeds: registrationData.caregiverInfo || '',
+          parentPhone: registrationData.parentPhone || '',
+          homeAddress: registrationData.homeAddress || ''
         });
         
         setRegistrationData({});
