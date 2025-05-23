@@ -426,15 +426,21 @@ router.post("/firebase-sync", async (req, res) => {
     let userId = 1; // Default ID
     
     // Handle specific test accounts with proper roles
+    console.log('Checking email for role assignment:', email);
     if (email === 'schooladmin@test.com') {
+      console.log('FOUND schooladmin@test.com - assigning admin role!');
       userRole = 'admin';
       userId = 1;
     } else if (email === 'educator@test.com') {
+      console.log('FOUND educator@test.com - assigning educator role!');
       userRole = 'educator';  
       userId = 2;
     } else if (email === 'parent@test.com') {
+      console.log('FOUND parent@test.com - assigning parent role!');
       userRole = 'parent';
       userId = 3;
+    } else {
+      console.log('Email not found in test accounts, using default parent role');
     }
     
     const userData = {
