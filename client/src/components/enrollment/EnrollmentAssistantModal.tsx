@@ -53,92 +53,249 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     },
   });
 
-  const processUserMessage = async (userInput: string) => {
-    setIsTyping(true);
-    
-    const lowerInput = userInput.toLowerCase();
-    
-    // Check for registration intent
-    const isRegistrationIntent = lowerInput.includes('register') ||
-                                lowerInput.includes('add') ||
-                                lowerInput.includes('new child') ||
-                                lowerInput.includes('sign up');
-    
-    let response = "";
+  // Initialize welcome message when modal opens
+  const initializeConversation = () => {
+    if (messages.length === 0) {
+      const welcomeMessage: Message = {
+        id: "welcome",
+        content: "Hi! I'm your Enrollment Assistant. I can help you with:",
+        sender: "assistant",
+        timestamp: new Date(),
+        actions: [
+          { type: 'button', label: '👶 Register a New Child', value: 'register_child' },
+          { type: 'button', label: '🔍 Find Programs', value: 'find_programs' },
+          { type: 'button', label: '📅 Schedule Classes', value: 'schedule_classes' },
+          { type: 'button', label: '💰 Payment Help', value: 'payment_help' }
+        ]
+      };
+      setMessages([welcomeMessage]);
+    }
+  };
 
-    if (isRegistrationIntent || registrationData) {
-      // We're in registration mode
-      if (!registrationData) {
-        // Start new registration - extract initial info
-        const newRegData = extractChildInfo(userInput);
-        setRegistrationData(newRegData);
-        response = buildRegistrationResponse(newRegData);
-      } else {
-        // Continue registration with additional info
-        response = await handleRegistrationStep(userInput, registrationData);
-      }
-    } else {
-      // General enrollment assistance
-      response = await handleGeneralInquiry(userInput);
+  const handleAction = async (actionValue: string, userInput?: string) => {
+    setIsTyping(true);
+
+    let response: Message;
+
+    switch (conversationState) {
+      case 'welcome':
+        response = await handleWelcomeAction(actionValue);
+        break;
+      case 'register_child_name':
+        response = await handleChildNameInput(userInput!);
+        break;
+      case 'register_child_age':
+        response = await handleChildAgeInput(userInput!);
+        break;
+      case 'register_child_gender':
+        response = await handleChildGenderSelection(actionValue);
+        break;
+      case 'register_child_grade':
+        response = await handleChildGradeInput(userInput!);
+        break;
+      case 'register_child_confirm':
+        response = await handleRegistrationConfirmation(actionValue);
+        break;
+      default:
+        response = await handleDefaultAction(actionValue, userInput);
     }
 
     setTimeout(() => {
-      const assistantMessage: Message = {
-        id: Date.now().toString(),
-        content: response,
-        sender: "assistant",
-        timestamp: new Date(),
-        registrationData: registrationData
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, response]);
       setIsTyping(false);
-    }, 1500);
+    }, 800);
   };
 
-  const extractChildInfo = (input: string) => {
-    const data: any = {};
+  // Conversation flow handlers
+  const handleWelcomeAction = async (actionValue: string): Promise<Message> => {
+    switch (actionValue) {
+      case 'register_child':
+        setConversationState('register_child_name');
+        return {
+          id: Date.now().toString(),
+          content: "Great! Let's register your child. What's their first and last name?",
+          sender: "assistant",
+          timestamp: new Date(),
+          actions: [{ type: 'input', label: 'Child\'s Name', placeholder: 'Enter first and last name' }]
+        };
+      case 'find_programs':
+        return {
+          id: Date.now().toString(),
+          content: "I can help you find programs! What age group or interests are you looking for?",
+          sender: "assistant",
+          timestamp: new Date(),
+          actions: [
+            { type: 'button', label: 'Ages 5-8', value: 'programs_5_8' },
+            { type: 'button', label: 'Ages 9-12', value: 'programs_9_12' },
+            { type: 'button', label: 'Ages 13+', value: 'programs_13_plus' }
+          ]
+        };
+      default:
+        return {
+          id: Date.now().toString(),
+          content: "I'd be happy to help with that! This feature is coming soon. For now, I can help you register a child or find programs.",
+          sender: "assistant",
+          timestamp: new Date(),
+          actions: [
+            { type: 'button', label: '🔙 Back to Main Menu', value: 'back_to_main' }
+          ]
+        };
+    }
+  };
+
+  const handleChildNameInput = async (name: string): Promise<Message> => {
+    const nameParts = name.trim().split(' ');
+    setRegistrationData({
+      ...registrationData,
+      firstName: nameParts[0],
+      lastName: nameParts.slice(1).join(' ') || ''
+    });
     
-    // Extract name - look for various patterns
-    const namePatterns = [
-      /(?:her name is|his name is|name is|called|named)\s+([A-Za-z\s]+?)(?:\s+(?:she's|he's|and|,))/i,
-      /([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+(?:she's|he's|is))/,
-      /^([A-Z][a-z]+\s+[A-Z][a-z]+)/  // Names at start of message
-    ];
+    setConversationState('register_child_age');
+    return {
+      id: Date.now().toString(),
+      content: `Perfect! How old is ${nameParts[0]}?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [{ type: 'input', label: 'Age', placeholder: 'Enter age (e.g., 9)' }]
+    };
+  };
+
+  const handleChildAgeInput = async (age: string): Promise<Message> => {
+    const ageNum = parseInt(age);
+    setRegistrationData({
+      ...registrationData,
+      age: ageNum
+    });
     
-    for (const pattern of namePatterns) {
-      const match = input.match(pattern);
-      if (match) {
-        const fullName = match[1].trim();
-        const nameParts = fullName.split(' ');
-        data.firstName = nameParts[0];
-        if (nameParts.length > 1) {
-          data.lastName = nameParts.slice(1).join(' ');
-        }
-        break;
+    setConversationState('register_child_gender');
+    return {
+      id: Date.now().toString(),
+      content: `Got it! What's ${registrationData.firstName}'s gender?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [
+        { type: 'button', label: 'Female', value: 'Female' },
+        { type: 'button', label: 'Male', value: 'Male' }
+      ]
+    };
+  };
+
+  const handleChildGenderSelection = async (gender: string): Promise<Message> => {
+    setRegistrationData({
+      ...registrationData,
+      gender
+    });
+    
+    setConversationState('register_child_grade');
+    return {
+      id: Date.now().toString(),
+      content: `What grade level is ${registrationData.firstName} in?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [{ type: 'input', label: 'Grade Level', placeholder: 'Enter grade (e.g., 4th grade, K, PreK)' }]
+    };
+  };
+
+  const handleChildGradeInput = async (grade: string): Promise<Message> => {
+    const updatedData = {
+      ...registrationData,
+      gradeLevel: grade
+    };
+    setRegistrationData(updatedData);
+    
+    setConversationState('register_child_confirm');
+    return {
+      id: Date.now().toString(),
+      content: `Perfect! Let me confirm the details:\n\n• **Name:** ${updatedData.firstName} ${updatedData.lastName}\n• **Age:** ${updatedData.age}\n• **Gender:** ${updatedData.gender}\n• **Grade:** ${updatedData.gradeLevel}\n\nShould I register ${updatedData.firstName} now?`,
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [
+        { type: 'button', label: '✅ Yes, Register', value: 'confirm_register' },
+        { type: 'button', label: '📝 Edit Details', value: 'edit_details' }
+      ]
+    };
+  };
+
+  const handleRegistrationConfirmation = async (action: string): Promise<Message> => {
+    if (action === 'confirm_register') {
+      try {
+        await registerChildMutation.mutateAsync({
+          firstName: registrationData.firstName,
+          lastName: registrationData.lastName || '',
+          age: registrationData.age,
+          gender: registrationData.gender,
+          gradeLevel: registrationData.gradeLevel || '',
+          interests: '',
+          medicalInfo: '',
+          emergencyContact: '',
+          specialNeeds: ''
+        });
+        
+        setRegistrationData({});
+        setConversationState('welcome');
+        
+        return {
+          id: Date.now().toString(),
+          content: `🎉 **Registration Complete!**\n\n${registrationData.firstName} has been successfully registered! You can now:\n\n• Browse programs in your dashboard\n• Schedule classes and activities\n• Manage their profile\n\nWould you like to find programs for ${registrationData.firstName}?`,
+          sender: "assistant",
+          timestamp: new Date(),
+          actions: [
+            { type: 'button', label: '🔍 Find Programs', value: 'find_programs' },
+            { type: 'button', label: '👶 Register Another Child', value: 'register_child' },
+            { type: 'button', label: '🏠 Back to Main Menu', value: 'back_to_main' }
+          ]
+        };
+      } catch (error) {
+        return {
+          id: Date.now().toString(),
+          content: `I'm sorry, there was an issue completing the registration. Please try again or use the regular registration form.`,
+          sender: "assistant",
+          timestamp: new Date(),
+          actions: [
+            { type: 'button', label: '🔄 Try Again', value: 'register_child' },
+            { type: 'button', label: '🏠 Back to Main Menu', value: 'back_to_main' }
+          ]
+        };
       }
+    } else {
+      setConversationState('register_child_name');
+      return {
+        id: Date.now().toString(),
+        content: "No problem! Let's start over. What's your child's first and last name?",
+        sender: "assistant",
+        timestamp: new Date(),
+        actions: [{ type: 'input', label: 'Child\'s Name', placeholder: 'Enter first and last name' }]
+      };
+    }
+  };
+
+  const handleDefaultAction = async (actionValue: string, userInput?: string): Promise<Message> => {
+    if (actionValue === 'back_to_main') {
+      setConversationState('welcome');
+      return {
+        id: "welcome-return",
+        content: "How can I help you today?",
+        sender: "assistant",
+        timestamp: new Date(),
+        actions: [
+          { type: 'button', label: '👶 Register a New Child', value: 'register_child' },
+          { type: 'button', label: '🔍 Find Programs', value: 'find_programs' },
+          { type: 'button', label: '📅 Schedule Classes', value: 'schedule_classes' },
+          { type: 'button', label: '💰 Payment Help', value: 'payment_help' }
+        ]
+      };
     }
     
-    // Extract age
-    const ageMatch = input.match(/(?:she's|he's|is|age)\s*(\d+)|(\d+)\s*(?:years?\s*old|and)/i);
-    if (ageMatch) {
-      data.age = parseInt(ageMatch[1] || ageMatch[2]);
-    }
-    
-    // Extract grade
-    const gradeMatch = input.match(/(?:grade|starting|in)\s*(?:the\s*)?(\d+)(?:st|nd|rd|th)?\s*grade/i);
-    if (gradeMatch) {
-      data.gradeLevel = gradeMatch[1];
-    }
-    
-    // Detect gender from pronouns and context
-    if (input.match(/\b(?:she|her|daughter|girl)\b/i)) {
-      data.gender = 'Female';
-    } else if (input.match(/\b(?:he|his|him|son|boy)\b/i)) {
-      data.gender = 'Male';
-    }
-    
-    return data;
+    return {
+      id: Date.now().toString(),
+      content: "I'm here to help! Please choose an option from the menu.",
+      sender: "assistant",
+      timestamp: new Date(),
+      actions: [
+        { type: 'button', label: '🏠 Back to Main Menu', value: 'back_to_main' }
+      ]
+    };
   };
 
   const buildRegistrationResponse = (regData: any) => {
