@@ -6,10 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Sparkles, Bot } from "lucide-react";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import EnrollmentAssistantModal from "@/components/enrollment/EnrollmentAssistantModal";
 
 export default function ParentDashboard() {
   const { user } = useFirebaseAuth();
   const [activeTab, setActiveTab] = useState("overview");
+  const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
 
   // Fetch children data
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
@@ -324,53 +326,45 @@ export default function ParentDashboard() {
                 <Button 
                   variant="outline" 
                   className="h-auto p-4 text-left flex flex-col items-start gap-2"
-                  asChild
+                  onClick={() => setIsAssistantModalOpen(true)}
                 >
-                  <Link href="/enrollment-assistant">
-                    <span className="font-medium">Find Programs for My Child</span>
-                    <span className="text-sm text-muted-foreground">
-                      "I'm looking for STEM programs for my 8-year-old daughter who loves building things"
-                    </span>
-                  </Link>
+                  <span className="font-medium">Find Programs for My Child</span>
+                  <span className="text-sm text-muted-foreground">
+                    "I'm looking for STEM programs for my 8-year-old daughter who loves building things"
+                  </span>
                 </Button>
                 
                 <Button 
                   variant="outline" 
                   className="h-auto p-4 text-left flex flex-col items-start gap-2"
-                  asChild
+                  onClick={() => setIsAssistantModalOpen(true)}
                 >
-                  <Link href="/enrollment-assistant">
-                    <span className="font-medium">Compare Program Options</span>
-                    <span className="text-sm text-muted-foreground">
-                      "What's the difference between the morning and afternoon art classes?"
-                    </span>
-                  </Link>
+                  <span className="font-medium">Compare Program Options</span>
+                  <span className="text-sm text-muted-foreground">
+                    "What's the difference between the morning and afternoon art classes?"
+                  </span>
                 </Button>
                 
                 <Button 
                   variant="outline" 
                   className="h-auto p-4 text-left flex flex-col items-start gap-2"
-                  asChild
+                  onClick={() => setIsAssistantModalOpen(true)}
                 >
-                  <Link href="/enrollment-assistant">
-                    <span className="font-medium">Get Scheduling Help</span>
-                    <span className="text-sm text-muted-foreground">
-                      "Can you help me coordinate classes for two children with different interests?"
-                    </span>
-                  </Link>
+                  <span className="font-medium">Get Scheduling Help</span>
+                  <span className="text-sm text-muted-foreground">
+                    "Can you help me coordinate classes for two children with different interests?"
+                  </span>
                 </Button>
                 
                 <Button 
                   variant="outline" 
                   className="h-auto p-4 text-left flex flex-col items-start gap-2"
-                  asChild
+                  onClick={() => setIsAssistantModalOpen(true)}
                 >
-                  <Link href="/enrollment-assistant">
-                    <span className="font-medium">Budget Planning</span>
-                    <span className="text-sm text-muted-foreground">
-                      "What programs fit within my $200/month budget for both kids?"
-                    </span>
-                  </Link>
+                  <span className="font-medium">Budget Planning</span>
+                  <span className="text-sm text-muted-foreground">
+                    "What programs fit within my $200/month budget for both kids?"
+                  </span>
                 </Button>
               </div>
               
@@ -390,14 +384,18 @@ export default function ParentDashboard() {
 
       {/* Floating AI Assistant Button - Fixed Position */}
       <Button
-        asChild
+        onClick={() => setIsAssistantModalOpen(true)}
         className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
       >
-        <Link href="/enrollment-assistant">
-          <Bot className="h-6 w-6" />
-          <span className="sr-only">AI Enrollment Assistant</span>
-        </Link>
+        <Bot className="h-6 w-6" />
+        <span className="sr-only">AI Enrollment Assistant</span>
       </Button>
+      
+      {/* AI Assistant Modal */}
+      <EnrollmentAssistantModal 
+        isOpen={isAssistantModalOpen} 
+        onClose={() => setIsAssistantModalOpen(false)} 
+      />
     </div>
   );
 }
