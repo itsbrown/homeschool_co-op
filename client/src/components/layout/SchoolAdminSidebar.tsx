@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { School, Calendar, Users, BookOpen, ChevronLeft, Menu } from "lucide-react";
+import { School, Calendar, Users, BookOpen, ChevronLeft, Menu, Home, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { apiRequest } from "@/lib/queryClient";
 
 interface SidebarProps {
   className?: string;
@@ -11,6 +13,16 @@ interface SidebarProps {
 export default function SchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { user, isAuthenticated } = useFirebaseAuth();
+
+  const handleLogout = async () => {
+    try {
+      await apiRequest('POST', '/api/auth/logout');
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   const schoolNavItems = [
     {
