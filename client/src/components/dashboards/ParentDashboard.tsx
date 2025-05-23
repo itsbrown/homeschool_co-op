@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Sparkles, Bot } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard } from "lucide-react";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import EnrollmentAssistantModal from "@/components/enrollment/EnrollmentAssistantModal";
 
@@ -16,41 +16,33 @@ export default function ParentDashboard() {
   // Fetch children data
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
     queryKey: ["/api/children"],
-    queryFn: () => fetch("/api/children").then(res => res.json()).catch(() => []),
-    // Ensure we always have an array, even if the API returns something else
-    select: (data) => Array.isArray(data) ? data : [],
   });
 
   // Fetch enrollments data
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/enrollments"],
-    queryFn: () => {
-      if (!childrenData) return Promise.resolve([]);
-      const childIds = childrenData.map(child => child.id);
-      return fetch(`/api/enrollments?childIds=${childIds.join(',')}`).then(res => res.json()).catch(() => []);
-    },
-    enabled: !!childrenData,
-  });
-  
-  // Fetch payment data for overview
-  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
-    queryKey: ["/api/payments/summary"],
-    queryFn: () => 
-      fetch("/api/payments/summary")
-        .then(res => res.json())
-        .catch(() => ({ pendingCount: 0 })),
   });
 
-  const { data: upcomingEventsData, isLoading: eventsLoading } = useQuery({
+  // Fetch upcoming events
+  const { data: eventsData, isLoading: eventsLoading } = useQuery({
     queryKey: ["/api/events/upcoming"],
-    queryFn: () => fetch("/api/events/upcoming").then(res => res.json()).catch(() => []),
+  });
+
+  // Fetch payment summary
+  const { data: paymentData, isLoading: paymentLoading } = useQuery({
+    queryKey: ["/api/payments/summary"],
   });
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Parent Dashboard</h1>
-        <div className="flex gap-2">
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold">Parent Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Welcome back, {user?.displayName || "Parent"}! Manage your children's education journey.
+          </p>
+        </div>
+        <div className="flex space-x-2">
           <Button asChild>
             <Link href="/children/register">
               <PlusCircle className="mr-2 h-4 w-4" />
@@ -73,71 +65,64 @@ export default function ParentDashboard() {
       </div>
 
       <Tabs defaultValue="overview" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="children">Children</TabsTrigger>
           <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
-          <TabsTrigger value="ai-assistant">
-            <Bot className="mr-1 h-4 w-4" />
-            AI Assistant
-          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <TabsContent value="overview" className="space-y-6">
+          {/* Stats Cards Row */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card>
-              <CardHeader className="pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">My Children</CardTitle>
+                <User className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{childrenLoading ? "Loading..." : childrenData?.length || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Registered children
-                </p>
+                <div className="text-2xl font-bold">{childrenData?.length || 0}</div>
+                <p className="text-xs text-muted-foreground">Registered children</p>
               </CardContent>
             </Card>
-            
+
             <Card>
-              <CardHeader className="pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Enrollments</CardTitle>
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{enrollmentsLoading ? "Loading..." : enrollmentsData?.length || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Active program enrollments
-                </p>
+                <div className="text-2xl font-bold">{enrollmentsData?.length || 0}</div>
+                <p className="text-xs text-muted-foreground">Active program enrollments</p>
               </CardContent>
             </Card>
-            
+
             <Card>
-              <CardHeader className="pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Upcoming Events</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{eventsLoading ? "Loading..." : upcomingEventsData?.length || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  In the next 7 days
-                </p>
+                <div className="text-2xl font-bold">{eventsData?.length || 0}</div>
+                <p className="text-xs text-muted-foreground">in the next 7 days</p>
               </CardContent>
             </Card>
-            
+
             <Card>
-              <CardHeader className="pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Payments</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {paymentsLoading ? "Loading..." : paymentsData?.pendingCount || 0}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Pending payments
-                </p>
+                <div className="text-2xl font-bold">{paymentData?.pending || 0}</div>
+                <p className="text-xs text-muted-foreground">Pending payments</p>
               </CardContent>
             </Card>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Upcoming Events */}
             <Card>
               <CardHeader>
                 <CardTitle>Upcoming Events</CardTitle>
@@ -145,64 +130,75 @@ export default function ParentDashboard() {
               </CardHeader>
               <CardContent>
                 {eventsLoading ? (
-                  <div className="text-center py-8">Loading upcoming events...</div>
-                ) : upcomingEventsData?.length === 0 ? (
+                  <div className="text-center py-8">Loading events...</div>
+                ) : eventsData?.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <Calendar className="h-12 w-12 mx-auto mb-2" />
+                    <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
                     <p>No upcoming events scheduled</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {(Array.isArray(upcomingEventsData) ? upcomingEventsData : []).slice(0, 3).map((event, index) => (
-                      <div key={index} className="flex justify-between items-center p-4 border rounded-lg">
-                        <div>
-                          <h3 className="font-medium">{event.title}</h3>
-                          <p className="text-sm text-muted-foreground">{new Date(event.startDate).toLocaleDateString()}</p>
+                  <div className="space-y-3">
+                    {eventsData?.map((event: any) => (
+                      <div key={event.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                        <div className="flex-shrink-0">
+                          <Calendar className="h-4 w-4 text-blue-600" />
                         </div>
-                        <Button size="sm" variant="outline" asChild>
-                          <Link href={`/events/${event.id}`}>View</Link>
-                        </Button>
+                        <div className="flex-1">
+                          <p className="font-medium">{event.title}</p>
+                          <p className="text-sm text-muted-foreground">{event.date}</p>
+                        </div>
                       </div>
                     ))}
-                    <div className="flex justify-end mt-2">
-                      <Button variant="link" asChild>
-                        <Link href="/events">View All Events</Link>
-                      </Button>
-                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
-            
+
+            {/* Quick Actions */}
             <Card>
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Common parent tasks</CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
-                <Button variant="default" asChild className="h-24 flex flex-col gap-2 w-full bg-primary/90 hover:bg-primary">
-                  <Link href="/enrollment-assistant">
-                    <Bot className="h-6 w-6 mb-1" />
-                    <span>AI Enrollment Assistant</span>
-                    <span className="text-xs mt-1 opacity-80">Register & find programs</span>
+              <CardContent className="space-y-3">
+                <Button 
+                  onClick={() => setIsAssistantModalOpen(true)}
+                  className="w-full justify-start h-auto p-4"
+                >
+                  <Bot className="mr-3 h-5 w-5" />
+                  <div className="text-left">
+                    <div className="font-medium">AI Enrollment Assistant</div>
+                    <div className="text-sm opacity-90">Register & find programs</div>
+                  </div>
+                </Button>
+
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4">
+                  <Link href="/children">
+                    <UserPlus className="mr-3 h-5 w-5" />
+                    <div className="text-left">
+                      <div className="font-medium">My Children</div>
+                      <div className="text-sm text-muted-foreground">Manage profiles</div>
+                    </div>
                   </Link>
                 </Button>
-                <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
-                  <a href="/children/view">
-                    <User className="h-5 w-5 mb-1" />
-                    <span>My Children</span>
-                  </a>
-                </Button>
-                <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
+
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4">
                   <Link href="/enrollments">
-                    <BookOpen className="h-5 w-5 mb-1" />
-                    <span>Enrollments</span>
+                    <BookOpen className="mr-3 h-5 w-5" />
+                    <div className="text-left">
+                      <div className="font-medium">Enrollments</div>
+                      <div className="text-sm text-muted-foreground">View program status</div>
+                    </div>
                   </Link>
                 </Button>
-                <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
+
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4">
                   <Link href="/payments">
-                    <DollarSign className="h-5 w-5 mb-1" />
-                    <span>Payments</span>
+                    <CreditCard className="mr-3 h-5 w-5" />
+                    <div className="text-left">
+                      <div className="font-medium">Payments</div>
+                      <div className="text-sm text-muted-foreground">Manage billing</div>
+                    </div>
                   </Link>
                 </Button>
               </CardContent>
@@ -214,29 +210,29 @@ export default function ParentDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>My Children</CardTitle>
-              <CardDescription>Manage your children's profiles</CardDescription>
+              <CardDescription>Manage your children's profiles and information</CardDescription>
             </CardHeader>
             <CardContent>
               {childrenLoading ? (
-                <div className="text-center py-8">Loading children profiles...</div>
+                <div className="text-center py-8">Loading children information...</div>
               ) : childrenData?.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <User className="h-12 w-12 mx-auto mb-2" />
                   <p>No children registered yet</p>
                   <Button className="mt-4" asChild>
-                    <Link href="/children/register">Register a Child</Link>
+                    <Link href="/children/register">Register Your First Child</Link>
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {childrenData?.map((child, index) => (
-                    <div key={index} className="flex justify-between items-center p-4 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="h-5 w-5 text-primary" />
+                  {childrenData?.map((child: any) => (
+                    <div key={child.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                          <User className="h-5 w-5 text-blue-600" />
                         </div>
                         <div>
-                          <h3 className="font-medium">{child.name}</h3>
+                          <p className="font-medium">{child.name}</p>
                           <p className="text-sm text-muted-foreground">Age: {child.age}</p>
                         </div>
                       </div>
@@ -291,91 +287,13 @@ export default function ParentDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Family Schedule</CardTitle>
-              <CardDescription>View and manage your family's schedule</CardDescription>
+              <CardDescription>View your children's class schedules and upcoming events</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-72 flex items-center justify-center border rounded-md">
-                <div className="text-center">
-                  <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-medium">Calendar View</h3>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    View all scheduled activities for your children
-                  </p>
-                  <Button className="mt-4" asChild>
-                    <Link href="/schedule">View Full Schedule</Link>
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="ai-assistant" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bot className="h-5 w-5" />
-                AI Enrollment Assistant
-              </CardTitle>
-              <CardDescription>
-                Get personalized help finding the perfect programs for your children
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button 
-                  variant="outline" 
-                  className="h-auto p-4 text-left flex flex-col items-start gap-2"
-                  onClick={() => setIsAssistantModalOpen(true)}
-                >
-                  <span className="font-medium">Find Programs for My Child</span>
-                  <span className="text-sm text-muted-foreground">
-                    "I'm looking for STEM programs for my 8-year-old daughter who loves building things"
-                  </span>
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  className="h-auto p-4 text-left flex flex-col items-start gap-2"
-                  onClick={() => setIsAssistantModalOpen(true)}
-                >
-                  <span className="font-medium">Compare Program Options</span>
-                  <span className="text-sm text-muted-foreground">
-                    "What's the difference between the morning and afternoon art classes?"
-                  </span>
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  className="h-auto p-4 text-left flex flex-col items-start gap-2"
-                  onClick={() => setIsAssistantModalOpen(true)}
-                >
-                  <span className="font-medium">Get Scheduling Help</span>
-                  <span className="text-sm text-muted-foreground">
-                    "Can you help me coordinate classes for two children with different interests?"
-                  </span>
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  className="h-auto p-4 text-left flex flex-col items-start gap-2"
-                  onClick={() => setIsAssistantModalOpen(true)}
-                >
-                  <span className="font-medium">Budget Planning</span>
-                  <span className="text-sm text-muted-foreground">
-                    "What programs fit within my $200/month budget for both kids?"
-                  </span>
-                </Button>
-              </div>
-              
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
-                <h4 className="font-medium text-blue-900 mb-2">How the AI Assistant Helps:</h4>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Personalized program recommendations based on your child's age and interests</li>
-                  <li>• Schedule optimization to avoid conflicts</li>
-                  <li>• Budget-friendly options within your price range</li>
-                  <li>• Answers to specific questions about classes and instructors</li>
-                </ul>
+              <div className="text-center py-8 text-muted-foreground">
+                <Calendar className="h-12 w-12 mx-auto mb-2" />
+                <p>Schedule view coming soon</p>
+                <p className="text-sm">Track all your children's classes and activities in one place</p>
               </div>
             </CardContent>
           </Card>
@@ -385,7 +303,7 @@ export default function ParentDashboard() {
       {/* Floating AI Assistant Button - Fixed Position */}
       <Button
         onClick={() => setIsAssistantModalOpen(true)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
+        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow"
       >
         <Bot className="h-6 w-6" />
         <span className="sr-only">AI Enrollment Assistant</span>
