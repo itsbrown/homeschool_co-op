@@ -1133,10 +1133,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
   app.delete('/api/enrollments/:id', isAuthenticated, hasRole(['admin']), programEnrollmentsApi.deleteEnrollment);
   
-  // AI Enrollment Assistant with NLP endpoint
+  // AI Enrollment Assistant with NLP and Action Capabilities
   app.post('/api/ai/enrollment-assistant', isAuthenticated, async (req, res) => {
     try {
-      const { message } = req.body;
+      const { message, action, registrationData } = req.body;
+      const userId = (req as any).session?.userId;
       
       // Use Google Cloud NLP to understand the user's intent
       const nlpAnalysis = await nlpService.analyzeUserInput(message);
@@ -1144,34 +1145,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract relevant information from the message
       const extractedInfo = nlpService.extractChildInfo(message, nlpAnalysis.entities);
       
-      // Generate intelligent response based on intent and sentiment
       let responseMessage = '';
+      let actionData = null;
       
-      switch (nlpAnalysis.intent) {
-        case 'register_child':
-          responseMessage = generateRegistrationResponse(extractedInfo, nlpAnalysis);
-          break;
-        case 'find_programs':
-          responseMessage = generateProgramResponse(extractedInfo, nlpAnalysis);
-          break;
-        case 'schedule_inquiry':
-          responseMessage = generateScheduleResponse(nlpAnalysis);
-          break;
-        case 'cost_inquiry':
-          responseMessage = generateCostResponse(nlpAnalysis);
-          break;
-        default:
-          responseMessage = generateGeneralResponse(nlpAnalysis);
+      // Handle specific actions (registration, enrollment)
+      if (action === 'register_child' && registrationData) {
+        try {
+          // Actually register the child using existing API
+          const childData = {
+            ...registrationData,
+            parentId: userId
+          };
+          
+          const registeredChild = await storage.createChild(childData);
+          responseMessage = `Great! I've successfully registered ${registeredChild.firstName} ${registeredChild.lastName}. They're now in our system and ready for program enrollment!`;
+          actionData = { type: 'child_registered', child: registeredChild };
+        } catch (error) {
+          responseMessage = "I encountered an issue while registering. Let me help you try again with the correct information.";
+        }
+      } else if (action === 'enroll_program' && registrationData) {
+        try {
+          // Actually enroll in program using existing API
+          const enrollment = await storage.createEnrollment({
+            childId: registrationData.childId,
+            programId: registrationData.programId,
+            parentId: userId,
+            status: 'pending'
+          });
+          
+          responseMessage = `Perfect! I've enrolled ${registrationData.childName} in the ${registrationData.programName} program. You'll receive confirmation details soon!`;
+          actionData = { type: 'program_enrolled', enrollment };
+        } catch (error) {
+          responseMessage = "I had trouble processing the enrollment. Let me help you with the program selection again.";
+        }
+      } else {
+        // Generate intelligent response based on intent and sentiment
+        switch (nlpAnalysis.intent) {
+          case 'register_child':
+            responseMessage = await generateRegistrationResponse(extractedInfo, nlpAnalysis, userId);
+            break;
+          case 'find_programs':
+            responseMessage = await generateProgramResponse(extractedInfo, nlpAnalysis, userId);
+            break;
+          case 'schedule_inquiry':
+            responseMessage = generateScheduleResponse(nlpAnalysis);
+            break;
+          case 'cost_inquiry':
+            responseMessage = generateCostResponse(nlpAnalysis);
+            break;
+          default:
+            responseMessage = generateGeneralResponse(nlpAnalysis);
+        }
       }
       
       res.json({
         response: responseMessage,
         analysis: nlpAnalysis,
-        extractedInfo
+        extractedInfo,
+        actionData
       });
       
     } catch (error) {
-      console.error('NLP Analysis Error:', error);
+      console.error('AI Assistant Error:', error);
       res.status(500).json({ 
         error: 'Failed to process message',
         response: "I'm here to help! Could you tell me more about what you're looking for?"
@@ -1179,8 +1214,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Smart response generation functions for conversational AI
-  function generateRegistrationResponse(extractedInfo: any, analysis: any): string {
+  // Enhanced response generation functions with real data integration
+  async function generateRegistrationResponse(extractedInfo: any, analysis: any, userId: string): Promise<string> {
     const sentiment = analysis.sentiment;
     let response = '';
     
@@ -1200,28 +1235,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
       response += `At ${extractedInfo.age} years old, there are some great programs available! `;
     }
     
+    // Check if user already has children registered
+    try {
+      const existingChildren = await storage.getChildrenByParent(userId);
+      if (existingChildren.length > 0) {
+        response += `I see you already have ${existingChildren.length} child${existingChildren.length > 1 ? 'ren' : ''} registered. `;
+      }
+    } catch (error) {
+      // Continue without existing children info
+    }
+    
     response += "To get started, I'll need some basic information. What's your child's full name and age?";
     
     return response;
   }
   
-  function generateProgramResponse(extractedInfo: any, analysis: any): string {
+  async function generateProgramResponse(extractedInfo: any, analysis: any, userId: string): Promise<string> {
     const keywords = analysis.keywords.join(', ');
     let response = "Great question about our programs! ";
     
-    if (keywords.includes('art') || keywords.includes('creative')) {
-      response += "We have fantastic art and creative programs that kids absolutely love! ";
-    } else if (keywords.includes('math') || keywords.includes('science')) {
-      response += "Our STEM programs are designed to make learning fun and engaging! ";
-    } else if (keywords.includes('sport') || keywords.includes('physical')) {
-      response += "Our physical education and sports programs help kids stay active and healthy! ";
+    // Get real programs from the system
+    try {
+      const programs = await storage.getPrograms();
+      const availablePrograms = programs.filter(p => p.isPublished);
+      
+      if (keywords.includes('art') || keywords.includes('creative')) {
+        const artPrograms = availablePrograms.filter(p => 
+          p.title.toLowerCase().includes('art') || 
+          p.description?.toLowerCase().includes('creative')
+        );
+        if (artPrograms.length > 0) {
+          response += `We have ${artPrograms.length} fantastic art and creative programs! `;
+        }
+      } else if (keywords.includes('math') || keywords.includes('science')) {
+        const stemPrograms = availablePrograms.filter(p => 
+          p.title.toLowerCase().includes('math') || 
+          p.title.toLowerCase().includes('science') ||
+          p.description?.toLowerCase().includes('stem')
+        );
+        if (stemPrograms.length > 0) {
+          response += `Our ${stemPrograms.length} STEM programs are designed to make learning fun and engaging! `;
+        }
+      }
+      
+      if (extractedInfo.age) {
+        const ageAppropriate = availablePrograms.filter(p => {
+          const age = parseInt(extractedInfo.age);
+          return p.gradeLevel.includes(age.toString()) || 
+                 (age <= 6 && p.gradeLevel.includes('Kindergarten'));
+        });
+        if (ageAppropriate.length > 0) {
+          response += `For a ${extractedInfo.age}-year-old, I found ${ageAppropriate.length} age-appropriate programs. `;
+        }
+      }
+      
+      response += `We currently have ${availablePrograms.length} programs available. Would you like me to show you programs by age group or by subject area?`;
+      
+    } catch (error) {
+      response += "We have various programs available for different ages and interests. Would you like me to show you programs by age group or by subject area?";
     }
-    
-    if (extractedInfo.age) {
-      response += `For a ${extractedInfo.age}-year-old, I'd recommend checking out our age-appropriate options. `;
-    }
-    
-    response += "Would you like me to show you programs by age group or by subject area?";
     
     return response;
   }
