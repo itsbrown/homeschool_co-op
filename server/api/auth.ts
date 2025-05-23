@@ -412,7 +412,7 @@ router.get("/me", async (req, res) => {
 // Firebase user sync endpoint
 router.post("/firebase-sync", async (req, res) => {
   try {
-    console.log("Direct Firebase sync request:", req.body);
+    console.log("🔥 UPDATED Firebase sync request:", req.body);
     
     const { firebaseUid, email, name, role } = req.body;
     
