@@ -33,11 +33,6 @@ export default function Dashboard() {
     return (
       <ParentAppShell>
         <div className="container mx-auto p-4">
-          {/* AI Status Panel */}
-          <div className="mb-6">
-            <AIStatusPanel />
-          </div>
-          
           {/* Parent Dashboard */}
           <RoleDashboard />
         </div>
