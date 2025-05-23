@@ -12,7 +12,14 @@ interface Message {
   content: string;
   sender: 'user' | 'assistant';
   timestamp: Date;
-  registrationData?: any;
+  actions?: Action[];
+}
+
+interface Action {
+  type: 'button' | 'input';
+  label: string;
+  value?: string;
+  placeholder?: string;
 }
 
 interface EnrollmentAssistantModalProps {
@@ -30,17 +37,11 @@ const samplePrompts = [
 ];
 
 export default function EnrollmentAssistantModal({ isOpen, onClose }: EnrollmentAssistantModalProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      content: "Hi! I'm your AI Enrollment Assistant. I can help you register your children, find the perfect programs, coordinate schedules, and provide guidance on enrollment options. Just tell me what you'd like to do - I can register a new child for you right here in our conversation!",
-      sender: "assistant",
-      timestamp: new Date()
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [registrationData, setRegistrationData] = useState<any>(null);
+  const [conversationState, setConversationState] = useState<string>('welcome');
+  const [registrationData, setRegistrationData] = useState<any>({});
   
   const queryClient = useQueryClient();
   
