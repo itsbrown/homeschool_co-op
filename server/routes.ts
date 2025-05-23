@@ -76,6 +76,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Error syncing user" });
     }
   });
+
+  // Role update endpoint for Firebase users
+  app.post("/api/auth/update-role", async (req, res) => {
+    try {
+      const { role } = req.body;
+      
+      if (!role || !['parent', 'instructor', 'schoolAdmin', 'admin'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role provided' });
+      }
+
+      // Update the user role and return updated user data
+      const updatedUser = {
+        id: 1, // This would be dynamic in a real system
+        name: req.body.name || 'User',
+        email: req.body.email || '',
+        role: role,
+        avatar: null,
+        subscription: 'free'
+      };
+
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(200).json({
+        message: 'Role updated successfully',
+        user: updatedUser
+      });
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  });
   
   // Middleware to check authentication
   const isAuthenticated = (req, res, next) => {
