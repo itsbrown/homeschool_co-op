@@ -640,8 +640,13 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     setMessages(prev => [...prev, newUserMessage]);
     setInputMessage("");
     
-    // Handle the user input through the action system
-    handleAction('text_input', newUserMessage.content);
+    // Check if this is registration-related and route properly
+    const input = newUserMessage.content.toLowerCase();
+    if (input.includes('register') || input.includes('child') || input.includes('daughter') || input.includes('son')) {
+      handleAction('register_child');
+    } else {
+      handleAction('text_input', newUserMessage.content);
+    }
   };
 
   const handlePromptClick = (prompt: string) => {
