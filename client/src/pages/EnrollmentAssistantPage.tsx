@@ -1,4 +1,4 @@
-import { useAuth } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import AppShell from "@/components/layout/AppShell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import EnrollmentAssistant from "@/components/enrollment/EnrollmentAssistant";
@@ -8,7 +8,8 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 export default function EnrollmentAssistantPage() {
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { user, isLoading } = useFirebaseAuth();
+  const isAuthenticated = !!user;
   const [, setLocation] = useLocation();
   
   // Redirect if not authenticated
