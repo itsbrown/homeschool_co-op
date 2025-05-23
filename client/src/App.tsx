@@ -119,6 +119,8 @@ function Router() {
       <Route path="/schools/register/confirm" component={SchoolRegistrationConfirmationPage} />
       
       {/* School Admin routes */}
+      <Route path="/schools" component={MySchoolPage} />
+      <Route path="/schools/dashboard" component={MySchoolPage} />
       <Route path="/schools/my-school" component={MySchoolPage} />
       <Route path="/schools/my-school/edit" component={SchoolEditPage} />
       <Route path="/schools/classes" component={SchoolClassesPage} />
