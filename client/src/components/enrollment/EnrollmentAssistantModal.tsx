@@ -3,13 +3,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Sparkles, User } from "lucide-react";
+import { Bot, Send, Sparkles, User, CheckCircle } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface Message {
   id: string;
   content: string;
   sender: 'user' | 'assistant';
   timestamp: Date;
+  registrationData?: any;
 }
 
 interface EnrollmentAssistantModalProps {
@@ -18,164 +21,358 @@ interface EnrollmentAssistantModalProps {
 }
 
 const samplePrompts = [
-  "I'm looking for STEM programs for my 8-year-old daughter who loves building things",
-  "What's the difference between the morning and afternoon art classes?",
-  "Can you help me coordinate classes for two children with different interests?",
-  "What programs fit within my $200/month budget for both kids?",
-  "Are there any programs that combine art and science for elementary students?",
-  "What are the most popular programs for 10-year-olds?"
+  "I want to register my 8-year-old daughter who loves building things",
+  "Help me register a new child and find programs for them",
+  "Can you register my child and coordinate classes for siblings?",
+  "I need to register two children and find budget-friendly programs",
+  "Register my child and find art and science programs",
+  "Help me register and enroll my 10-year-old in popular programs"
 ];
 
 export default function EnrollmentAssistantModal({ isOpen, onClose }: EnrollmentAssistantModalProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: '1',
-      content: "Hi! I'm your AI Enrollment Assistant. I'm here to help you find the perfect programs for your children. What can I help you with today?",
-      sender: 'assistant',
+      id: "1",
+      content: "Hi! I'm your AI Enrollment Assistant. I can help you register your children, find the perfect programs, coordinate schedules, and provide guidance on enrollment options. Just tell me what you'd like to do - I can register a new child for you right here in our conversation!",
+      sender: "assistant",
       timestamp: new Date()
     }
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [registrationData, setRegistrationData] = useState<any>(null);
+  
+  const queryClient = useQueryClient();
+  
+  // Child registration mutation
+  const registerChildMutation = useMutation({
+    mutationFn: (childData: any) => apiRequest("POST", "/api/children", childData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/children"] });
+    },
+  });
+
+  const processUserMessage = async (userInput: string) => {
+    setIsTyping(true);
+    
+    // Smart parsing for registration intent
+    const isRegistrationIntent = userInput.toLowerCase().includes('register') ||
+                                userInput.toLowerCase().includes('add') ||
+                                userInput.toLowerCase().includes('new child') ||
+                                userInput.toLowerCase().includes('sign up');
+    
+    // Extract child information from natural language
+    const ageMatch = userInput.match(/(\d+)[-\s]?year[-\s]?old|age\s*(\d+)/i);
+    const nameMatch = userInput.match(/(?:my|named|called)\s+([A-Za-z]+)/i);
+    const genderMatch = userInput.match(/(boy|girl|son|daughter|he|she|him|her)/i);
+    
+    let response = "";
+    let shouldShowRegistration = false;
+
+    if (isRegistrationIntent) {
+      if (registrationData) {
+        // Continue existing registration flow
+        response = await handleRegistrationStep(userInput, registrationData);
+      } else {
+        // Start new registration
+        const newRegData: any = {};
+        
+        if (ageMatch) {
+          newRegData.age = parseInt(ageMatch[1] || ageMatch[2]);
+        }
+        if (nameMatch) {
+          newRegData.firstName = nameMatch[1];
+        }
+        if (genderMatch) {
+          const genderText = genderMatch[1].toLowerCase();
+          if (['daughter', 'girl', 'she', 'her'].includes(genderText)) {
+            newRegData.gender = 'Female';
+          } else if (['son', 'boy', 'he', 'him'].includes(genderText)) {
+            newRegData.gender = 'Male';
+          }
+        }
+        
+        setRegistrationData(newRegData);
+        shouldShowRegistration = true;
+        response = buildRegistrationResponse(newRegData);
+      }
+    } else {
+      // General enrollment assistance
+      response = await handleGeneralInquiry(userInput);
+    }
+
+    setTimeout(() => {
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
+        content: response,
+        sender: "assistant",
+        timestamp: new Date(),
+        registrationData: shouldShowRegistration ? registrationData : undefined
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
+      setIsTyping(false);
+    }, 1500);
+  };
+
+  const buildRegistrationResponse = (regData: any) => {
+    let response = "Great! I'd love to help you register ";
+    
+    if (regData.firstName) {
+      response += `${regData.firstName}`;
+    } else {
+      response += "your child";
+    }
+    
+    response += ". Let me gather some information:\n\n";
+    
+    const needed = [];
+    if (!regData.firstName) needed.push("• **Child's full name**");
+    if (!regData.age) needed.push("• **Age**");
+    if (!regData.gender) needed.push("• **Gender** (Male/Female)");
+    if (!regData.gradeLevel) needed.push("• **Current grade level**");
+    if (!regData.interests) needed.push("• **Interests or learning preferences**");
+    
+    if (needed.length > 0) {
+      response += "I still need:\n" + needed.join("\n");
+      response += "\n\nYou can tell me everything at once or one piece at a time. For example: 'Her name is Emma, she's 8 years old, in 3rd grade, and loves art and science.'";
+    } else {
+      response += "I have all the basic information! Would you like me to register them now, or do you want to add any special notes about learning preferences or interests?";
+    }
+    
+    return response;
+  };
+
+  const handleRegistrationStep = async (input: string, currentData: any) => {
+    const updatedData = { ...currentData };
+    
+    // Parse additional information
+    const nameMatch = input.match(/(?:name is|called|named)\s+([A-Za-z\s]+)/i);
+    const ageMatch = input.match(/(?:age|years? old)\s*(?:is\s*)?(\d+)|(\d+)\s*years? old/i);
+    const gradeMatch = input.match(/(?:grade|class)\s*(\d+|kindergarten|pre-?k)/i);
+    const genderMatch = input.match(/(male|female|boy|girl)/i);
+    
+    if (nameMatch) {
+      const fullName = nameMatch[1].trim();
+      const nameParts = fullName.split(' ');
+      updatedData.firstName = nameParts[0];
+      if (nameParts.length > 1) {
+        updatedData.lastName = nameParts.slice(1).join(' ');
+      }
+    }
+    
+    if (ageMatch) {
+      updatedData.age = parseInt(ageMatch[1] || ageMatch[2]);
+    }
+    
+    if (gradeMatch) {
+      updatedData.gradeLevel = gradeMatch[1];
+    }
+    
+    if (genderMatch) {
+      const gender = genderMatch[1].toLowerCase();
+      updatedData.gender = gender === 'male' || gender === 'boy' ? 'Male' : 'Female';
+    }
+    
+    // Look for interests
+    const interests = [];
+    const interestWords = ['art', 'science', 'math', 'reading', 'sports', 'music', 'dance', 'building', 'crafts', 'nature', 'technology'];
+    for (const interest of interestWords) {
+      if (input.toLowerCase().includes(interest)) {
+        interests.push(interest);
+      }
+    }
+    if (interests.length > 0) {
+      updatedData.interests = interests.join(', ');
+    }
+    
+    setRegistrationData(updatedData);
+    
+    // Check if we have enough info to register
+    const hasRequiredInfo = updatedData.firstName && updatedData.age && updatedData.gender;
+    
+    if (hasRequiredInfo && (input.toLowerCase().includes('register') || input.toLowerCase().includes('yes') || input.toLowerCase().includes('submit'))) {
+      // Attempt registration
+      try {
+        await registerChildMutation.mutateAsync({
+          firstName: updatedData.firstName,
+          lastName: updatedData.lastName || '',
+          age: updatedData.age,
+          gender: updatedData.gender,
+          gradeLevel: updatedData.gradeLevel || '',
+          interests: updatedData.interests || '',
+          medicalInfo: '',
+          emergencyContact: '',
+          specialNeeds: ''
+        });
+        
+        setRegistrationData(null);
+        return `🎉 **Registration Complete!** \n\n${updatedData.firstName} has been successfully registered! You can now:\n\n• Browse programs that match their interests\n• Schedule classes and activities\n• Manage their profile in your dashboard\n\nWould you like me to help you find suitable programs for ${updatedData.firstName}?`;
+      } catch (error) {
+        return `I'm sorry, there was an issue completing the registration. Please try again or use the regular registration form. The error was: ${error}`;
+      }
+    } else {
+      return buildRegistrationResponse(updatedData);
+    }
+  };
+
+  const handleGeneralInquiry = async (input: string) => {
+    // Simple pattern matching for common inquiries
+    const lowerInput = input.toLowerCase();
+    
+    if (lowerInput.includes('program') || lowerInput.includes('class')) {
+      return "I can help you find the perfect programs! Our platform offers a wide variety of classes including:\n\n• **STEM Programs** - Science, technology, engineering, and math\n• **Arts & Crafts** - Creative expression and hands-on projects\n• **Language Arts** - Reading, writing, and communication skills\n• **Physical Education** - Sports and movement activities\n• **Music & Performing Arts** - Musical instruments and drama\n\nWhat age group and interests are you looking for? I can also help register a child if you haven't already!";
+    }
+    
+    if (lowerInput.includes('schedule') || lowerInput.includes('time')) {
+      return "I can help coordinate schedules for multiple children! Most of our programs offer flexible timing:\n\n• **Morning Sessions** - 9:00 AM - 12:00 PM\n• **Afternoon Sessions** - 1:00 PM - 4:00 PM\n• **Evening Sessions** - 5:00 PM - 7:00 PM\n• **Weekend Options** - Saturday and Sunday availability\n\nTell me about your children's ages and interests, and I can suggest programs that work well together timing-wise!";
+    }
+    
+    if (lowerInput.includes('cost') || lowerInput.includes('price') || lowerInput.includes('budget')) {
+      return "I'd be happy to help you find programs that fit your budget! Our programs have various pricing options:\n\n• **Community Programs** - Often free or low-cost\n• **Standard Classes** - Typically $50-150 per month\n• **Specialty Programs** - Advanced or specialized courses\n• **Family Discounts** - Available for multiple children\n\nWhat's your monthly budget range? I can recommend programs that fit your needs and help you register your children!";
+    }
+    
+    return "I'm here to help with all your enrollment needs! I can:\n\n• **Register new children** - Just tell me about them\n• **Find suitable programs** - Based on age and interests\n• **Coordinate schedules** - For multiple children\n• **Answer questions** - About programs, costs, and logistics\n\nWhat would you like to do first? Feel free to ask me anything or tell me about a child you'd like to register!";
+  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
     const newUserMessage: Message = {
       id: Date.now().toString(),
-      content: inputMessage,
-      sender: 'user',
+      content: inputMessage.trim(),
+      sender: "user",
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, newUserMessage]);
     setInputMessage("");
-    setIsTyping(true);
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: "I'd be happy to help you find programs! Based on what you've shared, let me suggest some options. For an 8-year-old who loves building, I recommend checking out our:\n\n• **STEM Explorer Program** - Perfect for hands-on learners\n• **Young Engineers Workshop** - Focuses on construction and design\n• **Creative Building Academy** - Combines art with engineering\n\nWould you like more details about any of these programs, or do you have specific requirements like scheduling or budget I should consider?",
-        sender: 'assistant',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, aiResponse]);
-      setIsTyping(false);
-    }, 1500);
+    
+    await processUserMessage(newUserMessage.content);
   };
 
   const handlePromptClick = (prompt: string) => {
     setInputMessage(prompt);
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl h-[80vh] p-0 gap-0">
-        <DialogHeader className="p-6 pb-4 border-b">
-          <DialogTitle className="flex items-center gap-2 text-xl">
+      <DialogContent className="max-w-4xl w-full h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
             <Bot className="h-6 w-6 text-blue-600" />
             AI Enrollment Assistant
           </DialogTitle>
         </DialogHeader>
-
-        <div className="flex-1 flex overflow-hidden">
-          {/* Chat Area */}
+        
+        <div className="flex flex-1 gap-4 min-h-0">
+          {/* Chat Interface */}
           <div className="flex-1 flex flex-col">
-            <ScrollArea className="flex-1 p-6">
+            <ScrollArea className="flex-1 p-4 border rounded-lg">
               <div className="space-y-4">
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                    className={`flex gap-3 ${
+                      message.sender === "user" ? "justify-end" : "justify-start"
+                    }`}
                   >
-                    {message.sender === 'assistant' && (
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                        <Bot className="h-4 w-4 text-blue-600" />
-                      </div>
-                    )}
                     <div
-                      className={`max-w-[70%] rounded-lg p-3 ${
-                        message.sender === 'user'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-900'
+                      className={`flex gap-3 max-w-[80%] ${
+                        message.sender === "user" ? "flex-row-reverse" : "flex-row"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{message.content}</p>
-                    </div>
-                    {message.sender === 'user' && (
-                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                        <User className="h-4 w-4 text-white" />
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          message.sender === "user"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {message.sender === "user" ? (
+                          <User className="h-4 w-4" />
+                        ) : (
+                          <Bot className="h-4 w-4" />
+                        )}
                       </div>
-                    )}
+                      <div
+                        className={`p-3 rounded-lg ${
+                          message.sender === "user"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-900"
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap">{message.content}</div>
+                        {message.registrationData && (
+                          <div className="mt-2 p-2 border rounded bg-white/10">
+                            <div className="text-sm font-medium">Registration Progress:</div>
+                            <div className="text-xs">
+                              {message.registrationData.firstName && `✓ Name: ${message.registrationData.firstName}`}
+                              {message.registrationData.age && ` ✓ Age: ${message.registrationData.age}`}
+                              {message.registrationData.gender && ` ✓ Gender: ${message.registrationData.gender}`}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
                 {isTyping && (
                   <div className="flex gap-3 justify-start">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <Bot className="h-4 w-4 text-blue-600" />
+                    <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center">
+                      <Bot className="h-4 w-4" />
                     </div>
-                    <div className="bg-gray-100 rounded-lg p-3">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    <div className="bg-gray-100 text-gray-900 p-3 rounded-lg">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"></div>
+                        <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             </ScrollArea>
-
-            {/* Input Area */}
-            <div className="p-6 border-t">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Ask me about programs for your children..."
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="flex-1"
-                />
-                <Button onClick={handleSendMessage} disabled={!inputMessage.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
+            
+            <div className="flex gap-2 mt-4">
+              <Input
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask me anything about registration, programs, or enrollment..."
+                className="flex-1"
+              />
+              <Button onClick={handleSendMessage}>
+                <Send className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-
+          
           {/* Sample Prompts Sidebar */}
-          <div className="w-80 border-l bg-gray-50 p-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Sparkles className="h-4 w-4" />
-                Sample Questions
-              </div>
-              <div className="space-y-2">
-                {samplePrompts.map((prompt, index) => (
-                  <Button
-                    key={index}
-                    variant="ghost"
-                    size="sm"
-                    className="w-full text-left h-auto p-3 whitespace-normal justify-start text-gray-600 hover:text-gray-900 hover:bg-white"
-                    onClick={() => handlePromptClick(prompt)}
-                  >
-                    "{prompt}"
-                  </Button>
-                ))}
-              </div>
-              
-              <div className="pt-4 border-t">
-                <h4 className="font-medium text-gray-900 mb-2">What I can help with:</h4>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Find age-appropriate programs</li>
-                  <li>• Compare class options</li>
-                  <li>• Schedule coordination</li>
-                  <li>• Budget planning</li>
-                  <li>• Program recommendations</li>
-                  <li>• Enrollment assistance</li>
-                </ul>
-              </div>
+          <div className="w-80 border-l pl-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              <h3 className="font-semibold">Try asking me:</h3>
+            </div>
+            <div className="space-y-2">
+              {samplePrompts.map((prompt, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-left justify-start h-auto p-3 whitespace-normal"
+                  onClick={() => handlePromptClick(prompt)}
+                >
+                  <div className="text-sm">{prompt}</div>
+                </Button>
+              ))}
             </div>
           </div>
         </div>
