@@ -187,10 +187,19 @@ export function AdminClassesPage() {
   };
 
   // Navigate to create new class
-  const handleCreateClass = () => {
-    console.log("Creating new class");
-    // Use setLocation for navigation within the React app instead of full page refresh
-    setLocation("/admin/classes/new");
+  const handleCreateClass = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("Creating new class - attempting navigation");
+    
+    // Try direct window navigation as fallback
+    try {
+      setLocation("/admin/classes/new");
+      console.log("Navigation attempted via setLocation");
+    } catch (error) {
+      console.error("SetLocation failed, trying window.location:", error);
+      window.location.href = "/admin/classes/new";
+    }
   };
 
   // Navigate to edit class
