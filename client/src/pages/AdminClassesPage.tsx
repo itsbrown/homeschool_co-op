@@ -64,7 +64,7 @@ import {
 } from "lucide-react";
 
 export function AdminClassesPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useFirebaseAuth();
   const [location, setLocation] = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
