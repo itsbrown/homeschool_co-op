@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -66,7 +66,7 @@ interface ClassCreationFormProps {
 
 export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCreationFormProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user } = useFirebaseAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Define type for educator
   interface Educator {
