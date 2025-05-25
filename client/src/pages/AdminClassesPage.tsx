@@ -226,10 +226,12 @@ export function AdminClassesPage() {
               <Upload className="h-4 w-4" />
               Upload CSV
             </Button>
-            <Button onClick={handleCreateClass} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Create Class
-            </Button>
+            <Link href="/admin/classes/new">
+              <Button className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Create Class
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -458,10 +460,12 @@ export function AdminClassesPage() {
                                   ? "Try adjusting your search or filters"
                                   : "Get started by creating your first class"}
                               </p>
-                              <Button onClick={handleCreateClass} className="flex items-center gap-2">
-                                <Plus className="h-4 w-4" />
-                                Create Class
-                              </Button>
+                              <Link href="/admin/classes/new">
+                                <Button className="flex items-center gap-2">
+                                  <Plus className="h-4 w-4" />
+                                  Create Class
+                                </Button>
+                              </Link>
                             </div>
                           )}
                         </TabsContent>
