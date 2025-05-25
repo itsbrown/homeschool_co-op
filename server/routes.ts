@@ -1584,6 +1584,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Student registration endpoint for school admins
   app.post("/api/students/register", async (req, res) => {
+    console.log('🚀 Student registration started');
+    console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+    
     try {
       const {
         firstName,
@@ -1599,22 +1602,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sendInvitation
       } = req.body;
 
+      console.log('✅ Extracted form data:', {
+        firstName, lastName, dateOfBirth, gradeLevel, parentEmail, sendInvitation
+      });
+
       // Create or find parent account
+      console.log('🔍 Looking for parent with email:', parentEmail);
       let parentUser = await storage.getUserByEmail(parentEmail);
       
       if (!parentUser) {
-        // Create a new parent account with required fields
-        parentUser = await storage.createUser({
-          username: parentEmail, // Use email as username
-          email: parentEmail,
-          password: 'temppass123', // Temporary password - parent will set their own
-          name: `${firstName}'s Parent`, // Default name
-          role: 'parent',
-          subscription: 'free'
-        });
+        console.log('👤 Parent not found, creating new account...');
+        try {
+          parentUser = await storage.createUser({
+            username: parentEmail, // Use email as username
+            email: parentEmail,
+            password: 'temppass123', // Temporary password - parent will set their own
+            name: `${firstName}'s Parent`, // Default name
+            role: 'parent',
+            subscription: 'free'
+          });
+          console.log('✅ Parent account created:', parentUser.id);
+        } catch (userError) {
+          console.error('❌ Error creating parent user:', userError);
+          throw userError;
+        }
+      } else {
+        console.log('✅ Found existing parent:', parentUser.id);
       }
 
       // Create the student/child record with correct schema
+      console.log('👶 Creating child record...');
       const childData = {
         firstName,
         lastName,
@@ -1630,7 +1647,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         profileImage: null
       };
 
-      const child = await storage.createChild(childData);
+      console.log('📋 Child data:', JSON.stringify(childData, null, 2));
+      
+      let child;
+      try {
+        child = await storage.createChild(childData);
+        console.log('✅ Child created successfully:', child.id);
+      } catch (childError) {
+        console.error('❌ Error creating child:', childError);
+        throw childError;
+      }
 
       // If email invitation is requested, prepare invitation
       if (sendInvitation) {
@@ -1649,6 +1675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Invitation email content:', invitationMessage);
       }
 
+      console.log('🎉 Registration completed successfully!');
       res.json({
         success: true,
         message: 'Student registered successfully',
@@ -1661,10 +1688,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
     } catch (error) {
-      console.error('Error registering student:', error);
+      console.error('💥 REGISTRATION ERROR:', error);
+      console.error('Error stack:', error.stack);
       res.status(500).json({
         success: false,
-        message: 'Failed to register student'
+        message: 'Failed to register student',
+        error: error.message
       });
     }
   });
