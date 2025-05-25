@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminShell } from "@/components/ui/admin-shell";
 import { useFirebaseAuth } from "../hooks/useFirebaseAuth";
 import { ClassCreationForm } from "../components/admin/ClassCreationForm";
-import { Route, Switch, useLocation } from "wouter";
+import { Route, Switch, useLocation, Link } from "wouter";
 import { apiRequest } from "../lib/queryClient";
 import { formatDate, formatCurrency } from "../lib/utils";
 import { useToast } from "../hooks/use-toast";
