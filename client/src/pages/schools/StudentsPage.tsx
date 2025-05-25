@@ -194,18 +194,18 @@ export default function StudentsPage() {
               <p className="text-muted-foreground">Manage your school's student roster</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" asChild>
-                <Link href="/schools/students/import">
-                  <FileUp className="mr-2 h-4 w-4" />
+              <Link href="/schools/students/import">
+                <Button variant="outline" className="flex items-center gap-2">
+                  <FileUp className="h-4 w-4" />
                   Import
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link href="/schools/students/register">
-                  <PlusCircle className="mr-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/schools/students/register">
+                <Button className="flex items-center gap-2">
+                  <PlusCircle className="h-4 w-4" />
                   Register Student
-                </Link>
-              </Button>
+                </Button>
+              </Link>
             </div>
           </div>
 
