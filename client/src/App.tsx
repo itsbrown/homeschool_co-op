@@ -55,6 +55,7 @@ import SchoolClassesPage from "./pages/schools/ClassesPage";
 import SchoolClassCreationPage from "./pages/schools/SchoolClassCreationPage";
 import StaffPage from "./pages/schools/StaffPage";
 import StudentsPage from "./pages/schools/StudentsPage";
+import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -130,6 +131,7 @@ function Router() {
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
       <Route path="/schools/students" component={StudentsPage} />
+      <Route path="/schools/students/register" component={StudentRegistrationPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/knowledge-base/new" component={KnowledgeBaseCreationPage} />
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
