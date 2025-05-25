@@ -41,12 +41,12 @@ export default function AdminDashboard() {
               Add New Class
             </Button>
           </Link>
-          <Button asChild variant="outline">
-            <Link href="/admin/users">
-              <Users className="mr-2 h-4 w-4" />
+          <Link href="/schools/staff">
+            <Button variant="outline" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
               Manage Users
-            </Link>
-          </Button>
+            </Button>
+          </Link>
         </div>
       </div>
 
