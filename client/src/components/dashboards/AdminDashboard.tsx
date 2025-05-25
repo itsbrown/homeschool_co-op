@@ -35,12 +35,12 @@ export default function AdminDashboard() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Admin Dashboard</h1>
         <div className="flex gap-2">
-          <Button asChild>
-            <Link href="/admin/classes/new">
-              <PlusCircle className="mr-2 h-4 w-4" />
+          <Link href="/admin/classes/new">
+            <Button className="flex items-center gap-2">
+              <PlusCircle className="h-4 w-4" />
               Add New Class
-            </Link>
-          </Button>
+            </Button>
+          </Link>
           <Button asChild variant="outline">
             <Link href="/admin/users">
               <Users className="mr-2 h-4 w-4" />
