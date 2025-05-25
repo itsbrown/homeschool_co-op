@@ -1581,6 +1581,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/ocr-test", ocrTestRouter);
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
+
+  // Student registration endpoint for school admins
+  app.post("/api/students/register", async (req, res) => {
+    try {
+      const {
+        firstName,
+        lastName,
+        dateOfBirth,
+        gradeLevel,
+        parentEmail,
+        parentPhone,
+        emergencyContact,
+        emergencyPhone,
+        medicalNotes,
+        specialNeeds,
+        sendInvitation
+      } = req.body;
+
+      // Create or find parent account
+      let parentUser = await storage.getUserByEmail(parentEmail);
+      
+      if (!parentUser) {
+        // Create a new parent account
+        parentUser = await storage.createUser({
+          email: parentEmail,
+          role: 'parent',
+          subscription: 'free'
+        });
+      }
+
+      // Create the student/child record
+      const childData = {
+        firstName,
+        lastName,
+        dateOfBirth,
+        gradeLevel,
+        parentId: parentUser.id,
+        emergencyContact,
+        emergencyPhone,
+        medicalNotes: medicalNotes || '',
+        specialNeeds: specialNeeds || ''
+      };
+
+      const child = await storage.createChild(childData);
+
+      // If email invitation is requested, prepare invitation
+      if (sendInvitation) {
+        // Here you would implement email service
+        console.log(`Sending invitation email to ${parentEmail} for child ${firstName} ${lastName}`);
+        
+        // For now, we'll just log it. In production, you'd use a service like SendGrid
+        const invitationMessage = `
+          Hello! Your child ${firstName} ${lastName} has been registered at our school.
+          Please log in to access your child's account and manage their enrollment.
+          
+          Login at: ${req.protocol}://${req.get('host')}/login
+          Email: ${parentEmail}
+        `;
+        
+        console.log('Invitation email content:', invitationMessage);
+      }
+
+      res.json({
+        success: true,
+        message: 'Student registered successfully',
+        student: {
+          id: child.id,
+          firstName: child.firstName,
+          lastName: child.lastName,
+          parentEmail: parentUser.email
+        }
+      });
+
+    } catch (error) {
+      console.error('Error registering student:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to register student'
+      });
+    }
+  });
   
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);

@@ -7,13 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, UserPlus } from "lucide-react";
+import { ArrowLeft, UserPlus, Mail } from "lucide-react";
 
 export default function StudentRegistrationPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sendInvitation, setSendInvitation] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -32,14 +34,29 @@ export default function StudentRegistrationPage() {
         emergencyPhone: formData.get('emergencyPhone'),
         medicalNotes: formData.get('medicalNotes'),
         specialNeeds: formData.get('specialNeeds'),
+        sendInvitation: sendInvitation,
       };
 
-      // Here you would typically save to your backend
-      console.log('Student registration data:', studentData);
+      // Save student and create parent-child relationship
+      const response = await fetch('/api/students/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(studentData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to register student');
+      }
+
+      const result = await response.json();
 
       toast({
-        title: "Student Registered",
-        description: "The student has been successfully registered.",
+        title: "Student Registered Successfully",
+        description: sendInvitation 
+          ? "Student registered and invitation email sent to parent."
+          : "Student registered and linked to parent account.",
       });
 
       setLocation("/schools/students");
@@ -214,17 +231,39 @@ export default function StudentRegistrationPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-4 pt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setLocation("/schools/students")}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Registering..." : "Register Student"}
-                </Button>
+              <div className="border-t pt-6">
+                <div className="flex items-center space-x-3 mb-6">
+                  <Checkbox
+                    id="sendInvitation"
+                    checked={sendInvitation}
+                    onCheckedChange={(checked) => setSendInvitation(checked === true)}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <Label
+                      htmlFor="sendInvitation"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
+                    >
+                      <Mail className="h-4 w-4" />
+                      Send invitation email to parent
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Email the parent with login instructions to access their child's account
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setLocation("/schools/students")}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Registering..." : "Register Student"}
+                  </Button>
+                </div>
               </div>
             </form>
           </CardContent>
