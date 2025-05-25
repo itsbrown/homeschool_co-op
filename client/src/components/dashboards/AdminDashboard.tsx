@@ -38,7 +38,7 @@ export default function AdminDashboard() {
           <Button asChild>
             <Link href="/admin/classes/new">
               <PlusCircle className="mr-2 h-4 w-4" />
-              Create Class
+              Add New Class
             </Link>
           </Button>
           <Button asChild variant="outline">
