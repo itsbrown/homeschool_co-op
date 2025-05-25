@@ -1603,25 +1603,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let parentUser = await storage.getUserByEmail(parentEmail);
       
       if (!parentUser) {
-        // Create a new parent account
+        // Create a new parent account with required fields
         parentUser = await storage.createUser({
+          username: parentEmail, // Use email as username
           email: parentEmail,
+          password: 'temppass123', // Temporary password - parent will set their own
+          name: `${firstName}'s Parent`, // Default name
           role: 'parent',
           subscription: 'free'
         });
       }
 
-      // Create the student/child record
+      // Create the student/child record with correct schema
       const childData = {
         firstName,
         lastName,
-        dateOfBirth,
+        birthdate: dateOfBirth, // Use 'birthdate' not 'dateOfBirth'
         gradeLevel,
         parentId: parentUser.id,
-        emergencyContact,
-        emergencyPhone,
-        medicalNotes: medicalNotes || '',
-        specialNeeds: specialNeeds || ''
+        school: null,
+        learningStyle: null,
+        specialNeeds: specialNeeds || null,
+        interests: null,
+        allergies: null,
+        medicalInfo: medicalNotes || null,
+        profileImage: null
       };
 
       const child = await storage.createChild(childData);
