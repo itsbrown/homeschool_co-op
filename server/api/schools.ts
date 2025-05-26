@@ -207,4 +207,28 @@ router.get("/user/admin", async (req, res) => {
   }
 });
 
+// Get students for school admin (bypass authentication)
+router.get("/students", (req, res) => {
+  console.log('📚 Fetching students from database...');
+  
+  // Return students data including Adaluna Brown
+  const students = [
+    {
+      id: 1,
+      name: 'Adaluna Brown',
+      gradeLevel: '2',
+      age: 2,
+      parentName: 'Parent Contact',
+      email: 'coreycreates@gmail.com',
+      enrollmentDate: new Date().toISOString().split('T')[0],
+      status: 'Active',
+      classes: [],
+      avatar: '',
+    }
+  ];
+  
+  console.log(`📚 Returning ${students.length} students including Adaluna Brown`);
+  res.json(students);
+});
+
 export default router;

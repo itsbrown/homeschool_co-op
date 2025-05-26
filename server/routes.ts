@@ -1577,30 +1577,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin", adminClassesRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/activities", activitiesRouter);
-  // Get students for school admin (must be before schools router)
-  app.get('/api/schools/students', (req, res) => {
-    console.log('📚 Fetching students from database...');
-    
-    // Immediately return students data including Adaluna Brown
-    const students = [
-      {
-        id: 1,
-        name: 'Adaluna Brown',
-        gradeLevel: '2',
-        age: 2,
-        parentName: 'Parent Contact',
-        email: 'coreycreates@gmail.com',
-        enrollmentDate: new Date().toISOString().split('T')[0],
-        status: 'Active',
-        classes: [],
-        avatar: '',
-      }
-    ];
-    
-    console.log(`📚 Returning ${students.length} students including Adaluna Brown`);
-    res.json(students);
-  });
-
   app.use("/api/image-services", imageServicesRouter);
   app.use("/api/ocr-test", ocrTestRouter);
   app.use("/api/schools", schoolsRouter);
