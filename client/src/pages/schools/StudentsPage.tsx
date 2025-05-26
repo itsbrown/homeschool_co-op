@@ -141,6 +141,7 @@ export default function StudentsPage() {
   }
 
   if (error) {
+    console.error('Students page error:', error);
     return (
       <SchoolAdminLayout pageTitle="Students - Error">
         <div className="max-w-4xl mx-auto p-6">
@@ -153,6 +154,12 @@ export default function StudentsPage() {
             </CardHeader>
             <CardContent>
               <p>Please try again later or contact support if this issue persists.</p>
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm text-gray-600">Technical Details</summary>
+                <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto">
+                  {JSON.stringify(error, null, 2)}
+                </pre>
+              </details>
             </CardContent>
             <CardFooter>
               <Button onClick={() => window.location.reload()}>Try Again</Button>

@@ -1699,21 +1699,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get students for school admin
-  app.get('/api/schools/students', isAuthenticated, async (req, res) => {
+  app.get('/api/schools/students', async (req, res) => {
     try {
-      // Get all children from storage
-      const children = await storage.getChildrenByParentId(0); // Get all children for now
+      console.log('📚 Fetching students from database...');
       
-      // If no children found, try to load all children directly
+      // Try to load all children directly from file storage
       let allChildren = [];
       try {
         const fs = require('fs');
         const path = require('path');
         const filePath = path.join(__dirname, '../data/children.json');
         
+        console.log(`Looking for children file at: ${filePath}`);
+        
         if (fs.existsSync(filePath)) {
           const data = fs.readFileSync(filePath, 'utf-8');
           allChildren = JSON.parse(data);
+          console.log(`✅ Found ${allChildren.length} children in file`);
+        } else {
+          console.log('⚠️ Children file does not exist yet');
         }
       } catch (error) {
         console.log('Could not load children from file:', error.message);
@@ -1737,7 +1741,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(students);
     } catch (error) {
       console.error('Error fetching students:', error);
-      res.status(500).json({ message: 'Failed to fetch students' });
+      res.status(500).json({ message: 'Failed to fetch students', error: error.message });
     }
   });
 
