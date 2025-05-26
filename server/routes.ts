@@ -1697,6 +1697,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // Get students for school admin
+  app.get('/api/schools/students', isAuthenticated, async (req, res) => {
+    try {
+      // Get all children from storage
+      const children = await storage.getChildrenByParentId(0); // Get all children for now
+      
+      // If no children found, try to load all children directly
+      let allChildren = [];
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(__dirname, '../data/children.json');
+        
+        if (fs.existsSync(filePath)) {
+          const data = fs.readFileSync(filePath, 'utf-8');
+          allChildren = JSON.parse(data);
+        }
+      } catch (error) {
+        console.log('Could not load children from file:', error.message);
+      }
+      
+      // Transform children data to match the expected format
+      const students = allChildren.map(child => ({
+        id: child.id,
+        name: `${child.firstName} ${child.lastName}`,
+        gradeLevel: child.gradeLevel || 'Unknown',
+        age: child.birthdate ? calculateAge(child.birthdate) : 'Unknown',
+        parentName: 'Parent Contact', // We'd need to join with parent data
+        email: 'Contact via school', // We'd need to get from parent
+        enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        status: 'Active',
+        classes: [],
+        avatar: child.profileImage || '',
+      }));
+      
+      console.log(`📚 Returning ${students.length} students`);
+      res.json(students);
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      res.status(500).json({ message: 'Failed to fetch students' });
+    }
+  });
+
+  // Helper function to calculate age from birthdate
+  function calculateAge(birthdate) {
+    const today = new Date();
+    const birth = new Date(birthdate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDifference = today.getMonth() - birth.getMonth();
+    
+    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    
+    return age;
+  }
   
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);

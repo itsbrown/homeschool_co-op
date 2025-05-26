@@ -124,10 +124,9 @@ export default function StudentsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [activeTab, setActiveTab] = useState("list");
 
-  // Fetch students for the school (using sample data for now)
+  // Fetch students for the school
   const { data: students, isLoading, error } = useQuery({
     queryKey: ['/api/schools/students'],
-    queryFn: () => Promise.resolve(sampleStudents),
   });
 
   if (isLoading) {
