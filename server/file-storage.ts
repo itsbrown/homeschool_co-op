@@ -228,25 +228,90 @@ export class FileStorage implements IStorage {
     return fileDb.updateActivityPdfUrl(id, pdfUrl);
   }
 
-  // Child methods
+  // Child methods - using in-memory storage since fileDb doesn't have child functions
   async getChildById(id: number): Promise<Child | undefined> {
-    return fileDb.getChildById(id);
+    // Simple in-memory implementation
+    const children = this.loadChildren();
+    return children.find(child => child.id === id);
   }
 
   async getChildrenByParentId(parentId: number): Promise<Child[]> {
-    return fileDb.getChildrenByParentId(parentId);
+    const children = this.loadChildren();
+    return children.filter(child => child.parentId === parentId);
   }
 
   async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
-    return fileDb.createChild(child);
+    const children = this.loadChildren();
+    const id = children.length > 0 ? Math.max(...children.map(c => c.id)) + 1 : 1;
+    const now = new Date();
+    
+    const newChild: Child = {
+      ...child,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    children.push(newChild);
+    this.saveChildren(children);
+    return newChild;
   }
 
   async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
-    return fileDb.updateChild(id, child);
+    const children = this.loadChildren();
+    const index = children.findIndex(c => c.id === id);
+    
+    if (index === -1) return undefined;
+    
+    children[index] = {
+      ...children[index],
+      ...child,
+      updatedAt: new Date()
+    };
+    
+    this.saveChildren(children);
+    return children[index];
   }
 
   async deleteChild(id: number): Promise<void> {
-    await fileDb.deleteChild(id);
+    const children = this.loadChildren();
+    const filtered = children.filter(child => child.id !== id);
+    this.saveChildren(filtered);
+  }
+
+  private loadChildren(): Child[] {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.join(__dirname, '../data/children.json');
+      
+      if (!fs.existsSync(filePath)) {
+        return [];
+      }
+      
+      const data = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(data);
+    } catch (error) {
+      console.error('Error loading children:', error);
+      return [];
+    }
+  }
+
+  private saveChildren(children: Child[]): void {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dataDir = path.join(__dirname, '../data');
+      const filePath = path.join(dataDir, 'children.json');
+      
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      fs.writeFileSync(filePath, JSON.stringify(children, null, 2));
+    } catch (error) {
+      console.error('Error saving children:', error);
+    }
   }
 
   // Emergency Contact methods

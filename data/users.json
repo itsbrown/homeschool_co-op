@@ -53,5 +53,15 @@
     "avatar": null,
     "subscription": "premium",
     "createdAt": "2025-05-01T00:00:00.000Z"
+  },
+  {
+    "username": "coreycreates@gmail.com",
+    "email": "coreycreates@gmail.com",
+    "password": "temppass123",
+    "name": "Adaluna's Parent",
+    "role": "parent",
+    "subscription": "free",
+    "id": 6,
+    "createdAt": "2025-05-26T14:10:40.071Z"
   }
 ]
