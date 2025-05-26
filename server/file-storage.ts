@@ -14,7 +14,7 @@ import {
   Activity, InsertActivity
 } from '@shared/schema';
 import * as fileDb from './file-db';
-import * as usersStorage from './users-storage';
+import { userStorage } from './users-storage';
 
 // Validation error class
 class ValidationError extends Error {
@@ -57,17 +57,17 @@ export class FileStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
     validateId(id);
-    return fileDb.getUser(id);
+    return userStorage.getUserById(id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     validateString(username, 'Username');
-    return fileDb.getUserByUsername(username);
+    return userStorage.getUserByUsername(username);
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     validateEmail(email);
-    return usersStorage.getUserByEmail(email);
+    return userStorage.getUserByEmail(email);
   }
 
   async createUser(user: InsertUser): Promise<User> {
@@ -76,7 +76,7 @@ export class FileStorage implements IStorage {
     validateString(user.password, 'Password', 72);
     validateString(user.name, 'Name');
     if (user.avatar) validateString(user.avatar, 'Avatar URL');
-    return fileDb.createUser(user);
+    return userStorage.createUser(user);
   }
 
   // Curriculum methods  
