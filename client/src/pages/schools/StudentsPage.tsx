@@ -127,6 +127,25 @@ export default function StudentsPage() {
   // Fetch students for the school
   const { data: students, isLoading, error } = useQuery({
     queryKey: ['/api/schools/students'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/schools/students', {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          // If we get an error, return empty array instead of throwing
+          console.log('Students API returned error:', response.status);
+          return [];
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.log('Students fetch error:', error);
+        return [];
+      }
+    },
+    retry: false,
   });
 
   if (isLoading) {
