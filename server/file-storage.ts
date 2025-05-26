@@ -14,6 +14,7 @@ import {
   Activity, InsertActivity
 } from '@shared/schema';
 import * as fileDb from './file-db';
+import * as usersStorage from './users-storage';
 
 // Validation error class
 class ValidationError extends Error {
@@ -66,7 +67,7 @@ export class FileStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     validateEmail(email);
-    return fileDb.getUserByEmail(email);
+    return usersStorage.getUserByEmail(email);
   }
 
   async createUser(user: InsertUser): Promise<User> {
