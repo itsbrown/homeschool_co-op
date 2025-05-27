@@ -281,6 +281,10 @@ export class FileStorage implements IStorage {
     this.saveChildren(filtered);
   }
 
+  async getAllChildren(): Promise<Child[]> {
+    return this.loadChildren();
+  }
+
   private loadChildren(): Child[] {
     try {
       const filePath = path.join(__dirname, '../data/children.json');

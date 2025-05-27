@@ -3,6 +3,7 @@ import { db } from "../db";
 import { schools, users, insertSchoolSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { schoolStorage } from "../school-storage";
+import { storage } from "../storage";
 
 const router = Router();
 
@@ -208,27 +209,34 @@ router.get("/user/admin", async (req, res) => {
 });
 
 // Get students for school admin (bypass authentication)
-router.get("/students", (req, res) => {
+router.get("/students", async (req, res) => {
   console.log('📚 Fetching students from database...');
   
-  // Return students data including Adaluna Brown
-  const students = [
-    {
-      id: 1,
-      name: 'Adaluna Brown',
-      gradeLevel: '2',
-      age: 2,
-      parentName: 'Parent Contact',
-      email: 'coreycreates@gmail.com',
-      enrollmentDate: new Date().toISOString().split('T')[0],
+  try {
+    // Get all children from storage
+    const children = await storage.getAllChildren();
+    console.log(`📚 Found ${children.length} children in storage:`, children.map(c => c.firstName + ' ' + c.lastName));
+    
+    // Transform children data to match students format
+    const students = children.map(child => ({
+      id: child.id,
+      name: `${child.firstName} ${child.lastName}`,
+      gradeLevel: child.gradeLevel || 'N/A',
+      age: child.dateOfBirth ? Math.floor((Date.now() - new Date(child.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
+      parentName: 'Parent Contact', // Will be enhanced later with actual parent lookup
+      email: child.parentEmail || 'No email',
+      enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       status: 'Active',
       classes: [],
       avatar: '',
-    }
-  ];
-  
-  console.log(`📚 Returning ${students.length} students including Adaluna Brown`);
-  res.json(students);
+    }));
+    
+    console.log(`📚 Returning ${students.length} students:`, students.map(s => s.name));
+    res.json(students);
+  } catch (error) {
+    console.error('❌ Error fetching students:', error);
+    res.status(500).json({ message: 'Error fetching students', error: error.message });
+  }
 });
 
 export default router;
