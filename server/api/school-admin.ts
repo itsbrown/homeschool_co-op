@@ -373,17 +373,49 @@ router.delete("/staff/:id", async (req, res) => {
   }
 });
 
-// Initialize staff positions storage
-let staffPositions = [
-  { id: 1, title: "Teacher", description: "Classroom instructor", isDefault: true },
-  { id: 2, title: "Teacher Assistant", description: "Supports classroom instruction", isDefault: true },
-  { id: 3, title: "Administrator", description: "School administration", isDefault: true },
-  { id: 4, title: "Support Staff", description: "General support roles", isDefault: false },
-  { id: 5, title: "Volunteer", description: "Volunteer position", isDefault: false },
-  { id: 6, title: "Substitute Teacher", description: "Temporary classroom instructor", isDefault: false },
-  { id: 7, title: "Counselor", description: "Student guidance and support", isDefault: false },
-  { id: 8, title: "Librarian", description: "Library management", isDefault: false },
-];
+// Initialize staff positions storage with file persistence
+const STAFF_POSITIONS_FILE = path.join(process.cwd(), 'data', 'staff-positions.json');
+
+// Load positions from file
+function loadStaffPositions() {
+  try {
+    if (fs.existsSync(STAFF_POSITIONS_FILE)) {
+      const data = fs.readFileSync(STAFF_POSITIONS_FILE, 'utf8');
+      const positions = JSON.parse(data);
+      console.log('Loaded staff positions from file:', positions.map(p => p.title));
+      return positions;
+    }
+  } catch (error) {
+    console.log('Error loading staff positions:', error);
+  }
+  // Fallback to defaults if file doesn't exist
+  return [
+    { id: 1, title: "Teacher", description: "Classroom instructor", isDefault: true },
+    { id: 2, title: "Teacher Assistant", description: "Supports classroom instruction", isDefault: true },
+    { id: 3, title: "Administrator", description: "School administration", isDefault: true },
+    { id: 4, title: "Support Staff", description: "General support roles", isDefault: false },
+    { id: 5, title: "Volunteer", description: "Volunteer position", isDefault: false },
+    { id: 6, title: "Substitute Teacher", description: "Temporary classroom instructor", isDefault: false },
+    { id: 7, title: "Counselor", description: "Student guidance and support", isDefault: false },
+    { id: 8, title: "Librarian", description: "Library management", isDefault: false },
+  ];
+}
+
+// Save positions to file
+function saveStaffPositions(positions: any[]) {
+  try {
+    const dataDir = path.dirname(STAFF_POSITIONS_FILE);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(STAFF_POSITIONS_FILE, JSON.stringify(positions, null, 2));
+    console.log('Staff positions saved to file successfully');
+  } catch (error) {
+    console.error('Error saving staff positions:', error);
+  }
+}
+
+let staffPositions = loadStaffPositions();
 
 // Get staff positions/roles for dropdown
 router.get("/staff-positions", async (req, res) => {
@@ -412,6 +444,7 @@ router.post("/staff-positions", async (req, res) => {
     };
 
     staffPositions.push(newPosition);
+    saveStaffPositions(staffPositions);
     console.log("Created new staff position:", newPosition);
     
     res.json(newPosition);
@@ -449,6 +482,7 @@ router.patch("/staff-positions/:id", async (req, res) => {
     };
     
     staffPositions[positionIndex] = updatedPosition;
+    saveStaffPositions(staffPositions);
 
     console.log("✅ Successfully updated staff position:", updatedPosition);
     console.log("📋 Full staffPositions after update:", staffPositions);
@@ -471,6 +505,7 @@ router.delete("/staff-positions/:id", async (req, res) => {
     }
 
     const deletedPosition = staffPositions.splice(positionIndex, 1)[0];
+    saveStaffPositions(staffPositions);
     console.log("Deleted staff position:", deletedPosition);
     
     res.json({ message: "Staff position deleted successfully" });
