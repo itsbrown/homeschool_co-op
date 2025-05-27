@@ -398,25 +398,100 @@ router.delete("/staff/:id", requireSchoolAdmin, async (req, res) => {
   }
 });
 
+// Initialize staff positions storage
+let staffPositions = [
+  { id: 1, title: "Teacher", description: "Classroom instructor", isDefault: true },
+  { id: 2, title: "Teacher Assistant", description: "Supports classroom instruction", isDefault: true },
+  { id: 3, title: "Administrator", description: "School administration", isDefault: true },
+  { id: 4, title: "Support Staff", description: "General support roles", isDefault: false },
+  { id: 5, title: "Volunteer", description: "Volunteer position", isDefault: false },
+  { id: 6, title: "Substitute Teacher", description: "Temporary classroom instructor", isDefault: false },
+  { id: 7, title: "Counselor", description: "Student guidance and support", isDefault: false },
+  { id: 8, title: "Librarian", description: "Library management", isDefault: false },
+];
+
 // Get staff positions/roles for dropdown
 router.get("/staff-positions", async (req, res) => {
   try {
-    // These would come from database in real app
-    const positions = [
-      { id: 1, title: "Teacher", description: "Classroom instructor", isDefault: true },
-      { id: 2, title: "Teacher Assistant", description: "Supports classroom instruction", isDefault: true },
-      { id: 3, title: "Administrator", description: "School administration", isDefault: true },
-      { id: 4, title: "Support Staff", description: "General support roles", isDefault: false },
-      { id: 5, title: "Volunteer", description: "Volunteer position", isDefault: false },
-      { id: 6, title: "Substitute Teacher", description: "Temporary classroom instructor", isDefault: false },
-      { id: 7, title: "Counselor", description: "Student guidance and support", isDefault: false },
-      { id: 8, title: "Librarian", description: "Library management", isDefault: false },
-    ];
-
-    res.json(positions);
+    res.json(staffPositions);
   } catch (error) {
     console.error("Error fetching staff positions:", error);
     res.status(500).json({ message: "Error fetching staff positions" });
+  }
+});
+
+// Create new staff position
+router.post("/staff-positions", async (req, res) => {
+  try {
+    const { title, description, isDefault } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ message: "Title is required" });
+    }
+
+    const newPosition = {
+      id: Math.max(...staffPositions.map(p => p.id)) + 1,
+      title,
+      description: description || "",
+      isDefault: isDefault || false
+    };
+
+    staffPositions.push(newPosition);
+    console.log("Created new staff position:", newPosition);
+    
+    res.json(newPosition);
+  } catch (error) {
+    console.error("Error creating staff position:", error);
+    res.status(500).json({ message: "Error creating staff position" });
+  }
+});
+
+// Update staff position
+router.patch("/staff-positions/:id", async (req, res) => {
+  try {
+    const positionId = parseInt(req.params.id);
+    const { title, description, isDefault } = req.body;
+    
+    const positionIndex = staffPositions.findIndex(p => p.id === positionId);
+    
+    if (positionIndex === -1) {
+      return res.status(404).json({ message: "Staff position not found" });
+    }
+
+    // Update the position
+    staffPositions[positionIndex] = {
+      ...staffPositions[positionIndex],
+      title: title || staffPositions[positionIndex].title,
+      description: description !== undefined ? description : staffPositions[positionIndex].description,
+      isDefault: isDefault !== undefined ? isDefault : staffPositions[positionIndex].isDefault
+    };
+
+    console.log("Updated staff position:", staffPositions[positionIndex]);
+    
+    res.json(staffPositions[positionIndex]);
+  } catch (error) {
+    console.error("Error updating staff position:", error);
+    res.status(500).json({ message: "Error updating staff position" });
+  }
+});
+
+// Delete staff position
+router.delete("/staff-positions/:id", async (req, res) => {
+  try {
+    const positionId = parseInt(req.params.id);
+    const positionIndex = staffPositions.findIndex(p => p.id === positionId);
+    
+    if (positionIndex === -1) {
+      return res.status(404).json({ message: "Staff position not found" });
+    }
+
+    const deletedPosition = staffPositions.splice(positionIndex, 1)[0];
+    console.log("Deleted staff position:", deletedPosition);
+    
+    res.json({ message: "Staff position deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting staff position:", error);
+    res.status(500).json({ message: "Error deleting staff position" });
   }
 });
 

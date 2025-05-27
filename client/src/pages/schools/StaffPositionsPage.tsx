@@ -95,11 +95,20 @@ export default function StaffPositionsPage() {
   // State to manage staff positions locally
   const [staffPositions, setStaffPositions] = useState<Position[]>(initialPositions);
   
-  // Get staff positions
+  // Get staff positions from API
   const { data: positions, isLoading } = useQuery({
     queryKey: ['/api/school-admin/staff-positions'],
-    queryFn: () => Promise.resolve(staffPositions),
-    enabled: true
+    queryFn: async () => {
+      const response = await fetch('/api/school-admin/staff-positions', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch staff positions');
+      }
+      return response.json();
+    },
+    enabled: true,
+    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
   });
 
   // Form for adding new position
@@ -114,13 +123,22 @@ export default function StaffPositionsPage() {
 
   // Setup mutation for updating positions
   const updatePositionMutation = useMutation({
-    mutationFn: (data: Position) => {
+    mutationFn: async (data: Position) => {
       console.log("Updating position:", data);
-      // Update local state directly
-      setStaffPositions(current => 
-        current.map(pos => pos.id === data.id ? data : pos)
-      );
-      return Promise.resolve(data);
+      const response = await fetch(`/api/school-admin/staff-positions/${data.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update position');
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff-positions'] });
