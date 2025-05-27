@@ -1460,6 +1460,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin", adminClassesRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/activities", activitiesRouter);
+  
+  // Add individual student route first (more specific)
+  app.get("/api/schools/students/:id", (req, res) => {
+    const studentId = parseInt(req.params.id);
+    console.log('🔍 Fetching individual student by ID:', studentId);
+    
+    try {
+      const filePath = path.join(process.cwd(), 'data/children.json');
+      
+      if (fs.existsSync(filePath)) {
+        const fileData = fs.readFileSync(filePath, 'utf-8');
+        const fileChildren = JSON.parse(fileData);
+        
+        const student = fileChildren.find((child: any) => child.id === studentId);
+        
+        if (!student) {
+          console.log('❌ Student not found with ID:', studentId);
+          return res.status(404).json({ message: 'Student not found' });
+        }
+        
+        console.log('✅ Student found:', student);
+        return res.json(student);
+      }
+      
+      res.status(404).json({ message: 'Student not found' });
+    } catch (error) {
+      console.error('❌ Error loading student:', error);
+      res.status(500).json({ message: 'Error loading student' });
+    }
+  });
+  
   // Add students route before schools router to bypass authentication
   app.get("/api/schools/students", (req, res) => {
     console.log('📚 Fetching students from database...');
