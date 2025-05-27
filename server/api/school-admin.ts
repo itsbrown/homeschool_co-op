@@ -243,43 +243,24 @@ router.get("/classes", async (req, res) => {
 // Get staff members for the school
 router.get("/staff", async (req, res) => {
   try {
-    // Get the school(s) administered by this user
-    const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId);
+    // Read invited staff from the data directory
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
     
-    if (userSchools.length === 0) {
-      return res.status(404).json({ message: "No schools found for this administrator" });
+    let staffList = [];
+    
+    try {
+      if (fs.existsSync(STAFF_FILE)) {
+        const staffData = fs.readFileSync(STAFF_FILE, 'utf8');
+        staffList = JSON.parse(staffData);
+      }
+    } catch (fileError) {
+      console.log('No staff file found, starting with empty list');
+      staffList = [];
     }
     
-    // For now, return sample staff data
-    // In a real implementation, this would come from the database
-    const sampleStaff = [
-      {
-        id: 1,
-        name: "Dr. Sarah Johnson",
-        email: "sarah.johnson@example.com",
-        phone: "(555) 123-4567",
-        role: "Teacher",
-        department: "History",
-        subjects: ["U.S. History", "World History"],
-        status: "Active",
-        joinDate: "2021-08-15",
-        avatar: "",
-      },
-      {
-        id: 2,
-        name: "Prof. Michael Chen",
-        email: "michael.chen@example.com",
-        phone: "(555) 234-5678",
-        role: "Teacher",
-        department: "Mathematics",
-        subjects: ["Calculus", "Algebra"],
-        status: "Active",
-        joinDate: "2020-09-01",
-        avatar: "",
-      }
-    ];
-    
-    res.json(sampleStaff);
+    // Return the actual invited staff members
+    res.json(staffList);
   } catch (error) {
     console.error("Error fetching school staff:", error);
     res.status(500).json({ message: "Error fetching school staff" });

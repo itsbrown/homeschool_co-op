@@ -126,10 +126,10 @@ export default function StaffPage() {
 
   // Fetch staff for the school with automatic polling for real-time updates
   const { data: staff, isLoading, error } = useQuery({
-    queryKey: ['/api/schools/staff'],
+    queryKey: ['/api/school-admin/staff'],
     queryFn: async () => {
       try {
-        const response = await fetch('/api/schools/staff', {
+        const response = await fetch('/api/school-admin/staff', {
           credentials: 'include',
         });
         
