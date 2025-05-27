@@ -6,6 +6,12 @@ import path from 'path';
 
 const router = Router();
 
+// Test route to verify router is working
+router.get("/test", (req, res) => {
+  console.log("🚨 TEST ROUTE HIT!");
+  res.json({ message: "School admin router is working!" });
+});
+
 // Removed problematic authentication middleware that was blocking PATCH requests
 
 // Special direct login for school admin
