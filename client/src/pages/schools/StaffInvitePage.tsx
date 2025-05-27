@@ -104,10 +104,11 @@ export default function StaffInvitePage() {
       });
       navigate("/schools/staff");
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error("Staff invitation error:", error);
       toast({
         title: "Failed to send invitation",
-        description: "There was an error sending the invitation. Please try again.",
+        description: error?.message || "There was an error sending the invitation. Please try again.",
         variant: "destructive",
       });
     },

@@ -271,17 +271,21 @@ function saveStaffMembers(staff: any[]) {
 // Invite staff member (POST endpoint)
 router.post("/staff/invite", async (req, res) => {
   try {
+    console.log("📧 Staff invitation request received:", req.body);
     const { email, firstName, lastName, role, department, message } = req.body;
     
     if (!email || !firstName || !lastName || !role || !department) {
+      console.log("❌ Missing required fields:", { email, firstName, lastName, role, department });
       return res.status(400).json({ message: "Missing required fields" });
     }
 
     const staffMembers = loadStaffMembers();
+    console.log("📋 Current staff members count:", staffMembers.length);
     
     // Check if staff member already exists
     const existingStaff = staffMembers.find(s => s.email === email);
     if (existingStaff) {
+      console.log("❌ Staff member already exists:", email);
       return res.status(400).json({ message: "Staff member with this email already exists" });
     }
 
@@ -305,15 +309,17 @@ router.post("/staff/invite", async (req, res) => {
     staffMembers.push(newStaffMember);
     saveStaffMembers(staffMembers);
     
-    console.log("New staff member invited:", newStaffMember);
+    console.log("✅ New staff member invited successfully:", newStaffMember);
+    console.log("📋 Updated staff members count:", staffMembers.length);
+    
     res.json({ 
       success: true, 
       message: "Staff member invited successfully",
       staff: newStaffMember 
     });
   } catch (error) {
-    console.error("Error inviting staff member:", error);
-    res.status(500).json({ message: "Error inviting staff member" });
+    console.error("❌ Error inviting staff member:", error);
+    res.status(500).json({ message: "Error inviting staff member", error: error.message });
   }
 });
 
