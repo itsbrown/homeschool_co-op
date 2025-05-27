@@ -33,9 +33,9 @@ export default function StaffInvitePage() {
 
   // Fetch staff positions for dropdown with automatic updates
   const { data: staffPositions = [] } = useQuery({
-    queryKey: ['/api/schools/staff-positions'],
+    queryKey: ['/api/school-admin/staff-positions'],
     queryFn: async () => {
-      const response = await fetch('/api/schools/staff-positions', {
+      const response = await fetch('/api/school-admin/staff-positions', {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -49,9 +49,9 @@ export default function StaffInvitePage() {
 
   // Fetch departments for dropdown with automatic updates
   const { data: departments = [] } = useQuery({
-    queryKey: ['/api/schools/departments'],
+    queryKey: ['/api/school-admin/departments'],
     queryFn: async () => {
-      const response = await fetch('/api/schools/departments', {
+      const response = await fetch('/api/school-admin/departments', {
         credentials: 'include',
       });
       if (!response.ok) {
