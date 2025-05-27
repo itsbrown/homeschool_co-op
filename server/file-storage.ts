@@ -290,11 +290,14 @@ export class FileStorage implements IStorage {
       const filePath = path.join(__dirname, '../data/children.json');
       
       if (!fs.existsSync(filePath)) {
+        console.log('⚠️ Children file not found at:', filePath);
         return [];
       }
       
       const data = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(data);
+      const children = JSON.parse(data);
+      console.log(`📚 FileStorage loaded ${children.length} children:`, children.map(c => c.firstName + ' ' + c.lastName));
+      return children;
     } catch (error) {
       console.error('Error loading children:', error);
       return [];
