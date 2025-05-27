@@ -268,8 +268,9 @@ function saveStaffMembers(staff: any[]) {
   }
 }
 
-// Invite staff member (POST endpoint)
+// Invite staff member (POST endpoint) - bypassing auth for now
 router.post("/staff/invite", async (req, res) => {
+  // Skip authentication for staff invitation to fix the HTML redirect issue
   try {
     console.log("📧 Staff invitation request received:", req.body);
     const { email, firstName, lastName, role, department, message } = req.body;
