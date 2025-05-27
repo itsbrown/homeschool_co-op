@@ -399,7 +399,7 @@ router.delete("/staff/:id", requireSchoolAdmin, async (req, res) => {
 });
 
 // Get staff positions/roles for dropdown
-router.get("/staff-positions", requireSchoolAdmin, async (req, res) => {
+router.get("/staff-positions", async (req, res) => {
   try {
     // These would come from database in real app
     const positions = [
@@ -421,7 +421,7 @@ router.get("/staff-positions", requireSchoolAdmin, async (req, res) => {
 });
 
 // Get departments for dropdown
-router.get("/departments", requireSchoolAdmin, async (req, res) => {
+router.get("/departments", async (req, res) => {
   try {
     // These would come from database in real app
     const departments = [
