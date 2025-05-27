@@ -35,9 +35,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const { initializeDatabase } = await import('./init-db');
   await initializeDatabase();
   
-  // Configure session using the dedicated configuration
-  const { configureSession, testUsers } = await import('./config/session');
-  configureSession(app);
+  // Import Auth0 token-based authentication middleware
+  const { verifyAuth0Token, optionalAuth0Token, requireAdmin, requireEducator } = await import('./middleware/auth0-auth');
   
   // Register API routers
   app.use("/api/children", childrenRouter);
@@ -125,21 +124,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Session-based authentication middleware
-  const isAuthenticated = (req: any, res: any, next: any) => {
-    if (req.session && req.session.userId) {
-      return next();
-    }
-    res.status(401).json({ message: "Unauthorized" });
-  };
+  // Auth0 token-based authentication middleware
+  const isAuthenticated = verifyAuth0Token;
 
-  // Role-based authorization middleware
+  // Role-based authorization middleware using Auth0 tokens
   const hasRole = (roles: string[]) => {
     return (req: any, res: any, next: any) => {
-      if (req.session && req.session.userId && roles.includes(req.session.userRole)) {
-        return next();
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
       }
-      res.status(403).json({ message: "Forbidden" });
+      
+      const userRole = req.user.role || req.user['custom:role'] || req.user['app_metadata']?.role;
+      
+      if (!userRole || !roles.includes(userRole)) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      next();
     };
   };
   
@@ -226,26 +227,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Username and password are required" });
       }
       
-      // HARDCODED TEST ACCOUNTS - Try these first before database
-      if (password === "password") {
-        if (username === "admin") {
-          console.log("Admin test account login success");
-          req.session.userId = 1;
-          req.session.userRole = "admin";
-          
-          await new Promise<void>((resolve) => {
-            req.session.save((err) => {
-              if (err) console.error("Session save error:", err);
-              resolve();
-            });
-          });
-          
-          console.log("Session saved, admin ID:", req.session.userId);
-          
-          return res.status(200).json({ 
-            message: "Login successful (test admin)", 
-            user: testUsers.admin
-          });
+      // Auth0 token-based authentication - hardcoded accounts removed
+      // Users should authenticate through Auth0 JWT tokens
         } 
         else if (username === "educator") {
           console.log("Educator test account login success");
