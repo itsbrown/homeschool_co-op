@@ -240,26 +240,87 @@ router.get("/classes", async (req, res) => {
   }
 });
 
+// Staff file management functions
+const STAFF_FILE = path.join(process.cwd(), 'data', 'staff.json');
+
+function loadStaffMembers() {
+  try {
+    if (fs.existsSync(STAFF_FILE)) {
+      const data = fs.readFileSync(STAFF_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.log('Error loading staff members:', error);
+  }
+  return [];
+}
+
+function saveStaffMembers(staff: any[]) {
+  try {
+    const dataDir = path.dirname(STAFF_FILE);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(STAFF_FILE, JSON.stringify(staff, null, 2));
+    console.log('Staff members saved successfully');
+  } catch (error) {
+    console.error('Error saving staff members:', error);
+  }
+}
+
+// Invite staff member (POST endpoint)
+router.post("/staff/invite", async (req, res) => {
+  try {
+    const { email, firstName, lastName, role, department, message } = req.body;
+    
+    if (!email || !firstName || !lastName || !role || !department) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    const staffMembers = loadStaffMembers();
+    
+    // Check if staff member already exists
+    const existingStaff = staffMembers.find(s => s.email === email);
+    if (existingStaff) {
+      return res.status(400).json({ message: "Staff member with this email already exists" });
+    }
+
+    const newStaffMember = {
+      id: Math.max(0, ...staffMembers.map(s => s.id || 0)) + 1,
+      email,
+      firstName,
+      lastName,
+      name: `${firstName} ${lastName}`,
+      role,
+      department,
+      status: "Pending",
+      joinDate: new Date().toISOString().split('T')[0],
+      avatar: "",
+      phone: "",
+      subjects: [],
+      invitedAt: new Date().toISOString(),
+      message: message || ""
+    };
+
+    staffMembers.push(newStaffMember);
+    saveStaffMembers(staffMembers);
+    
+    console.log("New staff member invited:", newStaffMember);
+    res.json({ 
+      success: true, 
+      message: "Staff member invited successfully",
+      staff: newStaffMember 
+    });
+  } catch (error) {
+    console.error("Error inviting staff member:", error);
+    res.status(500).json({ message: "Error inviting staff member" });
+  }
+});
+
 // Get staff members for the school
 router.get("/staff", async (req, res) => {
   try {
-    // Read invited staff from the data directory
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-    
-    let staffList = [];
-    
-    try {
-      if (fs.existsSync(STAFF_FILE)) {
-        const staffData = fs.readFileSync(STAFF_FILE, 'utf8');
-        staffList = JSON.parse(staffData);
-      }
-    } catch (fileError) {
-      console.log('No staff file found, starting with empty list');
-      staffList = [];
-    }
-    
-    // Return the actual invited staff members
+    const staffList = loadStaffMembers();
     res.json(staffList);
   } catch (error) {
     console.error("Error fetching school staff:", error);

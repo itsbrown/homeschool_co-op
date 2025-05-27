@@ -76,19 +76,26 @@ export default function StaffInvitePage() {
     },
   });
 
-  // Create invite mutation (simulated for now)
+  // Create invite mutation
   const inviteStaffMutation = useMutation({
-    mutationFn: (data: InviteFormValues) => {
-      // In a real implementation, this would send the invitation to the API
-      // For now, we'll just simulate success
+    mutationFn: async (data: InviteFormValues) => {
       console.log("Sending invitation to:", data);
       
-      // Simulate API call
-      return new Promise<void>((resolve) => {
-        setTimeout(() => {
-          resolve();
-        }, 1500);
+      const response = await fetch('/api/school-admin/staff/invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(data),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to send invitation');
+      }
+
+      return response.json();
     },
     onSuccess: () => {
       toast({
