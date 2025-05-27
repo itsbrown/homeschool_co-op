@@ -124,7 +124,7 @@ export default function StudentsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [activeTab, setActiveTab] = useState("list");
 
-  // Fetch students for the school
+  // Fetch students for the school with automatic polling
   const { data: students, isLoading, error } = useQuery({
     queryKey: ['/api/schools/students'],
     queryFn: async () => {
@@ -146,6 +146,8 @@ export default function StudentsPage() {
       }
     },
     retry: false,
+    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
+    refetchIntervalInBackground: true, // Continue polling when window is not focused
   });
 
   if (isLoading) {
