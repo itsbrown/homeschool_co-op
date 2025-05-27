@@ -287,7 +287,7 @@ export class FileStorage implements IStorage {
 
   private loadChildren(): Child[] {
     try {
-      const filePath = path.join(__dirname, '../data/children.json');
+      const filePath = path.join(process.cwd(), 'data/children.json');
       
       if (!fs.existsSync(filePath)) {
         console.log('⚠️ Children file not found at:', filePath);
@@ -306,7 +306,7 @@ export class FileStorage implements IStorage {
 
   private saveChildren(children: Child[]): void {
     try {
-      const dataDir = path.join(__dirname, '../data');
+      const dataDir = path.join(process.cwd(), 'data');
       const filePath = path.join(dataDir, 'children.json');
       
       if (!fs.existsSync(dataDir)) {

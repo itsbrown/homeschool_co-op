@@ -32,5 +32,22 @@
     "profileImage": null,
     "createdAt": "2025-01-27T18:55:00.000Z",
     "updatedAt": "2025-01-27T18:55:00.000Z"
+  },
+  {
+    "firstName": "Emma",
+    "lastName": "Wilson",
+    "birthdate": "2019-05-15",
+    "gradeLevel": "1",
+    "parentId": 6,
+    "school": null,
+    "learningStyle": null,
+    "specialNeeds": null,
+    "interests": null,
+    "allergies": null,
+    "medicalInfo": null,
+    "profileImage": null,
+    "id": 3,
+    "createdAt": "2025-05-27T14:17:49.440Z",
+    "updatedAt": "2025-05-27T14:17:49.440Z"
   }
 ]
