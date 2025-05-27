@@ -49,5 +49,22 @@
     "id": 3,
     "createdAt": "2025-05-27T14:17:49.440Z",
     "updatedAt": "2025-05-27T14:17:49.440Z"
+  },
+  {
+    "firstName": "Maeve",
+    "lastName": "Brown",
+    "birthdate": "2025-02-22",
+    "gradeLevel": "Diapers",
+    "parentId": 6,
+    "school": null,
+    "learningStyle": null,
+    "specialNeeds": null,
+    "interests": null,
+    "allergies": null,
+    "medicalInfo": null,
+    "profileImage": null,
+    "id": 4,
+    "createdAt": "2025-05-27T14:19:21.441Z",
+    "updatedAt": "2025-05-27T14:19:21.441Z"
   }
 ]
