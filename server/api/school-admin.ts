@@ -798,4 +798,40 @@ router.get("/knowledge-bases", async (req, res) => {
   }
 });
 
+// Update student endpoint
+router.put('/students/:id', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id);
+    const updateData = req.body;
+
+    console.log('Updating student:', studentId, updateData);
+
+    // Get existing student
+    const existingStudent = await storage.getStudentById(studentId);
+    if (!existingStudent) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Update student with new data
+    const updatedStudent = await storage.updateStudent(studentId, {
+      firstName: updateData.firstName,
+      lastName: updateData.lastName,
+      birthdate: updateData.dateOfBirth,
+      gradeLevel: updateData.gradeLevel,
+      parentEmail: updateData.parentEmail,
+      parentPhone: updateData.parentPhone,
+      emergencyContact: updateData.emergencyContact,
+      emergencyPhone: updateData.emergencyPhone,
+      medicalNotes: updateData.medicalNotes,
+      specialNeeds: updateData.specialNeeds,
+    });
+
+    console.log('Student updated successfully:', updatedStudent);
+    res.json(updatedStudent);
+  } catch (error) {
+    console.error('Error updating student:', error);
+    res.status(500).json({ message: 'Error updating student' });
+  }
+});
+
 export default router;

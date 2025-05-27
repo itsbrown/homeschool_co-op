@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { useLocation } from "wouter";
+import React, { useState, useEffect } from "react";
+import { useLocation, useRoute } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,14 +10,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, UserPlus, Mail } from "lucide-react";
+import { ArrowLeft, UserPlus, Mail, Edit } from "lucide-react";
 
 export default function StudentRegistrationPage() {
   const [, setLocation] = useLocation();
+  const [match, params] = useRoute("/schools/students/:id/edit");
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sendInvitation, setSendInvitation] = useState(true);
   const [gradeLevel, setGradeLevel] = useState("");
+  
+  // Check if we're in edit mode
+  const isEditMode = !!match && !!params?.id;
+  const studentId = params?.id;
+
+  // Fetch student data if in edit mode
+  const { data: studentData, isLoading } = useQuery({
+    queryKey: [`/api/schools/students/${studentId}`],
+    enabled: isEditMode
+  });
+
+  // Populate form when student data is loaded
+  useEffect(() => {
+    if (studentData && isEditMode) {
+      setGradeLevel(studentData.gradeLevel || "");
+    }
+  }, [studentData, isEditMode]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -24,7 +43,7 @@ export default function StudentRegistrationPage() {
 
     try {
       const formData = new FormData(e.currentTarget);
-      const studentData = {
+      const submissionData = {
         firstName: formData.get('firstName'),
         lastName: formData.get('lastName'),
         dateOfBirth: formData.get('dateOfBirth'),
@@ -38,15 +57,18 @@ export default function StudentRegistrationPage() {
         sendInvitation: sendInvitation,
       };
 
-      console.log('Form submission data:', studentData);
+      console.log('Form submission data:', submissionData);
 
-      // Save student and create parent-child relationship
-      const response = await fetch('/api/students/register', {
-        method: 'POST',
+      // Choose endpoint based on mode
+      const endpoint = isEditMode ? `/api/schools/students/${studentId}` : '/api/students/register';
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(endpoint, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(studentData),
+        body: JSON.stringify(submissionData),
       });
 
       if (!response.ok) {
@@ -68,8 +90,8 @@ export default function StudentRegistrationPage() {
       setLocation("/schools/students");
     } catch (error) {
       toast({
-        title: "Registration Failed",
-        description: "There was an error registering the student. Please try again.",
+        title: isEditMode ? "Update Failed" : "Registration Failed",
+        description: `There was an error ${isEditMode ? 'updating' : 'registering'} the student. Please try again.`,
         variant: "destructive",
       });
     } finally {
@@ -77,8 +99,18 @@ export default function StudentRegistrationPage() {
     }
   };
 
+  if (isEditMode && isLoading) {
+    return (
+      <SchoolAdminLayout pageTitle="Edit Student">
+        <div className="h-screen flex items-center justify-center">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+      </SchoolAdminLayout>
+    );
+  }
+
   return (
-    <SchoolAdminLayout pageTitle="Register Student">
+    <SchoolAdminLayout pageTitle={isEditMode ? "Edit Student" : "Register Student"}>
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex items-center gap-4 mb-6">
           <Button
@@ -89,19 +121,23 @@ export default function StudentRegistrationPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">Register New Student</h1>
-            <p className="text-muted-foreground">Add a new student to your school roster</p>
+            <h1 className="text-3xl font-bold">
+              {isEditMode ? "Edit Student" : "Register New Student"}
+            </h1>
+            <p className="text-muted-foreground">
+              {isEditMode ? "Update student information" : "Add a new student to your school roster"}
+            </p>
           </div>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5" />
+              {isEditMode ? <Edit className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
               Student Information
             </CardTitle>
             <CardDescription>
-              Please fill out all required information for the new student
+              {isEditMode ? "Update the student's information below" : "Please fill out all required information for the new student"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -114,6 +150,7 @@ export default function StudentRegistrationPage() {
                     name="firstName"
                     required
                     placeholder="Enter first name"
+                    defaultValue={studentData?.firstName || ""}
                   />
                 </div>
                 <div className="space-y-2">
@@ -123,6 +160,7 @@ export default function StudentRegistrationPage() {
                     name="lastName"
                     required
                     placeholder="Enter last name"
+                    defaultValue={studentData?.lastName || ""}
                   />
                 </div>
               </div>
@@ -135,33 +173,30 @@ export default function StudentRegistrationPage() {
                     name="dateOfBirth"
                     type="date"
                     required
+                    defaultValue={studentData?.birthdate || ""}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="gradeLevel">Grade Level *</Label>
-                  <Select value={gradeLevel} onValueChange={setGradeLevel} required>
+                  <Select value={gradeLevel} onValueChange={setGradeLevel}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select grade level" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Diapers">Diapers</SelectItem>
-                      <SelectItem value="1">1 Year Old</SelectItem>
-                      <SelectItem value="2">2 Years Old</SelectItem>
-                      <SelectItem value="3">3 Years Old</SelectItem>
-                      <SelectItem value="PreK">Pre-K</SelectItem>
+                      <SelectItem value="Pre-K">Pre-K</SelectItem>
                       <SelectItem value="K">Kindergarten</SelectItem>
-                      <SelectItem value="1st">1st Grade</SelectItem>
-                      <SelectItem value="2nd">2nd Grade</SelectItem>
-                      <SelectItem value="3rd">3rd Grade</SelectItem>
-                      <SelectItem value="4th">4th Grade</SelectItem>
-                      <SelectItem value="5th">5th Grade</SelectItem>
-                      <SelectItem value="6th">6th Grade</SelectItem>
-                      <SelectItem value="7th">7th Grade</SelectItem>
-                      <SelectItem value="8th">8th Grade</SelectItem>
-                      <SelectItem value="9th">9th Grade</SelectItem>
-                      <SelectItem value="10th">10th Grade</SelectItem>
-                      <SelectItem value="11th">11th Grade</SelectItem>
-                      <SelectItem value="12th">12th Grade</SelectItem>
+                      <SelectItem value="1">1st Grade</SelectItem>
+                      <SelectItem value="2">2nd Grade</SelectItem>
+                      <SelectItem value="3">3rd Grade</SelectItem>
+                      <SelectItem value="4">4th Grade</SelectItem>
+                      <SelectItem value="5">5th Grade</SelectItem>
+                      <SelectItem value="6">6th Grade</SelectItem>
+                      <SelectItem value="7">7th Grade</SelectItem>
+                      <SelectItem value="8">8th Grade</SelectItem>
+                      <SelectItem value="9">9th Grade</SelectItem>
+                      <SelectItem value="10">10th Grade</SelectItem>
+                      <SelectItem value="11">11th Grade</SelectItem>
+                      <SelectItem value="12">12th Grade</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -171,23 +206,23 @@ export default function StudentRegistrationPage() {
                 <h3 className="text-lg font-semibold">Parent/Guardian Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="parentEmail">Parent Email *</Label>
+                    <Label htmlFor="parentEmail">Parent Email</Label>
                     <Input
                       id="parentEmail"
                       name="parentEmail"
                       type="email"
-                      required
                       placeholder="parent@example.com"
+                      defaultValue={studentData?.parentEmail || ""}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="parentPhone">Parent Phone *</Label>
+                    <Label htmlFor="parentPhone">Parent Phone</Label>
                     <Input
                       id="parentPhone"
                       name="parentPhone"
                       type="tel"
-                      required
                       placeholder="(555) 123-4567"
+                      defaultValue={studentData?.parentPhone || ""}
                     />
                   </div>
                 </div>
@@ -197,22 +232,22 @@ export default function StudentRegistrationPage() {
                 <h3 className="text-lg font-semibold">Emergency Contact</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="emergencyContact">Emergency Contact Name *</Label>
+                    <Label htmlFor="emergencyContact">Emergency Contact Name</Label>
                     <Input
                       id="emergencyContact"
                       name="emergencyContact"
-                      required
-                      placeholder="Emergency contact full name"
+                      placeholder="Enter emergency contact name"
+                      defaultValue={studentData?.emergencyContact || ""}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="emergencyPhone">Emergency Phone *</Label>
+                    <Label htmlFor="emergencyPhone">Emergency Phone</Label>
                     <Input
                       id="emergencyPhone"
                       name="emergencyPhone"
                       type="tel"
-                      required
                       placeholder="(555) 123-4567"
+                      defaultValue={studentData?.emergencyPhone || ""}
                     />
                   </div>
                 </div>
@@ -228,53 +263,57 @@ export default function StudentRegistrationPage() {
                       name="medicalNotes"
                       placeholder="Any medical conditions, allergies, or medications..."
                       rows={3}
+                      defaultValue={studentData?.medicalNotes || ""}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="specialNeeds">Special Needs or Accommodations</Label>
+                    <Label htmlFor="specialNeeds">Special Needs</Label>
                     <Textarea
                       id="specialNeeds"
                       name="specialNeeds"
-                      placeholder="Any learning accommodations or special needs..."
+                      placeholder="Learning accommodations, dietary restrictions, etc..."
                       rows={3}
+                      defaultValue={studentData?.specialNeeds || ""}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="border-t pt-6">
-                <div className="flex items-center space-x-3 mb-6">
-                  <Checkbox
-                    id="sendInvitation"
+              {!isEditMode && (
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="sendInvitation" 
                     checked={sendInvitation}
-                    onCheckedChange={(checked) => setSendInvitation(checked === true)}
+                    onCheckedChange={setSendInvitation}
                   />
-                  <div className="grid gap-1.5 leading-none">
-                    <Label
-                      htmlFor="sendInvitation"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
-                    >
-                      <Mail className="h-4 w-4" />
-                      Send invitation email to parent
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Email the parent with login instructions to access their child's account
-                    </p>
-                  </div>
+                  <Label htmlFor="sendInvitation" className="flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    Send invitation email to parent
+                  </Label>
                 </div>
+              )}
 
-                <div className="flex justify-end gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setLocation("/schools/students")}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Registering..." : "Register Student"}
-                  </Button>
-                </div>
+              <div className="flex gap-4 justify-end">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => setLocation("/schools/students")}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                      {isEditMode ? "Updating..." : "Registering..."}
+                    </>
+                  ) : (
+                    <>
+                      {isEditMode ? <Edit className="w-4 h-4 mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
+                      {isEditMode ? "Update Student" : "Register Student"}
+                    </>
+                  )}
+                </Button>
               </div>
             </form>
           </CardContent>

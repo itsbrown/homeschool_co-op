@@ -239,13 +239,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Auth0 logout endpoint - replaces session-based logout
   app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ message: "Error during logout" });
-      }
-      res.status(200).json({ message: "Logout successful" });
-    });
+    // With Auth0 token-based auth, logout is handled client-side
+    // Server just acknowledges the logout request
+    res.status(200).json({ message: "Logout acknowledged" });
   });
   
   app.get("/api/auth/me", async (req, res) => {

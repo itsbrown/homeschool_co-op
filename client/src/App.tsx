@@ -135,6 +135,7 @@ function Router() {
       <Route path="/school-admin/staff-positions" component={StaffPositionsPage} />
       <Route path="/schools/staff/:id/edit" component={StaffEditPage} />
       <Route path="/schools/students" component={StudentsPage} />
+      <Route path="/schools/students/:id/edit" component={StudentRegistrationPage} />
       <Route path="/schools/students/register" component={StudentRegistrationPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/knowledge-base/new" component={KnowledgeBaseCreationPage} />
