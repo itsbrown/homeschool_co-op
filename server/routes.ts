@@ -1584,10 +1584,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Load directly from file to ensure all students appear
       const fs = require('fs');
       const path = require('path');
-      const filePath = path.join(__dirname, '../data/children.json');
+      const filePath = path.join(process.cwd(), 'data/children.json');
+      
+      console.log(`🔍 Checking file path: ${filePath}`);
+      console.log(`📂 File exists: ${fs.existsSync(filePath)}`);
       
       if (fs.existsSync(filePath)) {
         const fileData = fs.readFileSync(filePath, 'utf-8');
+        console.log(`📄 Raw file data: ${fileData.substring(0, 200)}...`);
+        
         const fileChildren = JSON.parse(fileData);
         console.log(`📁 Loaded ${fileChildren.length} children directly from file:`, fileChildren.map(c => c.firstName + ' ' + c.lastName));
         
@@ -1607,6 +1612,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`📚 Returning ${students.length} students from file:`, students.map(s => s.name));
         return res.json(students);
+      } else {
+        console.log(`❌ File does not exist at path: ${filePath}`);
       }
     } catch (error) {
       console.error('❌ Error reading students file:', error);
