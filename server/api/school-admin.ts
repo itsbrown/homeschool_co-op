@@ -446,8 +446,11 @@ router.post("/staff-positions", async (req, res) => {
   }
 });
 
-// Update staff position
+// Update staff position  
 router.patch("/staff-positions/:id", async (req, res) => {
+  console.log("🚨 PATCH ENDPOINT HIT! ID:", req.params.id);
+  console.log("🚨 REQUEST BODY:", req.body);
+  
   try {
     const positionId = parseInt(req.params.id);
     const { title, description, isDefault } = req.body;
