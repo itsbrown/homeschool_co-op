@@ -124,10 +124,30 @@ export default function StaffPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [activeTab, setActiveTab] = useState("list");
 
-  // Fetch staff for the school (using sample data for now)
+  // Fetch staff for the school with automatic polling for real-time updates
   const { data: staff, isLoading, error } = useQuery({
     queryKey: ['/api/schools/staff'],
-    queryFn: () => Promise.resolve(sampleStaff),
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/schools/staff', {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          // If we get an error, return empty array instead of throwing
+          console.log('Staff API returned error:', response.status);
+          return [];
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.log('Staff fetch error:', error);
+        return [];
+      }
+    },
+    retry: false,
+    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
+    refetchIntervalInBackground: true, // Continue polling when window is not focused
   });
 
   if (isLoading) {

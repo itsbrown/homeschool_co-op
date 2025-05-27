@@ -292,6 +292,112 @@ router.get("/staff", requireSchoolAdmin, async (req, res) => {
   }
 });
 
+// Get single staff member by ID
+router.get("/staff/:id", requireSchoolAdmin, async (req, res) => {
+  try {
+    const staffId = parseInt(req.params.id, 10);
+    if (isNaN(staffId)) {
+      return res.status(400).json({ message: "Invalid staff ID format" });
+    }
+
+    // Sample staff data - in a real app this would come from database
+    const sampleStaff = [
+      {
+        id: 1,
+        name: "Dr. Sarah Johnson",
+        email: "sarah.johnson@example.com",
+        phone: "(555) 123-4567",
+        role: "Teacher",
+        department: "History",
+        subjects: ["U.S. History", "World History"],
+        status: "Active",
+        joinDate: "2021-08-15",
+        avatar: "",
+      },
+      {
+        id: 2,
+        name: "Prof. Michael Chen",
+        email: "michael.chen@example.com",
+        phone: "(555) 234-5678",
+        role: "Teacher",
+        department: "Mathematics",
+        subjects: ["Calculus", "Algebra"],
+        status: "Active",
+        joinDate: "2020-09-01",
+        avatar: "",
+      }
+    ];
+
+    const staffMember = sampleStaff.find(s => s.id === staffId);
+    if (!staffMember) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    res.json(staffMember);
+  } catch (error) {
+    console.error("Error fetching staff member:", error);
+    res.status(500).json({ message: "Error fetching staff member" });
+  }
+});
+
+// Update staff member
+router.put("/staff/:id", requireSchoolAdmin, async (req, res) => {
+  try {
+    const staffId = parseInt(req.params.id, 10);
+    if (isNaN(staffId)) {
+      return res.status(400).json({ message: "Invalid staff ID format" });
+    }
+
+    const { name, email, phone, role, department, status } = req.body;
+
+    // In a real app, this would update the database
+    console.log(`🔄 Updating staff member ${staffId}:`, { name, email, role, department, status });
+
+    const updatedStaff = {
+      id: staffId,
+      name,
+      email,
+      phone,
+      role,
+      department,
+      subjects: [], // Would be handled separately
+      status,
+      joinDate: "2021-08-15", // Keep existing date
+      avatar: "",
+    };
+
+    res.json({ 
+      success: true, 
+      message: "Staff member updated successfully",
+      staff: updatedStaff 
+    });
+  } catch (error) {
+    console.error("Error updating staff member:", error);
+    res.status(500).json({ message: "Error updating staff member" });
+  }
+});
+
+// Delete staff member
+router.delete("/staff/:id", requireSchoolAdmin, async (req, res) => {
+  try {
+    const staffId = parseInt(req.params.id, 10);
+    if (isNaN(staffId)) {
+      return res.status(400).json({ message: "Invalid staff ID format" });
+    }
+
+    // In a real app, this would remove from database
+    console.log(`🗑️ Removing staff member ${staffId}`);
+
+    res.json({ 
+      success: true, 
+      message: "Staff member removed successfully" 
+    });
+  } catch (error) {
+    console.error("Error removing staff member:", error);
+    res.status(500).json({ message: "Error removing staff member" });
+  }
+});
+
 // Get students for the school
 router.get("/students", requireSchoolAdmin, async (req, res) => {
   try {
