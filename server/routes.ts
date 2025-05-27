@@ -28,12 +28,7 @@ import stream from 'stream';
 import { promisify } from 'util';
 import Stripe from "stripe";
 
-declare module "express-session" {
-  interface SessionData {
-    userId: number;
-    userRole: string;
-  }
-}
+// Removed express-session declarations - using Auth0 token-based authentication
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize database tables
@@ -130,16 +125,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Import Auth0 unified authentication
-  const { optionalAuth, requireAdmin, requireSchoolAdmin } = await import('./auth0-config');
-  
-  // Replace all conflicting authentication middlewares with Auth0
-  const isAuthenticated = optionalAuth;
-  
-  // Middleware to check role
+  // Session-based authentication middleware
+  const isAuthenticated = (req: any, res: any, next: any) => {
+    if (req.session && req.session.userId) {
+      return next();
+    }
+    res.status(401).json({ message: "Unauthorized" });
+  };
+
+  // Role-based authorization middleware
   const hasRole = (roles: string[]) => {
-    return (req, res, next) => {
-      if (req.session.userId && roles.includes(req.session.userRole)) {
+    return (req: any, res: any, next: any) => {
+      if (req.session && req.session.userId && roles.includes(req.session.userRole)) {
         return next();
       }
       res.status(403).json({ message: "Forbidden" });
