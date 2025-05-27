@@ -130,12 +130,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Middleware to check authentication
-  const isAuthenticated = (req, res, next) => {
-    // For now, skip authentication check to fix the immediate issue
-    // TODO: Implement proper Firebase authentication middleware
-    return next();
-  };
+  // Import Auth0 unified authentication
+  const { optionalAuth, requireAdmin, requireSchoolAdmin } = await import('./auth0-config');
+  
+  // Replace all conflicting authentication middlewares with Auth0
+  const isAuthenticated = optionalAuth;
   
   // Middleware to check role
   const hasRole = (roles: string[]) => {
