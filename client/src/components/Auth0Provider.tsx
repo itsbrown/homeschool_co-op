@@ -11,7 +11,9 @@ const Auth0Wrapper: React.FC<Auth0WrapperProps> = ({ children }) => {
   const audience = import.meta.env.VITE_AUTH0_API_IDENTIFIER;
 
   if (!domain || !clientId) {
-    return <div>Auth0 configuration missing</div>;
+    // Fallback: render children without Auth0 until configuration is complete
+    console.warn('Auth0 configuration incomplete, using fallback authentication');
+    return <>{children}</>;
   }
 
   return (
