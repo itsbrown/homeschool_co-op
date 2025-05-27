@@ -124,7 +124,9 @@ export default function StaffPositionsPage() {
   // Setup mutation for updating positions
   const updatePositionMutation = useMutation({
     mutationFn: async (data: Position) => {
-      console.log("Updating position:", data);
+      console.log("🔄 Frontend: Updating position:", data);
+      console.log("🌐 Frontend: Making PATCH request to:", `/api/school-admin/staff-positions/${data.id}`);
+      
       const response = await fetch(`/api/school-admin/staff-positions/${data.id}`, {
         method: 'PATCH',
         headers: {
@@ -134,11 +136,18 @@ export default function StaffPositionsPage() {
         body: JSON.stringify(data),
       });
       
+      console.log("📡 Frontend: Response status:", response.status);
+      console.log("📡 Frontend: Response ok:", response.ok);
+      
       if (!response.ok) {
-        throw new Error('Failed to update position');
+        const errorText = await response.text();
+        console.error("❌ Frontend: Update failed with error:", errorText);
+        throw new Error(`Failed to update position: ${response.status} ${errorText}`);
       }
       
-      return response.json();
+      const result = await response.json();
+      console.log("✅ Frontend: Update successful, received:", result);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff-positions'] });
