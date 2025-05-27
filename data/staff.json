@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "email": "coreycreates@gmail.com",
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "name": "Corey Brown",
+    "role": "Support Staff",
+    "department": "Technology",
+    "status": "Pending",
+    "joinDate": "2025-05-27",
+    "avatar": "",
+    "phone": "",
+    "subjects": [],
+    "invitedAt": "2025-05-27T19:43:32.236Z",
+    "message": "Welcome to our team!"
+  }
+]

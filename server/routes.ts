@@ -150,8 +150,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/ai/status", async (req, res) => {
     try {
       // Dynamically import the Anthropic and OpenAI services to check availability
-      const { anthropicService } = await import("./services/anthropicService");
-      const { checkOpenAIStatus } = await import("./services/openai");
+      let anthropicService, checkOpenAIStatus;
+      try {
+        ({ anthropicService } = await import("./services/anthropicService"));
+        ({ checkOpenAIStatus } = await import("./services/openai"));
+      } catch (error) {
+        console.error('Failed to load AI services:', error);
+        return res.status(500).json({ message: 'AI services unavailable' });
+      }
       
       const anthropicStatus = anthropicService.getStatus();
       const anthropicAvailable = anthropicStatus.available;
