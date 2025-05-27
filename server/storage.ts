@@ -528,6 +528,10 @@ export class MemStorage implements IStorage {
     this.childrenStore.delete(id);
   }
 
+  async getAllChildren(): Promise<Child[]> {
+    return Array.from(this.childrenStore.values());
+  }
+
   // Emergency Contact methods
   async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
     return this.emergencyContactsStore.get(id);
