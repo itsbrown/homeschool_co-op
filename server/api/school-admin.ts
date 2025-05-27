@@ -452,25 +452,32 @@ router.patch("/staff-positions/:id", async (req, res) => {
     const positionId = parseInt(req.params.id);
     const { title, description, isDefault } = req.body;
     
+    console.log("🔧 PATCH /staff-positions/" + positionId + " received:", { title, description, isDefault });
+    console.log("📋 Current staffPositions before update:", staffPositions);
+    
     const positionIndex = staffPositions.findIndex(p => p.id === positionId);
     
     if (positionIndex === -1) {
+      console.log("❌ Position not found for ID:", positionId);
       return res.status(404).json({ message: "Staff position not found" });
     }
 
     // Update the position
-    staffPositions[positionIndex] = {
+    const updatedPosition = {
       ...staffPositions[positionIndex],
       title: title || staffPositions[positionIndex].title,
       description: description !== undefined ? description : staffPositions[positionIndex].description,
       isDefault: isDefault !== undefined ? isDefault : staffPositions[positionIndex].isDefault
     };
-
-    console.log("Updated staff position:", staffPositions[positionIndex]);
     
-    res.json(staffPositions[positionIndex]);
+    staffPositions[positionIndex] = updatedPosition;
+
+    console.log("✅ Successfully updated staff position:", updatedPosition);
+    console.log("📋 Full staffPositions after update:", staffPositions);
+    
+    res.json(updatedPosition);
   } catch (error) {
-    console.error("Error updating staff position:", error);
+    console.error("❌ Error updating staff position:", error);
     res.status(500).json({ message: "Error updating staff position" });
   }
 });
