@@ -398,6 +398,54 @@ router.delete("/staff/:id", requireSchoolAdmin, async (req, res) => {
   }
 });
 
+// Get staff positions/roles for dropdown
+router.get("/staff-positions", requireSchoolAdmin, async (req, res) => {
+  try {
+    // These would come from database in real app
+    const positions = [
+      { id: 1, title: "Teacher", description: "Classroom instructor", isDefault: true },
+      { id: 2, title: "Teacher Assistant", description: "Supports classroom instruction", isDefault: true },
+      { id: 3, title: "Administrator", description: "School administration", isDefault: true },
+      { id: 4, title: "Support Staff", description: "General support roles", isDefault: false },
+      { id: 5, title: "Volunteer", description: "Volunteer position", isDefault: false },
+      { id: 6, title: "Substitute Teacher", description: "Temporary classroom instructor", isDefault: false },
+      { id: 7, title: "Counselor", description: "Student guidance and support", isDefault: false },
+      { id: 8, title: "Librarian", description: "Library management", isDefault: false },
+    ];
+
+    res.json(positions);
+  } catch (error) {
+    console.error("Error fetching staff positions:", error);
+    res.status(500).json({ message: "Error fetching staff positions" });
+  }
+});
+
+// Get departments for dropdown
+router.get("/departments", requireSchoolAdmin, async (req, res) => {
+  try {
+    // These would come from database in real app
+    const departments = [
+      { id: 1, name: "Mathematics", isActive: true },
+      { id: 2, name: "English Language Arts", isActive: true },
+      { id: 3, name: "Science", isActive: true },
+      { id: 4, name: "Social Studies", isActive: true },
+      { id: 5, name: "History", isActive: true },
+      { id: 6, name: "Physical Education", isActive: true },
+      { id: 7, name: "Arts", isActive: true },
+      { id: 8, name: "Music", isActive: true },
+      { id: 9, name: "Technology", isActive: true },
+      { id: 10, name: "Administration", isActive: true },
+      { id: 11, name: "Special Education", isActive: true },
+      { id: 12, name: "Foreign Languages", isActive: true },
+    ];
+
+    res.json(departments);
+  } catch (error) {
+    console.error("Error fetching departments:", error);
+    res.status(500).json({ message: "Error fetching departments" });
+  }
+});
+
 // Get students for the school
 router.get("/students", requireSchoolAdmin, async (req, res) => {
   try {

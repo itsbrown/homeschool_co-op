@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,7 @@ const inviteFormSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   role: z.string().min(1, "Please select a role"),
+  department: z.string().min(1, "Please select a department"),
   message: z.string().optional(),
 });
 
@@ -30,6 +31,38 @@ export default function StaffInvitePage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
+  // Fetch staff positions for dropdown with automatic updates
+  const { data: staffPositions = [] } = useQuery({
+    queryKey: ['/api/schools/staff-positions'],
+    queryFn: async () => {
+      const response = await fetch('/api/schools/staff-positions', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch staff positions');
+      }
+      return response.json();
+    },
+    retry: false,
+    refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
+  });
+
+  // Fetch departments for dropdown with automatic updates
+  const { data: departments = [] } = useQuery({
+    queryKey: ['/api/schools/departments'],
+    queryFn: async () => {
+      const response = await fetch('/api/schools/departments', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch departments');
+      }
+      return response.json();
+    },
+    retry: false,
+    refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
+  });
+
   // Set up form with validation
   const form = useForm<InviteFormValues>({
     resolver: zodResolver(inviteFormSchema),
@@ -38,6 +71,7 @@ export default function StaffInvitePage() {
       firstName: "",
       lastName: "",
       role: "",
+      department: "",
       message: "",
     },
   });
@@ -150,11 +184,39 @@ export default function StaffInvitePage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="teacher">Teacher</SelectItem>
-                          <SelectItem value="assistant">Teacher Assistant</SelectItem>
-                          <SelectItem value="administrator">Administrator</SelectItem>
-                          <SelectItem value="staff">Support Staff</SelectItem>
-                          <SelectItem value="volunteer">Volunteer</SelectItem>
+                          {staffPositions.map((position: any) => (
+                            <SelectItem key={position.id} value={position.title}>
+                              {position.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="department"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department*</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a department" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {departments.map((department: any) => (
+                            <SelectItem key={department.id} value={department.name}>
+                              {department.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
