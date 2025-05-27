@@ -213,56 +213,50 @@ router.get("/students", async (req, res) => {
   console.log('📚 Fetching students from database...');
   
   try {
-    // Get all children from storage
-    const children = await storage.getAllChildren();
-    console.log(`📚 Found ${children.length} children in storage:`, children.map(c => c.firstName + ' ' + c.lastName));
+    // Load directly from file to ensure all students appear
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.join(__dirname, '../../data/children.json');
     
-    // If no children found, try loading directly from file as fallback
-    if (children.length === 0) {
-      console.log('⚠️ No children found in storage, trying direct file access...');
-      const fs = require('fs');
-      const path = require('path');
-      const filePath = path.join(__dirname, '../../data/children.json');
+    if (fs.existsSync(filePath)) {
+      const fileData = fs.readFileSync(filePath, 'utf-8');
+      const fileChildren = JSON.parse(fileData);
+      console.log(`📁 Loaded ${fileChildren.length} children directly from file:`, fileChildren.map(c => c.firstName + ' ' + c.lastName));
       
-      if (fs.existsSync(filePath)) {
-        const fileData = fs.readFileSync(filePath, 'utf-8');
-        const fileChildren = JSON.parse(fileData);
-        console.log(`📁 Found ${fileChildren.length} children in file:`, fileChildren.map(c => c.firstName + ' ' + c.lastName));
-        
-        // Use file data if available
-        const students = fileChildren.map(child => ({
-          id: child.id,
-          name: `${child.firstName} ${child.lastName}`,
-          gradeLevel: child.gradeLevel || 'N/A',
-          age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
-          parentName: 'Parent Contact',
-          email: 'No email',
-          enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          status: 'Active',
-          classes: [],
-          avatar: '',
-        }));
-        
-        console.log(`📚 Returning ${students.length} students from file:`, students.map(s => s.name));
-        return res.json(students);
-      }
+      // Transform file data to match students format
+      const students = fileChildren.map(child => ({
+        id: child.id,
+        name: `${child.firstName} ${child.lastName}`,
+        gradeLevel: child.gradeLevel || 'N/A',
+        age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
+        parentName: 'Parent Contact',
+        email: 'No email',
+        enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        status: 'Active',
+        classes: [],
+        avatar: '',
+      }));
+      
+      console.log(`📚 Returning ${students.length} students from file:`, students.map(s => s.name));
+      return res.json(students);
     }
     
-    // Transform children data to match students format
+    // Fallback to storage if file doesn't exist
+    const children = await storage.getAllChildren();
     const students = children.map(child => ({
       id: child.id,
       name: `${child.firstName} ${child.lastName}`,
       gradeLevel: child.gradeLevel || 'N/A',
       age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
-      parentName: 'Parent Contact', // Will be enhanced later with actual parent lookup
-      email: 'No email', // Parent email lookup will be added later
+      parentName: 'Parent Contact',
+      email: 'No email',
       enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       status: 'Active',
       classes: [],
       avatar: '',
     }));
     
-    console.log(`📚 Returning ${students.length} students:`, students.map(s => s.name));
+    console.log(`📚 Returning ${students.length} students from storage:`, students.map(s => s.name));
     res.json(students);
   } catch (error) {
     console.error('❌ Error fetching students:', error);
