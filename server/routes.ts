@@ -1582,8 +1582,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       // Load directly from file to ensure all students appear
-      const fs = require('fs');
-      const path = require('path');
       const filePath = path.join(process.cwd(), 'data/children.json');
       
       console.log(`🔍 Checking file path: ${filePath}`);
@@ -1594,10 +1592,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`📄 Raw file data: ${fileData.substring(0, 200)}...`);
         
         const fileChildren = JSON.parse(fileData);
-        console.log(`📁 Loaded ${fileChildren.length} children directly from file:`, fileChildren.map(c => c.firstName + ' ' + c.lastName));
+        console.log(`📁 Loaded ${fileChildren.length} children directly from file:`, fileChildren.map((c: any) => c.firstName + ' ' + c.lastName));
         
         // Transform file data to match students format
-        const students = fileChildren.map(child => ({
+        const students = fileChildren.map((child: any) => ({
           id: child.id,
           name: `${child.firstName} ${child.lastName}`,
           gradeLevel: child.gradeLevel || 'N/A',
@@ -1610,7 +1608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           avatar: '',
         }));
         
-        console.log(`📚 Returning ${students.length} students from file:`, students.map(s => s.name));
+        console.log(`📚 Returning ${students.length} students from file:`, students.map((s: any) => s.name));
         return res.json(students);
       } else {
         console.log(`❌ File does not exist at path: ${filePath}`);
