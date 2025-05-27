@@ -1,11 +1,56 @@
 [
-  { "id": 1, "title": "Teacher", "description": "Classroom instructor", "isDefault": true },
-  { "id": 2, "title": "Teacher Assistant", "description": "Supports classroom instruction", "isDefault": true },
-  { "id": 3, "title": "Administrator", "description": "School administration", "isDefault": true },
-  { "id": 4, "title": "Support Staff", "description": "General support roles", "isDefault": false },
-  { "id": 5, "title": "Volunteer", "description": "Volunteer position", "isDefault": false },
-  { "id": 6, "title": "Substitute Teacher", "description": "Temporary classroom instructor", "isDefault": false },
-  { "id": 7, "title": "Counselor", "description": "Student guidance and support", "isDefault": false },
-  { "id": 8, "title": "Librarian", "description": "Library management", "isDefault": false },
-  { "id": 9, "title": "Mentor", "description": "Student mentoring and guidance", "isDefault": false }
+  {
+    "id": 1,
+    "title": "Teacher",
+    "description": "Classroom instructor",
+    "isDefault": true
+  },
+  {
+    "id": 2,
+    "title": "Aide",
+    "description": "Supports classroom instruction",
+    "isDefault": true
+  },
+  {
+    "id": 3,
+    "title": "Administrator",
+    "description": "School administration",
+    "isDefault": true
+  },
+  {
+    "id": 4,
+    "title": "Support Staff",
+    "description": "General support roles",
+    "isDefault": false
+  },
+  {
+    "id": 5,
+    "title": "Volunteer",
+    "description": "Volunteer position",
+    "isDefault": false
+  },
+  {
+    "id": 6,
+    "title": "Substitute Teacher",
+    "description": "Temporary classroom instructor",
+    "isDefault": false
+  },
+  {
+    "id": 7,
+    "title": "Counselor",
+    "description": "Student guidance and support",
+    "isDefault": false
+  },
+  {
+    "id": 8,
+    "title": "Librarian",
+    "description": "Library management",
+    "isDefault": false
+  },
+  {
+    "id": 9,
+    "title": "Mentor",
+    "description": "Student mentoring and guidance",
+    "isDefault": false
+  }
 ]
