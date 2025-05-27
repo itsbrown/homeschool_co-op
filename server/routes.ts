@@ -272,10 +272,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           req.session.userId = 3;
           req.session.userRole = "parent";
           
-          await new Promise<void>((resolve) => {
+          await new Promise<void>((resolve, reject) => {
             req.session.save((err) => {
-              if (err) console.error("Session save error:", err);
-              resolve();
+              if (err) {
+                console.error("Session save error:", err);
+                reject(err);
+              } else {
+                resolve();
+              }
             });
           });
           
@@ -1052,7 +1056,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Initialize Stripe
   if (!process.env.STRIPE_SECRET_KEY) {
-    console.warn('Missing STRIPE_SECRET_KEY environment variable. Stripe payments will not work.');
+    console.error('Critical: STRIPE_SECRET_KEY environment variable is missing. Stripe payments will not work.');
   }
   
   const stripe = process.env.STRIPE_SECRET_KEY ? 
