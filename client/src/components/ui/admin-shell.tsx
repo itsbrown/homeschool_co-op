@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 
 interface SidebarItemProps {
   href: string;
@@ -44,7 +44,7 @@ function SidebarItem({ href, title, icon, isActive }: SidebarItemProps) {
 
 export function AdminShell({ children }: PropsWithChildren) {
   const [location] = useLocation();
-  const { user } = useAuth();
+  const { user } = useFirebaseAuth();
 
   return (
     <div className="flex min-h-screen">

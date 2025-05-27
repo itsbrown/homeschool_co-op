@@ -1,6 +1,6 @@
 import { Link as WouterLink, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { useAuth } from "../hooks/use-auth";
+import { useFirebaseAuth } from "../hooks/useFirebaseAuth";
 import { Sparkles, Book, Layers, BookOpen, Users, GraduationCap, User2 } from "lucide-react";
 
 // Create a Link component that highlights the active page
