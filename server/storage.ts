@@ -76,6 +76,7 @@ export interface IStorage {
   // Child methods
   getChildById(id: number): Promise<Child | undefined>;
   getChildrenByParentId(parentId: number): Promise<Child[]>;
+  getAllChildren(): Promise<Child[]>;
   createChild(child: InsertChild & { parentId: number }): Promise<Child>;
   updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined>;
   deleteChild(id: number): Promise<void>;
