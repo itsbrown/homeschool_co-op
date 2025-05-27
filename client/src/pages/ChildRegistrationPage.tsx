@@ -3,13 +3,13 @@ import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import AppShell from "@/components/layout/AppShell";
 import ChildRegistrationForm from "@/components/registration/ChildRegistrationForm";
-import { useAuth } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ChildRegistrationPage() {
   const { childId } = useParams();
   const [, setLocation] = useLocation();
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useFirebaseAuth();
   
   // Redirect if not authenticated
   React.useEffect(() => {

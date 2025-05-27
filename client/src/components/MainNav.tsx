@@ -27,7 +27,7 @@ export function MainNav({
   className,
   ...props
 }: React.HTMLAttributes<HTMLElement>) {
-  const { user } = useAuth();
+  const { user } = useFirebaseAuth();
   const isAdmin = user?.role === "admin";
   const isEducator = user?.role === "educator" || isAdmin;
   
