@@ -217,129 +217,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.post("/api/auth/login", async (req, res) => {
+  // Auth0 token verification endpoint - replaces traditional login
+  app.get("/api/auth/verify", verifyAuth0Token, async (req: any, res) => {
     try {
-      const { username, password } = req.body;
+      // Token is already verified by middleware, user info is in req.user
+      const userInfo = {
+        id: req.user.sub,
+        email: req.user.email,
+        name: req.user.name || req.user.nickname,
+        role: req.user.role || req.user['custom:role'] || req.user['app_metadata']?.role || 'user',
+        picture: req.user.picture
+      };
       
-      console.log("Login attempt for user:", username);
-      
-      if (!username || !password) {
-        return res.status(400).json({ message: "Username and password are required" });
-      }
-      
-      // Auth0 token-based authentication - hardcoded accounts removed
-      // Users should authenticate through Auth0 JWT tokens
-        } 
-        else if (username === "educator") {
-          console.log("Educator test account login success");
-          req.session.userId = 2;
-          req.session.userRole = "educator";
-          
-          await new Promise<void>((resolve) => {
-            req.session.save((err) => {
-              if (err) console.error("Session save error:", err);
-              resolve();
-            });
-          });
-          
-          return res.status(200).json({ 
-            message: "Login successful (test educator)", 
-            user: testUsers.educator
-          });
-        }
-        else if (username === "parent") {
-          console.log("Parent test account login success");
-          req.session.userId = 3;
-          req.session.userRole = "parent";
-          
-          await new Promise<void>((resolve, reject) => {
-            req.session.save((err) => {
-              if (err) {
-                console.error("Session save error:", err);
-                reject(err);
-              } else {
-                resolve();
-              }
-            });
-          });
-          
-          return res.status(200).json({ 
-            message: "Login successful (test parent)", 
-            user: testUsers.parent
-          });
-        }
-        else if (username === "learner") {
-          console.log("Learner test account login success");
-          req.session.userId = 4;
-          req.session.userRole = "learner";
-          
-          await new Promise<void>((resolve) => {
-            req.session.save((err) => {
-              if (err) console.error("Session save error:", err);
-              resolve();
-            });
-          });
-          
-          return res.status(200).json({ 
-            message: "Login successful (test learner)", 
-            user: testUsers.learner
-          });
-        }
-        else if (username === "schooladmin") {
-          console.log("School Admin test account login success");
-          req.session.userId = 5;
-          req.session.userRole = "schoolAdmin";
-          
-          console.log("Setting School Admin session data...");
-          
-          await new Promise<void>((resolve) => {
-            req.session.save((err) => {
-              if (err) console.error("Session save error for School Admin:", err);
-              resolve();
-            });
-          });
-          
-          console.log("Session saved successfully for School Admin, userId:", req.session.userId);
-          
-          return res.status(200).json({ 
-            message: "Login successful (School Admin)", 
-            user: testUsers.schoolAdmin
-          });
-        }
-      }
-            
-      // If not a test account, try database
-      try {
-        const user = await storage.getUserByUsername(username);
-        if (!user) {
-          console.log("User not found:", username);
-          return res.status(401).json({ message: "Invalid credentials" });
-        }
-        
-        console.log("User found, checking password");
-        
-        const passwordValid = await bcrypt.compare(password, user.password);
-        console.log("Password valid:", passwordValid);
-        
-        if (!passwordValid) {
-          return res.status(401).json({ message: "Invalid credentials" });
-        }
-        
-        // Set session data
-        req.session.userId = user.id;
-        req.session.userRole = user.role;
-        
-        // Remove password from response
-        const { password: _, ...userWithoutPassword } = user;
-        
-        res.status(200).json({ message: "Login successful", user: userWithoutPassword });
-      } catch (dbError) {
-        console.error("Database login error:", dbError);
-        return res.status(500).json({ message: "Error during login - Database issue" });
-      }
+      res.status(200).json({ 
+        message: "Token verified successfully", 
+        user: userInfo 
+      });
     } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ message: "Error during login" });
+      console.error("Token verification error:", error);
+      res.status(500).json({ message: "Error verifying token" });
     }
   });
   
