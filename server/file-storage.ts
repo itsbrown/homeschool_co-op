@@ -15,6 +15,8 @@ import {
 } from '@shared/schema';
 import * as fileDb from './file-db';
 import { userStorage } from './users-storage';
+import fs from 'fs';
+import path from 'path';
 
 // Validation error class
 class ValidationError extends Error {
@@ -281,8 +283,6 @@ export class FileStorage implements IStorage {
 
   private loadChildren(): Child[] {
     try {
-      const fs = require('fs');
-      const path = require('path');
       const filePath = path.join(__dirname, '../data/children.json');
       
       if (!fs.existsSync(filePath)) {
@@ -299,8 +299,6 @@ export class FileStorage implements IStorage {
 
   private saveChildren(children: Child[]): void {
     try {
-      const fs = require('fs');
-      const path = require('path');
       const dataDir = path.join(__dirname, '../data');
       const filePath = path.join(dataDir, 'children.json');
       
