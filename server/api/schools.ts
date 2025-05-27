@@ -222,9 +222,9 @@ router.get("/students", async (req, res) => {
       id: child.id,
       name: `${child.firstName} ${child.lastName}`,
       gradeLevel: child.gradeLevel || 'N/A',
-      age: child.dateOfBirth ? Math.floor((Date.now() - new Date(child.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
+      age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
       parentName: 'Parent Contact', // Will be enhanced later with actual parent lookup
-      email: child.parentEmail || 'No email',
+      email: 'No email', // Parent email lookup will be added later
       enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       status: 'Active',
       classes: [],

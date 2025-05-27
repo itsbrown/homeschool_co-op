@@ -1,0 +1,36 @@
+[
+  {
+    "id": 1,
+    "firstName": "Adaluna",
+    "lastName": "Brown",
+    "birthdate": "2022-03-15",
+    "gradeLevel": "2",
+    "parentId": 1,
+    "specialNeeds": "",
+    "interests": null,
+    "school": null,
+    "learningStyle": null,
+    "allergies": null,
+    "medicalInfo": null,
+    "profileImage": null,
+    "createdAt": "2025-01-20T10:00:00.000Z",
+    "updatedAt": "2025-01-20T10:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "firstName": "Hermione",
+    "lastName": "Brown",
+    "birthdate": "2015-09-19",
+    "gradeLevel": "4",
+    "parentId": 1,
+    "specialNeeds": "",
+    "interests": null,
+    "school": null,
+    "learningStyle": null,
+    "allergies": null,
+    "medicalInfo": "No known allergies",
+    "profileImage": null,
+    "createdAt": "2025-01-27T18:55:00.000Z",
+    "updatedAt": "2025-01-27T18:55:00.000Z"
+  }
+]
