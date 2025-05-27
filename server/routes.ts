@@ -1580,7 +1580,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/schools/students", (req, res) => {
     console.log('📚 Fetching students from database...');
     
-    // Return students data including Adaluna Brown
+    try {
+      // Load directly from file to ensure all students appear
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.join(__dirname, '../data/children.json');
+      
+      if (fs.existsSync(filePath)) {
+        const fileData = fs.readFileSync(filePath, 'utf-8');
+        const fileChildren = JSON.parse(fileData);
+        console.log(`📁 Loaded ${fileChildren.length} children directly from file:`, fileChildren.map(c => c.firstName + ' ' + c.lastName));
+        
+        // Transform file data to match students format
+        const students = fileChildren.map(child => ({
+          id: child.id,
+          name: `${child.firstName} ${child.lastName}`,
+          gradeLevel: child.gradeLevel || 'N/A',
+          age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
+          parentName: 'Parent Contact',
+          email: 'coreycreates@gmail.com',
+          enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          status: 'Active',
+          classes: [],
+          avatar: '',
+        }));
+        
+        console.log(`📚 Returning ${students.length} students from file:`, students.map(s => s.name));
+        return res.json(students);
+      }
+    } catch (error) {
+      console.error('❌ Error reading students file:', error);
+    }
+    
+    // Fallback if file reading fails
     const students = [
       {
         id: 1,
@@ -1596,7 +1628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     ];
     
-    console.log(`📚 Returning ${students.length} students including Adaluna Brown`);
+    console.log(`📚 Returning ${students.length} fallback students`);
     res.json(students);
   });
 
