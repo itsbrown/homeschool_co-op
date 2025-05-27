@@ -168,17 +168,9 @@ export default function StaffPositionsPage() {
 
   // Setup mutation for adding positions
   const addPositionMutation = useMutation({
-    mutationFn: (data: PositionFormValues) => {
-      const newPosition: Position = { 
-        id: Date.now(), 
-        title: data.title,
-        description: data.description || "",
-        isDefault: data.isDefault 
-      };
-      
-      // Add to local state directly
-      setStaffPositions(current => [...current, newPosition]);
-      return Promise.resolve(newPosition);
+    mutationFn: async (data: PositionFormValues) => {
+      const response = await apiRequest("POST", "/api/school-admin/staff-positions", data);
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff-positions'] });
