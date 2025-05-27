@@ -1,15 +1,69 @@
 import { Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
+import { auth } from "firebase-admin/auth";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+
+// Initialize Firebase Admin SDK if not already initialized
+if (!getApps().length) {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS || '{}');
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+  } catch (error) {
+    console.error("Failed to initialize Firebase Admin:", error);
+  }
+}
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+    name?: string;
+    firebaseUid: string;
+  };
+}
 
 /**
- * Middleware to check if a user is authenticated
- * For now, we'll bypass authentication for development
+ * Middleware to check if a user is authenticated via Firebase
  */
-export const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
-  // Temporary bypass for Firebase authentication issues
-  // In production, this would verify Firebase tokens
-  console.log("🔓 Authentication bypassed for development");
-  return next();
+export const isAuthenticated = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: "No token provided" });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    
+    // Verify the Firebase token
+    const decodedToken = await auth().verifyIdToken(token);
+    const firebaseUid = decodedToken.uid;
+    const email = decodedToken.email;
+
+    // Get user from our system
+    const users = await storage.getUsers();
+    const user = users.find(u => u.email === email);
+    
+    if (!user) {
+      return res.status(401).json({ message: "User not found in system" });
+    }
+
+    // Attach user to request
+    req.user = {
+      id: user.id.toString(),
+      email: user.email,
+      role: user.role,
+      name: user.name || user.email,
+      firebaseUid: firebaseUid
+    };
+
+    return next();
+  } catch (error) {
+    console.error("Authentication error:", error);
+    return res.status(401).json({ message: "Invalid token" });
+  }
 };
 
 /**
