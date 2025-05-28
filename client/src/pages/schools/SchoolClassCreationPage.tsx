@@ -148,7 +148,9 @@ export default function SchoolClassCreationPage() {
         title: "Class updated successfully",
         description: "Your class has been updated.",
       });
+      // Invalidate both the class list and the individual class data
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/class-details", classId] });
       navigate("/schools/classes");
     },
     onError: (error) => {
