@@ -282,8 +282,13 @@ export default function SchoolClassCreationPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value="early-elementary">Early Elementary</SelectItem>
+                            <SelectItem value="lower-elementary">Lower Elementary</SelectItem>
+                            <SelectItem value="middle-elementary">Middle Elementary</SelectItem>
                             <SelectItem value="elementary">Elementary (K-5)</SelectItem>
+                            <SelectItem value="middle-school">Middle School</SelectItem>
                             <SelectItem value="middle">Middle School (6-8)</SelectItem>
+                            <SelectItem value="high-school">High School</SelectItem>
                             <SelectItem value="high">High School (9-12)</SelectItem>
                             <SelectItem value="k-12">All Grades (K-12)</SelectItem>
                           </SelectContent>
