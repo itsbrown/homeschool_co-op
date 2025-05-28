@@ -1491,6 +1491,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Add student update endpoint
+  app.put("/api/schools/students/:id", (req, res) => {
+    const studentId = parseInt(req.params.id);
+    console.log('📝 Updating student with ID:', studentId);
+    console.log('📄 Update data:', req.body);
+    
+    try {
+      const filePath = path.join(process.cwd(), 'data/children.json');
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: 'Student not found' });
+      }
+      
+      const fileData = fs.readFileSync(filePath, 'utf-8');
+      const students = JSON.parse(fileData);
+      
+      const studentIndex = students.findIndex((s: any) => s.id === studentId);
+      
+      if (studentIndex === -1) {
+        console.log('❌ Student not found with ID:', studentId);
+        return res.status(404).json({ message: 'Student not found' });
+      }
+      
+      // Update the student with new data
+      const updatedStudent = {
+        ...students[studentIndex],
+        firstName: req.body.firstName || students[studentIndex].firstName,
+        lastName: req.body.lastName || students[studentIndex].lastName,
+        birthdate: req.body.dateOfBirth || students[studentIndex].birthdate,
+        gradeLevel: req.body.gradeLevel || students[studentIndex].gradeLevel,
+        parentEmail: req.body.parentEmail || students[studentIndex].parentEmail,
+        parentPhone: req.body.parentPhone || students[studentIndex].parentPhone,
+        emergencyContact: req.body.emergencyContact || students[studentIndex].emergencyContact,
+        emergencyPhone: req.body.emergencyPhone || students[studentIndex].emergencyPhone,
+        medicalNotes: req.body.medicalNotes || students[studentIndex].medicalNotes,
+        specialNeeds: req.body.specialNeeds || students[studentIndex].specialNeeds,
+        updatedAt: new Date().toISOString()
+      };
+      
+      students[studentIndex] = updatedStudent;
+      
+      // Write back to file
+      fs.writeFileSync(filePath, JSON.stringify(students, null, 2));
+      
+      console.log('✅ Student updated successfully:', updatedStudent);
+      res.json(updatedStudent);
+    } catch (error) {
+      console.error('❌ Error updating student:', error);
+      res.status(500).json({ message: 'Error updating student' });
+    }
+  });
+  
   // Add students route before schools router to bypass authentication
   app.get("/api/schools/students", (req, res) => {
     console.log('📚 Fetching students from database...');
