@@ -1606,6 +1606,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use("/api/image-services", imageServicesRouter);
   app.use("/api/ocr-test", ocrTestRouter);
+  // Class details endpoint - direct route to avoid middleware conflicts
+  app.get("/api/class-details/:id", (req, res) => {
+    const classId = parseInt(req.params.id);
+    console.log('🔍 Fetching class details with ID:', classId);
+    
+    try {
+      const filePath = path.join(process.cwd(), 'data/classes.json');
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: 'Class not found' });
+      }
+      
+      const fileData = fs.readFileSync(filePath, 'utf-8');
+      const allClasses = JSON.parse(fileData);
+      
+      const classData = allClasses.find((cls: any) => cls.id === classId);
+      
+      if (!classData) {
+        console.log('❌ Class not found with ID:', classId);
+        return res.status(404).json({ message: 'Class not found' });
+      }
+      
+      console.log('✅ Class found:', classData.title);
+      res.json(classData);
+    } catch (error) {
+      console.error('❌ Error loading class:', error);
+      res.status(500).json({ message: 'Error loading class' });
+    }
+  });
+
+  // Class update endpoint
+  app.put("/api/class-details/:id", (req, res) => {
+    const classId = parseInt(req.params.id);
+    console.log('📝 Updating class with ID:', classId);
+    console.log('📄 Update data:', JSON.stringify(req.body, null, 2));
+    
+    try {
+      const filePath = path.join(process.cwd(), 'data/classes.json');
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: 'Classes file not found' });
+      }
+      
+      const fileData = fs.readFileSync(filePath, 'utf-8');
+      const allClasses = JSON.parse(fileData);
+      
+      const classIndex = allClasses.findIndex((cls: any) => cls.id === classId);
+      
+      if (classIndex === -1) {
+        console.log('❌ Class not found with ID:', classId);
+        return res.status(404).json({ message: 'Class not found' });
+      }
+      
+      // Update the class with new data
+      const updatedClass = {
+        ...allClasses[classIndex],
+        title: req.body.title || allClasses[classIndex].title,
+        description: req.body.description || allClasses[classIndex].description,
+        category: req.body.category || allClasses[classIndex].category,
+        gradeLevel: req.body.gradeLevel || allClasses[classIndex].gradeLevel,
+        status: req.body.status || allClasses[classIndex].status,
+        startDate: req.body.startDate || allClasses[classIndex].startDate,
+        endDate: req.body.endDate || allClasses[classIndex].endDate,
+        schedule: req.body.schedule || allClasses[classIndex].schedule,
+        maxEnrollment: req.body.maxEnrollment || allClasses[classIndex].maxEnrollment,
+        price: req.body.price || allClasses[classIndex].price,
+        updatedAt: new Date().toISOString()
+      };
+      
+      allClasses[classIndex] = updatedClass;
+      
+      // Write back to file
+      fs.writeFileSync(filePath, JSON.stringify(allClasses, null, 2));
+      
+      console.log('✅ Class updated successfully:', updatedClass.title);
+      res.json(updatedClass);
+    } catch (error) {
+      console.error('❌ Error updating class:', error);
+      res.status(500).json({ message: 'Error updating class' });
+    }
+  });
+
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
 

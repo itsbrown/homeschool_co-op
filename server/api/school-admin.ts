@@ -247,6 +247,88 @@ router.get("/classes", async (req, res) => {
   }
 });
 
+// Get individual class by ID for editing
+router.get("/classes/:id", async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id);
+    console.log('🔍 Fetching class with ID:', classId);
+    
+    // Read directly from the classes file
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
+    
+    if (!fs.existsSync(CLASSES_FILE)) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    
+    const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
+    const classData = allClasses.find((cls: any) => cls.id === classId);
+    
+    if (!classData) {
+      console.log('❌ Class not found with ID:', classId);
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    
+    console.log('✅ Class found:', classData.title);
+    res.json(classData);
+  } catch (error) {
+    console.error('❌ Error fetching class:', error);
+    res.status(500).json({ message: 'Error fetching class' });
+  }
+});
+
+// Update class by ID
+router.put("/classes/:id", async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id);
+    console.log('📝 Updating class with ID:', classId);
+    console.log('📄 Update data:', JSON.stringify(req.body, null, 2));
+    
+    // Read classes file
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
+    
+    if (!fs.existsSync(CLASSES_FILE)) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    
+    const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
+    const classIndex = allClasses.findIndex((cls: any) => cls.id === classId);
+    
+    if (classIndex === -1) {
+      console.log('❌ Class not found with ID:', classId);
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    
+    // Update the class with new data
+    const updatedClass = {
+      ...allClasses[classIndex],
+      title: req.body.title || allClasses[classIndex].title,
+      description: req.body.description || allClasses[classIndex].description,
+      category: req.body.category || allClasses[classIndex].category,
+      gradeLevel: req.body.gradeLevel || allClasses[classIndex].gradeLevel,
+      status: req.body.status || allClasses[classIndex].status,
+      startDate: req.body.startDate || allClasses[classIndex].startDate,
+      endDate: req.body.endDate || allClasses[classIndex].endDate,
+      schedule: req.body.schedule || allClasses[classIndex].schedule,
+      maxStudents: req.body.maxStudents || allClasses[classIndex].maxStudents,
+      price: req.body.price || allClasses[classIndex].price,
+      updatedAt: new Date().toISOString()
+    };
+    
+    allClasses[classIndex] = updatedClass;
+    
+    // Write back to file
+    fs.writeFileSync(CLASSES_FILE, JSON.stringify(allClasses, null, 2));
+    
+    console.log('✅ Class updated successfully:', updatedClass.title);
+    res.json(updatedClass);
+  } catch (error) {
+    console.error('❌ Error updating class:', error);
+    res.status(500).json({ message: 'Error updating class' });
+  }
+});
+
 // Staff file management functions
 const STAFF_FILE = path.join(process.cwd(), 'data', 'staff.json');
 
