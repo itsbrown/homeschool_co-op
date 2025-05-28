@@ -62,12 +62,16 @@ export default function SchoolClassCreationPage() {
     },
   });
 
-  // Fetch class data if in edit mode
+  // Fetch class data if in edit mode using direct endpoint
   const { data: classData, isLoading: isLoadingClass } = useQuery({
-    queryKey: ["/api/school-admin/classes", classId],
-    queryFn: () => 
-      apiRequest("GET", `/api/school-admin/classes/${classId}`)
-        .then(res => res.json()),
+    queryKey: ["/api/class-details", classId],
+    queryFn: async () => {
+      const response = await fetch(`/api/class-details/${classId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch class: ${response.status}`);
+      }
+      return response.json();
+    },
     enabled: !!classId, // Only run if classId exists
   });
 
@@ -126,8 +130,18 @@ export default function SchoolClassCreationPage() {
 
   // Update class mutation
   const updateClassMutation = useMutation({
-    mutationFn: (data: ClassFormValues) => {
-      return apiRequest("PUT", `/api/school-admin/classes/${classId}`, data);
+    mutationFn: async (data: ClassFormValues) => {
+      const response = await fetch(`/api/class-details/${classId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to update class: ${response.status}`);
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({
