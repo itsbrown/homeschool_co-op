@@ -222,7 +222,7 @@ export default function SchoolClassCreationPage() {
                         <FormLabel>Category*</FormLabel>
                         <Select 
                           onValueChange={field.onChange} 
-                          defaultValue={field.value}
+                          value={field.value}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -274,7 +274,7 @@ export default function SchoolClassCreationPage() {
                         <FormLabel>Grade Level*</FormLabel>
                         <Select 
                           onValueChange={field.onChange} 
-                          defaultValue={field.value}
+                          value={field.value}
                         >
                           <FormControl>
                             <SelectTrigger>
