@@ -1495,7 +1495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/schools/students/:id", (req, res) => {
     const studentId = parseInt(req.params.id);
     console.log('📝 Updating student with ID:', studentId);
-    console.log('📄 Update data:', req.body);
+    console.log('📄 Update data:', JSON.stringify(req.body, null, 2));
     
     try {
       const filePath = path.join(process.cwd(), 'data/children.json');

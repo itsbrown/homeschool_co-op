@@ -14,7 +14,11 @@
     "medicalInfo": null,
     "profileImage": null,
     "createdAt": "2025-01-20T10:00:00.000Z",
-    "updatedAt": "2025-01-20T10:00:00.000Z"
+    "updatedAt": "2025-05-28T11:47:16.424Z",
+    "parentEmail": "coreycreates@gmail.com",
+    "parentPhone": "7185010546",
+    "emergencyContact": "Jocelyn Brown",
+    "emergencyPhone": "7185019708"
   },
   {
     "id": 2,
