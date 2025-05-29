@@ -242,6 +242,7 @@ export default function SchoolClassCreationPage() {
                             <SelectItem value="Upper Elementary">Upper Elementary</SelectItem>
                             <SelectItem value="Middle School">Middle School</SelectItem>
                             <SelectItem value="High School">High School</SelectItem>
+                            <SelectItem value="Extracurricular">Extracurricular</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />

@@ -55,9 +55,9 @@ export default function StaffEditPage() {
 
   // Fetch staff member data
   const { data: staffMember, isLoading } = useQuery({
-    queryKey: ['/api/schools/staff', id],
+    queryKey: ['/api/school-admin/staff', id],
     queryFn: async () => {
-      const response = await fetch(`/api/schools/staff/${id}`, {
+      const response = await fetch(`/api/school-admin/staff/${id}`, {
         credentials: 'include',
       });
       
@@ -80,14 +80,14 @@ export default function StaffEditPage() {
   // Update staff member mutation
   const updateStaffMutation = useMutation({
     mutationFn: async (data: StaffMember) => {
-      return await apiRequest("PUT", `/api/schools/staff/${id}`, data);
+      return await apiRequest("PUT", `/api/school-admin/staff/${id}`, data);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: "Staff member updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/schools/staff'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
       navigate('/schools/staff');
     },
     onError: (error: any) => {
@@ -102,14 +102,14 @@ export default function StaffEditPage() {
   // Delete staff member mutation
   const deleteStaffMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("DELETE", `/api/schools/staff/${id}`);
+      return await apiRequest("DELETE", `/api/school-admin/staff/${id}`);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: "Staff member removed successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/schools/staff'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
       navigate('/schools/staff');
     },
     onError: (error: any) => {
