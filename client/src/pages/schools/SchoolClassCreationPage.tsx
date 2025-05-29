@@ -75,6 +75,11 @@ export default function SchoolClassCreationPage() {
     enabled: !!classId, // Only run if classId exists
   });
 
+  // Fetch available staff members for instructor selection
+  const { data: staffMembers = [], isLoading: staffLoading } = useQuery({
+    queryKey: ["/api/school-admin/staff"],
+  });
+
   // Update form when class data is loaded
   useEffect(() => {
     if (classData && classId) {
@@ -422,10 +427,32 @@ export default function SchoolClassCreationPage() {
                   name="instructorName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Instructor Name*</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Jane Smith" />
-                      </FormControl>
+                      <FormLabel>Instructor*</FormLabel>
+                      <Select 
+                        value={field.value} 
+                        onValueChange={field.onChange}
+                        disabled={staffLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={staffLoading ? "Loading staff..." : "Select an instructor"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {staffMembers.map((staff: any) => (
+                            <SelectItem 
+                              key={staff.id} 
+                              value={staff.name || `${staff.firstName} ${staff.lastName}`}
+                            >
+                              {staff.name || `${staff.firstName} ${staff.lastName}`}
+                              {staff.position && ` - ${staff.position}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Choose from available staff members
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
