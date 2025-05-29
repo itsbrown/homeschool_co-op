@@ -62,11 +62,10 @@ import StudentsPage from "./pages/schools/StudentsPage";
 import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
-import { useAuth } from "@/hooks/useAuth0";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth0();
 
   if (isLoading) {
     return (
