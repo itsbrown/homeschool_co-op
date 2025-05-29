@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { ProgramList } from "@/components/registration/ProgramList";
 import { ProgramEnrollmentForm } from "@/components/registration/ProgramEnrollmentForm";
 import { EnrollmentList } from "@/components/registration/EnrollmentList";
@@ -287,7 +287,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
 export default function ProgramsParentPage() {
   const [, setLocation] = useLocation();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useFirebaseAuth();
   const isAdmin = user?.role === 'admin';
 
   // Redirect if not authenticated using useEffect instead of during render
