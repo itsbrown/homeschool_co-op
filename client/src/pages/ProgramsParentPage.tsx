@@ -31,7 +31,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     queryKey: ["/api/classes/categories/names"],
     enabled: true,
   });
-  
+
   // Fetch classes with filters
   interface ClassData {
     id: number;
@@ -46,7 +46,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     totalOrders: number;
     totalWaitlisted: number;
   }
-  
+
   interface ClassesResponse {
     classes: ClassData[];
     pagination: {
@@ -55,12 +55,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       totalItems: number;
     }
   }
-  
+
   const { data: classesData = { classes: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0 } }, isLoading: classesLoading } = useQuery<ClassesResponse>({
     queryKey: ["/api/classes", { page: currentPage, limit: 12, search: searchTerm, category: categoryFilter }],
     enabled: activeTab === "classes" || activeTab === "all",
   });
-  
+
   // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -69,7 +69,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       minimumFractionDigits: 2
     }).format(amount / 100);
   };
-  
+
   // Check if there are any summer camp classes
   const summerCamps = classesData.classes.filter(c => c.category === "summer-camp");
   const classesList = classesData.classes.filter(c => c.category === "academic" || c.category === "membership");
@@ -83,7 +83,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           <TabsTrigger value="classes">Classes</TabsTrigger>
           <TabsTrigger value="camps">Summer Camps</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="all" className="space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* Programs Card */}
@@ -102,7 +102,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 <Button className="w-full" onClick={() => setActiveTab("programs")}>Browse Programs</Button>
               </CardFooter>
             </Card>
-            
+
             {/* Classes Card */}
             <Card className="flex flex-col">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -119,7 +119,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 <Button className="w-full" onClick={() => setActiveTab("classes")}>Browse Classes</Button>
               </CardFooter>
             </Card>
-            
+
             {/* Summer Camps Card */}
             <Card className="flex flex-col md:col-span-2">
               <CardHeader className="flex flex-row items-center justify-between bg-primary/5 rounded-t-lg">
@@ -146,7 +146,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               </CardFooter>
             </Card>
           </div>
-          
+
           {/* Featured Programs Section */}
           <h3 className="text-xl font-bold mt-8">Featured Programs</h3>
           <div className="space-y-4">
@@ -156,11 +156,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
             </div>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="programs">
           <ProgramList isAdmin={isAdmin} childId={childId || undefined} />
         </TabsContent>
-        
+
         <TabsContent value="classes">
           <div className="space-y-6">
             {/* Search & Filter */}
@@ -180,7 +180,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="programType">Program</Label>
                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -195,7 +195,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="md:col-span-3 flex justify-end gap-2">
                     {(searchTerm || (categoryFilter && categoryFilter !== 'all')) && (
                       <Button variant="outline" type="button" onClick={() => {
@@ -210,7 +210,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 </form>
               </CardContent>
             </Card>
-            
+
             {/* Classes Grid */}
             {classesLoading ? (
               <div className="flex justify-center items-center py-12">
@@ -236,21 +236,21 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                           <div className="flex items-center"><DollarSign className="h-4 w-4 mr-1 opacity-70" />Price:</div>
                           <div className="font-semibold">{formatCurrency(classItem.price)}</div>
                         </div>
-                        
+
                         {classItem.totalOrders > 0 && (
                           <div className="flex items-center justify-between">
                             <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Enrolled:</div>
                             <div className="font-medium">{classItem.totalOrders}</div>
                           </div>
                         )}
-                        
+
                         {classItem.numSessions && (
                           <div className="flex items-center justify-between">
                             <div className="flex items-center"><BookOpen className="h-4 w-4 mr-1 opacity-70" />Sessions:</div>
                             <div className="font-medium">{classItem.numSessions}</div>
                           </div>
                         )}
-                        
+
                         {(classItem.startDate && classItem.endDate) && (
                           <div className="flex items-center justify-between">
                             <div className="flex items-center"><CalendarIcon className="h-4 w-4 mr-1 opacity-70" />Dates:</div>
@@ -285,6 +285,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+// This component uses the useAuth hook to manage authentication and redirects non-authenticated users to the login page.
 export default function ProgramsParentPage() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();

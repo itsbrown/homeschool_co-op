@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { 
   School, 
@@ -72,7 +72,7 @@ const schoolNavItems: {
 
 export default function Sidebar() {
   const [location] = useLocation();
-  const { user, isAuthenticated } = useFirebaseAuth();
+  const { user, logout, isAuthenticated } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleSidebar = () => {
@@ -111,12 +111,12 @@ export default function Sidebar() {
             </Button>
           </div>
         </div>
-        
+
         <div className="flex-1 overflow-auto py-2">
           <nav className="grid gap-1 px-2">
             {schoolNavItems.map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`);
-              
+
               return (
                 <div key={item.href}>
                   <Link href={item.href}>
@@ -136,7 +136,7 @@ export default function Sidebar() {
             })}
           </nav>
         </div>
-        
+
         <div className="border-t p-4">
           {isAuthenticated && user && (
             <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
@@ -151,7 +151,7 @@ export default function Sidebar() {
                   </div>
                 </div>
               )}
-              
+
               <Button 
                 variant="ghost" 
                 size={isCollapsed ? "icon" : "sm"} 
@@ -165,7 +165,7 @@ export default function Sidebar() {
           )}
         </div>
       </div>
-      
+
       {/* Mobile sidebar button */}
       <Button 
         variant="outline" 
@@ -175,7 +175,7 @@ export default function Sidebar() {
       >
         <Menu className="h-6 w-6" />
       </Button>
-      
+
       {/* Mobile sidebar drawer */}
       {!isCollapsed && (
         <div className="md:hidden fixed inset-0 z-40 bg-background/80 backdrop-blur-sm" onClick={toggleSidebar}>
@@ -191,12 +191,12 @@ export default function Sidebar() {
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            
+
             <div className="py-4">
               <nav className="grid gap-1 px-2">
                 {schoolNavItems.map((item) => {
                   const isActive = location === item.href || location.startsWith(`${item.href}/`);
-                  
+
                   return (
                     <div key={item.href}>
                       <Link href={item.href}>
@@ -216,7 +216,7 @@ export default function Sidebar() {
                 })}
               </nav>
             </div>
-            
+
             <div className="border-t p-4 mt-auto">
               {isAuthenticated && user && (
                 <div className="flex items-center justify-between">
@@ -229,7 +229,7 @@ export default function Sidebar() {
                       <div className="text-xs text-muted-foreground">Administrator</div>
                     </div>
                   </div>
-                  
+
                   <Button 
                     variant="ghost" 
                     size="sm" 

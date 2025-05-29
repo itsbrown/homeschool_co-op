@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth } from '@/hooks/useAuth0';
 import { Bell, Mail, Menu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
-  const { user, logout } = useFirebaseAuth();
+  const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (e: React.FormEvent) => {
@@ -56,7 +56,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
         <div className="hidden md:block">
           <AIStatusBadge />
         </div>
-        
+
         <Button variant="ghost" size="icon" className="text-muted-foreground">
           <Bell className="h-5 w-5" />
           <span className="sr-only">Notifications</span>

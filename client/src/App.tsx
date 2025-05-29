@@ -34,12 +34,12 @@ import StaffPositionsPage from "./pages/schools/StaffPositionsPage";
 import KnowledgeBaseCreationPage from "./pages/schools/KnowledgeBaseCreationPage";
 import RolesAndPermissionsPage from "./pages/admin/RolesAndPermissionsPage";
 import FeaturesOverviewPage from "./pages/admin/FeaturesOverviewPage";
-import ChildRegistrationPage from "./pages/ChildRegistrationPage";
-import ChildRegistrationConfirmation from "./pages/ChildRegistrationConfirmation";
-import ChildRegistrationSuccess from "./pages/ChildRegistrationSuccess";
-import ChildrenPage from "./pages/ChildrenPage";
-import ChildrenViewPage from "./pages/children/ChildrenViewPage";
-import ChildProfileEditPage from "./pages/ChildProfileEditPage";
+import ChildRegistrationPage from "@/pages/ChildRegistrationPage";
+import ChildRegistrationConfirmation from "@/pages/ChildRegistrationConfirmation";
+import ChildRegistrationSuccess from "@/pages/ChildRegistrationSuccess";
+import ChildrenPage from "@/pages/ChildrenPage";
+import ChildrenViewPage from "@/pages/children/ChildrenViewPage";
+import ChildProfileEditPage from "@/pages/ChildProfileEditPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import ClassCreationPage from "./pages/admin/ClassCreationPage";
 import ClassesPage from "./pages/ClassesPage";
@@ -102,7 +102,7 @@ function Router() {
       <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/checkout-success" component={CheckoutSuccess} />
-      
+
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
       <Route path="/programs" component={ProgramsParentPage} />
@@ -118,11 +118,11 @@ function Router() {
       <Route path="/schedule" component={SchedulePage} />
       <Route path="/payments" component={PaymentsPage} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
-      
+
       {/* School/Co-op registration routes */}
       <Route path="/schools/register" component={SchoolRegistrationPage} />
       <Route path="/schools/register/confirm" component={SchoolRegistrationConfirmationPage} />
-      
+
       {/* School Admin routes */}
       <Route path="/schools" component={MySchoolPage} />
       <Route path="/schools/dashboard" component={MySchoolPage} />
@@ -143,7 +143,7 @@ function Router() {
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/knowledge-base/new" component={KnowledgeBaseCreationPage} />
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
-      
+
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />
       <Route path="/admin/classes/new" component={ClassCreationPage} />
@@ -158,7 +158,7 @@ function Router() {
       <Route path="/admin/reports" component={Dashboard} />
       <Route path="/admin/reports/:rest*" component={Dashboard} />
       <Route path="/admin" component={Dashboard} />
-      
+
       <Route component={NotFound} />
     </Switch>
   );

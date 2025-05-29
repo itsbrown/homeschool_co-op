@@ -10,23 +10,8 @@ const directUserStorage = require('../direct-user-storage');
 const router = Router();
 
 // Middleware to check Firebase authentication
-export const isAuthenticated = (req: any, res: any, next: any) => {
-  // Check for Firebase auth header or user data
-  const authHeader = req.headers.authorization;
-  
-  // For now, we'll be more permissive since Firebase auth is handled on frontend
-  // In a production app, you'd verify the Firebase token here
-  if (authHeader || req.headers['x-firebase-user']) {
-    return next();
-  }
-  
-  // Also allow if this looks like an authenticated request
-  if (req.headers.referer && req.headers.referer.includes('/schools/')) {
-    return next();
-  }
-  
-  res.status(401).json({ message: "Unauthorized" });
-};
+// Removing Firebase authentication, so this middleware is no longer needed
+// Auth0 authentication is handled by middleware
 
 // Middleware to check role
 export const hasRole = (roles: string[]) => {
@@ -42,12 +27,12 @@ export const hasRole = (roles: string[]) => {
 router.post("/register", async (req, res) => {
   try {
     console.log("Registration attempt with data:", req.body);
-    
+
     // Validate required fields
     if (!req.body.email || !req.body.password || !req.body.name) {
       return res.status(400).json({ message: "Email, password, and name are required" });
     }
-    
+
     // Use email as username for convenience
     const userData = {
       username: req.body.email,
@@ -58,9 +43,9 @@ router.post("/register", async (req, res) => {
       subscription: req.body.subscription || "free",
       avatar: null
     };
-    
+
     console.log("Preparing user data with email:", userData.email);
-    
+
     // Hash the password
     console.log("Hashing password...");
     try {
@@ -71,21 +56,21 @@ router.post("/register", async (req, res) => {
       console.error("Failed to hash password:", hashError);
       return res.status(500).json({ message: "Error during registration process" });
     }
-    
+
     // Use our direct file storage approach
     try {
       console.log("Calling direct user storage");
       const user = directUserStorage.createNewUser(userData);
       console.log("User successfully created with ID:", user.id);
-      
+
       // Create a sanitized version for the response
       const userWithoutPassword = { ...user };
       delete userWithoutPassword.password;
-      
+
       // Set up session
       req.session.userId = user.id;
       req.session.userRole = user.role;
-      
+
       // Save session explicitly
       req.session.save((err) => {
         if (err) {
@@ -94,14 +79,14 @@ router.post("/register", async (req, res) => {
           console.log("Session saved successfully");
         }
       });
-      
+
       // Send welcome email
       try {
         sendWelcomeEmail(user.email, user.name);
       } catch (emailError) {
         console.log("Email sending failed, but continuing:", emailError);
       }
-      
+
       return res.status(201).json({
         message: "User registered successfully",
         user: userWithoutPassword
@@ -126,15 +111,15 @@ router.post("/login", async (req, res) => {
   try {
     console.log('Login attempt for user:', req.body.username);
     const { username, password } = req.body;
-    
+
     if (!username || !password) {
       return res.status(400).json({ message: "Username and password are required" });
     }
-    
+
     // Special case for schooladmin login - the case is important! We need exact match
     if (username === 'schooladmin' && password === 'password') {
       console.log('School Admin login attempt successful');
-      
+
       // Create hardcoded School Admin user
       const schoolAdminUser = {
         id: 5,
@@ -146,11 +131,11 @@ router.post("/login", async (req, res) => {
         subscription: 'premium',
         createdAt: new Date()
       };
-      
+
       // Store user data in session
       req.session.userId = schoolAdminUser.id;
       req.session.userRole = schoolAdminUser.role;
-      
+
       // Debug session information
       console.log('Session before save:', {
         sessionID: req.sessionID,
@@ -158,7 +143,7 @@ router.post("/login", async (req, res) => {
         userId: req.session.userId,
         userRole: req.session.userRole
       });
-      
+
       // Force save the session with proper error handling
       await new Promise<void>((resolve, reject) => {
         req.session.save((err) => {
@@ -171,29 +156,29 @@ router.post("/login", async (req, res) => {
           }
         });
       });
-      
+
       console.log('Session after save:', {
         sessionID: req.sessionID,
         cookie: req.session.cookie,
         userId: req.session.userId,
         userRole: req.session.userRole
       });
-      
+
       return res.status(200).json({
         message: "School Admin login successful",
         user: schoolAdminUser
       });
     }
-    
+
     // Handle other test accounts
     if (password === 'password' && 
        (username === 'admin' || 
         username === 'educator' || 
         username === 'parent' || 
         username === 'learner')) {
-        
+
       console.log(`Login attempt with test account: ${username}`);
-      
+
       let userData;
       if (username === 'admin') {
         userData = {
@@ -240,7 +225,7 @@ router.post("/login", async (req, res) => {
           createdAt: new Date()
         };
       }
-      
+
       // Set session data
       console.log('Setting session data for user:', userData);
       req.session.userId = userData.id;
@@ -262,40 +247,40 @@ router.post("/login", async (req, res) => {
       } catch (sessionError) {
         console.error('Error saving session:', sessionError);
       }
-      
+
       console.log('Session after save:', req.session);
-      
+
       return res.status(200).json({
         message: `Login successful (test ${userData.role})`,
         user: userData
       });
     }
-    
+
     // If we reach this point, it means the user either:
     // 1. Provided incorrect credentials for a test account
     // 2. Is trying to use a database account
-    
+
     console.log(`Test account login failed, trying database lookup for: ${username}`);
-    
+
     // Only try database if test accounts don't match
     const user = await storage.getUserByUsername(username);
     if (!user) {
       console.log('User not found in database:', username);
       return res.status(401).json({ message: "Invalid credentials" });
     }
-  
+
     const passwordValid = await bcrypt.compare(password, user.password);
     if (!passwordValid) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
-    
+
     // Set session data
     req.session.userId = user.id;
     req.session.userRole = user.role;
-    
+
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
-    
+
     res.status(200).json({ 
       message: "Login successful", 
       user: userWithoutPassword 
@@ -321,16 +306,16 @@ router.get("/me", async (req, res) => {
   try {
     console.log('Session check in /me endpoint:', req.session);
     console.log('Cookies received:', req.headers.cookie);
-    
+
     // First check if user is authenticated
     if (!req.session || !req.session.userId) {
       console.log('No session or userId found in session');
       return res.status(401).json({ message: "Unauthorized" });
     }
-    
+
     // HARD-CODED TEST ACCOUNTS - NO DATABASE NEEDED
     console.log('User ID from session:', req.session.userId);
-    
+
     // Directly check which test account to return based on session ID
     if (req.session.userId === 1) {
       const adminUser = {
@@ -402,17 +387,17 @@ router.get("/me", async (req, res) => {
       console.log('Returning school admin user profile');
       return res.status(200).json(schoolAdminUser);
     }
-    
+
     // Try using database for real users
     console.log('Trying to fetch user from database, ID:', req.session.userId);
     const user = await storage.getUser(req.session.userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    
+
     // Remove password from response
     const { password, ...userWithoutPassword } = user;
-    
+
     res.status(200).json(userWithoutPassword);
   } catch (error) {
     console.error("Get user error:", error);
@@ -420,69 +405,17 @@ router.get("/me", async (req, res) => {
   }
 });
 
-// Firebase user sync endpoint
-router.post("/firebase-sync", async (req, res) => {
-  try {
-    console.log("🔥 UPDATED Firebase sync request:", req.body);
-    
-    const { firebaseUid, email, name, role } = req.body;
-    
-    if (!firebaseUid || !email) {
-      console.log("Missing required fields:", { firebaseUid: !!firebaseUid, email: !!email });
-      return res.status(400).json({ message: "Firebase UID and email are required" });
-    }
-    
-    // Check for special test accounts
-    let userRole = role || 'parent'; // Default to parent if no role provided
-    let userId = 1; // Default ID
-    
-    // Handle specific test accounts with proper roles
-    console.log('Checking email for role assignment:', email);
-    if (email === 'schooladmin@test.com') {
-      console.log('FOUND schooladmin@test.com - assigning admin role!');
-      userRole = 'admin';
-      userId = 1;
-    } else if (email === 'educator@test.com') {
-      console.log('FOUND educator@test.com - assigning educator role!');
-      userRole = 'educator';  
-      userId = 2;
-    } else if (email === 'parent@test.com') {
-      console.log('FOUND parent@test.com - assigning parent role!');
-      userRole = 'parent';
-      userId = 3;
-    } else {
-      console.log('Email not found in test accounts, using default parent role');
-    }
-    
-    const userData = {
-      id: userId,
-      name: name || email.split('@')[0],
-      email: email,
-      role: userRole,
-      avatar: null,
-      subscription: userRole === 'admin' ? 'premium' : 'free'
-    };
-    
-    console.log("Sending direct JSON response:", userData);
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(200).json(userData);
-    
-  } catch (error) {
-    console.error("Firebase sync error:", error);
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(500).json({ message: "Error syncing user" });
-  }
-});
+// Auth0 authentication is handled by middleware
 
 // Password reset request
 router.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
-    
+
     const user = await storage.getUserByEmail(email);
     if (!user) {
       // Don't reveal if the email exists or not for security
@@ -490,14 +423,14 @@ router.post("/forgot-password", async (req, res) => {
         message: "If your email is registered, you will receive a password reset link" 
       });
     }
-    
+
     // In a real app, generate a token and store it with an expiration
     const resetToken = Math.random().toString(36).substring(2, 15);
-    
+
     // Send password reset email - using our mock service
     console.log(`[MOCK EMAIL] Password reset email would be sent to: ${email}`);
     console.log(`[MOCK EMAIL] Reset token: ${resetToken}`);
-    
+
     res.status(200).json({ 
       message: "If your email is registered, you will receive a password reset link" 
     });
