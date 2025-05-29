@@ -1,15 +1,15 @@
 import React from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import AppShell from "@/components/layout/AppShell";
+import PageLayout from "@/components/layout/PageLayout";
 import ChildRegistrationForm from "@/components/registration/ChildRegistrationForm";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth } from "@/hooks/useAuth0";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ChildRegistrationPage() {
   const { childId } = useParams();
   const [, setLocation] = useLocation();
-  const { user, isAuthenticated, isLoading: authLoading } = useFirebaseAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -30,11 +30,11 @@ export default function ChildRegistrationPage() {
   
   if (authLoading) {
     return (
-      <AppShell>
+      <PageLayout>
         <div className="flex justify-center items-center min-h-[50vh]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
-      </AppShell>
+      </PageLayout>
     );
   }
   
@@ -45,17 +45,17 @@ export default function ChildRegistrationPage() {
   // Ensure only parents can access this page
   if (user && user.role !== 'parent') {
     return (
-      <AppShell>
+      <PageLayout>
         <div className="container mx-auto p-4 text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
           <p>Only parents can register children in the system.</p>
         </div>
-      </AppShell>
+      </PageLayout>
     );
   }
   
   return (
-    <AppShell>
+    <PageLayout>
       <div className="container mx-auto p-4">
         <div className="mb-8">
           <h1 className="text-2xl font-bold mb-2">
@@ -87,6 +87,6 @@ export default function ChildRegistrationPage() {
           />
         )}
       </div>
-    </AppShell>
+    </PageLayout>
   );
 }
