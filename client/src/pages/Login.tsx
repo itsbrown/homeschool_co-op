@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { useAuth } from "@/hooks/useAuth0";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,19 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
 import { FaGoogle } from "react-icons/fa";
-import { Eye, EyeOff, User, BookOpen, Users } from "lucide-react";
-import { FirebaseDebug } from "@/components/FirebaseDebug";
+import { User, BookOpen, Users } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),

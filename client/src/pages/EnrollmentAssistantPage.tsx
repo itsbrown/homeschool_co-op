@@ -1,4 +1,4 @@
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth } from "@/hooks/useAuth0";
 import AppShell from "@/components/layout/AppShell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import EnrollmentAssistant from "@/components/enrollment/EnrollmentAssistant";
