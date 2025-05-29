@@ -26,7 +26,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { FaGoogle } from "react-icons/fa";
 import { User, BookOpen, Users, Eye, EyeOff } from "lucide-react";
-import { useAuth0 } from "@auth0/auth0-react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),

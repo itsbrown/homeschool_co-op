@@ -62,6 +62,7 @@ import StudentsPage from "./pages/schools/StudentsPage";
 import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
+import { useAuth0 } from "@auth0/auth0-react";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
