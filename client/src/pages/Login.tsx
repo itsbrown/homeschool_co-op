@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/hooks/useAuth0";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -35,7 +35,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const { loginWithRedirect, isLoading } = useAuth0();
+  const { login, isLoading } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
@@ -50,7 +50,7 @@ export default function Login() {
   });
 
   const handleLogin = () => {
-    loginWithRedirect({
+    login({
       appState: {
         returnTo: window.location.origin
       }
@@ -59,7 +59,7 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      await loginWithRedirect({
+      await login({
         authorizationParams: {
           connection: 'google-oauth2'
         }
@@ -77,7 +77,7 @@ export default function Login() {
     try {
       setError(null);
       // Use Auth0 redirect with email hint
-      await loginWithRedirect({
+      await login({
         authorizationParams: {
           login_hint: data.email
         }
