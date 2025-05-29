@@ -1,7 +1,7 @@
 import React from "react";
 import { useAuth } from "@/hooks/useAuth0";
 import { Redirect, Link } from "wouter";
-import { DashboardShell } from "@/components/ui/dashboard-shell";
+import PageLayout from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ export default function ChildrenPage() {
   }
   
   return (
-    <DashboardShell>
+    <PageLayout>
       <div className="container py-10 max-w-7xl">
         <div className="flex items-center justify-between mb-8">
           <div>

@@ -1828,10 +1828,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);
   
   // Children API endpoint for parents
-  app.get("/api/children", isAuthenticated, async (req, res) => {
+  app.get("/api/children", verifyAuth0Token, async (req, res) => {
     try {
-      const userEmail = req.user.email;
-      const userRole = req.user.role;
+      const userEmail = req.auth?.payload?.email;
+      const userRole = req.auth?.payload?.['https://myapp.com/role'];
 
       if (userRole !== 'parent') {
         return res.status(403).json({ message: "Access denied. Parents only." });
