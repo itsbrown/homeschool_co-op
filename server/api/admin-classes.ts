@@ -6,7 +6,7 @@ import { storage } from "../storage";
 // Import both storage options for classes
 import { classStorage } from "../class-storage";
 import * as classesDb from "../classes-db";
-import { verifyAuth0Token, requireAdmin } from '../middleware/auth0'; // Import Auth0 middleware
+import { verifyAuth0Token, requireAdmin } from '../middleware/auth0-auth'; // Import Auth0 middleware
 // Flag to track which storage system we're using
 let useFileStorage = true;
 
