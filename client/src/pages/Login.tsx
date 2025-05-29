@@ -77,8 +77,12 @@ export default function Login() {
   const onSubmit = async (data: LoginFormValues) => {
     try {
       setError(null);
-      // For now, redirect to Auth0 login
-      await loginWithRedirect();
+      // Use Auth0 redirect with email hint
+      await loginWithRedirect({
+        authorizationParams: {
+          login_hint: data.email
+        }
+      });
     } catch (error) {
       setError("Login failed. Please try again.");
       toast({
@@ -115,16 +119,6 @@ export default function Login() {
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* Auth0 Login Button */}
-            <Button
-              type="button"
-              className="w-full"
-              onClick={handleLogin}
-              disabled={isLoading}
-            >
-              {isLoading ? "Signing in..." : "Sign In with Auth0"}
-            </Button>
-
             {/* Google Login Button */}
             <Button
               type="button"
@@ -146,7 +140,7 @@ export default function Login() {
                   Or continue with email
                 </span>
               </div>
-            </div>
+            </div></div>
 
             {/* Email/Password Form */}
             <Form {...form}>
