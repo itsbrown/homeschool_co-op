@@ -162,7 +162,8 @@ export default function SchoolClassesPage() {
             </CardFooter>
           </Card>
         </div>
-      </SchoolAdminLayout>
+      </div>
+    </div>
     );
   }
 
@@ -194,9 +195,11 @@ export default function SchoolClassesPage() {
   };
 
   return (
-    <SchoolAdminLayout pageTitle="Classes">
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="flex flex-col space-y-6">
+    <div className="flex h-screen bg-gray-100">
+      <UnifiedSchoolAdminSidebar />
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="flex flex-col space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
             <div>
               <h1 className="text-3xl font-bold">School Classes</h1>
@@ -450,8 +453,9 @@ export default function SchoolClassesPage() {
               </CardFooter>
             </Card>
           </Tabs>
+          </div>
         </div>
       </div>
-    </SchoolAdminLayout>
+    </div>
   );
 }
