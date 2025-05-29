@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
+import UnifiedSchoolAdminSidebar from '@/components/layout/UnifiedSchoolAdminSidebar';
 
 // School data interface
 interface SchoolData {
@@ -61,12 +61,15 @@ export default function MySchoolPage() {
 
   if (isLoading) {
     return (
-      <SchoolAdminLayout pageTitle="My School">
-        <div className="h-full flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2">Loading school information...</span>
+      <div className="flex h-screen bg-gray-100">
+        <UnifiedSchoolAdminSidebar />
+        <div className="flex-1 overflow-auto">
+          <div className="h-full flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2">Loading school information...</span>
+          </div>
         </div>
-      </SchoolAdminLayout>
+      </div>
     );
   }
 
