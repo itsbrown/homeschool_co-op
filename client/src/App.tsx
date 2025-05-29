@@ -66,7 +66,7 @@ import { useAuth } from "@/hooks/useAuth0";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth0();
+  const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
