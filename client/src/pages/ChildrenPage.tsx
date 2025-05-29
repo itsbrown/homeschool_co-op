@@ -26,6 +26,12 @@ interface Child {
 export default function ChildrenPage() {
   const { user, isLoading, isAuthenticated } = useAuth();
   
+  // Fetch children data - always call the hook
+  const { data: children = [], isLoading: isLoadingChildren } = useQuery<Child[]>({
+    queryKey: ["/api/children"],
+    enabled: isAuthenticated && user?.role === "parent",
+  });
+  
   // Check if user is parent
   const isParent = user?.role === "parent";
   
@@ -33,12 +39,6 @@ export default function ChildrenPage() {
   if (!isLoading && (!isAuthenticated || !isParent)) {
     return <Redirect to="/login" />;
   }
-  
-  // Fetch children data
-  const { data: children = [], isLoading: isLoadingChildren } = useQuery<Child[]>({
-    queryKey: ["/api/children"],
-    enabled: isAuthenticated && isParent,
-  });
   
   return (
     <DashboardShell>
