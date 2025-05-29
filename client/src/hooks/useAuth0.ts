@@ -1,4 +1,3 @@
-
 import { useAuth0 as useAuth0Hook } from '@auth0/auth0-react';
 
 export function useAuth() {
@@ -10,7 +9,7 @@ export function useAuth() {
     logout, 
     getAccessTokenSilently 
   } = useAuth0Hook();
-  
+
   return {
     user: user ? {
       id: user.sub || '',
@@ -30,3 +29,6 @@ export function useAuth() {
 
 // Keep the original export for backward compatibility
 export const useAuth0 = useAuth;
+
+// Re-export useAuth0 from @auth0/auth0-react for consistency
+export { useAuth0 } from '@auth0/auth0-react';

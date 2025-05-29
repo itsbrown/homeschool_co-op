@@ -1,3 +1,11 @@
 // This file has been removed as part of consolidating to Auth0-only authentication
-// All Firebase authentication functionality has been migrated to Auth0
-export {};
+// Use useAuth0 hook from @auth0/auth0-react for all authentication needs
+
+// Export empty function to prevent import errors during migration
+export const useFirebaseAuth = () => ({
+  user: null,
+  loading: false,
+  error: null
+});
+
+export default useFirebaseAuth;

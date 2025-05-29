@@ -37,7 +37,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await initializeDatabase();
 
   // Import Auth0 token-based authentication middleware
-  const { verifyAuth0Token, requireRole, requireAdmin, requireEducator } from "./middleware/auth0-auth";
+  const { verifyAuth0Token, requireRole, requireAdmin, requireEducator } = await import("./middleware/auth0-auth");
 
   // Register API routers
   app.use("/api/children", childrenRouter);
