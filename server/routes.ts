@@ -1671,7 +1671,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startDate: req.body.startDate || allClasses[classIndex].startDate,
         endDate: req.body.endDate || allClasses[classIndex].endDate,
         schedule: req.body.schedule || allClasses[classIndex].schedule,
-        maxEnrollment: req.body.maxEnrollment || allClasses[classIndex].maxEnrollment,
+        capacity: req.body.capacity || allClasses[classIndex].capacity,
+        location: req.body.location || allClasses[classIndex].location,
+        instructorName: req.body.instructorName || allClasses[classIndex].instructorName,
         price: req.body.price || allClasses[classIndex].price,
         updatedAt: new Date().toISOString()
       };
