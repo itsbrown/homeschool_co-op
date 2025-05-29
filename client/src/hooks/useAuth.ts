@@ -1,31 +1,12 @@
+import { useAuth0 } from '@auth0/auth0-react';
 
-import { useAuth0 as useAuth0Hook } from '@auth0/auth0-react';
-
-export function useAuth() {
-  const { 
-    user, 
-    isAuthenticated, 
-    isLoading, 
-    loginWithRedirect, 
-    logout, 
-    getAccessTokenSilently 
-  } = useAuth0Hook();
+export const useAuth = () => {
+  const auth0 = useAuth0();
 
   return {
-    user: user ? {
-      id: user.sub || '',
-      name: user.name || '',
-      email: user.email || '',
-      role: user['custom:role'] || user['app_metadata']?.role || 'parent',
-      avatar: user.picture,
-      subscription: user['app_metadata']?.subscription || 'free'
-    } : null,
-    isAuthenticated,
-    isLoading,
-    login: loginWithRedirect,
-    logout: () => logout({ logoutParams: { returnTo: window.location.origin } }),
-    getAccessTokenSilently,
+    ...auth0,
+    // Add any additional auth methods here
   };
-}
+};
 
 export default useAuth;

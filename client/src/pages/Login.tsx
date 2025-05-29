@@ -140,7 +140,7 @@ export default function Login() {
                   Or continue with email
                 </span>
               </div>
-            </div></div>
+            </div>
 
             {/* Email/Password Form */}
             <Form {...form}>
