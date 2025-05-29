@@ -13,6 +13,7 @@ import * as programEnrollmentsApi from "./api/program-enrollments";
 import * as csvUploadApi from "./api/csv-upload";
 import aiPricingRouter from "./api/ai-pricing";
 import adminClassesRouter from "./api/admin-classes";
+import { backupService } from "./services/backupService";
 import classesRouter from "./api/classes";
 import activitiesRouter from "./api/activities";
 import imageServicesRouter from "./api/image-services";
@@ -1828,5 +1829,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   
   const httpServer = createServer(app);
+  // Backup management endpoints
+  app.get("/api/admin/backups", async (req, res) => {
+    try {
+      const backups = await backupService.listBackups();
+      res.json(backups);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to list backups" });
+    }
+  });
+
+  app.post("/api/admin/backups/create", async (req, res) => {
+    try {
+      await backupService.performBackup();
+      res.json({ success: true, message: "Backup created successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create backup" });
+    }
+  });
+
+  app.post("/api/admin/backups/restore/:timestamp", async (req, res) => {
+    try {
+      const { timestamp } = req.params;
+      const result = await backupService.restoreBackup(timestamp);
+      
+      if (result.success) {
+        res.json({ success: true, message: `Restored ${result.restoredCount} files` });
+      } else {
+        res.status(500).json({ error: result.error });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to restore backup" });
+    }
+  });
+
   return httpServer;
 }
