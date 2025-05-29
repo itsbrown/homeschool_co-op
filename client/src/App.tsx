@@ -54,6 +54,7 @@ import MySchoolPage from "./pages/schools/MySchoolPage";
 import SchoolEditPage from "./pages/schools/SchoolEditPage";
 import SchoolClassesPage from "./pages/schools/ClassesPage";
 import SchoolClassCreationPage from "./pages/schools/SchoolClassCreationPage";
+import ClassRosterPage from "./pages/schools/ClassRosterPage";
 import StaffPage from "./pages/schools/StaffPage";
 import StaffEditPage from "./pages/schools/StaffEditPage";
 import StudentsPage from "./pages/schools/StudentsPage";
@@ -129,6 +130,7 @@ function Router() {
       <Route path="/schools/classes" component={SchoolClassesPage} />
       <Route path="/schools/classes/new" component={SchoolClassCreationPage} />
       <Route path="/schools/classes/:id/edit" component={SchoolClassCreationPage} />
+      <Route path="/schools/classes/:id/roster" component={ClassRosterPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
