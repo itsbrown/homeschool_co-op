@@ -235,15 +235,16 @@ export default function SchoolClassCreationPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="mathematics">Mathematics</SelectItem>
-                            <SelectItem value="science">Science</SelectItem>
-                            <SelectItem value="history">History</SelectItem>
-                            <SelectItem value="language-arts">Language Arts</SelectItem>
-                            <SelectItem value="foreign-language">Foreign Language</SelectItem>
-                            <SelectItem value="arts">Arts</SelectItem>
-                            <SelectItem value="physical-education">Physical Education</SelectItem>
-                            <SelectItem value="computer-science">Computer Science</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="Academic">Academic</SelectItem>
+                            <SelectItem value="Arts">Arts</SelectItem>
+                            <SelectItem value="Music">Music</SelectItem>
+                            <SelectItem value="Sports">Sports</SelectItem>
+                            <SelectItem value="STEM">STEM</SelectItem>
+                            <SelectItem value="Language">Language</SelectItem>
+                            <SelectItem value="Coding">Coding</SelectItem>
+                            <SelectItem value="Cooking">Cooking</SelectItem>
+                            <SelectItem value="Crafts">Crafts</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
