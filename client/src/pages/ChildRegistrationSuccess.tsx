@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from @/hooks/useAuth00";
 import { useToast } from "@/hooks/use-toast";
 import AppShell from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";

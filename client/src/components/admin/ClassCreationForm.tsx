@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth0 } from "@/hooks/useAuth0";
+import { useAuth0 } from @/hooks/useAuth00";
 import { useQuery } from "@tanstack/react-query";
 
 import {

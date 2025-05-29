@@ -26,6 +26,3 @@ export function useAuth() {
     getAccessTokenSilently,
   };
 }
-
-// Keep the original export for backward compatibility
-export const useAuth0 = useAuth;

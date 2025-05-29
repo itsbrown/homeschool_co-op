@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { PlusCircle, BookOpen, Users, Calendar, GraduationCap, FileText } from "lucide-react";
 import AIGenerationCard from "@/components/dashboard/AIGenerationCard";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from @/hooks/useAuth00";
 
 export default function EducatorDashboard() {
   const { user } = useAuth();

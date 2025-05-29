@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth0';
 import { useLocation } from 'wouter';
 import { formatDate, formatCurrency } from '@/lib/utils';
 

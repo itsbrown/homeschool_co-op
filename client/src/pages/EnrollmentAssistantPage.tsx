@@ -1,4 +1,4 @@
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from @/hooks/useAuth00";
 import AppShell from "@/components/layout/AppShell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import EnrollmentAssistant from "@/components/enrollment/EnrollmentAssistant";

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from @/hooks/useAuth00";
 
 interface SidebarItemProps {
   href: string;

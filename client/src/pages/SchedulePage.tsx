@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import AppShell from "@/components/layout/AppShell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import FamilySchedule from "@/components/schedule/FamilySchedule";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from @/hooks/useAuth00";
 
 export default function SchedulePage() {
   const [, setLocation] = useLocation();

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { User, Plus } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from @/hooks/useAuth00";
 
 export default function ChildrenViewPage() {
   const [, setLocation] = useLocation();

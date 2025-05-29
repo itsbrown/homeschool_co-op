@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminShell } from "@/components/ui/admin-shell";
-import { useAuth0 } from "@/hooks/useAuth0";
+import { useAuth0 } from @/hooks/useAuth00";
 import { ClassCreationForm } from "../components/admin/ClassCreationForm";
 import { Route, Switch, useLocation, Link } from "wouter";
 import { apiRequest } from "../lib/queryClient";

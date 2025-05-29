@@ -3,7 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import PageLayout from "@/components/layout/PageLayout";
 import ChildRegistrationForm from "@/components/registration/ChildRegistrationForm";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from @/hooks/useAuth00";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ChildRegistrationPage() {

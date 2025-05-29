@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { ClassCreationForm } from "@/components/admin/ClassCreationForm";
-import { useAuth0 } from "@/hooks/useAuth0";
+import { useAuth0 } from @/hooks/useAuth00";
 import { useQuery } from "@tanstack/react-query";
 
 export default function ClassCreationPage() {

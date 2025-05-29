@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard } from "lucide-react";
-import { useAuth0 } from "@/hooks/useAuth0";
+import { useAuth0 } from @/hooks/useAuth00";
 import EnrollmentAssistantModal from "@/components/enrollment/EnrollmentAssistantModal";
 
 export default function ParentDashboard() {

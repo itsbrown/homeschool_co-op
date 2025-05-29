@@ -17,7 +17,7 @@ import {
   BookOpenCheck,
   Shield
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from @/hooks/useAuth0';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,

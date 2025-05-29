@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from @/hooks/useAuth00";
 import { Redirect, Link } from "wouter";
 import PageLayout from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
