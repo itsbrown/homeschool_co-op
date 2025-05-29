@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth0";
 import { Redirect, Link } from "wouter";
 import { DashboardShell } from "@/components/ui/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,19 @@ import { UserPlus, Calendar, School, BookOpen, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+
+interface Child {
+  id: number;
+  firstName: string;
+  lastName: string;
+  birthdate: string;
+  gradeLevel: string;
+  parentEmail?: string;
+  school?: string;
+  learningStyle?: string;
+  interests?: string[];
+  age?: number;
+}
 
 export default function ChildrenPage() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -22,7 +35,7 @@ export default function ChildrenPage() {
   }
   
   // Fetch children data
-  const { data: children, isLoading: isLoadingChildren } = useQuery({
+  const { data: children = [], isLoading: isLoadingChildren } = useQuery<Child[]>({
     queryKey: ["/api/children"],
     enabled: isAuthenticated && isParent,
   });

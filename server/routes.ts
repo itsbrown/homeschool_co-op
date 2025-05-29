@@ -1827,6 +1827,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, hasRole(['admin']), csvUploadApi.uploadClassesCsv);
   
+  // Children API endpoint for parents
+  app.get("/api/children", isAuthenticated, async (req, res) => {
+    try {
+      const userEmail = req.user.email;
+      const userRole = req.user.role;
+
+      if (userRole !== 'parent') {
+        return res.status(403).json({ message: "Access denied. Parents only." });
+      }
+
+      // Load children data
+      const childrenPath = path.join(process.cwd(), 'data', 'children.json');
+      let children = [];
+      
+      try {
+        const childrenData = fs.readFileSync(childrenPath, 'utf8');
+        children = JSON.parse(childrenData);
+      } catch (error) {
+        console.log('No children data file found, returning empty array');
+        return res.json([]);
+      }
+
+      // Filter children that match the parent's email and calculate age
+      const parentChildren = children.filter(child => {
+        // Check if parent email matches any of the contact emails
+        return child.parentEmail === userEmail || 
+               child.emergencyContact?.email === userEmail ||
+               child.secondaryContact?.email === userEmail;
+      }).map(child => {
+        // Calculate age from birthdate
+        const age = calculateAge(child.birthdate);
+        return { ...child, age };
+      });
+
+      console.log(`👨‍👩‍👧‍👦 Found ${parentChildren.length} children for parent: ${userEmail}`);
+      res.json(parentChildren);
+
+    } catch (error) {
+      console.error("Error fetching children:", error);
+      res.status(500).json({ message: "Error fetching children data" });
+    }
+  });
+
   // Serve uploaded files (including PDFs)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   
