@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { User, Plus } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth0";
 
 export default function ChildrenViewPage() {
   const [, setLocation] = useLocation();
@@ -15,7 +15,7 @@ export default function ChildrenViewPage() {
   // Fetch children data
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
     queryKey: ["/api/children"],
-    queryFn: () => fetch("/api/children").then(res => res.json()).catch(() => []),
+    enabled: isAuthenticated && user?.role === "parent",
     // Ensure we always have an array, even if the API returns something else
     select: (data) => Array.isArray(data) ? data : [],
   });
