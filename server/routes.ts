@@ -42,55 +42,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register API routers
   app.use("/api/children", childrenRouter);
 
-  // Add Firebase sync route directly
-  app.post("/api/auth/firebase-sync", async (req, res) => {
+  // Auth0 user sync endpoint
+  app.post("/api/auth/sync", verifyAuth0Token, async (req, res) => {
     try {
-      console.log("🔥 FIXED Firebase sync request:", req.body);
-
-      const { firebaseUid, email, name } = req.body;
-
-      if (!firebaseUid || !email) {
-        return res.status(400).json({ message: "Firebase UID and email are required" });
-      }
-
-      // Check for special test accounts and assign proper roles
-      let userRole = 'parent'; // Default role
-      let userId = 1;
-
-      console.log('🔍 Checking email for role assignment:', email);
-      if (email === 'schooladmin@test.com') {
-        console.log('✅ FOUND schooladmin@test.com - assigning ADMIN role!');
-        userRole = 'admin';
-        userId = 1;
-      } else if (email === 'educator@test.com') {
-        console.log('✅ FOUND educator@test.com - assigning educator role!');
-        userRole = 'educator';  
-        userId = 2;
-      } else if (email === 'parent@test.com') {
-        console.log('✅ FOUND parent@test.com - assigning parent role!');
-        userRole = 'parent';
-        userId = 3;
-      } else {
-        console.log('❌ Email not found in test accounts, using default parent role');
-      }
-
+      const user = req.user;
+      
+      // Return user information from Auth0 token
       const userData = {
-        id: userId,
-        name: name || email.split('@')[0],
-        email: email,
-        role: userRole,
-        avatar: null,
-        subscription: userRole === 'admin' ? 'premium' : 'free'
+        id: user.sub,
+        name: user.name || user.nickname,
+        email: user.email,
+        role: user.role || user['custom:role'] || user['app_metadata']?.role || 'parent',
+        avatar: user.picture,
+        subscription: 'free'
       };
 
-      console.log("🚀 Sending corrected JSON response:", userData);
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(200).json(userData);
-
+      res.status(200).json(userData);
     } catch (error) {
-      console.error("Direct Firebase sync error:", error);
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(500).json({ message: "Error syncing user" });
+      console.error("Auth0 sync error:", error);
+      res.status(500).json({ message: "Error syncing user" });
     }
   });
 

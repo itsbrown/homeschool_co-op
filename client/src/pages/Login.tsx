@@ -32,45 +32,18 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-type LoginForm = z.infer<typeof loginSchema>;
+import { useAuth0 } from "@auth0/auth0-react";
 
-export default function LoginFirebase() {
-  const { loginWithEmail, loginWithGoogle, isLoading, error } = useFirebaseAuth();
+export default function Login() {
+  const { loginWithRedirect, isLoading } = useAuth0();
   const { toast } = useToast();
-  const [, navigate] = useLocation();
-  const [showPassword, setShowPassword] = useState(false);
 
-  const form = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  });
-
-  const onSubmit = async (data: LoginForm) => {
-    try {
-      const result = await loginWithEmail(data.email, data.password);
-      if (result.success) {
-        toast({
-          title: "Welcome back!",
-          description: "You've successfully logged in.",
-        });
-        navigate("/");
-      } else {
-        toast({
-          title: "Login failed",
-          description: result.error || "Please check your email and password",
-          variant: "destructive",
-        });
+  const handleLogin = () => {
+    loginWithRedirect({
+      appState: {
+        returnTo: window.location.origin
       }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
-    }
+    });
   };
 
   const handleGoogleLogin = async () => {

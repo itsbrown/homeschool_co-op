@@ -163,7 +163,7 @@ const SystemArchitectureSVG = () => {
         <text x="880" y="623" textAnchor="middle" fontSize="13" fill="#b91c1c">Stripe</text>
         
         <rect x="950" y="600" width="130" height="35" rx="4" ry="4" fill="white" stroke="#fca5a5" strokeWidth="1" />
-        <text x="1015" y="623" textAnchor="middle" fontSize="13" fill="#b91c1c">Google Cloud</text>
+        <text x="1015" y="623" textAnchor="middle" fontSize="13" fill="#b91c1c">Auth0</text>
         
         <rect x="820" y="645" width="260" height="25" rx="4" ry="4" fill="white" stroke="#fca5a5" strokeWidth="1" />
         <text x="950" y="662" textAnchor="middle" fontSize="13" fill="#b91c1c">Document AI OCR Service</text>

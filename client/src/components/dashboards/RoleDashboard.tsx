@@ -1,5 +1,5 @@
 import React from "react";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth0 } from "@auth0/auth0-react";
 import AdminDashboard from "./AdminDashboard";
 import EducatorDashboard from "./EducatorDashboard";
 import ParentDashboard from "./ParentDashboard";
