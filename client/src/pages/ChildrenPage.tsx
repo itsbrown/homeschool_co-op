@@ -190,6 +190,6 @@ export default function ChildrenPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardShell>
+    </PageLayout>
   );
 }
