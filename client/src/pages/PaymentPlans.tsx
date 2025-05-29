@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, Star, Users, GraduationCap, Building } from "lucide-react";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth0 } from "@/hooks/useAuth0";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -105,7 +105,7 @@ const annualDiscountPlans: PaymentPlan[] = paymentPlans.map(plan => ({
 }));
 
 export default function PaymentPlans() {
-  const { user, isAuthenticated } = useFirebaseAuth();
+  const { user, isAuthenticated } = useAuth0();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [isAnnual, setIsAnnual] = useState(false);

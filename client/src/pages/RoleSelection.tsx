@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth0 } from "@/hooks/useAuth0";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -11,7 +11,7 @@ import { GraduationCap, Users, BookOpen, Building } from "lucide-react";
 export default function RoleSelection() {
   const [selectedRole, setSelectedRole] = useState("");
   const [, setLocation] = useLocation();
-  const { user, isLoading } = useFirebaseAuth();
+  const { user, isLoading } = useAuth0();
   const { toast } = useToast();
 
   const roles = [

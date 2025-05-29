@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth0 } from "@/hooks/useAuth0";
 import { useLocation } from "wouter";
 import AppShell from "@/components/layout/AppShell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
@@ -7,7 +7,7 @@ import RoleDashboard from "@/components/dashboards/RoleDashboard";
 import AIStatusPanel from "@/components/AIStatusPanel";
 
 export default function Dashboard() {
-  const { user, isAuthenticated, isLoading: authLoading } = useFirebaseAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth0();
   const [, setLocation] = useLocation();
 
   // Redirect to login if not authenticated

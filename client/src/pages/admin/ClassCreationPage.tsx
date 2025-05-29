@@ -5,12 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { ClassCreationForm } from "@/components/admin/ClassCreationForm";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth0 } from "@/hooks/useAuth0";
 import { useQuery } from "@tanstack/react-query";
 
 export default function ClassCreationPage() {
   const [location, setLocation] = useLocation();
-  const { user, isAuthenticated } = useFirebaseAuth();
+  const { user, isAuthenticated } = useAuth0();
   const [, params] = useRoute("/admin/classes/edit/:id");
   
   const classId = params?.id ? parseInt(params.id) : undefined;

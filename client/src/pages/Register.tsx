@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth0 } from "@/hooks/useAuth0";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -42,7 +42,7 @@ const registerSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
-  const { registerWithEmail, loginWithGoogle, isLoading } = useFirebaseAuth();
+  const { loginWithRedirect, isLoading } = useAuth0();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [registerError, setRegisterError] = useState<string | null>(null);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminShell } from "@/components/ui/admin-shell";
-import { useFirebaseAuth } from "../hooks/useFirebaseAuth";
+import { useAuth0 } from "@/hooks/useAuth0";
 import { ClassCreationForm } from "../components/admin/ClassCreationForm";
 import { Route, Switch, useLocation, Link } from "wouter";
 import { apiRequest } from "../lib/queryClient";
@@ -64,7 +64,7 @@ import {
 } from "lucide-react";
 
 export function AdminClassesPage() {
-  const { user, isLoading } = useFirebaseAuth();
+  const { user, isLoading } = useAuth0();
   const [location, setLocation] = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");

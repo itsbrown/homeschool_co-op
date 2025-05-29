@@ -1,6 +1,6 @@
 import { Link as WouterLink, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { useFirebaseAuth } from "../hooks/useFirebaseAuth";
+import { useAuth0 } from "@/hooks/useAuth0";
 import { Sparkles, Book, Layers, BookOpen, Users, GraduationCap, User2 } from "lucide-react";
 
 // Create a Link component that highlights the active page
@@ -27,7 +27,7 @@ export function MainNav({
   className,
   ...props
 }: React.HTMLAttributes<HTMLElement>) {
-  const { user } = useFirebaseAuth();
+  const { user } = useAuth0();
   const isAdmin = user?.role === "admin";
   const isEducator = user?.role === "educator" || isAdmin;
   

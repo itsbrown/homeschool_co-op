@@ -5,11 +5,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard } from "lucide-react";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { useAuth0 } from "@/hooks/useAuth0";
 import EnrollmentAssistantModal from "@/components/enrollment/EnrollmentAssistantModal";
 
 export default function ParentDashboard() {
-  const { user } = useFirebaseAuth();
+  const { user } = useAuth0();
   const [activeTab, setActiveTab] = useState("overview");
   const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
 
