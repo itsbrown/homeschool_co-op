@@ -439,15 +439,18 @@ export default function SchoolClassCreationPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {staffMembers.map((staff: any) => (
-                            <SelectItem 
-                              key={staff.id} 
-                              value={staff.name || `${staff.firstName} ${staff.lastName}`}
-                            >
-                              {staff.name || `${staff.firstName} ${staff.lastName}`}
-                              {staff.position && ` - ${staff.position}`}
-                            </SelectItem>
-                          ))}
+                          {staffMembers.map((staff: any) => {
+                            const staffName = staff.name || `${staff.firstName} ${staff.lastName}`;
+                            return (
+                              <SelectItem 
+                                key={staff.id} 
+                                value={staffName}
+                              >
+                                {staffName}
+                                {staff.position && ` - ${staff.position}`}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                       <FormDescription>

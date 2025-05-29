@@ -288,7 +288,7 @@ export default function SchoolClassesPage() {
                             <TableRow key={cls.id}>
                               <TableCell className="font-medium">{cls.title}</TableCell>
                               <TableCell>{cls.category}</TableCell>
-                              <TableCell>{cls.instructor}</TableCell>
+                              <TableCell>{cls.instructorName || cls.instructor || "Not assigned"}</TableCell>
                               <TableCell>{cls.gradeLevel}</TableCell>
                               <TableCell>
                                 <Badge 
