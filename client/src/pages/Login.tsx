@@ -1,6 +1,7 @@
+
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,19 +11,44 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { FaGoogle } from "react-icons/fa";
-import { User, BookOpen, Users } from "lucide-react";
+import { User, BookOpen, Users, Eye, EyeOff } from "lucide-react";
+import { useAuth0 } from "@auth0/auth0-react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
-import { useAuth0 } from "@auth0/auth0-react";
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const { loginWithRedirect, isLoading } = useAuth0();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
   const handleLogin = () => {
     loginWithRedirect({
@@ -34,24 +60,30 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      const result = await loginWithGoogle();
-      if (result.success) {
-        toast({
-          title: "Welcome!",
-          description: "You've successfully logged in with Google.",
-        });
-        navigate("/");
-      } else {
-        toast({
-          title: "Google login failed",
-          description: result.error || "Please try again",
-          variant: "destructive",
-        });
-      }
+      await loginWithRedirect({
+        authorizationParams: {
+          connection: 'google-oauth2'
+        }
+      });
     } catch (error) {
       toast({
         title: "Error",
         description: "Google login failed",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onSubmit = async (data: LoginFormValues) => {
+    try {
+      setError(null);
+      // For now, redirect to Auth0 login
+      await loginWithRedirect();
+    } catch (error) {
+      setError("Login failed. Please try again.");
+      toast({
+        title: "Login Failed",
+        description: "Please check your credentials and try again.",
         variant: "destructive",
       });
     }
@@ -83,6 +115,16 @@ export default function Login() {
           </CardHeader>
 
           <CardContent className="space-y-6">
+            {/* Auth0 Login Button */}
+            <Button
+              type="button"
+              className="w-full"
+              onClick={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? "Signing in..." : "Sign In with Auth0"}
+            </Button>
+
             {/* Google Login Button */}
             <Button
               type="button"
