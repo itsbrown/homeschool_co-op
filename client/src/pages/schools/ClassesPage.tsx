@@ -29,7 +29,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import UnifiedSchoolAdminSidebar from '@/components/layout/UnifiedSchoolAdminSidebar';
 
 // Sample class data (will be replaced with API data)
 const sampleClasses = [
@@ -129,18 +129,23 @@ export default function SchoolClassesPage() {
 
   if (isLoading) {
     return (
-      <SchoolAdminLayout pageTitle="Classes">
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="ml-2 text-lg">Loading classes...</span>
+      <div className="flex h-screen bg-gray-100">
+        <UnifiedSchoolAdminSidebar />
+        <div className="flex-1 overflow-auto">
+          <div className="flex items-center justify-center h-96">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="ml-2 text-lg">Loading classes...</span>
+          </div>
         </div>
-      </SchoolAdminLayout>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <SchoolAdminLayout pageTitle="Classes - Error">
+      <div className="flex h-screen bg-gray-100">
+        <UnifiedSchoolAdminSidebar />
+        <div className="flex-1 overflow-auto p-6">
         <div className="max-w-4xl mx-auto p-6">
           <Card>
             <CardHeader>
