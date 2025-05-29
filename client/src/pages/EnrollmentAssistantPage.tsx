@@ -8,7 +8,7 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 export default function EnrollmentAssistantPage() {
-  const { user, isLoading } = useFirebaseAuth();
+  const { user, isLoading } = useAuth();
   const isAuthenticated = !!user;
   const [, setLocation] = useLocation();
   

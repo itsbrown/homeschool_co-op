@@ -44,7 +44,7 @@ function SidebarItem({ href, title, icon, isActive }: SidebarItemProps) {
 
 export function AdminShell({ children }: PropsWithChildren) {
   const [location] = useLocation();
-  const { user } = useFirebaseAuth();
+  const { user } = useAuth();
 
   return (
     <div className="flex min-h-screen">

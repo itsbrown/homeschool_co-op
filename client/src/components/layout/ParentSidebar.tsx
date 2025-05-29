@@ -58,7 +58,7 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
 }
 
 export default function ParentSidebar() {
-  const { user, logout } = useFirebaseAuth();
+  const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = React.useState(false);
   
   // Parent navigation items

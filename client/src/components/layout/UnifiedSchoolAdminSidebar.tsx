@@ -77,7 +77,7 @@ interface SidebarProps {
 export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user, isAuthenticated } = useFirebaseAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
