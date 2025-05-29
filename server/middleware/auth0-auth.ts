@@ -107,11 +107,6 @@ export function requireAdmin(req: AuthenticatedRequest, res: Response, next: Nex
   return requireRole(['admin', 'school_admin'])(req, res, next);
 }
 
-// Educator-only middleware
-export function requireEducator(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  return requireRole(['educator', 'admin', 'school_admin'])(req, res, next);
-}
-
 // Educator+ middleware (educator, admin, school_admin)
 export function requireEducator(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   return requireRole(['educator', 'admin', 'school_admin'])(req, res, next);

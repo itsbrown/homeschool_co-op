@@ -29,6 +29,3 @@ export function useAuth() {
 
 // Keep the original export for backward compatibility
 export const useAuth0 = useAuth;
-
-// Re-export useAuth0 from @auth0/auth0-react for consistency
-export { useAuth0 } from '@auth0/auth0-react';
