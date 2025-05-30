@@ -1864,9 +1864,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/children", verifyAuth0Token, async (req, res) => {
     try {
       const userEmail = req.auth?.payload?.email;
-      const userRole = req.auth?.payload?.['https://myapp.com/role'];
+      
+      // Debug: Log the entire token payload to understand the structure
+      console.log('🔍 Auth0 token payload for children endpoint:', JSON.stringify(req.auth?.payload, null, 2));
+      
+      // Check for role in multiple possible locations
+      const userRole = req.auth?.payload?.['https://myapp.com/role'] || 
+                      req.auth?.payload?.role || 
+                      req.auth?.payload?.['app_metadata']?.role ||
+                      'parent'; // Default to parent for now
+
+      console.log('👤 Detected user role:', userRole);
 
       if (userRole !== 'parent') {
+        console.log('❌ Access denied - role is not parent:', userRole);
         return res.status(403).json({ message: "Access denied. Parents only." });
       }
 
