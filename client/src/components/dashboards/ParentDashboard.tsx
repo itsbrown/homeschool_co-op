@@ -106,6 +106,7 @@ export default function ParentDashboard() {
       
       const result = await response.json();
       console.log('📊 Sync result:', result);
+      console.log('🔍 Debug info:', result.debug);
       
       toast({
         title: "Sync Complete",

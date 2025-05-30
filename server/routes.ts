@@ -86,6 +86,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         message: `Successfully synced ${updatedChildren.length} children`,
         syncedChildren: updatedChildren.length,
+        debug: {
+          auth0Email: userEmail,
+          totalChildrenInDb: allChildren.length,
+          parentEmailsInDb: parentEmails,
+          matchingChildrenFound: matchingChildren.length
+        },
         children: updatedChildren.map(child => ({
           id: child.id,
           firstName: child.firstName,
