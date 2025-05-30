@@ -11,7 +11,7 @@ import { GraduationCap, Users, BookOpen, Building } from "lucide-react";
 export default function RoleSelection() {
   const [selectedRole, setSelectedRole] = useState("");
   const [, setLocation] = useLocation();
-  const { user, isLoading } = useAuth0();
+  const { user, isLoading } = useAuth();
   const { toast } = useToast();
 
   const roles = [

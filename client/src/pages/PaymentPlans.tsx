@@ -105,7 +105,7 @@ const annualDiscountPlans: PaymentPlan[] = paymentPlans.map(plan => ({
 }));
 
 export default function PaymentPlans() {
-  const { user, isAuthenticated } = useAuth0();
+  const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [isAnnual, setIsAnnual] = useState(false);

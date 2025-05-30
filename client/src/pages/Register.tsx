@@ -42,7 +42,7 @@ const registerSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
-  const { loginWithRedirect, isLoading } = useAuth0();
+  const { loginWithRedirect, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [registerError, setRegisterError] = useState<string | null>(null);

@@ -7,7 +7,7 @@ import LearnerDashboard from "./LearnerDashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function RoleDashboard() {
-  const { user, isLoading, isAuthenticated } = useAuth0();
+  const { user, isLoading, isAuthenticated } = useAuth();
   
   if (isLoading) {
     return <DashboardSkeleton />;

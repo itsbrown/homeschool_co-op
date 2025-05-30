@@ -7,7 +7,7 @@ import RoleDashboard from "@/components/dashboards/RoleDashboard";
 import AIStatusPanel from "@/components/AIStatusPanel";
 
 export default function Dashboard() {
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
 
   // Redirect to login if not authenticated

@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export default function ClassCreationPage() {
   const [location, setLocation] = useLocation();
-  const { user, isAuthenticated } = useAuth0();
+  const { user, isAuthenticated } = useAuth();
   const [, params] = useRoute("/admin/classes/edit/:id");
   
   const classId = params?.id ? parseInt(params.id) : undefined;
