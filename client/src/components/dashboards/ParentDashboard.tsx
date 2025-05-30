@@ -11,28 +11,82 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ParentDashboard() {
-  const { user } = useAuth();
+  const { user, getAccessTokenSilently } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
 
-  // Fetch children data
+  // Fetch children data with Auth0 token
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
     queryKey: ["/api/children"],
+    queryFn: async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const response = await fetch("/api/children", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error("Error fetching children:", error);
+        return [];
+      }
+    },
+    enabled: !!user,
   });
 
-  // Fetch enrollments data
+  // Fetch enrollments data with Auth0 token
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/enrollments"],
+    queryFn: async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const response = await fetch("/api/enrollments", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error("Error fetching enrollments:", error);
+        return [];
+      }
+    },
+    enabled: !!user,
   });
 
-  // Fetch upcoming events
+  // Fetch upcoming events with Auth0 token
   const { data: eventsData, isLoading: eventsLoading } = useQuery({
     queryKey: ["/api/events/upcoming"],
+    queryFn: async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const response = await fetch("/api/events/upcoming", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error("Error fetching events:", error);
+        return [];
+      }
+    },
+    enabled: !!user,
   });
 
-  // Fetch payment summary
+  // Fetch payment summary (keeping original since it works)
   const { data: paymentData, isLoading: paymentLoading } = useQuery({
     queryKey: ["/api/payments/summary"],
   });
@@ -41,7 +95,8 @@ export default function ParentDashboard() {
   const handleSyncChildren = async () => {
     setIsSyncing(true);
     try {
-      const response = await apiRequest("POST", "/api/sync-children");
+      const token = await getAccessTokenSilently();
+      const response = await apiRequest("POST", "/api/sync-children", undefined, { token });
       const result = await response.json();
       
       toast({
@@ -261,7 +316,7 @@ export default function ParentDashboard() {
             <CardContent>
               {childrenLoading ? (
                 <div className="text-center py-8">Loading children information...</div>
-              ) : childrenData?.length === 0 ? (
+              ) : !Array.isArray(childrenData) || childrenData?.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <User className="h-12 w-12 mx-auto mb-2" />
                   <p>No children registered yet</p>
@@ -271,7 +326,7 @@ export default function ParentDashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {childrenData?.map((child: any) => (
+                  {childrenData.map((child: any) => (
                     <div key={child.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">

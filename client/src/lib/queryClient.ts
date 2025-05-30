@@ -9,6 +9,7 @@ async function throwIfResNotOk(res: Response) {
 
 interface ApiRequestOptions {
   rawFormData?: boolean;
+  token?: string;
 }
 
 export async function apiRequest(
@@ -19,9 +20,19 @@ export async function apiRequest(
 ): Promise<Response> {
   const isFormData = data instanceof FormData || (options && options.rawFormData);
   
+  const headers: Record<string, string> = {};
+  
+  if (data && !isFormData) {
+    headers["Content-Type"] = "application/json";
+  }
+  
+  if (options?.token) {
+    headers["Authorization"] = `Bearer ${options.token}`;
+  }
+  
   const res = await fetch(url, {
     method,
-    headers: data && !isFormData ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data instanceof FormData 
       ? data 
       : data && !isFormData 
