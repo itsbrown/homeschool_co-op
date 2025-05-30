@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { BookOpen, Calendar, Award, Clock, GraduationCap, Users } from "lucide-react";
-import { useAuth } from @/hooks/useAuth00";
+import { useAuth } from "@/hooks/useAuth0";
 import { Progress } from "@/components/ui/progress";
 
 export default function LearnerDashboard() {

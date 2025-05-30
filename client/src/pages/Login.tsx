@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useAuth } from @/hooks/useAuth00";
+import { useAuth } from "@/hooks/useAuth0";
 import { Button } from "@/components/ui/button";
 import {
   Card,

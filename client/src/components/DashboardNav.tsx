@@ -11,7 +11,7 @@ import {
   Calendar,
   School,
 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from @/hooks/useAuth0";
 
 export function DashboardNav() {
   const [location] = useLocation();

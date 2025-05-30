@@ -2,7 +2,7 @@ import React from 'react';
 import { useLocation } from 'wouter';
 import { Home, Users, BookOpen, Calendar, Settings, FileText, School, ChevronLeft, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from @/hooks/useAuth00';
+import { useAuth } from "@/hooks/useAuth0";
 import { cn } from '@/lib/utils';
 
 interface NavItem {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DashboardShell } from "../components/ui/dashboard-shell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
-import { useAuth } from "../hooks/use-auth";
+import { useAuth } from "@/hooks/useAuth0";
 import { ProgramList } from "../components/registration/ProgramList";
 import { ProgramEnrollmentForm } from "../components/registration/ProgramEnrollmentForm";
 import { EnrollmentList } from "../components/registration/EnrollmentList";

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from @/hooks/useAuth00";
+import { useAuth } from "@/hooks/useAuth0";
 import { Redirect, useLocation, useRoute, Link } from "wouter";
 import { DashboardShell } from "@/components/ui/dashboard-shell";
 import { Button } from "@/components/ui/button";

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from @/hooks/useAuth00";
+import { useAuth } from "@/hooks/useAuth0";
 import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

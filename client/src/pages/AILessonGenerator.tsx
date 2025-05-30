@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useAuth } from @/hooks/useAuth00";
+import { useAuth } from "@/hooks/useAuth0";
 import { useAIStatus } from "@/hooks/useAIStatus";
 import { useToast } from "@/hooks/use-toast";
 import AppShell from "@/components/layout/AppShell";

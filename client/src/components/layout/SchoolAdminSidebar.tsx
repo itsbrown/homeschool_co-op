@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { School, Calendar, Users, BookOpen, ChevronLeft, Menu, Home, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useAuth } from @/hooks/useAuth00";
+import { useAuth } from "@/hooks/useAuth0";
 import { apiRequest } from "@/lib/queryClient";
 
 interface SidebarProps {

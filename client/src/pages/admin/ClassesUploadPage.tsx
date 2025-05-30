@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, FileSpreadsheet, Upload, Check, AlertCircle } from "lucide-react";
-import { useAuth } from @/hooks/useAuth00";
+import { useAuth } from "@/hooks/useAuth0";
 import { User } from "@/lib/types";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CsvMappingDialog } from "@/components/admin/CsvMappingDialog";

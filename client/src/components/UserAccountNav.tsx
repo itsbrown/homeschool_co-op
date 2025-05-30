@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from @/hooks/useAuth0";
 import { apiRequest } from "@/lib/queryClient";
 
 export function UserAccountNav() {
