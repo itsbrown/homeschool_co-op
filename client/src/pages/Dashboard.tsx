@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAuth0 } from "@/hooks/useAuth0";
+import { useAuth } from "@/hooks/useAuth0";
 import { useLocation } from "wouter";
 import AppShell from "@/components/layout/AppShell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
