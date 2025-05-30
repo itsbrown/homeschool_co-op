@@ -60,9 +60,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Find all children with matching parent email
       const allChildren = await storage.getAllChildren();
+      console.log(`🔍 Searching for children with parent email: "${userEmail}"`);
+      console.log(`📋 Total children in database: ${allChildren.length}`);
+      
+      // Log all parent emails for debugging
+      const parentEmails = allChildren.map(child => child.parentEmail).filter(Boolean);
+      console.log('📧 All parent emails in database:', parentEmails);
+      
       const matchingChildren = allChildren.filter(child => 
         child.parentEmail && child.parentEmail.toLowerCase() === userEmail.toLowerCase()
       );
+      console.log(`✅ Found ${matchingChildren.length} matching children`);
 
       // Update children to link them to this user
       const updatedChildren = [];

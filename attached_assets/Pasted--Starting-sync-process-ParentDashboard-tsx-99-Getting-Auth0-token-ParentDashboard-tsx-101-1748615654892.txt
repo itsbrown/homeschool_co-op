@@ -1,0 +1,73 @@
+🔄 Starting sync process...
+ParentDashboard.tsx:99 🔐 Getting Auth0 token...
+ParentDashboard.tsx:101 ✅ Token received, length: 814
+ParentDashboard.tsx:103 📡 Making sync request...
+ParentDashboard.tsx:105 📨 Response received: 200
+ParentDashboard.tsx:108 📊 Sync result: {message: 'Successfully synced 0 children', syncedChildren: 0, children: Array(0)}
+ParentDashboard.tsx:26 
+            
+            
+           GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/children 500 (Internal Server Error)
+queryFn @ ParentDashboard.tsx:26
+await in queryFn
+fetchFn @ @tanstack_react-query.js?v=14352a4c:840
+run @ @tanstack_react-query.js?v=14352a4c:494
+start @ @tanstack_react-query.js?v=14352a4c:536
+fetch @ @tanstack_react-query.js?v=14352a4c:926
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:1726
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:1725
+batch @ @tanstack_react-query.js?v=14352a4c:583
+refetchQueries @ @tanstack_react-query.js?v=14352a4c:1724
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:1716
+batch @ @tanstack_react-query.js?v=14352a4c:583
+invalidateQueries @ @tanstack_react-query.js?v=14352a4c:1705
+handleSyncChildren @ ParentDashboard.tsx:116
+await in handleSyncChildren
+callCallback2 @ chunk-XQLYTHWV.js?v=14352a4c:3674
+invokeGuardedCallbackDev @ chunk-XQLYTHWV.js?v=14352a4c:3699
+invokeGuardedCallback @ chunk-XQLYTHWV.js?v=14352a4c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-XQLYTHWV.js?v=14352a4c:3736
+executeDispatch @ chunk-XQLYTHWV.js?v=14352a4c:7014
+processDispatchQueueItemsInOrder @ chunk-XQLYTHWV.js?v=14352a4c:7034
+processDispatchQueue @ chunk-XQLYTHWV.js?v=14352a4c:7043
+dispatchEventsForPlugins @ chunk-XQLYTHWV.js?v=14352a4c:7051
+(anonymous) @ chunk-XQLYTHWV.js?v=14352a4c:7174
+batchedUpdates$1 @ chunk-XQLYTHWV.js?v=14352a4c:18913
+batchedUpdates @ chunk-XQLYTHWV.js?v=14352a4c:3579
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=14352a4c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=14352a4c:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=14352a4c:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=14352a4c:5449Understand this error
+ParentDashboard.tsx:36 Error fetching children: Error: HTTP error! status: 500
+    at queryFn (ParentDashboard.tsx:32:17)
+overrideMethod @ hook.js:608
+queryFn @ ParentDashboard.tsx:36
+await in queryFn
+fetchFn @ @tanstack_react-query.js?v=14352a4c:840
+run @ @tanstack_react-query.js?v=14352a4c:494
+start @ @tanstack_react-query.js?v=14352a4c:536
+fetch @ @tanstack_react-query.js?v=14352a4c:926
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:1726
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:1725
+batch @ @tanstack_react-query.js?v=14352a4c:583
+refetchQueries @ @tanstack_react-query.js?v=14352a4c:1724
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:1716
+batch @ @tanstack_react-query.js?v=14352a4c:583
+invalidateQueries @ @tanstack_react-query.js?v=14352a4c:1705
+handleSyncChildren @ ParentDashboard.tsx:116
+await in handleSyncChildren
+callCallback2 @ chunk-XQLYTHWV.js?v=14352a4c:3674
+invokeGuardedCallbackDev @ chunk-XQLYTHWV.js?v=14352a4c:3699
+invokeGuardedCallback @ chunk-XQLYTHWV.js?v=14352a4c:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-XQLYTHWV.js?v=14352a4c:3736
+executeDispatch @ chunk-XQLYTHWV.js?v=14352a4c:7014
+processDispatchQueueItemsInOrder @ chunk-XQLYTHWV.js?v=14352a4c:7034
+processDispatchQueue @ chunk-XQLYTHWV.js?v=14352a4c:7043
+dispatchEventsForPlugins @ chunk-XQLYTHWV.js?v=14352a4c:7051
+(anonymous) @ chunk-XQLYTHWV.js?v=14352a4c:7174
+batchedUpdates$1 @ chunk-XQLYTHWV.js?v=14352a4c:18913
+batchedUpdates @ chunk-XQLYTHWV.js?v=14352a4c:3579
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=14352a4c:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=14352a4c:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=14352a4c:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=14352a4c:5449Understand this error
