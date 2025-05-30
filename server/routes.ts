@@ -46,15 +46,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/sync-children", verifyAuth0Token, async (req, res) => {
     try {
       const user = req.user;
+      console.log('Sync children - Auth0 user payload:', JSON.stringify(user, null, 2));
       
-      if (!user || !user.email) {
+      if (!user) {
+        return res.status(400).json({ message: "Authentication required" });
+      }
+
+      const userEmail = user.email || user['https://myapp.com/email'] || user.sub;
+      if (!userEmail) {
+        console.log('No email found in user payload:', user);
         return res.status(400).json({ message: "User email is required" });
       }
 
       // Find all children with matching parent email
       const allChildren = await storage.getAllChildren();
       const matchingChildren = allChildren.filter(child => 
-        child.parentEmail && child.parentEmail.toLowerCase() === user.email.toLowerCase()
+        child.parentEmail && child.parentEmail.toLowerCase() === userEmail.toLowerCase()
       );
 
       // Update children to link them to this user
