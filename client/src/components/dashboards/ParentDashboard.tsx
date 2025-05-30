@@ -93,11 +93,19 @@ export default function ParentDashboard() {
 
   // Handle syncing children accounts with parent email
   const handleSyncChildren = async () => {
+    console.log('🔄 Starting sync process...');
     setIsSyncing(true);
     try {
+      console.log('🔐 Getting Auth0 token...');
       const token = await getAccessTokenSilently();
+      console.log('✅ Token received, length:', token?.length);
+      
+      console.log('📡 Making sync request...');
       const response = await apiRequest("POST", "/api/sync-children", undefined, { token });
+      console.log('📨 Response received:', response.status);
+      
       const result = await response.json();
+      console.log('📊 Sync result:', result);
       
       toast({
         title: "Sync Complete",
@@ -107,9 +115,10 @@ export default function ParentDashboard() {
       // Refresh children data
       queryClient.invalidateQueries({ queryKey: ["/api/children"] });
     } catch (error) {
+      console.error('❌ Sync error:', error);
       toast({
         title: "Sync Failed",
-        description: "Unable to sync children accounts. Please try again.",
+        description: `Unable to sync children accounts: ${error.message}`,
         variant: "destructive",
       });
     } finally {
