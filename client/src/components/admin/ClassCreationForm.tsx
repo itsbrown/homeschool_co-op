@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth0 } from "@/hooks/useAuth0";
+import { useAuth } from "@/hooks/useAuth0";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -66,7 +66,7 @@ interface ClassCreationFormProps {
 
 export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCreationFormProps) {
   const { toast } = useToast();
-  const { user } = useAuth0();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Define type for educator
   interface Educator {
