@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
 import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema } from "@shared/schema";
-import childrenRouter from "./api/children";
+// Removed session-based children router - using Auth0 endpoints instead
 import * as emergencyContactsApi from "./api/emergency-contacts";
 import * as programsApi from "./api/programs";
 import * as programEnrollmentsApi from "./api/program-enrollments";
@@ -40,7 +40,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const { verifyAuth0Token, requireRole, requireAdmin, requireEducator } = await import("./middleware/auth0-auth");
 
   // Register API routers
-  app.use("/api/children", childrenRouter);
+  // Children endpoint is now handled directly below with Auth0 authentication
 
   // Parent-Child sync endpoint
   app.post("/api/sync-children", verifyAuth0Token, async (req, res) => {
@@ -1249,8 +1249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Children routes
-  app.use('/api/children', childrenRouter);
+  // Children routes - handled directly with Auth0 authentication above
 
   // Emergency Contacts routes
   app.get('/api/emergency-contacts', isAuthenticated, emergencyContactsApi.getMyEmergencyContacts);
