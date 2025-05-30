@@ -4,14 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth0";
 import EnrollmentAssistantModal from "@/components/enrollment/EnrollmentAssistantModal";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ParentDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const { toast } = useToast();
 
   // Fetch children data
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
@@ -32,6 +36,31 @@ export default function ParentDashboard() {
   const { data: paymentData, isLoading: paymentLoading } = useQuery({
     queryKey: ["/api/payments/summary"],
   });
+
+  // Handle syncing children accounts with parent email
+  const handleSyncChildren = async () => {
+    setIsSyncing(true);
+    try {
+      const response = await apiRequest("POST", "/api/sync-children");
+      const result = await response.json();
+      
+      toast({
+        title: "Sync Complete",
+        description: `Successfully synced ${result.syncedChildren} children with your account`,
+      });
+      
+      // Refresh children data
+      queryClient.invalidateQueries({ queryKey: ["/api/children"] });
+    } catch (error) {
+      toast({
+        title: "Sync Failed",
+        description: "Unable to sync children accounts. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -200,6 +229,23 @@ export default function ParentDashboard() {
                       <div className="text-sm text-muted-foreground">Manage billing</div>
                     </div>
                   </Link>
+                </Button>
+
+                <Button 
+                  onClick={handleSyncChildren}
+                  disabled={isSyncing}
+                  variant="outline" 
+                  className="w-full justify-start h-auto p-4"
+                >
+                  <RefreshCw className={`mr-3 h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <div className="text-left">
+                    <div className="font-medium">
+                      {isSyncing ? 'Syncing...' : 'Sync Children'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Link children by email
+                    </div>
+                  </div>
                 </Button>
               </CardContent>
             </Card>

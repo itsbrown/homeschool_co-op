@@ -42,6 +42,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register API routers
   app.use("/api/children", childrenRouter);
 
+  // Parent-Child sync endpoint
+  app.post("/api/sync-children", verifyAuth0Token, async (req, res) => {
+    try {
+      const user = req.user;
+      
+      if (!user || !user.email) {
+        return res.status(400).json({ message: "User email is required" });
+      }
+
+      // Find all children with matching parent email
+      const allChildren = await storage.getAllChildren();
+      const matchingChildren = allChildren.filter(child => 
+        child.parentEmail && child.parentEmail.toLowerCase() === user.email.toLowerCase()
+      );
+
+      // Update children to link them to this user
+      const updatedChildren = [];
+      for (const child of matchingChildren) {
+        const updatedChild = await storage.updateChild(child.id, {
+          ...child,
+          userId: user.sub, // Link child to Auth0 user ID
+          lastSyncedAt: new Date().toISOString()
+        });
+        updatedChildren.push(updatedChild);
+      }
+
+      res.json({
+        message: `Successfully synced ${updatedChildren.length} children`,
+        syncedChildren: updatedChildren.length,
+        children: updatedChildren.map(child => ({
+          id: child.id,
+          firstName: child.firstName,
+          lastName: child.lastName,
+          email: child.email,
+          parentEmail: child.parentEmail
+        }))
+      });
+    } catch (error) {
+      console.error("Error syncing children:", error);
+      res.status(500).json({ message: "Error syncing children accounts" });
+    }
+  });
+
   // Auth0 user sync endpoint
   app.post("/api/auth/sync", verifyAuth0Token, async (req, res) => {
     try {
