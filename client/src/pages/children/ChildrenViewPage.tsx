@@ -12,12 +12,34 @@ export default function ChildrenViewPage() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
   
-  // Fetch children data
+  // Fetch children data from school admin students endpoint
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
-    queryKey: ["/api/children"],
-    enabled: isAuthenticated && user?.role === "parent",
-    // Ensure we always have an array, even if the API returns something else
-    select: (data) => Array.isArray(data) ? data : [],
+    queryKey: ["/api/schools/students"],
+    queryFn: async () => {
+      try {
+        const response = await fetch("/api/schools/students");
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const students = await response.json();
+        // Transform students data to children format
+        return students.map((student: any) => ({
+          id: student.id,
+          firstName: student.name.split(' ')[0],
+          lastName: student.name.split(' ').slice(1).join(' '),
+          name: student.name,
+          gradeLevel: student.gradeLevel,
+          age: student.age,
+          email: student.email,
+          status: student.status,
+          enrollmentDate: student.enrollmentDate
+        }));
+      } catch (error) {
+        console.error("Error fetching students:", error);
+        return [];
+      }
+    },
+    enabled: true,
   });
 
   // Redirect if not authenticated

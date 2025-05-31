@@ -41,27 +41,31 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     enabled: true,
   });
 
-  // Fetch children for enrollment dialog
+  // Fetch children from school admin students endpoint
   const { data: children = [] } = useQuery({
-    queryKey: ["/api/children"],
+    queryKey: ["/api/schools/students"],
     queryFn: async () => {
       try {
-        const token = await getAccessTokenSilently();
-        const response = await fetch("/api/children", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch("/api/schools/students");
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        return await response.json();
+        const students = await response.json();
+        // Transform students data to children format for enrollment
+        return students.map((student: any) => ({
+          id: student.id,
+          firstName: student.name.split(' ')[0],
+          lastName: student.name.split(' ').slice(1).join(' '),
+          name: student.name,
+          gradeLevel: student.gradeLevel,
+          age: student.age
+        }));
       } catch (error) {
-        console.error("Error fetching children:", error);
+        console.error("Error fetching students:", error);
         return [];
       }
     },
-    enabled: isAuthenticated && !!user,
+    enabled: true,
   });
 
   // Enrollment mutation
