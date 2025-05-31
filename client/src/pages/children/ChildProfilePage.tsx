@@ -95,7 +95,7 @@ export default function ChildProfilePage() {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => setLocation("/children")}
+            onClick={() => setLocation("/children/view")}
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
