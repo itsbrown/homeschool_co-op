@@ -39,6 +39,7 @@ import ChildRegistrationConfirmation from "@/pages/ChildRegistrationConfirmation
 import ChildRegistrationSuccess from "@/pages/ChildRegistrationSuccess";
 import ChildrenPage from "@/pages/ChildrenPage";
 import ChildrenViewPage from "@/pages/children/ChildrenViewPage";
+import ChildProfilePage from "@/pages/children/ChildProfilePage";
 import ChildProfileEditPage from "@/pages/ChildProfileEditPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import ClassCreationPage from "./pages/admin/ClassCreationPage";
@@ -111,6 +112,7 @@ function Router() {
       <Route path="/classes" component={ClassesPage} />
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/view" component={ChildrenViewPage} />
+      <Route path="/children/:id" component={ChildProfilePage} />
       <Route path="/children/register" component={ChildRegistrationPage} />
       <Route path="/children/register/confirm" component={ChildRegistrationConfirmation} />
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />
