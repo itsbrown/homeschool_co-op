@@ -47,6 +47,12 @@ export default function EnrollmentAssistant() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
+  // Fetch user profile for personalized greeting
+  const { data: profileData } = useQuery({
+    queryKey: ['/api/users/profile'],
+    enabled: isAuthenticated,
+  }) as { data?: { firstName?: string; lastName?: string; name?: string } };
+
   // Fetch user's children
   const { data: children = [] } = useQuery({
     queryKey: ["/api/children"],
@@ -61,16 +67,17 @@ export default function EnrollmentAssistant() {
   
   // Initial welcome message from assistant
   useEffect(() => {
-    if (messages.length === 0) {
+    if (messages.length === 0 && profileData) {
+      const userName = profileData.firstName || user?.name || "parent";
       const initialMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: `Good afternoon, ${user?.username || "parent"}.\nHow can I help you today?`,
+        content: `Good afternoon, ${userName}.\nHow can I help you today?`,
         timestamp: new Date()
       };
       setMessages([initialMessage]);
     }
-  }, [messages]);
+  }, [messages, profileData, user]);
   
   // Auto scroll to bottom of messages
   useEffect(() => {
