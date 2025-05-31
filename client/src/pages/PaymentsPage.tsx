@@ -1,7 +1,6 @@
 import React from "react";
 import { useLocation } from "wouter";
-import AppShell from "@/components/layout/AppShell";
-import ParentAppShell from "@/components/layout/ParentAppShell";
+import BaseLayout from "@/components/layout/BaseLayout";
 import PaymentManagement from "@/components/payments/PaymentManagement";
 import { useAuth } from "@/hooks/useAuth0";
 
@@ -18,11 +17,11 @@ export default function PaymentsPage() {
   
   if (isLoading) {
     return (
-      <AppShell>
+      <BaseLayout pageTitle="Payments">
         <div className="flex justify-center items-center min-h-[50vh]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
-      </AppShell>
+      </BaseLayout>
     );
   }
   
@@ -33,20 +32,19 @@ export default function PaymentsPage() {
   // Ensure only parents can access this page
   if (user && user.role !== 'parent') {
     return (
-      <AppShell>
-        <div className="container mx-auto p-4 text-center">
+      <BaseLayout pageTitle="Access Denied">
+        <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
           <p>Only parents can access the payment management system.</p>
         </div>
-      </AppShell>
+      </BaseLayout>
     );
   }
   
   return (
-    <ParentAppShell>
-      <div className="container mx-auto p-4">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">Payment Management</h1>
+    <BaseLayout pageTitle="Payment Management">
+      <div className="space-y-6">
+        <div>
           <p className="text-muted-foreground">
             View and manage payments for your children's programs and classes
           </p>

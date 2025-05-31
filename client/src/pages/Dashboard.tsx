@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth0";
 import { useLocation } from "wouter";
-import AppShell from "@/components/layout/AppShell";
-import ParentAppShell from "@/components/layout/ParentAppShell";
+import BaseLayout from "@/components/layout/BaseLayout";
 import RoleDashboard from "@/components/dashboards/RoleDashboard";
 import AIStatusPanel from "@/components/AIStatusPanel";
 
@@ -20,28 +19,16 @@ export default function Dashboard() {
   // Show loading while checking auth
   if (authLoading) {
     return (
-      <AppShell>
-        <div className="flex items-center justify-center h-full">
+      <BaseLayout pageTitle="Loading...">
+        <div className="flex items-center justify-center h-96">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
-      </AppShell>
-    );
-  }
-  
-  // Use ParentAppShell for parent users, standard AppShell for others
-  if (user && user.role === 'parent') {
-    return (
-      <ParentAppShell>
-        <div className="container mx-auto p-4">
-          {/* Parent Dashboard */}
-          <RoleDashboard />
-        </div>
-      </ParentAppShell>
+      </BaseLayout>
     );
   }
 
   return (
-    <AppShell>
+    <BaseLayout pageTitle="Dashboard">
       {/* AI Status Panel */}
       <div className="mb-6">
         <AIStatusPanel />
@@ -49,6 +36,6 @@ export default function Dashboard() {
       
       {/* Role-specific Dashboard */}
       <RoleDashboard />
-    </AppShell>
+    </BaseLayout>
   );
 }
