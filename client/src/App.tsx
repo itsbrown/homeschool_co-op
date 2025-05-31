@@ -9,6 +9,7 @@ import { Auth0Provider } from "@auth0/auth0-react";
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import EmbeddedLogin from "@/components/auth/EmbeddedLogin";
+import DirectAuth0Login from "@/components/auth/DirectAuth0Login";
 import Register from "@/pages/Register";
 import RoleSelection from "@/pages/RoleSelection";
 import SchoolAdminLogin from "@/pages/SchoolAdminLogin";
@@ -100,9 +101,10 @@ function Router() {
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
-        <Route path="/" component={EmbeddedLogin} />
+        <Route path="/" component={DirectAuth0Login} />
       )}
-      <Route path="/login" component={EmbeddedLogin} />
+      <Route path="/login" component={DirectAuth0Login} />
+      <Route path="/embedded-login" component={EmbeddedLogin} />
       <Route path="/old-login" component={Login} />
       <Route path="/school-admin-login" component={SchoolAdminLogin} />
       <Route path="/register" component={Register} />
