@@ -82,6 +82,7 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/logout" component={LogoutPage} />
       {isAuthenticated ? (
         <Route path="/" component={Dashboard} />
       ) : (
@@ -122,7 +123,6 @@ function Router() {
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/schedule" component={SchedulePage} />
       <Route path="/payments" component={PaymentsPage} />
-      <Route path="/logout" component={LogoutPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
 
