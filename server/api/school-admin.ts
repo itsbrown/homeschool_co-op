@@ -864,17 +864,47 @@ router.get("/knowledge-bases", async (req, res) => {
 router.get('/students/:id', async (req, res) => {
   try {
     const studentId = parseInt(req.params.id);
-    console.log('Fetching student by ID:', studentId);
+    console.log('🎓 Fetching individual student by ID:', studentId);
 
-    const student = await storage.getStudentById(studentId);
+    // Read students from file
+    const childrenPath = path.join(process.cwd(), 'data', 'children.json');
+    const childrenData = JSON.parse(fs.readFileSync(childrenPath, 'utf8'));
+    
+    const student = childrenData.find((child: any) => child.id === studentId);
+    
     if (!student) {
+      console.log('❌ Student not found with ID:', studentId);
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    console.log('Student found:', student);
-    res.json(student);
+    // Format the student data for the detail view
+    const formattedStudent = {
+      id: student.id,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      birthdate: student.birthdate,
+      gradeLevel: student.gradeLevel,
+      specialNeeds: student.specialNeeds || '',
+      allergies: student.allergies || '',
+      interests: student.interests || [],
+      medicalNotes: student.medicalInfo || '',
+      parentEmail: student.parentEmail || '',
+      parentPhone: student.parentPhone || '',
+      address: student.address || '',
+      enrollmentDate: student.createdAt,
+      status: 'Active',
+      emergencyContact: {
+        name: student.emergencyContact || '',
+        relationship: 'Emergency Contact',
+        phone: student.emergencyPhone || '',
+        email: student.emergencyEmail || ''
+      }
+    };
+
+    console.log('✅ Student found:', formattedStudent.firstName, formattedStudent.lastName);
+    res.json(formattedStudent);
   } catch (error) {
-    console.error('Error fetching student:', error);
+    console.error('❌ Error fetching student:', error);
     res.status(500).json({ message: 'Error fetching student' });
   }
 });

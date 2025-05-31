@@ -62,6 +62,7 @@ import ClassRosterPage from "./pages/schools/ClassRosterPage";
 import StaffPage from "./pages/schools/StaffPage";
 import StaffEditPage from "./pages/schools/StaffEditPage";
 import StudentsPage from "./pages/schools/StudentsPage";
+import StudentDetailPage from "./pages/schools/StudentDetailPage";
 import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
@@ -144,6 +145,7 @@ function Router() {
       <Route path="/school-admin/staff-positions" component={StaffPositionsPage} />
       <Route path="/schools/staff/:id/edit" component={StaffEditPage} />
       <Route path="/schools/students" component={StudentsPage} />
+      <Route path="/schools/students/:id" component={StudentDetailPage} />
       <Route path="/schools/students/:id/edit" component={StudentRegistrationPage} />
       <Route path="/schools/students/register" component={StudentRegistrationPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
