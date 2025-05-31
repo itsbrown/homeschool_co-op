@@ -101,6 +101,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Check if there are any summer camp classes
   const summerCamps = classesData.classes.filter(c => c.category === "summer-camp");
   const classesList = classesData.classes.filter(c => c.category === "academic" || c.category === "membership");
+  
+  // Debug logging for filtered lists
+  console.log('All classes:', classesData.classes);
+  console.log('Filtered classesList:', classesList);
+  console.log('Summer camps:', summerCamps);
 
   return (
     <div className="space-y-6">
