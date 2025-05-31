@@ -70,7 +70,7 @@ import { useAuth } from "@/hooks/useAuth0";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -80,11 +80,24 @@ function Router() {
     );
   }
 
+  // Role-based dashboard routing
+  const getRoleDashboard = (userRole: string) => {
+    switch (userRole) {
+      case 'school_admin':
+        return MySchoolPage;
+      case 'educator':
+        return Dashboard; // Could be a specific educator dashboard
+      case 'parent':
+      default:
+        return Dashboard; // Parent dashboard
+    }
+  };
+
   return (
     <Switch>
       <Route path="/logout" component={LogoutPage} />
       {isAuthenticated ? (
-        <Route path="/" component={Dashboard} />
+        <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
         <Route path="/" component={Login} />
       )}
@@ -181,7 +194,7 @@ function App() {
         authorizationParams={{
           redirect_uri: `${window.location.origin}/`,
           audience: import.meta.env.VITE_AUTH0_API_IDENTIFIER,
-          scope: "openid profile email"
+          scope: "openid profile email read:current_user"
         }}
         useRefreshTokens={true}
         cacheLocation="localstorage"
