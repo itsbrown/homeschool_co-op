@@ -14,40 +14,50 @@ export default function ChildProfilePage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
 
-  // Fetch child data from school admin students endpoint
+  // Fetch detailed child data from school admin student endpoint
   const { data: child, isLoading } = useQuery({
-    queryKey: ["/api/schools/students", id],
+    queryKey: [`/api/school-admin/students/${id}`],
     queryFn: async () => {
       try {
-        const response = await fetch("/api/schools/students");
+        const response = await fetch(`/api/school-admin/students/${id}`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const students = await response.json();
-        const student = students.find((s: any) => s.id.toString() === id);
+        const studentData = await response.json();
         
-        if (!student) {
-          throw new Error("Student not found");
-        }
+        // Calculate age from birthdate
+        const calculateAge = (birthdate: string) => {
+          if (!birthdate) return "Unknown";
+          const today = new Date();
+          const birth = new Date(birthdate);
+          const age = today.getFullYear() - birth.getFullYear();
+          const monthDiff = today.getMonth() - birth.getMonth();
+          
+          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+            return age - 1;
+          }
+          return age;
+        };
         
-        // Transform student data to child format
+        // Return authentic student data from database
         return {
-          id: student.id,
-          firstName: student.name.split(' ')[0],
-          lastName: student.name.split(' ').slice(1).join(' '),
-          name: student.name,
-          gradeLevel: student.gradeLevel,
-          age: student.age,
-          email: student.email,
-          status: student.status,
-          enrollmentDate: student.enrollmentDate,
-          // Add some additional mock profile data for display
-          birthdate: "2015-06-15", // Mock data
+          id: studentData.id,
+          firstName: studentData.firstName,
+          lastName: studentData.lastName,
+          name: `${studentData.firstName} ${studentData.lastName}`,
+          gradeLevel: studentData.gradeLevel,
+          birthdate: studentData.birthdate,
+          age: calculateAge(studentData.birthdate),
           school: "American Seekers Academy",
-          interests: ["Reading", "Science", "Art"],
-          allergies: "None",
-          medicalInfo: "No medical conditions",
-          learningStyle: "Visual Learner"
+          interests: studentData.interests || [],
+          allergies: studentData.allergies || "None specified",
+          medicalInfo: studentData.medicalNotes || "No medical notes",
+          specialNeeds: studentData.specialNeeds || "None specified",
+          parentEmail: studentData.parentEmail,
+          parentPhone: studentData.parentPhone,
+          emergencyContact: studentData.emergencyContact,
+          enrollmentDate: studentData.enrollmentDate,
+          status: studentData.status || "Active"
         };
       } catch (error) {
         console.error("Error fetching student:", error);
@@ -186,8 +196,8 @@ export default function ChildProfilePage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Learning Style</label>
-                    <p className="font-medium">{child.learningStyle}</p>
+                    <label className="text-sm font-medium text-muted-foreground">Grade Level</label>
+                    <p className="font-medium">{child.gradeLevel}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Interests</label>
@@ -238,6 +248,68 @@ export default function ChildProfilePage() {
                   <label className="text-sm font-medium text-muted-foreground">Medical Information</label>
                   <p className="font-medium">{child.medicalInfo || "No medical conditions reported"}</p>
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Special Needs</label>
+                  <p className="font-medium">{child.specialNeeds || "None specified"}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="h-5 w-5" />
+                  Emergency Contact Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {child.emergencyContact ? (
+                  <>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Contact Name</label>
+                      <p className="font-medium">{child.emergencyContact.name}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Relationship</label>
+                      <p className="font-medium">{child.emergencyContact.relationship}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Phone Number</label>
+                      <p className="font-medium">{child.emergencyContact.phone}</p>
+                    </div>
+                    {child.emergencyContact.email && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Email</label>
+                        <p className="font-medium">{child.emergencyContact.email}</p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">No emergency contact information available</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Parent Contact Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {child.parentEmail && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Parent Email</label>
+                    <p className="font-medium">{child.parentEmail}</p>
+                  </div>
+                )}
+                {child.parentPhone && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Parent Phone</label>
+                    <p className="font-medium">{child.parentPhone}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
