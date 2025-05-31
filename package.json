@@ -13,6 +13,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
     "@auth0/auth0-react": "^2.3.0",
+    "@auth0/auth0-spa-js": "^2.2.0",
     "@google-cloud/documentai": "^9.1.0",
     "@google-cloud/language": "^7.0.2",
     "@google-cloud/storage": "^7.16.0",
