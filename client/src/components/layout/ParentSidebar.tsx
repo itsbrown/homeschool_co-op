@@ -177,7 +177,7 @@ export default function ParentSidebar() {
             </div>
             
             <Button variant="outline" className="w-full" asChild>
-              <a href="/api/logout">
+              <a href="/logout">
                 <LogOut className="mr-2 h-4 w-4" />
                 Log Out
               </a>
