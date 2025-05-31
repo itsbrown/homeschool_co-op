@@ -50,6 +50,7 @@ import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
 import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
 import SettingsPage from "@/pages/SettingsPage";
+import LogoutPage from "@/pages/LogoutPage";
 import NotFound from "@/pages/not-found";
 
 // School Admin pages
@@ -121,6 +122,7 @@ function Router() {
       <Route path="/schedule" component={SchedulePage} />
       <Route path="/payments" component={PaymentsPage} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/logout" component={LogoutPage} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
 
       {/* School/Co-op registration routes */}
