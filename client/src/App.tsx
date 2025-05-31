@@ -8,6 +8,7 @@ import { Auth0Provider } from "@auth0/auth0-react";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
+import EmbeddedLogin from "@/components/auth/EmbeddedLogin";
 import Register from "@/pages/Register";
 import RoleSelection from "@/pages/RoleSelection";
 import SchoolAdminLogin from "@/pages/SchoolAdminLogin";
@@ -102,6 +103,7 @@ function Router() {
         <Route path="/" component={Login} />
       )}
       <Route path="/login" component={Login} />
+      <Route path="/embedded-login" component={EmbeddedLogin} />
       <Route path="/school-admin-login" component={SchoolAdminLogin} />
       <Route path="/register" component={Register} />
       <Route path="/role-selection" component={RoleSelection} />

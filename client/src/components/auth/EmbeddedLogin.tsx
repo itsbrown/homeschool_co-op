@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { createAuth0Client, Auth0Client } from "@auth0/auth0-spa-js";
+import { useState } from "react";
+import { useAuth0 } from "@auth0/auth0-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,58 +11,29 @@ import { useLocation } from "wouter";
 
 export default function EmbeddedLogin() {
   const [, setLocation] = useLocation();
-  const [auth0Client, setAuth0Client] = useState<Auth0Client | null>(null);
+  const { loginWithPopup, isLoading: authLoading } = useAuth0();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const initAuth0 = async () => {
-      try {
-        const client = await createAuth0Client({
-          domain: import.meta.env.VITE_AUTH0_DOMAIN,
-          clientId: import.meta.env.VITE_AUTH0_CLIENT_ID,
-          authorizationParams: {
-            redirect_uri: window.location.origin,
-            audience: import.meta.env.VITE_AUTH0_API_IDENTIFIER,
-            scope: "openid profile email read:current_user"
-          }
-        });
-        setAuth0Client(client);
-      } catch (error) {
-        console.error("Failed to initialize Auth0:", error);
-        setError("Failed to initialize authentication");
-      }
-    };
-
-    initAuth0();
-  }, []);
-
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth0Client || !email || !password) return;
+    if (!email || !password) return;
 
     setIsLoading(true);
     setError("");
 
     try {
-      // Use Auth0's popup login with credentials
-      await auth0Client.loginWithPopup({
+      await loginWithPopup({
         authorizationParams: {
           login_hint: email,
           connection: "Username-Password-Authentication"
         }
       });
-
-      // Check if user is authenticated and redirect
-      const isAuthenticated = await auth0Client.isAuthenticated();
-      if (isAuthenticated) {
-        const user = await auth0Client.getUser();
-        console.log("User authenticated:", user);
-        setLocation("/");
-      }
+      
+      setLocation("/");
     } catch (error: any) {
       console.error("Login error:", error);
       setError(error.message || "Login failed. Please check your credentials.");
@@ -72,25 +43,17 @@ export default function EmbeddedLogin() {
   };
 
   const handleGoogleLogin = async () => {
-    if (!auth0Client) return;
-
     setIsLoading(true);
     setError("");
 
     try {
-      await auth0Client.loginWithPopup({
+      await loginWithPopup({
         authorizationParams: {
           connection: "google-oauth2"
         }
       });
-
-      // Check if user is authenticated and redirect
-      const isAuthenticated = await auth0Client.isAuthenticated();
-      if (isAuthenticated) {
-        const user = await auth0Client.getUser();
-        console.log("User authenticated via Google:", user);
-        setLocation("/");
-      }
+      
+      setLocation("/");
     } catch (error: any) {
       console.error("Google login error:", error);
       setError("Google login failed. Please try again.");
