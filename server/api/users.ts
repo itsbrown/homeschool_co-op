@@ -23,12 +23,17 @@ function readProfiles() {
 // Helper function to write profiles to file
 function writeProfiles(profiles: any) {
   try {
+    console.log("Writing profiles to:", PROFILE_FILE);
     // Ensure data directory exists
     const dataDir = path.dirname(PROFILE_FILE);
+    console.log("Data directory:", dataDir);
     if (!fs.existsSync(dataDir)) {
+      console.log("Creating data directory...");
       fs.mkdirSync(dataDir, { recursive: true });
     }
+    console.log("Writing file content:", JSON.stringify(profiles, null, 2));
     fs.writeFileSync(PROFILE_FILE, JSON.stringify(profiles, null, 2));
+    console.log("File written successfully");
   } catch (error) {
     console.error("Error writing profiles:", error);
   }
