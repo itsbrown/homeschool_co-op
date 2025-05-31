@@ -569,9 +569,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/events/upcoming", verifyAuth0Token, async (req: any, res) => {
     try {
-      const userEmail = req.auth?.payload?.email;
+      // Check multiple possible locations for email in the Auth0 token
+      const userEmail = req.user?.email || req.auth?.payload?.email || req.user?.sub;
+      
+      console.log('🎪 Events API - Auth0 user object:', JSON.stringify(req.user, null, 2));
+      console.log('🎪 Events API - Extracted email:', userEmail);
       
       if (!userEmail) {
+        console.log('❌ Events API - No email found in token');
         return res.status(401).json({ message: "Not authenticated" });
       }
 
@@ -580,6 +585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const events: any[] = [];
       res.status(200).json(events);
     } catch (error) {
+      console.error('❌ Events API error:', error);
       res.status(500).json({ message: "Error fetching upcoming events" });
     }
   });

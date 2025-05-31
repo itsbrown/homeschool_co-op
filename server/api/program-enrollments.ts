@@ -7,9 +7,14 @@ import { formatZodError } from "../utils";
 // Get all enrollments for a parent's children
 export const getMyChildrenEnrollments = async (req: any, res: Response) => {
   try {
-    const userEmail = req.auth?.payload?.email;
+    // Check multiple possible locations for email in the Auth0 token
+    const userEmail = req.user?.email || req.auth?.payload?.email || req.user?.sub;
+    
+    console.log('📚 Enrollments API - Auth0 user object:', JSON.stringify(req.user, null, 2));
+    console.log('📚 Enrollments API - Extracted email:', userEmail);
     
     if (!userEmail) {
+      console.log('❌ Enrollments API - No email found in token');
       return res.status(401).json({ message: "Not authenticated" });
     }
 
