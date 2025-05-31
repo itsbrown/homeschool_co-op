@@ -41,15 +41,20 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-// Auth0 token verification middleware
+// Auth0 token verification middleware with detailed logging
 export function verifyAuth0Token(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   
+  console.log('🔒 Auth0 Verify - Request:', req.method, req.path);
+  console.log('🔒 Auth0 Verify - Auth Header:', authHeader ? 'Present' : 'Missing');
+  
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('❌ Auth0 Verify - No valid Bearer token found');
     return res.status(401).json({ error: 'No token provided' });
   }
 
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  console.log('🔒 Auth0 Verify - Token Preview:', token.substring(0, 20) + '...');
 
   jwt.verify(token, getKey, {
     audience: AUTH0_API_IDENTIFIER,
@@ -57,15 +62,27 @@ export function verifyAuth0Token(req: AuthenticatedRequest, res: Response, next:
     algorithms: ['RS256']
   }, (err, decoded) => {
     if (err) {
-      console.error('Token verification failed:', err.message);
-      return res.status(401).json({ error: 'Invalid token' });
+      console.error('❌ Auth0 Verify - Token verification failed:', err.message);
+      console.error('❌ Auth0 Verify - Error details:', {
+        name: err.name,
+        message: err.message,
+        expiredAt: err.expiredAt,
+        audience: AUTH0_API_IDENTIFIER,
+        issuer: `https://${AUTH0_DOMAIN}/`
+      });
+      return res.status(401).json({ error: 'Invalid token', details: err.message });
     }
+
+    console.log('✅ Auth0 Verify - Token verified successfully');
+    console.log('✅ Auth0 Verify - Decoded payload:', JSON.stringify(decoded, null, 2));
 
     // Add user data to request object in the expected format
     req.auth = {
       payload: decoded as any
     };
     req.user = decoded as any;
+    
+    console.log('✅ Auth0 Verify - User data attached to request');
     next();
   });
 }
@@ -95,20 +112,57 @@ export function optionalAuth0Token(req: AuthenticatedRequest, res: Response, nex
   });
 }
 
-// Role-based authorization middleware
+// Role-based authorization middleware with detailed logging
 export function requireRole(roles: string[]) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    console.log('🛡️ Auth0 Role Check - Request:', req.method, req.path);
+    console.log('🛡️ Auth0 Role Check - Required Roles:', roles);
+    
     if (!req.user) {
+      console.log('❌ Auth0 Role Check - No user object found');
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const userRole = req.user.role || req.user['custom:role'] || req.user['app_metadata']?.role;
+    console.log('🛡️ Auth0 Role Check - User object:', JSON.stringify(req.user, null, 2));
     
-    if (!userRole || !roles.includes(userRole)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+    // Check multiple possible role locations
+    const possibleRoles = [
+      req.user.role,
+      req.user['custom:role'],
+      req.user['app_metadata']?.role,
+      req.user['app_metadata']?.roles,
+      req.user[`${AUTH0_API_IDENTIFIER}/roles`],
+      req.user['https://asa-platform.com/roles'],
+      req.user.roles
+    ];
+    
+    console.log('🛡️ Auth0 Role Check - Possible role values:', possibleRoles);
+    
+    const userRole = possibleRoles.find(role => role !== undefined);
+    console.log('🛡️ Auth0 Role Check - Extracted user role:', userRole);
+    
+    // Handle array of roles
+    if (Array.isArray(userRole)) {
+      console.log('🛡️ Auth0 Role Check - User has multiple roles:', userRole);
+      const hasMatchingRole = userRole.some(role => roles.includes(role));
+      if (hasMatchingRole) {
+        console.log('✅ Auth0 Role Check - Access granted (array match)');
+        return next();
+      }
+    } else if (userRole && roles.includes(userRole)) {
+      console.log('✅ Auth0 Role Check - Access granted:', userRole);
+      return next();
     }
-
-    next();
+    
+    console.log('❌ Auth0 Role Check - Access denied');
+    console.log('❌ Auth0 Role Check - User Role:', userRole);
+    console.log('❌ Auth0 Role Check - Required Roles:', roles);
+    
+    res.status(403).json({ 
+      error: 'Insufficient permissions',
+      userRole: userRole,
+      requiredRoles: roles
+    });
   };
 }
 
