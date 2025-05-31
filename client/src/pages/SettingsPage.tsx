@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,20 +10,77 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Bell, User, Shield, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 
 export default function SettingsPage() {
   const { user, logout } = useAuth0();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  // Profile form state
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  
+  // Notification preferences state
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [smsNotifications, setSmsNotifications] = useState(false);
   const [enrollmentReminders, setEnrollmentReminders] = useState(true);
   const [paymentReminders, setPaymentReminders] = useState(true);
 
+  // Initialize form with user data
+  useEffect(() => {
+    if (user) {
+      setFirstName(user.given_name || "");
+      setLastName(user.family_name || "");
+      setPhoneNumber(user.phone_number || "");
+    }
+  }, [user]);
+
+  // Mutation to update profile
+  const updateProfileMutation = useMutation({
+    mutationFn: async (profileData: {
+      firstName: string;
+      lastName: string;
+      phoneNumber: string;
+    }) => {
+      const response = await fetch('/api/users/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profileData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update profile');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Profile updated",
+        description: "Your profile information has been saved successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/users/profile'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSaveSettings = () => {
-    toast({
-      title: "Settings saved",
-      description: "Your preferences have been updated successfully.",
+    updateProfileMutation.mutate({
+      firstName,
+      lastName,
+      phoneNumber,
     });
   };
 
@@ -67,7 +124,8 @@ export default function SettingsPage() {
                   <Label htmlFor="firstName">First Name</Label>
                   <Input
                     id="firstName"
-                    defaultValue={user?.given_name || ""}
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
                     placeholder="Enter your first name"
                   />
                 </div>
@@ -76,7 +134,8 @@ export default function SettingsPage() {
                   <Label htmlFor="lastName">Last Name</Label>
                   <Input
                     id="lastName"
-                    defaultValue={user?.family_name || ""}
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
                     placeholder="Enter your last name"
                   />
                 </div>
@@ -100,6 +159,8 @@ export default function SettingsPage() {
                   <Input
                     id="phone"
                     type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="Enter your phone number"
                   />
                 </div>

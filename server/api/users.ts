@@ -33,7 +33,7 @@ router.patch("/profile", isAuthenticated, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
     
-    const { username, email, password, name, avatar, subscription } = req.body;
+    const { username, email, password, name, avatar, subscription, firstName, lastName, phoneNumber } = req.body;
     
     // Update only provided fields
     const updateData: any = {};
@@ -63,6 +63,19 @@ router.patch("/profile", isAuthenticated, async (req, res) => {
     
     if (name) {
       updateData.name = name;
+    }
+    
+    // Handle firstName and lastName separately or combined as name
+    if (firstName && lastName) {
+      updateData.name = `${firstName} ${lastName}`;
+    } else if (firstName) {
+      updateData.name = firstName;
+    } else if (lastName) {
+      updateData.name = lastName;
+    }
+    
+    if (phoneNumber) {
+      updateData.phoneNumber = phoneNumber;
     }
     
     if (avatar) {

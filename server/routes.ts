@@ -1502,6 +1502,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin", adminClassesRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/activities", activitiesRouter);
+  
+  // Import and register users API router
+  const usersRouter = await import("./api/users");
+  app.use("/api/users", usersRouter.default);
 
   // Add individual student route first (more specific)
   app.get("/api/schools/students/:id", (req, res) => {
