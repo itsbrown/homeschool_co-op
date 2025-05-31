@@ -59,20 +59,20 @@ export default function ChildProfilePage() {
 
   if (isLoading) {
     return (
-      <ParentLayout>
+      <ParentAppShell>
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-muted-foreground">Loading profile...</p>
           </div>
         </div>
-      </ParentLayout>
+      </ParentAppShell>
     );
   }
 
   if (!child) {
     return (
-      <ParentLayout>
+      <ParentAppShell>
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <h2 className="text-2xl font-bold mb-2">Student Not Found</h2>
@@ -83,12 +83,12 @@ export default function ChildProfilePage() {
             </Button>
           </div>
         </div>
-      </ParentLayout>
+      </ParentAppShell>
     );
   }
 
   return (
-    <ParentLayout>
+    <ParentAppShell>
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -258,6 +258,6 @@ export default function ChildProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
-    </ParentLayout>
+    </ParentAppShell>
   );
 }
