@@ -71,7 +71,7 @@ export function useAuth() {
     } : null,
     isAuthenticated,
     isLoading,
-    login: () => window.location.href = '/login',
+    login: () => loginWithRedirect(),
     logout: () => logout({ logoutParams: { returnTo: window.location.origin } }),
     getAccessTokenSilently: getTokenWithInspection,
     inspectCurrentToken: async () => {

@@ -14,6 +14,21 @@ const Auth0Wrapper: React.FC<Auth0WrapperProps> = ({ children }) => {
     throw new Error('Auth0 configuration missing. Please ensure VITE_AUTH0_DOMAIN and VITE_AUTH0_CLIENT_ID are properly set.');
   }
 
+  const handleOnRedirectCallback = (appState?: any) => {
+    console.log('🔄 Auth0 redirect callback completed', appState);
+    // Navigate to intended URL or default to dashboard
+    window.history.replaceState(
+      {},
+      document.title,
+      appState?.returnTo || window.location.pathname
+    );
+  };
+
+  const handleError = (error: Error) => {
+    console.error('🚨 Auth0 Error:', error);
+    // Don't redirect on error - let user see the error
+  };
+
   return (
     <Auth0Provider
       domain={domain}
@@ -25,6 +40,8 @@ const Auth0Wrapper: React.FC<Auth0WrapperProps> = ({ children }) => {
       }}
       useRefreshTokens={true}
       cacheLocation="localstorage"
+      onRedirectCallback={handleOnRedirectCallback}
+      skipRedirectCallback={window.location.search.includes('error=')}
     >
       {children}
     </Auth0Provider>

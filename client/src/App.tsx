@@ -58,13 +58,13 @@ import LogoutPage from "@/pages/LogoutPage";
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  
+
   React.useEffect(() => {
     if (isAuthenticated) {
       setLocation('/');
     }
   }, [isAuthenticated, setLocation]);
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
       <div className="text-center">
@@ -93,23 +93,62 @@ import { useAuth } from "@/hooks/useAuth0";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, error } = useAuth();
 
-  // Clean up Auth0 error parameters from URL
+  // Handle Auth0 callback
   React.useEffect(() => {
-    const url = new URL(window.location.href);
-    if (url.searchParams.has('error') || url.searchParams.has('state')) {
-      url.searchParams.delete('error');
-      url.searchParams.delete('error_description');
-      url.searchParams.delete('state');
-      window.history.replaceState({}, '', url.toString());
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+    const errorDescription = urlParams.get('error_description');
+
+    if (error) {
+      console.error('🚨 Auth0 Callback Error:', error, errorDescription);
+      // Clear error from URL but don't redirect
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    if (code && state) {
+      console.log('🔄 Auth0 callback detected, processing...');
+      // Auth0 will handle the callback automatically
     }
   }, []);
 
+  // Handle Auth0 errors
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+          <div className="text-center">
+            <div className="text-red-500 mb-4">
+              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.084 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Authentication Error
+            </h2>
+            <p className="text-gray-600 text-sm mb-4">
+              {error.message || 'An error occurred during authentication'}
+            </p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
       </div>
     );
   }

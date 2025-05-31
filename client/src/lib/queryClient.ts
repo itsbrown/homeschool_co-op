@@ -13,36 +13,46 @@ interface ApiRequestOptions {
 }
 
 export async function apiRequest(
-  method: string,
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   url: string,
-  data?: unknown | undefined,
-  options?: ApiRequestOptions
+  body?: unknown,
+  options?: RequestInit
 ): Promise<Response> {
-  const isFormData = data instanceof FormData || (options && options.rawFormData);
-  
-  const headers: Record<string, string> = {};
-  
-  if (data && !isFormData) {
-    headers["Content-Type"] = "application/json";
-  }
-  
-  if (options?.token) {
-    headers["Authorization"] = `Bearer ${options.token}`;
-  }
-  
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: data instanceof FormData 
-      ? data 
-      : data && !isFormData 
-        ? JSON.stringify(data) 
-        : undefined,
-    credentials: "include",
-  });
+  const token = localStorage.getItem('auth0_token');
 
-  await throwIfResNotOk(res);
-  return res;
+  const config: RequestInit = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options?.headers,
+    },
+    credentials: "include",
+    ...options,
+  };
+
+  if (body) {
+    config.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${url}`, config);
+
+  // Handle auth errors without throwing to prevent redirect loops
+  if (response.status === 401) {
+    console.log('🔒 API 401: Authentication required - clearing token');
+    localStorage.removeItem('auth0_token');
+    // Don't throw - let components handle this gracefully
+    return response;
+  }
+
+  if (response.status === 403) {
+    console.log('🚫 API 403: Insufficient permissions');
+    // Don't throw - let components handle this gracefully
+    return response;
+  }
+
+  await throwIfResNotOk(response);
+  return response;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

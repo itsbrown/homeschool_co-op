@@ -28,6 +28,19 @@ class ApiClient {
     return token;
   }
 
+  private handleApiError(response: Response): void {
+    console.log(`🚨 API Error: ${response.status} ${response.statusText}`);
+    
+    if (response.status === 401) {
+      console.log('🔒 401 Unauthorized - Token may be invalid or expired');
+      // Don't automatically redirect on 401 - let the component handle it
+      localStorage.removeItem('auth0_token');
+    } else if (response.status === 403) {
+      console.log('🚫 403 Forbidden - Insufficient permissions');
+      // Don't redirect on 403 - show error message instead
+    }
+  }
+
 // Auth API
 export async function registerUser(userData: {
   username: string;

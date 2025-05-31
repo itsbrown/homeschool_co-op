@@ -299,6 +299,6 @@ export default function SettingsPage() {
           <JWTDebugPanel />
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }
