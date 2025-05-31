@@ -295,10 +295,11 @@ export default function SettingsPage() {
               </Button>
             </div>
 
-          {/* JWT Debug Panel */}
-          <JWTDebugPanel />
+            {/* JWT Debug Panel */}
+            <JWTDebugPanel />
+          </div>
         </div>
       </div>
-    </PageLayout>
+    </ParentAppShell>
   );
 }
