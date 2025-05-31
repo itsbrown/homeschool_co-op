@@ -8,8 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Bell, User, Shield, CreditCard, LogOut, Save } from "lucide-react";
+import { Bell, User, Shield, CreditCard, LogOut, Save, Home, Calendar, BookOpen, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 export default function SettingsPage() {
   const { user, logout } = useAuth0();
@@ -31,14 +32,52 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Account Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your account preferences and settings
-          </p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center space-x-8">
+              <div className="flex-shrink-0">
+                <h1 className="text-xl font-bold text-blue-600">ASA Learning Platform</h1>
+              </div>
+              <div className="hidden md:flex space-x-8">
+                <Link href="/" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium flex items-center">
+                  <Home className="h-4 w-4 mr-2" />
+                  Dashboard
+                </Link>
+                <Link href="/schedule" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium flex items-center">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Schedule
+                </Link>
+                <Link href="/programs" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium flex items-center">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Programs
+                </Link>
+                <Link href="/children" className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium flex items-center">
+                  <Users className="h-4 w-4 mr-2" />
+                  Children
+                </Link>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Button variant="outline" onClick={handleLogout} className="flex items-center">
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+            </div>
+          </div>
         </div>
+      </nav>
+
+      <div className="container mx-auto py-8 px-4 max-w-4xl">
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold">Account Settings</h1>
+            <p className="text-muted-foreground">
+              Manage your account preferences and settings
+            </p>
+          </div>
 
         {/* Profile Section */}
         <Card>
@@ -269,6 +308,7 @@ export default function SettingsPage() {
             <LogOut className="h-4 w-4" />
             Sign Out
           </Button>
+        </div>
         </div>
       </div>
     </div>
