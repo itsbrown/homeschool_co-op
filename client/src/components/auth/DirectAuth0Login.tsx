@@ -2,17 +2,18 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { useEffect } from "react";
 
 export default function DirectAuth0Login() {
-  const { loginWithRedirect, isLoading } = useAuth0();
+  const { loginWithRedirect, isLoading, isAuthenticated } = useAuth0();
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && !isAuthenticated) {
+      console.log('Redirecting to Auth0 login...');
       loginWithRedirect({
         authorizationParams: {
-          redirect_uri: `${window.location.origin}/`
+          redirect_uri: window.location.origin
         }
       });
     }
-  }, [loginWithRedirect, isLoading]);
+  }, [loginWithRedirect, isLoading, isAuthenticated]);
 
   // Show a simple loading screen while redirecting
   return (
