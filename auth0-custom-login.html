@@ -323,26 +323,28 @@
     }
 
     // Handle form submission
-    document.getElementById('login-form').addEventListener('submit', function(e) {
-      e.preventDefault();
-      hideError();
-      
-      var email = document.getElementById('email').value;
-      var password = document.getElementById('password').value;
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('login-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        hideError();
+        
+        var email = document.getElementById('email').value;
+        var password = document.getElementById('password').value;
 
-      if (!email || !password) {
-        showError('Please enter both email and password');
-        return;
-      }
-
-      webAuth.login({
-        realm: 'Username-Password-Authentication',
-        username: email,
-        password: password
-      }, function(err) {
-        if (err) {
-          showError(err.description || 'Login failed. Please check your credentials.');
+        if (!email || !password) {
+          showError('Please enter both email and password');
+          return;
         }
+
+        webAuth.login({
+          realm: 'Username-Password-Authentication',
+          username: email,
+          password: password
+        }, function(err) {
+          if (err) {
+            showError(err.description || 'Login failed. Please check your credentials.');
+          }
+        });
       });
     });
 
