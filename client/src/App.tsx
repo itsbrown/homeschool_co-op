@@ -119,7 +119,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/logout" component={LogoutPage} />
-      <Route path="/callback" component={CallbackPage} />
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
