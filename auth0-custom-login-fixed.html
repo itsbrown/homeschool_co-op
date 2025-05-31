@@ -325,14 +325,10 @@
         return;
       }
 
-      webAuth.redirect.loginWithCredentials({
+      // Instead of trying to authenticate directly, redirect to Auth0 with prefilled email
+      webAuth.authorize({
         connection: 'Username-Password-Authentication',
-        username: email,
-        password: password
-      }, function(err) {
-        if (err) {
-          showError(err.description || 'Login failed. Please check your credentials.');
-        }
+        login_hint: email
       });
     });
   </script>
