@@ -1,17 +1,49 @@
 import { Router } from "express";
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 
-// Simple profile endpoints for the frontend form
-// Get current user profile (returns Auth0 user info)
+// File-based storage for user profiles
+const PROFILE_FILE = path.join(process.cwd(), 'data', 'user-profiles.json');
+
+// Helper function to read profiles from file
+function readProfiles() {
+  try {
+    if (fs.existsSync(PROFILE_FILE)) {
+      const data = fs.readFileSync(PROFILE_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error("Error reading profiles:", error);
+  }
+  return {};
+}
+
+// Helper function to write profiles to file
+function writeProfiles(profiles: any) {
+  try {
+    // Ensure data directory exists
+    const dataDir = path.dirname(PROFILE_FILE);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(PROFILE_FILE, JSON.stringify(profiles, null, 2));
+  } catch (error) {
+    console.error("Error writing profiles:", error);
+  }
+}
+
+// Get current user profile
 router.get("/profile", async (req, res) => {
   try {
-    // For now, return basic user info from Auth0
-    // In a real implementation, you would fetch additional profile data from a database
-    const mockProfile = {
+    const profiles = readProfiles();
+    const userEmail = "coreycreates@gmail.com"; // In real app, get from Auth0 token
+    
+    const userProfile = profiles[userEmail] || {
       id: "1",
       name: "Corey Creates", 
-      email: "coreycreates@gmail.com",
+      email: userEmail,
       firstName: "Corey",
       lastName: "Creates",
       phoneNumber: "",
@@ -19,7 +51,7 @@ router.get("/profile", async (req, res) => {
       subscription: "free"
     };
     
-    res.status(200).json(mockProfile);
+    res.status(200).json(userProfile);
   } catch (error) {
     console.error("Get user profile error:", error);
     res.status(500).json({ message: "Error fetching user profile" });
@@ -33,20 +65,36 @@ router.patch("/profile", async (req, res) => {
     
     console.log("Updating profile with:", { firstName, lastName, phoneNumber });
     
-    // For demonstration, we'll simulate saving the data and return success
-    // In a real implementation, you would save this to a database
-    const updatedProfile = {
+    const userEmail = "coreycreates@gmail.com"; // In real app, get from Auth0 token
+    const profiles = readProfiles();
+    
+    // Get existing profile or create new one
+    const existingProfile = profiles[userEmail] || {
       id: "1",
-      name: firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || "Corey Creates",
-      email: "coreycreates@gmail.com",
-      firstName: firstName || "Corey",
-      lastName: lastName || "Creates", 
-      phoneNumber: phoneNumber || "",
+      email: userEmail,
+      firstName: "Corey",
+      lastName: "Creates",
+      phoneNumber: "",
       avatar: "",
       subscription: "free"
     };
     
-    console.log("Profile updated successfully:", updatedProfile);
+    // Update profile with new data
+    const updatedProfile = {
+      ...existingProfile,
+      firstName: firstName || existingProfile.firstName,
+      lastName: lastName || existingProfile.lastName,
+      phoneNumber: phoneNumber || existingProfile.phoneNumber,
+      name: firstName && lastName ? `${firstName} ${lastName}` : 
+            firstName ? firstName : 
+            lastName ? lastName : existingProfile.name
+    };
+    
+    // Save to file
+    profiles[userEmail] = updatedProfile;
+    writeProfiles(profiles);
+    
+    console.log("Profile updated and saved successfully:", updatedProfile);
     
     res.status(200).json(updatedProfile);
   } catch (error) {

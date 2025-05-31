@@ -30,14 +30,26 @@ export default function SettingsPage() {
   const [enrollmentReminders, setEnrollmentReminders] = useState(true);
   const [paymentReminders, setPaymentReminders] = useState(true);
 
-  // Initialize form with user data
+  // Fetch user profile data from API
+  const { data: profileData, isLoading: profileLoading } = useQuery({
+    queryKey: ['/api/users/profile'],
+    queryFn: async () => {
+      const response = await fetch('/api/users/profile');
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile');
+      }
+      return response.json();
+    },
+  });
+
+  // Initialize form with profile data
   useEffect(() => {
-    if (user) {
-      setFirstName(user.given_name || "");
-      setLastName(user.family_name || "");
-      setPhoneNumber(user.phone_number || "");
+    if (profileData) {
+      setFirstName(profileData.firstName || "");
+      setLastName(profileData.lastName || "");
+      setPhoneNumber(profileData.phoneNumber || "");
     }
-  }, [user]);
+  }, [profileData]);
 
   // Mutation to update profile
   const updateProfileMutation = useMutation({
