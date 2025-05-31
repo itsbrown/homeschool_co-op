@@ -95,6 +95,17 @@ import AIStatusProvider from "@/contexts/AIStatusContext";
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
+  // Clean up Auth0 error parameters from URL
+  React.useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('error') || url.searchParams.has('state')) {
+      url.searchParams.delete('error');
+      url.searchParams.delete('error_description');
+      url.searchParams.delete('state');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">

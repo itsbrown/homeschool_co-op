@@ -23,9 +23,10 @@ const Auth0Wrapper: React.FC<Auth0WrapperProps> = ({ children }) => {
       authorizationParams={{
         redirect_uri: window.location.origin,
         audience: audience,
-        scope: "openid profile email",
-        response_type: "code"
+        scope: "openid profile email"
       }}
+      useRefreshTokens={true}
+      cacheLocation="localstorage"
     >
       {children}
     </Auth0Provider>
