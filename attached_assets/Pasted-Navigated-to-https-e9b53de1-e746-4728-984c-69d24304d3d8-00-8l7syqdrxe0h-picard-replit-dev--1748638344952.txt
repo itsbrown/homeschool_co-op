@@ -1,0 +1,131 @@
+Navigated to https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/
+
+                
+          
+          
+          
+         Chrome is moving towards a new experience that allows users to choose to browse without third-party cookies.Understand this warning
+client:495 [vite] connecting...
+client:618 [vite] connected.
+ParentDashboard.tsx:72 
+            
+            
+           GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/events/upcoming 500 (Internal Server Error)
+queryFn @ ParentDashboard.tsx:72
+await in queryFn
+fetchFn @ @tanstack_react-query.js?v=14352a4c:840
+run @ @tanstack_react-query.js?v=14352a4c:494
+start @ @tanstack_react-query.js?v=14352a4c:536
+fetch @ @tanstack_react-query.js?v=14352a4c:926
+executeFetch_fn @ @tanstack_react-query.js?v=14352a4c:2211
+onSubscribe @ @tanstack_react-query.js?v=14352a4c:1898
+subscribe @ @tanstack_react-query.js?v=14352a4c:24
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:3022
+subscribeToStore @ chunk-XQLYTHWV.js?v=14352a4c:11984
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=14352a4c:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=14352a4c:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=14352a4c:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=14352a4c:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=14352a4c:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=14352a4c:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=14352a4c:19447
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=14352a4c:18868
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=14352a4c:9119
+commitRootImpl @ chunk-XQLYTHWV.js?v=14352a4c:19432
+commitRoot @ chunk-XQLYTHWV.js?v=14352a4c:19277
+finishConcurrentRender @ chunk-XQLYTHWV.js?v=14352a4c:18805
+performConcurrentWorkOnRoot @ chunk-XQLYTHWV.js?v=14352a4c:18718
+workLoop @ chunk-XQLYTHWV.js?v=14352a4c:197
+flushWork @ chunk-XQLYTHWV.js?v=14352a4c:176
+performWorkUntilDeadline @ chunk-XQLYTHWV.js?v=14352a4c:384Understand this error
+ParentDashboard.tsx:82 Error fetching events: Error: HTTP error! status: 500
+    at queryFn (ParentDashboard.tsx:78:17)
+overrideMethod @ hook.js:608
+queryFn @ ParentDashboard.tsx:82
+await in queryFn
+fetchFn @ @tanstack_react-query.js?v=14352a4c:840
+run @ @tanstack_react-query.js?v=14352a4c:494
+start @ @tanstack_react-query.js?v=14352a4c:536
+fetch @ @tanstack_react-query.js?v=14352a4c:926
+executeFetch_fn @ @tanstack_react-query.js?v=14352a4c:2211
+onSubscribe @ @tanstack_react-query.js?v=14352a4c:1898
+subscribe @ @tanstack_react-query.js?v=14352a4c:24
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:3022
+subscribeToStore @ chunk-XQLYTHWV.js?v=14352a4c:11984
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=14352a4c:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=14352a4c:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=14352a4c:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=14352a4c:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=14352a4c:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=14352a4c:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=14352a4c:19447
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=14352a4c:18868
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=14352a4c:9119
+commitRootImpl @ chunk-XQLYTHWV.js?v=14352a4c:19432
+commitRoot @ chunk-XQLYTHWV.js?v=14352a4c:19277
+finishConcurrentRender @ chunk-XQLYTHWV.js?v=14352a4c:18805
+performConcurrentWorkOnRoot @ chunk-XQLYTHWV.js?v=14352a4c:18718
+workLoop @ chunk-XQLYTHWV.js?v=14352a4c:197
+flushWork @ chunk-XQLYTHWV.js?v=14352a4c:176
+performWorkUntilDeadline @ chunk-XQLYTHWV.js?v=14352a4c:384Understand this error
+ParentDashboard.tsx:49 
+            
+            
+           GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/enrollments 500 (Internal Server Error)
+queryFn @ ParentDashboard.tsx:49
+await in queryFn
+fetchFn @ @tanstack_react-query.js?v=14352a4c:840
+run @ @tanstack_react-query.js?v=14352a4c:494
+start @ @tanstack_react-query.js?v=14352a4c:536
+fetch @ @tanstack_react-query.js?v=14352a4c:926
+executeFetch_fn @ @tanstack_react-query.js?v=14352a4c:2211
+onSubscribe @ @tanstack_react-query.js?v=14352a4c:1898
+subscribe @ @tanstack_react-query.js?v=14352a4c:24
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:3022
+subscribeToStore @ chunk-XQLYTHWV.js?v=14352a4c:11984
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=14352a4c:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=14352a4c:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=14352a4c:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=14352a4c:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=14352a4c:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=14352a4c:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=14352a4c:19447
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=14352a4c:18868
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=14352a4c:9119
+commitRootImpl @ chunk-XQLYTHWV.js?v=14352a4c:19432
+commitRoot @ chunk-XQLYTHWV.js?v=14352a4c:19277
+finishConcurrentRender @ chunk-XQLYTHWV.js?v=14352a4c:18805
+performConcurrentWorkOnRoot @ chunk-XQLYTHWV.js?v=14352a4c:18718
+workLoop @ chunk-XQLYTHWV.js?v=14352a4c:197
+flushWork @ chunk-XQLYTHWV.js?v=14352a4c:176
+performWorkUntilDeadline @ chunk-XQLYTHWV.js?v=14352a4c:384Understand this error
+ParentDashboard.tsx:59 Error fetching enrollments: Error: HTTP error! status: 500
+    at queryFn (ParentDashboard.tsx:55:17)
+overrideMethod @ hook.js:608
+queryFn @ ParentDashboard.tsx:59
+await in queryFn
+fetchFn @ @tanstack_react-query.js?v=14352a4c:840
+run @ @tanstack_react-query.js?v=14352a4c:494
+start @ @tanstack_react-query.js?v=14352a4c:536
+fetch @ @tanstack_react-query.js?v=14352a4c:926
+executeFetch_fn @ @tanstack_react-query.js?v=14352a4c:2211
+onSubscribe @ @tanstack_react-query.js?v=14352a4c:1898
+subscribe @ @tanstack_react-query.js?v=14352a4c:24
+(anonymous) @ @tanstack_react-query.js?v=14352a4c:3022
+subscribeToStore @ chunk-XQLYTHWV.js?v=14352a4c:11984
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=14352a4c:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=14352a4c:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=14352a4c:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=14352a4c:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=14352a4c:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=14352a4c:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=14352a4c:19447
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=14352a4c:18868
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=14352a4c:9119
+commitRootImpl @ chunk-XQLYTHWV.js?v=14352a4c:19432
+commitRoot @ chunk-XQLYTHWV.js?v=14352a4c:19277
+finishConcurrentRender @ chunk-XQLYTHWV.js?v=14352a4c:18805
+performConcurrentWorkOnRoot @ chunk-XQLYTHWV.js?v=14352a4c:18718
+workLoop @ chunk-XQLYTHWV.js?v=14352a4c:197
+flushWork @ chunk-XQLYTHWV.js?v=14352a4c:176
+performWorkUntilDeadline @ chunk-XQLYTHWV.js?v=14352a4c:384Understand this error

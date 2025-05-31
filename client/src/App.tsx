@@ -48,6 +48,7 @@ import ProgramsBrowseRedirect from "./pages/ProgramsBrowseRedirect";
 import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
 import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
+import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "@/pages/not-found";
 
 // School Admin pages
@@ -117,6 +118,7 @@ function Router() {
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/schedule" component={SchedulePage} />
       <Route path="/payments" component={PaymentsPage} />
+      <Route path="/settings" component={SettingsPage} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
 
       {/* School/Co-op registration routes */}

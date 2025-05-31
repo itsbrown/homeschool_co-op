@@ -5,14 +5,16 @@ import { ZodError } from "zod";
 import { formatZodError } from "../utils";
 
 // Get all enrollments for a parent's children
-export const getMyChildrenEnrollments = async (req: Request, res: Response) => {
+export const getMyChildrenEnrollments = async (req: any, res: Response) => {
   try {
-    if (!req.session.userId) {
+    const userEmail = req.auth?.payload?.email;
+    
+    if (!userEmail) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
-    // Get all of the parent's children
-    const children = await storage.getChildrenByParentId(req.session.userId);
+    // Get all of the parent's children using email instead of session userId
+    const children = await storage.getChildrenByParentEmail(userEmail);
     
     if (!children || children.length === 0) {
       return res.json([]);

@@ -1267,7 +1267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/programs/:id', isAuthenticated, requireAdmin, programsApi.deleteProgram);
 
   // Program Enrollments routes
-  app.get('/api/enrollments', isAuthenticated, programEnrollmentsApi.getMyChildrenEnrollments);
+  app.get('/api/enrollments', verifyAuth0Token, programEnrollmentsApi.getMyChildrenEnrollments);
   app.get('/api/programs/:programId/enrollments', isAuthenticated, requireEducator, programEnrollmentsApi.getProgramEnrollments);
   app.get('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.getEnrollmentById);
   app.post('/api/enrollments', isAuthenticated, programEnrollmentsApi.createEnrollment);
