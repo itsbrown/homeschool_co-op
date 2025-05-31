@@ -1871,10 +1871,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Children API endpoint for parents
   app.get("/api/children", verifyAuth0Token, async (req, res) => {
     try {
-      const userEmail = req.auth?.payload?.email;
+      // Extract access token from Authorization header
+      const accessToken = req.headers.authorization?.substring(7); // Remove 'Bearer ' prefix
+      
+      if (!accessToken) {
+        return res.status(401).json({ message: "No access token provided" });
+      }
+
+      // Get user info from Auth0 userinfo endpoint to get the email
+      const userInfoResponse = await fetch(`https://${process.env.AUTH0_DOMAIN}/userinfo`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!userInfoResponse.ok) {
+        console.log('❌ Failed to fetch user info from Auth0');
+        return res.status(401).json({ message: "Failed to authenticate with Auth0" });
+      }
+
+      const userInfo = await userInfoResponse.json();
+      const userEmail = userInfo.email;
       
       // Debug: Log the entire token payload to understand the structure
       console.log('🔍 Auth0 token payload for children endpoint:', JSON.stringify(req.auth?.payload, null, 2));
+      console.log('📧 User email from Auth0 userinfo:', userEmail);
+      
+      if (!userEmail) {
+        console.log('❌ No email found in Auth0 userinfo');
+        return res.status(401).json({ message: "Email not found in user profile" });
+      }
       
       // Check for role in multiple possible locations
       const userRole = req.auth?.payload?.['https://myapp.com/role'] || 
