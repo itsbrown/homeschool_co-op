@@ -11,7 +11,7 @@ import { useLocation } from "wouter";
 
 export default function EmbeddedLogin() {
   const [, setLocation] = useLocation();
-  const { loginWithPopup, isLoading: authLoading } = useAuth0();
+  const { loginWithRedirect, isLoading: authLoading } = useAuth0();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -26,18 +26,17 @@ export default function EmbeddedLogin() {
     setError("");
 
     try {
-      await loginWithPopup({
+      await loginWithRedirect({
         authorizationParams: {
           login_hint: email,
-          connection: "Username-Password-Authentication"
+          connection: "Username-Password-Authentication",
+          redirect_uri: window.location.origin,
+          prompt: "login"
         }
       });
-      
-      setLocation("/");
     } catch (error: any) {
       console.error("Login error:", error);
       setError(error.message || "Login failed. Please check your credentials.");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -47,17 +46,16 @@ export default function EmbeddedLogin() {
     setError("");
 
     try {
-      await loginWithPopup({
+      await loginWithRedirect({
         authorizationParams: {
-          connection: "google-oauth2"
+          connection: "google-oauth2",
+          redirect_uri: window.location.origin,
+          prompt: "login"
         }
       });
-      
-      setLocation("/");
     } catch (error: any) {
       console.error("Google login error:", error);
       setError("Google login failed. Please try again.");
-    } finally {
       setIsLoading(false);
     }
   };
