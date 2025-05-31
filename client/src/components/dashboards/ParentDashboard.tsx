@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth0";
 import EnrollmentAssistantModal from "@/components/enrollment/EnrollmentAssistantModal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import Layout from "@/components/Layout";
 
 export default function ParentDashboard() {
   const { user, getAccessTokenSilently } = useAuth();
@@ -128,8 +129,9 @@ export default function ParentDashboard() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-start">
+    <Layout>
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">Parent Dashboard</h1>
           <p className="text-muted-foreground mt-1">
@@ -425,6 +427,7 @@ export default function ParentDashboard() {
         isOpen={isAssistantModalOpen} 
         onClose={() => setIsAssistantModalOpen(false)} 
       />
-    </div>
+      </div>
+    </Layout>
   );
 }
