@@ -1,0 +1,110 @@
+To pinpoint the issue, we need to check the code and configuration holistically, but since only one file was provided, here’s how to proceed with this file and what to check next:
+
+Verify Environment Variables:
+Ensure process.env.AUTH0_API_IDENTIFIER and process.env.AUTH0_DOMAIN are set correctly in your environment (e.g., .env file or server configuration).
+Example .env:
+env
+
+Copy
+AUTH0_API_IDENTIFIER=your-api-identifier
+AUTH0_DOMAIN=your-tenant.auth0.com
+Log these values in your app to confirm they’re loaded:
+typescript
+
+Copy
+console.log('Audience:', process.env.AUTH0_API_IDENTIFIER);
+console.log('Issuer:', `https://${process.env.AUTH0_DOMAIN}/`);
+Inspect JWT Tokens:
+After login, capture the JWT sent in the Authorization header (e.g., using browser dev tools or a tool like Postman).
+Decode the JWT (e.g., at jwt.io) to verify:
+The aud (audience) matches process.env.AUTH0_API_IDENTIFIER.
+The iss (issuer) matches https://${process.env.AUTH0_DOMAIN}/.
+The token isn’t expired (exp claim).
+The presence of a role claim or custom claim (e.g., https://your-namespace/role) containing admin, schoolAdmin, etc.
+If roles are missing, configure Auth0 to include them (e.g., via Auth0 Rules or Actions to add custom claims).
+Log Middleware Behavior:
+Add logging to jwtCheck and requireRole to see why requests are failing:
+typescript
+
+Copy
+export const jwtCheck = auth({
+  audience: process.env.AUTH0_API_IDENTIFIER,
+  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
+  tokenSigningAlg: 'RS256'
+}).unless({ path: ['/public'] }); // Example: skip for public routes
+
+export const requireRole = (allowedRoles: string[]) => {
+  return (req: any, res: Response, next: NextFunction) => {
+    const userRole = req.auth?.role || req.headers['x-user-role'] || 'admin';
+    console.log('User Role:', userRole, 'Allowed Roles:', allowedRoles);
+    if (allowedRoles.includes(userRole)) {
+      return next();
+    }
+    console.log('Access Denied for user:', req.auth);
+    res.status(403).json({ message: 'Insufficient permissions' });
+  };
+};
+Check logs to see if jwtCheck is rejecting tokens (401) or if requireRole is rejecting due to role mismatches (403).
+Check Client-Side Behavior:
+Since the loop involves redirects, inspect the client-side code (e.g., React, Angular, or Auth0 SPA SDK) to see how it handles 401/403 responses.
+Look for code that redirects to /login or Auth0’s /authorize endpoint on these errors. For example, in an Auth0 SPA:
+javascript
+
+Copy
+auth0.handleRedirectCallback().catch((err) => {
+  console.error('Auth0 callback error:', err);
+  // Avoid redirecting on 403
+});
+Ensure the client stores the token correctly and doesn’t clear it prematurely.
+Review Auth0 Configuration:
+In the Auth0 dashboard:
+Verify the API’s Identifier matches process.env.AUTH0_API_IDENTIFIER.
+Ensure the application’s callback URLs include the route the client redirects to after login.
+Check if a Rule or Action adds the role claim to the JWT. Example Rule:
+javascript
+
+Copy
+function (user, context, callback) {
+  const namespace = 'https://your-app';
+  context.accessToken[namespace + '/role'] = user.role || 'user';
+  callback(null, user, context);
+}
+If using custom claims, update the middleware to read them:
+typescript
+
+Copy
+const userRole = req.auth?.['https://your-namespace/role'] || req.headers['x-user-role'] || 'admin';
+Examine Other Files: Since the redirect loop likely involves the client or other server routes, please provide:
+Client-Side Code: The Auth0 integration code (e.g., auth0-spa-js, auth0-react) to see how redirects are handled.
+Server Routes: The Express route definitions (e.g., index.ts or routes.ts) to check how jwtCheck, optionalAuth, and requireRole are applied.
+Auth0 Callback Handler: The server or client code handling the /callback route after Auth0 login.
+Example routes to check:
+typescript
+
+Copy
+// In routes.ts
+app.get('/protected', jwtCheck, requireAdmin, (req, res) => {
+  res.json({ message: 'Protected route' });
+});
+app.get('/callback', (req, res) => {
+  // Handle Auth0 callback
+});
+Test with Debugging:
+Temporarily disable role checks to isolate the issue:
+typescript
+
+Copy
+export const requireRole = (allowedRoles: string[]) => {
+  return (req: any, res: Response, next: NextFunction) => {
+    console.log('Bypassing role check for debugging');
+    return next();
+  };
+};
+If the loop stops, the issue is in requireRole. If it persists, focus on jwtCheck or client-side redirects.
+Next Steps
+The provided file alone doesn’t definitively show the cause of the redirect loop, but it suggests potential issues in token verification (jwtCheck) or role-based authorization (requireRole). To proceed:
+
+Share Additional Files: Provide the Express route definitions, client-side Auth0 code, or the callback handler to trace the redirect flow.
+Enable Logging: Add the suggested logs and share the output for failed requests (e.g., 401 or 403 responses).
+Check Auth0 Logs: In the Auth0 dashboard, check the Logs section for failed token validations or callback errors.
+Test Token: Share the decoded JWT (remove sensitive data) to verify its claims.
