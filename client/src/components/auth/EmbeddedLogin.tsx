@@ -20,44 +20,33 @@ export default function EmbeddedLogin() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
-
-    setIsLoading(true);
-    setError("");
-
-    try {
-      await loginWithRedirect({
-        authorizationParams: {
-          login_hint: email,
-          connection: "Username-Password-Authentication",
-          redirect_uri: window.location.origin,
-          prompt: "login"
-        }
-      });
-    } catch (error: any) {
-      console.error("Login error:", error);
-      setError(error.message || "Login failed. Please check your credentials.");
-      setIsLoading(false);
-    }
+    
+    // Redirect to the customized Auth0 login page
+    await loginWithRedirect({
+      authorizationParams: {
+        login_hint: email,
+        redirect_uri: window.location.origin
+      }
+    });
   };
 
   const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError("");
+    // Redirect to the customized Auth0 login page with Google connection
+    await loginWithRedirect({
+      authorizationParams: {
+        connection: "google-oauth2",
+        redirect_uri: window.location.origin
+      }
+    });
+  };
 
-    try {
-      await loginWithRedirect({
-        authorizationParams: {
-          connection: "google-oauth2",
-          redirect_uri: window.location.origin,
-          prompt: "login"
-        }
-      });
-    } catch (error: any) {
-      console.error("Google login error:", error);
-      setError("Google login failed. Please try again.");
-      setIsLoading(false);
-    }
+  const handleGeneralLogin = async () => {
+    // Redirect to the customized Auth0 login page
+    await loginWithRedirect({
+      authorizationParams: {
+        redirect_uri: window.location.origin
+      }
+    });
   };
 
   const handleQuickAccess = (role: string) => {
@@ -99,8 +88,25 @@ export default function EmbeddedLogin() {
             )}
 
             <Button
+              onClick={handleGeneralLogin}
+              className="w-full"
+            >
+              Sign In
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <Separator className="w-full" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Quick Login Options
+                </span>
+              </div>
+            </div>
+
+            <Button
               onClick={handleGoogleLogin}
-              disabled={isLoading || authLoading}
               variant="outline"
               className="w-full"
             >
@@ -124,69 +130,6 @@ export default function EmbeddedLogin() {
               </svg>
               Continue with Google
             </Button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or continue with email
-                </span>
-              </div>
-            </div>
-
-            <form onSubmit={handleEmailLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    required
-                    disabled={isLoading}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading || authLoading || !email || !password}
-              >
-                {isLoading ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
 
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground text-center">
