@@ -1,6 +1,14 @@
 import { auth } from 'express-oauth2-jwt-bearer';
 import { Request, Response, NextFunction } from 'express';
 
+// Log Auth0 environment variables for debugging
+console.log('🔍 Auth0 Environment Variables:');
+console.log('Audience:', process.env.AUTH0_API_IDENTIFIER);
+console.log('Issuer:', `https://${process.env.AUTH0_DOMAIN}/`);
+console.log('Domain:', process.env.AUTH0_DOMAIN);
+console.log('Client ID:', process.env.AUTH0_CLIENT_ID);
+console.log('Client Secret Set:', process.env.AUTH0_CLIENT_SECRET ? 'Yes' : 'No');
+
 // Auth0 JWT verification middleware
 export const jwtCheck = auth({
   audience: process.env.AUTH0_API_IDENTIFIER,

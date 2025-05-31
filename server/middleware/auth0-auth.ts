@@ -6,7 +6,14 @@ import jwksClient from 'jwks-rsa';
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 const AUTH0_API_IDENTIFIER = process.env.AUTH0_API_IDENTIFIER;
 
+// Log Auth0 configuration for debugging
+console.log('🔍 Auth0 Middleware Configuration:');
+console.log('Domain:', AUTH0_DOMAIN);
+console.log('API Identifier:', AUTH0_API_IDENTIFIER);
+console.log('JWKS URI:', `https://${AUTH0_DOMAIN}/.well-known/jwks.json`);
+
 if (!AUTH0_DOMAIN || !AUTH0_API_IDENTIFIER) {
+  console.error('❌ Missing Auth0 environment variables');
   throw new Error('AUTH0_DOMAIN and AUTH0_API_IDENTIFIER must be set in environment variables');
 }
 
