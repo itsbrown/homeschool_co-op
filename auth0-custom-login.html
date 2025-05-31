@@ -302,7 +302,9 @@
     function showSignup() {
       hideError();
       webAuth.authorize({
-        mode: 'signUp'
+        authorizationParams: {
+          screen_hint: 'signup'
+        }
       });
     }
 
