@@ -102,9 +102,6 @@ function Router() {
         <Route path="/" component={Login} />
       )}
       <Route path="/login" component={Login} />
-      <Route path="/school-admin-login" component={SchoolAdminLogin} />
-      <Route path="/register" component={Register} />
-      <Route path="/role-selection" component={RoleSelection} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/curriculum" component={Curriculum} />
       <Route path="/curriculum/:id" component={CurriculumDetail} />
