@@ -1,0 +1,67 @@
+[
+  {
+    "id": 1,
+    "name": "Admin User",
+    "username": "admin",
+    "email": "admin@example.com",
+    "password": "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.",
+    "role": "admin",
+    "avatar": null,
+    "subscription": "premium",
+    "createdAt": "2025-05-01T00:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "name": "Test Educator",
+    "username": "educator",
+    "email": "educator@example.com",
+    "password": "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.",
+    "role": "educator",
+    "avatar": null,
+    "subscription": "educator",
+    "createdAt": "2025-05-01T00:00:00.000Z"
+  },
+  {
+    "id": 3,
+    "name": "Test Parent",
+    "username": "parent",
+    "email": "parent@example.com",
+    "password": "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.",
+    "role": "parent",
+    "avatar": null,
+    "subscription": "family",
+    "createdAt": "2025-05-01T00:00:00.000Z"
+  },
+  {
+    "id": 4,
+    "name": "Test Learner",
+    "username": "learner",
+    "email": "learner@example.com",
+    "password": "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.",
+    "role": "learner",
+    "avatar": null,
+    "subscription": "free",
+    "createdAt": "2025-05-01T00:00:00.000Z"
+  },
+  {
+    "id": 5,
+    "name": "School Administrator",
+    "username": "schooladmin",
+    "email": "school@example.com",
+    "password": "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.",
+    "role": "schoolAdmin",
+    "avatar": null,
+    "subscription": "premium",
+    "createdAt": "2025-05-01T00:00:00.000Z"
+  },
+  {
+    "username": "coreycreates@gmail.com",
+    "email": "coreycreates@gmail.com",
+    "password": "temppass123",
+    "name": "Adaluna's Parent",
+    "role": "parent",
+    "subscription": "free",
+    "id": 6,
+    "createdAt": "2025-05-26T14:10:40.071Z"
+  }
+]

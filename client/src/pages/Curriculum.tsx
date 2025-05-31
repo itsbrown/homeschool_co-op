@@ -129,6 +129,6 @@ export default function Curriculum() {
           </div>
         )}
       </div>
-    </BaseLayout>
+    </AppShell>
   );
 }

@@ -34,9 +34,8 @@ export default function SettingsPage() {
         
         <div className="max-w-4xl mx-auto">
           <div className="space-y-6">
-
-          {/* Profile Section */}
-          <Card>
+            {/* Profile Section */}
+            <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
@@ -214,12 +213,14 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Action Buttons */}
-          <div className="flex gap-4">
-            <Button onClick={handleSaveSettings} className="flex items-center gap-2">
-              <Save className="h-4 w-4" />
-              Save Changes
-            </Button>
+            {/* Action Buttons */}
+            <div className="flex gap-4">
+              <Button onClick={handleSaveSettings} className="flex items-center gap-2">
+                <Save className="h-4 w-4" />
+                Save Changes
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </ParentAppShell>
