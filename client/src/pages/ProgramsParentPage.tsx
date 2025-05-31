@@ -29,6 +29,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user, isAuthenticated, getAccessTokenSilently } = useAuth();
 
   // Get childId from URL query parameters if present
   const urlParams = new URLSearchParams(window.location.search);
@@ -43,7 +44,24 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Fetch children for enrollment dialog
   const { data: children = [] } = useQuery({
     queryKey: ["/api/children"],
-    enabled: true,
+    queryFn: async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const response = await fetch("/api/children", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error("Error fetching children:", error);
+        return [];
+      }
+    },
+    enabled: isAuthenticated && !!user,
   });
 
   // Enrollment mutation
