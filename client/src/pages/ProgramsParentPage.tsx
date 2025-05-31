@@ -57,8 +57,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   }
 
   // Fetch school admin classes and transform the response
-  const { data: schoolClassesResponse, isLoading: classesLoading } = useQuery({
-    queryKey: ["/api/school-admin/classes", { page: currentPage, limit: 12, search: searchTerm, category: categoryFilter }],
+  const { data: schoolClassesResponse, isLoading: classesLoading, error: classesError } = useQuery({
+    queryKey: ["/api/school-admin/classes"],
     enabled: activeTab === "classes" || activeTab === "all",
   });
 
@@ -86,6 +86,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   // Debug logging
   console.log('School classes response:', schoolClassesResponse);
+  console.log('Classes error:', classesError);
   console.log('Transformed classes data:', classesData);
 
   // Format currency
