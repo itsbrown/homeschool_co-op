@@ -26,7 +26,7 @@ export default function SchoolAdminLogin() {
           title: "Login successful",
           description: "You have been logged in as a School Administrator.",
         });
-        setLocation("/dashboard");
+        setLocation("/schools");
       } else {
         const errorData = await response.json();
         setError(errorData.message || "Login failed");
