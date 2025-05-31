@@ -1873,31 +1873,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/upload/classes', isAuthenticated, requireAdmin, csvUploadApi.uploadClassesCsv);
 
   // Children API endpoint for parents
-  app.get("/api/children", async (req, res) => {
+  app.get("/api/children", verifyAuth0Token, async (req, res) => {
     try {
-      // For now, let's use a more direct approach to match children to the current user
-      // Get the current user's profile from the existing endpoint
+      // Extract access token from Authorization header
+      const accessToken = req.headers.authorization?.substring(7); // Remove 'Bearer ' prefix
+      
+      if (!accessToken) {
+        return res.status(401).json({ error: "No token provided" });
+      }
+
+      // Get user info from Auth0 userinfo endpoint to get the email
+      const userInfoResponse = await fetch(`https://${process.env.AUTH0_DOMAIN}/userinfo`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!userInfoResponse.ok) {
+        console.log('❌ Failed to fetch user info from Auth0');
+        return res.status(401).json({ error: "Failed to authenticate with Auth0" });
+      }
+
+      const userInfo = await userInfoResponse.json();
+      const userEmail = userInfo.email;
+      
+      console.log('📧 User email from Auth0 userinfo:', userEmail);
+      
+      if (!userEmail) {
+        console.log('❌ No email found in Auth0 userinfo');
+        return res.status(401).json({ error: "Email not found in user profile" });
+      }
+
+      // Get user profile data to find the user ID
       const userProfilePath = path.join(process.cwd(), 'data', 'user-profiles.json');
       let userProfile = null;
       
       try {
         const userProfileData = fs.readFileSync(userProfilePath, 'utf8');
         const userProfiles = JSON.parse(userProfileData);
-        // Find the current user (assuming it's the coreycreates@gmail.com user for now)
-        userProfile = userProfiles.find(profile => profile.email === 'coreycreates@gmail.com');
+        // User profiles are stored as object with email keys
+        userProfile = userProfiles[userEmail];
       } catch (error) {
         console.log('No user profile data found');
       }
-
-      if (!userProfile) {
-        console.log('❌ User profile not found');
-        return res.status(401).json({ message: "User profile not found" });
-      }
-
-      const userId = userProfile.id;
-      const userEmail = userProfile.email;
-      
-      console.log(`👤 Loading children for user ID: ${userId}, email: ${userEmail}`);
 
       // Load children data
       const childrenPath = path.join(process.cwd(), 'data', 'children.json');
@@ -1913,10 +1932,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Filter children that match the parent's ID or email
       const parentChildren = children.filter(child => {
-        return child.parentId === userId || 
-               child.parentEmail === userEmail || 
-               child.emergencyContact?.email === userEmail ||
-               child.secondaryContact?.email === userEmail;
+        // Match by parentId if user profile found, otherwise match by email
+        if (userProfile && userProfile.id) {
+          return child.parentId === parseInt(userProfile.id) || 
+                 child.parentEmail === userEmail;
+        } else {
+          return child.parentEmail === userEmail;
+        }
       }).map(child => {
         // Calculate age from birthdate
         const age = calculateAge(child.birthdate);
@@ -1930,7 +1952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error) {
       console.error("Error fetching children:", error);
-      res.status(500).json({ message: "Error fetching children data" });
+      res.status(500).json({ error: "Error fetching children data" });
     }
   });
 
