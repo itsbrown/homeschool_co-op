@@ -8,7 +8,7 @@ export default function DirectAuth0Login() {
     if (!isLoading) {
       loginWithRedirect({
         authorizationParams: {
-          redirect_uri: window.location.origin
+          redirect_uri: `${window.location.origin}/`
         }
       });
     }
