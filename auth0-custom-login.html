@@ -302,8 +302,8 @@
       hideError();
       webAuth.authorize({
         connection: 'google-oauth2',
-        responseType: responseType,
-        redirectUri: redirectUri
+        responseType: config.responseType,
+        redirectUri: config.callbackURL
       });
     }
 
@@ -312,8 +312,8 @@
       console.log('Signup clicked');
       webAuth.authorize({
         screen_hint: 'signup',
-        responseType: responseType,
-        redirectUri: redirectUri
+        responseType: config.responseType,
+        redirectUri: config.callbackURL
       });
     }
 
@@ -356,8 +356,8 @@
           realm: 'Username-Password-Authentication',
           username: email,
           password: password,
-          responseType: responseType,
-          redirectUri: redirectUri
+          responseType: config.responseType,
+          redirectUri: config.callbackURL
         }, function(err) {
           if (err) {
             showError(err.description || 'Login failed. Please check your credentials.');
