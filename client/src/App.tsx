@@ -133,9 +133,9 @@ function Router() {
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
-        <Route path="/" component={EmbeddedLogin} />
+        <Route path="/" component={DirectAuth0Login} />
       )}
-      <Route path="/login" component={EmbeddedLogin} />
+      <Route path="/login" component={DirectAuth0Login} />
       <Route path="/auth0-login" component={DirectAuth0Login} />
       <Route path="/embedded-login" component={EmbeddedLogin} />
       <Route path="/old-login" component={Login} />
