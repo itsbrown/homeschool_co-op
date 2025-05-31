@@ -49,6 +49,16 @@ export default function EmbeddedLogin() {
     });
   };
 
+  const handleSignup = async () => {
+    // Redirect to the customized Auth0 signup page
+    await loginWithRedirect({
+      authorizationParams: {
+        redirect_uri: window.location.origin,
+        screen_hint: "signup"
+      }
+    });
+  };
+
   const handleQuickAccess = (role: string) => {
     const testAccounts = {
       parent: { email: "parent@test.com", password: "demo123" },
@@ -172,11 +182,11 @@ export default function EmbeddedLogin() {
             <div className="text-center space-y-2">
               <p className="text-sm text-muted-foreground">
                 Don't have an account?{" "}
-                <Button variant="link" className="p-0 h-auto">
+                <Button variant="link" className="p-0 h-auto" onClick={handleSignup}>
                   Sign up
                 </Button>
               </p>
-              <Button variant="link" className="p-0 h-auto text-sm">
+              <Button variant="link" className="p-0 h-auto text-sm" onClick={handleGeneralLogin}>
                 Forgot your password?
               </Button>
             </div>

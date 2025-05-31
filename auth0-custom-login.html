@@ -240,10 +240,10 @@
       <div class="text-center" style="margin-top: 24px;">
         <p class="text-sm text-muted">
           Don't have an account? 
-          <a href="#" class="link">Sign up</a>
+          <a href="#" onclick="showSignup()" class="link">Sign up</a>
         </p>
         <p style="margin-top: 8px;">
-          <a href="#" class="link text-sm">Forgot your password?</a>
+          <a href="#" onclick="showForgotPassword()" class="link text-sm">Forgot your password?</a>
         </p>
       </div>
     </div>
@@ -296,6 +296,27 @@
       hideError();
       webAuth.authorize({
         connection: 'google-oauth2'
+      });
+    }
+
+    function showSignup() {
+      hideError();
+      webAuth.authorize({
+        mode: 'signUp'
+      });
+    }
+
+    function showForgotPassword() {
+      hideError();
+      webAuth.changePassword({
+        connection: 'Username-Password-Authentication',
+        email: document.getElementById('email').value
+      }, function(err, resp) {
+        if (err) {
+          showError(err.description || 'Password reset failed');
+        } else {
+          showError('Password reset email sent!');
+        }
       });
     }
 
