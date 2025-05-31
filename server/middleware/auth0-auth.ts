@@ -28,12 +28,9 @@ function getKey(header: any, callback: any) {
 
 // Extended Request interface to include user data
 export interface AuthenticatedRequest extends Request {
-  user?: {
-    sub: string;
-    email: string;
-    name?: string;
-    role?: string;
-    [key: string]: any;
+  user?: any;
+  auth?: {
+    payload?: any;
   };
 }
 
@@ -57,7 +54,10 @@ export function verifyAuth0Token(req: AuthenticatedRequest, res: Response, next:
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    // Add user data to request object
+    // Add user data to request object in the expected format
+    req.auth = {
+      payload: decoded as any
+    };
     req.user = decoded as any;
     next();
   });
@@ -79,6 +79,9 @@ export function optionalAuth0Token(req: AuthenticatedRequest, res: Response, nex
     algorithms: ['RS256']
   }, (err, decoded) => {
     if (!err) {
+      req.auth = {
+        payload: decoded as any
+      };
       req.user = decoded as any;
     }
     next(); // Continue regardless of token validity
