@@ -281,6 +281,12 @@
       nonce: nonce
     });
 
+    console.log('Auth0 WebAuth initialized:', {
+      domain: domain,
+      clientID: clientID,
+      redirectUri: redirectUri
+    });
+
     function showError(message) {
       var errorDiv = document.getElementById('error-message');
       errorDiv.textContent = message;
@@ -295,24 +301,34 @@
     function loginWithGoogle() {
       hideError();
       webAuth.authorize({
-        connection: 'google-oauth2'
+        connection: 'google-oauth2',
+        responseType: responseType,
+        redirectUri: redirectUri
       });
     }
 
     function showSignup() {
       hideError();
+      console.log('Signup clicked');
       webAuth.authorize({
-        authorizationParams: {
-          screen_hint: 'signup'
-        }
+        screen_hint: 'signup',
+        responseType: responseType,
+        redirectUri: redirectUri
       });
     }
 
     function showForgotPassword() {
       hideError();
+      console.log('Forgot password clicked');
+      var email = document.getElementById('email').value;
+      if (!email) {
+        showError('Please enter your email address first');
+        return;
+      }
+      
       webAuth.changePassword({
         connection: 'Username-Password-Authentication',
-        email: document.getElementById('email').value
+        email: email
       }, function(err, resp) {
         if (err) {
           showError(err.description || 'Password reset failed');
@@ -339,7 +355,9 @@
         webAuth.login({
           realm: 'Username-Password-Authentication',
           username: email,
-          password: password
+          password: password,
+          responseType: responseType,
+          redirectUri: redirectUri
         }, function(err) {
           if (err) {
             showError(err.description || 'Login failed. Please check your credentials.');
