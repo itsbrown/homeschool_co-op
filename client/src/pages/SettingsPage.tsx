@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Bell, User, Shield, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import BaseLayout from "@/components/layout/BaseLayout";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 
 export default function SettingsPage() {
   const { user, logout } = useAuth0();
@@ -28,9 +28,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <BaseLayout pageTitle="Account Settings">
-      <div className="max-w-4xl mx-auto">
-        <div className="space-y-6">
+    <ParentAppShell>
+      <div className="container mx-auto py-6">
+        <h1 className="text-3xl font-bold mb-6">Settings</h1>
+        
+        <div className="max-w-4xl mx-auto">
+          <div className="space-y-6">
 
           {/* Profile Section */}
           <Card>
@@ -217,9 +220,8 @@ export default function SettingsPage() {
               <Save className="h-4 w-4" />
               Save Changes
             </Button>
-          </div>
         </div>
       </div>
-    </BaseLayout>
+    </ParentAppShell>
   );
 }

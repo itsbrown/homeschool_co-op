@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth0";
-import BaseLayout from "@/components/layout/BaseLayout";
+import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,9 +40,10 @@ export default function Curriculum() {
   }
 
   return (
-    <BaseLayout pageTitle="My Curriculum">
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
+    <AppShell>
+      <div className="container mx-auto py-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">My Curriculum</h1>
           <Button onClick={() => navigate("/dashboard")}>
             Generate New Curriculum
           </Button>

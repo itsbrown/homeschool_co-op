@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation } from "wouter";
-import BaseLayout from "@/components/layout/BaseLayout";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 import PaymentManagement from "@/components/payments/PaymentManagement";
 import { useAuth } from "@/hooks/useAuth0";
 
@@ -17,11 +17,11 @@ export default function PaymentsPage() {
   
   if (isLoading) {
     return (
-      <BaseLayout pageTitle="Payments">
+      <ParentAppShell>
         <div className="flex justify-center items-center min-h-[50vh]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
-      </BaseLayout>
+      </ParentAppShell>
     );
   }
   
@@ -32,26 +32,32 @@ export default function PaymentsPage() {
   // Ensure only parents can access this page
   if (user && user.role !== 'parent') {
     return (
-      <BaseLayout pageTitle="Access Denied">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>Only parents can access the payment management system.</p>
+      <ParentAppShell>
+        <div className="container mx-auto py-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+            <p>Only parents can access the payment management system.</p>
+          </div>
         </div>
-      </BaseLayout>
+      </ParentAppShell>
     );
   }
   
   return (
-    <BaseLayout pageTitle="Payment Management">
-      <div className="space-y-6">
-        <div>
-          <p className="text-muted-foreground">
-            View and manage payments for your children's programs and classes
-          </p>
-        </div>
+    <ParentAppShell>
+      <div className="container mx-auto py-6">
+        <h1 className="text-3xl font-bold mb-6">Payments</h1>
         
-        <PaymentManagement />
+        <div className="space-y-6">
+          <div>
+            <p className="text-muted-foreground">
+              View and manage payments for your children's programs and classes
+            </p>
+          </div>
+          
+          <PaymentManagement />
+        </div>
       </div>
-    </BaseLayout>
+    </ParentAppShell>
   );
 }
