@@ -496,6 +496,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.childrenStore.values()).filter(child => child.parentId === parentId);
   }
 
+  async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
+    return Array.from(this.childrenStore.values()).filter(child => (child as any).parentEmail === parentEmail);
+  }
+
   async createChild(childData: InsertChild & { parentId: number }): Promise<Child> {
     const id = this.childIdCounter++;
     const now = new Date();

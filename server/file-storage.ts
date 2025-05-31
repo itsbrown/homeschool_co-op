@@ -242,6 +242,11 @@ export class FileStorage implements IStorage {
     return children.filter(child => child.parentId === parentId);
   }
 
+  async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
+    const children = this.loadChildren();
+    return children.filter(child => (child as any).parentEmail === parentEmail);
+  }
+
   async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
     const children = this.loadChildren();
     const id = children.length > 0 ? Math.max(...children.map(c => c.id)) + 1 : 1;
