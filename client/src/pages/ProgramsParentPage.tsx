@@ -56,10 +56,33 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
-  const { data: classesData = { classes: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0 } }, isLoading: classesLoading } = useQuery<ClassesResponse>({
-    queryKey: ["/api/classes", { page: currentPage, limit: 12, search: searchTerm, category: categoryFilter }],
+  // Fetch school admin classes and transform the response
+  const { data: schoolClassesResponse, isLoading: classesLoading } = useQuery({
+    queryKey: ["/api/school-admin/classes", { page: currentPage, limit: 12, search: searchTerm, category: categoryFilter }],
     enabled: activeTab === "classes" || activeTab === "all",
   });
+
+  // Transform school admin classes data to match expected format
+  const classesData: ClassesResponse = {
+    classes: schoolClassesResponse?.items?.map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      price: item.price * 100, // Convert to cents for currency formatting
+      category: item.category?.toLowerCase().replace(/\s+/g, '-') || 'academic',
+      categoryName: item.category || 'Academic',
+      startDate: item.startDate,
+      endDate: item.endDate,
+      numSessions: item.numSessions,
+      totalOrders: item.enrollmentCount || 0,
+      totalWaitlisted: 0
+    })) || [],
+    pagination: {
+      currentPage: schoolClassesResponse?.page || 1,
+      totalPages: schoolClassesResponse?.totalPages || 1,
+      totalItems: schoolClassesResponse?.total || 0
+    }
+  };
 
   // Format currency
   const formatCurrency = (amount: number) => {
