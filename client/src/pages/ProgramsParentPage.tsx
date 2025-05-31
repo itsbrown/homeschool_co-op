@@ -4,7 +4,7 @@ import { ProgramList } from "@/components/registration/ProgramList";
 import { ProgramEnrollmentForm } from "@/components/registration/ProgramEnrollmentForm";
 import { EnrollmentList } from "@/components/registration/EnrollmentList";
 import { Route, Switch, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 
 // Separate component for Programs content to avoid hooks issues
@@ -21,6 +24,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; classId?: number; classTitle?: string }>({ open: false });
+  const [selectedChildId, setSelectedChildId] = useState<string>("");
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Get childId from URL query parameters if present
   const urlParams = new URLSearchParams(window.location.search);
@@ -30,6 +38,35 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const { data: classCategories = [] } = useQuery<string[]>({
     queryKey: ["/api/classes/categories/names"],
     enabled: true,
+  });
+
+  // Fetch children for enrollment dialog
+  const { data: children = [] } = useQuery({
+    queryKey: ["/api/children"],
+    enabled: true,
+  });
+
+  // Enrollment mutation
+  const enrollmentMutation = useMutation({
+    mutationFn: async ({ classId, childId }: { classId: number; childId: string }) => {
+      return apiRequest(`/api/classes/${classId}/enroll`, 'POST', { childId: parseInt(childId) });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Enrollment Successful",
+        description: "Your child has been successfully enrolled in the class.",
+      });
+      setEnrollmentDialog({ open: false });
+      setSelectedChildId("");
+      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Enrollment Failed",
+        description: error.message || "There was an error enrolling your child in the class.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Fetch classes with filters
@@ -297,7 +334,14 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       </div>
                     </CardContent>
                     <CardFooter>
-                      <Button className="w-full">
+                      <Button 
+                        className="w-full"
+                        onClick={() => setEnrollmentDialog({ 
+                          open: true, 
+                          classId: classItem.id, 
+                          classTitle: classItem.title 
+                        })}
+                      >
                         Enroll Now
                       </Button>
                     </CardFooter>
@@ -316,6 +360,58 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Enrollment Dialog */}
+      <Dialog open={enrollmentDialog.open} onOpenChange={(open) => setEnrollmentDialog({ open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enroll in Class</DialogTitle>
+            <DialogDescription>
+              Select which child you would like to enroll in "{enrollmentDialog.classTitle}".
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="child-select">Select Child</Label>
+              <Select value={selectedChildId} onValueChange={setSelectedChildId}>
+                <SelectTrigger id="child-select">
+                  <SelectValue placeholder="Choose a child" />
+                </SelectTrigger>
+                <SelectContent>
+                  {children.map((child: any) => (
+                    <SelectItem key={child.id} value={child.id.toString()}>
+                      {child.firstName} {child.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setEnrollmentDialog({ open: false })}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (selectedChildId && enrollmentDialog.classId) {
+                  enrollmentMutation.mutate({
+                    classId: enrollmentDialog.classId,
+                    childId: selectedChildId
+                  });
+                }
+              }}
+              disabled={!selectedChildId || enrollmentMutation.isPending}
+            >
+              {enrollmentMutation.isPending ? "Enrolling..." : "Enroll"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
