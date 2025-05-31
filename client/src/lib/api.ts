@@ -8,6 +8,25 @@ import {
   Stats,
   AIGenerationFormData
 } from "./types";
+import { QueryClient } from '@tanstack/react-query';
+import { inspectJWT } from '../utils/jwtDebugger';
+
+const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:5000' : '';
+
+class ApiClient {
+  private getAuthToken(): string | null {
+    const token = localStorage.getItem('auth0_token');
+
+    // Inspect token when retrieved for debugging
+    if (token) {
+      console.log('🔍 Retrieved token from localStorage for API call');
+      inspectJWT(token);
+    } else {
+      console.log('❌ No token found in localStorage');
+    }
+
+    return token;
+  }
 
 // Auth API
 export async function registerUser(userData: {
@@ -136,4 +155,6 @@ export async function fetchDashboardStats(): Promise<Stats> {
     completionRate: 87,
     marketplaceSales: 2450
   };
+}
+
 }

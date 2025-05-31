@@ -13,17 +13,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import JWTDebugPanel from "@/components/JWTDebugPanel";
 
 export default function SettingsPage() {
   const { user, logout } = useAuth0();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   // Profile form state
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  
+
   // Notification preferences state
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [smsNotifications, setSmsNotifications] = useState(false);
@@ -65,11 +66,11 @@ export default function SettingsPage() {
         },
         body: JSON.stringify(profileData),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to update profile');
       }
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -100,7 +101,7 @@ export default function SettingsPage() {
     <ParentAppShell>
       <div className="container mx-auto py-6">
         <h1 className="text-3xl font-bold mb-6">Settings</h1>
-        
+
         <div className="max-w-4xl mx-auto">
           <div className="space-y-6">
             {/* Profile Section */}
@@ -128,9 +129,9 @@ export default function SettingsPage() {
                   <Badge variant="secondary">Parent Account</Badge>
                 </div>
               </div>
-              
+
               <Separator />
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
@@ -141,7 +142,7 @@ export default function SettingsPage() {
                     placeholder="Enter your first name"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name</Label>
                   <Input
@@ -151,7 +152,7 @@ export default function SettingsPage() {
                     placeholder="Enter your last name"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
                   <Input
@@ -165,7 +166,7 @@ export default function SettingsPage() {
                     Email cannot be changed here. Please contact support.
                   </p>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
                   <Input
@@ -205,7 +206,7 @@ export default function SettingsPage() {
                   onCheckedChange={setEmailNotifications}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="sms-notifications">SMS Notifications</Label>
@@ -219,7 +220,7 @@ export default function SettingsPage() {
                   onCheckedChange={setSmsNotifications}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="enrollment-reminders">Enrollment Reminders</Label>
@@ -233,7 +234,7 @@ export default function SettingsPage() {
                   onCheckedChange={setEnrollmentReminders}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="payment-reminders">Payment Reminders</Label>
@@ -271,9 +272,9 @@ export default function SettingsPage() {
                   Configure in Auth0
                 </Button>
               </div>
-              
+
               <Separator />
-              
+
               <div className="space-y-2">
                 <Label>Account Deletion</Label>
                 <p className="text-sm text-muted-foreground">
@@ -293,9 +294,11 @@ export default function SettingsPage() {
                 Save Changes
               </Button>
             </div>
-          </div>
+
+          {/* JWT Debug Panel */}
+          <JWTDebugPanel />
         </div>
       </div>
-    </ParentAppShell>
+    </div>
   );
 }
