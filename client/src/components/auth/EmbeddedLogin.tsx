@@ -20,33 +20,48 @@ export default function EmbeddedLogin() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError("");
     
-    // Redirect to the customized Auth0 login page
-    await loginWithRedirect({
-      authorizationParams: {
-        login_hint: email,
-        redirect_uri: window.location.origin
-      }
-    });
+    try {
+      await loginWithRedirect({
+        authorizationParams: {
+          login_hint: email,
+          screen_hint: "login"
+        }
+      });
+    } catch (err) {
+      setError("Login failed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleLogin = async () => {
-    // Redirect to the customized Auth0 login page with Google connection
-    await loginWithRedirect({
-      authorizationParams: {
-        connection: "google-oauth2",
-        redirect_uri: window.location.origin
-      }
-    });
+    setIsLoading(true);
+    setError("");
+    
+    try {
+      await loginWithRedirect({
+        authorizationParams: {
+          connection: "google-oauth2"
+        }
+      });
+    } catch (err) {
+      setError("Google login failed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   const handleGeneralLogin = async () => {
-    // Redirect to the customized Auth0 login page
-    await loginWithRedirect({
-      authorizationParams: {
-        redirect_uri: window.location.origin
-      }
-    });
+    setIsLoading(true);
+    setError("");
+    
+    try {
+      await loginWithRedirect();
+    } catch (err) {
+      setError("Login failed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   const handleSignup = async () => {
