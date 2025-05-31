@@ -69,7 +69,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       title: item.title,
       description: item.description,
       price: item.price * 100, // Convert to cents for currency formatting
-      category: item.category?.toLowerCase().replace(/\s+/g, '-') || 'academic',
+      category: 'academic', // Set all school admin classes as academic for now
       categoryName: item.category || 'Academic',
       startDate: item.startDate,
       endDate: item.endDate,
@@ -83,6 +83,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       totalItems: schoolClassesResponse?.total || 0
     }
   };
+
+  // Debug logging
+  console.log('School classes response:', schoolClassesResponse);
+  console.log('Transformed classes data:', classesData);
 
   // Format currency
   const formatCurrency = (amount: number) => {
