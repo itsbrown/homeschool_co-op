@@ -16,11 +16,11 @@ router.get("/test", (req, res) => {
 // Removed problematic authentication middleware that was blocking PATCH requests
 
 // Special direct login for school admin
-router.post("/login", async (req, res) => {
+router.post("/login", (req, res) => {
   try {
     console.log('School Admin direct login attempt');
     
-    // Create the school admin user
+    // Create the school admin user response
     const schoolAdminUser = {
       id: 5,
       name: 'School Administrator',
@@ -32,28 +32,7 @@ router.post("/login", async (req, res) => {
       createdAt: new Date()
     };
     
-    // Set session data for the school admin
-    req.session.userId = schoolAdminUser.id;
-    req.session.userRole = schoolAdminUser.role;
-    
-    // Log session details for debugging
-    console.log('School Admin direct login - Session data:', {
-      userId: req.session.userId,
-      userRole: req.session.userRole
-    });
-    
-    // Force save the session
-    await new Promise<void>((resolve, reject) => {
-      req.session.save((err) => {
-        if (err) {
-          console.error('Error saving session for school admin:', err);
-          reject(err);
-        } else {
-          console.log('School admin session saved successfully');
-          resolve();
-        }
-      });
-    });
+    console.log('School admin login successful');
     
     // Return success response
     return res.status(200).json({
