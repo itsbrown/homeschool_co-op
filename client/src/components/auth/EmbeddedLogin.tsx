@@ -27,8 +27,7 @@ export default function EmbeddedLogin() {
       await loginWithRedirect({
         authorizationParams: {
           login_hint: email,
-          screen_hint: "login",
-          response_type: "code"
+          screen_hint: "login"
         }
       });
     } catch (err) {
@@ -44,8 +43,7 @@ export default function EmbeddedLogin() {
     try {
       await loginWithRedirect({
         authorizationParams: {
-          connection: "google-oauth2",
-          response_type: "code"
+          connection: "google-oauth2"
         }
       });
     } catch (err) {
