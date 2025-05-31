@@ -87,6 +87,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Debug logging
   console.log('School classes response:', schoolClassesResponse);
   console.log('Classes error:', classesError);
+  console.log('Classes loading:', classesLoading);
+  console.log('Active tab:', activeTab);
   console.log('Transformed classes data:', classesData);
 
   // Format currency
