@@ -7,8 +7,17 @@ export function useAuth() {
     isLoading, 
     loginWithRedirect, 
     logout, 
-    getAccessTokenSilently 
+    getAccessTokenSilently,
+    error 
   } = useAuth0Hook();
+
+  // Debug logging
+  console.log('Auth state:', { 
+    isAuthenticated, 
+    isLoading, 
+    user: user ? { id: user.sub, email: user.email } : null,
+    error: error?.message 
+  });
 
   const getUserRole = (user: any) => {
     // Check for roles in Auth0 user object
