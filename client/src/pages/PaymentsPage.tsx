@@ -52,6 +52,6 @@ export default function PaymentsPage() {
         
         <PaymentManagement />
       </div>
-    </ParentAppShell>
+    </BaseLayout>
   );
 }
