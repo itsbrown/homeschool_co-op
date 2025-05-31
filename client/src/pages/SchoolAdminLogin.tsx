@@ -16,7 +16,7 @@ export default function SchoolAdminLogin() {
     setError(null);
     
     try {
-      const response = await apiRequest('POST', '/api/auth/login', {
+      const response = await apiRequest('POST', '/api/school-admin/login', {
         username: 'schooladmin',
         password: 'password'
       });

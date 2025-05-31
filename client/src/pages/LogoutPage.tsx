@@ -11,11 +11,7 @@ export default function LogoutPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      logout({
-        logoutParams: {
-          returnTo: window.location.origin
-        }
-      });
+      logout();
     }
   }, [logout, isAuthenticated]);
 
