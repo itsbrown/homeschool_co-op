@@ -100,10 +100,10 @@ function Router() {
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
-        <Route path="/" component={Login} />
+        <Route path="/" component={EmbeddedLogin} />
       )}
-      <Route path="/login" component={Login} />
-      <Route path="/embedded-login" component={EmbeddedLogin} />
+      <Route path="/login" component={EmbeddedLogin} />
+      <Route path="/old-login" component={Login} />
       <Route path="/school-admin-login" component={SchoolAdminLogin} />
       <Route path="/register" component={Register} />
       <Route path="/role-selection" component={RoleSelection} />

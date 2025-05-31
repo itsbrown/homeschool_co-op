@@ -102,7 +102,7 @@ export default function EmbeddedLogin() {
 
             <Button
               onClick={handleGoogleLogin}
-              disabled={isLoading || !auth0Client}
+              disabled={isLoading || authLoading}
               variant="outline"
               className="w-full"
             >
@@ -184,7 +184,7 @@ export default function EmbeddedLogin() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isLoading || !auth0Client || !email || !password}
+                disabled={isLoading || authLoading || !email || !password}
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
