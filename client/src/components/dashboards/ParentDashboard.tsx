@@ -18,27 +18,31 @@ export default function ParentDashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
 
-  // Fetch children data with Auth0 token
+  // Fetch children data from school admin students endpoint
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
-    queryKey: ["/api/children"],
+    queryKey: ["/api/schools/students"],
     queryFn: async () => {
       try {
-        const token = await getAccessTokenSilently();
-        const response = await fetch("/api/children", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch("/api/schools/students");
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        return await response.json();
+        const students = await response.json();
+        // Transform students data to match expected format
+        return students.map((student: any) => ({
+          id: student.id,
+          name: student.name,
+          age: student.age,
+          gradeLevel: student.gradeLevel,
+          firstName: student.name.split(' ')[0],
+          lastName: student.name.split(' ').slice(1).join(' ')
+        }));
       } catch (error) {
-        console.error("Error fetching children:", error);
+        console.error("Error fetching students:", error);
         return [];
       }
     },
-    enabled: !!user,
+    enabled: true,
   });
 
   // Fetch enrollments data with Auth0 token
