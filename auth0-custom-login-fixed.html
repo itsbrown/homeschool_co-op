@@ -251,24 +251,20 @@
     </div>
   </div>
 
-  <script src="https://cdn.auth0.com/js/lock/11.30.0/lock.min.js"></script>
+  <script src="https://cdn.auth0.com/js/auth0/9.16/auth0.min.js"></script>
   <script>
     var config = JSON.parse(
       decodeURIComponent(escape(window.atob('@@config@@')))
     );
 
-    var lock = new Auth0Lock(config.clientID, config.auth0Domain, {
-      auth: {
-        redirectUrl: config.callbackURL,
-        responseType: config.responseType,
-        params: config.internalOptions
-      },
-      theme: {
-        primaryColor: '#3b82f6'
-      },
-      languageDictionary: config.languageDictionary,
-      closable: false,
-      container: 'login-container'
+    var webAuth = new auth0.WebAuth({
+      domain: config.auth0Domain,
+      clientID: config.clientID,
+      redirectUri: config.callbackURL,
+      responseType: config.responseType,
+      scope: config.scope,
+      state: config.state,
+      nonce: config.nonce
     });
 
     function showError(message) {
@@ -284,25 +280,35 @@
 
     function loginWithGoogle() {
       hideError();
-      lock.show({
-        allowedConnections: ['google-oauth2'],
-        autoclose: true
+      webAuth.authorize({
+        connection: 'google-oauth2'
       });
     }
 
     function showSignup() {
       hideError();
-      lock.show({
-        initialScreen: 'signUp',
-        autoclose: true
+      webAuth.authorize({
+        screen_hint: 'signup'
       });
     }
 
     function showForgotPassword() {
       hideError();
-      lock.show({
-        initialScreen: 'forgotPassword',
-        autoclose: true
+      var email = document.getElementById('email').value;
+      if (!email) {
+        showError('Please enter your email address first');
+        return;
+      }
+      
+      webAuth.changePassword({
+        connection: 'Username-Password-Authentication',
+        email: email
+      }, function(err, resp) {
+        if (err) {
+          showError(err.description || 'Password reset failed');
+        } else {
+          showError('Password reset email sent!');
+        }
       });
     }
 
@@ -319,12 +325,13 @@
         return;
       }
 
-      // Use Lock for password authentication
-      lock.show({
-        initialScreen: 'login',
-        autoclose: true,
-        prefill: {
-          email: email
+      webAuth.redirect.loginWithCredentials({
+        connection: 'Username-Password-Authentication',
+        username: email,
+        password: password
+      }, function(err) {
+        if (err) {
+          showError(err.description || 'Login failed. Please check your credentials.');
         }
       });
     });
