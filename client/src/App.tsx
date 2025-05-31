@@ -1,9 +1,10 @@
-import { Switch, Route } from "wouter";
+import React from "react";
+import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Auth0Provider } from "@auth0/auth0-react";
+import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 
 
 import Home from "@/pages/Home";
@@ -53,6 +54,26 @@ import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
 import SettingsPage from "@/pages/SettingsPage";
 import LogoutPage from "@/pages/LogoutPage";
+
+const CallbackPage = () => {
+  const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
+  
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      setLocation('/');
+    }
+  }, [isAuthenticated, setLocation]);
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Processing login...</p>
+      </div>
+    </div>
+  );
+};
 import NotFound from "@/pages/not-found";
 
 // School Admin pages
@@ -98,25 +119,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/logout" component={LogoutPage} />
-      <Route path="/callback" component={() => {
-        // Auth0 callback handling
-        const [location, setLocation] = useLocation();
-        
-        React.useEffect(() => {
-          if (isAuthenticated) {
-            setLocation('/');
-          }
-        }, [isAuthenticated, setLocation]);
-        
-        return (
-          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Processing login...</p>
-            </div>
-          </div>
-        );
-      }} />
+      <Route path="/callback" component={CallbackPage} />
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
