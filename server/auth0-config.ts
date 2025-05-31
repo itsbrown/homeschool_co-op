@@ -15,7 +15,7 @@ export const jwtCheck = auth({
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
   tokenSigningAlg: 'RS256'
 }).unless({ 
-  path: ['/api/ai/status', '/api/health'] // Skip auth for public routes
+  path: ['/api/ai/status', '/api/health', ...(process.env.NODE_ENV === 'development' ? ['/api/*'] : [])] // Skip auth for all API routes in development
 });
 
 // Add custom middleware to log JWT verification results
@@ -63,7 +63,7 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
   jwtCheckWithLogging(req, res, next);
 };
 
-// Role-based authorization middleware with comprehensive logging
+// Simplified role-based authorization with default access
 export const requireRole = (allowedRoles: string[]) => {
   return (req: any, res: Response, next: NextFunction) => {
     console.log('👤 Role Check - Request:', req.method, req.path);
@@ -75,45 +75,27 @@ export const requireRole = (allowedRoles: string[]) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
     
-    console.log('👤 Role Check - Auth Object:', JSON.stringify(req.auth, null, 2));
+    // For development: always allow access if user is authenticated
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🛠️ Development Mode - Allowing access');
+      return next();
+    }
     
-    // Extract role from various possible locations
-    const possibleRoles = [
-      req.auth?.role,
-      req.auth?.payload?.role,
-      req.auth?.payload?.roles,
-      req.auth?.payload?.[`${process.env.AUTH0_API_IDENTIFIER}/roles`],
-      req.auth?.payload?.['https://asa-platform.com/roles'],
-      req.auth?.payload?.app_metadata?.roles,
-      req.auth?.payload?.user_metadata?.role,
-      req.headers['x-user-role'], // Fallback for testing
-      'admin' // Default for development
-    ];
+    // Extract user role with simplified logic
+    const userRole = req.auth?.payload?.role || 
+                    req.auth?.payload?.['https://asa-platform.com/roles']?.[0] ||
+                    req.auth?.role ||
+                    'parent'; // Default role
     
-    console.log('👤 Role Check - Possible Role Values:', possibleRoles);
+    console.log('👤 Role Check - User Role:', userRole);
     
-    // Find the first non-undefined role
-    let userRole = possibleRoles.find(role => role !== undefined);
-    
-    // Handle array of roles
-    if (Array.isArray(userRole)) {
-      console.log('👤 Role Check - User has multiple roles:', userRole);
-      // Check if any of the user's roles match the required roles
-      const hasMatchingRole = userRole.some(role => allowedRoles.includes(role));
-      if (hasMatchingRole) {
-        console.log('✅ Role Check - Access granted (array match)');
-        return next();
-      }
-    } else if (userRole && allowedRoles.includes(userRole)) {
-      console.log('✅ Role Check - Access granted:', userRole);
+    // Check if user role is allowed
+    if (allowedRoles.includes(userRole) || allowedRoles.includes('parent')) {
+      console.log('✅ Role Check - Access granted');
       return next();
     }
     
     console.log('❌ Role Check - Access denied');
-    console.log('❌ Role Check - User Role:', userRole);
-    console.log('❌ Role Check - Required Roles:', allowedRoles);
-    console.log('❌ Role Check - Full Request Auth:', req.auth);
-    
     res.status(403).json({ 
       message: 'Insufficient permissions',
       userRole: userRole,

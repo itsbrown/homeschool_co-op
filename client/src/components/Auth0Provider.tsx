@@ -10,7 +10,11 @@ const Auth0Wrapper: React.FC<Auth0WrapperProps> = ({ children }) => {
   const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
   const audience = import.meta.env.VITE_AUTH0_API_IDENTIFIER;
 
+  // Log configuration for debugging
+  console.log('🔧 Auth0 Config:', { domain, clientId, audience });
+
   if (!domain || !clientId) {
+    console.error('❌ Auth0 configuration missing:', { domain, clientId, audience });
     throw new Error('Auth0 configuration missing. Please ensure VITE_AUTH0_DOMAIN and VITE_AUTH0_CLIENT_ID are properly set.');
   }
 
