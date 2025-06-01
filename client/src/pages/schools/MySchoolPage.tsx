@@ -63,7 +63,7 @@ export default function MySchoolPage() {
 
   // Show error toast if there's an error (but not for 404 which means no school setup)
   useEffect(() => {
-    if (error && !error.message.includes('404')) {
+    if (error && !error.message.includes('404') && !error.message.includes('No school found')) {
       toast({
         title: "Error loading school data",
         description: "There was a problem loading your school information. Please try again.",
@@ -71,6 +71,18 @@ export default function MySchoolPage() {
       });
     }
   }, [error, toast]);
+
+  // Check if user needs school setup
+  const needsSetup = error && (error.message.includes('404') || error.message.includes('No school found'));
+
+  // Handle setup button click
+  const handleSetupSchool = async () => {
+    try {
+      await setupSchoolMutation.mutateAsync();
+    } catch (err) {
+      console.error('Setup failed:', err);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -104,8 +116,24 @@ export default function MySchoolPage() {
                   Please register a school or contact an administrator for assistance.
                 </p>
               </CardContent>
-              <CardFooter>
-                <Button asChild>
+              <CardFooter className="flex gap-3">
+                {needsSetup && (
+                  <Button 
+                    onClick={handleSetupSchool}
+                    disabled={setupSchoolMutation.isPending}
+                    className="mr-2"
+                  >
+                    {setupSchoolMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Setting up...
+                      </>
+                    ) : (
+                      'Create School'
+                    )}
+                  </Button>
+                )}
+                <Button asChild variant="outline">
                   <Link href="/schools/register">Register a School</Link>
                 </Button>
               </CardFooter>
