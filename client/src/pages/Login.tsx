@@ -35,7 +35,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const { login, isLoading } = useAuth();
+  const { signInWithEmail, isLoading } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);

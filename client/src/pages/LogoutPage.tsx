@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { LogOut, Home } from "lucide-react";
 
 export default function LogoutPage() {
-  const { logout, isAuthenticated } = useAuth();
+  const { signOut, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {

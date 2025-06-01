@@ -16,7 +16,7 @@ import ParentAppShell from "@/components/layout/ParentAppShell";
 import JWTDebugPanel from "@/components/JWTDebugPanel";
 
 export default function SettingsPage() {
-  const { user, logout } = useAuth0();
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
