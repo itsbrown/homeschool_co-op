@@ -95,73 +95,56 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // Since we confirmed the data exists in the schools.schools table,
-      // let's use raw SQL to query across schemas
-      const { data: result, error } = await supabaseAdmin
-        .rpc('execute_raw_sql', { 
-          sql: `
-            SELECT s.* 
-            FROM schools.schools s
-            INNER JOIN users.accounts u ON s.created_by = u.id
-            WHERE u.email = '${user.email}' AND u.role = 'school_admin'
-            LIMIT 1;
-          `
+      // With updated permissions, try direct schema access first
+      const { data: userAccount, error: userError } = await supabaseAdmin
+        .schema('users')
+        .from('accounts')
+        .select('id, email, role')
+        .eq('email', user.email)
+        .eq('role', 'school_admin')
+        .single();
+
+      if (userError) {
+        console.error('User lookup error:', userError.message);
+        return res.status(404).json({ 
+          message: "School admin account not found",
+          error: userError.message
         });
-
-      if (error) {
-        console.error('Raw SQL error:', error.message);
-        
-        // If that doesn't work, try a direct approach to get school ID 1 
-        // since we know the data exists
-        console.log('Trying direct school query...');
-        
-        const { data: schoolData, error: directError } = await supabaseAdmin
-          .rpc('get_school_data', {});
-
-        if (directError) {
-          console.error('Direct query error:', directError.message);
-          
-          // As final fallback, return the school data we know exists
-          const knownSchoolData = {
-            id: 1,
-            name: 'American Seekers Academy',
-            address: 'Rochester, NY 14618',
-            created_by: 5,
-            created_at: '2025-05-20T03:25:23.589Z',
-            updated_at: '2025-05-20T13:18:16.226Z'
-          };
-          
-          console.log('🚀 Returning known school data:', knownSchoolData.name);
-          res.json(knownSchoolData);
-          return;
-        }
-
-        if (schoolData) {
-          console.log('🚀 Returning school data from direct query:', schoolData.name);
-          res.json(schoolData);
-          return;
-        }
       }
 
-      if (result && result.length > 0) {
-        const school = result[0];
-        console.log('🚀 Returning school data from raw SQL:', school.name);
-        res.json(school);
-        return;
+      if (!userAccount) {
+        console.error('No user account found for:', user.email);
+        return res.status(404).json({ 
+          message: "School admin account not found"
+        });
       }
 
-      if (!schoolError && schools && schools.length > 0) {
-        const school = schools[0];
-        console.log('🚀 Returning school data from database:', school.name);
-        res.json(school);
-        return;
+      // Now get the school data
+      const { data: schools, error: schoolError } = await supabaseAdmin
+        .schema('schools')
+        .from('schools')
+        .select('*')
+        .eq('created_by', userAccount.id)
+        .limit(1);
+
+      if (schoolError) {
+        console.error('School lookup error:', schoolError.message);
+        return res.status(404).json({ 
+          message: "Error retrieving school data",
+          error: schoolError.message
+        });
       }
-      
-      console.error('Database query error:', schoolError?.message || 'No results found');
-      return res.status(404).json({ 
-        message: "No school found for this administrator",
-        error: schoolError?.message || 'No schools found'
-      });
+
+      if (!schools || schools.length === 0) {
+        console.error('No schools found for user ID:', userAccount.id);
+        return res.status(404).json({ 
+          message: "No school found for this administrator"
+        });
+      }
+
+      const school = schools[0];
+      console.log('🚀 Returning school data from database:', school.name);
+      res.json(school);
       
     } catch (error) {
       console.error('Database access error:', error);
