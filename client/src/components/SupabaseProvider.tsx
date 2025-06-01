@@ -67,6 +67,25 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
+
+      // Handle successful OAuth login
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('✅ User signed in successfully, checking for redirect...');
+        
+        // Clear any auth tokens from URL
+        const currentUrl = window.location.href;
+        if (currentUrl.includes('#access_token=') || currentUrl.includes('?code=')) {
+          console.log('🔄 Cleaning up auth tokens from URL and redirecting...');
+          
+          // Determine redirect based on user
+          const userRole = session.user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent';
+          const redirectPath = userRole === 'school_admin' ? '/schools' : '/dashboard';
+          
+          // Clean URL and redirect
+          window.history.replaceState({}, document.title, redirectPath);
+          window.location.href = redirectPath;
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -94,10 +113,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
 
   const signInWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`
-      }
+      provider: 'google'
     });
     return { data, error };
   };
