@@ -114,6 +114,12 @@ export interface IStorage {
   createClass(classData: InsertClass & { instructorId: number }): Promise<Class>;
   updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
   deleteClass(id: number): Promise<void>;
+  
+  // Role Invitation methods
+  getActiveRoleInvitation(email: string): Promise<RoleInvitation | undefined>;
+  createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation>;
+  acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined>;
+  getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]>;
 }
 
 export class MemStorage implements IStorage {
