@@ -55,6 +55,7 @@ import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
 import SettingsPage from "@/pages/SettingsPage";
 import LogoutPage from "@/pages/LogoutPage";
+import AuthCallback from "@/pages/AuthCallback";
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -184,6 +185,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/logout" component={LogoutPage} />
+      <Route path="/auth/callback" component={AuthCallback} />
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
