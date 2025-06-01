@@ -407,6 +407,61 @@ router.get("/me", async (req, res) => {
 
 // Auth0 authentication is handled by middleware
 
+// Check for role invitation
+router.post("/check-invitation", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    // Check for active role invitations
+    const invitation = await storage.getActiveRoleInvitation(email);
+    
+    if (invitation) {
+      return res.status(200).json({ 
+        invitation: {
+          role: invitation.role,
+          schoolId: invitation.schoolId,
+          token: invitation.token
+        }
+      });
+    }
+
+    return res.status(200).json({ invitation: null });
+  } catch (error) {
+    console.error("Check invitation error:", error);
+    res.status(500).json({ message: "Error checking invitation" });
+  }
+});
+
+// Accept role invitation
+router.post("/accept-invitation", async (req, res) => {
+  try {
+    const { token, userEmail } = req.body;
+
+    if (!token || !userEmail) {
+      return res.status(400).json({ message: "Token and email are required" });
+    }
+
+    const invitation = await storage.acceptRoleInvitation(token, userEmail);
+    
+    if (!invitation) {
+      return res.status(404).json({ message: "Invalid or expired invitation" });
+    }
+
+    return res.status(200).json({ 
+      message: "Invitation accepted successfully",
+      role: invitation.role,
+      schoolId: invitation.schoolId
+    });
+  } catch (error) {
+    console.error("Accept invitation error:", error);
+    res.status(500).json({ message: "Error accepting invitation" });
+  }
+});
+
 // Password reset request
 router.post("/forgot-password", async (req, res) => {
   try {

@@ -10,7 +10,8 @@ import {
   programs, type Program, type InsertProgram,
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
   classes, type Class, type InsertClass,
-  activities, type Activity, type InsertActivity
+  activities, type Activity, type InsertActivity,
+  roleInvitations, type RoleInvitation, type InsertRoleInvitation
 } from "@shared/schema";
 
 export interface IStorage {

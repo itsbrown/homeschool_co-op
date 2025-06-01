@@ -401,6 +401,29 @@ export const lessonsRelations = relations(lessons, ({ one }) => ({
   curriculum: one(curricula, { fields: [lessons.curriculumId], references: [curricula.id] })
 }));
 
+// Role Invitations table
+export const roleInvitations = pgTable("role_invitations", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  role: text("role", { enum: ["teacher", "schoolAdmin", "admin", "superAdmin"] }).notNull(),
+  invitedBy: integer("invited_by").notNull().references(() => users.id),
+  schoolId: integer("school_id").references(() => schools.id), // Optional - for school-specific roles
+  token: text("token").notNull().unique(), // Unique invitation token
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"), // When invitation was accepted
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertRoleInvitationSchema = createInsertSchema(roleInvitations).omit({ 
+  id: true, 
+  createdAt: true, 
+  token: true,
+  usedAt: true 
+});
+export type InsertRoleInvitation = z.infer<typeof insertRoleInvitationSchema>;
+export type RoleInvitation = typeof roleInvitations.$inferSelect;
+
 // Events table
 export const events = pgTable("events", {
   id: serial("id").primaryKey(),
@@ -417,6 +440,12 @@ export const events = pgTable("events", {
 export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true, organizerId: true });
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
+
+// Define role invitation relations
+export const roleInvitationsRelations = relations(roleInvitations, ({ one }) => ({
+  inviter: one(users, { fields: [roleInvitations.invitedBy], references: [users.id] }),
+  school: one(schools, { fields: [roleInvitations.schoolId], references: [schools.id] })
+}));
 
 // Define event relations
 export const eventsRelations = relations(events, ({ one }) => ({

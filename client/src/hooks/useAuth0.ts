@@ -43,15 +43,16 @@ export function useAuth() {
   };
 
   const getUserRole = (user: any) => {
-    // For Supabase, check user metadata for roles
+    // For Supabase, check user metadata for roles first
     const metadata = user?.user_metadata || user?.app_metadata || {};
     let role = metadata.role || metadata.roles?.[0];
     
-    // Temporary role assignment for known admin emails
+    // Temporary role assignment for known admin email (will be replaced by invitation system)
     if (user?.email === 'coreycreates@gmail.com') {
-      role = 'school-admin';
+      role = 'school_admin';
     }
     
+    // Default to parent role for all users unless they have an invitation
     return role || 'parent';
   };
 
