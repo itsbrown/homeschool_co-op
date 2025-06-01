@@ -117,4 +117,12 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+export const useSupabase = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useSupabase must be used within a SupabaseProvider');
+  }
+  return context;
+};
+
 export { supabase };

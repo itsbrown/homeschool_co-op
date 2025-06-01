@@ -1,35 +1,40 @@
-import { useAuth0 as useAuth0Hook } from '@auth0/auth0-react';
+import { useSupabase } from '../components/SupabaseProvider';
 import { inspectJWT } from '../utils/jwtDebugger';
 
 export function useAuth() {
   const { 
     user, 
-    isAuthenticated, 
+    session,
     isLoading, 
-    loginWithRedirect, 
-    logout, 
-    getAccessTokenSilently,
+    signIn,
+    signOut,
+    signInWithGoogle,
     error 
-  } = useAuth0Hook();
+  } = useSupabase();
+
+  const isAuthenticated = !!user && !!session;
 
   // Debug logging
   console.log('Auth state:', { 
     isAuthenticated, 
     isLoading, 
-    user: user ? { id: user.sub, email: user.email } : null,
+    user: user ? { id: user.id, email: user.email } : null,
     error: error?.message 
   });
 
   // Enhanced token retrieval with inspection
   const getTokenWithInspection = async () => {
     try {
-      console.log('🔍 Requesting access token from Auth0...');
-      const token = await getAccessTokenSilently();
-      console.log('✅ Token received from Auth0');
+      console.log('🔍 Requesting access token from Supabase...');
+      if (!session?.access_token) {
+        throw new Error('No session available');
+      }
+      const token = session.access_token;
+      console.log('✅ Token received from Supabase');
       inspectJWT(token);
       
       // Store token in localStorage for API calls
-      localStorage.setItem('auth0_token', token);
+      localStorage.setItem('supabase_token', token);
       return token;
     } catch (error) {
       console.error('❌ Failed to get access token:', error);
@@ -38,41 +43,27 @@ export function useAuth() {
   };
 
   const getUserRole = (user: any) => {
-    // Check for roles in Auth0 user object
-    // Auth0 roles can be found in different places depending on configuration
-    const roles = user?.[`${import.meta.env.VITE_AUTH0_API_IDENTIFIER}/roles`] || 
-                  user?.['https://asa-platform.com/roles'] ||
-                  user?.roles || 
-                  user?.['app_metadata']?.roles ||
-                  [];
-    
-    // Return the first role found, or default to 'parent'
-    if (Array.isArray(roles) && roles.length > 0) {
-      return roles[0];
-    }
-    
-    // Fallback role detection
-    return user?.['custom:role'] || user?.['app_metadata']?.role || 'parent';
+    // For Supabase, check user metadata for roles
+    const metadata = user?.user_metadata || user?.app_metadata || {};
+    const role = metadata.role || metadata.roles?.[0] || 'parent';
+    return role;
   };
 
   return {
     user: user ? {
-      id: user.sub || '',
-      name: user.name || '',
+      id: user.id || '',
+      name: user.user_metadata?.name || user.email?.split('@')[0] || '',
       email: user.email || '',
       role: getUserRole(user),
-      roles: user?.[`${import.meta.env.VITE_AUTH0_API_IDENTIFIER}/roles`] || 
-             user?.['https://asa-platform.com/roles'] ||
-             user?.roles || 
-             user?.['app_metadata']?.roles || 
-             [],
-      avatar: user.picture,
-      subscription: user['app_metadata']?.subscription || 'free'
+      roles: user.user_metadata?.roles || user.app_metadata?.roles || [],
+      avatar: user.user_metadata?.avatar || user.user_metadata?.picture,
+      subscription: user.user_metadata?.subscription || 'free'
     } : null,
     isAuthenticated,
     isLoading,
-    login: () => loginWithRedirect(),
-    logout: () => logout({ logoutParams: { returnTo: window.location.origin } }),
+    login: (email: string, password: string) => signIn(email, password),
+    logout: () => signOut(),
+    signInWithGoogle,
     getAccessTokenSilently: getTokenWithInspection,
     inspectCurrentToken: async () => {
       try {
