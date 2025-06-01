@@ -89,53 +89,55 @@ router.get("/my-school", async (req, res) => {
 
     console.log('✅ Authenticated user:', user.email);
 
-    // Use file-based storage as temporary workaround for database issues
-    const schoolFilePath = path.join(process.cwd(), 'data', 'school-data.json');
-    
+    // Use admin client to query the schools table with service role permissions
+    const { supabaseAdmin } = await import('../db/supabase');
+
+    console.log('🔍 Attempting to query database...');
+
     try {
-      // Check if school data file exists
-      if (fs.existsSync(schoolFilePath)) {
-        const schoolData = JSON.parse(fs.readFileSync(schoolFilePath, 'utf8'));
-        console.log('🚀 Returning school data from file:', schoolData.name);
-        return res.json(schoolData);
-      } else {
-        // Create default school data for the authenticated user
-        const defaultSchoolData = {
-          id: 1,
-          name: 'American Seekers Academy',
-          type: 'Private Academy',
-          address: '123 Education Lane',
-          city: 'Rochester',
-          state: 'NY',
-          zip_code: '14620',
-          phone_number: '',
-          email: user.email,
-          website: '',
-          description: '',
-          founded_year: null,
-          accreditation: '',
-          enrollment_size: null,
-          created_by: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
+      // Query the public.accounts table to get user data
+      console.log('🔍 Querying public.accounts for email:', user.email);
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from('accounts')
+        .select('id')
+        .eq('firebase_uid', user.id)
+        .eq('role', 'school_admin')
+        .single();
 
-        // Create data directory if it doesn't exist
-        const dataDir = path.dirname(schoolFilePath);
-        if (!fs.existsSync(dataDir)) {
-          fs.mkdirSync(dataDir, { recursive: true });
-        }
-
-        // Save default data
-        fs.writeFileSync(schoolFilePath, JSON.stringify(defaultSchoolData, null, 2));
-        console.log('🚀 Created and returned default school data');
-        return res.json(defaultSchoolData);
+      if (userError || !userData) {
+        console.error('User lookup error:', userError?.message);
+        return res.status(404).json({ 
+          message: "School admin user not found",
+          error: userError?.message
+        });
       }
-    } catch (fileError) {
-      console.error('File storage error:', fileError);
+
+      console.log('✅ Found user ID:', userData.id);
+
+      // Query the public.schools table
+      console.log('🔍 Querying public.schools for created_by:', userData.id);
+      const { data: schoolData, error: schoolError } = await supabaseAdmin
+        .from('schools')
+        .select('*')
+        .eq('created_by', userData.id)
+        .single();
+
+      if (schoolError || !schoolData) {
+        console.error('School lookup error:', schoolError?.message);
+        return res.status(404).json({ 
+          message: "No school found for this administrator",
+          error: schoolError?.message
+        });
+      }
+
+      console.log('🚀 Returning school data from database:', schoolData.name);
+      res.json(schoolData);
+
+    } catch (error) {
+      console.error('Database access error:', error);
       return res.status(500).json({ 
-        message: "Unable to access school data storage",
-        error: fileError instanceof Error ? fileError.message : 'Unknown error'
+        message: "Unable to connect to database. Please verify your Supabase credentials.",
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   } catch (error) {
