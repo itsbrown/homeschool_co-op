@@ -172,9 +172,9 @@ function Router() {
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
-        <Route path="/" component={EmbeddedLogin} />
+        <Route path="/" component={SupabaseLogin} />
       )}
-      <Route path="/login" component={EmbeddedLogin} />
+      <Route path="/login" component={SupabaseLogin} />
       <Route path="/auth0-login" component={DirectAuth0Login} />
       <Route path="/embedded-login" component={EmbeddedLogin} />
       <Route path="/old-login" component={Login} />
@@ -264,24 +264,14 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Auth0Provider
-        domain={import.meta.env.VITE_AUTH0_DOMAIN}
-        clientId={import.meta.env.VITE_AUTH0_CLIENT_ID}
-        authorizationParams={{
-          redirect_uri: `${window.location.origin}/`,
-          audience: import.meta.env.VITE_AUTH0_API_IDENTIFIER,
-          scope: "openid profile email read:current_user"
-        }}
-        useRefreshTokens={true}
-        cacheLocation="localstorage"
-      >
+      <SupabaseProvider>
         <AIStatusProvider>
           <TooltipProvider>
             <Toaster />
             <Router />
           </TooltipProvider>
         </AIStatusProvider>
-      </Auth0Provider>
+      </SupabaseProvider>
     </QueryClientProvider>
   );
 }

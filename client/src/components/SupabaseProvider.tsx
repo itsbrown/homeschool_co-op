@@ -40,6 +40,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     // Get initial session
@@ -95,6 +96,8 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
     user,
     session,
     isLoading,
+    isAuthenticated: !!user,
+    error,
     signIn,
     signUp,
     signOut,
