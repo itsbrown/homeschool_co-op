@@ -1,0 +1,769 @@
+-- ASA Platform Database Setup Script (Updated for Public Schema, Simplified RLS)
+    -- Moves all tables to the public schema to avoid Supabase client limitations
+    -- Removes subqueries from RLS policies to comply with Supabase SQL parser limitations
+
+    -- Drop existing schemas and functions to start fresh
+    DROP SCHEMA IF EXISTS public CASCADE;
+    DROP SCHEMA IF EXISTS users CASCADE;
+    DROP SCHEMA IF EXISTS schools CASCADE;
+    DROP SCHEMA IF EXISTS knowledge_base CASCADE;
+    DROP SCHEMA IF EXISTS analytics CASCADE;
+    DROP SCHEMA IF EXISTS mentors CASCADE;
+    DROP SCHEMA IF EXISTS finance CASCADE;
+    DROP SCHEMA IF EXISTS lessons CASCADE;
+    DROP SCHEMA IF EXISTS curriculum CASCADE;
+    DROP SCHEMA IF EXISTS marketplace CASCADE;
+    DROP SCHEMA IF EXISTS payments CASCADE;
+    DROP SCHEMA IF EXISTS ai CASCADE;
+    DROP SCHEMA IF EXISTS messaging CASCADE;
+    DROP SCHEMA IF EXISTS notifications CASCADE;
+    DROP SCHEMA IF EXISTS certifications CASCADE;
+    DROP SCHEMA IF EXISTS websites CASCADE;
+    DROP SCHEMA IF EXISTS calendar CASCADE;
+    DROP FUNCTION IF EXISTS update_updated_at_column;
+    DROP FUNCTION IF EXISTS public.log_rls_error;
+
+    -- Recreate public schema
+    CREATE SCHEMA IF NOT EXISTS public;
+
+    -- Create a function to update the updated_at column
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Create a table for logging RLS policy errors
+    CREATE TABLE public.rls_errors (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        error_message TEXT NOT NULL,
+        context TEXT, -- e.g., table and policy name
+        user_id TEXT, -- firebase_uid from auth.uid()
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Create a function to log RLS errors
+    CREATE OR REPLACE FUNCTION public.log_rls_error(error_msg TEXT, context TEXT)
+    RETURNS void AS $$
+    BEGIN
+        INSERT INTO public.rls_errors (error_message, context, user_id, created_at)
+        VALUES (error_msg, context, (SELECT auth.uid()::text), NOW());
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Create tables in the public schema (previously in users schema)
+    CREATE TABLE public.accounts (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        firebase_uid VARCHAR(128) UNIQUE NOT NULL, -- Links to Supabase Auth user
+        email VARCHAR(255) UNIQUE NOT NULL CHECK (email ~* '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'),
+        role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin', 'admin', 'school_admin', 'teacher', 'parent', 'student')),
+        parent_id BIGINT, -- For students, links to parent user; set to NULL if parent is deleted
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (parent_id) REFERENCES public.accounts(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_accounts_updated_at
+        BEFORE UPDATE ON public.accounts
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in schools schema)
+    CREATE TABLE public.schools (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        address TEXT,
+        created_by BIGINT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (created_by) REFERENCES public.accounts(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_schools_updated_at
+        BEFORE UPDATE ON public.schools
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.classes (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        school_id BIGINT NOT NULL,
+        program_type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        target_age VARCHAR(50),
+        capacity INTEGER NOT NULL CHECK (capacity > 0),
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        days_of_week VARCHAR(50)[] NOT NULL,
+        time_of_day VARCHAR(50),
+        pricing_model JSONB NOT NULL,
+        enrollment_count INTEGER DEFAULT 0 CHECK (enrollment_count >= 0 AND enrollment_count <= capacity),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (school_id) REFERENCES public.schools(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_classes_updated_at
+        BEFORE UPDATE ON public.classes
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.enrollments (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        class_id BIGINT NOT NULL,
+        student_id BIGINT NOT NULL,
+        enrolled_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
+        FOREIGN KEY (student_id) REFERENCES public.accounts(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_enrollments_updated_at
+        BEFORE UPDATE ON public.enrollments
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in knowledge_base schema)
+    CREATE TABLE public.resources (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        subject VARCHAR(100),
+        difficulty VARCHAR(50),
+        content TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TRIGGER update_resources_updated_at
+        BEFORE UPDATE ON public.resources
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in mentors schema)
+    CREATE TABLE public.mentors (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL CHECK (email ~* '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'),
+        certification_level VARCHAR(20) CHECK (certification_level IN ('foundations', 'practitioner', 'master')),
+        training_progress JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TRIGGER update_mentors_updated_at
+        BEFORE UPDATE ON public.mentors
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.schedules (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        mentor_id BIGINT NOT NULL,
+        class_id BIGINT NOT NULL,
+        scheduled_date DATE NOT NULL,
+        hours INTEGER NOT NULL CHECK (hours > 0),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (mentor_id) REFERENCES public.mentors(id) ON DELETE CASCADE,
+        FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_schedules_updated_at
+        BEFORE UPDATE ON public.schedules
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in analytics schema)
+    CREATE TABLE public.student_progress (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        student_id BIGINT NOT NULL,
+        class_id BIGINT NOT NULL,
+        progress_data JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (student_id) REFERENCES public.accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_student_progress_updated_at
+        BEFORE UPDATE ON public.student_progress
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.feedback (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        class_id BIGINT,
+        feedback_text TEXT NOT NULL,
+        sentiment VARCHAR(20),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES public.accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_feedback_updated_at
+        BEFORE UPDATE ON public.feedback
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in finance schema)
+    CREATE TABLE public.subscriptions (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        plan_type VARCHAR(20) NOT NULL CHECK (plan_type IN ('free', 'educator', 'school', 'enterprise')),
+        amount_in_cents INTEGER NOT NULL CHECK (amount_in_cents >= 0),
+        start_date TIMESTAMPTZ NOT NULL,
+        end_date TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES public.accounts(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_subscriptions_updated_at
+        BEFORE UPDATE ON public.subscriptions
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.mentor_payments (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        mentor_id BIGINT NOT NULL,
+        amount_in_cents INTEGER NOT NULL CHECK (amount_in_cents >= 0),
+        payment_date TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (mentor_id) REFERENCES public.mentors(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_mentor_payments_updated_at
+        BEFORE UPDATE ON public.mentor_payments
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in lessons schema)
+    CREATE TABLE public.lessons (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        class_id BIGINT NOT NULL,
+        created_by BIGINT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        objectives TEXT[],
+        grade_level VARCHAR(50),
+        lesson_content JSONB,
+        ai_metadata JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES public.accounts(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_lessons_updated_at
+        BEFORE UPDATE ON public.lessons
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.lesson_resources (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        lesson_id BIGINT NOT NULL,
+        resource_id BIGINT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (lesson_id) REFERENCES public.lessons(id) ON DELETE CASCADE,
+        FOREIGN KEY (resource_id) REFERENCES public.resources(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_lesson_resources_updated_at
+        BEFORE UPDATE ON public.lesson_resources
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in curriculum schema)
+    CREATE TABLE public.curricula (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        class_id BIGINT NOT NULL,
+        created_by BIGINT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        grade_level VARCHAR(50),
+        duration_weeks INTEGER NOT NULL CHECK (duration_weeks > 0),
+        ai_metadata JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES public.accounts(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_curricula_updated_at
+        BEFORE UPDATE ON public.curricula
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.curriculum_lessons (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        curriculum_id BIGINT NOT NULL,
+        lesson_id BIGINT NOT NULL,
+        sequence_order INTEGER NOT NULL CHECK (sequence_order > 0),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (curriculum_id) REFERENCES public.curricula(id) ON DELETE CASCADE,
+        FOREIGN KEY (lesson_id) REFERENCES public.lessons(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_curriculum_lessons_updated_at
+        BEFORE UPDATE ON public.curriculum_lessons
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in marketplace schema)
+    CREATE TABLE public.listings (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        creator_id BIGINT NOT NULL,
+        content_type VARCHAR(20) NOT NULL CHECK (content_type IN ('lesson', 'curriculum', 'worksheet')),
+        resource_id BIGINT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        price_in_cents INTEGER NOT NULL CHECK (price_in_cents >= 0),
+        status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'sold')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (creator_id) REFERENCES public.accounts(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_listings_updated_at
+        BEFORE UPDATE ON public.listings
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.transactions (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        listing_id BIGINT NOT NULL,
+        buyer_id BIGINT NOT NULL,
+        seller_id BIGINT NOT NULL,
+        amount_in_cents INTEGER NOT NULL CHECK (amount_in_cents >= 0),
+        commission_in_cents INTEGER NOT NULL CHECK (commission_in_cents >= 0),
+        transaction_date TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (listing_id) REFERENCES public.listings(id) ON DELETE CASCADE,
+        FOREIGN KEY (buyer_id) REFERENCES public.accounts(id) ON DELETE SET NULL,
+        FOREIGN KEY (seller_id) REFERENCES public.accounts(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_transactions_updated_at
+        BEFORE UPDATE ON public.transactions
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in payments schema)
+    CREATE TABLE public.payment_history (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        payment_type VARCHAR(20) NOT NULL CHECK (payment_type IN ('subscription', 'marketplace', 'school_fee')),
+        payment_source_id BIGINT NOT NULL,
+        amount_in_cents INTEGER NOT NULL CHECK (amount_in_cents >= 0),
+        stripe_transaction_id VARCHAR(255),
+        payment_date TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES public.accounts(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_payment_history_updated_at
+        BEFORE UPDATE ON public.payment_history
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in ai schema)
+    CREATE TABLE public.prompts (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        prompt_type VARCHAR(20) NOT NULL CHECK (prompt_type IN ('lesson', 'worksheet', 'curriculum', 'enrollment')),
+        title VARCHAR(255) NOT NULL,
+        prompt_text TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TRIGGER update_prompts_updated_at
+        BEFORE UPDATE ON public.prompts
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.logs (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        operation_type VARCHAR(50) NOT NULL CHECK (operation_type IN ('generation', 'sentiment_analysis', 'ocr', 'recommendation')),
+        request_data JSONB,
+        response_data JSONB,
+        model_version VARCHAR(50),
+        api_provider VARCHAR(50),
+        execution_time_ms INTEGER,
+        error_message TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TRIGGER update_logs_updated_at
+        BEFORE UPDATE ON public.logs
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in messaging schema)
+    CREATE TABLE public.conversations (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        participant1_id BIGINT NOT NULL,
+        participant2_id BIGINT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (participant1_id) REFERENCES public.accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (participant2_id) REFERENCES public.accounts(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_conversations_updated_at
+        BEFORE UPDATE ON public.conversations
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.messages (
+        id BIGINT GENERATED ALWAYS AS IDENTITY,
+        conversation_id BIGINT NOT NULL,
+        sender_id BIGINT NOT NULL,
+        recipient_id BIGINT NOT NULL,
+        content TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'read')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES public.accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipient_id) REFERENCES public.accounts(id) ON DELETE CASCADE
+    ) PARTITION BY RANGE (created_at);
+
+    CREATE TABLE public.messages_2025 PARTITION OF public.messages
+        FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+    CREATE TABLE public.messages_2026 PARTITION OF public.messages
+        FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+
+    CREATE TRIGGER update_messages_updated_at
+        BEFORE UPDATE ON public.messages
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in notifications schema)
+    CREATE TABLE public.notifications (
+        id BIGINT GENERATED ALWAYS AS IDENTITY,
+        user_id BIGINT NOT NULL,
+        notification_type VARCHAR(50) NOT NULL CHECK (notification_type IN ('class_update', 'new_assignment', 'feedback_received', 'message_received', 'event_reminder')),
+        message TEXT NOT NULL,
+        related_entity_type VARCHAR(50),
+        related_entity_id BIGINT,
+        status VARCHAR(20) NOT NULL DEFAULT 'unread' CHECK (status IN ('unread', 'read', 'dismissed')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES public.accounts(id) ON DELETE CASCADE
+    ) PARTITION BY RANGE (created_at);
+
+    CREATE TABLE public.notifications_2025 PARTITION OF public.notifications
+        FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+    CREATE TABLE public.notifications_2026 PARTITION OF public.notifications
+        FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+
+    CREATE TRIGGER update_notifications_updated_at
+        BEFORE UPDATE ON public.notifications
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in certifications schema)
+    CREATE TABLE public.certifications (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        certification_type VARCHAR(50) NOT NULL CHECK (certification_type IN ('mentor', 'student_badge', 'teacher_training')),
+        certification_level VARCHAR(50),
+        blockchain_tx_hash VARCHAR(255),
+        blockchain_network VARCHAR(50),
+        issued_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES public.accounts(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_certifications_updated_at
+        BEFORE UPDATE ON public.certifications
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in websites schema)
+    CREATE TABLE public.sites (
+        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        school_id BIGINT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) UNIQUE NOT NULL,
+        logo_url VARCHAR(255),
+        customization JSONB,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (school_id) REFERENCES public.schools(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_sites_updated_at
+        BEFORE UPDATE ON public.sites
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.pages (
+        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        site_id INTEGER NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        is_homepage BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (site_id) REFERENCES public.sites(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_pages_updated_at
+        BEFORE UPDATE ON public.pages
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.posts (
+        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        site_id INTEGER NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        published_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (site_id) REFERENCES public.sites(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_posts_updated_at
+        BEFORE UPDATE ON public.posts
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create tables in the public schema (previously in calendar schema)
+    CREATE TABLE public.events (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        school_id BIGINT,
+        created_by BIGINT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        start_datetime TIMESTAMPTZ NOT NULL,
+        end_datetime TIMESTAMPTZ NOT NULL CHECK (end_datetime > start_datetime),
+        location VARCHAR(255),
+        recurrence_rule VARCHAR(255),
+        status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'cancelled', 'completed')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (school_id) REFERENCES public.schools(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES public.accounts(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_events_updated_at
+        BEFORE UPDATE ON public.events
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TABLE public.event_participants (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        event_id BIGINT NOT NULL,
+        user_id BIGINT NOT NULL,
+        role VARCHAR(20) NOT NULL CHECK (role IN ('organizer', 'attendee')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES public.accounts(id) ON DELETE CASCADE
+    );
+
+    CREATE TRIGGER update_event_participants_updated_at
+        BEFORE UPDATE ON public.event_participants
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create audit log table in the public schema
+    CREATE TABLE public.audit_logs (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        user_id BIGINT,
+        action VARCHAR(50) NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id BIGINT NOT NULL,
+        details JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES public.accounts(id) ON DELETE SET NULL
+    );
+
+    CREATE TRIGGER update_audit_logs_updated_at
+        BEFORE UPDATE ON public.audit_logs
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    -- Enable RLS on all tables
+    ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.schools ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.student_progress ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.mentors ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.mentor_payments ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.lesson_resources ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.curricula ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.curriculum_lessons ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.listings ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.payment_history ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.prompts ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.logs ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.certifications ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.sites ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.pages ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.event_participants ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.rls_errors ENABLE ROW LEVEL SECURITY;
+
+    -- Create indexes for performance
+    CREATE INDEX idx_accounts_firebase_uid ON public.accounts(firebase_uid);
+    CREATE INDEX idx_accounts_parent_id ON public.accounts(parent_id);
+    CREATE INDEX idx_schools_created_by ON public.schools(created_by);
+    CREATE INDEX idx_classes_school_id ON public.classes(school_id);
+    CREATE INDEX idx_enrollments_class_id ON public.enrollments(class_id);
+    CREATE INDEX idx_enrollments_student_id ON public.enrollments(student_id);
+    CREATE INDEX idx_resources_subject ON public.resources(subject);
+    CREATE INDEX idx_student_progress_student_id ON public.student_progress(student_id);
+    CREATE INDEX idx_student_progress_class_id ON public.student_progress(class_id);
+    CREATE INDEX idx_feedback_user_id ON public.feedback(user_id);
+    CREATE INDEX idx_feedback_class_id ON public.feedback(class_id);
+    CREATE INDEX idx_mentors_email ON public.mentors(email);
+    CREATE INDEX idx_schedules_mentor_id ON public.schedules(mentor_id);
+    CREATE INDEX idx_schedules_class_id ON public.schedules(class_id);
+    CREATE INDEX idx_subscriptions_user_id ON public.subscriptions(user_id);
+    CREATE INDEX idx_mentor_payments_mentor_id ON public.mentor_payments(mentor_id);
+    CREATE INDEX idx_lessons_class_id ON public.lessons(class_id);
+    CREATE INDEX idx_lessons_created_by ON public.lessons(created_by);
+    CREATE INDEX idx_lesson_resources_lesson_id ON public.lesson_resources(lesson_id);
+    CREATE INDEX idx_lesson_resources_resource_id ON public.lesson_resources(resource_id);
+    CREATE INDEX idx_curricula_class_id ON public.curricula(class_id);
+    CREATE INDEX idx_curricula_created_by ON public.curricula(created_by);
+    CREATE INDEX idx_curriculum_lessons_curriculum_id ON public.curriculum_lessons(curriculum_id);
+    CREATE INDEX idx_curriculum_lessons_lesson_id ON public.curriculum_lessons(lesson_id);
+    CREATE INDEX idx_listings_creator_id ON public.listings(creator_id);
+    CREATE INDEX idx_listings_resource_id ON public.listings(resource_id);
+    CREATE INDEX idx_transactions_listing_id ON public.transactions(listing_id);
+    CREATE INDEX idx_transactions_buyer_id ON public.transactions(buyer_id);
+    CREATE INDEX idx_transactions_seller_id ON public.transactions(seller_id);
+    CREATE INDEX idx_payment_history_user_id ON public.payment_history(user_id);
+    CREATE INDEX idx_prompts_prompt_type ON public.prompts(prompt_type);
+    CREATE INDEX idx_logs_operation_type ON public.logs(operation_type);
+    CREATE INDEX idx_logs_created_at ON public.logs(created_at);
+    CREATE INDEX idx_conversations_participant1_id ON public.conversations(participant1_id);
+    CREATE INDEX idx_conversations_participant2_id ON public.conversations(participant2_id);
+    CREATE INDEX idx_messages_conversation_id ON public.messages(conversation_id);
+    CREATE INDEX idx_messages_sender_id ON public.messages(sender_id);
+    CREATE INDEX idx_messages_recipient_id ON public.messages(recipient_id);
+    CREATE INDEX idx_notifications_user_id ON public.notifications(user_id);
+    CREATE INDEX idx_notifications_created_at ON public.notifications(created_at);
+    CREATE INDEX idx_certifications_user_id ON public.certifications(user_id);
+    CREATE INDEX idx_sites_school_id ON public.sites(school_id);
+    CREATE INDEX idx_pages_site_id ON public.pages(site_id);
+    CREATE INDEX idx_posts_site_id ON public.posts(site_id);
+    CREATE INDEX idx_events_school_id ON public.events(school_id);
+    CREATE INDEX idx_events_created_by ON public.events(created_by);
+    CREATE INDEX idx_events_start_datetime ON public.events(start_datetime);
+    CREATE INDEX idx_event_participants_event_id ON public.event_participants(event_id);
+    CREATE INDEX idx_event_participants_user_id ON public.event_participants(user_id);
+    CREATE INDEX idx_audit_logs_user_id ON public.audit_logs(user_id);
+    CREATE INDEX idx_audit_logs_created_at ON public.audit_logs(created_at);
+
+    -- Insert initial data
+    INSERT INTO public.accounts (firebase_uid, email, role)
+    VALUES ('firebase-uid-1', 'admin@asa.org', 'super_admin');
+
+    INSERT INTO public.accounts (firebase_uid, email, role)
+    VALUES ('firebase-uid-2', 'schooladmin@asa.org', 'school_admin');
+
+    INSERT INTO public.accounts (firebase_uid, email, role)
+    VALUES ('firebase-uid-3', 'parent@asa.org', 'parent');
+
+    INSERT INTO public.accounts (firebase_uid, email, role, parent_id)
+    VALUES ('firebase-uid-4', 'student@asa.org', 'student', 3);
+
+    INSERT INTO public.schools (name, address, created_by)
+    VALUES ('American Seekers Academy', 'Monroe County, NY', 2);
+
+    INSERT INTO public.classes (school_id, program_type, title, description, target_age, capacity, start_date, end_date, days_of_week, time_of_day, pricing_model)
+    VALUES (1, 'class', 'Tycoons Class', 'A 10-week session for ages 6-7', 'Ages 6-7', 20, '2025-04-07', '2025-06-13', ARRAY['Monday', 'Wednesday', 'Friday'], '09:00-12:00', '{"type": "flat", "price": 15000, "inCents": true}');
+
+    INSERT INTO public.enrollments (class_id, student_id)
+    VALUES (1, 4);
+
+    INSERT INTO public.resources (title, description, subject, difficulty, content)
+    VALUES ('Liberty Bell History', 'A brief history of the Liberty Bell', 'History', 'easy', 'The Liberty Bell is an iconic symbol of American independence...');
+
+    INSERT INTO public.lessons (class_id, created_by, title, description, objectives, grade_level, lesson_content, ai_metadata)
+    VALUES (1, 1, 'Introduction to Latin Vocabulary', 'Learn basic Latin words for ages 6-7', ARRAY['Learn 10 Latin words', 'Practice pronunciation'], 'Grade 1', '{"text": "Lesson content", "activities": ["Flashcards", "Pronunciation practice"]}', '{"model_version": "T5-small", "confidence_score": 0.95, "generated_at": "2025-05-31"}');
+
+    INSERT INTO public.lesson_resources (lesson_id, resource_id)
+    VALUES (1, 1);
+
+    INSERT INTO public.curricula (class_id, created_by, title, description, grade_level, duration_weeks, ai_metadata)
+    VALUES (1, 1, 'Tycoons Spring Curriculum', '10-week curriculum covering phonics and Latin', 'Grade 1', 10, '{"model_version": "T5-small", "confidence_score": 0.92, "generated_at": "2025-05-31"}');
+
+    INSERT INTO public.curriculum_lessons (curriculum_id, lesson_id, sequence_order)
+    VALUES (1, 1, 1);
+
+    INSERT INTO public.listings (creator_id, content_type, resource_id, title, description, price_in_cents, status)
+    VALUES (1, 'lesson', 1, 'Introduction to Latin Vocabulary', 'A lesson plan for ages 6-7', 500, 'active');
+
+    INSERT INTO public.prompts (prompt_type, title, prompt_text, version)
+    VALUES ('lesson', 'Latin Vocabulary Lesson for Young Learners', 'Generate a Latin vocabulary lesson for ages 6-7, including 10 words and pronunciation practice.', 1);
+
+    INSERT INTO public.conversations (participant1_id, participant2_id)
+    VALUES (1, 3);
+
+    INSERT INTO public.messages (conversation_id, sender_id, recipient_id, content, status)
+    VALUES (1, 1, 3, 'How is your child doing in Tycoons class?', 'sent');
+
+    INSERT INTO public.notifications (user_id, notification_type, message, related_entity_type, related_entity_id, status)
+    VALUES (3, 'message_received', 'You have a new message from an admin.', 'message', 1, 'unread');
+
+    INSERT INTO public.certifications (user_id, certification_type, certification_level, blockchain_tx_hash, blockchain_network)
+    VALUES (3, 'mentor', 'foundations', '0x123abc...', 'Polygon');
+
+    INSERT INTO public.sites (school_id, title, slug, logo_url, customization, status)
+    VALUES (1, 'American Seekers Academy', 'asa-monroe', 'https://storage.supabase.com/logos/asa-logo.png', '{"theme": {"primary_color": "#FF0000", "layout": "modern"}}', 'published');
+
+    INSERT INTO public.pages (site_id, title, slug, content, is_homepage)
+    VALUES (1, 'Welcome to ASA', 'home', '<h1>Welcome to American Seekers Academy</h1><p>We offer classical education for homeschoolers.</p>', true);
+
+    INSERT INTO public.posts (site_id, title, slug, content, published_at)
+    VALUES (1, 'Tycoons Class Field Trip', 'tycoons-field-trip', '<h1>Field Trip Announcement</h1><p>Join us for a field trip on June 10th!</p>', '2025-06-01');
+
+    INSERT INTO public.events (school_id, created_by, title, description, start_datetime, end_datetime, location, recurrence_rule, status)
+    VALUES (1, 1, 'ASA Field Trip', 'A field trip for all students to Monroe County Park', '2025-06-10T09:00:00Z', '2025-06-10T15:00:00Z', 'Monroe County Park', NULL, 'scheduled');
+
+    INSERT INTO public.event_participants (event_id, user_id, role)
+    VALUES (1, 3, 'attendee');
+
+    INSERT INTO public.notifications (user_id, notification_type, message, related_entity_type, related_entity_id, status)
+    VALUES (3, 'event_reminder', 'Reminder: ASA Field Trip on June 10th at 9:00 AM', 'event', 1, 'unread');
+
+    INSERT INTO public.audit_logs (user_id, action, entity_type, entity_id, details)
+    VALUES (1, 'create', 'site', 1, '{"title": "American Seekers Academy"}');
+
+    INSERT INTO public.audit_logs (user_id, action, entity_type, entity_id, details)
+    VALUES (1, 'create', 'event', 1, '{"title": "ASA Field Trip"}');
+
+    -- End of script (RLS policies will be added separately)
