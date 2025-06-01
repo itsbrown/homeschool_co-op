@@ -33,7 +33,7 @@ function generateInvitationToken(): string {
 // Send role invitation email via SendGrid
 async function sendRoleInvitationEmail(email: string, role: string, token: string): Promise<boolean> {
   try {
-    const invitationUrl = `${process.env.REPLIT_DOMAIN || 'https://localhost:5000'}/accept-invitation?token=${token}`;
+    const invitationUrl = `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.replit.dev/accept-invitation?token=${token}`;
     
     const msg = {
       to: email,
