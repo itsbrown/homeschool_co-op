@@ -48,6 +48,7 @@ const navItems = [
   { name: 'AI Tools', href: '/admin/ai-tools', icon: <BookOpenCheck className="h-5 w-5" /> },
   { name: 'Platform Overview', href: '/admin/features', icon: <FileText className="h-5 w-5" /> },
   { name: 'Roles & Permissions', href: '/admin/roles', icon: <Shield className="h-5 w-5" /> },
+  { name: 'Role Management', href: '/admin/role-management', icon: <Users className="h-5 w-5" /> },
   { name: 'Settings', href: '/admin/settings', icon: <Settings className="h-5 w-5" /> },
 ];
 
