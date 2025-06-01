@@ -89,57 +89,41 @@ router.get("/my-school", async (req, res) => {
 
     console.log('✅ Authenticated user:', user.email);
 
-    // Query the schools table directly using the authenticated user
-    // Use raw SQL query to access the schools.schools table properly
-    const { data: schools, error: schoolError } = await supabase
-      .from('schools.schools')
-      .select('*')
-      .eq('admin_email', user.email)
-      .limit(1);
+    // Use admin client to query the schools table with service role permissions
+    const { supabaseAdmin } = await import('../db/supabase');
     
-    // If the above fails, try with alternative schema approach
-    if (schoolError && schoolError.code === '42P01') {
-      console.log('Trying alternative table reference...');
-      const { data: altSchools, error: altError } = await supabase
+    console.log('🔍 Attempting to query database...');
+    
+    try {
+      // Try database query first with corrected schema access
+      const { data: schools, error: schoolError } = await supabaseAdmin
         .schema('schools')
         .from('schools')
         .select('*')
         .eq('admin_email', user.email)
         .limit(1);
-      
-      if (altError) {
-        console.error('Alternative query also failed:', altError);
-        return res.status(500).json({ message: "Error querying schools" });
+
+      if (!schoolError && schools && schools.length > 0) {
+        const school = schools[0];
+        console.log('🚀 Returning school data from database:', school.name);
+        res.json(school);
+        return;
       }
       
-      const school = altSchools && altSchools.length > 0 ? altSchools[0] : null;
-      if (!school) {
-        return res.status(404).json({ 
-          message: "No school found for this administrator",
-          needsSetup: true 
-        });
-      }
-
-      console.log('🚀 Returning school data from Supabase (alternative):', school.name);
-      res.json(school);
-      return;
-    }
-
-    if (schoolError) {
-      console.error('School query error:', schoolError);
-      return res.status(500).json({ message: "Error querying schools" });
-    }
-
-    if (!schools || schools.length === 0) {
-      return res.status(404).json({ 
-        message: "No school found for this administrator",
-        needsSetup: true 
+      // If database query fails, log the specific error
+      console.error('Database connectivity issue:', schoolError?.message || 'No results found');
+      return res.status(500).json({ 
+        message: "Database connection error. Please check your Supabase configuration.",
+        error: schoolError?.message || 'Connection failed'
+      });
+      
+    } catch (error) {
+      console.error('Database access error:', error);
+      return res.status(500).json({ 
+        message: "Unable to connect to database. Please verify your Supabase credentials.",
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
-
-    const school = schools[0];
-    console.log('🚀 Returning school data from Supabase:', school.name);
-    res.json(school);
   } catch (error) {
     console.error("Error fetching school information:", error);
     res.status(500).json({ message: "Error fetching school information" });

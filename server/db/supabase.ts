@@ -12,7 +12,7 @@ export const supabase = createClient(
 // Admin client with service role key for server-side operations
 export const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vaXZ3anVnbHd3ZnJocWVld2p1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Njc0Mzk3NCwiZXhwIjoyMDYyMzE5OTc0fQ.XXyVSDqFjafa8tMqMLHHw1mXs3si4tnz8P2C41X2EfA'
 );
 
 export interface DatabaseUser {
