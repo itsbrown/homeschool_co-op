@@ -174,6 +174,52 @@ export class SupabaseStorage implements IStorage {
     return data || [];
   }
 
+  // School management methods
+  async getSchoolById(id: number): Promise<any | undefined> {
+    const { data, error } = await supabase
+      .from('schools')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching school by id:', error);
+      return undefined;
+    }
+    
+    return data;
+  }
+
+  async updateSchool(id: number, schoolData: any): Promise<any | undefined> {
+    const { data, error } = await supabase
+      .from('schools')
+      .update(schoolData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating school:', error);
+      return undefined;
+    }
+    
+    return data;
+  }
+
+  async getSchoolsByAdminId(adminId: number): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('schools')
+      .select('*')
+      .eq('adminId', adminId);
+    
+    if (error) {
+      console.error('Error fetching schools by admin id:', error);
+      return [];
+    }
+    
+    return data || [];
+  }
+
   // Stub implementations for other storage methods - implement as needed
   async getAllCurricula(): Promise<any[]> { return []; }
   async getAllKnowledgeBases(): Promise<any[]> { return []; }
