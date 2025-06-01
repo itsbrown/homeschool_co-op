@@ -94,8 +94,3 @@ app.use((err: any, req: any, res: any, next: any) => {
   res.status(500).json({ message: "Internal server error", error: err.message });
 });
 
-// Catch-all for unmatched routes
-app.use((req: any, res: any, next: any) => {
-  console.log(`❌ Unmatched route: ${req.method} ${req.url}`);
-  res.status(404).json({ message: "Route not found" });
-});

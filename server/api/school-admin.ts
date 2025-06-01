@@ -95,37 +95,27 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
 
     try {
-      // First get the user ID from users.accounts table using service role
-      const { data: userData, error: userError } = await supabaseAdmin
-        .from('users.accounts')
-        .select('id')
-        .eq('email', user.email)
-        .eq('role', 'school_admin')
-        .single();
+      // Use database function to get school data
+      const { data: result, error } = await supabaseAdmin
+        .rpc('get_school_admin_data', { admin_email: user.email });
 
-      if (userError || !userData) {
-        console.error('User lookup error:', userError?.message);
-        return res.status(404).json({ 
-          message: "School admin user not found"
+      if (error) {
+        console.error('Database function error:', error.message);
+        return res.status(500).json({ 
+          message: "Database query failed",
+          error: error.message
         });
       }
 
-      // Then get the school using the user ID
-      const { data: schoolData, error: schoolError } = await supabaseAdmin
-        .from('schools.schools')
-        .select('*')
-        .eq('created_by', userData.id)
-        .single();
-
-      if (schoolError || !schoolData) {
-        console.error('School lookup error:', schoolError?.message);
+      if (!result || !result.school) {
+        console.error('No school found for admin:', user.email);
         return res.status(404).json({ 
           message: "No school found for this administrator"
         });
       }
 
-      console.log('🚀 Returning school data from database:', schoolData.name);
-      res.json(schoolData);
+      console.log('🚀 Returning school data from database:', result.school.name);
+      res.json(result.school);
 
     } catch (error) {
       console.error('Database access error:', error);
@@ -141,7 +131,6 @@ router.get("/my-school", async (req, res) => {
 });
 
 // Create initial school setup for a new admin
-const pool = require('../db/pgClient');
 
 async function setupSchool(req: any, res: any) {
   let client;
