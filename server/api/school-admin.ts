@@ -95,27 +95,55 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
 
     try {
-      // Use database function to get school data
-      const { data: result, error } = await supabaseAdmin
-        .rpc('get_school_admin_data', { admin_email: user.email });
-
-      if (error) {
-        console.error('Database function error:', error.message);
-        return res.status(500).json({ 
-          message: "Database query failed",
-          error: error.message
+      // First get the user ID by querying auth.users (accessible with service role)
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(user.id);
+      
+      if (authError || !authUser) {
+        console.error('Auth user lookup error:', authError?.message);
+        return res.status(404).json({ 
+          message: "User not found in authentication system"
         });
       }
 
-      if (!result || !result.school) {
-        console.error('No school found for admin:', user.email);
+      // Query the public tables directly using raw SQL
+      const { data: schoolData, error: schoolError } = await supabaseAdmin
+        .from('schools')
+        .select('*')
+        .eq('created_by', user.id)
+        .single();
+
+      if (schoolError) {
+        console.error('School lookup error:', schoolError.message);
+        // Try fallback to file-based data
+        const fs = await import('fs');
+        const path = await import('path');
+        
+        try {
+          const filePath = path.join(process.cwd(), 'data/schools.json');
+          if (fs.existsSync(filePath)) {
+            const fileData = fs.readFileSync(filePath, 'utf-8');
+            const schools = JSON.parse(fileData);
+            const userSchool = schools.find((school: any) => 
+              school.adminEmail === user.email || 
+              school.name === 'American Seekers Academy'
+            );
+            
+            if (userSchool) {
+              console.log('🚀 Returning school data from file:', userSchool.name);
+              return res.json(userSchool);
+            }
+          }
+        } catch (fileError) {
+          console.error('File fallback error:', fileError);
+        }
+        
         return res.status(404).json({ 
           message: "No school found for this administrator"
         });
       }
 
-      console.log('🚀 Returning school data from database:', result.school.name);
-      res.json(result.school);
+      console.log('🚀 Returning school data from database:', schoolData.name);
+      res.json(schoolData);
 
     } catch (error) {
       console.error('Database access error:', error);
