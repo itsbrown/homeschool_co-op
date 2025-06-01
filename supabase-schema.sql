@@ -27,7 +27,9 @@ CREATE TABLE users (
   name TEXT NOT NULL,
   avatar TEXT,
   subscription TEXT NOT NULL DEFAULT 'free' CHECK (subscription IN ('free', 'individual', 'family', 'educator', 'institutional')),
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  supabase_id TEXT, -- Add supabase_id to store the user's UUID from Supabase Auth
+  school_id INTEGER REFERENCES schools(id) -- Add school_id for school admins and staff
 );
 
 -- Create children table
@@ -248,7 +250,10 @@ CREATE INDEX idx_school_classes_teacher_id ON school_classes(teacher_id);
 CREATE INDEX idx_school_class_enrollments_class_id ON school_class_enrollments(class_id);
 CREATE INDEX idx_school_class_enrollments_student_id ON school_class_enrollments(student_id);
 
--- Enable Row Level Security (RLS) for Supabase
+-- Supabase Role-Based Access Control Setup
+-- Run this SQL in your Supabase SQL Editor
+
+-- Enable RLS on all tables
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE children ENABLE ROW LEVEL SECURITY;
 ALTER TABLE schools ENABLE ROW LEVEL SECURITY;
@@ -262,21 +267,122 @@ ALTER TABLE school_staff ENABLE ROW LEVEL SECURITY;
 ALTER TABLE school_classes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE school_class_enrollments ENABLE ROW LEVEL SECURITY;
 
--- Basic RLS policies (you can customize these based on your needs)
--- Users can read their own data
-CREATE POLICY "Users can view own profile" ON users FOR SELECT USING (auth.uid()::text = id::text);
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid()::text = id::text);
+-- Helper function to get current user's role
+CREATE OR REPLACE FUNCTION auth.user_role() 
+RETURNS TEXT AS $$
+BEGIN
+  RETURN (
+    SELECT role 
+    FROM users 
+    WHERE supabase_id = auth.uid()::text
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Parents can manage their children
-CREATE POLICY "Parents can view own children" ON children FOR SELECT USING (parent_id = (auth.uid())::integer);
-CREATE POLICY "Parents can insert own children" ON children FOR INSERT WITH CHECK (parent_id = (auth.uid())::integer);
-CREATE POLICY "Parents can update own children" ON children FOR UPDATE USING (parent_id = (auth.uid())::integer);
+-- Helper function to get current user's school
+CREATE OR REPLACE FUNCTION auth.user_school_id() 
+RETURNS INTEGER AS $$
+BEGIN
+  RETURN (
+    SELECT school_id 
+    FROM users 
+    WHERE supabase_id = auth.uid()::text
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Public can view published programs
-CREATE POLICY "Anyone can view published programs" ON programs FOR SELECT USING (is_published = true);
+-- Users table policies
+CREATE POLICY "Users can view own profile" ON users 
+  FOR SELECT USING (supabase_id = auth.uid()::text);
 
--- Public can view active classes
-CREATE POLICY "Anyone can view active classes" ON classes FOR SELECT USING (is_active = true);
+CREATE POLICY "Users can update own profile" ON users 
+  FOR UPDATE USING (supabase_id = auth.uid()::text);
 
--- Public can view public knowledge bases
-CREATE POLICY "Anyone can view public knowledge bases" ON knowledge_bases FOR SELECT USING (is_public = true);
+CREATE POLICY "Admins can view all users" ON users 
+  FOR SELECT USING (auth.user_role() IN ('admin', 'superAdmin'));
+
+CREATE POLICY "School admins can view school users" ON users 
+  FOR SELECT USING (
+    auth.user_role() = 'schoolAdmin' AND 
+    school_id = auth.user_school_id()
+  );
+
+-- Children table policies
+CREATE POLICY "Parents can manage own children" ON children 
+  FOR ALL USING (parent_id = (
+    SELECT id FROM users WHERE supabase_id = auth.uid()::text
+  ));
+
+CREATE POLICY "School staff can view school children" ON children 
+  FOR SELECT USING (
+    auth.user_role() IN ('teacher', 'schoolAdmin') AND
+    EXISTS (
+      SELECT 1 FROM school_students ss 
+      JOIN users u ON u.id = ss.child_id 
+      WHERE ss.child_id = children.id 
+      AND u.school_id = auth.user_school_id()
+    )
+  );
+
+-- Schools table policies
+CREATE POLICY "Public can view published schools" ON schools 
+  FOR SELECT USING (status = 'active');
+
+CREATE POLICY "School admins can manage own school" ON schools 
+  FOR ALL USING (admin_id = (
+    SELECT id FROM users WHERE supabase_id = auth.uid()::text
+  ));
+
+CREATE POLICY "Super admins can manage all schools" ON schools 
+  FOR ALL USING (auth.user_role() = 'superAdmin');
+
+-- Programs table policies
+CREATE POLICY "Public can view published programs" ON programs 
+  FOR SELECT USING (is_published = true);
+
+CREATE POLICY "Instructors can manage own programs" ON programs 
+  FOR ALL USING (instructor_id = (
+    SELECT id FROM users WHERE supabase_id = auth.uid()::text
+  ));
+
+CREATE POLICY "School staff can manage school programs" ON programs 
+  FOR ALL USING (
+    auth.user_role() IN ('schoolAdmin', 'teacher') AND
+    instructor_id IN (
+      SELECT id FROM users WHERE school_id = auth.user_school_id()
+    )
+  );
+
+-- Knowledge bases table policies
+CREATE POLICY "Public can view public knowledge bases" ON knowledge_bases 
+  FOR SELECT USING (is_public = true);
+
+CREATE POLICY "Authors can manage own knowledge bases" ON knowledge_bases 
+  FOR ALL USING (creator_id = (
+    SELECT id FROM users WHERE supabase_id = auth.uid()::text
+  ));
+
+CREATE POLICY "School staff can view school knowledge bases" ON knowledge_bases 
+  FOR SELECT USING (
+    auth.user_role() IN ('teacher', 'schoolAdmin') AND
+    creator_id IN (
+      SELECT id FROM users WHERE school_id = auth.user_school_id()
+    )
+  );
+
+-- Classes table policies
+CREATE POLICY "Public can view published classes" ON classes 
+  FOR SELECT USING (is_active = true);
+
+CREATE POLICY "Instructors can manage own classes" ON classes 
+  FOR ALL USING (instructor_name = (
+    SELECT name FROM users WHERE supabase_id = auth.uid()::text
+  ));
+
+CREATE POLICY "School admins can manage school classes" ON classes 
+  FOR ALL USING (
+    auth.user_role() = 'schoolAdmin' AND
+    instructor_name IN (
+      SELECT name FROM users WHERE school_id = auth.user_school_id()
+    )
+  );

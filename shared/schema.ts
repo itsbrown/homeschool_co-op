@@ -6,14 +6,20 @@ import { relations } from "drizzle-orm";
 // Users table
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
+  supabaseId: text("supabase_id").unique(), // Link to Supabase auth.users
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role", { enum: ["learner", "parent", "educator", "admin", "schoolAdmin"] }).default("learner").notNull(),
+  role: text("role", { enum: ["student", "parent", "teacher", "schoolAdmin", "admin", "superAdmin"] }).default("student").notNull(),
   name: text("name").notNull(),
   avatar: text("avatar"),
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),
+  permissions: jsonb("permissions").default({}).notNull(), // Custom permissions
+  schoolId: integer("school_id").references(() => schools.id), // Link user to school
+  isActive: boolean("is_active").default(true).notNull(),
+  lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
