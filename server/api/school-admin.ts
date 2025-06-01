@@ -995,7 +995,8 @@ router.patch("/schools/:id", async (req, res) => {
       }
     });
 
-    console.log('🔄 Updating school in database with data:', dbUpdateData);
+    console.log('🔄 Updating school in database with data:', JSON.stringify(dbUpdateData, null, 2));
+    console.log('🔄 Updating school ID:', schoolId);
 
     // Update the school in the database
     const { data: updatedSchool, error: updateError } = await supabaseAdmin
@@ -1006,14 +1007,22 @@ router.patch("/schools/:id", async (req, res) => {
       .single();
 
     if (updateError) {
-      console.error('Database update error:', updateError);
+      console.error('❌ Database update error:', updateError);
       return res.status(500).json({ 
         message: "Failed to update school",
         error: updateError.message
       });
     }
 
+    if (!updatedSchool) {
+      console.error('❌ No school data returned after update');
+      return res.status(500).json({ 
+        message: "School update failed - no data returned"
+      });
+    }
+
     console.log('✅ School updated successfully:', updatedSchool.name);
+    console.log('✅ Updated school data:', JSON.stringify(updatedSchool, null, 2));
 
     return res.json({
       message: "School updated successfully",
