@@ -30,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import UnifiedSchoolAdminSidebar from '@/components/layout/UnifiedSchoolAdminSidebar';
+import { apiRequest } from "@/lib/queryClient";
 
 // Sample class data (will be replaced with API data)
 const sampleClasses = [
@@ -125,6 +126,11 @@ export default function SchoolClassesPage() {
   // Fetch classes for the school from the API
   const { data: classes, isLoading, error, refetch } = useQuery({
     queryKey: ['/school-admin/classes'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/school-admin/classes");
+      const data = await response.json();
+      return data;
+    },
   });
 
   if (isLoading) {
