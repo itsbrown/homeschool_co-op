@@ -924,28 +924,96 @@ router.patch("/schools/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid school ID" });
     }
 
-    // Get the school being edited
-    const school = await storage.getSchoolById(schoolId);
-
-    if (!school) {
-      return res.status(404).json({ message: "School not found" });
+    // Get the authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: "No authorization header" });
     }
 
-    // Verify the current user is the admin of this school
-    if (school.created_by !== req.session.userId && req.session.userRole !== "admin") {
-      return res.status(403).json({ message: "You do not have permission to update this school" });
+    const token = authHeader.replace('Bearer ', '');
+
+    // Create a new Supabase client instance with the user's access token
+    const { createClient } = await import('@supabase/supabase-js');
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      return res.status(500).json({ message: "Supabase configuration missing" });
     }
 
-    // Don't allow updating certain fields like created_by unless admin
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    );
+
+    // Verify the token and get user
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    console.log('✅ Authenticated user for school update:', user.email);
+
+    // Use admin client to update the school
+    const { supabaseAdmin } = await import('../db/supabase');
+
+    // Don't allow updating certain protected fields
     const updateData = { ...req.body };
-    if (req.session.userRole !== "admin") {
-      delete updateData.created_by;
-      delete updateData.id;
-      delete updateData.created_at;
+    delete updateData.id;
+    delete updateData.created_at;
+    delete updateData.created_by;
+
+    // Map frontend field names to database field names
+    const dbUpdateData: any = {
+      name: updateData.name,
+      type: updateData.type,
+      address: updateData.address,
+      city: updateData.city,
+      state: updateData.state,
+      zip_code: updateData.zipCode,
+      phone_number: updateData.phoneNumber,
+      email: updateData.email,
+      website: updateData.website,
+      description: updateData.description,
+      founded_year: updateData.foundedYear,
+      accreditation: updateData.accreditation,
+      enrollment_size: updateData.enrollmentSize,
+      updated_at: new Date().toISOString()
+    };
+
+    // Remove undefined fields
+    Object.keys(dbUpdateData).forEach(key => {
+      if (dbUpdateData[key] === undefined) {
+        delete dbUpdateData[key];
+      }
+    });
+
+    console.log('🔄 Updating school in database with data:', dbUpdateData);
+
+    // Update the school in the database
+    const { data: updatedSchool, error: updateError } = await supabaseAdmin
+      .from('schools')
+      .update(dbUpdateData)
+      .eq('id', schoolId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('Database update error:', updateError);
+      return res.status(500).json({ 
+        message: "Failed to update school",
+        error: updateError.message
+      });
     }
 
-    // Update the school in Supabase
-    const updatedSchool = await storage.updateSchool(schoolId, updateData);
+    console.log('✅ School updated successfully:', updatedSchool.name);
 
     return res.json({
       message: "School updated successfully",
