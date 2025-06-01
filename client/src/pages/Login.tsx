@@ -35,7 +35,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const { signInWithEmail, isLoading } = useAuth();
+  const { signIn, signInWithGoogle, isLoading } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
@@ -49,21 +49,27 @@ export default function Login() {
     },
   });
 
-  const handleLogin = () => {
-    login({
-      appState: {
-        returnTo: window.location.origin
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      const result = await signIn(email, password);
+      if (result.error) {
+        setError(result.error.message);
+      } else {
+        navigate('/dashboard');
       }
-    });
+    } catch (err) {
+      setError('Login failed. Please try again.');
+    }
   };
 
   const handleGoogleLogin = async () => {
     try {
-      await login({
-        authorizationParams: {
-          connection: 'google-oauth2'
-        }
-      });
+      const result = await signInWithGoogle();
+      if (result.error) {
+        setError(result.error.message);
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -76,12 +82,7 @@ export default function Login() {
   const onSubmit = async (data: LoginFormValues) => {
     try {
       setError(null);
-      // Use Auth0 redirect with email hint
-      await login({
-        authorizationParams: {
-          login_hint: data.email
-        }
-      });
+      await handleLogin(data.email, data.password);
     } catch (error) {
       setError("Login failed. Please try again.");
       toast({
