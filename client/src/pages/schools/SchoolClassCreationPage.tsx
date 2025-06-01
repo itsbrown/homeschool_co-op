@@ -78,6 +78,11 @@ export default function SchoolClassCreationPage() {
   // Fetch available staff members for instructor selection
   const { data: staffMembers = [], isLoading: staffLoading } = useQuery({
     queryKey: ["/school-admin/staff"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/school-admin/staff");
+      const data = await response.json();
+      return data;
+    },
   });
 
   // Update form when class data is loaded
