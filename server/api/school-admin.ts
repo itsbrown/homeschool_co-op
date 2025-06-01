@@ -95,47 +95,38 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
 
     try {
-      // First get the user ID by querying auth.users (accessible with service role)
-      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(user.id);
-      
-      if (authError || !authUser) {
-        console.error('Auth user lookup error:', authError?.message);
+      // Query the public.accounts table to get user data
+      console.log('🔍 Querying public.accounts for email:', user.email);
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from('accounts')
+        .select('id')
+        .eq('email', user.email)
+        .eq('role', 'school_admin')
+        .single();
+
+      if (userError || !userData) {
+        console.error('User lookup error:', userError?.message);
         return res.status(404).json({ 
-          message: "User not found in authentication system"
+          message: "School admin user not found",
+          error: userError?.message
         });
       }
 
-      // Use the database function to access custom schemas
-      const { data: schoolData, error: schoolError } = await supabaseAdmin
-        .rpc('get_school_admin_data', { admin_email: user.email });
+      console.log('✅ Found user ID:', userData.id);
 
-      if (schoolError) {
-        console.error('School lookup error:', schoolError.message);
-        // Try fallback to file-based data
-        const fs = await import('fs');
-        const path = await import('path');
-        
-        try {
-          const filePath = path.join(process.cwd(), 'data/schools.json');
-          if (fs.existsSync(filePath)) {
-            const fileData = fs.readFileSync(filePath, 'utf-8');
-            const schools = JSON.parse(fileData);
-            const userSchool = schools.find((school: any) => 
-              school.adminEmail === user.email || 
-              school.name === 'American Seekers Academy'
-            );
-            
-            if (userSchool) {
-              console.log('🚀 Returning school data from file:', userSchool.name);
-              return res.json(userSchool);
-            }
-          }
-        } catch (fileError) {
-          console.error('File fallback error:', fileError);
-        }
-        
+      // Query the public.schools table
+      console.log('🔍 Querying public.schools for created_by:', userData.id);
+      const { data: schoolData, error: schoolError } = await supabaseAdmin
+        .from('schools')
+        .select('*')
+        .eq('created_by', userData.id)
+        .single();
+
+      if (schoolError || !schoolData) {
+        console.error('School lookup error:', schoolError?.message);
         return res.status(404).json({ 
-          message: "No school found for this administrator"
+          message: "No school found for this administrator",
+          error: schoolError?.message
         });
       }
 
