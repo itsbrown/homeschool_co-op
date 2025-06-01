@@ -1,19 +1,25 @@
 
 import React, { useState } from 'react';
-import { useAuth } from '@/hooks/useAuth0';
+import { useAuth } from '@/components/SupabaseProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { decodeJWT, inspectJWT } from '@/utils/jwtDebugger';
 
 export default function JWTDebugPanel() {
-  const { inspectCurrentToken, isAuthenticated } = useAuth();
+  const { session, isAuthenticated } = useAuth();
   const [manualToken, setManualToken] = useState('');
   const [decodedPayload, setDecodedPayload] = useState<any>(null);
 
   const handleInspectCurrentToken = async () => {
-    console.log('🔍 Inspecting current Auth0 token...');
-    await inspectCurrentToken();
+    console.log('🔍 Inspecting current Supabase session...');
+    if (session?.access_token) {
+      inspectJWT(session.access_token);
+      const payload = decodeJWT(session.access_token);
+      setDecodedPayload(payload);
+    } else {
+      console.log('No active session or access token found');
+    }
   };
 
   const handleInspectManualToken = () => {
