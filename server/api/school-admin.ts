@@ -97,7 +97,7 @@ router.get("/my-school", async (req, res) => {
     try {
       // First, find the user account
       const { data: userAccount, error: userError } = await supabaseAdmin
-        .from('users.accounts')
+        .from('accounts')
         .select('id, email, role')
         .eq('email', user.email)
         .eq('role', 'school_admin')
@@ -113,7 +113,7 @@ router.get("/my-school", async (req, res) => {
 
       // Then find schools created by this user
       const { data: schools, error: schoolError } = await supabaseAdmin
-        .from('schools.schools')
+        .from('schools')
         .select('*')
         .eq('created_by', userAccount.id)
         .limit(1);
