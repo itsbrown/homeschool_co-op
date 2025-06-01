@@ -95,28 +95,37 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // Use the database function with proper permissions
-      const { data: schools, error } = await supabaseAdmin
-        .rpc('get_school_by_admin_email', { admin_email: user.email });
+      // First get the user ID from users.accounts using service role
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from('users.accounts')
+        .select('id')
+        .eq('email', user.email)
+        .eq('role', 'school_admin')
+        .single();
 
-      if (error) {
-        console.error('Database function error:', error.message);
-        return res.status(500).json({ 
-          message: "Database query failed",
-          error: error.message
+      if (userError || !userData) {
+        console.error('User lookup error:', userError?.message);
+        return res.status(404).json({ 
+          message: "School admin user not found"
         });
       }
 
-      if (!schools || schools.length === 0) {
-        console.error('No school found for admin:', user.email);
+      // Then get the school using the user ID
+      const { data: schoolData, error: schoolError } = await supabaseAdmin
+        .from('schools.schools')
+        .select('*')
+        .eq('created_by', userData.id)
+        .single();
+
+      if (schoolError || !schoolData) {
+        console.error('School lookup error:', schoolError?.message);
         return res.status(404).json({ 
           message: "No school found for this administrator"
         });
       }
 
-      const school = schools[0];
-      console.log('🚀 Returning school data from database:', school.name);
-      res.json(school);
+      console.log('🚀 Returning school data from database:', schoolData.name);
+      res.json(schoolData);
       
     } catch (error) {
       console.error('Database access error:', error);

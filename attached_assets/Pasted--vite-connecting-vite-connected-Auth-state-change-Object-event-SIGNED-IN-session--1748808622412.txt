@@ -1,0 +1,55 @@
+[vite] connecting...
+[vite] connected.
+Auth state change: 
+Object {event: "SIGNED_IN", session: {…}}
+✅ Stored Supabase access token
+✅ User signed in successfully, checking for redirect...
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Supabase session check: 
+Object {session: {…}, error: null}
+✅ Stored initial Supabase access token
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state change: 
+Object {event: "INITIAL_SESSION", session: {…}}
+✅ Stored Supabase access token
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Auth state: 
+Object {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Error registering school: 
+SyntaxError {}
+message: "Unexpected token '<', "<!DOCTYPE "... is not valid JSON"
+stack: "SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON"
+get stack: ƒ ()
+set stack: ƒ ()
+[[Prototype]]: Object
