@@ -95,16 +95,27 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // Query schools table using the correct schema structure
-      // Join with users.accounts to find schools where the current user is the creator
+      // First, find the user account
+      const { data: userAccount, error: userError } = await supabaseAdmin
+        .from('users.accounts')
+        .select('id, email, role')
+        .eq('email', user.email)
+        .eq('role', 'school_admin')
+        .single();
+
+      if (userError || !userAccount) {
+        console.error('User lookup error:', userError?.message || 'User not found');
+        return res.status(404).json({ 
+          message: "School admin account not found",
+          error: userError?.message || 'User not found'
+        });
+      }
+
+      // Then find schools created by this user
       const { data: schools, error: schoolError } = await supabaseAdmin
         .from('schools.schools')
-        .select(`
-          *,
-          creator:users.accounts!created_by(id, email, role)
-        `)
-        .eq('users.accounts.email', user.email)
-        .eq('users.accounts.role', 'school_admin')
+        .select('*')
+        .eq('created_by', userAccount.id)
         .limit(1);
 
       if (!schoolError && schools && schools.length > 0) {
@@ -115,9 +126,9 @@ router.get("/my-school", async (req, res) => {
       }
       
       console.error('Database query error:', schoolError?.message || 'No results found');
-      return res.status(500).json({ 
-        message: "Database connection error. Please check your Supabase configuration.",
-        error: schoolError?.message || 'Connection failed'
+      return res.status(404).json({ 
+        message: "No school found for this administrator",
+        error: schoolError?.message || 'No schools found'
       });
       
     } catch (error) {
