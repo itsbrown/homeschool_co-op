@@ -95,8 +95,9 @@ import AIStatusProvider from "@/contexts/AIStatusContext";
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
 
-  // Handle Auth0 callback
+  // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {
+    // Handle Auth0 callback
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const state = urlParams.get('state');
@@ -113,6 +114,20 @@ function Router() {
     if (code && state) {
       console.log('🔄 Auth0 callback detected, processing...');
       // Auth0 will handle the callback automatically
+      return;
+    }
+
+    // Handle Supabase OAuth callback (access_token in URL hash)
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token=')) {
+      console.log('🔄 Supabase OAuth callback detected');
+      // Supabase client will automatically handle the session from URL hash
+      // Clear the hash from URL after a short delay to allow processing
+      setTimeout(() => {
+        if (window.location.hash.includes('access_token=')) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }, 2000);
     }
   }, []);
 
