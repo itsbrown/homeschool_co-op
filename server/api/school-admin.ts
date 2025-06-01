@@ -95,36 +95,42 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // First get the user ID from users.accounts using service role
-      const { data: userData, error: userError } = await supabaseAdmin
-        .from('users.accounts')
-        .select('id')
-        .eq('email', user.email)
-        .eq('role', 'school_admin')
-        .single();
-
-      if (userError || !userData) {
-        console.error('User lookup error:', userError?.message);
+      // Load school data from file until database permissions are fixed
+      const fs = require('fs');
+      const path = require('path');
+      
+      const schoolsPath = path.join(process.cwd(), 'data', 'schools.json');
+      const usersPath = path.join(process.cwd(), 'data', 'users.json');
+      
+      if (!fs.existsSync(schoolsPath) || !fs.existsSync(usersPath)) {
+        console.error('Data files not found');
+        return res.status(404).json({ 
+          message: "School data not available"
+        });
+      }
+      
+      const schools = JSON.parse(fs.readFileSync(schoolsPath, 'utf8'));
+      const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+      
+      // Find the user
+      const userData = users.find(u => u.email === user.email && u.role === 'school_admin');
+      if (!userData) {
+        console.error('School admin user not found in file:', user.email);
         return res.status(404).json({ 
           message: "School admin user not found"
         });
       }
-
-      // Then get the school using the user ID
-      const { data: schoolData, error: schoolError } = await supabaseAdmin
-        .from('schools.schools')
-        .select('*')
-        .eq('created_by', userData.id)
-        .single();
-
-      if (schoolError || !schoolData) {
-        console.error('School lookup error:', schoolError?.message);
+      
+      // Find the school created by this user
+      const schoolData = schools.find(s => s.created_by === userData.id);
+      if (!schoolData) {
+        console.error('No school found for admin:', user.email);
         return res.status(404).json({ 
           message: "No school found for this administrator"
         });
       }
 
-      console.log('🚀 Returning school data from database:', schoolData.name);
+      console.log('🚀 Returning school data from file:', schoolData.name);
       res.json(schoolData);
       
     } catch (error) {
