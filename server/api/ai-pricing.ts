@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
-import { verifyAuth0Token as isAuthenticated } from "../middleware/auth0-auth";
+import { jwtCheck as isAuthenticated } from "../middleware/auth0-auth";
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({

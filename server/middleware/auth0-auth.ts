@@ -123,3 +123,8 @@ export const requireSchoolAccess = (req: any, res: Response, next: NextFunction)
   console.log('🚫 School access denied');
   res.status(403).json({ message: 'School access denied' });
 };
+
+// Export alias for backward compatibility
+export const verifyAuth0Token = jwtCheck;
+export const requireAdmin = requireRole(['admin', 'superAdmin', 'school-admin']);
+export const requireEducator = requireRole(['admin', 'superAdmin', 'school-admin', 'teacher']);
