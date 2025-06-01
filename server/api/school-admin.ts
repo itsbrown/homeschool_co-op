@@ -95,45 +95,50 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // First, find the user account using RPC call to access users schema
-      const { data: userAccount, error: userError } = await supabaseAdmin
-        .rpc('get_user_by_email', { 
-          user_email: user.email,
-          user_role: 'school_admin'
+      // Since tables are in users/schools schema but client can only access public,
+      // we need to use SQL query directly
+      const { data: queryResult, error: queryError } = await supabaseAdmin
+        .rpc('execute_sql', {
+          query: `
+            SELECT s.* 
+            FROM schools.schools s
+            INNER JOIN users.accounts u ON s.created_by = u.id
+            WHERE u.email = $1 AND u.role = $2
+            LIMIT 1
+          `,
+          params: [user.email, 'school_admin']
         });
 
-      if (userError || !userAccount) {
-        console.error('User lookup error:', userError?.message || 'User not found');
-        console.log('Creating RPC function call instead...');
+      if (queryError) {
+        console.error('SQL query error:', queryError?.message);
         
-        // Fallback: Try direct schema access
-        const { data: directUserAccount, error: directUserError } = await supabaseAdmin
-          .schema('users')
+        // If SQL function doesn't exist, fall back to looking for data in public schema
+        console.log('Trying public schema tables...');
+        
+        const { data: publicUserAccount, error: publicUserError } = await supabaseAdmin
           .from('accounts')
           .select('id, email, role')
           .eq('email', user.email)
           .eq('role', 'school_admin')
           .single();
 
-        if (directUserError || !directUserAccount) {
-          console.error('Direct user lookup error:', directUserError?.message || 'User not found');
+        if (publicUserError || !publicUserAccount) {
+          console.error('Public user lookup error:', publicUserError?.message || 'User not found');
           return res.status(404).json({ 
-            message: "School admin account not found",
-            error: directUserError?.message || 'User not found'
+            message: "School admin account not found. Please ensure your account data exists in the database.",
+            error: publicUserError?.message || 'User not found'
           });
         }
 
-        // Use the direct result
         const { data: schools, error: schoolError } = await supabaseAdmin
-          .schema('schools')
           .from('schools')
           .select('*')
-          .eq('created_by', directUserAccount.id)
+          .eq('created_by', publicUserAccount.id)
           .limit(1);
 
         if (!schoolError && schools && schools.length > 0) {
           const school = schools[0];
-          console.log('🚀 Returning school data from database:', school.name);
+          console.log('🚀 Returning school data from public schema:', school.name);
           res.json(school);
           return;
         }
@@ -145,9 +150,12 @@ router.get("/my-school", async (req, res) => {
         });
       }
 
-      // Then find schools created by this user using RPC result
-      const { data: schools, error: schoolError } = await supabaseAdmin
-        .rpc('get_school_by_creator', { creator_id: userAccount.id });
+      if (queryResult && queryResult.length > 0) {
+        const school = queryResult[0];
+        console.log('🚀 Returning school data from SQL query:', school.name);
+        res.json(school);
+        return;
+      }
 
       if (!schoolError && schools && schools.length > 0) {
         const school = schools[0];
