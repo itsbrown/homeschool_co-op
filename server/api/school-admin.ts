@@ -95,11 +95,16 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // Query the schools table in the public schema
+      // Query schools table using the correct schema structure
+      // Join with users.accounts to find schools where the current user is the creator
       const { data: schools, error: schoolError } = await supabaseAdmin
-        .from('schools')
-        .select('*')
-        .eq('admin_email', user.email)
+        .from('schools.schools')
+        .select(`
+          *,
+          creator:users.accounts!created_by(id, email, role)
+        `)
+        .eq('users.accounts.email', user.email)
+        .eq('users.accounts.role', 'school_admin')
         .limit(1);
 
       if (!schoolError && schools && schools.length > 0) {
@@ -109,62 +114,16 @@ router.get("/my-school", async (req, res) => {
         return;
       }
       
-      // If database table doesn't exist or no results found, fall back to local data
-      console.log('Database table not found, using local school data...');
-      
-      const fs = await import('fs');
-      const path = await import('path');
-      const schoolDataPath = path.join(process.cwd(), 'data', 'schools.json');
-      const usersDataPath = path.join(process.cwd(), 'data', 'users.json');
-      
-      if (fs.existsSync(schoolDataPath) && fs.existsSync(usersDataPath)) {
-        const schoolData = JSON.parse(fs.readFileSync(schoolDataPath, 'utf8'));
-        const usersData = JSON.parse(fs.readFileSync(usersDataPath, 'utf8'));
-        
-        // For now, return the first school in the system for any authenticated user
-        // This allows you to access the school admin features
-        const school = schoolData[0];
-        
-        if (school) {
-          // Convert local data format to match expected API response
-          const schoolResponse = {
-            id: school.id,
-            name: school.name,
-            type: school.type,
-            address: school.address,
-            city: school.city,
-            state: school.state,
-            zipCode: school.zipCode,
-            phoneNumber: school.phoneNumber,
-            email: school.email,
-            website: school.website,
-            logo: school.logo,
-            description: school.description,
-            foundedYear: school.foundedYear,
-            accreditation: school.accreditation,
-            enrollmentSize: school.enrollmentSize,
-            adminId: school.adminId,
-            status: school.status,
-            isVerified: school.isVerified,
-            createdAt: school.createdAt,
-            updatedAt: school.updatedAt
-          };
-          
-          console.log('🚀 Returning school data from local file:', school.name);
-          res.json(schoolResponse);
-          return;
-        }
-      }
-      
-      return res.status(404).json({ 
-        message: "No school found for this administrator",
-        needsSetup: true 
+      console.error('Database query error:', schoolError?.message || 'No results found');
+      return res.status(500).json({ 
+        message: "Database connection error. Please check your Supabase configuration.",
+        error: schoolError?.message || 'Connection failed'
       });
       
     } catch (error) {
       console.error('Database access error:', error);
       return res.status(500).json({ 
-        message: "Unable to access school data",
+        message: "Unable to connect to database. Please verify your Supabase credentials.",
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
