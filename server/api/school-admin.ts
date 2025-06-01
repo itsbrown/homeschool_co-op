@@ -918,6 +918,9 @@ router.post("/classes", async (req, res) => {
 
 // Update school information for a school admin
 router.patch("/schools/:id", async (req, res) => {
+  console.log('🔥 PATCH request received in school-admin router');
+  console.log('🔥 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🔥 School ID:', req.params.id);
   try {
     const schoolId = parseInt(req.params.id);
     if (isNaN(schoolId)) {
