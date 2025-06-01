@@ -516,6 +516,84 @@ router.post("/staff/invite", async (req, res) => {
       return res.status(400).json({ message: "Staff member with this email already exists" });
     }
 
+    // Try to save to database first, fallback to file storage
+    try {
+      // Get authorization header for Supabase
+      const authHeader = req.headers.authorization;
+      if (authHeader) {
+        const token = authHeader.replace('Bearer ', '');
+        
+        // Create Supabase client with user's access token
+        const { createClient } = await import('@supabase/supabase-js');
+        
+        if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+          const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_ANON_KEY,
+            {
+              global: {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              },
+            }
+          );
+
+          // Insert into database
+          const { data: dbStaff, error: dbError } = await supabase
+            .from('school_staff')
+            .insert({
+              school_id: 1,
+              first_name: firstName,
+              last_name: lastName,
+              email: email,
+              position: role,
+              department: department,
+              is_active: true,
+              permissions: {},
+              start_date: new Date().toISOString(),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (!dbError && dbStaff) {
+            console.log("✅ Staff member saved to database:", dbStaff);
+            
+            // Transform to match frontend format
+            const responseStaff = {
+              id: dbStaff.id,
+              email: dbStaff.email,
+              firstName: dbStaff.first_name,
+              lastName: dbStaff.last_name,
+              name: `${dbStaff.first_name} ${dbStaff.last_name}`,
+              role: dbStaff.position,
+              department: dbStaff.department,
+              status: "Active",
+              joinDate: dbStaff.start_date?.split('T')[0] || new Date().toISOString().split('T')[0],
+              avatar: "",
+              phone: "",
+              subjects: [],
+              invitedAt: dbStaff.created_at,
+              message: message || ""
+            };
+
+            return res.json({ 
+              success: true, 
+              message: "Staff member invited successfully",
+              staff: responseStaff 
+            });
+          } else {
+            console.log("Database insert failed, using file storage fallback:", dbError?.message);
+          }
+        }
+      }
+    } catch (dbError) {
+      console.log("Database operation failed, using file storage fallback:", dbError);
+    }
+
+    // Fallback to file storage
     const newStaffMember = {
       id: Math.max(0, ...staffMembers.map(s => s.id || 0)) + 1,
       email,
@@ -536,7 +614,7 @@ router.post("/staff/invite", async (req, res) => {
     staffMembers.push(newStaffMember);
     saveStaffMembers(staffMembers);
 
-    console.log("✅ New staff member invited successfully:", newStaffMember);
+    console.log("✅ New staff member invited successfully (file storage):", newStaffMember);
     console.log("📋 Updated staff members count:", staffMembers.length);
 
     res.json({ 
@@ -553,11 +631,82 @@ router.post("/staff/invite", async (req, res) => {
 // Get staff members for the school
 router.get("/staff", async (req, res) => {
   try {
-    const staffList = loadStaffMembers();
-    res.json(staffList);
+    // Get authorization header for Supabase
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: "No authorization header" });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Create Supabase client with user's access token
+    const { createClient } = await import('@supabase/supabase-js');
+    
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      return res.status(500).json({ message: "Supabase configuration missing" });
+    }
+
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      }
+    );
+
+    // First try to get from database
+    const { data: dbStaff, error: dbError } = await supabase
+      .from('school_staff')
+      .select('*')
+      .eq('school_id', 1)
+      .eq('is_active', true);
+
+    if (dbError) {
+      console.log('Database query failed, falling back to file storage:', dbError.message);
+      // Fallback to existing file-based storage
+      const staffList = loadStaffMembers();
+      return res.json(staffList);
+    }
+
+    if (dbStaff && dbStaff.length > 0) {
+      // Transform database format to match frontend expectations
+      const transformedStaff = dbStaff.map(staff => ({
+        id: staff.id,
+        email: staff.email,
+        firstName: staff.first_name,
+        lastName: staff.last_name,
+        name: `${staff.first_name} ${staff.last_name}`,
+        role: staff.position,
+        department: staff.department,
+        status: staff.is_active ? 'Active' : 'Pending',
+        joinDate: staff.start_date?.split('T')[0] || new Date().toISOString().split('T')[0],
+        avatar: "",
+        phone: staff.phone || "",
+        subjects: [],
+        invitedAt: staff.created_at,
+        message: ""
+      }));
+      
+      console.log(`Loaded ${transformedStaff.length} staff members from database`);
+      return res.json(transformedStaff);
+    } else {
+      // If no database records, fallback to file storage
+      const staffList = loadStaffMembers();
+      return res.json(staffList);
+    }
   } catch (error) {
     console.error("Error fetching school staff:", error);
-    res.status(500).json({ message: "Error fetching school staff" });
+    // Fallback to file-based storage on any error
+    try {
+      const staffList = loadStaffMembers();
+      res.json(staffList);
+    } catch (fallbackError) {
+      res.status(500).json({ message: "Error fetching school staff" });
+    }
   }
 });
 
