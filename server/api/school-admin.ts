@@ -95,48 +95,20 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // With updated permissions, try direct schema access first
-      const { data: userAccount, error: userError } = await supabaseAdmin
-        .schema('users')
-        .from('accounts')
-        .select('id, email, role')
-        .eq('email', user.email)
-        .eq('role', 'school_admin')
-        .single();
+      // Use the database function with proper permissions
+      const { data: schools, error } = await supabaseAdmin
+        .rpc('get_school_by_admin_email', { admin_email: user.email });
 
-      if (userError) {
-        console.error('User lookup error:', userError.message);
-        return res.status(404).json({ 
-          message: "School admin account not found",
-          error: userError.message
-        });
-      }
-
-      if (!userAccount) {
-        console.error('No user account found for:', user.email);
-        return res.status(404).json({ 
-          message: "School admin account not found"
-        });
-      }
-
-      // Now get the school data
-      const { data: schools, error: schoolError } = await supabaseAdmin
-        .schema('schools')
-        .from('schools')
-        .select('*')
-        .eq('created_by', userAccount.id)
-        .limit(1);
-
-      if (schoolError) {
-        console.error('School lookup error:', schoolError.message);
-        return res.status(404).json({ 
-          message: "Error retrieving school data",
-          error: schoolError.message
+      if (error) {
+        console.error('Database function error:', error.message);
+        return res.status(500).json({ 
+          message: "Database query failed",
+          error: error.message
         });
       }
 
       if (!schools || schools.length === 0) {
-        console.error('No schools found for user ID:', userAccount.id);
+        console.error('No school found for admin:', user.email);
         return res.status(404).json({ 
           message: "No school found for this administrator"
         });
