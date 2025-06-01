@@ -95,28 +95,59 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // First, find the user account
+      // First, find the user account using RPC call to access users schema
       const { data: userAccount, error: userError } = await supabaseAdmin
-        .from('accounts')
-        .select('id, email, role')
-        .eq('email', user.email)
-        .eq('role', 'school_admin')
-        .single();
+        .rpc('get_user_by_email', { 
+          user_email: user.email,
+          user_role: 'school_admin'
+        });
 
       if (userError || !userAccount) {
         console.error('User lookup error:', userError?.message || 'User not found');
+        console.log('Creating RPC function call instead...');
+        
+        // Fallback: Try direct schema access
+        const { data: directUserAccount, error: directUserError } = await supabaseAdmin
+          .schema('users')
+          .from('accounts')
+          .select('id, email, role')
+          .eq('email', user.email)
+          .eq('role', 'school_admin')
+          .single();
+
+        if (directUserError || !directUserAccount) {
+          console.error('Direct user lookup error:', directUserError?.message || 'User not found');
+          return res.status(404).json({ 
+            message: "School admin account not found",
+            error: directUserError?.message || 'User not found'
+          });
+        }
+
+        // Use the direct result
+        const { data: schools, error: schoolError } = await supabaseAdmin
+          .schema('schools')
+          .from('schools')
+          .select('*')
+          .eq('created_by', directUserAccount.id)
+          .limit(1);
+
+        if (!schoolError && schools && schools.length > 0) {
+          const school = schools[0];
+          console.log('🚀 Returning school data from database:', school.name);
+          res.json(school);
+          return;
+        }
+        
+        console.error('School lookup error:', schoolError?.message || 'No results found');
         return res.status(404).json({ 
-          message: "School admin account not found",
-          error: userError?.message || 'User not found'
+          message: "No school found for this administrator",
+          error: schoolError?.message || 'No schools found'
         });
       }
 
-      // Then find schools created by this user
+      // Then find schools created by this user using RPC result
       const { data: schools, error: schoolError } = await supabaseAdmin
-        .from('schools')
-        .select('*')
-        .eq('created_by', userAccount.id)
-        .limit(1);
+        .rpc('get_school_by_creator', { creator_id: userAccount.id });
 
       if (!schoolError && schools && schools.length > 0) {
         const school = schools[0];
