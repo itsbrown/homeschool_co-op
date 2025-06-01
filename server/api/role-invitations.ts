@@ -37,7 +37,7 @@ async function sendRoleInvitationEmail(email: string, role: string, token: strin
     
     const msg = {
       to: email,
-      from: 'coreycreates@gmail.com', // Use verified sender email
+      from: 'contact@americanseekersacademy.com', // Use verified sender email
       subject: `You've been invited to join ASA Platform as ${role}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
