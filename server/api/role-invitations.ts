@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
+import sgMail from "@sendgrid/mail";
 
 const router = Router();
+
+// Initialize SendGrid
+if (!process.env.SENDGRID_API_KEY) {
+  throw new Error("SENDGRID_API_KEY environment variable is required");
+}
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // In-memory storage for role invitations (replace with database later)
 const roleInvitations = new Map<number, {
@@ -21,6 +28,45 @@ let invitationIdCounter = 1;
 // Generate a random token for invitations
 function generateInvitationToken(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+// Send role invitation email via SendGrid
+async function sendRoleInvitationEmail(email: string, role: string, token: string): Promise<boolean> {
+  try {
+    const invitationUrl = `${process.env.REPLIT_DOMAIN || 'https://localhost:5000'}/accept-invitation?token=${token}`;
+    
+    const msg = {
+      to: email,
+      from: 'noreply@asaplatform.com', // Replace with your verified sender
+      subject: `You've been invited to join ASA Platform as ${role}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">You're Invited to Join ASA Platform</h2>
+          <p>Hello,</p>
+          <p>You've been invited to join ASA Platform with the role of <strong>${role}</strong>.</p>
+          <p>Click the button below to accept your invitation and set up your account:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${invitationUrl}" 
+               style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Accept Invitation
+            </a>
+          </div>
+          <p>Or copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${invitationUrl}</p>
+          <p style="color: #666; font-size: 14px; margin-top: 30px;">
+            This invitation will expire in 7 days. If you have any questions, please contact our support team.
+          </p>
+        </div>
+      `,
+    };
+
+    await sgMail.send(msg);
+    console.log(`✅ Role invitation email sent successfully to ${email} for role ${role}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error sending role invitation email:', error);
+    return false;
+  }
 }
 
 // Get all role invitations
@@ -78,19 +124,24 @@ router.post("/", async (req, res) => {
 
     roleInvitations.set(id, invitation);
 
-    // In a real system, send an email here
-    console.log(`[MOCK EMAIL] Role invitation sent to ${email} for role ${role}`);
-    console.log(`[MOCK EMAIL] Invitation token: ${token}`);
+    // Send real email invitation
+    const emailSent = await sendRoleInvitationEmail(email, role, token);
+    
+    if (!emailSent) {
+      // If email fails, we still keep the invitation but note the issue
+      console.warn(`⚠️ Email delivery failed for invitation to ${email}, but invitation was created`);
+    }
 
     res.status(201).json({
-      message: "Invitation sent successfully",
+      message: emailSent ? "Invitation sent successfully" : "Invitation created but email delivery failed",
       invitation: {
         id: invitation.id,
         email: invitation.email,
         role: invitation.role,
         createdAt: invitation.createdAt,
         expiresAt: invitation.expiresAt
-      }
+      },
+      emailSent
     });
   } catch (error) {
     console.error("Error sending role invitation:", error);
