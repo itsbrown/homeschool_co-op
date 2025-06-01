@@ -72,7 +72,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('✅ User signed in successfully, checking for redirect...');
         
-        // Clear any auth tokens from URL
+        // Clear any auth tokens from URL and redirect
         const currentUrl = window.location.href;
         if (currentUrl.includes('#access_token=') || currentUrl.includes('?code=')) {
           console.log('🔄 Cleaning up auth tokens from URL and redirecting...');
@@ -81,9 +81,10 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
           const userRole = session.user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent';
           const redirectPath = userRole === 'school_admin' ? '/schools' : '/dashboard';
           
-          // Clean URL and redirect
-          window.history.replaceState({}, document.title, redirectPath);
-          window.location.href = redirectPath;
+          // Use setTimeout to ensure the auth state is fully processed
+          setTimeout(() => {
+            window.location.replace(redirectPath);
+          }, 100);
         }
       }
     });
