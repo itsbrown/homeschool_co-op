@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 import { ProgramList } from "@/components/registration/ProgramList";
 import { ProgramEnrollmentForm } from "@/components/registration/ProgramEnrollmentForm";
 import { EnrollmentList } from "@/components/registration/EnrollmentList";
