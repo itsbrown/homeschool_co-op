@@ -95,9 +95,8 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // Try database query first with corrected schema access
+      // Query the schools table in the public schema
       const { data: schools, error: schoolError } = await supabaseAdmin
-        .schema('schools')
         .from('schools')
         .select('*')
         .eq('admin_email', user.email)
