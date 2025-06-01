@@ -1,6 +1,4 @@
 import { Router } from "express";
-import { schoolStorage } from "../school-storage";
-import { classStorage } from "../class-storage";
 import { storage } from "../storage";
 import fs from 'fs';
 import path from 'path';
@@ -52,36 +50,24 @@ router.post("/login", (req, res) => {
 // Get the school associated with the logged-in school administrator
 router.get("/my-school", async (req, res) => {
   try {
-    console.log('🏫 Fetching school data for admin');
+    console.log('🏫 Fetching school data for admin, userId:', req.session.userId);
     
-    // Return American Seekers Academy data for the admin user
-    const schoolData = {
-      id: 1,
-      name: "American Seekers Academy",
-      type: "Charter School",
-      address: "123 Education Drive",
-      city: "Learning City",
-      state: "CA",
-      zipCode: "90210",
-      phone: "(555) 123-4567",
-      email: "info@americanseekersacademy.org",
-      website: "https://americanseekersacademy.org",
-      description: "A progressive educational institution committed to fostering critical thinking, creativity, and character development in every student.",
-      principalName: "Dr. Sarah Martinez",
-      foundedYear: 2018,
-      studentCount: 485,
-      teacherCount: 32,
-      gradeRange: "K-12",
-      enrollmentSize: 485,
-      adminId: 1,
-      status: "Active",
-      isVerified: true,
-      createdAt: "2023-01-15T00:00:00.000Z",
-      updatedAt: new Date().toISOString()
-    };
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    // Get schools associated with this admin
+    const schools = await storage.getSchoolsByAdminId(req.session.userId);
     
-    console.log('🚀 Returning school data:', schoolData.name);
-    res.json(schoolData);
+    if (!schools || schools.length === 0) {
+      return res.status(404).json({ message: "No school found for this administrator" });
+    }
+
+    // Return the first school (assuming one school per admin for now)
+    const school = schools[0];
+    
+    console.log('🚀 Returning school data from database:', school.name);
+    res.json(school);
   } catch (error) {
     console.error("Error fetching school information:", error);
     res.status(500).json({ message: "Error fetching school information" });
@@ -773,27 +759,27 @@ router.patch("/schools/:id", async (req, res) => {
     }
 
     // Get the school being edited
-    const school = schoolStorage.getSchoolById(schoolId);
+    const school = await storage.getSchoolById(schoolId);
     
     if (!school) {
       return res.status(404).json({ message: "School not found" });
     }
     
     // Verify the current user is the admin of this school
-    if (school.adminId !== req.session.userId && req.session.userRole !== "admin") {
+    if (school.created_by !== req.session.userId && req.session.userRole !== "admin") {
       return res.status(403).json({ message: "You do not have permission to update this school" });
     }
     
-    // Don't allow updating certain fields like adminId, status, isVerified unless admin
+    // Don't allow updating certain fields like created_by unless admin
     const updateData = { ...req.body };
     if (req.session.userRole !== "admin") {
-      delete updateData.adminId;
-      delete updateData.status;
-      delete updateData.isVerified;
+      delete updateData.created_by;
+      delete updateData.id;
+      delete updateData.created_at;
     }
     
-    // Update the school in file storage
-    const updatedSchool = schoolStorage.updateSchool(schoolId, updateData);
+    // Update the school in Supabase
+    const updatedSchool = await storage.updateSchool(schoolId, updateData);
     
     return res.json({
       message: "School updated successfully",

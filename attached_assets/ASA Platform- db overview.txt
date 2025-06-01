@@ -1,0 +1,123 @@
+﻿It uses PostgreSQL via Supabase, with multiple schemas to organize data by functionality. The structure supports user management, class scheduling, lesson and curriculum generation, marketplace transactions, messaging, notifications, certifications (including student badges), and website management. Row-Level Security (RLS) policies ensure secure access based on user roles.
+Schemas and Their Purposes
+The database is organized into the following schemas, each serving a distinct purpose:
+1. public: General-purpose schema for non-sensitive data and logs.
+   * Tables: audit_logs (tracks user actions), rls_errors (logs RLS policy errors).
+2. users: Manages user accounts and authentication.
+   * Tables: accounts (user profiles and roles).
+3. schools: Manages schools, classes, and enrollments.
+   * Tables: schools, classes, enrollments.
+4. knowledge_base: Stores educational resources.
+   * Tables: resources.
+5. analytics: Tracks student progress and feedback.
+   * Tables: student_progress, feedback.
+6. mentors: Manages CEA Mentors and their schedules.
+   * Tables: mentors, schedules.
+7. finance: Handles subscriptions and mentor payments.
+   * Tables: subscriptions, mentor_payments.
+8. lessons: Manages lesson plans and associated resources.
+   * Tables: lessons, lesson_resources.
+9. curriculum: Manages curricula and lesson sequencing.
+   * Tables: curricula, curriculum_lessons.
+10. marketplace: Supports buying/selling educational content.
+   * Tables: listings, transactions.
+11. payments: Logs payment history.
+   * Tables: payment_history.
+12. ai: Tracks AI prompts and logs for lesson generation.
+   * Tables: prompts, logs.
+13. messaging: Handles in-app messaging.
+   * Tables: conversations, messages.
+14. notifications: Manages in-app notifications.
+   * Tables: notifications (partitioned by year).
+15. certifications: Stores certifications and badges, including blockchain verification.
+   * Tables: certifications.
+16. websites: Supports school websites with pages and posts.
+   * Tables: sites, pages, posts.
+17. calendar: Manages events and schedules.
+   * Tables: events, event_participants.
+Key Tables and Relationships
+Here’s a breakdown of the most critical tables, their purposes, and relationships:
+* users.accounts:
+   * Columns: id (PK), firebase_uid, email, role (e.g., super_admin, school_admin, student), parent_id (self-referencing FK), created_at, updated_at.
+   * Purpose: Stores user profiles and roles, linked to Supabase Auth via firebase_uid.
+   * Relationships: parent_id links students to parents; referenced by many tables (e.g., schools.schools.created_by, lessons.lessons.created_by).
+* schools.schools:
+   * Columns: id (PK), name, address, created_by (FK to users.accounts), created_at, updated_at.
+   * Purpose: Represents schools (e.g., American Seekers Academy).
+   * Relationships: created_by links to the user who created the school; parent of schools.classes.
+* schools.classes:
+   * Columns: id (PK), school_id (FK to schools.schools), program_type, title, start_date, end_date, days_of_week, capacity, enrollment_count, created_at, updated_at.
+   * Purpose: Defines classes (e.g., Tycoons Class, a 10-week session for ages 6-7).
+   * Relationships: Links to schools.schools via school_id; parent of schools.enrollments and lessons.lessons.
+* schools.enrollments:
+   * Columns: id (PK), class_id (FK to schools.classes), student_id (FK to users.accounts), enrolled_at, updated_at.
+   * Purpose: Tracks student enrollments in classes.
+   * Relationships: Links students (users.accounts) to classes (schools.classes).
+* lessons.lessons:
+   * Columns: id (PK), class_id (FK to schools.classes), created_by (FK to users.accounts), title, description, objectives, lesson_content (JSONB), ai_metadata (JSONB), created_at, updated_at.
+   * Purpose: Stores lesson plans for classes (e.g., "Introduction to Latin Vocabulary").
+   * Relationships: Links to schools.classes via class_id; created_by references users.accounts.
+* certifications.certifications:
+   * Columns: id (PK), user_id (FK to users.accounts), certification_type (e.g., student_badge), certification_level, blockchain_tx_hash, blockchain_network, issued_at, created_at, updated_at.
+   * Purpose: Stores certifications and badges earned by users, including students (e.g., a "Phonics Master" badge for Tycoons students).
+   * Relationships: Links to users.accounts via user_id.
+* calendar.events:
+   * Columns: id (PK), school_id (FK to schools.schools), created_by (FK to users.accounts), title, start_datetime, end_datetime, status, created_at, updated_at.
+   * Purpose: Manages school-wide and user-specific events (e.g., field trips).
+   * Relationships: Links to schools.schools and users.accounts; parent of calendar.event_participants.
+Access Control (RLS Policies)
+* RLS policies secure data access based on user roles (users.accounts.role):
+   * Super Admins/Admins: Full access to most tables (e.g., schools.schools, lessons.lessons).
+   * School Admins: Can manage classes, events, and websites for their school (e.g., schools.classes where school_id matches their created school).
+   * Teachers: Can read/write lessons and student progress for their classes.
+   * Parents/Students: Can read data relevant to their enrolled classes (e.g., lessons.lessons, calendar.events).
+Example: The class_write policy on schools.classes:
+sql
+CollapseWrap
+Copy
+CREATE POLICY class_write ON schools.classes
+    FOR ALL
+    USING (
+        COALESCE((SELECT role FROM users.accounts WHERE firebase_uid = (SELECT auth.uid()::text)) IN ('super_admin', 'admin'), FALSE)
+        OR (
+            COALESCE((SELECT role FROM users.accounts WHERE firebase_uid = (SELECT auth.uid()::text)) = 'school_admin', FALSE)
+            AND school_id IN (SELECT id FROM schools.schools WHERE created_by = (SELECT id FROM users.accounts WHERE firebase_uid = (SELECT auth.uid()::text)))
+        )
+*     );
+
+   * Allows super admins, admins, and school admins to manage classes for their schools.
+Key Features Supported by the Structure
+   1. User Authentication:
+   * users.accounts links to Supabase Auth via firebase_uid.
+   * Supports roles for access control (e.g., super_admin, student).
+   2. Class Management:
+   * schools.schools, schools.classes, and schools.enrollments manage schools, classes, and student enrollments.
+   3. Lessons and Curriculum:
+   * lessons.lessons and curriculum.curricula store AI-generated lesson plans and curricula.
+   * knowledge_base.resources provides reusable educational content.
+   4. Badges and Certifications:
+   * certifications.certifications tracks badges (e.g., student_badge type) with blockchain verification.
+   5. Events and Notifications:
+   * calendar.events manages events like field trips.
+   * notifications.notifications sends alerts (e.g., "You’ve earned a badge!").
+   6. Marketplace and Payments:
+   * marketplace.listings and marketplace.transactions support buying/selling content.
+   * payments.payment_history logs transactions.
+   7. Website Management:
+   * websites.sites, websites.pages, and websites.posts enable school websites.
+Considerations for Replit
+   * OAuth Integration:
+   * The platform uses Supabase for authentication, with Google OAuth configured (as discussed previously).
+   * The users.accounts.firebase_uid column links to Supabase Auth, supporting the OAuth flow.
+   * Replit should use the production domain (https://your-app-name.replit.app) for OAuth redirects to avoid localhost issues.
+   * Database Access:
+   * Replit applications can connect to Supabase using the JavaScript client (@supabase/supabase-js) with the project URL and anon key.
+   * RLS policies ensure secure access, so Replit must authenticate users via Supabase Auth to access data.
+   * Performance:
+   * Indexes are created for all foreign keys (e.g., idx_classes_school_id, idx_enrollments_student_id) to optimize joins and queries.
+   * Partitioned tables (messaging.messages, notifications.notifications) improve performance for large datasets.
+________________
+
+
+Conclusion
+The ASA Platform’s Supabase database is a well-structured, modular system with 17 schemas supporting user management, class scheduling, lesson generation, badges, events, and more. Key tables like users.accounts, schools.classes, lessons.lessons, and certifications.certifications enable core functionality, while RLS policies ensure secure access. For Replit, the database supports the Google OAuth flow (via production domain configuration) and provides a robust foundation for application features. If Replit needs further details on specific tables or integration steps, I can provide additional documentation or code snippets!

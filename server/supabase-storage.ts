@@ -177,7 +177,7 @@ export class SupabaseStorage implements IStorage {
   // School management methods
   async getSchoolById(id: number): Promise<any | undefined> {
     const { data, error } = await supabase
-      .from('schools')
+      .from('schools.schools')
       .select('*')
       .eq('id', id)
       .single();
@@ -192,8 +192,11 @@ export class SupabaseStorage implements IStorage {
 
   async updateSchool(id: number, schoolData: any): Promise<any | undefined> {
     const { data, error } = await supabase
-      .from('schools')
-      .update(schoolData)
+      .from('schools.schools')
+      .update({
+        ...schoolData,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', id)
       .select()
       .single();
@@ -208,9 +211,9 @@ export class SupabaseStorage implements IStorage {
 
   async getSchoolsByAdminId(adminId: number): Promise<any[]> {
     const { data, error } = await supabase
-      .from('schools')
+      .from('schools.schools')
       .select('*')
-      .eq('adminId', adminId);
+      .eq('created_by', adminId);
     
     if (error) {
       console.error('Error fetching schools by admin id:', error);
