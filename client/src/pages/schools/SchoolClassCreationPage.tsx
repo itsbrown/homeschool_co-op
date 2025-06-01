@@ -77,7 +77,7 @@ export default function SchoolClassCreationPage() {
 
   // Fetch available staff members for instructor selection
   const { data: staffMembers = [], isLoading: staffLoading } = useQuery({
-    queryKey: ["/api/school-admin/staff"],
+    queryKey: ["/school-admin/staff"],
   });
 
   // Update form when class data is loaded
@@ -113,14 +113,14 @@ export default function SchoolClassCreationPage() {
   // Create class mutation
   const createClassMutation = useMutation({
     mutationFn: (data: ClassFormValues) => {
-      return apiRequest("POST", "/api/school-admin/classes", data);
+      return apiRequest("POST", "/school-admin/classes", data);
     },
     onSuccess: () => {
       toast({
         title: "Class created successfully",
         description: "Your new class has been added to the system.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
+      queryClient.invalidateQueries({ queryKey: ["/school-admin/classes"] });
       navigate("/schools/classes");
     },
     onError: (error) => {
@@ -135,18 +135,8 @@ export default function SchoolClassCreationPage() {
 
   // Update class mutation
   const updateClassMutation = useMutation({
-    mutationFn: async (data: ClassFormValues) => {
-      const response = await fetch(`/api/class-details/${classId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to update class: ${response.status}`);
-      }
-      return response.json();
+    mutationFn: (data: ClassFormValues) => {
+      return apiRequest("PUT", `/class-details/${classId}`, data);
     },
     onSuccess: () => {
       toast({
@@ -154,8 +144,8 @@ export default function SchoolClassCreationPage() {
         description: "Your class has been updated.",
       });
       // Invalidate both the class list and the individual class data
-      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/class-details", classId] });
+      queryClient.invalidateQueries({ queryKey: ["/school-admin/classes"] });
+      queryClient.invalidateQueries({ queryKey: ["/class-details", classId] });
       navigate("/schools/classes");
     },
     onError: (error) => {

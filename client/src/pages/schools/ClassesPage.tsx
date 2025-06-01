@@ -124,7 +124,7 @@ export default function SchoolClassesPage() {
 
   // Fetch classes for the school from the API
   const { data: classes, isLoading, error, refetch } = useQuery({
-    queryKey: ['/api/school-admin/classes'],
+    queryKey: ['/school-admin/classes'],
   });
 
   if (isLoading) {
