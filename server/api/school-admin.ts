@@ -95,9 +95,9 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
     
     try {
-      // First get the user ID from accounts table using service role
+      // First get the user ID from users.accounts table using service role
       const { data: userData, error: userError } = await supabaseAdmin
-        .from('accounts')
+        .from('users.accounts')
         .select('id')
         .eq('email', user.email)
         .eq('role', 'school_admin')
@@ -112,7 +112,7 @@ router.get("/my-school", async (req, res) => {
 
       // Then get the school using the user ID
       const { data: schoolData, error: schoolError } = await supabaseAdmin
-        .from('schools')
+        .from('schools.schools')
         .select('*')
         .eq('created_by', userData.id)
         .single();
