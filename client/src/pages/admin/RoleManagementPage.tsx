@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/layout/AdminLayout";
+import { useAuth } from "@/hooks/useAuth0";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,34 @@ export default function RoleManagementPage() {
   const [selectedRole, setSelectedRole] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  // Get current user's role from user profile API
+  const { data: currentUserProfile } = useQuery({
+    queryKey: ['/api/user/profile'],
+    queryFn: () => fetch('/api/user/profile').then(res => res.json()),
+    enabled: !!user
+  });
+
+  const currentUserRole = currentUserProfile?.role || 'admin';
+
+  // Define available roles based on current user's permissions
+  // Only Super Admins and Admins can invite school admins
+  // All admins can invite parents, educators (teachers), and learners (students)
+  const getAvailableRoles = () => {
+    const baseRoles = [
+      { value: 'parent', label: 'Parent' },
+      { value: 'teacher', label: 'Educator/Teacher' },
+      { value: 'student', label: 'Learner/Student' }
+    ];
+
+    // Only super admins and admins can invite school admins
+    if (currentUserRole === 'superAdmin' || currentUserRole === 'admin') {
+      baseRoles.push({ value: 'schoolAdmin', label: 'School Administrator' });
+    }
+
+    return baseRoles;
+  };
 
   // Fetch current role invitations
   const { data: invitations, isLoading } = useQuery({
@@ -102,12 +131,7 @@ export default function RoleManagementPage() {
     sendInvitationMutation.mutate({ email, role: selectedRole });
   };
 
-  const roleOptions = [
-    { value: "teacher", label: "Teacher", description: "Can create and manage classes and content" },
-    { value: "schoolAdmin", label: "School Administrator", description: "Can manage school operations and staff" },
-    { value: "admin", label: "Platform Administrator", description: "Full platform access" },
-    { value: "superAdmin", label: "Super Administrator", description: "Complete system control" }
-  ];
+  const availableRoles = getAvailableRoles();
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -129,13 +153,26 @@ export default function RoleManagementPage() {
           </p>
         </div>
 
-        <Alert className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            <strong>Default Role Policy:</strong> All new users are automatically assigned the "Parent" role. 
-            Use invitations to grant users elevated permissions like Teacher, School Admin, or Platform Admin.
-          </AlertDescription>
-        </Alert>
+        <div className="space-y-4 mb-6">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Default Role Policy:</strong> All new users are automatically assigned the "Parent" role. 
+              Use invitations to grant users elevated permissions like Teacher, School Admin, or Platform Admin.
+            </AlertDescription>
+          </Alert>
+
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Permission Levels:</strong> Your current role is <Badge variant="secondary">{currentUserRole}</Badge>. 
+              {currentUserRole === 'superAdmin' || currentUserRole === 'admin' 
+                ? ' You can invite users to all available roles including School Administrators.'
+                : ' You can invite Parents, Educators, and Learners. Contact a Super Admin or Admin to invite School Administrators.'
+              }
+            </AlertDescription>
+          </Alert>
+        </div>
 
         <Tabs defaultValue="invite" className="space-y-6">
           <TabsList>
@@ -176,12 +213,9 @@ export default function RoleManagementPage() {
                       <SelectValue placeholder="Select a role" />
                     </SelectTrigger>
                     <SelectContent>
-                      {roleOptions.map((role) => (
+                      {availableRoles.map((role) => (
                         <SelectItem key={role.value} value={role.value}>
-                          <div>
-                            <div className="font-medium">{role.label}</div>
-                            <div className="text-sm text-muted-foreground">{role.description}</div>
-                          </div>
+                          <div className="font-medium">{role.label}</div>
                         </SelectItem>
                       ))}
                     </SelectContent>
