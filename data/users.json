@@ -63,5 +63,16 @@
     "subscription": "free",
     "id": 6,
     "createdAt": "2025-05-26T14:10:40.071Z"
+  },
+  {
+    "id": 7,
+    "name": "Super Administrator",
+    "username": "contact@americanseekersacademy.com",
+    "email": "contact@americanseekersacademy.com",
+    "password": "$2b$10$RvZuwKgvl4gULriHNY1vbOOUKIvwHUczlXWK4Ucvx4GMUOq5SMqU.",
+    "role": "superAdmin",
+    "avatar": null,
+    "subscription": "premium",
+    "createdAt": "2025-06-01T15:38:34.548Z"
   }
 ]
