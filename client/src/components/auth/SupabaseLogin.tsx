@@ -45,9 +45,13 @@ export const SupabaseLogin: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
-    const { error } = await signUp(email, password);
+    console.log('Attempting sign up with:', email);
+    const { data, error } = await signUp(email, password);
+    
+    console.log('Sign up response:', { data, error });
     
     if (error) {
+      console.error('Sign up error:', error);
       setError(error.message);
       toast({
         title: "Registration Failed",
@@ -55,10 +59,16 @@ export const SupabaseLogin: React.FC = () => {
         variant: "destructive",
       });
     } else {
+      console.log('Sign up successful:', data);
       toast({
-        title: "Registration Successful",
-        description: "Please check your email to verify your account.",
+        title: "Registration Successful", 
+        description: data.user?.email_confirmed_at ? "Account created successfully!" : "Please check your email to verify your account.",
       });
+      
+      // If email confirmation is disabled, redirect to dashboard
+      if (data.user && data.user.email_confirmed_at) {
+        window.location.href = '/dashboard';
+      }
     }
     
     setIsLoading(false);
