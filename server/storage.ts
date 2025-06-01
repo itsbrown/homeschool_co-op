@@ -83,6 +83,13 @@ export interface IStorage {
   updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined>;
   deleteChild(id: number): Promise<void>;
   
+  // Role invitation methods
+  createRoleInvitation(invitation: any): Promise<any>;
+  getRoleInvitations(): Promise<any[]>;
+  getActiveRoleInvitation(token: string): Promise<any>;
+  acceptRoleInvitation(token: string): Promise<void>;
+  revokeRoleInvitation(id: number): Promise<void>;
+  
   // Emergency Contact methods
   getEmergencyContactById(id: number): Promise<EmergencyContact | undefined>;
   getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]>;
@@ -1146,20 +1153,7 @@ export class MemStorage implements IStorage {
 }
 
 import { DatabaseStorage } from "./dbStorage";
+import { supabaseStorage } from './supabase-storage';
 
-// Use the database storage implementation instead of memory storage
-import { FileStorage } from './file-storage';
-
-// Use FileStorage for reliable persistence
-// This ensures that classes data is stored reliably without database configuration issues
-// Initialize storage with fallback mechanism
-export const storage = (() => {
-  try {
-    console.log('Initializing persistent storage...');
-    return new FileStorage();
-  } catch (error) {
-    console.error('Error initializing file storage:', error);
-    console.warn('Falling back to memory storage - DATA WILL NOT PERSIST');
-    return new MemStorage();
-  }
-})();
+// Use the Supabase storage implementation
+export const storage = supabaseStorage;
