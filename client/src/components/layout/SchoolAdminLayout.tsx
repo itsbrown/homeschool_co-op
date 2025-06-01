@@ -1,5 +1,5 @@
 import React from "react";
-import SchoolAdminSidebar from "./SchoolAdminSidebar";
+import UnifiedSchoolAdminSidebar from "./UnifiedSchoolAdminSidebar";
 
 interface SchoolAdminLayoutProps {
   children: React.ReactNode;
@@ -9,7 +9,7 @@ interface SchoolAdminLayoutProps {
 export default function SchoolAdminLayout({ children, pageTitle }: SchoolAdminLayoutProps) {
   return (
     <div className="flex h-screen bg-gray-100">
-      <SchoolAdminSidebar />
+      <UnifiedSchoolAdminSidebar />
       
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">

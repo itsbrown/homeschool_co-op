@@ -41,7 +41,7 @@ const schoolNavItems: NavItem[] = [
   {
     title: 'Classes',
     href: '/schools/classes',
-    icon: Calendar,
+    icon: BookOpen,
   },
   {
     title: 'Staff',
@@ -57,16 +57,6 @@ const schoolNavItems: NavItem[] = [
     title: 'Knowledge Base',
     href: '/schools/knowledge-base',
     icon: Database,
-  },
-  {
-    title: 'Calendar',
-    href: '/schools/calendar',
-    icon: Calendar,
-  },
-  {
-    title: 'Settings',
-    href: '/schools/settings',
-    icon: Settings,
   },
 ];
 
@@ -155,7 +145,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                     <User className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-gray-900">{user.name || 'Dan the man'}</div>
+                    <div className="text-sm font-medium text-gray-900">{user.user_metadata?.full_name || user.email}</div>
                     <div className="text-xs text-gray-500">School Administrator</div>
                   </div>
                 </div>
@@ -239,7 +229,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                         <User className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{user.name || 'Dan the man'}</div>
+                        <div className="text-sm font-medium text-gray-900">{user.user_metadata?.full_name || user.email}</div>
                         <div className="text-xs text-gray-500">School Administrator</div>
                       </div>
                     </div>
