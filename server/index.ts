@@ -87,3 +87,15 @@ app.use((req, res, next) => {
     backupService.startAutomaticBackups(24); // Backup every 24 hours
   });
 })();
+
+// Global error handler to ensure JSON responses
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('❌ Server error:', err.message, err.stack);
+  res.status(500).json({ message: "Internal server error", error: err.message });
+});
+
+// Catch-all for unmatched routes
+app.use((req: any, res: any, next: any) => {
+  console.log(`❌ Unmatched route: ${req.method} ${req.url}`);
+  res.status(404).json({ message: "Route not found" });
+});

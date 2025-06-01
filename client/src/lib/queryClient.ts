@@ -52,6 +52,12 @@ export async function apiRequest(
     return response;
   }
 
+  // Add detailed logging for other error statuses
+  if (!response.ok) {
+    const text = await response.text();
+    console.log(`❌ API ${response.status}: ${text}`);
+  }
+
   await throwIfResNotOk(response);
   return response;
 }

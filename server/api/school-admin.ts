@@ -17,7 +17,7 @@ router.get("/test", (req, res) => {
 router.post("/login", (req, res) => {
   try {
     console.log('School Admin direct login attempt');
-    
+
     // Create the school admin user response
     const schoolAdminUser = {
       id: 5,
@@ -29,9 +29,9 @@ router.post("/login", (req, res) => {
       subscription: 'premium',
       createdAt: new Date()
     };
-    
+
     console.log('School admin login successful');
-    
+
     // Return success response
     return res.status(200).json({
       success: true,
@@ -51,7 +51,7 @@ router.post("/login", (req, res) => {
 router.get("/my-school", async (req, res) => {
   try {
     console.log('🏫 Fetching school data for admin');
-    
+
     // Get the authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -59,10 +59,10 @@ router.get("/my-school", async (req, res) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    
+
     // Create a new Supabase client instance with the user's access token
     const { createClient } = await import('@supabase/supabase-js');
-    
+
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
       return res.status(500).json({ message: "Supabase configuration missing" });
     }
@@ -78,10 +78,10 @@ router.get("/my-school", async (req, res) => {
         }
       }
     );
-    
+
     // Verify the token and get user
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+
     if (authError || !user) {
       console.error('Auth error:', authError);
       return res.status(401).json({ message: "Invalid token" });
@@ -91,9 +91,9 @@ router.get("/my-school", async (req, res) => {
 
     // Use admin client to query the schools table with service role permissions
     const { supabaseAdmin } = await import('../db/supabase');
-    
+
     console.log('🔍 Attempting to query database...');
-    
+
     try {
       // First get the user ID from users.accounts table using service role
       const { data: userData, error: userError } = await supabaseAdmin
@@ -126,7 +126,7 @@ router.get("/my-school", async (req, res) => {
 
       console.log('🚀 Returning school data from database:', schoolData.name);
       res.json(schoolData);
-      
+
     } catch (error) {
       console.error('Database access error:', error);
       return res.status(500).json({ 
@@ -141,42 +141,60 @@ router.get("/my-school", async (req, res) => {
 });
 
 // Create initial school setup for a new admin
-router.post("/setup-school", async (req, res) => {
+const pool = require('../db/pgClient');
+
+async function setupSchool(req: any, res: any) {
+  let client;
   try {
     console.log('🏫 Setting up school for new admin');
-    
-    // Get the authorization header
+
     const authHeader = req.headers.authorization;
     if (!authHeader) {
+      console.log('❌ No authorization header provided');
       return res.status(401).json({ message: "No authorization header" });
     }
 
     const token = authHeader.replace('Bearer ', '');
-    
-    // Verify the token with Supabase
+    console.log('🔒 Token:', token.substring(0, 20) + '...');
+
     const { supabase } = await import('../db/supabase');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+
     if (authError || !user) {
-      console.error('Auth error:', authError);
-      return res.status(401).json({ message: "Invalid token" });
+      console.error('❌ Auth error:', authError?.message);
+      return res.status(401).json({ message: "Invalid token", error: authError?.message });
     }
 
     console.log('✅ Setting up school for user:', user.email);
 
-    // Check if user exists in database, create if not
-    let dbUser = await storage.getUserByEmail(user.email);
+    client = await pool.connect();
+    console.log('🔌 Connected to PostgreSQL database');
+
+    console.log('🔍 Checking if user exists in database:', user.email);
+    const userResult = await client.query(
+      'SELECT * FROM users.accounts WHERE email = $1',
+      [user.email]
+    );
+    let dbUser = userResult.rows[0];
+
     if (!dbUser) {
-      // Create user in database
-      dbUser = await storage.createUser({
-        email: user.email,
-        username: user.email.split('@')[0],
-        role: 'schoolAdmin',
-        name: user.user_metadata?.full_name || user.email
-      });
+      console.log('❌ User not found, creating new user...');
+      const newUserResult = await client.query(
+        'INSERT INTO users.accounts (email, firebase_uid, username, role, name) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [
+          user.email,
+          user.id,
+          user.email.split('@')[0],
+          'schoolAdmin',
+          user.user_metadata?.full_name || user.email
+        ]
+      );
+      dbUser = newUserResult.rows[0];
+      console.log('✅ Created user:', dbUser);
+    } else {
+      console.log('✅ User found:', dbUser);
     }
 
-    // Create a default school for this admin
     const schoolData = {
       name: "My School",
       type: "academy",
@@ -186,16 +204,36 @@ router.post("/setup-school", async (req, res) => {
       created_by: dbUser.id,
       status: "active"
     };
+    console.log('📋 School data to create:', schoolData);
 
-    const newSchool = await storage.createSchool(schoolData);
-    
-    console.log('🚀 Created school:', newSchool.name);
+    const schoolResult = await client.query(
+      'INSERT INTO schools.schools (name, type, city, state, zip_code, created_by, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [
+        schoolData.name,
+        schoolData.type,
+        schoolData.city,
+        schoolData.state,
+        schoolData.zipCode,
+        schoolData.created_by,
+        schoolData.status
+      ]
+    );
+    const newSchool = schoolResult.rows[0];
+    console.log('🚀 Created school:', newSchool);
+
     res.json(newSchool);
-  } catch (error) {
-    console.error("Error setting up school:", error);
-    res.status(500).json({ message: "Error setting up school" });
+  } catch (error: any) {
+    console.error("❌ Error setting up school:", error.message, error.stack);
+    res.status(500).json({ message: "Error setting up school", error: error.message });
+  } finally {
+    if (client) {
+      client.release();
+      console.log('🔌 Disconnected from PostgreSQL database');
+    }
   }
-});
+}
+
+router.post("/setup-school", setupSchool);
 
 // Get single class by ID
 router.get("/classes/:id", async (req, res) => {
@@ -204,28 +242,28 @@ router.get("/classes/:id", async (req, res) => {
     if (isNaN(classId)) {
       return res.status(400).json({ message: "Invalid class ID format" });
     }
-    
+
     // Get the class from storage
     const classItem = classStorage.getClassById(classId);
-    
+
     if (!classItem) {
       return res.status(404).json({ message: "Class not found" });
     }
-    
+
     // Get the school(s) administered by this user
     const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId || 0);
-    
+
     if (userSchools.length === 0) {
       return res.status(404).json({ message: "No schools found for this administrator" });
     }
-    
+
     const schoolId = userSchools[0].id;
-    
+
     // Verify that the class belongs to this school
     if (Number(classItem.schoolId) !== Number(schoolId)) {
       return res.status(403).json({ message: "You don't have permission to access this class" });
     }
-    
+
     // Return the class
     res.json(classItem);
   } catch (error) {
@@ -241,40 +279,40 @@ router.put("/classes/:id", async (req, res) => {
     if (isNaN(classId)) {
       return res.status(400).json({ message: "Invalid class ID format" });
     }
-    
+
     // Get the class from storage
     const existingClass = classStorage.getClassById(classId);
-    
+
     if (!existingClass) {
       return res.status(404).json({ message: "Class not found" });
     }
-    
+
     // Get the school(s) administered by this user
     const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId || 0);
-    
+
     if (userSchools.length === 0) {
       return res.status(404).json({ message: "No schools found for this administrator" });
     }
-    
+
     const schoolId = userSchools[0].id;
-    
+
     // Verify that the class belongs to this school
     if (Number(existingClass.schoolId) !== Number(schoolId)) {
       return res.status(403).json({ message: "You don't have permission to update this class" });
     }
-    
+
     // Update the class
     const updatedClass = classStorage.updateClass(classId, {
       ...req.body,
       schoolId: schoolId // Ensure the school ID doesn't change
     });
-    
+
     if (!updatedClass) {
       return res.status(500).json({ message: "Failed to update class" });
     }
-    
+
     console.log(`Class ${classId} updated successfully for school ${schoolId}`);
-    
+
     // Return the updated class
     res.json(updatedClass);
   } catch (error) {
@@ -289,20 +327,20 @@ router.get("/classes", async (req, res) => {
     // For Firebase auth, directly use the hardcoded school admin connection
     // Since schooladmin@test.com is associated with American Seekers Academy (ID: 1)
     const schoolId = 1; // American Seekers Academy
-    
+
     console.log(`🏫 Loading classes for school ID: ${schoolId} (American Seekers Academy)`);
-    
+
     // Get raw classes from storage 
     // Read directly from the file system to ensure we get the latest data
     const DATA_DIR = path.join(process.cwd(), 'data');
     const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
     const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
-    
+
     // Filter to only include classes for this school
     const schoolClasses = allClasses.filter(cls => Number(cls.schoolId) === Number(schoolId));
-    
+
     console.log(`Found ${schoolClasses.length} classes for school ID ${schoolId} (direct access)`);
-    
+
     // Apply additional filters if needed
     let filteredClasses = schoolClasses;
     if (req.query.search) {
@@ -312,15 +350,15 @@ router.get("/classes", async (req, res) => {
         (cls.description && cls.description.toLowerCase().includes(searchTerm))
       );
     }
-    
+
     if (req.query.category && req.query.category !== "all-categories") {
       filteredClasses = filteredClasses.filter(cls => cls.category === req.query.category);
     }
-    
+
     if (req.query.status && req.query.status !== "all-statuses") {
       filteredClasses = filteredClasses.filter(cls => cls.status === req.query.status);
     }
-    
+
     // Return the filtered classes
     res.json({
       items: filteredClasses,
@@ -340,23 +378,23 @@ router.get("/classes/:id", async (req, res) => {
   try {
     const classId = parseInt(req.params.id);
     console.log('🔍 Fetching class with ID:', classId);
-    
+
     // Read directly from the classes file
     const DATA_DIR = path.join(process.cwd(), 'data');
     const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
-    
+
     if (!fs.existsSync(CLASSES_FILE)) {
       return res.status(404).json({ message: 'Class not found' });
     }
-    
+
     const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
     const classData = allClasses.find((cls: any) => cls.id === classId);
-    
+
     if (!classData) {
       console.log('❌ Class not found with ID:', classId);
       return res.status(404).json({ message: 'Class not found' });
     }
-    
+
     console.log('✅ Class found:', classData.title);
     res.json(classData);
   } catch (error) {
@@ -371,23 +409,23 @@ router.put("/classes/:id", async (req, res) => {
     const classId = parseInt(req.params.id);
     console.log('📝 Updating class with ID:', classId);
     console.log('📄 Update data:', JSON.stringify(req.body, null, 2));
-    
+
     // Read classes file
     const DATA_DIR = path.join(process.cwd(), 'data');
     const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
-    
+
     if (!fs.existsSync(CLASSES_FILE)) {
       return res.status(404).json({ message: 'Class not found' });
     }
-    
+
     const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
     const classIndex = allClasses.findIndex((cls: any) => cls.id === classId);
-    
+
     if (classIndex === -1) {
       console.log('❌ Class not found with ID:', classId);
       return res.status(404).json({ message: 'Class not found' });
     }
-    
+
     // Update the class with new data
     const updatedClass = {
       ...allClasses[classIndex],
@@ -403,12 +441,12 @@ router.put("/classes/:id", async (req, res) => {
       price: req.body.price || allClasses[classIndex].price,
       updatedAt: new Date().toISOString()
     };
-    
+
     allClasses[classIndex] = updatedClass;
-    
+
     // Write back to file
     fs.writeFileSync(CLASSES_FILE, JSON.stringify(allClasses, null, 2));
-    
+
     console.log('✅ Class updated successfully:', updatedClass.title);
     res.json(updatedClass);
   } catch (error) {
@@ -453,11 +491,11 @@ router.post("/staff/invite", async (req, res) => {
   console.log("🚨 DEBUG: Request URL:", req.url);
   console.log("🚨 DEBUG: Request body:", req.body);
   console.log("🚨 DEBUG: Request headers:", req.headers);
-  
+
   try {
     console.log("📧 Staff invitation request received:", req.body);
     const { email, firstName, lastName, role, department, message } = req.body;
-    
+
     if (!email || !firstName || !lastName || !role || !department) {
       console.log("❌ Missing required fields:", { email, firstName, lastName, role, department });
       return res.status(400).json({ message: "Missing required fields" });
@@ -465,7 +503,7 @@ router.post("/staff/invite", async (req, res) => {
 
     const staffMembers = loadStaffMembers();
     console.log("📋 Current staff members count:", staffMembers.length);
-    
+
     // Check if staff member already exists
     const existingStaff = staffMembers.find(s => s.email === email);
     if (existingStaff) {
@@ -492,10 +530,10 @@ router.post("/staff/invite", async (req, res) => {
 
     staffMembers.push(newStaffMember);
     saveStaffMembers(staffMembers);
-    
+
     console.log("✅ New staff member invited successfully:", newStaffMember);
     console.log("📋 Updated staff members count:", staffMembers.length);
-    
+
     res.json({ 
       success: true, 
       message: "Staff member invited successfully",
@@ -682,7 +720,7 @@ router.get("/staff-positions", async (req, res) => {
 router.post("/staff-positions", async (req, res) => {
   try {
     const { title, description, isDefault } = req.body;
-    
+
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
     }
@@ -697,7 +735,7 @@ router.post("/staff-positions", async (req, res) => {
     staffPositions.push(newPosition);
     saveStaffPositions(staffPositions);
     console.log("Created new staff position:", newPosition);
-    
+
     res.json(newPosition);
   } catch (error) {
     console.error("Error creating staff position:", error);
@@ -709,16 +747,16 @@ router.post("/staff-positions", async (req, res) => {
 router.patch("/staff-positions/:id", async (req, res) => {
   console.log("🚨 PATCH ENDPOINT HIT! ID:", req.params.id);
   console.log("🚨 REQUEST BODY:", req.body);
-  
+
   try {
     const positionId = parseInt(req.params.id);
     const { title, description, isDefault } = req.body;
-    
+
     console.log("🔧 PATCH /staff-positions/" + positionId + " received:", { title, description, isDefault });
     console.log("📋 Current staffPositions before update:", staffPositions);
-    
+
     const positionIndex = staffPositions.findIndex(p => p.id === positionId);
-    
+
     if (positionIndex === -1) {
       console.log("❌ Position not found for ID:", positionId);
       return res.status(404).json({ message: "Staff position not found" });
@@ -731,13 +769,13 @@ router.patch("/staff-positions/:id", async (req, res) => {
       description: description !== undefined ? description : staffPositions[positionIndex].description,
       isDefault: isDefault !== undefined ? isDefault : staffPositions[positionIndex].isDefault
     };
-    
+
     staffPositions[positionIndex] = updatedPosition;
     saveStaffPositions(staffPositions);
 
     console.log("✅ Successfully updated staff position:", updatedPosition);
     console.log("📋 Full staffPositions after update:", staffPositions);
-    
+
     res.json(updatedPosition);
   } catch (error) {
     console.error("❌ Error updating staff position:", error);
@@ -750,7 +788,7 @@ router.delete("/staff-positions/:id", async (req, res) => {
   try {
     const positionId = parseInt(req.params.id);
     const positionIndex = staffPositions.findIndex(p => p.id === positionId);
-    
+
     if (positionIndex === -1) {
       return res.status(404).json({ message: "Staff position not found" });
     }
@@ -758,7 +796,7 @@ router.delete("/staff-positions/:id", async (req, res) => {
     const deletedPosition = staffPositions.splice(positionIndex, 1)[0];
     saveStaffPositions(staffPositions);
     console.log("Deleted staff position:", deletedPosition);
-    
+
     res.json({ message: "Staff position deleted successfully" });
   } catch (error) {
     console.error("Error deleting staff position:", error);
@@ -797,11 +835,11 @@ router.get("/students", async (req, res) => {
   try {
     // Get the school(s) administered by this user
     const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId);
-    
+
     if (userSchools.length === 0) {
       return res.status(404).json({ message: "No schools found for this administrator" });
     }
-    
+
     // For now, return sample student data
     // In a real implementation, this would come from the database
     const sampleStudents = [
@@ -830,7 +868,7 @@ router.get("/students", async (req, res) => {
         avatar: "",
       }
     ];
-    
+
     res.json(sampleStudents);
   } catch (error) {
     console.error("Error fetching school students:", error);
@@ -843,13 +881,13 @@ router.post("/classes", async (req, res) => {
   try {
     // Get the school(s) administered by this user
     const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId || 0);
-    
+
     if (userSchools.length === 0) {
       return res.status(404).json({ message: "No schools found for this administrator" });
     }
-    
+
     const schoolId = userSchools[0].id;
-    
+
     // Prepare class data with school ID
     const classData = {
       ...req.body,
@@ -859,10 +897,10 @@ router.post("/classes", async (req, res) => {
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    
+
     // Create the class
     const newClass = classStorage.createClass(classData);
-    
+
     return res.status(201).json({
       message: "Class created successfully",
       class: newClass
@@ -883,16 +921,16 @@ router.patch("/schools/:id", async (req, res) => {
 
     // Get the school being edited
     const school = await storage.getSchoolById(schoolId);
-    
+
     if (!school) {
       return res.status(404).json({ message: "School not found" });
     }
-    
+
     // Verify the current user is the admin of this school
     if (school.created_by !== req.session.userId && req.session.userRole !== "admin") {
       return res.status(403).json({ message: "You do not have permission to update this school" });
     }
-    
+
     // Don't allow updating certain fields like created_by unless admin
     const updateData = { ...req.body };
     if (req.session.userRole !== "admin") {
@@ -900,10 +938,10 @@ router.patch("/schools/:id", async (req, res) => {
       delete updateData.id;
       delete updateData.created_at;
     }
-    
+
     // Update the school in Supabase
     const updatedSchool = await storage.updateSchool(schoolId, updateData);
-    
+
     return res.json({
       message: "School updated successfully",
       school: updatedSchool,
@@ -918,11 +956,11 @@ router.get("/knowledge-bases", async (req, res) => {
   try {
     // Get the school(s) administered by this user
     const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId);
-    
+
     if (userSchools.length === 0) {
       return res.status(404).json({ message: "No schools found for this administrator" });
     }
-    
+
     // For now, return sample knowledge base data
     // In a real implementation, this would come from the database
     const sampleKnowledgeBases = [
@@ -961,7 +999,7 @@ router.get("/knowledge-bases", async (req, res) => {
         usageCount: 120,
       }
     ];
-    
+
     res.json(sampleKnowledgeBases);
   } catch (error) {
     console.error("Error fetching knowledge bases:", error);
@@ -978,9 +1016,9 @@ router.get('/students/:id', async (req, res) => {
     // Read students from file
     const childrenPath = path.join(process.cwd(), 'data', 'children.json');
     const childrenData = JSON.parse(fs.readFileSync(childrenPath, 'utf8'));
-    
+
     const student = childrenData.find((child: any) => child.id === studentId);
-    
+
     if (!student) {
       console.log('❌ Student not found with ID:', studentId);
       return res.status(404).json({ message: 'Student not found' });
