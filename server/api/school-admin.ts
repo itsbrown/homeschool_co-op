@@ -105,12 +105,9 @@ router.get("/my-school", async (req, res) => {
         });
       }
 
-      // Query the public tables directly using raw SQL
+      // Use the database function to access custom schemas
       const { data: schoolData, error: schoolError } = await supabaseAdmin
-        .from('schools')
-        .select('*')
-        .eq('created_by', user.id)
-        .single();
+        .rpc('get_school_admin_data', { admin_email: user.email });
 
       if (schoolError) {
         console.error('School lookup error:', schoolError.message);
