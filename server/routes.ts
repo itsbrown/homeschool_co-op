@@ -21,6 +21,7 @@ import ocrTestRouter from "./api/ocr-test";
 import schoolsRouter from "./api/schools";
 import schoolAdminRouter from "./api/school-admin";
 import { processEnrollmentMessage } from "./api/enrollment-assistant";
+import migrationRouter from "./routes/migration";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -1508,6 +1509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin", adminClassesRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/activities", activitiesRouter);
+  app.use("/api/migration", migrationRouter);
   
   // Import and register users API router
   const usersRouter = await import("./api/users");
