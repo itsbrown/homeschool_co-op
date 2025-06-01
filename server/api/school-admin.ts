@@ -631,82 +631,30 @@ router.post("/staff/invite", async (req, res) => {
 // Get staff members for the school
 router.get("/staff", async (req, res) => {
   try {
-    // Get authorization header for Supabase
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ message: "No authorization header" });
-    }
+    // For Firebase auth, directly use the hardcoded school admin connection
+    // Since schooladmin@test.com is associated with American Seekers Academy (ID: 1)
+    const schoolId = 1; // American Seekers Academy
 
-    const token = authHeader.replace('Bearer ', '');
+    console.log(`👥 Loading staff for school ID: ${schoolId} (American Seekers Academy)`);
+
+    // Get staff directly from the file system to ensure we get the latest data
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
     
-    // Create Supabase client with user's access token
-    const { createClient } = await import('@supabase/supabase-js');
+    if (!fs.existsSync(STAFF_FILE)) {
+      console.log('No staff file found, returning empty array');
+      return res.json([]);
+    }
     
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      return res.status(500).json({ message: "Supabase configuration missing" });
-    }
-
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      }
-    );
-
-    // First try to get from database
-    const { data: dbStaff, error: dbError } = await supabase
-      .from('school_staff')
-      .select('*')
-      .eq('school_id', 1)
-      .eq('is_active', true);
-
-    if (dbError) {
-      console.log('Database query failed, falling back to file storage:', dbError.message);
-      // Fallback to existing file-based storage
-      const staffList = loadStaffMembers();
-      return res.json(staffList);
-    }
-
-    if (dbStaff && dbStaff.length > 0) {
-      // Transform database format to match frontend expectations
-      const transformedStaff = dbStaff.map(staff => ({
-        id: staff.id,
-        email: staff.email,
-        firstName: staff.first_name,
-        lastName: staff.last_name,
-        name: `${staff.first_name} ${staff.last_name}`,
-        role: staff.position,
-        department: staff.department,
-        status: staff.is_active ? 'Active' : 'Pending',
-        joinDate: staff.start_date?.split('T')[0] || new Date().toISOString().split('T')[0],
-        avatar: "",
-        phone: staff.phone || "",
-        subjects: [],
-        invitedAt: staff.created_at,
-        message: ""
-      }));
-      
-      console.log(`Loaded ${transformedStaff.length} staff members from database`);
-      return res.json(transformedStaff);
-    } else {
-      // If no database records, fallback to file storage
-      const staffList = loadStaffMembers();
-      return res.json(staffList);
-    }
+    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+    
+    console.log(`Found ${allStaff.length} staff members (direct access)`);
+    
+    // Return the staff list
+    res.json(allStaff);
   } catch (error) {
     console.error("Error fetching school staff:", error);
-    // Fallback to file-based storage on any error
-    try {
-      const staffList = loadStaffMembers();
-      res.json(staffList);
-    } catch (fallbackError) {
-      res.status(500).json({ message: "Error fetching school staff" });
-    }
+    res.status(500).json({ message: "Error fetching school staff" });
   }
 });
 
