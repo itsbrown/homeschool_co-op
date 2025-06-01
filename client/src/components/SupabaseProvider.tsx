@@ -43,17 +43,27 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Get initial session with error handling
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('Supabase session check:', { session, error });
+      if (error) {
+        console.error('Supabase session error:', error);
+        setError(error);
+      }
       setSession(session);
       setUser(session?.user ?? null);
+      setIsLoading(false);
+    }).catch((err) => {
+      console.error('Supabase connection error:', err);
+      setError(err);
       setIsLoading(false);
     });
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', { event, session });
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
