@@ -884,34 +884,74 @@ router.get("/students", async (req, res) => {
 // Create a new class for a school
 router.post("/classes", async (req, res) => {
   try {
-    // Get the school(s) administered by this user
-    const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId || 0);
+    console.log('📝 Creating new class:', JSON.stringify(req.body, null, 2));
+    
+    // Read classes file
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
 
-    if (userSchools.length === 0) {
-      return res.status(404).json({ message: "No schools found for this administrator" });
+    // Ensure data directory exists
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
     }
 
-    const schoolId = userSchools[0].id;
+    // Load existing classes or initialize empty array
+    let existingClasses = [];
+    if (fs.existsSync(CLASSES_FILE)) {
+      try {
+        const fileContent = fs.readFileSync(CLASSES_FILE, 'utf8');
+        existingClasses = JSON.parse(fileContent);
+      } catch (error) {
+        console.log('Error reading classes file, starting with empty array:', error);
+        existingClasses = [];
+      }
+    }
 
-    // Prepare class data with school ID
-    const classData = {
-      ...req.body,
-      schoolId: schoolId,
-      instructorId: req.session.userId || 0,
+    // Generate new ID
+    const newId = existingClasses.length > 0 
+      ? Math.max(...existingClasses.map((c: any) => c.id)) + 1 
+      : 1;
+
+    // Find instructor details from staff
+    const staffMembers = loadStaffMembers();
+    const instructor = staffMembers.find((s: any) => s.name === req.body.instructorName);
+
+    // Create new class object
+    const newClass = {
+      id: newId,
+      schoolId: 1, // Default to American Seekers Academy
+      title: req.body.title,
+      description: req.body.description,
+      category: req.body.category || 'Academic',
+      gradeLevel: req.body.gradeLevel,
+      status: req.body.status || 'upcoming',
+      startDate: req.body.startDate,
+      endDate: req.body.endDate,
+      schedule: req.body.schedule,
+      capacity: req.body.capacity || 10,
+      maxStudents: req.body.capacity || 10,
       enrollmentCount: 0,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      location: req.body.location,
+      price: req.body.price || 0,
+      instructorName: req.body.instructorName,
+      instructorId: instructor ? instructor.id : 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
-    // Create the class
-    const newClass = classStorage.createClass(classData);
+    // Add to classes array
+    existingClasses.push(newClass);
 
+    // Write back to file
+    fs.writeFileSync(CLASSES_FILE, JSON.stringify(existingClasses, null, 2));
+
+    console.log('✅ Class created successfully:', newClass.title);
     return res.status(201).json({
       message: "Class created successfully",
       class: newClass
     });
   } catch (error) {
-    console.error("Error creating class:", error);
+    console.error("❌ Error creating class:", error);
     return res.status(500).json({ message: "Server error while creating class" });
   }
 });
