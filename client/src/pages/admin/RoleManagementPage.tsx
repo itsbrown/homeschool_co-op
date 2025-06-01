@@ -261,7 +261,7 @@ export default function RoleManagementPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant={getRoleBadgeVariant(invitation.role)}>
-                            {roleOptions.find(r => r.value === invitation.role)?.label || invitation.role}
+                            {availableRoles.find(r => r.value === invitation.role)?.label || invitation.role}
                           </Badge>
                           {invitation.isActive && !invitation.usedAt && (
                             <Button
