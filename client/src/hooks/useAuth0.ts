@@ -45,8 +45,14 @@ export function useAuth() {
   const getUserRole = (user: any) => {
     // For Supabase, check user metadata for roles
     const metadata = user?.user_metadata || user?.app_metadata || {};
-    const role = metadata.role || metadata.roles?.[0] || 'parent';
-    return role;
+    let role = metadata.role || metadata.roles?.[0];
+    
+    // Temporary role assignment for known admin emails
+    if (user?.email === 'coreycreates@gmail.com') {
+      role = 'school-admin';
+    }
+    
+    return role || 'parent';
   };
 
   return {
