@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth0";
+import { apiRequest } from "@/lib/queryClient";
 import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,9 +42,28 @@ export default function MySchoolPage() {
     enabled: isAuthenticated,
   });
 
-  // Show error toast if there's an error
+  // Setup school mutation
+  const setupSchoolMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/school-admin/setup-school"),
+    onSuccess: () => {
+      toast({
+        title: "School created successfully",
+        description: "Your school has been set up. You can now edit the details.",
+      });
+      refetch();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error creating school",
+        description: "There was a problem setting up your school. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Show error toast if there's an error (but not for 404 which means no school setup)
   useEffect(() => {
-    if (error) {
+    if (error && !error.message.includes('404')) {
       toast({
         title: "Error loading school data",
         description: "There was a problem loading your school information. Please try again.",

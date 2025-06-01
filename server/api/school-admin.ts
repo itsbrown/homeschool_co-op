@@ -50,17 +50,44 @@ router.post("/login", (req, res) => {
 // Get the school associated with the logged-in school administrator
 router.get("/my-school", async (req, res) => {
   try {
-    console.log('🏫 Fetching school data for admin, userId:', req.session.userId);
+    console.log('🏫 Fetching school data for admin');
     
-    if (!req.session.userId) {
-      return res.status(401).json({ message: "Not authenticated" });
+    // Get the authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: "No authorization header" });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Verify the token with Supabase
+    const { supabase } = await import('../db/supabase');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    console.log('✅ Authenticated user:', user.email);
+
+    // Get user from database
+    const dbUser = await storage.getUserByEmail(user.email);
+    if (!dbUser) {
+      return res.status(404).json({ 
+        message: "User not found in database",
+        needsSetup: true 
+      });
     }
 
     // Get schools associated with this admin
-    const schools = await storage.getSchoolsByAdminId(req.session.userId);
+    const schools = await storage.getSchoolsByAdminId(dbUser.id);
     
     if (!schools || schools.length === 0) {
-      return res.status(404).json({ message: "No school found for this administrator" });
+      return res.status(404).json({ 
+        message: "No school found for this administrator",
+        needsSetup: true 
+      });
     }
 
     // Return the first school (assuming one school per admin for now)
@@ -71,6 +98,63 @@ router.get("/my-school", async (req, res) => {
   } catch (error) {
     console.error("Error fetching school information:", error);
     res.status(500).json({ message: "Error fetching school information" });
+  }
+});
+
+// Create initial school setup for a new admin
+router.post("/setup-school", async (req, res) => {
+  try {
+    console.log('🏫 Setting up school for new admin');
+    
+    // Get the authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: "No authorization header" });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Verify the token with Supabase
+    const { supabase } = await import('../db/supabase');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    console.log('✅ Setting up school for user:', user.email);
+
+    // Check if user exists in database, create if not
+    let dbUser = await storage.getUserByEmail(user.email);
+    if (!dbUser) {
+      // Create user in database
+      dbUser = await storage.createUser({
+        email: user.email,
+        username: user.email.split('@')[0],
+        role: 'schoolAdmin',
+        name: user.user_metadata?.full_name || user.email
+      });
+    }
+
+    // Create a default school for this admin
+    const schoolData = {
+      name: "My School",
+      type: "academy",
+      city: "City",
+      state: "State",
+      zipCode: "12345",
+      created_by: dbUser.id,
+      status: "active"
+    };
+
+    const newSchool = await storage.createSchool(schoolData);
+    
+    console.log('🚀 Created school:', newSchool.name);
+    res.json(newSchool);
+  } catch (error) {
+    console.error("Error setting up school:", error);
+    res.status(500).json({ message: "Error setting up school" });
   }
 });
 
