@@ -65,7 +65,7 @@ export default function SchoolEditPage() {
   
   // Fetch the school information for the logged-in school admin
   const { data: school, isLoading, error } = useQuery<SchoolData>({
-    queryKey: ['/api/school-admin/my-school'],
+    queryKey: ['/school-admin/my-school'],
     enabled: !!user,
     staleTime: 60000, // 1 minute stale time
   });
@@ -114,14 +114,14 @@ export default function SchoolEditPage() {
   // Handle form submission to update school
   const updateSchoolMutation = useMutation({
     mutationFn: (data: z.infer<typeof schoolFormSchema>) => {
-      return apiRequest("PATCH", `/api/school-admin/schools/${school?.id}`, data);
+      return apiRequest("PATCH", `/school-admin/schools/${school?.id}`, data);
     },
     onSuccess: () => {
       toast({
         title: "School updated",
         description: "Your school information has been updated successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+      queryClient.invalidateQueries({ queryKey: ['/school-admin/my-school'] });
       setLocation("/schools/my-school");
     },
     onError: () => {

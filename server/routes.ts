@@ -1745,14 +1745,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add catch-all PATCH handler to identify routing issues
-  app.patch("/api/api/school-admin/schools/:id", (req, res) => {
-    console.log('🚨 CATCH-ALL PATCH handler hit with double /api/api/');
-    console.log('🚨 Request body:', JSON.stringify(req.body, null, 2));
-    console.log('🚨 This should not happen - routing issue detected');
-    res.status(500).json({ message: "Routing configuration error detected" });
-  });
-
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/admin/role-invitations", roleInvitationsRouter);
