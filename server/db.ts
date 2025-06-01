@@ -1,23 +1,40 @@
-import { Pool } from 'pg';
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from '../shared/schema';
 
-// Create a PostgreSQL connection pool
-let pool: Pool;
-
-try {
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
-  console.log("Database connection pool created successfully");
-} catch (error) {
-  console.error("Failed to create PostgreSQL connection pool:", error);
-  // Create a valid Pool instance as a fallback
-  pool = new Pool();
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
 }
 
-// Create a Drizzle ORM instance with the connection pool
-export const db = drizzle(pool, { schema });
+// Create a PostgreSQL connection for Supabase
+const connectionString = process.env.DATABASE_URL;
 
-// Export the connection pool for direct queries if needed
-export { pool };
+// Parse and fix URL encoding issues
+let client;
+try {
+  client = postgres(connectionString, { 
+    prepare: false,
+    max: 10,
+    ssl: { rejectUnauthorized: false }
+  });
+} catch (error) {
+  // If URL parsing fails, try with manual configuration
+  client = postgres({
+    host: 'db.moivwjuglwwfrhqeewju.supabase.co',
+    port: 5432,
+    database: 'postgres',
+    username: 'postgres',
+    password: 'SZ+)R5R4?wjEWB8',
+    ssl: { rejectUnauthorized: false },
+    prepare: false,
+    max: 10
+  });
+}
+
+console.log("Database connection to Supabase created successfully");
+
+// Create a Drizzle ORM instance with the connection
+export const db = drizzle(client, { schema });
+
+// Export the client for direct queries if needed
+export { client as pool };
