@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import sgMail from "@sendgrid/mail";
+import { supabaseStorage } from "../supabase-storage";
 
 const router = Router();
 
@@ -9,21 +10,6 @@ if (!process.env.SENDGRID_API_KEY) {
   throw new Error("SENDGRID_API_KEY environment variable is required");
 }
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-// In-memory storage for role invitations (replace with database later)
-const roleInvitations = new Map<number, {
-  id: number;
-  email: string;
-  role: string;
-  invitedBy: string;
-  createdAt: Date;
-  expiresAt: Date;
-  isActive: boolean;
-  usedAt?: Date;
-  token: string;
-}>();
-
-let invitationIdCounter = 1;
 
 // Generate a random token for invitations
 function generateInvitationToken(): string {
@@ -72,9 +58,7 @@ async function sendRoleInvitationEmail(email: string, role: string, token: strin
 // Get all role invitations
 router.get("/", async (req, res) => {
   try {
-    const invitations = Array.from(roleInvitations.values())
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    
+    const invitations = await supabaseStorage.getRoleInvitations();
     res.status(200).json(invitations);
   } catch (error) {
     console.error("Error fetching role invitations:", error);
@@ -98,31 +82,29 @@ router.post("/", async (req, res) => {
     }
 
     // Check if there's already an active invitation for this email
-    const existingInvitation = Array.from(roleInvitations.values())
-      .find(inv => inv.email === email && inv.isActive && !inv.usedAt);
+    const existingInvitations = await supabaseStorage.getRoleInvitations();
+    const existingInvitation = existingInvitations.find(inv => 
+      inv.email === email && inv.is_active && !inv.used_at
+    );
 
     if (existingInvitation) {
       return res.status(400).json({ message: "An active invitation already exists for this email" });
     }
 
     // Create new invitation
-    const id = invitationIdCounter++;
     const token = generateInvitationToken();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (7 * 24 * 60 * 60 * 1000)); // 7 days
 
-    const invitation = {
-      id,
+    const invitationData = {
       email,
       role,
-      invitedBy: "Admin", // In a real system, get this from the authenticated user
-      createdAt: now,
-      expiresAt,
-      isActive: true,
-      token
+      token,
+      invited_by: "Admin", // In a real system, get this from the authenticated user
+      expires_at: expiresAt.toISOString(),
     };
 
-    roleInvitations.set(id, invitation);
+    const invitation = await supabaseStorage.createRoleInvitation(invitationData);
 
     // Send real email invitation
     const emailSent = await sendRoleInvitationEmail(email, role, token);
