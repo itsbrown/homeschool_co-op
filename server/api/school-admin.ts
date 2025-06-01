@@ -90,11 +90,40 @@ router.get("/my-school", async (req, res) => {
     console.log('✅ Authenticated user:', user.email);
 
     // Query the schools table directly using the authenticated user
+    // Use raw SQL query to access the schools.schools table properly
     const { data: schools, error: schoolError } = await supabase
       .from('schools.schools')
       .select('*')
       .eq('admin_email', user.email)
       .limit(1);
+    
+    // If the above fails, try with alternative schema approach
+    if (schoolError && schoolError.code === '42P01') {
+      console.log('Trying alternative table reference...');
+      const { data: altSchools, error: altError } = await supabase
+        .schema('schools')
+        .from('schools')
+        .select('*')
+        .eq('admin_email', user.email)
+        .limit(1);
+      
+      if (altError) {
+        console.error('Alternative query also failed:', altError);
+        return res.status(500).json({ message: "Error querying schools" });
+      }
+      
+      const school = altSchools && altSchools.length > 0 ? altSchools[0] : null;
+      if (!school) {
+        return res.status(404).json({ 
+          message: "No school found for this administrator",
+          needsSetup: true 
+        });
+      }
+
+      console.log('🚀 Returning school data from Supabase (alternative):', school.name);
+      res.json(school);
+      return;
+    }
 
     if (schoolError) {
       console.error('School query error:', schoolError);
