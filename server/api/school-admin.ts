@@ -89,23 +89,7 @@ router.get("/my-school", async (req, res) => {
 
     console.log('✅ Authenticated user:', user.email);
 
-    // Temporary hardcoded response while we fix database schema issues
-    // This ensures the application works while we resolve the Supabase permissions
-    if (user.email === 'coreycreates@gmail.com') {
-      const schoolData = {
-        id: 1,
-        name: 'American Seekers Academy',
-        address: 'Monroe County, NY',
-        created_by: 1,
-        created_at: '2024-05-01T00:00:00.000Z',
-        updated_at: '2024-05-01T00:00:00.000Z'
-      };
-
-      console.log('🚀 Returning hardcoded school data for user:', user.email);
-      return res.json(schoolData);
-    }
-
-    // For other users, attempt database query
+    // Use admin client to query the schools table with service role permissions
     const { supabaseAdmin } = await import('../db/supabase');
 
     console.log('🔍 Attempting to query database...');
