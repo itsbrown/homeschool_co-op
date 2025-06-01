@@ -91,7 +91,7 @@ router.get("/my-school", async (req, res) => {
 
     // Query the schools table directly using the authenticated user
     const { data: schools, error: schoolError } = await supabase
-      .from('schools')
+      .from('schools.schools')
       .select('*')
       .eq('admin_email', user.email)
       .limit(1);
