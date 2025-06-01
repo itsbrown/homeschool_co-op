@@ -52,46 +52,65 @@ router.get("/my-school", async (req, res) => {
   try {
     console.log('🏫 Fetching school data for admin');
     
-    // For now, return the first available school from the schools.json file
-    // This provides a working demonstration while authentication issues are resolved
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    
-    try {
-      const schoolsPath = path.join(process.cwd(), 'data', 'schools.json');
-      const schoolsData = await fs.readFile(schoolsPath, 'utf8');
-      const schools = JSON.parse(schoolsData);
-      
-      if (schools && schools.length > 0) {
-        const school = schools[0]; // Return the first school for demonstration
-        console.log('🚀 Returning school data from file:', school.name);
-        res.json(school);
-        return;
-      }
-    } catch (fileError) {
-      console.log('📁 No schools file found, creating default school data');
+    // Get the authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: "No authorization header" });
     }
 
-    // If no schools found in file, return a default school
-    const defaultSchool = {
-      id: 1,
-      name: "American Seekers Academy",
-      type: "academy",
-      address: "123 Education Way",
-      city: "Learning City",
-      state: "CA",
-      zipCode: "90210",
-      phoneNumber: "(555) 123-4567",
-      email: "info@americanseekersacademy.com",
-      website: "https://americanseekersacademy.com",
-      description: "A premier educational institution focused on innovative learning approaches.",
-      foundedYear: 2020,
-      enrollmentSize: 250,
-      status: "active"
-    };
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Create a new Supabase client instance with the user's access token
+    const { createClient } = await import('@supabase/supabase-js');
+    
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      return res.status(500).json({ message: "Supabase configuration missing" });
+    }
 
-    console.log('🚀 Returning default school data');
-    res.json(defaultSchool);
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    );
+    
+    // Verify the token and get user
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    console.log('✅ Authenticated user:', user.email);
+
+    // Query the schools table directly using the authenticated user
+    const { data: schools, error: schoolError } = await supabase
+      .from('schools')
+      .select('*')
+      .eq('admin_email', user.email)
+      .limit(1);
+
+    if (schoolError) {
+      console.error('School query error:', schoolError);
+      return res.status(500).json({ message: "Error querying schools" });
+    }
+
+    if (!schools || schools.length === 0) {
+      return res.status(404).json({ 
+        message: "No school found for this administrator",
+        needsSetup: true 
+      });
+    }
+
+    const school = schools[0];
+    console.log('🚀 Returning school data from Supabase:', school.name);
+    res.json(school);
   } catch (error) {
     console.error("Error fetching school information:", error);
     res.status(500).json({ message: "Error fetching school information" });

@@ -53,6 +53,12 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
+      
+      // Store initial token if available
+      if (session?.access_token) {
+        localStorage.setItem('supabase_token', session.access_token);
+        console.log('✅ Stored initial Supabase access token');
+      }
     }).catch((err) => {
       console.error('Supabase connection error:', err);
       setError(err);
@@ -67,6 +73,15 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
+      
+      // Store the access token for API calls
+      if (session?.access_token) {
+        localStorage.setItem('supabase_token', session.access_token);
+        console.log('✅ Stored Supabase access token');
+      } else {
+        localStorage.removeItem('supabase_token');
+        console.log('🗑️ Removed Supabase access token');
+      }
 
       // Handle successful OAuth login
       if (event === 'SIGNED_IN' && session?.user) {
