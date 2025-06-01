@@ -197,17 +197,55 @@ router.post("/check", async (req, res) => {
   }
 });
 
-// Accept an invitation
-router.post("/accept", async (req, res) => {
+// Validate invitation token
+router.get("/validate", async (req, res) => {
   try {
-    const { token, email } = req.body;
-
-    if (!token || !email) {
-      return res.status(400).json({ message: "Token and email are required" });
+    const { token } = req.query;
+    
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ valid: false, message: 'Token is required' });
     }
 
     const invitation = Array.from(roleInvitations.values())
-      .find(inv => inv.token === token && inv.email === email && inv.isActive && !inv.usedAt);
+      .find(inv => inv.token === token && inv.isActive && !inv.usedAt);
+    
+    if (!invitation) {
+      return res.status(404).json({ valid: false, message: 'Invalid or expired invitation' });
+    }
+
+    // Check if invitation has expired
+    if (new Date() > invitation.expiresAt) {
+      return res.status(400).json({ valid: false, message: 'Invitation has expired' });
+    }
+
+    return res.json({ 
+      valid: true, 
+      invitation: {
+        id: invitation.id,
+        email: invitation.email,
+        role: invitation.role,
+        invitedBy: invitation.invitedBy,
+        createdAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt
+      }
+    });
+  } catch (error) {
+    console.error('Error validating invitation:', error);
+    return res.status(500).json({ valid: false, message: 'Failed to validate invitation' });
+  }
+});
+
+// Accept an invitation
+router.post("/accept", async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: "Token is required" });
+    }
+
+    const invitation = Array.from(roleInvitations.values())
+      .find(inv => inv.token === token && inv.isActive && !inv.usedAt);
 
     if (!invitation) {
       return res.status(404).json({ message: "Invalid or expired invitation" });
@@ -223,7 +261,8 @@ router.post("/accept", async (req, res) => {
 
     res.status(200).json({
       message: "Invitation accepted successfully",
-      role: invitation.role
+      role: invitation.role,
+      email: invitation.email
     });
   } catch (error) {
     console.error("Error accepting invitation:", error);

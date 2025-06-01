@@ -57,6 +57,7 @@ import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfir
 import SettingsPage from "@/pages/SettingsPage";
 import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
+import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -187,12 +188,13 @@ function Router() {
     <Switch>
       <Route path="/logout" component={LogoutPage} />
       <Route path="/auth/callback" component={AuthCallback} />
+      <Route path="/accept-invitation" component={AcceptInvitationPage} />
+      <Route path="/login" component={SupabaseLogin} />
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
         <Route path="/" component={SupabaseLogin} />
       )}
-      <Route path="/login" component={SupabaseLogin} />
       <Route path="/auth0-login" component={DirectAuth0Login} />
       <Route path="/embedded-login" component={EmbeddedLogin} />
       <Route path="/old-login" component={Login} />
