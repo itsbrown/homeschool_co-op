@@ -63,11 +63,18 @@ export default function SchoolEditPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   
+  // Clear any cached data on mount to ensure fresh fetch
+  React.useEffect(() => {
+    queryClient.removeQueries({ queryKey: ['/api/school-admin/my-school'] });
+    queryClient.removeQueries({ queryKey: ['/school-admin/my-school'] });
+  }, [queryClient]);
+  
   // Fetch the school information for the logged-in school admin
   const { data: school, isLoading, error } = useQuery<SchoolData>({
     queryKey: ['/school-admin/my-school'],
     enabled: !!user,
     staleTime: 60000, // 1 minute stale time
+    retry: 1, // Only retry once to avoid infinite loading
   });
 
   // Setup form with validation
