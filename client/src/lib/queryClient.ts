@@ -18,7 +18,7 @@ export async function apiRequest(
   body?: unknown,
   options?: RequestInit
 ): Promise<Response> {
-  const token = localStorage.getItem('auth0_token');
+  const token = localStorage.getItem('supabase_token');
 
   const config: RequestInit = {
     method,
@@ -35,12 +35,13 @@ export async function apiRequest(
     config.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${url}`, config);
+  // Use relative URL since frontend and backend run on same port
+  const response = await fetch(`/api${url}`, config);
 
   // Handle auth errors without throwing to prevent redirect loops
   if (response.status === 401) {
     console.log('🔒 API 401: Authentication required - clearing token');
-    localStorage.removeItem('auth0_token');
+    localStorage.removeItem('supabase_token');
     // Don't throw - let components handle this gracefully
     return response;
   }
