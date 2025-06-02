@@ -14,13 +14,25 @@ export default function AuthCallback() {
     if (isAuthenticated && user) {
       console.log('✅ Authentication successful, redirecting...');
       
-      // Determine redirect based on user role
-      const userRole = user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent';
+      // Determine redirect based on user metadata role
+      const userRole = user.user_metadata?.role || 
+                      (user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent');
       
-      if (userRole === 'school_admin') {
-        setLocation('/schools');
-      } else {
-        setLocation('/dashboard');
+      console.log('👤 User role detected:', userRole);
+      
+      switch (userRole) {
+        case 'school_admin':
+          setLocation('/schools');
+          break;
+        case 'educator':
+          setLocation('/educator/dashboard');
+          break;
+        case 'learner':
+          setLocation('/learner/dashboard');
+          break;
+        case 'parent':
+        default:
+          setLocation('/dashboard');
       }
     }
   }, [isAuthenticated, isLoading, user, setLocation]);

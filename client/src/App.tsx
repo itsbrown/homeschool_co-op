@@ -202,6 +202,8 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/role-selection" component={RoleSelection} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/educator/dashboard" component={Dashboard} />
+      <Route path="/learner/dashboard" component={Dashboard} />
       <Route path="/curriculum" component={Curriculum} />
       <Route path="/curriculum/:id" component={CurriculumDetail} />
       <Route path="/lessons" component={Lessons} />

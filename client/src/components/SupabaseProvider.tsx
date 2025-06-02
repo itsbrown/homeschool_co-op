@@ -92,9 +92,25 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
         if (currentUrl.includes('#access_token=') || currentUrl.includes('?code=')) {
           console.log('🔄 Cleaning up auth tokens from URL and redirecting...');
           
-          // Determine redirect based on user
-          const userRole = session.user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent';
-          const redirectPath = userRole === 'school_admin' ? '/schools' : '/dashboard';
+          // Determine redirect based on user metadata role
+          const userRole = session.user.user_metadata?.role || 
+                          (session.user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent');
+          
+          let redirectPath;
+          switch (userRole) {
+            case 'school_admin':
+              redirectPath = '/schools';
+              break;
+            case 'educator':
+              redirectPath = '/educator/dashboard';
+              break;
+            case 'learner':
+              redirectPath = '/learner/dashboard';
+              break;
+            case 'parent':
+            default:
+              redirectPath = '/dashboard';
+          }
           
           // Use setTimeout to ensure the auth state is fully processed
           setTimeout(() => {
