@@ -10,17 +10,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAuth } from "@/hooks/useAuth0";
-import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/components/SupabaseProvider";
 
 export function UserAccountNav() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, signOut } = useAuth();
   const [, setLocation] = useLocation();
 
   const handleLogout = async () => {
     try {
-      await apiRequest("POST", "/api/auth/logout");
-      setLocation("/login");
+      console.log('🔄 UserAccountNav logout clicked');
+      await signOut();
     } catch (error) {
       console.error("Logout failed", error);
     }
