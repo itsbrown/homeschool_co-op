@@ -1,0 +1,79 @@
+import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
+
+const router = Router();
+
+// Get children for the authenticated parent
+router.get('/children', async (req, res) => {
+  try {
+    // Get the authenticated user's email from the token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    // Decode the Supabase JWT to get user email
+    let userEmail;
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+      userEmail = payload.email;
+      console.log('👨‍👩‍👧‍👦 Parent requesting children for email:', userEmail);
+    } catch (error) {
+      console.error('❌ Error decoding token:', error);
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Email not found in token' });
+    }
+
+    // Read children from file
+    const childrenPath = path.join(process.cwd(), 'data', 'children.json');
+    
+    if (!fs.existsSync(childrenPath)) {
+      console.log('📁 No children file found, returning empty array');
+      return res.json([]);
+    }
+
+    const childrenData = JSON.parse(fs.readFileSync(childrenPath, 'utf8'));
+    
+    // Filter children by parent email
+    const userChildren = childrenData.filter((child: any) => 
+      child.parentEmail === userEmail
+    );
+
+    console.log(`🔍 Found ${userChildren.length} children for parent ${userEmail}:`, 
+      userChildren.map((c: any) => `${c.firstName} ${c.lastName}`));
+
+    // Transform to expected format
+    const transformedChildren = userChildren.map((child: any) => ({
+      id: child.id,
+      name: `${child.firstName} ${child.lastName}`,
+      firstName: child.firstName,
+      lastName: child.lastName,
+      gradeLevel: child.gradeLevel || 'N/A',
+      age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
+      birthdate: child.birthdate,
+      parentName: userEmail,
+      email: userEmail,
+      enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      status: 'Active',
+      classes: [],
+      avatar: child.profileImage || '',
+      interests: child.interests || [],
+      allergies: child.allergies || 'None specified',
+      specialNeeds: child.specialNeeds || '',
+      school: child.school || 'American Seekers Academy'
+    }));
+
+    res.json(transformedChildren);
+  } catch (error) {
+    console.error('❌ Error fetching parent children:', error);
+    res.status(500).json({ message: 'Error fetching children' });
+  }
+});
+
+export default router;

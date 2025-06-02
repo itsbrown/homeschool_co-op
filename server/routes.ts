@@ -21,6 +21,7 @@ import ocrTestRouter from "./api/ocr-test";
 import schoolsRouter from "./api/schools";
 import schoolAdminRouter from "./api/school-admin";
 import roleInvitationsRouter from "./api/role-invitations";
+import parentRouter from "./api/parent";
 import { processEnrollmentMessage } from "./api/enrollment-assistant";
 import migrationRouter from "./routes/migration";
 import archiver from 'archiver';
@@ -1747,6 +1748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
+  app.use("/api/parent", parentRouter);
   app.use("/api/admin/role-invitations", roleInvitationsRouter);
 
   // Student registration endpoint for school admins

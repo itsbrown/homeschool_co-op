@@ -41,27 +41,31 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     enabled: true,
   });
 
-  // Fetch children from school admin students endpoint
+  // Fetch children from authenticated parent endpoint
   const { data: children = [] } = useQuery({
-    queryKey: ["/api/schools/students"],
+    queryKey: ["/api/parent/children"],
     queryFn: async () => {
       try {
-        const response = await fetch("/api/schools/students");
+        const token = localStorage.getItem('supabase_token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+        
+        const response = await fetch("/api/parent/children", {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const students = await response.json();
-        // Transform students data to children format for enrollment
-        return students.map((student: any) => ({
-          id: student.id,
-          firstName: student.name.split(' ')[0],
-          lastName: student.name.split(' ').slice(1).join(' '),
-          name: student.name,
-          gradeLevel: student.gradeLevel,
-          age: student.age
-        }));
+        
+        const children = await response.json();
+        return children;
       } catch (error) {
-        console.error("Error fetching students:", error);
+        console.error("Error fetching children:", error);
         return [];
       }
     },

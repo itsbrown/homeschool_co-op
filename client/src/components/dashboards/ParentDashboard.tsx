@@ -18,27 +18,31 @@ export default function ParentDashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
 
-  // Fetch children data from school admin students endpoint
+  // Fetch children data from authenticated parent endpoint
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
-    queryKey: ["/api/schools/students"],
+    queryKey: ["/api/parent/children"],
     queryFn: async () => {
       try {
-        const response = await fetch("/api/schools/students");
+        const token = localStorage.getItem('supabase_token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+        
+        const response = await fetch("/api/parent/children", {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const students = await response.json();
-        // Transform students data to match expected format
-        return students.map((student: any) => ({
-          id: student.id,
-          name: student.name,
-          age: student.age,
-          gradeLevel: student.gradeLevel,
-          firstName: student.name.split(' ')[0],
-          lastName: student.name.split(' ').slice(1).join(' ')
-        }));
+        
+        const children = await response.json();
+        return children;
       } catch (error) {
-        console.error("Error fetching students:", error);
+        console.error("Error fetching children:", error);
         return [];
       }
     },
