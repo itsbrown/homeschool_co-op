@@ -5,14 +5,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard, RefreshCw } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 import EnrollmentAssistantModal from "@/components/enrollment/EnrollmentAssistantModal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 
 export default function ParentDashboard() {
-  const { user, getAccessTokenSilently } = useAuth();
+  const { user, session } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -49,12 +49,15 @@ export default function ParentDashboard() {
     enabled: true,
   });
 
-  // Fetch enrollments data with Auth0 token
+  // Fetch enrollments data with Supabase token
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/enrollments"],
     queryFn: async () => {
       try {
-        const token = await getAccessTokenSilently();
+        const token = session?.access_token;
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
         const response = await fetch("/api/enrollments", {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -69,7 +72,7 @@ export default function ParentDashboard() {
         return [];
       }
     },
-    enabled: !!user,
+    enabled: !!user && !!session,
   });
 
   // Fetch upcoming events with Auth0 token

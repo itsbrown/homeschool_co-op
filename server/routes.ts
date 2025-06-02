@@ -39,14 +39,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const { initializeDatabase } = await import('./init-db');
   await initializeDatabase();
 
-  // Import Auth0 token-based authentication middleware
-  const { verifyAuth0Token, requireRole, requireAdmin, requireEducator } = await import("./middleware/auth0-auth");
+  // Import Supabase token-based authentication middleware
+  const { jwtCheck, requireRole, requireAdmin, requireEducator } = await import("./middleware/auth0-auth");
 
   // Register API routers
   // Children endpoint is now handled directly below with Auth0 authentication
 
   // Parent-Child sync endpoint
-  app.post("/api/sync-children", verifyAuth0Token, async (req, res) => {
+  app.post("/api/sync-children", jwtCheck, async (req, res) => {
     try {
       const user = req.user;
       console.log('Sync children - Auth0 user payload:', JSON.stringify(user, null, 2));
@@ -570,12 +570,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/events/upcoming", verifyAuth0Token, async (req: any, res) => {
+  app.get("/api/events/upcoming", jwtCheck, async (req: any, res) => {
     try {
-      // Check multiple possible locations for email in the Auth0 token
-      const userEmail = req.user?.email || req.auth?.payload?.email || req.user?.sub;
+      // Get email from Supabase auth structure
+      const userEmail = req.auth?.email;
       
-      console.log('🎪 Events API - Auth0 user object:', JSON.stringify(req.user, null, 2));
+      console.log('🎪 Events API - Supabase auth object:', JSON.stringify(req.auth, null, 2));
       console.log('🎪 Events API - Extracted email:', userEmail);
       
       if (!userEmail) {
@@ -1284,7 +1284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/programs/:id', isAuthenticated, requireAdmin, programsApi.deleteProgram);
 
   // Program Enrollments routes
-  app.get('/api/enrollments', verifyAuth0Token, programEnrollmentsApi.getMyChildrenEnrollments);
+  app.get('/api/enrollments', jwtCheck, programEnrollmentsApi.getMyChildrenEnrollments);
   app.get('/api/programs/:programId/enrollments', isAuthenticated, requireEducator, programEnrollmentsApi.getProgramEnrollments);
   app.get('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.getEnrollmentById);
   app.post('/api/enrollments', isAuthenticated, programEnrollmentsApi.createEnrollment);
