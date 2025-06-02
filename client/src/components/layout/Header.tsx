@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 import { Bell, Mail, Menu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (e: React.FormEvent) => {
@@ -88,7 +88,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => logout()}>
+            <DropdownMenuItem onClick={() => signOut()}>
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

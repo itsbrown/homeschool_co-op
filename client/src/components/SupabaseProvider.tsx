@@ -141,6 +141,10 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    // Clear any stored access tokens
+    localStorage.removeItem('supabase_access_token');
+    // Redirect to login page
+    window.location.href = '/login';
   };
 
   const signInWithGoogle = async () => {
