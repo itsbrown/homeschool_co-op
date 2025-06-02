@@ -24,39 +24,22 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
 
     console.log('✅ Token verified successfully for:', user.email);
 
-    // Get user from database to get proper role
-    const pool = require('../db/pgClient');
-    let client;
-    try {
-      client = await pool.connect();
-      const userResult = await client.query(
-        'SELECT * FROM users.accounts WHERE email = $1 OR firebase_uid = $2',
-        [user.email, user.id]
-      );
-      const dbUser = userResult.rows[0];
-      
-      // Attach user info to request
-      req.auth = {
-        userId: user.id,
-        supabaseId: user.id,
-        email: user.email,
-        role: dbUser?.role || 'school_admin', // Use DB role if available
-        schoolId: dbUser?.school_id,
-        isActive: true,
-        dbUser: dbUser
-      };
-    } catch (dbError) {
-      console.warn('⚠️ Could not fetch user from database, using default role:', dbError.message);
-      req.auth = {
-        userId: user.id,
-        supabaseId: user.id,
-        email: user.email,
-        role: 'school_admin', // Default fallback
-        isActive: true
-      };
-    } finally {
-      if (client) client.release();
-    }
+    // Use the role from the token metadata - no database lookup needed
+    req.user = {
+      ...user,
+      role: user.user_metadata?.role || 'parent',
+      id: user.sub,
+      email: user.email
+    };
+
+    // Also set req.auth for compatibility with existing code
+    req.auth = {
+      userId: user.sub,
+      supabaseId: user.sub,
+      email: user.email,
+      role: user.user_metadata?.role || 'parent',
+      isActive: true
+    };
 
     console.log('✅ Token verified for user:', user.email);
     next();
