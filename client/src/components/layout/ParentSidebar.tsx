@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   items: {
@@ -58,8 +58,13 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
 }
 
 export default function ParentSidebar() {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = React.useState(false);
+
+  const handleLogout = async () => {
+    console.log('🚪 ParentSidebar logout clicked');
+    await signOut();
+  };
   
   // Parent navigation items
   const navigationItems = [
@@ -140,7 +145,7 @@ export default function ParentSidebar() {
               <Button 
                 variant="outline" 
                 className="w-full" 
-                onClick={() => logout()}
+                onClick={handleLogout}
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 Log Out
@@ -176,11 +181,9 @@ export default function ParentSidebar() {
               </div>
             </div>
             
-            <Button variant="outline" className="w-full" asChild>
-              <a href="/logout">
-                <LogOut className="mr-2 h-4 w-4" />
-                Log Out
-              </a>
+            <Button variant="outline" className="w-full" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Log Out
             </Button>
           </div>
         </div>
