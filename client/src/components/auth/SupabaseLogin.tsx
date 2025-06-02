@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../SupabaseProvider';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,12 +10,38 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 
 export const SupabaseLogin: React.FC = () => {
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { signIn, signUp, signInWithGoogle, user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // Handle redirect after successful authentication
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const userRole = user.user_metadata?.role || 
+                      (user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent');
+      
+      console.log('👤 User logged in with role:', userRole);
+      
+      switch (userRole) {
+        case 'school_admin':
+          setLocation('/schools');
+          break;
+        case 'educator':
+          setLocation('/educator/dashboard');
+          break;
+        case 'learner':
+          setLocation('/learner/dashboard');
+          break;
+        case 'parent':
+        default:
+          setLocation('/dashboard');
+      }
+    }
+  }, [isAuthenticated, user, setLocation]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
