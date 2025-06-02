@@ -88,7 +88,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut()}>
+            <DropdownMenuItem onClick={() => {
+              console.log('🖱️ Logout button clicked');
+              signOut();
+            }}>
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

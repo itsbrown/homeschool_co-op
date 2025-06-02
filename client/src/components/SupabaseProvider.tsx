@@ -140,11 +140,25 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    // Clear any stored access tokens
-    localStorage.removeItem('supabase_access_token');
-    // Redirect to login page
-    window.location.href = '/login';
+    try {
+      console.log('🚪 Starting logout process...');
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('❌ Logout error:', error);
+        return;
+      }
+      console.log('✅ Supabase logout successful');
+      
+      // Clear any stored access tokens
+      localStorage.removeItem('supabase_access_token');
+      console.log('🧹 Cleared local storage');
+      
+      // Redirect to login page
+      console.log('🔄 Redirecting to login...');
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('💥 Logout failed:', error);
+    }
   };
 
   const signInWithGoogle = async () => {
