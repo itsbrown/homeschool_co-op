@@ -327,15 +327,17 @@ export default function StudentsPage() {
                               <TableCell>{student.parentName}</TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap gap-1">
-                                  {student.classes.length > 2 ? (
+                                  {student.classes && student.classes.length > 2 ? (
                                     <>
                                       <Badge variant="outline">{student.classes[0]}</Badge>
                                       <Badge variant="outline" className="whitespace-nowrap">+{student.classes.length - 1} more</Badge>
                                     </>
-                                  ) : (
+                                  ) : student.classes && student.classes.length > 0 ? (
                                     student.classes.map((cls, index) => (
                                       <Badge key={index} variant="outline">{cls}</Badge>
                                     ))
+                                  ) : (
+                                    <span className="text-gray-500">No classes</span>
                                   )}
                                 </div>
                               </TableCell>
