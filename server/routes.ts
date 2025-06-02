@@ -110,7 +110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auth0 user sync endpoint
-  app.post("/api/auth/sync", verifyAuth0Token, async (req, res) => {
+  app.post("/api/auth/sync", jwtCheck, async (req, res) => {
     try {
       const user = req.user;
       
@@ -162,8 +162,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Auth0 token-based authentication middleware
-  const isAuthenticated = verifyAuth0Token;
+  // Supabase token-based authentication middleware
+  const isAuthenticated = jwtCheck;
 
   // Role-based authorization middleware using Auth0 tokens
   const hasRole = (roles: string[]) => {
@@ -256,7 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auth0 token verification endpoint - replaces traditional login
-  app.get("/api/auth/verify", verifyAuth0Token, async (req: any, res) => {
+  app.get("/api/auth/verify", jwtCheck, async (req: any, res) => {
     try {
       // Token is already verified by middleware, user info is in req.user
       const userInfo = {
@@ -1885,7 +1885,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/upload/classes', isAuthenticated, requireAdmin, csvUploadApi.uploadClassesCsv);
 
   // Children API endpoint for parents
-  app.get("/api/children", verifyAuth0Token, async (req, res) => {
+  app.get("/api/children", jwtCheck, async (req, res) => {
     try {
       // Extract access token from Authorization header
       const accessToken = req.headers.authorization?.substring(7); // Remove 'Bearer ' prefix

@@ -75,12 +75,15 @@ export default function ParentDashboard() {
     enabled: !!user && !!session,
   });
 
-  // Fetch upcoming events with Auth0 token
+  // Fetch upcoming events with Supabase token
   const { data: eventsData, isLoading: eventsLoading } = useQuery({
     queryKey: ["/api/events/upcoming"],
     queryFn: async () => {
       try {
-        const token = await getAccessTokenSilently();
+        const token = session?.access_token;
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
         const response = await fetch("/api/events/upcoming", {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -95,7 +98,7 @@ export default function ParentDashboard() {
         return [];
       }
     },
-    enabled: !!user,
+    enabled: !!user && !!session,
   });
 
   // Fetch payment summary (keeping original since it works)
