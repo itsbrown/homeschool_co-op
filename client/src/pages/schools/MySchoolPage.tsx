@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import UnifiedSchoolAdminSidebar from '@/components/layout/UnifiedSchoolAdminSidebar';
+import AppShell from '@/components/layout/AppShell';
 
 // School data interface
 interface SchoolData {
@@ -48,34 +48,23 @@ export default function MySchoolPage() {
     onSuccess: () => {
       toast({
         title: "School created successfully",
-        description: "Your school has been set up. You can now edit the details.",
+        description: "Your school has been set up and registered.",
       });
       refetch();
     },
     onError: (error) => {
       toast({
-        title: "Error creating school",
-        description: "There was a problem setting up your school. Please try again.",
         variant: "destructive",
+        title: "Failed to create school",
+        description: error?.message || "An error occurred while setting up your school.",
       });
-    }
+    },
   });
 
-  // Show error toast if there's an error (but not for 404 which means no school setup)
-  useEffect(() => {
-    if (error && !error.message.includes('404') && !error.message.includes('No school found')) {
-      toast({
-        title: "Error loading school data",
-        description: "There was a problem loading your school information. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [error, toast]);
+  // Check if user needs to set up a school
+  const userEmail = user?.email;
+  const needsSetup = !school && userEmail && !isLoading;
 
-  // Check if user needs school setup
-  const needsSetup = error && (error.message.includes('404') || error.message.includes('No school found'));
-
-  // Handle setup button click
   const handleSetupSchool = async () => {
     try {
       await setupSchoolMutation.mutateAsync();
@@ -86,23 +75,21 @@ export default function MySchoolPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-gray-100">
-        <UnifiedSchoolAdminSidebar />
-        <div className="flex-1 overflow-auto">
+      <AppShell>
+        <div className="container mx-auto p-4">
           <div className="h-full flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <span className="ml-2">Loading school information...</span>
           </div>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   if (!school) {
     return (
-      <div className="flex h-screen bg-gray-100">
-        <UnifiedSchoolAdminSidebar />
-        <div className="flex-1 overflow-auto">
+      <AppShell>
+        <div className="container mx-auto p-4">
           <div className="max-w-3xl mx-auto my-8">
             <Card>
               <CardHeader>
@@ -140,16 +127,14 @@ export default function MySchoolPage() {
             </Card>
           </div>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <UnifiedSchoolAdminSidebar />
-      <div className="flex-1 overflow-auto">
+    <AppShell>
+      <div className="container mx-auto p-4">
         <div className="max-w-6xl mx-auto my-8">
-          {/* School Overview Card */}
           <Card className="mb-8">
             <CardHeader className="pb-3">
               <div className="flex items-center space-x-4">
@@ -158,38 +143,42 @@ export default function MySchoolPage() {
                     <AvatarImage src={school.logo} alt={school.name} />
                   ) : (
                     <AvatarFallback className="text-lg">
-                      {school.name?.substring(0, 2).toUpperCase()}
+                      {school.name.split(' ').map(word => word[0]).join('').toUpperCase()}
                     </AvatarFallback>
                   )}
                 </Avatar>
                 <div>
-                  <CardTitle className="text-2xl">{school.name}</CardTitle>
-                  <div className="flex items-center mt-1 space-x-2">
+                  <CardTitle className="text-2xl mb-1">{school.name}</CardTitle>
+                  <CardDescription className="flex items-center space-x-2">
                     <Badge variant="secondary">{school.type}</Badge>
-                    <Badge variant={school.status === "active" ? "outline" : "default"}>
-                      {school.status || "Active"}
+                    <Badge variant={school.status === 'active' ? 'default' : 'secondary'}>
+                      {school.status}
                     </Badge>
-                  </div>
+                  </CardDescription>
                 </div>
               </div>
             </CardHeader>
+            
             <CardContent>
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList>
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="details">Details</TabsTrigger>
                   <TabsTrigger value="stats">Statistics</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="overview">
-                  <div className="space-y-4 mt-6">
-                    {(school.address || school.city) && (
-                      <div className="space-y-3">
-                        <div className="flex items-center space-x-2">
-                          <MapPin className="h-5 w-5 text-muted-foreground" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {(school.address || school.city || school.state || school.zipCode) && (
+                      <div className="flex items-start space-x-2">
+                        <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                        <div>
+                          {school.address && <div>{school.address}</div>}
                           <div>
-                            {school.address && <p>{school.address}</p>}
-                            <p>{school.city}, {school.state} {school.zipCode}</p>
+                            {school.city && school.city}
+                            {school.city && school.state && ', '}
+                            {school.state && school.state}
+                            {school.zipCode && ` ${school.zipCode}`}
                           </div>
                         </div>
                       </div>
@@ -309,6 +298,6 @@ export default function MySchoolPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }
