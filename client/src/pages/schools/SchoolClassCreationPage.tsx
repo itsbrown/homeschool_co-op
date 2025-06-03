@@ -281,15 +281,11 @@ export default function SchoolClassCreationPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="early-elementary">Early Elementary</SelectItem>
-                            <SelectItem value="lower-elementary">Lower Elementary</SelectItem>
-                            <SelectItem value="middle-elementary">Middle Elementary</SelectItem>
-                            <SelectItem value="elementary">Elementary (K-5)</SelectItem>
-                            <SelectItem value="middle-school">Middle School</SelectItem>
-                            <SelectItem value="middle">Middle School (6-8)</SelectItem>
-                            <SelectItem value="high-school">High School</SelectItem>
-                            <SelectItem value="high">High School (9-12)</SelectItem>
-                            <SelectItem value="k-12">All Grades (K-12)</SelectItem>
+                            <SelectItem value="pre-k-k">Pre K - K</SelectItem>
+                            <SelectItem value="grades-1-2">Grades 1-2</SelectItem>
+                            <SelectItem value="grades-3-5">Grades 3-5</SelectItem>
+                            <SelectItem value="grades-6-8">Grades 6-8</SelectItem>
+                            <SelectItem value="grades-9-12">Grades 9-12</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -433,11 +429,11 @@ export default function SchoolClassCreationPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {staffMembers.map((staff: any) => {
+                          {staffMembers.map((staff: any, index: number) => {
                             const staffName = staff.name || `${staff.firstName} ${staff.lastName}`;
                             return (
                               <SelectItem 
-                                key={staff.id} 
+                                key={`${staff.id}-${index}`} 
                                 value={staffName}
                               >
                                 {staffName}
