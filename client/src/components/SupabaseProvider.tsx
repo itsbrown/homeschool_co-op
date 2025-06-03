@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { createClient, User, Session } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { createClient, User, Session } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  throw new Error("Missing Supabase environment variables");
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -27,7 +27,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within a SupabaseProvider');
+    throw new Error("useAuth must be used within a SupabaseProvider");
   }
   return context;
 };
@@ -36,7 +36,9 @@ interface SupabaseProviderProps {
   children: React.ReactNode;
 }
 
-export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) => {
+export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,50 +46,53 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
 
   useEffect(() => {
     // Get initial session with error handling
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log('Supabase session check:', { session, error });
-      if (error) {
-        console.error('Supabase session error:', error);
-        setError(error);
-      }
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-      
-      // Store initial token if available
-      if (session?.access_token) {
-        localStorage.setItem('supabase_token', session.access_token);
-        console.log('✅ Stored initial Supabase access token');
-      }
-    }).catch((err) => {
-      console.error('Supabase connection error:', err);
-      setError(err);
-      setIsLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session }, error }) => {
+        console.log("Supabase session check:", { session, error });
+        if (error) {
+          console.error("Supabase session error:", error);
+          setError(error);
+        }
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+
+        // Store initial token if available
+        if (session?.access_token) {
+          localStorage.setItem("supabase_token", session.access_token);
+          console.log("✅ Stored initial Supabase access token");
+        }
+      })
+      .catch((err) => {
+        console.error("Supabase connection error:", err);
+        setError(err);
+        setIsLoading(false);
+      });
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state change:', { event, session });
+      console.log("Auth state change:", { event, session });
 
       // Update state
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
-      
+
       // Manage access token
       if (session?.access_token) {
-        localStorage.setItem('supabase_token', session.access_token);
-        console.log('✅ Stored Supabase access token');
+        localStorage.setItem("supabase_token", session.access_token);
+        console.log("✅ Stored Supabase access token");
       } else {
-        localStorage.removeItem('supabase_token');
-        console.log('🗑️ Removed Supabase access token');
+        localStorage.removeItem("supabase_token");
+        console.log("🗑️ Removed Supabase access token");
       }
 
       // Handle logout completion
-      if (event === 'SIGNED_OUT') {
-        console.log('🚪 User signed out - auth state cleared');
+      if (event === "SIGNED_OUT") {
+        console.log("🚪 User signed out - auth state cleared");
         setSession(null);
         setUser(null);
         setIsLoading(false);
@@ -95,38 +100,45 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       }
 
       // Handle successful OAuth login or session refresh
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('✅ User signed in successfully, checking for redirect...');
-        
+      if (event === "SIGNED_IN" && session?.user) {
+        console.log("✅ User signed in successfully, checking for redirect...");
+
         // Only redirect if on login page, root, or OAuth callback
         const currentUrl = window.location.href;
-        if (currentUrl.includes('#access_token=') || currentUrl.includes('?code=') || 
-            (window.location.pathname === '/login' || window.location.pathname === '/')) {
-          console.log('🔄 Cleaning up auth tokens from URL and redirecting...');
-          
+        if (
+          currentUrl.includes("#access_token=") ||
+          currentUrl.includes("?code=") ||
+          window.location.pathname === "/login" ||
+          window.location.pathname === "/"
+        ) {
+          console.log("🔄 Cleaning up auth tokens from URL and redirecting...");
+
           // Determine redirect based on user metadata role
           const userEmail = session.user.email;
-          const userRole = session.user.user_metadata?.role || 
-                          (userEmail === 'coreycreates@gmail.com' || 
-                           userEmail === 'contact.americanseekersacademy@gmail.com' ||
-                           userEmail === 'contact@americanseekersacademy.com' ? 'school_admin' : 'parent');
-          
+          const userRole =
+            session.user.user_metadata?.role ||
+            (userEmail === "coreycreates@gmail.com" ||
+            userEmail === "contact.americanseekersacademy@gmail.com" ||
+            userEmail === "contact@americanseekersacademy.com"
+              ? "school_admin"
+              : "parent");
+
           let redirectPath;
           switch (userRole) {
-            case 'school_admin':
-              redirectPath = '/schools';
+            case "school_admin":
+              redirectPath = "/schools";
               break;
-            case 'educator':
-              redirectPath = '/educator/dashboard';
+            case "educator":
+              redirectPath = "/educator/dashboard";
               break;
-            case 'learner':
-              redirectPath = '/learner/dashboard';
+            case "learner":
+              redirectPath = "/learner/dashboard";
               break;
-            case 'parent':
+            case "parent":
             default:
-              redirectPath = '/dashboard';
+              redirectPath = "/dashboard";
           }
-          
+
           // Redirect only if not already on the target path
           if (window.location.pathname !== redirectPath) {
             console.log(`🔄 Redirecting to ${redirectPath}...`);
@@ -156,41 +168,42 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
   };
 
   const signOut = async () => {
-    console.log('🚪 Starting logout process...');
-    
+    console.log("🚪 Starting logout process...");
+    console.log("updated code");
+
     // Immediately clear all auth state
     setSession(null);
     setUser(null);
     setIsLoading(false);
-    
+
     // Clear all local storage items
-    localStorage.removeItem('supabase_token');
-    localStorage.removeItem('supabase_access_token');
-    localStorage.removeItem('logout_in_progress');
-    
+    localStorage.removeItem("supabase_token");
+    localStorage.removeItem("supabase_access_token");
+    localStorage.removeItem("logout_in_progress");
+
     try {
       // Sign out from Supabase (fire and forget)
       await supabase.auth.signOut();
     } catch (error) {
-      console.error('Supabase logout error:', error);
+      console.error("Supabase logout error:", error);
     }
-    
+
     // Immediate redirect without delay
-    console.log('🔄 Redirecting to login...');
-    window.location.replace('/login');
+    console.log("🔄 Redirecting to login...");
+    window.location.replace("/login");
   };
 
   const signInWithGoogle = async () => {
     // Use production domain for OAuth redirects
-    const redirectUrl = import.meta.env.PROD 
-      ? `https://${import.meta.env.VITE_REPLIT_DOMAIN || 'e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev'}`
+    const redirectUrl = import.meta.env.PROD
+      ? `https://${import.meta.env.VITE_REPLIT_DOMAIN || "e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev"}`
       : `${window.location.origin}`;
-    
+
     const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: "google",
       options: {
-        redirectTo: redirectUrl
-      }
+        redirectTo: redirectUrl,
+      },
     });
     return { data, error };
   };
@@ -213,7 +226,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
 export const useSupabase = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useSupabase must be used within a SupabaseProvider');
+    throw new Error("useSupabase must be used within a SupabaseProvider");
   }
   return context;
 };
