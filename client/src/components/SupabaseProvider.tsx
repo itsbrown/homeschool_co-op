@@ -87,12 +87,12 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
 
       // Handle logout completion
       if (event === 'SIGNED_OUT') {
-        console.log('🚪 User signed out, redirecting to login...');
+        console.log('🚪 User signed out, clearing state...');
         localStorage.removeItem('logout_in_progress');
         localStorage.removeItem('supabase_access_token');
         setSession(null);
         setUser(null);
-        window.location.href = '/login';
+        // Don't redirect here - let the signOut function handle it
         return;
       }
 
@@ -164,10 +164,15 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       // Set logout flag to prevent automatic redirects
       localStorage.setItem('logout_in_progress', 'true');
       
-      // Clear all session-related data
+      // Clear all session-related data immediately
       localStorage.removeItem('supabase_token');
       localStorage.removeItem('supabase_access_token');
       console.log('🧹 Cleared local storage');
+      
+      // Reset state immediately to prevent any race conditions
+      setSession(null);
+      setUser(null);
+      setIsLoading(false);
       
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
@@ -177,23 +182,22 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
         console.log('✅ Supabase logout successful');
       }
 
-      // Reset state immediately
-      setSession(null);
-      setUser(null);
-      setIsLoading(false);
-
-      // Wait briefly to ensure the SIGNED_OUT event is processed
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait longer to ensure all state changes are processed
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       // Clear logout flag and redirect
       localStorage.removeItem('logout_in_progress');
       console.log('🔄 Redirecting to login...');
-      window.location.href = '/login';
+      
+      // Use replace to prevent back navigation issues
+      window.location.replace('/login');
     } catch (error) {
       console.error('💥 Logout failed:', error);
       // Ensure we still redirect even if logout fails
       localStorage.removeItem('logout_in_progress');
-      window.location.href = '/login';
+      setSession(null);
+      setUser(null);
+      window.location.replace('/login');
     }
   };
 
