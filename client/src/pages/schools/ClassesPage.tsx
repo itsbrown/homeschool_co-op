@@ -29,7 +29,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import UnifiedSchoolAdminSidebar from '@/components/layout/UnifiedSchoolAdminSidebar';
+import AppShell from '@/components/layout/AppShell';
 import { apiRequest } from "@/lib/queryClient";
 
 // Sample class data (will be replaced with API data)
@@ -59,44 +59,30 @@ const sampleClasses = [
     enrollmentCount: 15,
     maxEnrollment: 20,
     schedule: "Tue, Thu 10:00-11:30 AM",
-    startDate: "2023-09-06",
-    endDate: "2023-12-16",
+    startDate: "2023-09-07",
+    endDate: "2023-12-14",
   },
   {
     id: 3,
-    title: "Beginner Spanish",
-    category: "Languages",
-    subject: "Spanish",
-    instructor: "Ms. Elena Rodriguez",
-    gradeLevel: "6-8",
-    status: "Active",
-    enrollmentCount: 22,
-    maxEnrollment: 24,
-    schedule: "Mon, Wed, Fri 9:00-10:00 AM",
-    startDate: "2023-09-05",
-    endDate: "2023-12-15",
-  },
-  {
-    id: 4,
-    title: "Biology and Ecosystems",
-    category: "Science",
-    subject: "Biology",
-    instructor: "Dr. Robert Williams",
-    gradeLevel: "9-10",
+    title: "Creative Writing Workshop",
+    category: "Language Arts",
+    subject: "English",
+    instructor: "Ms. Emily Rodriguez",
+    gradeLevel: "7-9",
     status: "Upcoming",
     enrollmentCount: 12,
-    maxEnrollment: 24,
-    schedule: "Tue, Thu 1:00-2:30 PM",
-    startDate: "2024-01-08",
+    maxEnrollment: 18,
+    schedule: "Fri 1:00-2:30 PM",
+    startDate: "2024-01-15",
     endDate: "2024-05-20",
   },
   {
-    id: 5,
-    title: "Creative Writing Workshop",
-    category: "English",
-    subject: "Writing",
-    instructor: "Ms. Amanda Taylor",
-    gradeLevel: "7-9",
+    id: 4,
+    title: "Science Laboratory",
+    category: "Science",
+    subject: "Chemistry",
+    instructor: "Dr. Robert Kim",
+    gradeLevel: "10-12",
     status: "Draft",
     enrollmentCount: 0,
     maxEnrollment: 15,
@@ -135,333 +121,313 @@ export default function SchoolClassesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-gray-100">
-        <UnifiedSchoolAdminSidebar />
-        <div className="flex-1 overflow-auto">
+      <AppShell>
+        <div className="container mx-auto p-4">
           <div className="flex items-center justify-center h-96">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
             <span className="ml-2 text-lg">Loading classes...</span>
           </div>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-screen bg-gray-100">
-        <UnifiedSchoolAdminSidebar />
-        <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-4xl mx-auto p-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Error Loading Classes</CardTitle>
-              <CardDescription>
-                There was a problem loading your school's classes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p>Please try again later or contact support if this issue persists.</p>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={() => window.location.reload()}>Try Again</Button>
-            </CardFooter>
-          </Card>
+      <AppShell>
+        <div className="container mx-auto p-4">
+          <div className="max-w-4xl mx-auto p-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Error Loading Classes</CardTitle>
+                <CardDescription>
+                  There was a problem loading your school's classes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>Please try again later or contact support if this issue persists.</p>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </CardFooter>
+            </Card>
+          </div>
         </div>
-      </div>
-    </div>
+      </AppShell>
     );
   }
 
-  // Get the classes data array
-  const classesData = classes?.items || [];
-  
-  // Filter classes based on search query and filters
-  const filteredClasses = classesData.filter(cls => {
-    const matchesSearch = searchQuery === "" || 
-      cls.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (cls.instructorName && cls.instructorName.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    const matchesCategory = categoryFilter === "" || categoryFilter === "all-categories" || cls.category === categoryFilter;
-    const matchesStatus = statusFilter === "" || statusFilter === "all-statuses" || cls.status === statusFilter;
-    const matchesGradeLevel = gradeLevelFilter === "" || gradeLevelFilter === "all-grades" || cls.gradeLevel === gradeLevelFilter;
-    
-    return matchesSearch && matchesCategory && matchesStatus && matchesGradeLevel;
+  // Use API data if available, otherwise fall back to sample data
+  const classData = classes?.items || sampleClasses;
+
+  // Filter logic
+  const filteredClasses = classData.filter((cls: any) => {
+    return (
+      (!searchQuery || 
+       cls.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+       cls.instructor.toLowerCase().includes(searchQuery.toLowerCase())) &&
+      (!categoryFilter || cls.category === categoryFilter) &&
+      (!statusFilter || cls.status === statusFilter) &&
+      (!gradeLevelFilter || cls.gradeLevel === gradeLevelFilter)
+    );
   });
 
-  // Get unique categories, statuses, and grade levels for filters
-  const categories = classesData.length > 0 ? [...new Set(classesData.map(cls => cls.category))] : [];
-  const statuses = classesData.length > 0 ? [...new Set(classesData.map(cls => cls.status))] : [];
-  const gradeLevels = classesData.length > 0 ? [...new Set(classesData.map(cls => cls.gradeLevel))] : [];
+  // Extract unique values for filters
+  const categories = [...new Set(classData.map((cls: any) => cls.category))];
+  const statuses = [...new Set(classData.map((cls: any) => cls.status))];
+  const gradeLevels = [...new Set(classData.map((cls: any) => cls.gradeLevel))];
 
-  // Helper function to get color styles from status
-  const getStatusStyles = (status: string) => {
-    const baseColor = STATUS_COLORS[status] || "gray";
-    return `bg-${baseColor}-100 text-${baseColor}-800 border-${baseColor}-200`;
+  const exportClassList = () => {
+    const csvContent = [
+      ['Class Name', 'Category', 'Instructor', 'Grade Level', 'Status', 'Enrollment', 'Schedule'],
+      ...filteredClasses.map((cls: any) => [
+        cls.title,
+        cls.category,
+        cls.instructor,
+        cls.gradeLevel,
+        cls.status,
+        `${cls.enrollmentCount}/${cls.maxEnrollment}`,
+        cls.schedule
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'class-list.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Class list exported",
+      description: "Your class list has been downloaded as a CSV file.",
+    });
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <UnifiedSchoolAdminSidebar />
-      <div className="flex-1 overflow-auto">
+    <AppShell>
+      <div className="container mx-auto p-4">
         <div className="max-w-6xl mx-auto p-6">
           <div className="flex flex-col space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
-            <div>
-              <h1 className="text-3xl font-bold">School Classes</h1>
-              <p className="text-muted-foreground">Manage your school's classes and curricula</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
+              <div>
+                <h1 className="text-3xl font-bold">School Classes</h1>
+                <p className="text-muted-foreground">Manage your school's classes and curricula</p>
+              </div>
+              <Link href="/schools/classes/new">
+                <Button>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add New Class
+                </Button>
+              </Link>
             </div>
-            <Link href="/schools/classes/new">
-              <Button>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add New Class
-              </Button>
-            </Link>
-          </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6">
-              <TabsTrigger value="list">List View</TabsTrigger>
-              <TabsTrigger value="grid">Grid View</TabsTrigger>
-              <TabsTrigger value="calendar">Calendar View</TabsTrigger>
-            </TabsList>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-6">
+                <TabsTrigger value="list">List View</TabsTrigger>
+                <TabsTrigger value="grid">Grid View</TabsTrigger>
+                <TabsTrigger value="calendar">Calendar View</TabsTrigger>
+              </TabsList>
 
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col space-y-4 xl:flex-row xl:space-y-0 xl:space-x-4">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by class name or instructor..."
-                        className="pl-8"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all-categories">All Categories</SelectItem>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>{category}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all-statuses">All Statuses</SelectItem>
-                        {statuses.map((status) => (
-                          <SelectItem key={status} value={status}>{status}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={gradeLevelFilter} onValueChange={setGradeLevelFilter}>
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="Grade Level" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all-grades">All Grades</SelectItem>
-                        {gradeLevels.map((grade) => (
-                          <SelectItem key={grade} value={grade}>{grade}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {/* Filters and Search */}
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Search by class name or instructor..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
                 </div>
-              </CardHeader>
+                
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Categories</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>{category}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              <TabsContent value="list">
-                <CardContent>
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Class Name</TableHead>
-                          <TableHead>Category</TableHead>
-                          <TableHead>Instructor</TableHead>
-                          <TableHead>Grade Level</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Enrollment</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredClasses.length > 0 ? (
-                          filteredClasses.map((cls) => (
-                            <TableRow key={cls.id}>
-                              <TableCell className="font-medium">{cls.title}</TableCell>
-                              <TableCell>{cls.category}</TableCell>
-                              <TableCell>{cls.instructorName || cls.instructor || "Not assigned"}</TableCell>
-                              <TableCell>{cls.gradeLevel}</TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="outline" 
-                                  className={`bg-opacity-15 border border-opacity-30 ${cls.status === "Active" ? "bg-green-100 text-green-800 border-green-200" : 
-                                    cls.status === "Upcoming" ? "bg-blue-100 text-blue-800 border-blue-200" :
-                                    cls.status === "Completed" ? "bg-gray-100 text-gray-800 border-gray-200" :
-                                    cls.status === "Canceled" ? "bg-red-100 text-red-800 border-red-200" :
-                                    "bg-yellow-100 text-yellow-800 border-yellow-200"}`}
-                                >
-                                  {cls.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>{cls.enrollmentCount}/{cls.maxEnrollment}</TableCell>
-                              <TableCell>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm">Actions</Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem>
-                                      <Link href={`/schools/classes/${cls.id}`}>View Details</Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                      <Link href={`/schools/classes/${cls.id}/edit`}>Edit Class</Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                      <Link href={`/schools/classes/${cls.id}/roster`}>View Roster</Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                      <Link href={`/schools/classes/${cls.id}/schedule`}>Manage Schedule</Link>
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                              No classes found. Try adjusting your search or filters.
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </TabsContent>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Statuses</SelectItem>
+                    {statuses.map((status) => (
+                      <SelectItem key={status} value={status}>{status}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              <TabsContent value="grid">
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredClasses.length > 0 ? (
-                      filteredClasses.map((cls) => (
-                        <Card key={cls.id}>
-                          <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                              <Badge 
-                                variant="outline" 
-                                className={`bg-opacity-15 border border-opacity-30 ${cls.status === "Active" ? "bg-green-100 text-green-800 border-green-200" : 
-                                  cls.status === "Upcoming" ? "bg-blue-100 text-blue-800 border-blue-200" :
-                                  cls.status === "Completed" ? "bg-gray-100 text-gray-800 border-gray-200" :
-                                  cls.status === "Canceled" ? "bg-red-100 text-red-800 border-red-200" :
-                                  "bg-yellow-100 text-yellow-800 border-yellow-200"}`}
-                              >
-                                {cls.status}
-                              </Badge>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">...</Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem>
-                                    <Link href={`/schools/classes/${cls.id}`}>View Details</Link>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem>
-                                    <Link href={`/schools/classes/${cls.id}/edit`}>Edit Class</Link>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem>
-                                    <Link href={`/schools/classes/${cls.id}/roster`}>View Roster</Link>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                            <CardTitle className="text-lg mt-2">{cls.title}</CardTitle>
-                            <CardDescription>{cls.subject}</CardDescription>
-                          </CardHeader>
-                          <CardContent className="pb-2">
-                            <div className="space-y-2 text-sm">
-                              <div className="flex items-center">
-                                <Users className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <span>Instructor: {cls.instructor}</span>
-                              </div>
-                              <div className="flex items-center">
-                                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <span>{cls.schedule}</span>
-                              </div>
-                              <div className="flex items-center">
-                                <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <span>{cls.startDate} to {cls.endDate}</span>
-                              </div>
-                            </div>
-                          </CardContent>
-                          <CardFooter className="pt-2">
-                            <div className="w-full flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">
-                                Enrolled: {cls.enrollmentCount}/{cls.maxEnrollment}
-                              </span>
-                              <Button size="sm" variant="outline">
-                                <Link href={`/schools/classes/${cls.id}`}>View Details</Link>
-                              </Button>
-                            </div>
-                          </CardFooter>
-                        </Card>
-                      ))
-                    ) : (
-                      <div className="col-span-full flex items-center justify-center p-6 text-muted-foreground">
-                        No classes found. Try adjusting your search or filters.
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </TabsContent>
-
-              <TabsContent value="calendar">
-                <CardContent>
-                  <div className="p-6 min-h-[300px] flex items-center justify-center flex-col">
-                    <div className="mb-4">
-                      <Calendar className="h-12 w-12 text-primary opacity-70" />
-                    </div>
-                    <h3 className="text-xl font-medium">Calendar View Coming Soon</h3>
-                    <p className="text-muted-foreground mt-2 text-center">
-                      The calendar view for scheduling and visualizing classes is currently in development.
-                    </p>
-                  </div>
-                </CardContent>
-              </TabsContent>
-
-              <CardFooter className="flex justify-between border-t pt-6">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" onClick={exportClassList}>
                   <FileDown className="mr-2 h-4 w-4" />
                   Export Class List
                 </Button>
-                <div>
-                  <span className="text-sm text-muted-foreground mr-4">
-                    {filteredClasses.length} of {classes?.length || 0} classes
-                  </span>
-                  <Button>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add New Class
-                  </Button>
-                </div>
-              </CardFooter>
-            </Card>
-          </Tabs>
+              </div>
+
+              {/* List View */}
+              <TabsContent value="list">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Class List</CardTitle>
+                    <CardDescription>
+                      {filteredClasses.length} of {classData.length} classes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Class Name</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Instructor</TableHead>
+                            <TableHead>Grade Level</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Enrollment</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredClasses.length > 0 ? (
+                            filteredClasses.map((cls: any) => (
+                              <TableRow key={cls.id}>
+                                <TableCell className="font-medium">{cls.title}</TableCell>
+                                <TableCell>{cls.category}</TableCell>
+                                <TableCell>{cls.instructor}</TableCell>
+                                <TableCell>{cls.gradeLevel}</TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary">{cls.status}</Badge>
+                                </TableCell>
+                                <TableCell>{cls.enrollmentCount}/{cls.maxEnrollment}</TableCell>
+                                <TableCell>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" className="h-8 w-8 p-0">
+                                        <span className="sr-only">Open menu</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-more-horizontal h-4 w-4"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem>
+                                        <Link href={`/schools/classes/${cls.id}`}>View Details</Link>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem>
+                                        <Link href={`/schools/classes/${cls.id}/edit`}>Edit Class</Link>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem>
+                                        <Link href={`/schools/classes/${cls.id}/roster`}>View Roster</Link>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem>
+                                        <Link href={`/schools/classes/${cls.id}/schedule`}>Manage Schedule</Link>
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                                No classes found. Try adjusting your search or filters.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Grid View */}
+              <TabsContent value="grid">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Classes Grid</CardTitle>
+                    <CardDescription>
+                      {filteredClasses.length} of {classData.length} classes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredClasses.length > 0 ? (
+                        filteredClasses.map((cls: any) => (
+                          <Card key={cls.id} className="hover:shadow-md transition-shadow">
+                            <CardHeader className="pb-3">
+                              <div className="flex justify-between items-start">
+                                <CardTitle className="text-lg">{cls.title}</CardTitle>
+                                <Badge variant="secondary">{cls.status}</Badge>
+                              </div>
+                              <CardDescription>{cls.category} • {cls.gradeLevel}</CardDescription>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              <div className="space-y-2">
+                                <div className="flex items-center">
+                                  <Users className="w-4 h-4 mr-2 text-muted-foreground" />
+                                  <span className="text-sm">{cls.instructor}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                                  <span className="text-sm">{cls.schedule}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
+                                  <span className="text-sm">{cls.startDate} to {cls.endDate}</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                            <CardFooter className="pt-2">
+                              <div className="w-full flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">
+                                  Enrolled: {cls.enrollmentCount}/{cls.maxEnrollment}
+                                </span>
+                                <Button size="sm" variant="outline">
+                                  <Link href={`/schools/classes/${cls.id}`}>View Details</Link>
+                                </Button>
+                              </div>
+                            </CardFooter>
+                          </Card>
+                        ))
+                      ) : (
+                        <div className="col-span-full flex items-center justify-center p-6 text-muted-foreground">
+                          No classes found. Try adjusting your search or filters.
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Calendar View */}
+              <TabsContent value="calendar">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Class Calendar</CardTitle>
+                    <CardDescription>
+                      View classes in calendar format
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Calendar className="w-12 h-12 mx-auto mb-4" />
+                      <p>Calendar view coming soon</p>
+                      <p className="text-sm">This will show your classes in a monthly calendar layout</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }
