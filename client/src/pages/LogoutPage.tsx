@@ -11,9 +11,9 @@ export default function LogoutPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      logout();
+      signOut();
     }
-  }, [logout, isAuthenticated]);
+  }, [signOut, isAuthenticated]);
 
   const handleGoHome = () => {
     setLocation("/");

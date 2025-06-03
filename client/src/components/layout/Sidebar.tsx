@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 import { cn } from '@/lib/utils';
 import { 
   School, 
@@ -72,7 +72,7 @@ const schoolNavItems: {
 
 export default function Sidebar() {
   const [location] = useLocation();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, signOut, isAuthenticated } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleSidebar = () => {
@@ -80,12 +80,8 @@ export default function Sidebar() {
   };
 
   const handleLogout = async () => {
-    try {
-      await apiRequest('POST', '/auth/logout');
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+    console.log('🚪 Sidebar logout clicked');
+    await signOut();
   };
 
   return (
