@@ -62,9 +62,14 @@ export default function ParentSidebar() {
   const [isOpen, setIsOpen] = React.useState(false);
 
   const handleLogout = async () => {
-    console.log('🚪 ParentSidebar logout clicked');
-    localStorage.setItem('logout_in_progress', 'true');
-    await signOut();
+    try {
+      console.log('🚪 ParentSidebar logout clicked');
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout failed:', error);
+      window.location.href = '/login';
+    }
   };
   
   // Parent navigation items
