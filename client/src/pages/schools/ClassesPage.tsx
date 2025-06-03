@@ -338,7 +338,7 @@ export default function SchoolClassesPage() {
                                 <TableCell>
                                   <Badge variant="secondary">{cls.status}</Badge>
                                 </TableCell>
-                                <TableCell>{cls.enrollmentCount}/{cls.maxEnrollment}</TableCell>
+                                <TableCell>{cls.enrollmentCount || 0}/{cls.capacity || cls.maxEnrollment || 0}</TableCell>
                                 <TableCell>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -427,7 +427,7 @@ export default function SchoolClassesPage() {
                             <CardFooter className="pt-2">
                               <div className="w-full flex justify-between items-center">
                                 <span className="text-sm text-muted-foreground">
-                                  Enrolled: {cls.enrollmentCount}/{cls.maxEnrollment}
+                                  Enrolled: {cls.enrollmentCount || 0}/{cls.capacity || cls.maxEnrollment || 0}
                                 </span>
                                 <Button size="sm" variant="outline">
                                   <Link href={`/schools/classes/${cls.id}`}>View Details</Link>
