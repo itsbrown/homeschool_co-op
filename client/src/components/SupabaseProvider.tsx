@@ -83,6 +83,15 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
         console.log('🗑️ Removed Supabase access token');
       }
 
+      // Handle logout completion
+      if (event === 'SIGNED_OUT') {
+        console.log('🚪 User signed out, redirecting to login...');
+        localStorage.removeItem('logout_in_progress');
+        localStorage.removeItem('supabase_access_token');
+        window.location.href = '/login';
+        return;
+      }
+
       // Handle successful OAuth login (only for initial OAuth flows, not token refreshes)
       if (event === 'SIGNED_IN' && session?.user && !localStorage.getItem('logout_in_progress')) {
         console.log('✅ User signed in successfully, checking for redirect...');
@@ -123,14 +132,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
         }
       }
 
-      // Handle sign out event
-      if (event === 'SIGNED_OUT') {
-        console.log('👋 User signed out, redirecting to login...');
-        localStorage.removeItem('logout_in_progress');
-        setTimeout(() => {
-          window.location.replace('/login');
-        }, 100);
-      }
+
     });
 
     return () => subscription.unsubscribe();
@@ -156,23 +158,29 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
     try {
       console.log('🚪 Starting logout process...');
       
-      // Clear any stored access tokens and logout flag
+      // Set logout flag to prevent automatic redirects
+      localStorage.setItem('logout_in_progress', 'true');
+      
+      // Clear stored access tokens
       localStorage.removeItem('supabase_access_token');
-      localStorage.removeItem('logout_in_progress');
       console.log('🧹 Cleared local storage');
       
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('❌ Logout error:', error);
-        return;
+        // Still redirect even if there's an error
       }
       console.log('✅ Supabase logout successful');
       
-      // Redirect to login page
+      // Clear logout flag and redirect
+      localStorage.removeItem('logout_in_progress');
       console.log('🔄 Redirecting to login...');
       window.location.href = '/login';
     } catch (error) {
       console.error('💥 Logout failed:', error);
+      // Ensure we still redirect even if logout fails
+      localStorage.removeItem('logout_in_progress');
+      window.location.href = '/login';
     }
   };
 
