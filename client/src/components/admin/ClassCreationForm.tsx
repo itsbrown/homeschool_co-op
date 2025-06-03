@@ -382,14 +382,11 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="pre-k">Pre-K</SelectItem>
-                  <SelectItem value="kindergarten">Kindergarten</SelectItem>
-                  <SelectItem value="elementary">Elementary (Grades 1-5)</SelectItem>
-                  <SelectItem value="middle">Middle School (Grades 6-8)</SelectItem>
-                  <SelectItem value="high">High School (Grades 9-12)</SelectItem>
-                  <SelectItem value="college">College Level</SelectItem>
-                  <SelectItem value="adult">Adult Education</SelectItem>
-                  <SelectItem value="all">All Levels</SelectItem>
+                  <SelectItem value="pre-k-k">Pre K - K</SelectItem>
+                  <SelectItem value="grades-1-2">Grades 1-2</SelectItem>
+                  <SelectItem value="grades-3-5">Grades 3-5</SelectItem>
+                  <SelectItem value="grades-6-8">Grades 6-8</SelectItem>
+                  <SelectItem value="grades-9-12">Grades 9-12</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription>
