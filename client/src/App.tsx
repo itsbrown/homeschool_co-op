@@ -175,7 +175,7 @@ function Router() {
   const getRoleDashboard = (userRole: string) => {
     switch (userRole) {
       case 'school_admin':
-        return MySchoolPage;
+        return Dashboard; // School admins should see the standard dashboard
       case 'educator':
         return Dashboard; // Could be a specific educator dashboard
       case 'parent':

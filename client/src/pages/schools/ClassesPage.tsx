@@ -173,9 +173,9 @@ export default function SchoolClassesPage() {
   });
 
   // Extract unique values for filters
-  const categories = [...new Set(classData.map((cls: any) => cls.category))];
-  const statuses = [...new Set(classData.map((cls: any) => cls.status))];
-  const gradeLevels = [...new Set(classData.map((cls: any) => cls.gradeLevel))];
+  const categories = Array.from(new Set(classData.map((cls: any) => cls.category)));
+  const statuses = Array.from(new Set(classData.map((cls: any) => cls.status)));
+  const gradeLevels = Array.from(new Set(classData.map((cls: any) => cls.gradeLevel)));
 
   const exportClassList = () => {
     const csvContent = [
