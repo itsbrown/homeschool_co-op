@@ -13,36 +13,33 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function createSchoolAdminAccount() {
   try {
-    console.log('Creating school admin account...');
+    console.log('Getting existing school admin account...');
     
-    // Insert the school admin account
+    // Get the existing school admin account
     const { data, error } = await supabase
-      .from('accounts')
-      .insert({
-        email: 'contact.americanseekersacademy@gmail.com',
-        role: 'school_admin',
-        name: 'ASA School Administrator'
-      })
-      .select()
+      .from('users')
+      .select('*')
+      .eq('email', 'contact.americanseekersacademy@gmail.com')
       .single();
 
     if (error) {
-      console.error('Error creating account:', error);
+      console.error('Error finding account:', error);
       return;
     }
 
-    console.log('✅ School admin account created:', data);
+    console.log('✅ Found school admin account:', data);
 
     // Also create a school record for this admin
     const { data: schoolData, error: schoolError } = await supabase
       .from('schools')
       .insert({
         name: 'American Seekers Academy',
-        type: 'academy',
-        city: 'City',
-        state: 'State',
-        zip_code: '12345',
-        created_by: data.id,
+        type: 'school',
+        admin_id: data.id,
+        city: 'San Francisco',
+        state: 'CA',
+        zip_code: '94102',
+        email: 'contact.americanseekersacademy@gmail.com',
         status: 'active'
       })
       .select()

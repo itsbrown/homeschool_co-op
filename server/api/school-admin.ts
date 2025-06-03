@@ -149,13 +149,13 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
 
     try {
-      // Query the public.accounts table to get user data by email
-      console.log('🔍 Querying public.accounts for email:', user.email);
+      // Query the public.users table to get user data by email
+      console.log('🔍 Querying public.users for email:', user.email);
       const { data: userData, error: userError } = await supabaseAdmin
-        .from('accounts')
+        .from('users')
         .select('id')
         .eq('email', user.email)
-        .eq('role', 'school_admin')
+        .eq('role', 'schoolAdmin')
         .single();
 
       if (userError || !userData) {
@@ -169,11 +169,11 @@ router.get("/my-school", async (req, res) => {
       console.log('✅ Found user ID:', userData.id);
 
       // Query the public.schools table
-      console.log('🔍 Querying public.schools for created_by:', userData.id);
+      console.log('🔍 Querying public.schools for admin_id:', userData.id);
       const { data: schoolData, error: schoolError } = await supabaseAdmin
         .from('schools')
         .select('*')
-        .eq('created_by', userData.id)
+        .eq('admin_id', userData.id)
         .single();
 
       if (schoolError || !schoolData) {
