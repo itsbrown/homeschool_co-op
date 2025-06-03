@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest } from "@/lib/queryClient";
 
 interface SidebarProps {
@@ -23,11 +23,11 @@ interface SidebarProps {
 export default function SchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, signOut, isAuthenticated } = useAuth();
 
   const handleLogout = async () => {
     console.log("🚪 SchoolAdminSidebar logout clicked");
-    await logout();
+    await signOut();
   };
 
   const schoolNavItems = [
@@ -121,7 +121,7 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
-                  {user.name || user.email}
+                  {user.user_metadata?.full_name || user.email}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
                   School Administrator
