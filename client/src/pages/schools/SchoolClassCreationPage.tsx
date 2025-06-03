@@ -24,6 +24,8 @@ const classFormSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
   schedule: z.string().min(1, "Schedule information is required"),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1"),
   location: z.string().min(1, "Location is required"),
   instructorName: z.string().min(1, "Instructor name is required"),
@@ -54,6 +56,8 @@ export default function SchoolClassCreationPage() {
       startDate: "",
       endDate: "",
       schedule: "",
+      startTime: "",
+      endTime: "",
       capacity: 10,
       location: "",
       instructorName: "",
@@ -106,6 +110,8 @@ export default function SchoolClassCreationPage() {
         startDate,
         endDate,
         schedule: classData.schedule || "",
+        startTime: classData.startTime || "",
+        endTime: classData.endTime || "",
         capacity: classData.capacity || 10,
         location: classData.location || "",
         instructorName: classData.instructorName || "",
@@ -368,6 +374,42 @@ export default function SchoolClassCreationPage() {
                   )}
                 />
 
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="startTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          What time does the class start?
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="endTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          What time does the class end?
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <div className="grid gap-6 sm:grid-cols-3">
                   <FormField
                     control={form.control}
@@ -435,11 +477,10 @@ export default function SchoolClassCreationPage() {
                               const staffName = staff.name || `${staff.firstName} ${staff.lastName}`;
                               return (
                                 <SelectItem 
-                                  key={`${staff.id}-${index}`} 
+                                  key={`staff-${staff.id}`} 
                                   value={staffName}
                                 >
                                   {staffName}
-                                  {staff.position && ` - ${staff.position}`}
                                 </SelectItem>
                               );
                             })}
