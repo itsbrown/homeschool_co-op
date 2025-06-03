@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Loader2 } from "lucide-react";
 
 // Form schema for class creation
@@ -382,7 +383,11 @@ export default function SchoolClassCreationPage() {
                       <FormItem>
                         <FormLabel>Start Time</FormLabel>
                         <FormControl>
-                          <Input type="time" {...field} />
+                          <TimePicker
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Select start time"
+                          />
                         </FormControl>
                         <FormDescription>
                           What time does the class start?
@@ -399,7 +404,11 @@ export default function SchoolClassCreationPage() {
                       <FormItem>
                         <FormLabel>End Time</FormLabel>
                         <FormControl>
-                          <Input type="time" {...field} />
+                          <TimePicker
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Select end time"
+                          />
                         </FormControl>
                         <FormDescription>
                           What time does the class end?
