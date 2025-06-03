@@ -124,7 +124,7 @@ export default function SchoolClassesPage() {
   const unassignInstructorMutation = useMutation({
     mutationFn: async (classId: number) => {
       const response = await apiRequest("PATCH", `/school-admin/classes/${classId}`, {
-        instructorName: ""
+        instructorName: "no-instructor"
       });
       return response.json();
     },
@@ -198,9 +198,9 @@ export default function SchoolClassesPage() {
       (!searchQuery || 
        cls.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
        cls.instructor.toLowerCase().includes(searchQuery.toLowerCase())) &&
-      (!categoryFilter || cls.category === categoryFilter) &&
-      (!statusFilter || cls.status === statusFilter) &&
-      (!gradeLevelFilter || cls.gradeLevel === gradeLevelFilter)
+      (!categoryFilter || categoryFilter === 'all-categories' || cls.category === categoryFilter) &&
+      (!statusFilter || statusFilter === 'all-statuses' || cls.status === statusFilter) &&
+      (!gradeLevelFilter || gradeLevelFilter === 'all-grade-levels' || cls.gradeLevel === gradeLevelFilter)
     );
   });
 
@@ -279,7 +279,7 @@ export default function SchoolClassesPage() {
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Categories</SelectItem>
+                    <SelectItem value="all-categories">All Categories</SelectItem>
                     {categories.map((category) => (
                       <SelectItem key={category} value={category}>{category}</SelectItem>
                     ))}
@@ -291,7 +291,7 @@ export default function SchoolClassesPage() {
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Statuses</SelectItem>
+                    <SelectItem value="all-statuses">All Statuses</SelectItem>
                     {statuses.map((status) => (
                       <SelectItem key={status} value={status}>{status}</SelectItem>
                     ))}

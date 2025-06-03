@@ -430,7 +430,7 @@ export default function SchoolClassCreationPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">No Instructor Assigned</SelectItem>
+                            <SelectItem value="no-instructor">No Instructor Assigned</SelectItem>
                             {staffMembers.map((staff: any, index: number) => {
                               const staffName = staff.name || `${staff.firstName} ${staff.lastName}`;
                               return (
@@ -445,12 +445,12 @@ export default function SchoolClassCreationPage() {
                             })}
                           </SelectContent>
                         </Select>
-                        {field.value && (
+                        {field.value && field.value !== "no-instructor" && (
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
-                            onClick={() => field.onChange("")}
+                            onClick={() => field.onChange("no-instructor")}
                             title="Clear instructor assignment"
                           >
                             ×

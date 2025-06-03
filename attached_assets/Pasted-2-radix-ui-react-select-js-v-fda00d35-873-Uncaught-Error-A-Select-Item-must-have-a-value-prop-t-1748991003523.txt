@@ -1,0 +1,171 @@
+2@radix-ui_react-select.js?v=fda00d35:873 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=fda00d35:873:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=fda00d35:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=fda00d35:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=fda00d35:15946:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=fda00d35:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=fda00d35:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=fda00d35:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=fda00d35:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=fda00d35:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=fda00d35:19137:13)
+(anonymous) @ @radix-ui_react-select.js?v=fda00d35:873
+renderWithHooks @ chunk-NFC5BX5N.js?v=fda00d35:11548
+updateForwardRef @ chunk-NFC5BX5N.js?v=fda00d35:14325
+beginWork @ chunk-NFC5BX5N.js?v=fda00d35:15946
+callCallback2 @ chunk-NFC5BX5N.js?v=fda00d35:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=fda00d35:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=fda00d35:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=fda00d35:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=fda00d35:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=fda00d35:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=fda00d35:19116
+recoverFromConcurrentError @ chunk-NFC5BX5N.js?v=fda00d35:18736
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=fda00d35:18879
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=fda00d35:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=fda00d35:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=fda00d35:555
+flush @ @tanstack_react-query.js?v=fda00d35:569
+batch @ @tanstack_react-query.js?v=fda00d35:587
+dispatch_fn @ @tanstack_react-query.js?v=fda00d35:996
+setData @ @tanstack_react-query.js?v=fda00d35:696
+onSuccess @ @tanstack_react-query.js?v=fda00d35:897
+resolve @ @tanstack_react-query.js?v=fda00d35:456
+Promise.then
+run @ @tanstack_react-query.js?v=fda00d35:498
+start @ @tanstack_react-query.js?v=fda00d35:536
+fetch @ @tanstack_react-query.js?v=fda00d35:926
+executeFetch_fn @ @tanstack_react-query.js?v=fda00d35:2211
+onSubscribe @ @tanstack_react-query.js?v=fda00d35:1898
+subscribe @ @tanstack_react-query.js?v=fda00d35:24
+(anonymous) @ @tanstack_react-query.js?v=fda00d35:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=fda00d35:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=fda00d35:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=fda00d35:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=fda00d35:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=fda00d35:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=fda00d35:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=fda00d35:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=fda00d35:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=fda00d35:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=fda00d35:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=fda00d35:19432
+commitRoot @ chunk-NFC5BX5N.js?v=fda00d35:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=fda00d35:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=fda00d35:18718
+workLoop @ chunk-NFC5BX5N.js?v=fda00d35:197
+flushWork @ chunk-NFC5BX5N.js?v=fda00d35:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=fda00d35:384Understand this error
+2hook.js:608 The above error occurred in the <SelectItem> component:
+
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=fda00d35:846:7
+    at _c11 (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/ui/select.tsx:208:13)
+    at div
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-VSHUKEGI.js?v=fda00d35:42:13
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-W762HMDF.js?v=fda00d35:79:13
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-W762HMDF.js?v=fda00d35:56:13
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-H5AAK3YZ.js?v=fda00d35:39:15
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=fda00d35:757:13
+    at div
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-W762HMDF.js?v=fda00d35:79:13
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-W762HMDF.js?v=fda00d35:56:13
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-H5AAK3YZ.js?v=fda00d35:39:15
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=fda00d35:38:15)
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=fda00d35:300:58
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-W762HMDF.js?v=fda00d35:79:13
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-W762HMDF.js?v=fda00d35:56:13
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-VSHUKEGI.js?v=fda00d35:42:13
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-3K3PFTMU.js?v=fda00d35:260:22
+    at SelectPortal
+    at _c7 (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/ui/select.tsx:123:12)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=fda00d35:38:15)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=fda00d35:38:15)
+    at CollectionProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-H5AAK3YZ.js?v=fda00d35:29:13)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=fda00d35:38:15)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=fda00d35:38:15)
+    at Popper (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-LMUKDCPN.js?v=fda00d35:1921:11)
+    at Select (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=fda00d35:88:5)
+    at div
+    at div
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-VSHUKEGI.js?v=fda00d35:42:13
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=fda00d35:38:15)
+    at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=fda00d35:54:7
+    at div
+    at div
+    at div
+    at main
+    at div
+    at div
+    at AppShell (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/layout/AppShell.tsx:21:36)
+    at SchoolClassesPage (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/schools/ClassesPage.tsx:118:21)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=fda00d35:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=fda00d35:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?v=TtljNHVqoawqhFz9WcNWL:124:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=fda00d35:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=fda00d35:64:5)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=fda00d35:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+overrideMethod @ hook.js:608
+logCapturedError @ chunk-NFC5BX5N.js?v=fda00d35:14032
+update.callback @ chunk-NFC5BX5N.js?v=fda00d35:14052
+callCallback @ chunk-NFC5BX5N.js?v=fda00d35:11248
+commitUpdateQueue @ chunk-NFC5BX5N.js?v=fda00d35:11265
+commitLayoutEffectOnFiber @ chunk-NFC5BX5N.js?v=fda00d35:17093
+commitLayoutMountEffects_complete @ chunk-NFC5BX5N.js?v=fda00d35:17980
+commitLayoutEffects_begin @ chunk-NFC5BX5N.js?v=fda00d35:17969
+commitLayoutEffects @ chunk-NFC5BX5N.js?v=fda00d35:17920
+commitRootImpl @ chunk-NFC5BX5N.js?v=fda00d35:19353
+commitRoot @ chunk-NFC5BX5N.js?v=fda00d35:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=fda00d35:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=fda00d35:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=fda00d35:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=fda00d35:555
+flush @ @tanstack_react-query.js?v=fda00d35:569
+batch @ @tanstack_react-query.js?v=fda00d35:587
+dispatch_fn @ @tanstack_react-query.js?v=fda00d35:996
+setData @ @tanstack_react-query.js?v=fda00d35:696
+onSuccess @ @tanstack_react-query.js?v=fda00d35:897
+resolve @ @tanstack_react-query.js?v=fda00d35:456
+Promise.then
+run @ @tanstack_react-query.js?v=fda00d35:498
+start @ @tanstack_react-query.js?v=fda00d35:536
+fetch @ @tanstack_react-query.js?v=fda00d35:926
+executeFetch_fn @ @tanstack_react-query.js?v=fda00d35:2211
+onSubscribe @ @tanstack_react-query.js?v=fda00d35:1898
+subscribe @ @tanstack_react-query.js?v=fda00d35:24
+(anonymous) @ @tanstack_react-query.js?v=fda00d35:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=fda00d35:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=fda00d35:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=fda00d35:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=fda00d35:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=fda00d35:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=fda00d35:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=fda00d35:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=fda00d35:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=fda00d35:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=fda00d35:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=fda00d35:19432
+commitRoot @ chunk-NFC5BX5N.js?v=fda00d35:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=fda00d35:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=fda00d35:18718
+workLoop @ chunk-NFC5BX5N.js?v=fda00d35:197
+flushWork @ chunk-NFC5BX5N.js?v=fda00d35:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=fda00d35:384Understand this error
+chunk-NFC5BX5N.js?v=fda00d35:9129 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=fda00d35:873:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=fda00d35:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=fda00d35:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=fda00d35:15946:22)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=fda00d35:19753:22)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=fda00d35:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=fda00d35:19137:13)
+    at renderRootSync (chunk-NFC5BX5N.js?v=fda00d35:19116:15)
+    at recoverFromConcurrentError (chunk-NFC5BX5N.js?v=fda00d35:18736:28)
+    at performSyncWorkOnRoot (chunk-NFC5BX5N.js?v=fda00d35:18879:28)
