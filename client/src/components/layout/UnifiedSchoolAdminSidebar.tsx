@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 import { cn } from '@/lib/utils';
 import { 
   School, 
@@ -18,7 +18,6 @@ import {
   LucideIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { apiRequest } from '@/lib/queryClient';
 
 interface NavItem {
   title: string;
@@ -67,19 +66,15 @@ interface SidebarProps {
 export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, signOut } = useAuth();
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
   };
 
   const handleLogout = async () => {
-    try {
-      await apiRequest('POST', '/api/auth/logout');
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+    console.log('🚪 School admin sidebar logout clicked');
+    await signOut();
   };
 
   return (
