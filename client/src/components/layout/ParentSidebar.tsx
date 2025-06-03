@@ -63,6 +63,7 @@ export default function ParentSidebar() {
 
   const handleLogout = async () => {
     console.log('🚪 ParentSidebar logout clicked');
+    localStorage.setItem('logout_in_progress', 'true');
     await signOut();
   };
   

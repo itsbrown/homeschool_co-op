@@ -83,13 +83,14 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
         console.log('🗑️ Removed Supabase access token');
       }
 
-      // Handle successful OAuth login
-      if (event === 'SIGNED_IN' && session?.user) {
+      // Handle successful OAuth login (only for initial OAuth flows, not token refreshes)
+      if (event === 'SIGNED_IN' && session?.user && !localStorage.getItem('logout_in_progress')) {
         console.log('✅ User signed in successfully, checking for redirect...');
         
-        // Clear any auth tokens from URL and redirect
+        // Clear any auth tokens from URL and redirect (only during OAuth callback)
         const currentUrl = window.location.href;
-        if (currentUrl.includes('#access_token=') || currentUrl.includes('?code=')) {
+        if (currentUrl.includes('#access_token=') || currentUrl.includes('?code=') || 
+            (window.location.pathname === '/login' || window.location.pathname === '/')) {
           console.log('🔄 Cleaning up auth tokens from URL and redirecting...');
           
           // Determine redirect based on user metadata role
@@ -120,6 +121,15 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
             window.location.replace(redirectPath);
           }, 100);
         }
+      }
+
+      // Handle sign out event
+      if (event === 'SIGNED_OUT') {
+        console.log('👋 User signed out, redirecting to login...');
+        localStorage.removeItem('logout_in_progress');
+        setTimeout(() => {
+          window.location.replace('/login');
+        }, 100);
       }
     });
 
