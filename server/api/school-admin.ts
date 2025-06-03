@@ -149,12 +149,12 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query database...');
 
     try {
-      // Query the public.accounts table to get user data
+      // Query the public.accounts table to get user data by email
       console.log('🔍 Querying public.accounts for email:', user.email);
       const { data: userData, error: userError } = await supabaseAdmin
         .from('accounts')
         .select('id')
-        .eq('firebase_uid', user.id)
+        .eq('email', user.email)
         .eq('role', 'school_admin')
         .single();
 
