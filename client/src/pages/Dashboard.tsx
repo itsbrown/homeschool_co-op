@@ -29,7 +29,14 @@ export default function Dashboard() {
   }
   
   // Use ParentAppShell for parent users, standard AppShell for others
-  if (user && user.role === 'parent') {
+  const userRole = user?.user_metadata?.role || 
+                  (user?.email === 'coreycreates@gmail.com' || 
+                   user?.email === 'contact.americanseekersacademy@gmail.com' ||
+                   user?.email === 'contact@americanseekersacademy.com' ? 'school_admin' : 'parent');
+  
+  console.log('🏠 Dashboard page - User role:', userRole);
+  
+  if (user && userRole === 'parent') {
     return (
       <ParentAppShell>
         <div className="container mx-auto p-4">
