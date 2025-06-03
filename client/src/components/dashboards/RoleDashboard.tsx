@@ -37,6 +37,7 @@ export default function RoleDashboard() {
   switch (userRole) {
     case 'admin':
     case 'school_admin':
+    case 'schoolAdmin':
       return <AdminDashboard />;
     case 'educator':
       return <EducatorDashboard />;

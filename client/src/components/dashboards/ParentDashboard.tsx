@@ -49,55 +49,15 @@ export default function ParentDashboard() {
     enabled: true,
   });
 
-  // Fetch enrollments data with Supabase token
+  // Fetch enrollments data
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/enrollments"],
-    queryFn: async () => {
-      try {
-        const token = session?.access_token;
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-        const response = await fetch("/api/enrollments", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return await response.json();
-      } catch (error) {
-        console.error("Error fetching enrollments:", error);
-        return [];
-      }
-    },
     enabled: !!user && !!session,
   });
 
-  // Fetch upcoming events with Supabase token
+  // Fetch upcoming events
   const { data: eventsData, isLoading: eventsLoading } = useQuery({
     queryKey: ["/api/events/upcoming"],
-    queryFn: async () => {
-      try {
-        const token = session?.access_token;
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-        const response = await fetch("/api/events/upcoming", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return await response.json();
-      } catch (error) {
-        console.error("Error fetching events:", error);
-        return [];
-      }
-    },
     enabled: !!user && !!session,
   });
 
