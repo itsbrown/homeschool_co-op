@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 import AdminDashboard from "./AdminDashboard";
 import EducatorDashboard from "./EducatorDashboard";
 import ParentDashboard from "./ParentDashboard";
@@ -24,9 +24,19 @@ export default function RoleDashboard() {
     );
   }
   
+  // Determine user role from Supabase user metadata or email
+  const userEmail = user.email;
+  const userRole = user.user_metadata?.role || 
+                  (userEmail === 'coreycreates@gmail.com' || 
+                   userEmail === 'contact.americanseekersacademy@gmail.com' ||
+                   userEmail === 'contact@americanseekersacademy.com' ? 'school_admin' : 'parent');
+
+  console.log('👤 User logged in with role:', userRole);
+
   // Render the appropriate dashboard based on user role
-  switch (user.role) {
+  switch (userRole) {
     case 'admin':
+    case 'school_admin':
       return <AdminDashboard />;
     case 'educator':
       return <EducatorDashboard />;
@@ -38,10 +48,10 @@ export default function RoleDashboard() {
       // Fallback for any undefined or new roles
       return (
         <div className="container mx-auto p-4 text-center">
-          <h1 className="text-2xl font-bold mb-4">Welcome to LearnSphere!</h1>
+          <h1 className="text-2xl font-bold mb-4">Welcome to ASA Platform!</h1>
           <p>Your role-specific dashboard is being set up.</p>
           <p className="text-sm text-muted-foreground mt-4">
-            Current role: {user.role || 'Unknown role'}
+            Current role: {userRole || 'Unknown role'}
           </p>
         </div>
       );

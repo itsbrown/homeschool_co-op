@@ -93,8 +93,11 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
           console.log('🔄 Cleaning up auth tokens from URL and redirecting...');
           
           // Determine redirect based on user metadata role
+          const userEmail = session.user.email;
           const userRole = session.user.user_metadata?.role || 
-                          (session.user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent');
+                          (userEmail === 'coreycreates@gmail.com' || 
+                           userEmail === 'contact.americanseekersacademy@gmail.com' ||
+                           userEmail === 'contact@americanseekersacademy.com' ? 'school_admin' : 'parent');
           
           let redirectPath;
           switch (userRole) {
