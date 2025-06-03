@@ -137,7 +137,7 @@ export default function ParentSidebar() {
                     <User className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium">{user?.name}</p>
+                    <p className="font-medium">{user?.email}</p>
                     <p className="text-xs text-muted-foreground">Parent Account</p>
                   </div>
                 </div>
@@ -176,7 +176,7 @@ export default function ParentSidebar() {
                   <User className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium">{user?.name}</p>
+                  <p className="font-medium">{user?.email}</p>
                   <p className="text-xs text-muted-foreground">Parent Account</p>
                 </div>
               </div>

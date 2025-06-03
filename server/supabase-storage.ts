@@ -223,13 +223,75 @@ export class SupabaseStorage implements IStorage {
     return data || [];
   }
 
+  // Child management methods
+  async getChildById(id: number): Promise<any | undefined> {
+    const { data, error } = await supabase
+      .from('children')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching child:', error);
+      return undefined;
+    }
+    
+    return data;
+  }
+
+  async getChildrenByParentId(parentId: number): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('children')
+      .select('*')
+      .eq('parent_id', parentId);
+    
+    if (error) {
+      console.error('Error fetching children by parent id:', error);
+      return [];
+    }
+    
+    return data || [];
+  }
+
+  async getChildrenByParentEmail(parentEmail: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('children')
+      .select('*')
+      .eq('parent_email', parentEmail);
+    
+    if (error) {
+      console.error('Error fetching children by parent email:', error);
+      return [];
+    }
+    
+    return data || [];
+  }
+
+  async createChild(childData: any): Promise<any> {
+    const { data, error } = await supabase
+      .from('children')
+      .insert(childData)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating child:', error);
+      throw error;
+    }
+    
+    return data;
+  }
+
   // Stub implementations for other storage methods - implement as needed
   async getAllCurricula(): Promise<any[]> { return []; }
   async getAllKnowledgeBases(): Promise<any[]> { return []; }
   async getAllActivities(): Promise<any[]> { return []; }
+  async getAllPayments(): Promise<any[]> { return []; }
+  async getAllEnrollments(): Promise<any[]> { return []; }
+  async getAllUsers(): Promise<any[]> { return []; }
   async getCurriculumById(id: number): Promise<any | undefined> { return undefined; }
-  async getKnowledgeBaseById(id: number): Promise<any | undefined> { return undefined; }
-  async getActivityById(id: number): Promise<any | undefined> { return undefined; }
+  async getKnowledgeBaseById(id: number, userId: number): Promise<any | undefined> { return undefined; }
+  async getActivityById(id: number, userId: number): Promise<any | undefined> { return undefined; }
   async createCurriculum(curriculum: any): Promise<any> { throw new Error('Not implemented'); }
   async createKnowledgeBase(knowledgeBase: any): Promise<any> { throw new Error('Not implemented'); }
   async createActivity(activity: any): Promise<any> { throw new Error('Not implemented'); }
@@ -239,6 +301,63 @@ export class SupabaseStorage implements IStorage {
   async deleteCurriculum(id: number): Promise<void> { throw new Error('Not implemented'); }
   async deleteKnowledgeBase(id: number): Promise<void> { throw new Error('Not implemented'); }
   async deleteActivity(id: number): Promise<void> { throw new Error('Not implemented'); }
+  
+  // Add other missing methods as stubs
+  async getCurricula(): Promise<any[]> { return []; }
+  async getCurriculaByAuthor(authorId: number): Promise<any[]> { return []; }
+  async getLesson(id: number): Promise<any | undefined> { return undefined; }
+  async getLessonsByCurriculum(curriculumId: number): Promise<any[]> { return []; }
+  async getLessonsByAuthor(authorId: number): Promise<any[]> { return []; }
+  async createLesson(lesson: any): Promise<any> { throw new Error('Not implemented'); }
+  async updateLesson(id: number, lesson: any): Promise<any> { throw new Error('Not implemented'); }
+  async getEvent(id: number): Promise<any | undefined> { return undefined; }
+  async getEventsByOrganizer(organizerId: number): Promise<any[]> { return []; }
+  async getUpcomingEvents(userId: number): Promise<any[]> { return []; }
+  async getAllEvents(userId: number): Promise<any[]> { return []; }
+  async createEvent(event: any): Promise<any> { throw new Error('Not implemented'); }
+  async getMarketplaceItem(id: number): Promise<any | undefined> { return undefined; }
+  async getMarketplaceItemsBySeller(sellerId: number): Promise<any[]> { return []; }
+  async getTopSellingItems(limit: number): Promise<any[]> { return []; }
+  async createMarketplaceItem(item: any): Promise<any> { throw new Error('Not implemented'); }
+  async updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<any> { throw new Error('Not implemented'); }
+  async getKnowledgeBase(id: number): Promise<any | undefined> { return undefined; }
+  async getActivitiesByAuthor(authorId: number): Promise<any[]> { return []; }
+  async updateActivityDownloadCount(id: number): Promise<any> { throw new Error('Not implemented'); }
+  async updateActivityPdfUrl(id: number, pdfUrl: string): Promise<any> { throw new Error('Not implemented'); }
+  async getKnowledgeBasesByAuthor(authorId: number): Promise<any[]> { return []; }
+  async getKnowledgeBasesBySubject(subject: string): Promise<any[]> { return []; }
+  async getPublicKnowledgeBases(limit?: number): Promise<any[]> { return []; }
+  async incrementDownloadCount(id: number): Promise<any> { throw new Error('Not implemented'); }
+  async addPurchaser(id: number, userId: number): Promise<any> { throw new Error('Not implemented'); }
+  async updateChild(id: number, childData: any): Promise<any> { throw new Error('Not implemented'); }
+  async deleteChild(id: number): Promise<void> { throw new Error('Not implemented'); }
+  async getEmergencyContactsByChildId(childId: number): Promise<any[]> { return []; }
+  async createEmergencyContact(contact: any): Promise<any> { throw new Error('Not implemented'); }
+  async updateEmergencyContact(id: number, contact: any): Promise<any> { throw new Error('Not implemented'); }
+  async deleteEmergencyContact(id: number): Promise<void> { throw new Error('Not implemented'); }
+  async getPrograms(): Promise<any[]> { return []; }
+  async getProgramById(id: number): Promise<any | undefined> { return undefined; }
+  async getProgramsBySchoolId(schoolId: number): Promise<any[]> { return []; }
+  async createProgram(program: any): Promise<any> { throw new Error('Not implemented'); }
+  async updateProgram(id: number, program: any): Promise<any> { throw new Error('Not implemented'); }
+  async deleteProgram(id: number): Promise<void> { throw new Error('Not implemented'); }
+  async getEnrollmentsByChildId(childId: number): Promise<any[]> { return []; }
+  async getEnrollmentsByProgramId(programId: number): Promise<any[]> { return []; }
+  async createEnrollment(enrollment: any): Promise<any> { throw new Error('Not implemented'); }
+  async updateEnrollment(id: number, enrollment: any): Promise<any> { throw new Error('Not implemented'); }
+  async deleteEnrollment(id: number): Promise<void> { throw new Error('Not implemented'); }
+  async getClasses(): Promise<any[]> { return []; }
+  async getClassById(id: number): Promise<any | undefined> { return undefined; }
+  async getClassesByInstructorId(instructorId: number): Promise<any[]> { return []; }
+  async getClassesBySchoolId(schoolId: number): Promise<any[]> { return []; }
+  async createClass(classData: any): Promise<any> { throw new Error('Not implemented'); }
+  async updateClass(id: number, classData: any): Promise<any> { throw new Error('Not implemented'); }
+  async deleteClass(id: number): Promise<void> { throw new Error('Not implemented'); }
+  async createRoleInvitation(invitation: any): Promise<any> { throw new Error('Not implemented'); }
+  async getRoleInvitationsByEmail(email: string): Promise<any[]> { return []; }
+  async getRoleInvitationById(id: number): Promise<any | undefined> { return undefined; }
+  async updateRoleInvitation(id: number, invitation: any): Promise<any> { throw new Error('Not implemented'); }
+  async deleteRoleInvitation(id: number): Promise<void> { throw new Error('Not implemented'); }
 }
 
 export const supabaseStorage = new SupabaseStorage();

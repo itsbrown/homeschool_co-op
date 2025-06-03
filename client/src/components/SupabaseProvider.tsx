@@ -155,16 +155,18 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
   const signOut = async () => {
     try {
       console.log('🚪 Starting logout process...');
+      
+      // Clear any stored access tokens and logout flag
+      localStorage.removeItem('supabase_access_token');
+      localStorage.removeItem('logout_in_progress');
+      console.log('🧹 Cleared local storage');
+      
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('❌ Logout error:', error);
         return;
       }
       console.log('✅ Supabase logout successful');
-      
-      // Clear any stored access tokens
-      localStorage.removeItem('supabase_access_token');
-      console.log('🧹 Cleared local storage');
       
       // Redirect to login page
       console.log('🔄 Redirecting to login...');
