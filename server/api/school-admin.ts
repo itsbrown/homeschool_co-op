@@ -67,39 +67,8 @@ router.get("/test", (req, res) => {
 
 // Removed problematic authentication middleware that was blocking PATCH requests
 
-// Special direct login for school admin
-router.post("/login", (req, res) => {
-  try {
-    console.log('School Admin direct login attempt');
-
-    // Create the school admin user response
-    const schoolAdminUser = {
-      id: 5,
-      name: 'School Administrator',
-      username: 'schooladmin',
-      email: 'school@example.com',
-      role: 'schoolAdmin',
-      avatar: null,
-      subscription: 'premium',
-      createdAt: new Date()
-    };
-
-    console.log('School admin login successful');
-
-    // Return success response
-    return res.status(200).json({
-      success: true,
-      message: "School Admin login successful",
-      user: schoolAdminUser
-    });
-  } catch (error) {
-    console.error('School admin direct login error:', error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error during login"
-    });
-  }
-});
+// School admin login now handled through Supabase authentication
+// Removed hardcoded authentication bypass for security
 
 // Get the school associated with the logged-in school administrator
 router.get("/my-school", async (req, res) => {

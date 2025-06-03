@@ -24,12 +24,9 @@ export default function RoleDashboard() {
     );
   }
   
-  // Determine user role from Supabase user metadata or email
+  // Determine user role from Supabase user metadata only
   const userEmail = user.email;
-  const userRole = user.user_metadata?.role || 
-                  (userEmail === 'coreycreates@gmail.com' || 
-                   userEmail === 'contact.americanseekersacademy@gmail.com' ||
-                   userEmail === 'contact@americanseekersacademy.com' ? 'school_admin' : 'parent');
+  const userRole = user.user_metadata?.role || 'parent';
 
   console.log('🔍 User email:', userEmail);
   console.log('🔍 User metadata role:', user.user_metadata?.role);

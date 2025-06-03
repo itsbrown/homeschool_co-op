@@ -84,14 +84,9 @@ export default function ParentSidebar() {
     }
   };*/
   const handleLogout = async () => {
-    alert("🚪 ParentSidebar logout clicked");
-    try {
-      await fetch("/auth/logout", { method: "POST", credentials: "include" });
-      window.location.href = "/login";
-    } catch (error) {
-      console.error("Logout failed:", error);
-      alert("Logout failed. Please try again.");
-    }
+    //alert("🚪 ParentSidebar logout clicked again");
+    console.log("🚪 ParentSidebar logout clicked");
+    await signOut();
   };
 
   // Parent navigation items

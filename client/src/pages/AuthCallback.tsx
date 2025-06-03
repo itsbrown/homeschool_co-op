@@ -15,8 +15,7 @@ export default function AuthCallback() {
       console.log('✅ Authentication successful, redirecting...');
       
       // Determine redirect based on user metadata role
-      const userRole = user.user_metadata?.role || 
-                      (user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent');
+      const userRole = user.user_metadata?.role || 'parent';
       
       console.log('👤 User role detected:', userRole);
       
