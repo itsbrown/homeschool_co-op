@@ -1,0 +1,33 @@
+Navigated to https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/
+client:495 [vite] connecting...
+client:618 [vite] connected.
+SupabaseProvider.tsx:77 Auth state change: {event: 'SIGNED_IN', session: {…}}
+SupabaseProvider.tsx:87 ✅ Stored Supabase access token
+SupabaseProvider.tsx:104 ✅ User signed in successfully, checking for redirect...
+SupabaseProvider.tsx:114 🔄 Cleaning up auth tokens from URL and redirecting...
+SupabaseProvider.tsx:144 🔄 Redirecting to /schools...
+useAuth0.ts:18 Auth state: {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+Dashboard.tsx:34 🏠 Dashboard page - User role: school_admin
+Dashboard.tsx:35 🔍 User email: contact.americanseekersacademy@gmail.com
+Dashboard.tsx:36 🔍 User metadata role: school_admin
+Dashboard.tsx:37 🔍 Final determined role: school_admin
+useAuth0.ts:18 Auth state: {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+RoleDashboard.tsx:31 👥 RoleDashboard - User email: contact.americanseekersacademy@gmail.com
+RoleDashboard.tsx:32 👥 RoleDashboard - User role: school_admin
+RoleDashboard.tsx:33 👤 User logged in with role: school_admin
+chunk-NFC5BX5N.js:377 [Violation] 'message' handler took 179ms
+Navigated to https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/schools
+client:495 [vite] connecting...
+client:618 [vite] connected.
+SupabaseProvider.tsx:77 Auth state change: {event: 'SIGNED_IN', session: {…}}
+SupabaseProvider.tsx:87 ✅ Stored Supabase access token
+SupabaseProvider.tsx:104 ✅ User signed in successfully, checking for redirect...
+useAuth0.ts:18 Auth state: {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+SupabaseProvider.tsx:52 Supabase session check: {session: {…}, error: null}
+SupabaseProvider.tsx:64 ✅ Stored initial Supabase access token
+useAuth0.ts:18 Auth state: {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+SupabaseProvider.tsx:77 Auth state change: {event: 'INITIAL_SESSION', session: {…}}
+SupabaseProvider.tsx:87 ✅ Stored Supabase access token
+useAuth0.ts:18 Auth state: {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+useAuth0.ts:18 Auth state: {isAuthenticated: true, isLoading: false, user: {…}, error: undefined}
+chunk-NFC5BX5N.js?v=fda00d35:377 [Violation] 'message' handler took 160ms

@@ -126,7 +126,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
           let redirectPath;
           switch (userRole) {
             case "school_admin":
-              redirectPath = "/schools";
+              redirectPath = "/dashboard";
               break;
             case "educator":
               redirectPath = "/educator/dashboard";
