@@ -1,0 +1,172 @@
+Fix the Logout Issue
+To fix the issue, we need to ensure that:
+
+The signOut function fully clears the session and prevents any SIGNED_IN events from triggering after logout.
+The onAuthStateChange listener respects the logout state and doesn’t redirect to the dashboard or schools page after a SIGNED_OUT event.
+Redirects are handled consistently without race conditions.
+2.1: Update the signOut Function
+Clear Session More Aggressively:
+Ensure all session-related data is cleared before redirecting.
+Prevent Race Conditions:
+Delay the redirect until we’re certain the SIGNED_OUT event has been processed.
+Updated Code:
+javascript
+
+Collapse
+
+Wrap
+
+Run
+
+Copy
+const signOut = async () => {
+  try {
+    console.log('🚪 Starting logout process...');
+    
+    // Set logout flag to prevent automatic redirects
+    localStorage.setItem('logout_in_progress', 'true');
+    
+    // Clear all session-related data
+    localStorage.removeItem('supabase_token');
+    localStorage.removeItem('supabase_access_token');
+    console.log('🧹 Cleared local storage');
+    
+    // Sign out from Supabase
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('❌ Logout error:', error);
+    } else {
+      console.log('✅ Supabase logout successful');
+    }
+
+    // Reset state immediately
+    setSession(null);
+    setUser(null);
+    setIsLoading(false);
+
+    // Wait briefly to ensure the SIGNED_OUT event is processed
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Clear logout flag and redirect
+    localStorage.removeItem('logout_in_progress');
+    console.log('🔄 Redirecting to login...');
+    window.location.href = '/login';
+  } catch (error) {
+    console.error('💥 Logout failed:', error);
+    // Ensure we still redirect even if logout fails
+    localStorage.removeItem('logout_in_progress');
+    window.location.href = '/login';
+  }
+};
+2.2: Update the onAuthStateChange Listener
+Respect SIGNED_OUT State:
+Ensure that after a SIGNED_OUT event, no further redirects occur.
+Avoid SIGNED_IN Redirects During Logout:
+Strengthen the logout_in_progress check and clear state explicitly.
+Updated Code:
+javascript
+
+Collapse
+
+Wrap
+
+Run
+
+Copy
+useEffect(() => {
+  // Get initial session with error handling
+  supabase.auth.getSession().then(({ data: { session }, error }) => {
+    console.log('Supabase session check:', { session, error });
+    if (error) {
+      console.error('Supabase session error:', error);
+      setError(error);
+    }
+    setSession(session);
+    setUser(session?.user ?? null);
+    setIsLoading(false);
+    
+    if (session?.access_token) {
+      localStorage.setItem('supabase_token', session.access_token);
+      console.log('✅ Stored initial Supabase access token');
+    }
+  }).catch((err) => {
+    console.error('Supabase connection error:', err);
+    setError(err);
+    setIsLoading(false);
+  });
+
+  // Listen for auth changes
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    console.log('Auth state change:', { event, session });
+
+    // Update state
+    setSession(session);
+    setUser(session?.user ?? null);
+    setIsLoading(false);
+    
+    // Manage access token
+    if (session?.access_token) {
+      localStorage.setItem('supabase_token', session.access_token);
+      console.log('✅ Stored Supabase access token');
+    } else {
+      localStorage.removeItem('supabase_token');
+      console.log('🗑️ Removed Supabase access token');
+    }
+
+    // Handle logout completion
+    if (event === 'SIGNED_OUT') {
+      console.log('🚪 User signed out, redirecting to login...');
+      localStorage.removeItem('logout_in_progress');
+      localStorage.removeItem('supabase_access_token');
+      setSession(null);
+      setUser(null);
+      window.location.href = '/login';
+      return;
+    }
+
+    // Handle successful OAuth login or session refresh
+    if (event === 'SIGNED_IN' && session?.user && !localStorage.getItem('logout_in_progress')) {
+      console.log('✅ User signed in successfully, checking for redirect...');
+      
+      // Only redirect if on login page, root, or OAuth callback
+      const currentUrl = window.location.href;
+      if (currentUrl.includes('#access_token=') || currentUrl.includes('?code=') || 
+          (window.location.pathname === '/login' || window.location.pathname === '/')) {
+        console.log('🔄 Cleaning up auth tokens from URL and redirecting...');
+        
+        // Determine redirect based on user metadata role
+        const userEmail = session.user.email;
+        const userRole = session.user.user_metadata?.role || 
+                        (userEmail === 'coreycreates@gmail.com' || 
+                         userEmail === 'contact.americanseekersacademy@gmail.com' ||
+                         userEmail === 'contact@americanseekersacademy.com' ? 'school_admin' : 'parent');
+        
+        let redirectPath;
+        switch (userRole) {
+          case 'school_admin':
+            redirectPath = '/schools';
+            break;
+          case 'educator':
+            redirectPath = '/educator/dashboard';
+            break;
+          case 'learner':
+            redirectPath = '/learner/dashboard';
+            break;
+          case 'parent':
+          default:
+            redirectPath = '/dashboard';
+        }
+        
+        // Redirect only if not already on the target path
+        if (window.location.pathname !== redirectPath) {
+          console.log(`🔄 Redirecting to ${redirectPath}...`);
+          window.location.replace(redirectPath);
+        }
+      }
+    }
+  });
+
+  return () => subscription.unsubscribe();
+}, []);

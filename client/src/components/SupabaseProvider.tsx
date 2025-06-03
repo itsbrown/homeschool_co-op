@@ -70,11 +70,13 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth state change:', { event, session });
+
+      // Update state
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
       
-      // Store the access token for API calls
+      // Manage access token
       if (session?.access_token) {
         localStorage.setItem('supabase_token', session.access_token);
         console.log('✅ Stored Supabase access token');
@@ -88,15 +90,17 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
         console.log('🚪 User signed out, redirecting to login...');
         localStorage.removeItem('logout_in_progress');
         localStorage.removeItem('supabase_access_token');
+        setSession(null);
+        setUser(null);
         window.location.href = '/login';
         return;
       }
 
-      // Handle successful OAuth login (only for initial OAuth flows, not token refreshes)
+      // Handle successful OAuth login or session refresh
       if (event === 'SIGNED_IN' && session?.user && !localStorage.getItem('logout_in_progress')) {
         console.log('✅ User signed in successfully, checking for redirect...');
         
-        // Clear any auth tokens from URL and redirect (only during OAuth callback)
+        // Only redirect if on login page, root, or OAuth callback
         const currentUrl = window.location.href;
         if (currentUrl.includes('#access_token=') || currentUrl.includes('?code=') || 
             (window.location.pathname === '/login' || window.location.pathname === '/')) {
@@ -125,14 +129,13 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
               redirectPath = '/dashboard';
           }
           
-          // Use setTimeout to ensure the auth state is fully processed
-          setTimeout(() => {
+          // Redirect only if not already on the target path
+          if (window.location.pathname !== redirectPath) {
+            console.log(`🔄 Redirecting to ${redirectPath}...`);
             window.location.replace(redirectPath);
-          }, 100);
+          }
         }
       }
-
-
     });
 
     return () => subscription.unsubscribe();
@@ -161,17 +164,27 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       // Set logout flag to prevent automatic redirects
       localStorage.setItem('logout_in_progress', 'true');
       
-      // Clear stored access tokens
+      // Clear all session-related data
+      localStorage.removeItem('supabase_token');
       localStorage.removeItem('supabase_access_token');
       console.log('🧹 Cleared local storage');
       
+      // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('❌ Logout error:', error);
-        // Still redirect even if there's an error
+      } else {
+        console.log('✅ Supabase logout successful');
       }
-      console.log('✅ Supabase logout successful');
-      
+
+      // Reset state immediately
+      setSession(null);
+      setUser(null);
+      setIsLoading(false);
+
+      // Wait briefly to ensure the SIGNED_OUT event is processed
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Clear logout flag and redirect
       localStorage.removeItem('logout_in_progress');
       console.log('🔄 Redirecting to login...');
