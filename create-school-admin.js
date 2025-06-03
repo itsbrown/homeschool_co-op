@@ -29,27 +29,41 @@ async function createSchoolAdminAccount() {
 
     console.log('✅ Found school admin account:', data);
 
-    // Also create a school record for this admin
-    const { data: schoolData, error: schoolError } = await supabase
+    // Check if school already exists
+    const { data: existingSchool, error: existingError } = await supabase
       .from('schools')
-      .insert({
-        name: 'American Seekers Academy',
-        type: 'school',
-        admin_id: data.id,
-        city: 'San Francisco',
-        state: 'CA',
-        zip_code: '94102',
-        email: 'contact.americanseekersacademy@gmail.com',
-        status: 'active'
-      })
-      .select()
+      .select('*')
+      .eq('admin_id', data.id)
       .single();
 
-    if (schoolError) {
-      console.error('Error creating school:', schoolError);
-    } else {
-      console.log('✅ School record created:', schoolData);
+    if (existingError && existingError.code !== 'PGRST116') {
+      console.log('Error checking existing school:', existingError);
     }
+
+    if (!existingSchool) {
+      console.log('Creating school record...');
+      // Create a school record for this admin using only the required fields
+      const { data: schoolData, error: schoolError } = await supabase
+        .from('schools')
+        .insert({
+          name: 'American Seekers Academy',
+          type: 'school',
+          admin_id: data.id,
+          email: 'contact.americanseekersacademy@gmail.com'
+        })
+        .select()
+        .single();
+
+      if (schoolError) {
+        console.error('Error creating school:', schoolError);
+      } else {
+        console.log('✅ School created:', schoolData);
+      }
+    } else {
+      console.log('✅ School already exists:', existingSchool);
+    }
+
+    console.log('School admin setup complete!');
 
   } catch (error) {
     console.error('Script error:', error);
