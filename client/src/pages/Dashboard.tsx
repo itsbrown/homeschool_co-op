@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAuth } from "@/components/SupabaseProvider";
+import { useAuth } from "@/hooks/useAuth0";
 import { useLocation } from "wouter";
 import AppShell from "@/components/layout/AppShell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
@@ -29,9 +29,12 @@ export default function Dashboard() {
   }
   
   // Use ParentAppShell for parent users, standard AppShell for others
-  const userRole = user?.user_metadata?.role || 'parent';
+  const userRole = user?.role || 'parent';
   
   console.log('🏠 Dashboard page - User role:', userRole);
+  console.log('🔍 User email:', user?.email);
+  console.log('🔍 User metadata role:', user?.role);
+  console.log('🔍 Final determined role:', userRole);
   
   if (user && userRole === 'parent') {
     return (

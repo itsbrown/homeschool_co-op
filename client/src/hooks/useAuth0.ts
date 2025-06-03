@@ -47,8 +47,8 @@ export function useAuth() {
     const metadata = user?.user_metadata || user?.app_metadata || {};
     let role = metadata.role || metadata.roles?.[0];
     
-    // Temporary role assignment for known admin email (will be replaced by invitation system)
-    if (user?.email === 'coreycreates@gmail.com') {
+    // School admin role assignment for known admin emails
+    if (user?.email === 'contact.americanseekersacademy@gmail.com' || user?.email === 'coreycreates@gmail.com') {
       role = 'school_admin';
     }
     
