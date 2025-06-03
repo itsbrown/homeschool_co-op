@@ -417,34 +417,48 @@ export default function SchoolClassCreationPage() {
                   name="instructorName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Instructor*</FormLabel>
-                      <Select 
-                        value={field.value} 
-                        onValueChange={field.onChange}
-                        disabled={staffLoading}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={staffLoading ? "Loading staff..." : "Select an instructor"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {staffMembers.map((staff: any, index: number) => {
-                            const staffName = staff.name || `${staff.firstName} ${staff.lastName}`;
-                            return (
-                              <SelectItem 
-                                key={`${staff.id}-${index}`} 
-                                value={staffName}
-                              >
-                                {staffName}
-                                {staff.position && ` - ${staff.position}`}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Instructor</FormLabel>
+                      <div className="flex gap-2">
+                        <Select 
+                          value={field.value || ""} 
+                          onValueChange={field.onChange}
+                          disabled={staffLoading}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder={staffLoading ? "Loading staff..." : "Select an instructor"} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="">No Instructor Assigned</SelectItem>
+                            {staffMembers.map((staff: any, index: number) => {
+                              const staffName = staff.name || `${staff.firstName} ${staff.lastName}`;
+                              return (
+                                <SelectItem 
+                                  key={`${staff.id}-${index}`} 
+                                  value={staffName}
+                                >
+                                  {staffName}
+                                  {staff.position && ` - ${staff.position}`}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        {field.value && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => field.onChange("")}
+                            title="Clear instructor assignment"
+                          >
+                            ×
+                          </Button>
+                        )}
+                      </div>
                       <FormDescription>
-                        Choose from available staff members
+                        Choose from available staff members or leave unassigned
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

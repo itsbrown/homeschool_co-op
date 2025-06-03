@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -103,6 +103,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function SchoolClassesPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -118,6 +119,37 @@ export default function SchoolClassesPage() {
       return data;
     },
   });
+
+  // Mutation for unassigning instructor
+  const unassignInstructorMutation = useMutation({
+    mutationFn: async (classId: number) => {
+      const response = await apiRequest("PATCH", `/school-admin/classes/${classId}`, {
+        instructorName: ""
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/school-admin/classes'] });
+      toast({
+        title: "Success",
+        description: "Instructor has been unassigned from the class.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unassign instructor.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handler for unassigning instructor
+  const handleUnassignInstructor = async (classId: number, className: string) => {
+    if (confirm(`Are you sure you want to unassign the instructor from "${className}"?`)) {
+      unassignInstructorMutation.mutate(classId);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -328,6 +360,14 @@ export default function SchoolClassesPage() {
                                       <DropdownMenuItem>
                                         <Link href={`/schools/classes/${cls.id}/schedule`}>Manage Schedule</Link>
                                       </DropdownMenuItem>
+                                      {cls.instructor && cls.instructor !== "No Instructor Assigned" && (
+                                        <DropdownMenuItem 
+                                          onClick={() => handleUnassignInstructor(cls.id, cls.title)}
+                                          className="text-orange-600"
+                                        >
+                                          Unassign Instructor
+                                        </DropdownMenuItem>
+                                      )}
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </TableCell>
