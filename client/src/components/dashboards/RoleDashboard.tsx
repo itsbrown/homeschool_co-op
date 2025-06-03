@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "@/components/SupabaseProvider";
+import { useAuth } from "@/hooks/useAuth0";
 import AdminDashboard from "./AdminDashboard";
 import EducatorDashboard from "./EducatorDashboard";
 import ParentDashboard from "./ParentDashboard";
@@ -24,14 +24,12 @@ export default function RoleDashboard() {
     );
   }
   
-  // Determine user role from Supabase user metadata only
+  // Determine user role from auth hook which includes email-based role override
   const userEmail = user.email;
-  const userRole = user.user_metadata?.role || 'parent';
+  const userRole = user.role;
 
-  console.log('🔍 User email:', userEmail);
-  console.log('🔍 User metadata role:', user.user_metadata?.role);
-  console.log('🔍 Final determined role:', userRole);
-
+  console.log('👥 RoleDashboard - User email:', userEmail);
+  console.log('👥 RoleDashboard - User role:', userRole);
   console.log('👤 User logged in with role:', userRole);
 
   // Render the appropriate dashboard based on user role
