@@ -1,6 +1,16 @@
 import React, { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { School, Calendar, Users, BookOpen, ChevronLeft, Menu, Home, LogOut, User } from "lucide-react";
+import {
+  School,
+  Calendar,
+  Users,
+  BookOpen,
+  ChevronLeft,
+  Menu,
+  Home,
+  LogOut,
+  User,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth0";
@@ -17,10 +27,10 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
 
   const handleLogout = async () => {
     try {
-      await apiRequest('POST', '/api/auth/logout');
-      window.location.href = '/login';
+      await apiRequest("POST", "/auth/logout");
+      window.location.href = "/login";
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
     }
   };
 
@@ -62,7 +72,7 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
       className={cn(
         "flex flex-col border-r bg-white transition-all duration-300",
         isCollapsed ? "w-16" : "w-64",
-        className
+        className,
       )}
     >
       <div className="p-4 flex items-center justify-between border-b">
@@ -93,7 +103,7 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
                   ? "bg-primary text-white"
                   : "text-gray-700 hover:bg-gray-100",
                 !isCollapsed && "justify-start",
-                isCollapsed && "justify-center"
+                isCollapsed && "justify-center",
               )}
             >
               {item.icon}
@@ -128,7 +138,7 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
             variant="ghost"
             className={cn(
               "w-full flex items-center text-gray-700 hover:bg-red-50 hover:text-red-600",
-              isCollapsed ? "justify-center px-2" : "justify-start px-2"
+              isCollapsed ? "justify-center px-2" : "justify-start px-2",
             )}
           >
             <LogOut className="h-4 w-4" />
