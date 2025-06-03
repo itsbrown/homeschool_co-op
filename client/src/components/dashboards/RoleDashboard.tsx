@@ -31,6 +31,10 @@ export default function RoleDashboard() {
                    userEmail === 'contact.americanseekersacademy@gmail.com' ||
                    userEmail === 'contact@americanseekersacademy.com' ? 'school_admin' : 'parent');
 
+  console.log('🔍 User email:', userEmail);
+  console.log('🔍 User metadata role:', user.user_metadata?.role);
+  console.log('🔍 Final determined role:', userRole);
+
   console.log('👤 User logged in with role:', userRole);
 
   // Render the appropriate dashboard based on user role

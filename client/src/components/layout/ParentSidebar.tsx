@@ -70,9 +70,28 @@ export default function ParentSidebar() {
   const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = React.useState(false);
 
-  const handleLogout = async () => {
+  /*const handleLogout = async () => {
     console.log('🚪 ParentSidebar logout clicked');
     await signOut();
+  };*/
+  /*const handleLogout = async () => {
+    alert("🚪 ParentSidebar logout clicked");
+    try {
+      await apiRequest("POST", "/auth/logout");
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };*/
+  const handleLogout = async () => {
+    alert("🚪 ParentSidebar logout clicked");
+    try {
+      await fetch("/auth/logout", { method: "POST", credentials: "include" });
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Logout failed. Please try again.");
+    }
   };
 
   // Parent navigation items
@@ -206,7 +225,7 @@ export default function ParentSidebar() {
 
             <Button variant="outline" className="w-full" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
-              Log Out
+              SIGN OUT
             </Button>
           </div>
         </div>
