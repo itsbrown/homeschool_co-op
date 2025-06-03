@@ -87,17 +87,15 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
 
       // Handle logout completion
       if (event === 'SIGNED_OUT') {
-        console.log('🚪 User signed out, clearing state...');
-        localStorage.removeItem('logout_in_progress');
-        localStorage.removeItem('supabase_access_token');
+        console.log('🚪 User signed out - auth state cleared');
         setSession(null);
         setUser(null);
-        // Don't redirect here - let the signOut function handle it
+        setIsLoading(false);
         return;
       }
 
       // Handle successful OAuth login or session refresh
-      if (event === 'SIGNED_IN' && session?.user && !localStorage.getItem('logout_in_progress')) {
+      if (event === 'SIGNED_IN' && session?.user) {
         console.log('✅ User signed in successfully, checking for redirect...');
         
         // Only redirect if on login page, root, or OAuth callback
@@ -158,47 +156,28 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
   };
 
   const signOut = async () => {
+    console.log('🚪 Starting logout process...');
+    
+    // Immediately clear all auth state
+    setSession(null);
+    setUser(null);
+    setIsLoading(false);
+    
+    // Clear all local storage items
+    localStorage.removeItem('supabase_token');
+    localStorage.removeItem('supabase_access_token');
+    localStorage.removeItem('logout_in_progress');
+    
     try {
-      console.log('🚪 Starting logout process...');
-      
-      // Set logout flag to prevent automatic redirects
-      localStorage.setItem('logout_in_progress', 'true');
-      
-      // Clear all session-related data immediately
-      localStorage.removeItem('supabase_token');
-      localStorage.removeItem('supabase_access_token');
-      console.log('🧹 Cleared local storage');
-      
-      // Reset state immediately to prevent any race conditions
-      setSession(null);
-      setUser(null);
-      setIsLoading(false);
-      
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('❌ Logout error:', error);
-      } else {
-        console.log('✅ Supabase logout successful');
-      }
-
-      // Wait longer to ensure all state changes are processed
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Clear logout flag and redirect
-      localStorage.removeItem('logout_in_progress');
-      console.log('🔄 Redirecting to login...');
-      
-      // Use replace to prevent back navigation issues
-      window.location.replace('/login');
+      // Sign out from Supabase (fire and forget)
+      await supabase.auth.signOut();
     } catch (error) {
-      console.error('💥 Logout failed:', error);
-      // Ensure we still redirect even if logout fails
-      localStorage.removeItem('logout_in_progress');
-      setSession(null);
-      setUser(null);
-      window.location.replace('/login');
+      console.error('Supabase logout error:', error);
     }
+    
+    // Immediate redirect without delay
+    console.log('🔄 Redirecting to login...');
+    window.location.replace('/login');
   };
 
   const signInWithGoogle = async () => {
