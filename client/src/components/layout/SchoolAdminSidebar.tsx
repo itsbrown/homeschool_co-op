@@ -23,11 +23,11 @@ interface SidebarProps {
 export default function SchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user, isAuthenticated,  } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const handleLogout = async () => {
-    console.log("🚪 ParentSidebar logout clicked");
-    await signOut();
+    console.log("🚪 SchoolAdminSidebar logout clicked");
+    await logout();
   };
 
   const schoolNavItems = [
