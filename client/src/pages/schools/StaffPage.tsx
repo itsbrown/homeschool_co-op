@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, PlusCircle, Search, Mail, Phone, UserCheck, UserX, MoreHorizontal } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2, PlusCircle, Search, Mail, Phone, UserCheck, UserX, MoreHorizontal, RefreshCw, Send } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import { apiRequest } from "@/lib/queryClient";
 
 // Sample staff data (will be replaced with API data)
 const sampleStaff = [
@@ -118,11 +119,56 @@ const STATUS_COLORS = {
 
 export default function StaffPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [activeTab, setActiveTab] = useState("list");
+
+  // Mutation for resending individual invite
+  const resendInviteMutation = useMutation({
+    mutationFn: async (staffId: number) => {
+      const response = await apiRequest("POST", `/school-admin/staff/${staffId}/resend-invite`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+      toast({
+        title: "Invite resent",
+        description: "The invitation has been resent successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to resend invite",
+        description: error?.message || "There was an error resending the invitation.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for resending all pending invites
+  const resendAllInvitesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/school-admin/staff/resend-all-invites");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+      toast({
+        title: "Invites resent",
+        description: `${data.count || 0} pending invitations have been resent successfully.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to resend invites",
+        description: error?.message || "There was an error resending the invitations.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Fetch staff for the school with automatic polling for real-time updates
   const { data: staff, isLoading, error } = useQuery({
@@ -212,6 +258,18 @@ export default function StaffPage() {
               <p className="text-muted-foreground">Manage your school's teachers and staff members</p>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => resendAllInvitesMutation.mutate()}
+                disabled={resendAllInvitesMutation.isPending}
+              >
+                {resendAllInvitesMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Resend All Invites
+              </Button>
               <Link href="/schools/staff/invite">
                 <Button>
                   <PlusCircle className="mr-2 h-4 w-4" />
@@ -362,6 +420,17 @@ export default function StaffPage() {
                                     <DropdownMenuItem>
                                       <Link href={`/schools/staff/${member.id}/schedule`}>View Schedule</Link>
                                     </DropdownMenuItem>
+                                    {member.status === "Pending" && (
+                                      <DropdownMenuItem
+                                        onClick={() => resendInviteMutation.mutate(member.id)}
+                                        disabled={resendInviteMutation.isPending}
+                                      >
+                                        <div className="flex items-center text-blue-600">
+                                          <Send className="mr-2 h-4 w-4" />
+                                          <span>Resend Invite</span>
+                                        </div>
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem>
                                       {member.status === "Active" ? (
                                         <div className="flex items-center text-red-500">
