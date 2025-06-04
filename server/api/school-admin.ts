@@ -745,8 +745,9 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get staff member details from storage
-    const staff = await storage.getStaffById(staffId);
+    // Get staff member details from existing staff data
+    const allStaff = loadStaffMembers();
+    const staff = allStaff.find(s => s.id === staffId);
     if (!staff) {
       return res.status(404).json({ message: "Staff member not found" });
     }
@@ -755,34 +756,30 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
       return res.status(400).json({ message: "Can only resend invites to pending staff members" });
     }
 
-    // Resend the invitation email using SendGrid
-    const inviteData = {
-      email: staff.email,
-      firstName: staff.firstName || staff.name?.split(' ')[0] || '',
-      lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
-      role: staff.role,
-      department: staff.department,
-      message: `Your invitation to join our school staff has been resent. Please check your email for details.`
-    };
+    // Resend the invitation email using SendGrid directly
+    const firstName = staff.firstName || staff.name?.split(' ')[0] || '';
+    const lastName = staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '';
+    const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
 
     try {
-      const response = await fetch('/api/school-admin/staff/invite', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(inviteData),
-      });
+      const emailSent = await sendStaffInvitationEmail(
+        staff.email,
+        firstName,
+        lastName,
+        staff.role,
+        staff.department,
+        message
+      );
 
-      if (!response.ok) {
-        throw new Error('Failed to resend invitation');
+      if (emailSent) {
+        res.json({ 
+          message: "Invitation resent successfully",
+          staffId: staffId,
+          email: staff.email 
+        });
+      } else {
+        res.status(500).json({ message: "Failed to send invitation email" });
       }
-
-      res.json({ 
-        message: "Invitation resent successfully",
-        staffId: staffId,
-        email: staff.email 
-      });
     } catch (emailError) {
       console.error("Error resending invitation:", emailError);
       res.status(500).json({ message: "Failed to resend invitation email" });
@@ -797,8 +794,8 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
 router.post("/staff/resend-all-invites", async (req, res) => {
   try {
     // Get all pending staff members
-    const allStaff = await storage.getAllStaff();
-    const pendingStaff = allStaff.filter(member => member.status === "Pending");
+    const allStaff = loadStaffMembers();
+    const pendingStaff = allStaff.filter((member: any) => member.status === "Pending");
 
     if (pendingStaff.length === 0) {
       return res.json({ 
@@ -813,24 +810,20 @@ router.post("/staff/resend-all-invites", async (req, res) => {
     // Resend invites to all pending staff members
     for (const staff of pendingStaff) {
       try {
-        const inviteData = {
-          email: staff.email,
-          firstName: staff.firstName || staff.name?.split(' ')[0] || '',
-          lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
-          role: staff.role,
-          department: staff.department,
-          message: `Your invitation to join our school staff has been resent. Please check your email for details.`
-        };
+        const firstName = staff.firstName || staff.name?.split(' ')[0] || '';
+        const lastName = staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '';
+        const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
 
-        const response = await fetch('/api/school-admin/staff/invite', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(inviteData),
-        });
+        const emailSent = await sendStaffInvitationEmail(
+          staff.email,
+          firstName,
+          lastName,
+          staff.role,
+          staff.department,
+          message
+        );
 
-        if (response.ok) {
+        if (emailSent) {
           successCount++;
         } else {
           failureCount++;
