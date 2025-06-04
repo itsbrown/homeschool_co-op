@@ -288,6 +288,7 @@ export default function SchoolClassCreationPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value="littles">Littles</SelectItem>
                             <SelectItem value="pre-k-k">Pre K - K</SelectItem>
                             <SelectItem value="grades-1-2">Grades 1-2</SelectItem>
                             <SelectItem value="grades-3-5">Grades 3-5</SelectItem>
