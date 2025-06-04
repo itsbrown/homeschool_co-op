@@ -737,6 +737,122 @@ router.get("/staff/:id", async (req, res) => {
   }
 });
 
+// Resend invite to individual staff member
+router.post("/staff/:id/resend-invite", async (req, res) => {
+  try {
+    const staffId = parseInt(req.params.id, 10);
+    if (isNaN(staffId)) {
+      return res.status(400).json({ message: "Invalid staff ID format" });
+    }
+
+    // Get staff member details from storage
+    const staff = await storage.getStaffById(staffId);
+    if (!staff) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    if (staff.status !== "Pending") {
+      return res.status(400).json({ message: "Can only resend invites to pending staff members" });
+    }
+
+    // Resend the invitation email using SendGrid
+    const inviteData = {
+      email: staff.email,
+      firstName: staff.firstName || staff.name?.split(' ')[0] || '',
+      lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
+      role: staff.role,
+      department: staff.department,
+      message: `Your invitation to join our school staff has been resent. Please check your email for details.`
+    };
+
+    try {
+      const response = await fetch('/api/school-admin/staff/invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(inviteData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to resend invitation');
+      }
+
+      res.json({ 
+        message: "Invitation resent successfully",
+        staffId: staffId,
+        email: staff.email 
+      });
+    } catch (emailError) {
+      console.error("Error resending invitation:", emailError);
+      res.status(500).json({ message: "Failed to resend invitation email" });
+    }
+  } catch (error) {
+    console.error("Error resending staff invite:", error);
+    res.status(500).json({ message: "Error resending staff invite" });
+  }
+});
+
+// Resend all pending invites
+router.post("/staff/resend-all-invites", async (req, res) => {
+  try {
+    // Get all pending staff members
+    const allStaff = await storage.getAllStaff();
+    const pendingStaff = allStaff.filter(member => member.status === "Pending");
+
+    if (pendingStaff.length === 0) {
+      return res.json({ 
+        message: "No pending invitations found",
+        count: 0 
+      });
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    // Resend invites to all pending staff members
+    for (const staff of pendingStaff) {
+      try {
+        const inviteData = {
+          email: staff.email,
+          firstName: staff.firstName || staff.name?.split(' ')[0] || '',
+          lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
+          role: staff.role,
+          department: staff.department,
+          message: `Your invitation to join our school staff has been resent. Please check your email for details.`
+        };
+
+        const response = await fetch('/api/school-admin/staff/invite', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(inviteData),
+        });
+
+        if (response.ok) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
+      } catch (emailError) {
+        console.error(`Error resending invitation to ${staff.email}:`, emailError);
+        failureCount++;
+      }
+    }
+
+    res.json({ 
+      message: `Resent ${successCount} invitations successfully`,
+      count: successCount,
+      failures: failureCount,
+      total: pendingStaff.length
+    });
+  } catch (error) {
+    console.error("Error resending all staff invites:", error);
+    res.status(500).json({ message: "Error resending staff invites" });
+  }
+});
+
 // Update staff member
 router.put("/staff/:id", async (req, res) => {
   try {

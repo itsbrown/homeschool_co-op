@@ -511,6 +511,17 @@ export default function StaffPage() {
                             <Button size="sm" variant="outline">
                               <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
                             </Button>
+                            {member.status === "Pending" && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => resendInviteMutation.mutate(member.id)}
+                                disabled={resendInviteMutation.isPending}
+                              >
+                                <Send className="w-3 h-3 mr-1" />
+                                Resend
+                              </Button>
+                            )}
                           </CardFooter>
                         </Card>
                       ))
