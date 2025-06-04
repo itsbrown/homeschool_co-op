@@ -120,6 +120,37 @@ export default function SchoolClassesPage() {
     },
   });
 
+  // Mutation for duplicating a class
+  const duplicateClassMutation = useMutation({
+    mutationFn: async (classData: any) => {
+      const duplicatedClass = {
+        ...classData,
+        title: `${classData.title} - Copy`,
+        status: "upcoming",
+        enrollmentCount: 0,
+        id: undefined // Remove ID so it creates a new class
+      };
+      delete duplicatedClass.id;
+      
+      const response = await apiRequest("POST", "/school-admin/classes", duplicatedClass);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/school-admin/classes'] });
+      toast({
+        title: "Success",
+        description: "Class has been duplicated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to duplicate class. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Mutation for unassigning instructor
   const unassignInstructorMutation = useMutation({
     mutationFn: async (classId: number) => {
@@ -149,6 +180,11 @@ export default function SchoolClassesPage() {
     if (confirm(`Are you sure you want to unassign the instructor from "${className}"?`)) {
       unassignInstructorMutation.mutate(classId);
     }
+  };
+
+  // Handler for duplicating a class
+  const handleDuplicateClass = (classData: any) => {
+    duplicateClassMutation.mutate(classData);
   };
 
   if (isLoading) {
@@ -333,7 +369,11 @@ export default function SchoolClassesPage() {
                               <TableRow key={cls.id}>
                                 <TableCell className="font-medium">{cls.title}</TableCell>
                                 <TableCell>{cls.category}</TableCell>
-                                <TableCell>{cls.instructor}</TableCell>
+                                <TableCell>
+                                  {cls.instructorName && cls.instructorName !== "no-instructor" 
+                                    ? cls.instructorName 
+                                    : "No Instructor Assigned"}
+                                </TableCell>
                                 <TableCell>{cls.gradeLevel}</TableCell>
                                 <TableCell>
                                   <Badge variant="secondary">{cls.status}</Badge>
@@ -360,7 +400,13 @@ export default function SchoolClassesPage() {
                                       <DropdownMenuItem>
                                         <Link href={`/schools/classes/${cls.id}/schedule`}>Manage Schedule</Link>
                                       </DropdownMenuItem>
-                                      {cls.instructor && cls.instructor !== "No Instructor Assigned" && (
+                                      <DropdownMenuItem 
+                                        onClick={() => handleDuplicateClass(cls)}
+                                        className="text-blue-600"
+                                      >
+                                        Duplicate Class
+                                      </DropdownMenuItem>
+                                      {cls.instructorName && cls.instructorName !== "no-instructor" && cls.instructorName !== "No Instructor Assigned" && (
                                         <DropdownMenuItem 
                                           onClick={() => handleUnassignInstructor(cls.id, cls.title)}
                                           className="text-orange-600"

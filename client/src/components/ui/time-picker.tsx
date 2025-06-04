@@ -100,7 +100,7 @@ export function TimePicker({ value, onChange, placeholder = "Select time", class
                     variant={minute === m ? "default" : "ghost"}
                     size="sm"
                     className="h-8 text-xs w-full"
-                    onClick={() => handleTimeChange(hour, m, period)}
+                    onClick={() => handleTimeChange(undefined, m, undefined)}
                   >
                     {m}
                   </Button>
@@ -118,7 +118,7 @@ export function TimePicker({ value, onChange, placeholder = "Select time", class
                     variant={period === p ? "default" : "ghost"}
                     size="sm"
                     className="h-8 text-xs w-full"
-                    onClick={() => handleTimeChange(hour, minute, p)}
+                    onClick={() => handleTimeChange(undefined, undefined, p)}
                   >
                     {p}
                   </Button>
