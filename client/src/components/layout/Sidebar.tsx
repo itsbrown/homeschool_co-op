@@ -119,11 +119,11 @@ export default function Sidebar() {
                     <div
                       className={cn(
                         "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
-                        isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+                        isActive ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100",
                         isCollapsed ? "justify-center" : "justify-start"
                       )}
                     >
-                      <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
+                      <item.icon className={cn("h-5 w-5", isActive ? "text-white" : "text-muted-foreground")} />
                       {!isCollapsed && <span>{item.title}</span>}
                     </div>
                   </Link>
@@ -199,11 +199,11 @@ export default function Sidebar() {
                         <div
                           className={cn(
                             "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
-                            isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+                            isActive ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
                           )}
                           onClick={toggleSidebar}
                         >
-                          <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
+                          <item.icon className={cn("h-5 w-5", isActive ? "text-white" : "text-muted-foreground")} />
                           <span>{item.title}</span>
                         </div>
                       </Link>
