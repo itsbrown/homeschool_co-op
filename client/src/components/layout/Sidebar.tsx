@@ -142,8 +142,8 @@ export default function Sidebar() {
                     <User className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium">School Admin</div>
-                    <div className="text-xs text-muted-foreground">Administrator</div>
+                    <div className="text-sm font-medium">{user.user_metadata?.full_name || user.email}</div>
+                    <div className="text-xs text-muted-foreground">School Administrator</div>
                   </div>
                 </div>
               )}
@@ -221,8 +221,8 @@ export default function Sidebar() {
                       <User className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="text-sm font-medium">School Admin</div>
-                      <div className="text-xs text-muted-foreground">Administrator</div>
+                      <div className="text-sm font-medium">{user.user_metadata?.full_name || user.email}</div>
+                      <div className="text-xs text-muted-foreground">School Administrator</div>
                     </div>
                   </div>
 
