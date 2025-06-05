@@ -40,8 +40,8 @@ import AppShell from '@/components/layout/AppShell';
 
 export default function KnowledgeBasePage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [subjectFilter, setSubjectFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [activeView, setActiveView] = useState("grid");
   const { toast } = useToast();
 
@@ -93,8 +93,8 @@ export default function KnowledgeBasePage() {
       kb.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       kb.tags?.some((tag: string) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const matchesSubject = subjectFilter === "" || kb.subjectArea === subjectFilter;
-    const matchesStatus = statusFilter === "" || kb.status === statusFilter;
+    const matchesSubject = subjectFilter === "all" || kb.subjectArea === subjectFilter;
+    const matchesStatus = statusFilter === "all" || kb.status === statusFilter;
     
     return matchesSearch && matchesSubject && matchesStatus;
   }) : [];
@@ -161,7 +161,7 @@ export default function KnowledgeBasePage() {
                       <SelectValue placeholder="Subject Area" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Subjects</SelectItem>
+                      <SelectItem value="all">All Subjects</SelectItem>
                       {subjects.map((subject: any) => (
                         <SelectItem key={subject} value={subject}>{subject}</SelectItem>
                       ))}
@@ -172,7 +172,7 @@ export default function KnowledgeBasePage() {
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Statuses</SelectItem>
+                      <SelectItem value="all">All Statuses</SelectItem>
                       {statuses.map((status: any) => (
                         <SelectItem key={status} value={status}>{status}</SelectItem>
                       ))}

@@ -34,8 +34,8 @@ import AppShell from '@/components/layout/AppShell';
 
 export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [gradeLevelFilter, setGradeLevelFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [gradeLevelFilter, setGradeLevelFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [activeView, setActiveView] = useState("list");
   const { toast } = useToast();
 
@@ -87,8 +87,8 @@ export default function StudentsPage() {
       student.parentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.email?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesGradeLevel = gradeLevelFilter === "" || student.gradeLevel === gradeLevelFilter;
-    const matchesStatus = statusFilter === "" || student.status === statusFilter;
+    const matchesGradeLevel = gradeLevelFilter === "all" || student.gradeLevel === gradeLevelFilter;
+    const matchesStatus = statusFilter === "all" || student.status === statusFilter;
     
     return matchesSearch && matchesGradeLevel && matchesStatus;
   }) : [];
@@ -165,7 +165,7 @@ export default function StudentsPage() {
                       <SelectValue placeholder="Grade Level" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Grades</SelectItem>
+                      <SelectItem value="all">All Grades</SelectItem>
                       {gradeLevels.map((grade: any) => (
                         <SelectItem key={grade} value={grade}>{grade}</SelectItem>
                       ))}
@@ -176,7 +176,7 @@ export default function StudentsPage() {
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Statuses</SelectItem>
+                      <SelectItem value="all">All Statuses</SelectItem>
                       {statuses.map((status: any) => (
                         <SelectItem key={status} value={status}>{status}</SelectItem>
                       ))}
