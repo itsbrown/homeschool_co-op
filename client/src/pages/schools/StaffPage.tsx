@@ -33,167 +33,66 @@ import { Link } from "wouter";
 import AppShell from '@/components/layout/AppShell';
 import { apiRequest } from "@/lib/queryClient";
 
-// Sample staff data (will be replaced with API data)
-const sampleStaff = [
-  {
-    id: 1,
-    name: "Dr. Sarah Johnson",
-    email: "sarah.johnson@example.com",
-    phone: "(555) 123-4567",
-    role: "Teacher",
-    department: "History",
-    subjects: ["U.S. History", "World History"],
-    status: "Active",
-    joinDate: "2021-08-15",
-    avatar: "",
-  },
-  {
-    id: 2,
-    name: "Prof. Michael Chen",
-    email: "michael.chen@example.com",
-    phone: "(555) 234-5678",
-    role: "Teacher",
-    department: "Mathematics",
-    subjects: ["Calculus", "Algebra"],
-    status: "Active",
-    joinDate: "2020-09-01",
-    avatar: "",
-  },
-  {
-    id: 3,
-    name: "Ms. Elena Rodriguez",
-    email: "elena.rodriguez@example.com",
-    phone: "(555) 345-6789",
-    role: "Teacher",
-    department: "Languages",
-    subjects: ["Spanish", "ESL"],
-    status: "Active",
-    joinDate: "2022-01-10",
-    avatar: "",
-  },
-  {
-    id: 4,
-    name: "Dr. Robert Williams",
-    email: "robert.williams@example.com",
-    phone: "(555) 456-7890",
-    role: "Department Head",
-    department: "Science",
-    subjects: ["Biology", "Environmental Science"],
-    status: "Active",
-    joinDate: "2019-08-20",
-    avatar: "",
-  },
-  {
-    id: 5,
-    name: "Ms. Amanda Taylor",
-    email: "amanda.taylor@example.com",
-    phone: "(555) 567-8901",
-    role: "Teacher",
-    department: "English",
-    subjects: ["Creative Writing", "Literature"],
-    status: "On Leave",
-    joinDate: "2020-08-15",
-    avatar: "",
-  },
-  {
-    id: 6,
-    name: "Mr. David Kim",
-    email: "david.kim@example.com",
-    phone: "(555) 678-9012",
-    role: "Administrator",
-    department: "Administration",
-    subjects: [],
-    status: "Active",
-    joinDate: "2018-06-01",
-    avatar: "",
-  },
-];
-
-// Sample status colors
-const STATUS_COLORS = {
-  "Active": "green",
-  "On Leave": "yellow",
-  "Inactive": "red",
-  "Pending": "blue",
-};
-
 export default function StaffPage() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRole, setSelectedRole] = useState<string>("all");
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [activeView, setActiveView] = useState("list");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [activeTab, setActiveTab] = useState("list");
 
-  // Mutation for resending individual invite
-  const resendInviteMutation = useMutation({
-    mutationFn: async (staffId: number) => {
-      const response = await apiRequest("POST", `/school-admin/staff/${staffId}/resend-invite`);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
-      toast({
-        title: "Invite resent",
-        description: "The invitation has been resent successfully.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to resend invite",
-        description: error?.message || "There was an error resending the invitation.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Mutation for resending all pending invites
-  const resendAllInvitesMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/school-admin/staff/resend-all-invites");
-      return response.json();
-    },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
-      toast({
-        title: "Invites resent",
-        description: `${data.count || 0} pending invitations have been resent successfully.`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to resend invites",
-        description: error?.message || "There was an error resending the invitations.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Fetch staff for the school with automatic polling for real-time updates
+  // Fetch staff data from API
   const { data: staff, isLoading, error } = useQuery({
     queryKey: ['/api/school-admin/staff'],
-    queryFn: async () => {
-      try {
-        const response = await fetch('/api/school-admin/staff', {
-          credentials: 'include',
-        });
-        
-        if (!response.ok) {
-          // If we get an error, return empty array instead of throwing
-          console.log('Staff API returned error:', response.status);
-          return [];
-        }
-        
-        return await response.json();
-      } catch (error) {
-        console.log('Staff fetch error:', error);
-        return [];
-      }
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true,
+  });
+
+  // Mutation for resending individual invites
+  const resendInviteMutation = useMutation({
+    mutationFn: async (staffId: number) => {
+      return apiRequest(`/api/school-admin/staff/${staffId}/resend-invite`, {
+        method: 'POST',
+      });
     },
-    retry: false,
-    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
-    refetchIntervalInBackground: true, // Continue polling when window is not focused
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Invitation resent successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to resend invitation",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for resending all invites
+  const resendAllInvitesMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/school-admin/staff/resend-all-invites', {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success", 
+        description: "All pending invitations resent successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to resend all invitations",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -231,22 +130,22 @@ export default function StaffPage() {
   }
 
   // Filter staff based on search query and filters
-  const filteredStaff = staff?.filter(member => {
+  const filteredStaff = staff?.filter((member: any) => {
     const matchesSearch = searchQuery === "" || 
-      member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchQuery.toLowerCase());
+      member.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      member.email?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesRole = roleFilter === "" || member.role === roleFilter;
-    const matchesDepartment = departmentFilter === "" || member.department === departmentFilter;
-    const matchesStatus = statusFilter === "" || member.status === statusFilter;
+    const matchesRole = selectedRole === "all" || member.role === selectedRole;
+    const matchesDepartment = selectedDepartment === "all" || member.department === selectedDepartment;
+    const matchesStatus = selectedStatus === "all" || member.status === selectedStatus;
     
     return matchesSearch && matchesRole && matchesDepartment && matchesStatus;
   }) || [];
 
-  // Get unique roles, departments, and statuses for filters
-  const roles = staff ? [...new Set(staff.map(member => member.role))] : [];
-  const departments = staff ? [...new Set(staff.map(member => member.department))] : [];
-  const statuses = staff ? [...new Set(staff.map(member => member.status))] : [];
+  // Extract unique values for filter dropdowns
+  const roles = staff ? [...new Set(staff.map((member: any) => member.role))] : [];
+  const departments = staff ? [...new Set(staff.map((member: any) => member.department))] : [];
+  const statuses = staff ? [...new Set(staff.map((member: any) => member.status))] : [];
 
   return (
     <AppShell>
@@ -281,258 +180,205 @@ export default function StaffPage() {
           </div>
         </div>
 
-      <div className="max-w-6xl mx-auto">
         <div className="flex flex-col space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
-            <div>
-              <h1 className="text-3xl font-bold">Staff Management</h1>
-              <p className="text-muted-foreground">Manage your school's teachers and staff members</p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => resendAllInvitesMutation.mutate()}
-                disabled={resendAllInvitesMutation.isPending}
-              >
-                {resendAllInvitesMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                Resend All Invites
-              </Button>
-              <Link href="/schools/staff/invite">
-                <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Invite Staff
-                </Button>
-              </Link>
-              <Link href="/schools/staff/positions">
-                <Button variant="outline">
-                  Manage Positions
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6">
-              <TabsTrigger value="list">List View</TabsTrigger>
-              <TabsTrigger value="grid">Grid View</TabsTrigger>
-              <TabsTrigger value="org">Org Chart</TabsTrigger>
-            </TabsList>
-
+          <Tabs value={activeView} onValueChange={setActiveView}>
             <Card>
               <CardHeader>
-                <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by name or email..."
-                        className="pl-8"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
-                    </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
+                  <div>
+                    <CardTitle>Staff Management</CardTitle>
+                    <CardDescription>Manage your school's teachers and staff members</CardDescription>
                   </div>
-
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Select value={roleFilter} onValueChange={setRoleFilter}>
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all-roles">All Roles</SelectItem>
-                        {roles.map((role) => (
-                          <SelectItem key={role} value={role}>{role}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="Department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all-departments">All Departments</SelectItem>
-                        {departments.map((department) => (
-                          <SelectItem key={department} value={department}>{department}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all-statuses">All Statuses</SelectItem>
-                        {statuses.map((status) => (
-                          <SelectItem key={status} value={status}>{status}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center space-x-2">
+                    <TabsList>
+                      <TabsTrigger value="list">List View</TabsTrigger>
+                      <TabsTrigger value="grid">Grid View</TabsTrigger>
+                      <TabsTrigger value="chart">Org Chart</TabsTrigger>
+                    </TabsList>
                   </div>
                 </div>
               </CardHeader>
 
-              <TabsContent value="list">
+              <CardContent className="space-y-4">
+                {/* Search and Filters */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by name or email..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                  <Select value={selectedRole} onValueChange={setSelectedRole}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      {roles.map((role) => (
+                        <SelectItem key={role} value={role}>{role}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {statuses.map((status) => (
+                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+
+              <TabsContent value="list" className="mt-0">
                 <CardContent>
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Department</TableHead>
-                          <TableHead>Contact</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredStaff.length > 0 ? (
-                          filteredStaff.map((member) => (
-                            <TableRow key={member.id}>
-                              <TableCell>
-                                <div className="flex items-center space-x-3">
-                                  <Avatar>
-                                    <AvatarImage src={member.avatar} />
-                                    <AvatarFallback>{member.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <div className="font-medium">{member.name}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                      Joined {new Date(member.joinDate).toLocaleDateString()}
-                                    </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredStaff.length > 0 ? (
+                        filteredStaff.map((member: any) => (
+                          <TableRow key={member.id}>
+                            <TableCell>
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-primary">
+                                    {member.name?.split(' ').map((n: any) => n[0]).join('').toUpperCase() || 'U'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <div className="font-medium">{member.name}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    Joined {new Date(member.joinDate).toLocaleDateString()}
                                   </div>
                                 </div>
-                              </TableCell>
-                              <TableCell>{member.role}</TableCell>
-                              <TableCell>{member.department}</TableCell>
-                              <TableCell>
-                                <div className="flex flex-col space-y-1">
-                                  <div className="flex items-center">
-                                    <Mail className="w-3 h-3 mr-1 text-muted-foreground" />
-                                    <span className="text-sm">{member.email}</span>
-                                  </div>
-                                  <div className="flex items-center">
-                                    <Phone className="w-3 h-3 mr-1 text-muted-foreground" />
+                              </div>
+                            </TableCell>
+                            <TableCell>{member.role}</TableCell>
+                            <TableCell>{member.department}</TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="flex items-center space-x-1">
+                                  <Mail className="w-3 h-3" />
+                                  <span className="text-sm">{member.email}</span>
+                                </div>
+                                {member.phone && (
+                                  <div className="flex items-center space-x-1">
+                                    <Phone className="w-3 h-3" />
                                     <span className="text-sm">{member.phone}</span>
                                   </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="outline" 
-                                  className={`bg-opacity-15 border border-opacity-30 ${member.status === "Active" ? "bg-green-100 text-green-800 border-green-200" : 
-                                    member.status === "On Leave" ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
-                                    member.status === "Inactive" ? "bg-red-100 text-red-800 border-red-200" :
-                                    "bg-blue-100 text-blue-800 border-blue-200"}`}
-                                >
-                                  {member.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem>
-                                      <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={member.status === 'Active' ? 'default' : 'secondary'}
+                                className={member.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : ''}
+                              >
+                                {member.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
+                                  </DropdownMenuItem>
+                                  {member.status === "Pending" && (
+                                    <DropdownMenuItem 
+                                      onClick={() => resendInviteMutation.mutate(member.id)}
+                                      disabled={resendInviteMutation.isPending}
+                                    >
+                                      <Send className="w-4 h-4 mr-2" />
+                                      Resend Invite
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                      <Link href={`/schools/staff/${member.id}/edit`}>Edit Details</Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                      <Link href={`/schools/staff/${member.id}/schedule`}>View Schedule</Link>
-                                    </DropdownMenuItem>
-                                    {member.status === "Pending" && (
-                                      <DropdownMenuItem
-                                        onClick={() => resendInviteMutation.mutate(member.id)}
-                                        disabled={resendInviteMutation.isPending}
-                                      >
-                                        <div className="flex items-center text-blue-600">
-                                          <Send className="mr-2 h-4 w-4" />
-                                          <span>Resend Invite</span>
-                                        </div>
-                                      </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem>
-                                      {member.status === "Active" ? (
-                                        <div className="flex items-center text-red-500">
-                                          <UserX className="mr-2 h-4 w-4" />
-                                          <span>Set Inactive</span>
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center text-green-500">
-                                          <UserCheck className="mr-2 h-4 w-4" />
-                                          <span>Set Active</span>
-                                        </div>
-                                      )}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                              No staff members found. Try adjusting your search or filters.
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8">
+                            <div className="text-muted-foreground">No staff members found matching your criteria.</div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </TabsContent>
 
-              <TabsContent value="grid">
+              <TabsContent value="grid" className="mt-0">
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredStaff.length > 0 ? (
-                      filteredStaff.map((member) => (
-                        <Card key={member.id}>
+                  {filteredStaff.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredStaff.map((member: any) => (
+                        <Card key={member.id} className="hover:shadow-md transition-shadow">
                           <CardHeader className="text-center pb-2">
-                            <div className="flex justify-end">
+                            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                              <span className="text-lg font-medium text-primary">
+                                {member.name?.split(' ').map((n: any) => n[0]).join('').toUpperCase() || 'U'}
+                              </span>
+                            </div>
+                            <CardTitle className="text-lg">{member.name}</CardTitle>
+                            <CardDescription>{member.role} • {member.department}</CardDescription>
+                          </CardHeader>
+                          <CardContent className="text-center space-y-2">
+                            <div className="flex items-center justify-center space-x-1">
+                              <Mail className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-sm">{member.email}</span>
+                            </div>
+                            {member.phone && (
+                              <div className="flex items-center justify-center space-x-1">
+                                <Phone className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm">{member.phone}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-center">
                               <Badge 
-                                variant="outline" 
-                                className={`bg-opacity-15 border border-opacity-30 ${member.status === "Active" ? "bg-green-100 text-green-800 border-green-200" : 
-                                    member.status === "On Leave" ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
-                                    member.status === "Inactive" ? "bg-red-100 text-red-800 border-red-200" :
-                                    "bg-blue-100 text-blue-800 border-blue-200"}`}
+                                variant={member.status === 'Active' ? 'default' : 'secondary'}
+                                className={member.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : ''}
                               >
                                 {member.status}
                               </Badge>
                             </div>
-                            <div className="flex flex-col items-center mt-2">
-                              <Avatar className="w-24 h-24 mb-3">
-                                <AvatarImage src={member.avatar} />
-                                <AvatarFallback className="text-2xl">{member.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                              </Avatar>
-                              <CardTitle className="text-xl">{member.name}</CardTitle>
-                              <CardDescription>{member.role} - {member.department}</CardDescription>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="text-center pb-2">
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-center">
-                                <Mail className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <span className="text-sm">{member.email}</span>
-                              </div>
-                              <div className="flex items-center justify-center">
-                                <Phone className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <span className="text-sm">{member.phone}</span>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                Joined {new Date(member.joinDate).toLocaleDateString()}
-                              </div>
+                            <div className="text-sm text-muted-foreground">
+                              Joined {new Date(member.joinDate).toLocaleDateString()}
                             </div>
                           </CardContent>
                           <CardFooter className="flex justify-center gap-2 pt-2">
@@ -555,29 +401,26 @@ export default function StaffPage() {
                             )}
                           </CardFooter>
                         </Card>
-                      ))
-                    ) : (
-                      <div className="col-span-full flex items-center justify-center p-6 text-muted-foreground">
-                        No staff members found. Try adjusting your search or filters.
-                      </div>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="col-span-full flex items-center justify-center p-6 text-muted-foreground">
+                      No staff members found matching your criteria.
+                    </div>
+                  )}
                 </CardContent>
               </TabsContent>
 
-              <TabsContent value="org">
-                <CardContent>
-                  <div className="p-6 min-h-[300px] flex items-center justify-center flex-col">
-                    <div className="mb-4">
+              <TabsContent value="chart" className="mt-0">
+                <CardContent className="flex items-center justify-center py-12">
+                  <div className="text-center space-y-4">
+                    <div className="mx-auto w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
                       <svg
-                        className="h-12 w-12 text-primary opacity-70"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
+                        className="w-8 h-8 text-muted-foreground"
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        viewBox="0 0 24 24"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       >
