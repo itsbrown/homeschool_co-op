@@ -30,7 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import AppShell from '@/components/layout/AppShell';
 import { apiRequest } from "@/lib/queryClient";
 
 // Sample staff data (will be replaced with API data)
@@ -198,18 +198,18 @@ export default function StaffPage() {
 
   if (isLoading) {
     return (
-      <SchoolAdminLayout pageTitle="Staff Management">
+      <AppShell>
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading staff information...</span>
         </div>
-      </SchoolAdminLayout>
+      </AppShell>
     );
   }
 
   if (error) {
     return (
-      <SchoolAdminLayout pageTitle="Staff Management - Error">
+      <AppShell>
         <div className="max-w-4xl mx-auto p-6">
           <Card>
             <CardHeader>
@@ -226,7 +226,7 @@ export default function StaffPage() {
             </CardFooter>
           </Card>
         </div>
-      </SchoolAdminLayout>
+      </AppShell>
     );
   }
 
@@ -249,8 +249,39 @@ export default function StaffPage() {
   const statuses = staff ? [...new Set(staff.map(member => member.status))] : [];
 
   return (
-    <SchoolAdminLayout pageTitle="Staff Management">
-      <div className="max-w-6xl mx-auto p-6">
+    <AppShell>
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Staff Management</h1>
+            <p className="text-muted-foreground">Manage your school's teachers and staff members</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => resendAllInvitesMutation.mutate()}
+              disabled={resendAllInvitesMutation.isPending}
+            >
+              {resendAllInvitesMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Resend All Invites
+            </Button>
+            <Button asChild>
+              <Link href="/schools/staff/invite">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Invite Staff
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/schools/staff/positions">Manage Positions</Link>
+            </Button>
+          </div>
+        </div>
+
+      <div className="max-w-6xl mx-auto">
         <div className="flex flex-col space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
             <div>
@@ -576,6 +607,6 @@ export default function StaffPage() {
           </Tabs>
         </div>
       </div>
-    </SchoolAdminLayout>
+    </AppShell>
   );
 }
