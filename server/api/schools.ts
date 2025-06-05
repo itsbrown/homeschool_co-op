@@ -98,4 +98,69 @@ router.get("/:id/students", async (req, res) => {
   }
 });
 
+// Get knowledge bases - temporary endpoint until proper implementation
+router.get("/knowledge-bases", async (req, res) => {
+  try {
+    // Return sample knowledge base data for now
+    const sampleKnowledgeBases = [
+      {
+        id: 1,
+        title: "American History Primary Documents",
+        description: "A comprehensive collection of primary documents from American history, including the Declaration of Independence, Constitution, and other significant historical texts.",
+        subjectArea: "History",
+        gradeLevel: ["9-12"],
+        status: "Published",
+        visibility: "School",
+        fileCount: 36,
+        size: "128 MB",
+        createdAt: "2023-09-15",
+        updatedAt: "2023-10-20",
+        tags: ["American History", "Primary Sources", "Constitution", "Revolution"],
+        creator: "Dr. Sarah Johnson",
+        rating: 4.8,
+        usageCount: 85,
+      },
+      {
+        id: 2,
+        title: "Middle School Mathematics",
+        description: "Core mathematics curriculum materials for grades 6-8, covering algebra, geometry, statistics, and more.",
+        subjectArea: "Mathematics",
+        gradeLevel: ["6-8"],
+        status: "Published",
+        visibility: "School",
+        fileCount: 42,
+        size: "95 MB",
+        createdAt: "2023-08-05",
+        updatedAt: "2023-11-10",
+        tags: ["Mathematics", "Algebra", "Geometry", "Middle School"],
+        creator: "Prof. Michael Chen",
+        rating: 4.6,
+        usageCount: 120,
+      },
+      {
+        id: 3,
+        title: "Science Laboratory Experiments",
+        description: "Hands-on laboratory experiments for high school chemistry and physics classes.",
+        subjectArea: "Science",
+        gradeLevel: ["9-12"],
+        status: "Published",
+        visibility: "School",
+        fileCount: 28,
+        size: "156 MB",
+        createdAt: "2023-07-12",
+        updatedAt: "2023-10-05",
+        tags: ["Science", "Chemistry", "Physics", "Laboratory"],
+        creator: "Dr. Emily Rodriguez",
+        rating: 4.7,
+        usageCount: 93,
+      }
+    ];
+
+    res.json(sampleKnowledgeBases);
+  } catch (error: any) {
+    console.error("Error fetching knowledge bases:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 export default router;
