@@ -51,12 +51,34 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     }
   }, [user, canSwitchRoles]);
 
-  const handleRoleChange = (role: string) => {
+  const handleRoleChange = async (role: string) => {
     if (availableRoles.includes(role)) {
-      setActiveRole(role);
-      localStorage.setItem('activeRole', role);
-      // Force page reload to apply role change
-      window.location.reload();
+      try {
+        // Call backend API to switch role context
+        const response = await fetch('/api/switch-role', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('supabase_access_token')}`
+          },
+          body: JSON.stringify({ targetRole: role })
+        });
+
+        if (response.ok) {
+          setActiveRole(role);
+          localStorage.setItem('activeRole', role);
+          // Force page reload to apply role change completely
+          window.location.reload();
+        } else {
+          console.error('Failed to switch role:', await response.text());
+        }
+      } catch (error) {
+        console.error('Error switching role:', error);
+        // Fallback to local role change if API fails
+        setActiveRole(role);
+        localStorage.setItem('activeRole', role);
+        window.location.reload();
+      }
     }
   };
 

@@ -19,12 +19,14 @@ export async function apiRequest(
   options?: RequestInit
 ): Promise<Response> {
   const token = localStorage.getItem('supabase_token');
+  const activeRole = localStorage.getItem('activeRole');
 
   const config: RequestInit = {
     method,
     headers: {
       "Content-Type": "application/json",
       ...(token && { Authorization: `Bearer ${token}` }),
+      ...(activeRole && { 'X-Active-Role': activeRole }),
       ...options?.headers,
     },
     credentials: "include",
@@ -69,11 +71,13 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const token = localStorage.getItem('supabase_token');
+    const activeRole = localStorage.getItem('activeRole');
     
     const res = await fetch(queryKey[0] as string, {
       credentials: "include",
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(activeRole && { 'X-Active-Role': activeRole }),
       },
     });
 

@@ -42,6 +42,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Import Supabase token-based authentication middleware
   const { jwtCheck, requireRole, requireAdmin, requireEducator } = await import("./middleware/auth0-auth");
 
+  // Role switching API endpoint for multi-role users
+  app.post("/api/switch-role", jwtCheck, async (req, res) => {
+    try {
+      const { targetRole } = req.body;
+      const userEmail = req.auth?.payload?.email;
+
+      if (!userEmail) {
+        return res.status(401).json({ message: "User email not found in token" });
+      }
+
+      // Only allow role switching for specific multi-role users
+      const multiRoleUsers = ['coreycreates@gmail.com'];
+      if (!multiRoleUsers.includes(userEmail)) {
+        return res.status(403).json({ message: "Role switching not allowed for this user" });
+      }
+
+      // Validate target role
+      const allowedRoles = ['parent', 'school_admin'];
+      if (!allowedRoles.includes(targetRole)) {
+        return res.status(400).json({ message: "Invalid target role" });
+      }
+
+      // Store the active role in session/context for this user
+      // For now, we'll return success and let the frontend handle the role context
+      res.status(200).json({ 
+        message: "Role switched successfully",
+        activeRole: targetRole,
+        userEmail 
+      });
+    } catch (error) {
+      console.error("Role switch error:", error);
+      res.status(500).json({ message: "Error switching role" });
+    }
+  });
+
   // Register API routers
   // Children endpoint is now handled directly below with Auth0 authentication
 

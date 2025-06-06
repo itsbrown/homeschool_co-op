@@ -24,10 +24,24 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
 
     console.log('✅ Token verified successfully for:', user.email);
 
+    // Check for role override from role switcher
+    const activeRoleHeader = req.headers['x-active-role'];
+    const multiRoleUsers = ['coreycreates@gmail.com'];
+    let effectiveRole = user.user_metadata?.role || 'parent';
+
+    // Allow role switching for multi-role users
+    if (user.email && multiRoleUsers.includes(user.email) && activeRoleHeader) {
+      const allowedRoles = ['parent', 'school_admin'];
+      if (allowedRoles.includes(activeRoleHeader as string)) {
+        effectiveRole = activeRoleHeader as string;
+        console.log(`🔄 Role switched to: ${effectiveRole} for user: ${user.email}`);
+      }
+    }
+
     // Use the role from the token metadata - no database lookup needed
     req.user = {
       ...user,
-      role: user.user_metadata?.role || 'parent',
+      role: effectiveRole,
       id: user.sub,
       email: user.email
     };
@@ -37,8 +51,12 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
       userId: user.sub,
       supabaseId: user.sub,
       email: user.email,
-      role: user.user_metadata?.role || 'parent',
-      isActive: true
+      role: effectiveRole,
+      isActive: true,
+      payload: {
+        email: user.email,
+        role: effectiveRole
+      }
     };
 
     console.log('✅ Token verified for user:', user.email);
