@@ -43,20 +43,36 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     ? ['parent', 'school_admin'] 
     : [user?.user_metadata?.role || 'parent'];
 
-  // Handle role selection logic for multi-role users
+  // Check if user has multiple roles and handle role selection
+  const checkUserRoles = (user: any) => {
+    const multiRoleUsers = ['coreycreates@gmail.com'];
+    return multiRoleUsers.includes(user?.email);
+  };
+
+  // Handle role selection logic immediately after login
   useEffect(() => {
-    console.log(`🔄 RoleContext useEffect - user:`, user?.email, 'savedRole:', localStorage.getItem('activeRole'));
-    
-    if (user?.email === 'coreycreates@gmail.com') {
-      // For testing, clear any saved role to force role selection
+    if (!user) {
+      // User logged out - reset state
+      setActiveRole('');
+      setShowRoleSelection(false);
+      return;
+    }
+
+    console.log(`🔄 Role check for user:`, user.email);
+    const hasMultipleRoles = checkUserRoles(user);
+    const savedRole = localStorage.getItem('activeRole');
+
+    if (hasMultipleRoles) {
+      console.log(`🎯 Multi-role user detected:`, user.email);
+      // Clear any existing role for testing - force role selection
       localStorage.removeItem('activeRole');
-      console.log(`🎯 Multi-role user detected - clearing saved role and showing selection`);
+      console.log(`🎯 Clearing saved role - showing role selection`);
       setShowRoleSelection(true);
       setActiveRole('');
-    } else if (user && !localStorage.getItem('activeRole')) {
-      // Single role user - set default role
+    } else {
+      // Single role user - set default role immediately
       const defaultRole = user.user_metadata?.role || 'parent';
-      console.log(`🎯 Single role user - setting default role:`, defaultRole);
+      console.log(`🎯 Single role user - setting role: ${defaultRole}`);
       setActiveRole(defaultRole);
       localStorage.setItem('activeRole', defaultRole);
       setShowRoleSelection(false);
