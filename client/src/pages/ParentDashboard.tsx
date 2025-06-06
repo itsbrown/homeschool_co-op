@@ -33,7 +33,7 @@ export default function ParentDashboard() {
 
   // Query for children data
   const { data: children = [], isLoading: childrenLoading } = useQuery<Child[]>({
-    queryKey: ["/api/children"],
+    queryKey: ["/api/parent/children"],
     enabled: !!user,
   });
 
