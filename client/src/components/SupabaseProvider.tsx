@@ -46,14 +46,17 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
 
   useEffect(() => {
     // Get initial session with error handling
-    supabase.auth
-      .getSession()
-      .then(({ data: { session }, error }) => {
+    const initializeAuth = async () => {
+      try {
+        console.log("🔍 Initializing authentication...");
+        const { data: { session }, error } = await supabase.auth.getSession();
         console.log("Supabase session check:", { session, error });
+        
         if (error) {
           console.error("Supabase session error:", error);
           setError(error);
         }
+        
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
@@ -63,12 +66,21 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
           localStorage.setItem("supabase_token", session.access_token);
           console.log("✅ Stored initial Supabase access token");
         }
-      })
-      .catch((err) => {
+        
+        // Debug session state
+        console.log("🔍 Initial auth state:", {
+          hasSession: !!session,
+          userEmail: session?.user?.email,
+          userId: session?.user?.id
+        });
+      } catch (err) {
         console.error("Supabase connection error:", err);
-        setError(err);
+        setError(err instanceof Error ? err : new Error(String(err)));
         setIsLoading(false);
-      });
+      }
+    };
+    
+    initializeAuth();
 
     // Listen for auth changes
     const {
