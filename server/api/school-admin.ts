@@ -22,14 +22,18 @@ async function sendStaffInvitationEmail(email: string, firstName: string, lastNa
       return false;
     }
 
-    // Dynamically determine the correct domain for invitation links
+    // Use Replit-specific environment variables to determine the correct domain
     let baseUrl;
-    if (process.env.NODE_ENV === 'development') {
-      // In development, use the current Replit development domain
-      baseUrl = process.env.REPLIT_DEV_DOMAIN || 'https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev';
+    if (process.env.REPLIT_DEV_DOMAIN) {
+      // Use the development domain when available
+      baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    } else if (process.env.REPLIT_DOMAINS) {
+      // Use the primary domain from REPLIT_DOMAINS
+      const domains = process.env.REPLIT_DOMAINS.split(',');
+      baseUrl = `https://${domains[0]}`;
     } else {
-      // In production, use the deployment domain
-      baseUrl = process.env.REPLIT_DOMAINS || `https://${process.env.REPL_ID}.replit.app`;
+      // Fallback to the Replit app domain
+      baseUrl = `https://${process.env.REPL_ID}.replit.app`;
     }
     const invitationUrl = `${baseUrl}/auth/login`;
     
