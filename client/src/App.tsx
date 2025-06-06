@@ -188,8 +188,13 @@ function Router() {
     <Switch>
       <Route path="/auth/login">
         {() => {
-          console.log('🔍 /auth/login route matched');
-          return <SupabaseLogin />;
+          console.log('🔍 /auth/login route matched - rendering SupabaseLogin');
+          return (
+            <div style={{ minHeight: '100vh', backgroundColor: 'white' }}>
+              <h1>AUTH LOGIN PAGE</h1>
+              <SupabaseLogin />
+            </div>
+          );
         }}
       </Route>
       <Route path="/logout" component={LogoutPage} />
