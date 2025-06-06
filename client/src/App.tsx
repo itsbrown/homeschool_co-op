@@ -5,7 +5,7 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
-
+import { RoleProvider, useRole } from "@/contexts/RoleContext";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -99,6 +99,7 @@ import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
+  const { activeRole } = useRole();
 
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {
@@ -177,9 +178,9 @@ function Router() {
   const getRoleDashboard = (userRole: string) => {
     switch (userRole) {
       case 'school_admin':
-        return Dashboard; // School admins should see the standard dashboard
+        return MySchoolPage; // School admin dashboard
       case 'educator':
-        return Dashboard; // Could be a specific educator dashboard
+        return Dashboard; // Educator dashboard
       case 'parent':
       default:
         return Dashboard; // Parent dashboard
@@ -194,7 +195,7 @@ function Router() {
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
       <Route path="/login" component={SupabaseLogin} />
       {isAuthenticated ? (
-        <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
+        <Route path="/" component={getRoleDashboard(activeRole || 'parent')} />
       ) : (
         <Route path="/" component={SupabaseLogin} />
       )}
@@ -292,12 +293,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SupabaseProvider>
-        <AIStatusProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </AIStatusProvider>
+        <RoleProvider>
+          <AIStatusProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </AIStatusProvider>
+        </RoleProvider>
       </SupabaseProvider>
     </QueryClientProvider>
   );

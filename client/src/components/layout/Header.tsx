@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 import { Bell, Mail, Menu, Search } from "lucide-react";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,6 +20,7 @@ interface HeaderProps {
 
 export default function Header({ onMenuClick }: HeaderProps) {
   const { user, signOut } = useAuth();
+  const { activeRole, setActiveRole, canSwitchRoles } = useRole();
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (e: React.FormEvent) => {
