@@ -29,7 +29,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user, isAuthenticated, getAccessTokenSilently } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   // Get childId from URL query parameters if present
   const urlParams = new URLSearchParams(window.location.search);
@@ -42,40 +42,17 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   });
 
   // Fetch children from authenticated parent endpoint
-  const { data: children = [] } = useQuery({
+  const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery({
     queryKey: ["/api/parent/children"],
-    queryFn: async () => {
-      try {
-        const token = localStorage.getItem('supabase_token');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-        
-        const response = await fetch("/api/parent/children", {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const children = await response.json();
-        return children;
-      } catch (error) {
-        console.error("Error fetching children:", error);
-        return [];
-      }
-    },
     enabled: true,
   });
+  
+
 
   // Enrollment mutation
   const enrollmentMutation = useMutation({
     mutationFn: async ({ classId, childId }: { classId: number; childId: string }) => {
-      return apiRequest(`/api/classes/${classId}/enroll`, 'POST', { childId: parseInt(childId) });
+      return apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
     },
     onSuccess: () => {
       toast({
@@ -405,7 +382,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                   <SelectValue placeholder="Choose a child" />
                 </SelectTrigger>
                 <SelectContent>
-                  {children.map((child: any) => (
+                  {Array.isArray(children) && children.map((child: any) => (
                     <SelectItem key={child.id} value={child.id.toString()}>
                       {child.firstName} {child.lastName}
                     </SelectItem>
