@@ -94,6 +94,7 @@ import StudentDetailPage from "./pages/schools/StudentDetailPage";
 import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
+import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
@@ -264,6 +265,7 @@ function Router() {
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/knowledge-base/new" component={KnowledgeBaseCreationPage} />
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
+      <Route path="/schools/settings" component={SchoolSettingsPage} />
 
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />
