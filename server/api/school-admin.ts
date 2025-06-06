@@ -22,7 +22,16 @@ async function sendStaffInvitationEmail(email: string, firstName: string, lastNa
       return false;
     }
 
-    const invitationUrl = `https://${process.env.REPL_ID}.replit.app/auth/login`;
+    // Dynamically determine the correct domain for invitation links
+    let baseUrl;
+    if (process.env.NODE_ENV === 'development') {
+      // In development, use the current Replit development domain
+      baseUrl = process.env.REPLIT_DEV_DOMAIN || 'https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev';
+    } else {
+      // In production, use the deployment domain
+      baseUrl = process.env.REPLIT_DOMAINS || `https://${process.env.REPL_ID}.replit.app`;
+    }
+    const invitationUrl = `${baseUrl}/auth/login`;
     
     const msg = {
       to: email,
