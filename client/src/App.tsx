@@ -293,6 +293,9 @@ function Router() {
       <Route path="/payments" component={PaymentsPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
+      
+      {/* Dashboard route */}
+      <Route path="/dashboard" component={DashboardRouter} />
 
       {/* School/Co-op registration routes */}
       <Route path="/schools/register" component={SchoolRegistrationPage} />

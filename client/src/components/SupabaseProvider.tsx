@@ -122,47 +122,11 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       if (event === "SIGNED_IN" && session?.user) {
         console.log("✅ User signed in successfully, checking for redirect...");
 
-        // Only redirect if on login page, root, or OAuth callback
+        // Clean up OAuth tokens from URL without redirect (let App.tsx handle routing)
         const currentUrl = window.location.href;
-        if (
-          currentUrl.includes("#access_token=") ||
-          currentUrl.includes("?code=") ||
-          window.location.pathname === "/login" ||
-          window.location.pathname === "/"
-        ) {
-          console.log("🔄 Cleaning up auth tokens from URL and redirecting...");
-
-          // Determine redirect based on user metadata role
-          const userEmail = session.user.email;
-          const userRole =
-            session.user.user_metadata?.role ||
-            (userEmail === "coreycreates@gmail.com" ||
-            userEmail === "contact.americanseekersacademy@gmail.com" ||
-            userEmail === "contact@americanseekersacademy.com"
-              ? "school_admin"
-              : "parent");
-
-          let redirectPath;
-          switch (userRole) {
-            case "school_admin":
-              redirectPath = "/dashboard";
-              break;
-            case "educator":
-              redirectPath = "/educator/dashboard";
-              break;
-            case "learner":
-              redirectPath = "/learner/dashboard";
-              break;
-            case "parent":
-            default:
-              redirectPath = "/dashboard";
-          }
-
-          // Redirect only if not already on the target path
-          if (window.location.pathname !== redirectPath) {
-            console.log(`🔄 Redirecting to ${redirectPath}...`);
-            window.location.replace(redirectPath);
-          }
+        if (currentUrl.includes("#access_token=") || currentUrl.includes("?code=")) {
+          console.log("🔄 Cleaning up auth tokens from URL...");
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
       }
     });
