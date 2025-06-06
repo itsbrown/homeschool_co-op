@@ -42,19 +42,14 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       console.log(`🔄 Can switch roles:`, canSwitchRoles);
       console.log(`🔄 Available roles:`, availableRoles);
       
-      // For multi-role users, respect localStorage preferences
+      // For multi-role users, check localStorage but ensure consistency
       if (canSwitchRoles) {
-        const savedRole = localStorage.getItem('activeRole');
-        console.log(`🔄 Saved role from localStorage:`, savedRole);
-        if (savedRole && availableRoles.includes(savedRole)) {
-          console.log(`🔄 Setting active role to saved role:`, savedRole);
-          setActiveRole(savedRole);
-        } else {
-          // Default to school_admin if no preference saved
-          console.log(`🔄 No saved preference, defaulting to school_admin`);
-          setActiveRole('school_admin');
-          localStorage.setItem('activeRole', 'school_admin');
-        }
+        // Clear any inconsistent state and start fresh
+        localStorage.removeItem('activeRole');
+        const defaultRole = 'school_admin';
+        console.log(`🔄 Multi-role user detected, setting to default:`, defaultRole);
+        setActiveRole(defaultRole);
+        localStorage.setItem('activeRole', defaultRole);
       } else {
         const defaultRole = user.user_metadata?.role || 'parent';
         console.log(`🔄 Setting active role to user metadata role:`, defaultRole);
@@ -72,8 +67,16 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       localStorage.setItem('activeRole', role);
       console.log(`🔄 Stored role in localStorage:`, role);
       console.log(`🔄 Role change complete - new activeRole should be:`, role);
+      
+      // Force page reload to ensure complete state reset
+      setTimeout(() => {
+        console.log(`🔄 Reloading page to apply role change`);
+        window.location.reload();
+      }, 100);
     }
   };
+
+  console.log(`🔄 RoleProvider rendering - activeRole: ${activeRole}, canSwitchRoles: ${canSwitchRoles}`);
 
   return (
     <RoleContext.Provider

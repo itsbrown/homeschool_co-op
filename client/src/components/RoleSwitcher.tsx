@@ -42,6 +42,9 @@ export default function RoleSwitcher({ currentRole, onRoleChange }: RoleSwitcher
   }
 
   const currentRoleData = availableRoles.find(role => role.id === currentRole);
+  
+  console.log(`🎯 RoleSwitcher render - currentRole prop:`, currentRole);
+  console.log(`🎯 RoleSwitcher render - currentRoleData:`, currentRoleData);
 
   return (
     <div className="flex items-center gap-2">

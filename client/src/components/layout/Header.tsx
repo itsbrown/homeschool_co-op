@@ -63,7 +63,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
         {canSwitchRoles && (
           <RoleSwitcher 
             currentRole={activeRole} 
-            onRoleChange={setActiveRole} 
+            onRoleChange={(role) => {
+              console.log(`🎯 Header: Role change requested to ${role}`);
+              setActiveRole(role);
+            }} 
           />
         )}
 
