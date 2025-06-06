@@ -190,6 +190,7 @@ function Router() {
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
       <Route path="/login" component={SupabaseLogin} />
+      <Route path="/auth/login" component={SupabaseLogin} />
       {isAuthenticated ? (
         <Route path="/" component={getRoleDashboard(user?.role || 'parent')} />
       ) : (
