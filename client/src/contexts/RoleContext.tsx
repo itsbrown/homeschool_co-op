@@ -42,19 +42,12 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       console.log(`🔄 Can switch roles:`, canSwitchRoles);
       console.log(`🔄 Available roles:`, availableRoles);
       
-      // For multi-role users, check localStorage for preferred role
+      // Always start with parent role as default for multi-role users
       if (canSwitchRoles) {
-        const savedRole = localStorage.getItem('activeRole');
-        console.log(`🔄 Saved role from localStorage:`, savedRole);
-        if (savedRole && availableRoles.includes(savedRole)) {
-          console.log(`🔄 Setting active role to saved role:`, savedRole);
-          setActiveRole(savedRole);
-        } else {
-          // Default to parent role first for new users
-          console.log(`🔄 Setting active role to default: parent`);
-          setActiveRole('parent');
-          localStorage.setItem('activeRole', 'parent');
-        }
+        // Force parent role as default unless explicitly changed
+        console.log(`🔄 Setting active role to parent (default for multi-role users)`);
+        setActiveRole('parent');
+        localStorage.setItem('activeRole', 'parent');
       } else {
         const defaultRole = user.user_metadata?.role || 'parent';
         console.log(`🔄 Setting active role to user metadata role:`, defaultRole);
@@ -72,6 +65,11 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       localStorage.setItem('activeRole', role);
       console.log(`🔄 Stored role in localStorage:`, role);
       console.log(`🔄 Role change complete - new activeRole should be:`, role);
+      
+      // Force a page reload to ensure complete context switching
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
     }
   };
 
