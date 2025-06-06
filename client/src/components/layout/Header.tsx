@@ -60,6 +60,13 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <AIStatusBadge />
         </div>
 
+        {canSwitchRoles && (
+          <RoleSwitcher 
+            currentRole={activeRole} 
+            onRoleChange={setActiveRole} 
+          />
+        )}
+
         <Button variant="ghost" size="icon" className="text-muted-foreground">
           <Bell className="h-5 w-5" />
           <span className="sr-only">Notifications</span>
