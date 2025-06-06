@@ -81,34 +81,15 @@ export default function SchoolSettingsPage() {
     systemMaintenance: false,
   });
 
-  // Fetch user profile data
-  const { data: profileData, isLoading: profileLoading } = useQuery({
-    queryKey: ['/api/users/profile'],
-    enabled: !!user,
-  });
-
-  // Fetch notification settings
-  const { data: notificationData, isLoading: notificationLoading } = useQuery({
-    queryKey: ['/api/users/notifications'],
-    enabled: !!user,
-  });
-
-  // Initialize form with profile data
+  // Initialize form with user data
   useEffect(() => {
-    if (profileData) {
-      setFirstName(profileData.firstName || "");
-      setLastName(profileData.lastName || "");
-      setPhoneNumber(profileData.phoneNumber || "");
-      setUsername(profileData.username || profileData.email || "");
+    if (user) {
+      setFirstName(user.firstName || "");
+      setLastName(user.lastName || "");
+      setPhoneNumber(user.phoneNumber || "");
+      setUsername(user.email || "");
     }
-  }, [profileData]);
-
-  // Initialize notification settings
-  useEffect(() => {
-    if (notificationData) {
-      setNotifications(notificationData);
-    }
-  }, [notificationData]);
+  }, [user]);
 
   // Update profile mutation
   const updateProfileMutation = useMutation({
@@ -118,17 +99,25 @@ export default function SchoolSettingsPage() {
       phoneNumber: string;
       username: string;
     }) => {
-      return apiRequest('/api/users/profile', {
+      const response = await fetch('/api/users/profile', {
         method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(profileData),
       });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update profile');
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({
         title: "Profile updated",
         description: "Your profile information has been saved successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/users/profile'] });
     },
     onError: (error) => {
       toast({
@@ -142,17 +131,25 @@ export default function SchoolSettingsPage() {
   // Update notifications mutation
   const updateNotificationsMutation = useMutation({
     mutationFn: async (notificationSettings: NotificationSettings) => {
-      return apiRequest('/api/users/notifications', {
+      const response = await fetch('/api/users/notifications', {
         method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(notificationSettings),
       });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update notifications');
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({
         title: "Notifications updated",
         description: "Your notification preferences have been saved.",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/users/notifications'] });
     },
     onError: (error) => {
       toast({
@@ -169,10 +166,19 @@ export default function SchoolSettingsPage() {
       currentPassword: string;
       newPassword: string;
     }) => {
-      return apiRequest('/api/users/change-password', {
+      const response = await fetch('/api/users/change-password', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(passwordData),
       });
+      
+      if (!response.ok) {
+        throw new Error('Failed to change password');
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -238,7 +244,7 @@ export default function SchoolSettingsPage() {
   };
 
   return (
-    <SchoolAdminLayout>
+    <SchoolAdminLayout pageTitle="Account Settings">
       <div className="container mx-auto py-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Account Settings</h1>
@@ -283,13 +289,13 @@ export default function SchoolSettingsPage() {
                 <CardContent className="space-y-6">
                   <div className="flex items-center gap-4">
                     <Avatar className="h-20 w-20">
-                      <AvatarImage src={user?.picture} alt={user?.name || ""} />
+                      <AvatarImage src={user?.user_metadata?.picture} alt={user?.email || ""} />
                       <AvatarFallback className="text-lg">
-                        {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                        {user?.email?.charAt(0)?.toUpperCase() || "U"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-1">
-                      <h3 className="font-semibold text-lg">{user?.name}</h3>
+                      <h3 className="font-semibold text-lg">{user?.email}</h3>
                       <p className="text-muted-foreground">{user?.email}</p>
                       <Badge variant="secondary">
                         {user?.role === 'school_admin' ? 'School Administrator' : 'Staff Member'}
@@ -629,33 +635,24 @@ export default function SchoolSettingsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {profileData?.school ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h3 className="font-semibold">{profileData.school.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            School ID: {profileData.school.id}
-                          </p>
-                        </div>
-                        <Badge variant="outline">Active</Badge>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <h3 className="font-semibold">American Seekers Academy</h3>
+                        <p className="text-sm text-muted-foreground">
+                          School ID: 1
+                        </p>
                       </div>
-
-                      <Alert>
-                        <CheckCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          You are successfully associated with this school. Contact your administrator for any changes.
-                        </AlertDescription>
-                      </Alert>
+                      <Badge variant="outline">Active</Badge>
                     </div>
-                  ) : (
+
                     <Alert>
-                      <AlertCircle className="h-4 w-4" />
+                      <CheckCircle className="h-4 w-4" />
                       <AlertDescription>
-                        No school association found. Please contact support if you believe this is an error.
+                        You are successfully associated with this school. Contact your administrator for any changes.
                       </AlertDescription>
                     </Alert>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

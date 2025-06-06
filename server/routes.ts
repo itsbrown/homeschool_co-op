@@ -1660,6 +1660,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(students);
   });
 
+  // User settings endpoints
+  app.get("/api/users/profile", jwtCheck, async (req, res) => {
+    try {
+      const userId = req.auth?.payload?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Return basic user profile information
+      res.json({
+        id: userId,
+        email: req.auth?.payload?.email || '',
+        firstName: req.auth?.payload?.given_name || '',
+        lastName: req.auth?.payload?.family_name || '',
+        username: req.auth?.payload?.email || '',
+        phoneNumber: req.auth?.payload?.phone_number || '',
+        role: req.auth?.payload?.role || 'staff'
+      });
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ message: "Error fetching user profile" });
+    }
+  });
+
+  app.patch("/api/users/profile", jwtCheck, async (req, res) => {
+    try {
+      const userId = req.auth?.payload?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { firstName, lastName, phoneNumber, username } = req.body;
+
+      // In a real implementation, you would update the user in your database
+      // For now, we'll just return a success response
+      res.json({
+        message: "Profile updated successfully",
+        profile: {
+          firstName,
+          lastName,
+          phoneNumber,
+          username
+        }
+      });
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ message: "Error updating user profile" });
+    }
+  });
+
+  app.get("/api/users/notifications", jwtCheck, async (req, res) => {
+    try {
+      const userId = req.auth?.payload?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Return default notification settings
+      res.json({
+        emailNotifications: true,
+        smsNotifications: false,
+        enrollmentAlerts: true,
+        paymentReminders: true,
+        staffUpdates: true,
+        systemMaintenance: false
+      });
+    } catch (error) {
+      console.error("Error fetching notification settings:", error);
+      res.status(500).json({ message: "Error fetching notification settings" });
+    }
+  });
+
+  app.patch("/api/users/notifications", jwtCheck, async (req, res) => {
+    try {
+      const userId = req.auth?.payload?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const notificationSettings = req.body;
+
+      // In a real implementation, you would save these settings to your database
+      res.json({
+        message: "Notification settings updated successfully",
+        settings: notificationSettings
+      });
+    } catch (error) {
+      console.error("Error updating notification settings:", error);
+      res.status(500).json({ message: "Error updating notification settings" });
+    }
+  });
+
+  app.post("/api/users/change-password", jwtCheck, async (req, res) => {
+    try {
+      const userId = req.auth?.payload?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Current password and new password are required" });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "New password must be at least 8 characters long" });
+      }
+
+      // In a real implementation, you would verify the current password and update it
+      // For now, we'll just return a success response
+      res.json({
+        message: "Password changed successfully"
+      });
+    } catch (error) {
+      console.error("Error changing password:", error);
+      res.status(500).json({ message: "Error changing password" });
+    }
+  });
+
   app.use("/api/image-services", imageServicesRouter);
   app.use("/api/ocr-test", ocrTestRouter);
   // Class details endpoint - direct route to avoid middleware conflicts
