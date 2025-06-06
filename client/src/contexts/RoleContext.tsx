@@ -24,7 +24,11 @@ interface RoleProviderProps {
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  const [activeRole, setActiveRole] = useState<string>('school_admin');
+  // Initialize from localStorage to persist role across page reloads
+  const [activeRole, setActiveRole] = useState<string>(() => {
+    const savedRole = localStorage.getItem('activeRole');
+    return savedRole || 'school_admin';
+  });
 
   // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
   const multiRoleUsers = ['coreycreates@gmail.com'];
@@ -35,32 +39,13 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     ? ['parent', 'school_admin'] 
     : [user?.user_metadata?.role || 'parent'];
 
-  // Initialize role based on user metadata or default to parent
+  // Only set default role if no role is saved and user is authenticated
   useEffect(() => {
-    if (user) {
-      console.log(`🔄 Role initialization - User:`, user.email);
-      console.log(`🔄 Can switch roles:`, canSwitchRoles);
-      console.log(`🔄 Available roles:`, availableRoles);
-      
-      // For multi-role users, respect localStorage preferences
-      if (canSwitchRoles) {
-        const savedRole = localStorage.getItem('activeRole');
-        console.log(`🔄 Saved role from localStorage:`, savedRole);
-        if (savedRole && availableRoles.includes(savedRole)) {
-          console.log(`🔄 Setting active role to saved role:`, savedRole);
-          setActiveRole(savedRole);
-        } else {
-          // Default to school_admin for first time users
-          const defaultRole = 'school_admin';
-          console.log(`🔄 No saved preference, defaulting to:`, defaultRole);
-          setActiveRole(defaultRole);
-          localStorage.setItem('activeRole', defaultRole);
-        }
-      } else {
-        const defaultRole = user.user_metadata?.role || 'parent';
-        console.log(`🔄 Setting active role to user metadata role:`, defaultRole);
-        setActiveRole(defaultRole);
-      }
+    if (user && !localStorage.getItem('activeRole')) {
+      console.log(`🔄 First time user login, setting default role`);
+      const defaultRole = canSwitchRoles ? 'school_admin' : (user.user_metadata?.role || 'parent');
+      setActiveRole(defaultRole);
+      localStorage.setItem('activeRole', defaultRole);
     }
   }, [user, canSwitchRoles]);
 
@@ -73,12 +58,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       localStorage.setItem('activeRole', role);
       console.log(`🔄 Stored role in localStorage:`, role);
       console.log(`🔄 Role change complete - new activeRole should be:`, role);
-      
-      // Force page reload to ensure complete state reset
-      setTimeout(() => {
-        console.log(`🔄 Reloading page to apply role change`);
-        window.location.reload();
-      }, 100);
     }
   };
 
