@@ -75,7 +75,7 @@ export function ProgramEnrollmentForm({
   });
 
   const { data: children, isLoading: isLoadingChildren } = useQuery({
-    queryKey: ["/api/children"],
+    queryKey: ["/api/parent/children"],
   });
 
   // Form setup

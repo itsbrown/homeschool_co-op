@@ -31,7 +31,7 @@ export function RegistrationDashboard() {
 
   // Get counts for the dashboard
   const { data: childrenData } = useQuery({
-    queryKey: ["/api/children"],
+    queryKey: ["/api/parent/children"],
   });
   
   const { data: contactsData } = useQuery({

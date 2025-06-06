@@ -72,7 +72,7 @@ export function ProgramList({ isAdmin = false, childId, featured = false, limit 
 
   // Fetch children (if not admin)
   const { data: children, isLoading: isLoadingChildren } = useQuery({
-    queryKey: ["/api/children"],
+    queryKey: ["/api/parent/children"],
     enabled: !isAdmin,
   });
   

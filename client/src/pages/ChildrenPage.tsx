@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
 import { Redirect, Link } from "wouter";
 import PageLayout from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -24,19 +24,16 @@ interface Child {
 }
 
 export default function ChildrenPage() {
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   
   // Fetch children data - always call the hook
   const { data: children = [], isLoading: isLoadingChildren } = useQuery<Child[]>({
-    queryKey: ["/api/children"],
-    enabled: isAuthenticated && user?.role === "parent",
+    queryKey: ["/api/parent/children"],
+    enabled: isAuthenticated,
   });
   
-  // Check if user is parent
-  const isParent = user?.role === "parent";
-  
-  // If not authenticated or not parent, redirect to login
-  if (!isLoading && (!isAuthenticated || !isParent)) {
+  // If not authenticated, redirect to login
+  if (!isAuthenticated) {
     return <Redirect to="/login" />;
   }
   
