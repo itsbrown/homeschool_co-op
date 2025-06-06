@@ -208,6 +208,8 @@ function Router() {
           {() => {
             console.log(`🔍 Route decision - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
             
+
+
             // Show role selection screen if user needs to pick a role
             if (showRoleSelection && user?.email === 'coreycreates@gmail.com') {
               console.log(`✅ Showing role selection for ${user.email}`);
