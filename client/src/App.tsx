@@ -212,14 +212,27 @@ function Router() {
     );
   }
 
-  // Force role selection for multi-role users regardless of current path
-  if (isAuthenticated && user?.email === 'coreycreates@gmail.com' && showRoleSelection) {
+  // Emergency logout for stuck users
+  if (location === '/emergency-logout') {
+    localStorage.clear();
+    window.location.href = '/login';
+    return <div>Logging out...</div>;
+  }
+
+  // Force role selection for multi-role users only on dashboard-related paths
+  if (isAuthenticated && user?.email === 'coreycreates@gmail.com' && showRoleSelection && 
+      (location === '/' || location === '/dashboard' || location.startsWith('/admin') || location.startsWith('/programs'))) {
     console.log(`🎯 Forcing role selection for multi-role user at location: ${location}`);
     return (
-      <RoleSelectionComponent 
-        onRoleSelect={setActiveRole} 
-        userEmail={user.email} 
-      />
+      <div>
+        <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+          <a href="/emergency-logout" style={{ color: 'red', textDecoration: 'underline' }}>Emergency Logout</a>
+        </div>
+        <RoleSelectionComponent 
+          onRoleSelect={setActiveRole} 
+          userEmail={user.email} 
+        />
+      </div>
     );
   }
 
