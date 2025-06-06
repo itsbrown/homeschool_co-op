@@ -24,7 +24,7 @@ interface RoleProviderProps {
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  const [activeRole, setActiveRole] = useState<string>('parent');
+  const [activeRole, setActiveRole] = useState<string>('school_admin');
 
   // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
   const multiRoleUsers = ['coreycreates@gmail.com'];
@@ -42,12 +42,19 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       console.log(`🔄 Can switch roles:`, canSwitchRoles);
       console.log(`🔄 Available roles:`, availableRoles);
       
-      // Always start with parent role as default for multi-role users
+      // For multi-role users, respect localStorage preferences
       if (canSwitchRoles) {
-        // Force parent role as default unless explicitly changed
-        console.log(`🔄 Setting active role to parent (default for multi-role users)`);
-        setActiveRole('parent');
-        localStorage.setItem('activeRole', 'parent');
+        const savedRole = localStorage.getItem('activeRole');
+        console.log(`🔄 Saved role from localStorage:`, savedRole);
+        if (savedRole && availableRoles.includes(savedRole)) {
+          console.log(`🔄 Setting active role to saved role:`, savedRole);
+          setActiveRole(savedRole);
+        } else {
+          // Default to school_admin if no preference saved
+          console.log(`🔄 No saved preference, defaulting to school_admin`);
+          setActiveRole('school_admin');
+          localStorage.setItem('activeRole', 'school_admin');
+        }
       } else {
         const defaultRole = user.user_metadata?.role || 'parent';
         console.log(`🔄 Setting active role to user metadata role:`, defaultRole);
@@ -65,11 +72,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       localStorage.setItem('activeRole', role);
       console.log(`🔄 Stored role in localStorage:`, role);
       console.log(`🔄 Role change complete - new activeRole should be:`, role);
-      
-      // Force a page reload to ensure complete context switching
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
     }
   };
 
