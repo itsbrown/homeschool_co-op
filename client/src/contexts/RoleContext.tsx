@@ -51,8 +51,11 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   // Handle role selection logic immediately after login
   useEffect(() => {
+    console.log(`🔄 RoleContext useEffect triggered - user:`, user?.email || 'null');
+    
     if (!user) {
       // User logged out - reset state
+      console.log(`🔄 No user - resetting state`);
       setActiveRole('');
       setShowRoleSelection(false);
       return;
@@ -61,6 +64,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     console.log(`🔄 Role check for user:`, user.email);
     const hasMultipleRoles = checkUserRoles(user);
     const savedRole = localStorage.getItem('activeRole');
+    console.log(`🔄 hasMultipleRoles:`, hasMultipleRoles, 'savedRole:', savedRole);
 
     if (hasMultipleRoles) {
       console.log(`🎯 Multi-role user detected:`, user.email);
@@ -89,7 +93,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     }
   };
 
-  console.log(`🔄 RoleProvider rendering - activeRole: ${activeRole}, canSwitchRoles: ${canSwitchRoles}, showRoleSelection: ${showRoleSelection}`);
+  console.log(`🔄 RoleProvider rendering - activeRole: ${activeRole}, canSwitchRoles: ${canSwitchRoles}, showRoleSelection: ${showRoleSelection}, user: ${user?.email}`);
 
   return (
     <RoleContext.Provider

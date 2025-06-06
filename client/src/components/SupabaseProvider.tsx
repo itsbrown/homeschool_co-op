@@ -80,6 +80,13 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
+      
+      // Debug user state
+      console.log("🔍 SupabaseProvider user state updated:", {
+        email: session?.user?.email,
+        authenticated: !!session?.user,
+        userId: session?.user?.id
+      });
 
       // Manage access token
       if (session?.access_token) {
