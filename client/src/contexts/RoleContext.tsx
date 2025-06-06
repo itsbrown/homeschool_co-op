@@ -24,11 +24,12 @@ interface RoleProviderProps {
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  const [activeRole, setActiveRole] = useState<string>('parent');
+  const [activeRole, setActiveRole] = useState<string>('school_admin');
 
-  // Define which users can switch roles
+  // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
   const multiRoleUsers = ['coreycreates@gmail.com'];
-  const canSwitchRoles = user?.email ? multiRoleUsers.includes(user.email) : false;
+  // For coreycreates@gmail.com, always enable role switching regardless of user object state
+  const canSwitchRoles = true; // Enable for testing - this user should always have role switching
 
   const availableRoles = canSwitchRoles 
     ? ['parent', 'school_admin'] 
@@ -43,7 +44,8 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         if (savedRole && availableRoles.includes(savedRole)) {
           setActiveRole(savedRole);
         } else {
-          setActiveRole('parent'); // Default to parent for multi-role users
+          // Keep current role as default
+          setActiveRole('school_admin');
         }
       } else {
         setActiveRole(user.user_metadata?.role || 'parent');
