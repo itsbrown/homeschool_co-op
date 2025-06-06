@@ -24,7 +24,7 @@ interface RoleProviderProps {
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  const [activeRole, setActiveRole] = useState<string>('school_admin');
+  const [activeRole, setActiveRole] = useState<string>('parent');
 
   // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
   const multiRoleUsers = ['coreycreates@gmail.com'];
@@ -50,9 +50,10 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
           console.log(`🔄 Setting active role to saved role:`, savedRole);
           setActiveRole(savedRole);
         } else {
-          // Keep current role as default
-          console.log(`🔄 Setting active role to default: school_admin`);
-          setActiveRole('school_admin');
+          // Default to parent role first for new users
+          console.log(`🔄 Setting active role to default: parent`);
+          setActiveRole('parent');
+          localStorage.setItem('activeRole', 'parent');
         }
       } else {
         const defaultRole = user.user_metadata?.role || 'parent';

@@ -101,6 +101,8 @@ import AIStatusProvider from "@/contexts/AIStatusContext";
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
   const { activeRole } = useRole();
+  
+  console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated);
 
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {
