@@ -135,8 +135,20 @@ function DashboardRouter() {
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
   const { activeRole, showRoleSelection, setActiveRole } = useRole();
+  const [location] = useLocation();
   
-  console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email);
+  console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
+
+  // Force role selection for multi-role users regardless of current path
+  if (isAuthenticated && user?.email === 'coreycreates@gmail.com' && showRoleSelection) {
+    console.log(`🎯 Forcing role selection for multi-role user at location: ${location}`);
+    return (
+      <RoleSelectionComponent 
+        onRoleSelect={setActiveRole} 
+        userEmail={user.email} 
+      />
+    );
+  }
 
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {
