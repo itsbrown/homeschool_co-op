@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 import { apiRequest } from "@/lib/queryClient";
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
@@ -68,6 +69,7 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
 
 export default function ParentSidebar() {
   const { user, signOut } = useAuth();
+  const { activeRole } = useRole();
   const [isOpen, setIsOpen] = React.useState(false);
 
   /*const handleLogout = async () => {
@@ -168,7 +170,7 @@ export default function ParentSidebar() {
                   <div>
                     <p className="font-medium">{user?.email}</p>
                     <p className="text-xs text-muted-foreground">
-                      Parent Account
+                      {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
                     </p>
                   </div>
                 </div>
@@ -212,7 +214,7 @@ export default function ParentSidebar() {
                 <div>
                   <p className="font-medium">{user?.email}</p>
                   <p className="text-xs text-muted-foreground">
-                    Parent Account
+                    {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
                   </p>
                 </div>
               </div>

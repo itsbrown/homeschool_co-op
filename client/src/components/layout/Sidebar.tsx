@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 import { cn } from '@/lib/utils';
 import { 
   School, 
@@ -73,6 +74,7 @@ const schoolNavItems: {
 export default function Sidebar() {
   const [location] = useLocation();
   const { user, signOut, isAuthenticated } = useAuth();
+  const { activeRole } = useRole();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleSidebar = () => {
@@ -143,7 +145,9 @@ export default function Sidebar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium">{user.user_metadata?.full_name || user.email}</div>
-                    <div className="text-xs text-muted-foreground">School Administrator</div>
+                    <div className="text-xs text-muted-foreground">
+                      {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
+                    </div>
                   </div>
                 </div>
               )}
