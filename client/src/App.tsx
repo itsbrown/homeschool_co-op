@@ -186,7 +186,12 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/auth/login" component={SupabaseLogin} />
+      <Route path="/auth/login">
+        {() => {
+          console.log('🔍 /auth/login route matched');
+          return <SupabaseLogin />;
+        }}
+      </Route>
       <Route path="/logout" component={LogoutPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
