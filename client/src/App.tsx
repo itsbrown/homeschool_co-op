@@ -99,15 +99,16 @@ import ParentDashboard from "./pages/ParentDashboard";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 import RoleSelectionComponent from "@/components/RoleSelection";
 
-function MainRouterComponent() {
+function DashboardRouter() {
   const { user } = useAuth();
   const { activeRole, showRoleSelection, setActiveRole } = useRole();
   
-  console.log(`🔍 MainRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
+  console.log(`🚀 DashboardRouter called!`);
+  console.log(`🔍 DashboardRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
   
   // Check localStorage directly
   const currentSavedRole = localStorage.getItem('activeRole');
-  console.log(`🔍 MainRouter LocalStorage check - savedRole:`, currentSavedRole);
+  console.log(`🔍 DashboardRouter LocalStorage check - savedRole:`, currentSavedRole);
 
   // Show role selection screen if user needs to pick a role
   if (user?.email === 'coreycreates@gmail.com') {
@@ -219,11 +220,6 @@ function Router() {
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
       <Route path="/login" component={SupabaseLogin} />
-      {isAuthenticated ? (
-        <Route path="/" component={MainRouterComponent} />
-      ) : (
-        <Route path="/" component={SupabaseLogin} />
-      )}
       <Route path="/auth0-login" component={DirectAuth0Login} />
       <Route path="/embedded-login" component={EmbeddedLogin} />
       <Route path="/old-login" component={Login} />
@@ -306,6 +302,13 @@ function Router() {
       <Route path="/admin/reports" component={Dashboard} />
       <Route path="/admin/reports/:rest*" component={Dashboard} />
       <Route path="/admin" component={Dashboard} />
+
+      {/* Root path route for authenticated users */}
+      {isAuthenticated ? (
+        <Route path="/" component={DashboardRouter} />
+      ) : (
+        <Route path="/" component={SupabaseLogin} />
+      )}
 
       <Route component={NotFound} />
     </Switch>
