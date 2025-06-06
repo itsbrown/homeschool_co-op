@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 import { apiRequest } from "@/lib/queryClient";
 
 interface SidebarProps {
@@ -24,6 +25,7 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { user, signOut, isAuthenticated } = useAuth();
+  const { activeRole } = useRole();
 
   const handleLogout = async () => {
     console.log("🚪 SchoolAdminSidebar logout clicked");
@@ -124,7 +126,7 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
                   {user.user_metadata?.full_name || user.email}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
-                  School Administrator
+                  {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
                 </p>
               </div>
             </div>

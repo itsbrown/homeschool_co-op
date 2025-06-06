@@ -226,7 +226,9 @@ export default function Sidebar() {
                     </div>
                     <div>
                       <div className="text-sm font-medium">{user.user_metadata?.full_name || user.email}</div>
-                      <div className="text-xs text-muted-foreground">School Administrator</div>
+                      <div className="text-xs text-muted-foreground">
+                        {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
+                      </div>
                     </div>
                   </div>
 
