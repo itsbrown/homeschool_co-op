@@ -76,7 +76,7 @@ export function ChildrenManagement() {
 
   // Fetch children data
   const { data: children, isLoading } = useQuery({
-    queryKey: ["/api/children"],
+    queryKey: ["/api/parent/children"],
   });
 
   // Get selected child data for editing
@@ -127,7 +127,7 @@ export function ChildrenManagement() {
       });
       
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ["/api/children"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
       
       setDeleteDialogOpen(false);
       setSelectedChildId(null);
