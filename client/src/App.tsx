@@ -95,6 +95,7 @@ import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
 import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
+import ParentDashboard from "./pages/ParentDashboard";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 
 function Router() {
@@ -183,7 +184,7 @@ function Router() {
         return Dashboard; // Educator dashboard
       case 'parent':
       default:
-        return Dashboard; // Parent dashboard
+        return ParentDashboard; // Parent dashboard
     }
   };
 
