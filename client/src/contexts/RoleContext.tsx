@@ -42,14 +42,20 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       console.log(`🔄 Can switch roles:`, canSwitchRoles);
       console.log(`🔄 Available roles:`, availableRoles);
       
-      // For multi-role users, check localStorage but ensure consistency
+      // For multi-role users, respect localStorage preferences
       if (canSwitchRoles) {
-        // Clear any inconsistent state and start fresh
-        localStorage.removeItem('activeRole');
-        const defaultRole = 'school_admin';
-        console.log(`🔄 Multi-role user detected, setting to default:`, defaultRole);
-        setActiveRole(defaultRole);
-        localStorage.setItem('activeRole', defaultRole);
+        const savedRole = localStorage.getItem('activeRole');
+        console.log(`🔄 Saved role from localStorage:`, savedRole);
+        if (savedRole && availableRoles.includes(savedRole)) {
+          console.log(`🔄 Setting active role to saved role:`, savedRole);
+          setActiveRole(savedRole);
+        } else {
+          // Default to school_admin for first time users
+          const defaultRole = 'school_admin';
+          console.log(`🔄 No saved preference, defaulting to:`, defaultRole);
+          setActiveRole(defaultRole);
+          localStorage.setItem('activeRole', defaultRole);
+        }
       } else {
         const defaultRole = user.user_metadata?.role || 'parent';
         console.log(`🔄 Setting active role to user metadata role:`, defaultRole);

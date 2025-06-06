@@ -205,14 +205,13 @@ function Router() {
         <Route path="/">
           {() => {
             console.log(`🏠 Route rendering - activeRole:`, activeRole);
-            console.log(`🏠 Dashboard component decision: ${activeRole === 'parent' ? 'ParentDashboard' : 'MySchoolPage'}`);
-            if (activeRole === 'parent') {
-              console.log(`🏠 Rendering ParentDashboard for parent role`);
-              return <ParentDashboard key="parent-dashboard" />;
-            } else {
-              console.log(`🏠 Rendering MySchoolPage for admin role`);
-              return <MySchoolPage key="admin-dashboard" />;
-            }
+            console.log(`🏠 Dashboard routing decision: ${activeRole === 'parent' ? 'ParentDashboard' : 'MySchoolPage'}`);
+            
+            // Force re-render when role changes
+            const DashboardComponent = activeRole === 'parent' ? ParentDashboard : MySchoolPage;
+            console.log(`🏠 Selected component:`, DashboardComponent.name);
+            
+            return <DashboardComponent key={`dashboard-${activeRole}`} />;
           }}
         </Route>
       ) : (
