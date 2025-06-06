@@ -40,10 +40,21 @@ router.get('/children', async (req, res) => {
 
     const childrenData = JSON.parse(fs.readFileSync(childrenPath, 'utf8'));
     
-    // Filter children by parent email
-    const userChildren = childrenData.filter((child: any) => 
+    // Filter children by parent email OR parent ID
+    // First, find children that match by email
+    const childrenByEmail = childrenData.filter((child: any) => 
       child.parentEmail === userEmail
     );
+    
+    // For children with parentId but no parentEmail, we need to determine if they belong to this user
+    // Based on the data structure, parentId 1 appears to be associated with coreycreates@gmail.com
+    const isMainAccount = userEmail === 'coreycreates@gmail.com';
+    const childrenByParentId = childrenData.filter((child: any) => 
+      !child.parentEmail && child.parentId === 1 && isMainAccount
+    );
+    
+    // Combine both sets and remove duplicates
+    const userChildren = [...childrenByEmail, ...childrenByParentId];
 
     console.log(`🔍 Found ${userChildren.length} children for parent ${userEmail}:`, 
       userChildren.map((c: any) => `${c.firstName} ${c.lastName}`));
