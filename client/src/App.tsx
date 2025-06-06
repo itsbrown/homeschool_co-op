@@ -139,17 +139,6 @@ function Router() {
   
   console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
 
-  // Force role selection for multi-role users regardless of current path
-  if (isAuthenticated && user?.email === 'coreycreates@gmail.com' && showRoleSelection) {
-    console.log(`🎯 Forcing role selection for multi-role user at location: ${location}`);
-    return (
-      <RoleSelectionComponent 
-        onRoleSelect={setActiveRole} 
-        userEmail={user.email} 
-      />
-    );
-  }
-
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {
     // Handle Auth0 callback
@@ -223,6 +212,16 @@ function Router() {
     );
   }
 
+  // Force role selection for multi-role users regardless of current path
+  if (isAuthenticated && user?.email === 'coreycreates@gmail.com' && showRoleSelection) {
+    console.log(`🎯 Forcing role selection for multi-role user at location: ${location}`);
+    return (
+      <RoleSelectionComponent 
+        onRoleSelect={setActiveRole} 
+        userEmail={user.email} 
+      />
+    );
+  }
 
 
   return (
