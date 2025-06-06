@@ -99,6 +99,37 @@ import ParentDashboard from "./pages/ParentDashboard";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 import RoleSelectionComponent from "@/components/RoleSelection";
 
+function MainRouterComponent() {
+  const { user } = useAuth();
+  const { activeRole, showRoleSelection, setActiveRole } = useRole();
+  
+  console.log(`🔍 MainRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
+  
+  // Check localStorage directly
+  const currentSavedRole = localStorage.getItem('activeRole');
+  console.log(`🔍 MainRouter LocalStorage check - savedRole:`, currentSavedRole);
+
+  // Show role selection screen if user needs to pick a role
+  if (user?.email === 'coreycreates@gmail.com') {
+    console.log(`🔍 Multi-role user check - currentSavedRole: ${currentSavedRole}, activeRole: ${activeRole}, showRoleSelection: ${showRoleSelection}`);
+    if (!currentSavedRole || !activeRole || showRoleSelection) {
+      console.log(`✅ Showing role selection for ${user.email}`);
+      return (
+        <RoleSelectionComponent 
+          onRoleSelect={setActiveRole} 
+          userEmail={user.email} 
+        />
+      );
+    } else {
+      console.log(`❌ Not showing role selection - conditions not met`);
+    }
+  }
+  
+  // Show dashboard based on selected role
+  console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
+  const DashboardComponent = activeRole === 'parent' ? ParentDashboard : MySchoolPage;
+  return <DashboardComponent key={`dashboard-${activeRole}`} />;
+}
 
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
@@ -179,22 +210,7 @@ function Router() {
     );
   }
 
-  // Role-based dashboard routing
-  const getRoleDashboard = (userRole: string) => {
-    console.log(`🏠 Dashboard routing - Active role:`, userRole);
-    switch (userRole) {
-      case 'school_admin':
-        console.log(`🏠 Returning MySchoolPage for school_admin`);
-        return MySchoolPage; // School admin dashboard
-      case 'educator':
-        console.log(`🏠 Returning Dashboard for educator`);
-        return Dashboard; // Educator dashboard
-      case 'parent':
-      default:
-        console.log(`🏠 Returning ParentDashboard for parent or default`);
-        return ParentDashboard; // Parent dashboard
-    }
-  };
+
 
   return (
     <Switch>
@@ -204,36 +220,7 @@ function Router() {
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
       <Route path="/login" component={SupabaseLogin} />
       {isAuthenticated ? (
-        <Route path="/">
-          {() => {
-            console.log(`🔍 Route decision - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
-            
-            // Check localStorage directly
-            const currentSavedRole = localStorage.getItem('activeRole');
-            console.log(`🔍 LocalStorage check - savedRole:`, currentSavedRole);
-
-            // Show role selection screen if user needs to pick a role
-            if (user?.email === 'coreycreates@gmail.com') {
-              console.log(`🔍 Multi-role user check - currentSavedRole: ${currentSavedRole}, activeRole: ${activeRole}, showRoleSelection: ${showRoleSelection}`);
-              if (!currentSavedRole || !activeRole || showRoleSelection) {
-                console.log(`✅ Showing role selection for ${user.email}`);
-                return (
-                  <RoleSelectionComponent 
-                    onRoleSelect={setActiveRole} 
-                    userEmail={user.email} 
-                  />
-                );
-              } else {
-                console.log(`❌ Not showing role selection - conditions not met`);
-              }
-            }
-            
-            // Show dashboard based on selected role
-            console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
-            const DashboardComponent = activeRole === 'parent' ? ParentDashboard : MySchoolPage;
-            return <DashboardComponent key={`dashboard-${activeRole}`} />;
-          }}
-        </Route>
+        <Route path="/" component={MainRouterComponent} />
       ) : (
         <Route path="/" component={SupabaseLogin} />
       )}
@@ -243,9 +230,7 @@ function Router() {
       <Route path="/school-admin-login" component={SchoolAdminLogin} />
       <Route path="/register" component={Register} />
 
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/educator/dashboard" component={Dashboard} />
-      <Route path="/learner/dashboard" component={Dashboard} />
+
       <Route path="/curriculum" component={Curriculum} />
       <Route path="/curriculum/:id" component={CurriculumDetail} />
       <Route path="/lessons" component={Lessons} />
