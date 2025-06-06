@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, BookOpen, Calendar, Bell, Plus, User, GraduationCap } from "lucide-react";
 import Header from "@/components/layout/Header";
-import Sidebar from "@/components/layout/Sidebar";
+import ParentSidebar from "@/components/layout/ParentSidebar";
 
 interface Child {
   id: number;
@@ -51,7 +51,7 @@ export default function ParentDashboard() {
 
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar />
+      <ParentSidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header onMenuClick={() => {}} />
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 overflow-y-auto">
