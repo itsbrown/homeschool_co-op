@@ -68,15 +68,11 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
     if (hasMultipleRoles) {
       console.log(`🎯 Multi-role user detected:`, user.email);
-      if (!savedRole) {
-        console.log(`🎯 No saved role - showing role selection`);
-        setShowRoleSelection(true);
-        setActiveRole('');
-      } else {
-        console.log(`🎯 Found saved role: ${savedRole}`);
-        setActiveRole(savedRole);
-        setShowRoleSelection(false);
-      }
+      // Always clear saved role for multi-role users to force role selection
+      localStorage.removeItem('activeRole');
+      console.log(`🎯 Cleared saved role - forcing role selection`);
+      setShowRoleSelection(true);
+      setActiveRole('');
     } else {
       // Single role user - set default role immediately
       const defaultRole = user.user_metadata?.role || 'parent';
@@ -94,6 +90,9 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       localStorage.setItem('activeRole', role);
       setShowRoleSelection(false);
       console.log(`🔄 Role change complete - new activeRole:`, role);
+      
+      // Force page refresh to ensure clean state
+      window.location.reload();
     }
   };
 

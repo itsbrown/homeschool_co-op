@@ -23,8 +23,8 @@ export const SupabaseLogin: React.FC = () => {
     if (isAuthenticated && user) {
       // Don't auto-redirect for multi-role users - let role selection handle it
       if (user.email === 'coreycreates@gmail.com') {
-        console.log('👤 Multi-role user logged in - will show role selection');
-        setLocation('/');
+        console.log('👤 Multi-role user logged in - staying on home page for role selection');
+        // Don't redirect - stay on current page to show role selection
         return;
       }
       

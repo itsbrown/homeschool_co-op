@@ -98,7 +98,7 @@ import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
 import ParentDashboard from "./pages/ParentDashboard";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 import RoleSelectionComponent from "@/components/RoleSelection";
-import { debugAuthState } from "@/utils/authDebug";
+
 
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
@@ -208,17 +208,24 @@ function Router() {
           {() => {
             console.log(`🔍 Route decision - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
             
-
+            // Check localStorage directly
+            const currentSavedRole = localStorage.getItem('activeRole');
+            console.log(`🔍 LocalStorage check - savedRole:`, currentSavedRole);
 
             // Show role selection screen if user needs to pick a role
-            if (showRoleSelection && user?.email === 'coreycreates@gmail.com') {
-              console.log(`✅ Showing role selection for ${user.email}`);
-              return (
-                <RoleSelectionComponent 
-                  onRoleSelect={setActiveRole} 
-                  userEmail={user.email} 
-                />
-              );
+            if (user?.email === 'coreycreates@gmail.com') {
+              console.log(`🔍 Multi-role user check - currentSavedRole: ${currentSavedRole}, activeRole: ${activeRole}, showRoleSelection: ${showRoleSelection}`);
+              if (!currentSavedRole || !activeRole || showRoleSelection) {
+                console.log(`✅ Showing role selection for ${user.email}`);
+                return (
+                  <RoleSelectionComponent 
+                    onRoleSelect={setActiveRole} 
+                    userEmail={user.email} 
+                  />
+                );
+              } else {
+                console.log(`❌ Not showing role selection - conditions not met`);
+              }
             }
             
             // Show dashboard based on selected role
