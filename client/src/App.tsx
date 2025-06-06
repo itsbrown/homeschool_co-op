@@ -215,6 +215,16 @@ function Router() {
   // Emergency logout for stuck users
   if (location === '/emergency-logout') {
     localStorage.clear();
+    sessionStorage.clear();
+    // Clear Supabase session
+    import('@supabase/supabase-js').then(({ createClient }) => {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseAnonKey) {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        supabase.auth.signOut();
+      }
+    });
     window.location.href = '/login';
     return <div>Logging out...</div>;
   }

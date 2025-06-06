@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, School, ArrowRight } from "lucide-react";
+import { User, School, ArrowRight, LogOut } from "lucide-react";
+import { useAuth } from "@/components/SupabaseProvider";
 
 interface RoleSelectionProps {
   onRoleSelect: (role: string) => void;
@@ -10,6 +11,7 @@ interface RoleSelectionProps {
 
 export default function RoleSelection({ onRoleSelect, userEmail }: RoleSelectionProps) {
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const { signOut } = useAuth();
 
   const roles = [
     {
@@ -40,9 +42,31 @@ export default function RoleSelection({ onRoleSelect, userEmail }: RoleSelection
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force logout by clearing everything and redirecting
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = '/login';
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-2xl w-full">
+        <div className="absolute top-4 right-4">
+          <Button 
+            variant="outline" 
+            onClick={handleLogout}
+            className="flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
+        </div>
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome to ASA Platform
