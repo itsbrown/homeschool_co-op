@@ -6,6 +6,8 @@ interface RoleContextType {
   setActiveRole: (role: string) => void;
   availableRoles: string[];
   canSwitchRoles: boolean;
+  showRoleSelection: boolean;
+  setShowRoleSelection: (show: boolean) => void;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -27,13 +29,18 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   // Initialize from localStorage to persist role across page reloads
   const [activeRole, setActiveRole] = useState<string>(() => {
     const savedRole = localStorage.getItem('activeRole');
-    return savedRole || 'school_admin';
+    return savedRole || '';
+  });
+  
+  const [showRoleSelection, setShowRoleSelection] = useState<boolean>(() => {
+    // Show role selection if user is authenticated but no role is selected
+    return !localStorage.getItem('activeRole');
   });
 
   // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
   const multiRoleUsers = ['coreycreates@gmail.com'];
   // For coreycreates@gmail.com, always enable role switching regardless of user object state
-  const canSwitchRoles = true; // Enable for testing - this user should always have role switching
+  const canSwitchRoles = user?.email === 'coreycreates@gmail.com';
 
   const availableRoles = canSwitchRoles 
     ? ['parent', 'school_admin'] 
@@ -52,12 +59,10 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const handleRoleChange = (role: string) => {
     if (availableRoles.includes(role)) {
       console.log(`🔄 Switching role to: ${role}`);
-      console.log(`🔄 Available roles:`, availableRoles);
-      console.log(`🔄 Current active role before change:`, activeRole);
       setActiveRole(role);
       localStorage.setItem('activeRole', role);
-      console.log(`🔄 Stored role in localStorage:`, role);
-      console.log(`🔄 Role change complete - new activeRole should be:`, role);
+      setShowRoleSelection(false);
+      console.log(`🔄 Role change complete - new activeRole:`, role);
     }
   };
 
@@ -70,6 +75,8 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         setActiveRole: handleRoleChange,
         availableRoles,
         canSwitchRoles,
+        showRoleSelection,
+        setShowRoleSelection,
       }}
     >
       {children}

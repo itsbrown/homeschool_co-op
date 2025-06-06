@@ -13,7 +13,7 @@ import { SupabaseLogin } from "@/components/auth/SupabaseLogin";
 import EmbeddedLogin from "@/components/auth/EmbeddedLogin";
 import DirectAuth0Login from "@/components/auth/DirectAuth0Login";
 import Register from "@/pages/Register";
-import RoleSelection from "@/pages/RoleSelection";
+
 import SchoolAdminLogin from "@/pages/SchoolAdminLogin";
 import Dashboard from "@/pages/Dashboard";
 import PaymentsPage from "@/pages/PaymentsPage";
@@ -97,12 +97,13 @@ import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
 import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
 import ParentDashboard from "./pages/ParentDashboard";
 import AIStatusProvider from "@/contexts/AIStatusContext";
+import RoleSelectionComponent from "@/components/RoleSelection";
 
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
-  const { activeRole } = useRole();
+  const { activeRole, showRoleSelection, setActiveRole } = useRole();
   
-  console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated);
+  console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection);
 
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {
@@ -204,13 +205,19 @@ function Router() {
       {isAuthenticated ? (
         <Route path="/">
           {() => {
-            console.log(`🏠 Route rendering - activeRole:`, activeRole);
-            console.log(`🏠 Dashboard routing decision: ${activeRole === 'parent' ? 'ParentDashboard' : 'MySchoolPage'}`);
+            // Show role selection screen if user needs to pick a role
+            if (showRoleSelection && user?.email === 'coreycreates@gmail.com') {
+              return (
+                <RoleSelectionComponent 
+                  onRoleSelect={setActiveRole} 
+                  userEmail={user.email} 
+                />
+              );
+            }
             
-            // Force re-render when role changes
+            // Show dashboard based on selected role
+            console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
             const DashboardComponent = activeRole === 'parent' ? ParentDashboard : MySchoolPage;
-            console.log(`🏠 Selected component:`, DashboardComponent.name);
-            
             return <DashboardComponent key={`dashboard-${activeRole}`} />;
           }}
         </Route>
