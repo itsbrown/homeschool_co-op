@@ -229,7 +229,7 @@ function Router() {
       <Route path="/old-login" component={Login} />
       <Route path="/school-admin-login" component={SchoolAdminLogin} />
       <Route path="/register" component={Register} />
-      <Route path="/role-selection" component={RoleSelection} />
+
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/educator/dashboard" component={Dashboard} />
       <Route path="/learner/dashboard" component={Dashboard} />

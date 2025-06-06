@@ -76,7 +76,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
               <img
-                src={user?.avatar || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
+                src={user?.user_metadata?.avatar_url || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
                 alt="User"
                 className="h-8 w-8 rounded-full"
               />
@@ -85,8 +85,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <DropdownMenuContent align="end">
             <div className="flex items-center p-2">
               <div className="ml-2">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
+                <p className="text-sm font-medium">{user?.email}</p>
+                <p className="text-xs text-muted-foreground">{activeRole}</p>
               </div>
             </div>
             <DropdownMenuSeparator />

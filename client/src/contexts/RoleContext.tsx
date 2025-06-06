@@ -32,10 +32,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     return savedRole || '';
   });
   
-  const [showRoleSelection, setShowRoleSelection] = useState<boolean>(() => {
-    // Show role selection if user is authenticated but no role is selected
-    return !localStorage.getItem('activeRole');
-  });
+  const [showRoleSelection, setShowRoleSelection] = useState<boolean>(false);
 
   // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
   const multiRoleUsers = ['coreycreates@gmail.com'];
@@ -46,15 +43,25 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     ? ['parent', 'school_admin'] 
     : [user?.user_metadata?.role || 'parent'];
 
-  // Only set default role if no role is saved and user is authenticated
+  // Handle role selection logic for multi-role users
   useEffect(() => {
-    if (user && !localStorage.getItem('activeRole')) {
-      console.log(`🔄 First time user login, setting default role`);
-      const defaultRole = canSwitchRoles ? 'school_admin' : (user.user_metadata?.role || 'parent');
+    if (user?.email === 'coreycreates@gmail.com') {
+      const savedRole = localStorage.getItem('activeRole');
+      if (!savedRole) {
+        // Show role selection for multi-role user
+        setShowRoleSelection(true);
+      } else {
+        setActiveRole(savedRole);
+        setShowRoleSelection(false);
+      }
+    } else if (user && !localStorage.getItem('activeRole')) {
+      // Single role user - set default role
+      const defaultRole = user.user_metadata?.role || 'parent';
       setActiveRole(defaultRole);
       localStorage.setItem('activeRole', defaultRole);
+      setShowRoleSelection(false);
     }
-  }, [user, canSwitchRoles]);
+  }, [user]);
 
   const handleRoleChange = (role: string) => {
     if (availableRoles.includes(role)) {
