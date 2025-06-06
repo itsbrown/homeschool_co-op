@@ -196,7 +196,12 @@ function Router() {
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
       <Route path="/login" component={SupabaseLogin} />
       {isAuthenticated ? (
-        <Route path="/" component={getRoleDashboard(activeRole || 'parent')} />
+        <Route path="/">
+          {() => {
+            const DashboardComponent = getRoleDashboard(activeRole || 'parent');
+            return <DashboardComponent />;
+          }}
+        </Route>
       ) : (
         <Route path="/" component={SupabaseLogin} />
       )}
