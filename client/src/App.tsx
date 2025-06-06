@@ -203,9 +203,13 @@ function Router() {
         <Route path="/">
           {() => {
             console.log(`🏠 Route rendering - activeRole:`, activeRole);
-            const DashboardComponent = getRoleDashboard(activeRole || 'parent');
-            console.log(`🏠 Selected DashboardComponent:`, DashboardComponent.name);
-            return <DashboardComponent key={activeRole} />;
+            if (activeRole === 'parent') {
+              console.log(`🏠 Rendering ParentDashboard`);
+              return <ParentDashboard />;
+            } else {
+              console.log(`🏠 Rendering MySchoolPage (admin)`);
+              return <MySchoolPage />;
+            }
           }}
         </Route>
       ) : (
