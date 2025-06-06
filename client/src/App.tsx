@@ -177,13 +177,17 @@ function Router() {
 
   // Role-based dashboard routing
   const getRoleDashboard = (userRole: string) => {
+    console.log(`🏠 Dashboard routing - Active role:`, userRole);
     switch (userRole) {
       case 'school_admin':
+        console.log(`🏠 Returning MySchoolPage for school_admin`);
         return MySchoolPage; // School admin dashboard
       case 'educator':
+        console.log(`🏠 Returning Dashboard for educator`);
         return Dashboard; // Educator dashboard
       case 'parent':
       default:
+        console.log(`🏠 Returning ParentDashboard for parent or default`);
         return ParentDashboard; // Parent dashboard
     }
   };
@@ -198,8 +202,10 @@ function Router() {
       {isAuthenticated ? (
         <Route path="/">
           {() => {
+            console.log(`🏠 Route rendering - activeRole:`, activeRole);
             const DashboardComponent = getRoleDashboard(activeRole || 'parent');
-            return <DashboardComponent />;
+            console.log(`🏠 Selected DashboardComponent:`, DashboardComponent.name);
+            return <DashboardComponent key={activeRole} />;
           }}
         </Route>
       ) : (

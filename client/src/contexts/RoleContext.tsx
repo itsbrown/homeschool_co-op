@@ -38,17 +38,26 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   // Initialize role based on user metadata or default to parent
   useEffect(() => {
     if (user) {
+      console.log(`🔄 Role initialization - User:`, user.email);
+      console.log(`🔄 Can switch roles:`, canSwitchRoles);
+      console.log(`🔄 Available roles:`, availableRoles);
+      
       // For multi-role users, check localStorage for preferred role
       if (canSwitchRoles) {
         const savedRole = localStorage.getItem('activeRole');
+        console.log(`🔄 Saved role from localStorage:`, savedRole);
         if (savedRole && availableRoles.includes(savedRole)) {
+          console.log(`🔄 Setting active role to saved role:`, savedRole);
           setActiveRole(savedRole);
         } else {
           // Keep current role as default
+          console.log(`🔄 Setting active role to default: school_admin`);
           setActiveRole('school_admin');
         }
       } else {
-        setActiveRole(user.user_metadata?.role || 'parent');
+        const defaultRole = user.user_metadata?.role || 'parent';
+        console.log(`🔄 Setting active role to user metadata role:`, defaultRole);
+        setActiveRole(defaultRole);
       }
     }
   }, [user, canSwitchRoles]);
@@ -56,10 +65,12 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const handleRoleChange = (role: string) => {
     if (availableRoles.includes(role)) {
       console.log(`🔄 Switching role to: ${role}`);
+      console.log(`🔄 Available roles:`, availableRoles);
+      console.log(`🔄 Current active role before change:`, activeRole);
       setActiveRole(role);
       localStorage.setItem('activeRole', role);
-      // Force page reload to apply role change completely
-      window.location.reload();
+      console.log(`🔄 Stored role in localStorage:`, role);
+      console.log(`🔄 Role change complete - new activeRole should be:`, role);
     }
   };
 

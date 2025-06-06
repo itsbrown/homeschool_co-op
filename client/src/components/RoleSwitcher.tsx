@@ -58,7 +58,10 @@ export default function RoleSwitcher({ currentRole, onRoleChange }: RoleSwitcher
           {availableRoles.map((role) => (
             <DropdownMenuItem
               key={role.id}
-              onClick={() => onRoleChange(role.id)}
+              onClick={() => {
+                console.log(`🎯 Role switcher clicked: ${role.id}`);
+                onRoleChange(role.id);
+              }}
               className="flex items-start gap-3 p-3"
             >
               <role.icon className="h-5 w-5 mt-0.5" />
