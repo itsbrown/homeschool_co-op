@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth0";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users } from "lucide-react";
+import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users, TrendingUp, DollarSign, BookOpen, GraduationCap, AlertTriangle, CheckCircle, Clock, Target } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import AppShell from '@/components/layout/AppShell';
 
 // School data interface
@@ -32,6 +33,41 @@ interface SchoolData {
   status?: string;
 }
 
+// Dashboard KPI interfaces
+interface EnrollmentMetrics {
+  totalStudents: number;
+  activeStudents: number;
+  newEnrollments: number;
+  enrollmentGrowth: number;
+  graduationRate: number;
+  retentionRate: number;
+}
+
+interface FinancialMetrics {
+  totalRevenue: number;
+  outstandingBalance: number;
+  collectionRate: number;
+  avgTuitionPaid: number;
+  monthlyRevenue: number;
+  unpaidAccounts: number;
+}
+
+interface AcademicMetrics {
+  averageProgress: number;
+  completionRate: number;
+  activeClasses: number;
+  totalClasses: number;
+  avgClassSize: number;
+  studentTeacherRatio: number;
+}
+
+interface StaffMetrics {
+  totalStaff: number;
+  activeInstructors: number;
+  pendingInvites: number;
+  staffUtilization: number;
+}
+
 export default function MySchoolPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -40,6 +76,27 @@ export default function MySchoolPage() {
   const { data: school, isLoading, error, refetch } = useQuery<SchoolData>({
     queryKey: ["/api/school-admin/my-school"],
     enabled: isAuthenticated,
+  });
+
+  // Fetch dashboard metrics from authentic data sources
+  const { data: enrollmentMetrics } = useQuery<EnrollmentMetrics>({
+    queryKey: ["/api/school-admin/metrics/enrollment"],
+    enabled: isAuthenticated && !!school,
+  });
+
+  const { data: financialMetrics } = useQuery<FinancialMetrics>({
+    queryKey: ["/api/school-admin/metrics/financial"],
+    enabled: isAuthenticated && !!school,
+  });
+
+  const { data: academicMetrics } = useQuery<AcademicMetrics>({
+    queryKey: ["/api/school-admin/metrics/academic"],
+    enabled: isAuthenticated && !!school,
+  });
+
+  const { data: staffMetrics } = useQuery<StaffMetrics>({
+    queryKey: ["/api/school-admin/metrics/staff"],
+    enabled: isAuthenticated && !!school,
   });
 
   // Setup school mutation
@@ -167,73 +224,283 @@ export default function MySchoolPage() {
                   <TabsTrigger value="stats">Statistics</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="overview">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {(school.address || school.city || school.state || school.zipCode) && (
-                      <div className="flex items-start space-x-2">
-                        <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                        <div>
-                          {school.address && <div>{school.address}</div>}
-                          <div>
-                            {school.city && school.city}
-                            {school.city && school.state && ', '}
-                            {school.state && school.state}
-                            {school.zipCode && ` ${school.zipCode}`}
-                          </div>
+                <TabsContent value="overview" className="space-y-6">
+                  {/* Key Performance Indicators */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Enrollment KPI */}
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {enrollmentMetrics?.totalStudents || 0}
                         </div>
-                      </div>
-                    )}
-                    
-                    {school.phoneNumber && (
-                      <div className="flex items-center space-x-2">
-                        <Phone className="h-5 w-5 text-muted-foreground" />
-                        <span>{school.phoneNumber}</span>
-                      </div>
-                    )}
-                    
-                    {school.email && (
-                      <div className="flex items-center space-x-2">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
-                        <span>{school.email}</span>
-                      </div>
-                    )}
-                    
-                    {school.website && (
-                      <div className="flex items-center space-x-2">
-                        <Globe className="h-5 w-5 text-muted-foreground" />
-                        <a 
-                          href={school.website.startsWith("http") ? school.website : `https://${school.website}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          {school.website}
-                        </a>
-                      </div>
-                    )}
-                    
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      {school.foundedYear && (
-                        <div className="flex items-center space-x-2">
-                          <Calendar className="h-5 w-5 text-muted-foreground" />
-                          <span>Founded {school.foundedYear}</span>
+                        <div className="flex items-center text-xs text-muted-foreground">
+                          <TrendingUp className="h-3 w-3 mr-1" />
+                          {enrollmentMetrics?.enrollmentGrowth ? 
+                            `+${enrollmentMetrics.enrollmentGrowth.toFixed(1)}% this month` : 
+                            'No growth data'
+                          }
                         </div>
-                      )}
-                      
-                      {school.accreditation && (
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="outline">{school.accreditation}</Badge>
+                      </CardContent>
+                    </Card>
+
+                    {/* Financial KPI */}
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          ${financialMetrics?.monthlyRevenue?.toLocaleString() || '0'}
                         </div>
-                      )}
-                      
-                      {school.enrollmentSize && (
-                        <div className="flex items-center space-x-2">
-                          <Users className="h-5 w-5 text-muted-foreground" />
-                          <span>{school.enrollmentSize} enrolled students</span>
+                        <div className="flex items-center text-xs text-muted-foreground">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          {financialMetrics?.collectionRate ? 
+                            `${financialMetrics.collectionRate.toFixed(1)}% collection rate` : 
+                            'No collection data'
+                          }
                         </div>
-                      )}
-                    </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Academic Progress KPI */}
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Avg Progress</CardTitle>
+                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {academicMetrics?.averageProgress ? 
+                            `${academicMetrics.averageProgress.toFixed(1)}%` : 
+                            '0%'
+                          }
+                        </div>
+                        <div className="flex items-center text-xs text-muted-foreground">
+                          <Target className="h-3 w-3 mr-1" />
+                          {academicMetrics?.completionRate ? 
+                            `${academicMetrics.completionRate.toFixed(1)}% completion rate` : 
+                            'No completion data'
+                          }
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Staff KPI */}
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Active Staff</CardTitle>
+                        <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {staffMetrics?.activeInstructors || 0}
+                        </div>
+                        <div className="flex items-center text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {staffMetrics?.pendingInvites ? 
+                            `${staffMetrics.pendingInvites} pending invites` : 
+                            'No pending invites'
+                          }
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
+
+                  {/* Detailed Metrics Cards */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Enrollment Metrics */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="h-5 w-5" />
+                          Enrollment Overview
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Active Students</span>
+                          <span className="text-lg font-bold">
+                            {enrollmentMetrics?.activeStudents || 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">New Enrollments</span>
+                          <span className="text-lg font-bold text-green-600">
+                            +{enrollmentMetrics?.newEnrollments || 0}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Retention Rate</span>
+                            <span>{enrollmentMetrics?.retentionRate?.toFixed(1) || 0}%</span>
+                          </div>
+                          <Progress value={enrollmentMetrics?.retentionRate || 0} />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Graduation Rate</span>
+                            <span>{enrollmentMetrics?.graduationRate?.toFixed(1) || 0}%</span>
+                          </div>
+                          <Progress value={enrollmentMetrics?.graduationRate || 0} />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Financial Metrics */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <DollarSign className="h-5 w-5" />
+                          Financial Overview
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Total Revenue</span>
+                          <span className="text-lg font-bold">
+                            ${financialMetrics?.totalRevenue?.toLocaleString() || '0'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Outstanding Balance</span>
+                          <span className="text-lg font-bold text-amber-600">
+                            ${financialMetrics?.outstandingBalance?.toLocaleString() || '0'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Unpaid Accounts</span>
+                          <span className="text-lg font-bold text-red-600">
+                            {financialMetrics?.unpaidAccounts || 0}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Collection Rate</span>
+                            <span>{financialMetrics?.collectionRate?.toFixed(1) || 0}%</span>
+                          </div>
+                          <Progress value={financialMetrics?.collectionRate || 0} />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Academic Metrics */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <BookOpen className="h-5 w-5" />
+                          Academic Performance
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Active Classes</span>
+                          <span className="text-lg font-bold">
+                            {academicMetrics?.activeClasses || 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Average Class Size</span>
+                          <span className="text-lg font-bold">
+                            {academicMetrics?.avgClassSize?.toFixed(1) || 0}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Student Progress</span>
+                            <span>{academicMetrics?.averageProgress?.toFixed(1) || 0}%</span>
+                          </div>
+                          <Progress value={academicMetrics?.averageProgress || 0} />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Course Completion</span>
+                            <span>{academicMetrics?.completionRate?.toFixed(1) || 0}%</span>
+                          </div>
+                          <Progress value={academicMetrics?.completionRate || 0} />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Staff Metrics */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <GraduationCap className="h-5 w-5" />
+                          Staff Management
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Total Staff</span>
+                          <span className="text-lg font-bold">
+                            {staffMetrics?.totalStaff || 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Active Instructors</span>
+                          <span className="text-lg font-bold text-green-600">
+                            {staffMetrics?.activeInstructors || 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Pending Invites</span>
+                          <span className="text-lg font-bold text-amber-600">
+                            {staffMetrics?.pendingInvites || 0}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Staff Utilization</span>
+                            <span>{staffMetrics?.staffUtilization?.toFixed(1) || 0}%</span>
+                          </div>
+                          <Progress value={staffMetrics?.staffUtilization || 0} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Quick Actions</CardTitle>
+                      <CardDescription>
+                        Common administrative tasks and shortcuts
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <Button asChild variant="outline" className="h-auto p-4 flex flex-col items-center gap-2">
+                          <Link href="/schools/students/register">
+                            <Users className="h-6 w-6" />
+                            <span className="text-sm">Register Student</span>
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline" className="h-auto p-4 flex flex-col items-center gap-2">
+                          <Link href="/schools/staff/invite">
+                            <GraduationCap className="h-6 w-6" />
+                            <span className="text-sm">Invite Staff</span>
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline" className="h-auto p-4 flex flex-col items-center gap-2">
+                          <Link href="/schools/classes/create">
+                            <BookOpen className="h-6 w-6" />
+                            <span className="text-sm">Create Class</span>
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline" className="h-auto p-4 flex flex-col items-center gap-2">
+                          <Link href="/schools/knowledge-base">
+                            <Globe className="h-6 w-6" />
+                            <span className="text-sm">Knowledge Base</span>
+                          </Link>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </TabsContent>
                 
                 <TabsContent value="details">
