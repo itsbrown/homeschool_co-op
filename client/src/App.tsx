@@ -79,6 +79,7 @@ const CallbackPage = () => {
   );
 };
 import NotFound from "@/pages/not-found";
+import AuthLogin from "@/pages/AuthLogin";
 
 // School Admin pages
 import MySchoolPage from "./pages/schools/MySchoolPage";
@@ -186,17 +187,7 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/auth/login">
-        {() => {
-          console.log('🔍 /auth/login route matched - rendering SupabaseLogin');
-          return (
-            <div style={{ minHeight: '100vh', backgroundColor: 'white' }}>
-              <h1>AUTH LOGIN PAGE</h1>
-              <SupabaseLogin />
-            </div>
-          );
-        }}
-      </Route>
+      <Route path="/auth/login" component={AuthLogin} />
       <Route path="/logout" component={LogoutPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
