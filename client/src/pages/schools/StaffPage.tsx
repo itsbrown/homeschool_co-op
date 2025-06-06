@@ -52,9 +52,7 @@ export default function StaffPage() {
   // Mutation for resending individual invites
   const resendInviteMutation = useMutation({
     mutationFn: async (staffId: number) => {
-      return apiRequest(`/api/school-admin/staff/${staffId}/resend-invite`, {
-        method: 'POST',
-      });
+      return apiRequest("POST", `/school-admin/staff/${staffId}/resend-invite`);
     },
     onSuccess: () => {
       toast({
@@ -75,9 +73,7 @@ export default function StaffPage() {
   // Mutation for resending all invites
   const resendAllInvitesMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/school-admin/staff/resend-all-invites', {
-        method: 'POST',
-      });
+      return apiRequest("POST", "/school-admin/staff/resend-all-invites");
     },
     onSuccess: () => {
       toast({
