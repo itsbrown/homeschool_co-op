@@ -45,18 +45,18 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   // Handle role selection logic for multi-role users
   useEffect(() => {
+    console.log(`🔄 RoleContext useEffect - user:`, user?.email, 'savedRole:', localStorage.getItem('activeRole'));
+    
     if (user?.email === 'coreycreates@gmail.com') {
-      const savedRole = localStorage.getItem('activeRole');
-      if (!savedRole) {
-        // Show role selection for multi-role user
-        setShowRoleSelection(true);
-      } else {
-        setActiveRole(savedRole);
-        setShowRoleSelection(false);
-      }
+      // For testing, clear any saved role to force role selection
+      localStorage.removeItem('activeRole');
+      console.log(`🎯 Multi-role user detected - clearing saved role and showing selection`);
+      setShowRoleSelection(true);
+      setActiveRole('');
     } else if (user && !localStorage.getItem('activeRole')) {
       // Single role user - set default role
       const defaultRole = user.user_metadata?.role || 'parent';
+      console.log(`🎯 Single role user - setting default role:`, defaultRole);
       setActiveRole(defaultRole);
       localStorage.setItem('activeRole', defaultRole);
       setShowRoleSelection(false);
@@ -73,7 +73,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     }
   };
 
-  console.log(`🔄 RoleProvider rendering - activeRole: ${activeRole}, canSwitchRoles: ${canSwitchRoles}`);
+  console.log(`🔄 RoleProvider rendering - activeRole: ${activeRole}, canSwitchRoles: ${canSwitchRoles}, showRoleSelection: ${showRoleSelection}`);
 
   return (
     <RoleContext.Provider

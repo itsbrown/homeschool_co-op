@@ -21,10 +21,15 @@ export const SupabaseLogin: React.FC = () => {
   // Handle redirect after successful authentication
   useEffect(() => {
     if (isAuthenticated && user) {
-      const userRole = user.user_metadata?.role || 
-                      (user.email === 'coreycreates@gmail.com' ? 'school_admin' : 'parent');
+      // Don't auto-redirect for multi-role users - let role selection handle it
+      if (user.email === 'coreycreates@gmail.com') {
+        console.log('👤 Multi-role user logged in - will show role selection');
+        setLocation('/');
+        return;
+      }
       
-      console.log('👤 User logged in with role:', userRole);
+      const userRole = user.user_metadata?.role || 'parent';
+      console.log('👤 Single-role user logged in with role:', userRole);
       
       switch (userRole) {
         case 'school_admin':
