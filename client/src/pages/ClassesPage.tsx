@@ -23,8 +23,8 @@ const formatCurrency = (amount: number) => {
 export default function ClassesPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [categoryNameFilter, setCategoryNameFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categoryNameFilter, setCategoryNameFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   
   interface ClassData {
@@ -58,7 +58,13 @@ export default function ClassesPage() {
   
   // Fetch classes with filters
   const { data: classesData = { classes: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0 } }, isLoading } = useQuery<ClassesResponse>({
-    queryKey: ["/api/classes", { page: currentPage, limit: 12, search: searchTerm, category: categoryFilter, categoryName: categoryNameFilter }],
+    queryKey: ["/api/classes", { 
+      page: currentPage, 
+      limit: 12, 
+      search: searchTerm, 
+      category: categoryFilter === "all" ? "" : categoryFilter, 
+      categoryName: categoryNameFilter === "all" ? "" : categoryNameFilter 
+    }],
     enabled: true,
   });
   
@@ -69,8 +75,8 @@ export default function ClassesPage() {
   
   const clearFilters = () => {
     setSearchTerm("");
-    setCategoryFilter("");
-    setCategoryNameFilter("");
+    setCategoryFilter("all");
+    setCategoryNameFilter("all");
     setCurrentPage(1);
   };
   
@@ -107,7 +113,7 @@ export default function ClassesPage() {
                   <SelectValue placeholder="Any category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any category</SelectItem>
+                  <SelectItem value="all">Any category</SelectItem>
                   <SelectItem value="academic">Academic</SelectItem>
                   <SelectItem value="membership">Membership</SelectItem>
                   <SelectItem value="summer-camp">Summer Camp</SelectItem>
@@ -123,8 +129,8 @@ export default function ClassesPage() {
                   <SelectValue placeholder="Any program" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any program</SelectItem>
-                  {categories && categories.map((cat: string) => (
+                  <SelectItem value="all">Any program</SelectItem>
+                  {categories && categories.filter(cat => cat && cat.trim() !== '').map((cat: string) => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
                 </SelectContent>
