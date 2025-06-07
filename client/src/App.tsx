@@ -96,6 +96,7 @@ import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
 import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
 import ParentDashboard from "./components/dashboards/ParentDashboard";
+import ParentAppShell from "./components/layout/ParentAppShell";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 import RoleSelectionComponent from "@/components/RoleSelection";
 
@@ -128,8 +129,16 @@ function DashboardRouter() {
   
   // Show dashboard based on selected role
   console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
-  const DashboardComponent = activeRole === 'parent' ? ParentDashboard : MySchoolPage;
-  return <DashboardComponent key={`dashboard-${activeRole}`} />;
+  
+  if (activeRole === 'parent') {
+    return (
+      <ParentAppShell key={`dashboard-${activeRole}`}>
+        <ParentDashboard />
+      </ParentAppShell>
+    );
+  }
+  
+  return <MySchoolPage key={`dashboard-${activeRole}`} />;
 }
 
 function Router() {
