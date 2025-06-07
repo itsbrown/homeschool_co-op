@@ -6,40 +6,43 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { User, Plus } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 
 export default function ChildrenViewPage() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { activeRole } = useRole();
   
-  // Fetch children data from school admin students endpoint
+  // Fetch children data from parent-specific endpoint
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
-    queryKey: ["/api/schools/students"],
+    queryKey: ["/api/parent/children"],
     queryFn: async () => {
       try {
-        const response = await fetch("/api/schools/students");
+        const token = localStorage.getItem('supabase_token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+        
+        const response = await fetch("/api/parent/children", {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const students = await response.json();
-        // Transform students data to children format
-        return students.map((student: any) => ({
-          id: student.id,
-          firstName: student.name.split(' ')[0],
-          lastName: student.name.split(' ').slice(1).join(' '),
-          name: student.name,
-          gradeLevel: student.gradeLevel,
-          age: student.age,
-          email: student.email,
-          status: student.status,
-          enrollmentDate: student.enrollmentDate
-        }));
+        
+        const children = await response.json();
+        return children;
       } catch (error) {
-        console.error("Error fetching students:", error);
+        console.error("Error fetching children:", error);
         return [];
       }
     },
-    enabled: true,
+    enabled: isAuthenticated && activeRole === 'parent',
   });
 
   // Redirect if not authenticated
@@ -64,7 +67,7 @@ export default function ChildrenViewPage() {
   }
   
   // Ensure only parents can access this page
-  if (user && user.role !== 'parent') {
+  if (isAuthenticated && activeRole !== 'parent') {
     return (
       <ParentAppShell>
         <div className="container mx-auto p-4 text-center">

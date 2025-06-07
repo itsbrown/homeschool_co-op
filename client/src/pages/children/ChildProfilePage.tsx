@@ -14,12 +14,18 @@ export default function ChildProfilePage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
 
-  // Fetch detailed child data from school admin student endpoint
+  // Fetch detailed child data using proper authentication
   const { data: child, isLoading } = useQuery({
     queryKey: [`/api/school-admin/students/${id}`],
     queryFn: async () => {
       try {
-        const response = await fetch(`/api/school-admin/students/${id}`);
+        const token = localStorage.getItem('supabase_token');
+        const response = await fetch(`/api/school-admin/students/${id}`, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json'
+          }
+        });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
