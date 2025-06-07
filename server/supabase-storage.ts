@@ -353,6 +353,35 @@ export class SupabaseStorage implements IStorage {
   async createClass(classData: any): Promise<any> { throw new Error('Not implemented'); }
   async updateClass(id: number, classData: any): Promise<any> { throw new Error('Not implemented'); }
   async deleteClass(id: number): Promise<void> { throw new Error('Not implemented'); }
+  // Program methods - temporary implementations to fix 500 errors
+  async getPublishedPrograms(category?: string, gradeLevel?: string): Promise<any[]> {
+    console.log('Supabase getPublishedPrograms called with:', { category, gradeLevel });
+    // Return empty array for now to prevent 500 errors
+    return [];
+  }
+  
+  async getProgramById(id: number): Promise<any | undefined> {
+    console.log('Supabase getProgramById called with id:', id);
+    return undefined;
+  }
+  
+  async getProgramsBySchoolId(schoolId: number): Promise<any[]> {
+    console.log('Supabase getProgramsBySchoolId called with schoolId:', schoolId);
+    return [];
+  }
+  
+  async createProgram(program: any): Promise<any> {
+    throw new Error('Program creation not implemented in Supabase storage');
+  }
+  
+  async updateProgram(id: number, program: any): Promise<any> {
+    throw new Error('Program update not implemented in Supabase storage');
+  }
+  
+  async deleteProgram(id: number): Promise<void> {
+    throw new Error('Program deletion not implemented in Supabase storage');
+  }
+
   async createRoleInvitation(invitation: any): Promise<any> { throw new Error('Not implemented'); }
   async getRoleInvitationsByEmail(email: string): Promise<any[]> { return []; }
   async getRoleInvitationById(id: number): Promise<any | undefined> { return undefined; }

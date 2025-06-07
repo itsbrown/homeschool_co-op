@@ -188,7 +188,7 @@ export class MemStorage implements IStorage {
     // Add sample events for testing the calendar
     this.initializeSampleEvents();
     this.initializeSampleKnowledgeBases();
-    this.initializeSamplePrograms();
+
     this.createUser({
       username: "admin",
       email: "admin@example.com",
