@@ -39,10 +39,8 @@ export default function Dashboard() {
   if (user && userRole === 'parent') {
     return (
       <ParentAppShell>
-        <div className="container mx-auto p-4">
-          {/* Parent Dashboard */}
-          <RoleDashboard />
-        </div>
+        {/* Parent Dashboard with register child button and AI assistant */}
+        <RoleDashboard />
       </ParentAppShell>
     );
   }
