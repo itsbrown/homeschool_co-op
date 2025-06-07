@@ -188,6 +188,7 @@ export class MemStorage implements IStorage {
     // Add sample events for testing the calendar
     this.initializeSampleEvents();
     this.initializeSampleKnowledgeBases();
+    this.initializeSamplePrograms();
     this.createUser({
       username: "admin",
       email: "admin@example.com",
@@ -606,7 +607,7 @@ export class MemStorage implements IStorage {
     }
     
     if (gradeLevel) {
-      programs = programs.filter(program => program.gradeLevel === gradeLevel);
+      programs = programs.filter(program => program.gradeLevels && program.gradeLevels.includes(gradeLevel));
     }
     
     return programs;
