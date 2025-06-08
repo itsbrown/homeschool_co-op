@@ -1327,86 +1327,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/program-enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
   app.delete('/api/program-enrollments/:id', isAuthenticated, requireAdmin, programEnrollmentsApi.deleteEnrollment);
 
-  // AI Enrollment Assistant with NLP and Action Capabilities
-  app.post('/api/ai/enrollment-assistant', isAuthenticated, async (req, res) => {
-    try {
-      const { message, action, registrationData } = req.body;
-      const userId = (req as any).session?.userId;
-
-      // Use Google Cloud NLP to understand the user's intent
-      const nlpAnalysis = await nlpService.analyzeUserInput(message);
-
-      // Extract relevant information from the message
-      const extractedInfo = nlpService.extractChildInfo(message, nlpAnalysis.entities);
-
-      let responseMessage = '';
-      let actionData = null;
-
-      // Handle specific actions (registration, enrollment)
-      if (action === 'register_child' && registrationData) {
-        try {
-          // Actually register the child using existing API
-          const childData = {
-            ...registrationData,
-            parentId: userId
-          };
-
-          const registeredChild = await storage.createChild(childData);
-          responseMessage = `Great! I've successfully registered ${registeredChild.firstName} ${registeredChild.lastName}. They're now in our system and ready for program enrollment!`;
-          actionData = { type: 'child_registered', child: registeredChild };
-        } catch (error) {
-          responseMessage = "I encountered an issue while registering. Let me help you try again with the correct information.";
-        }
-      } else if (action === 'enroll_program' && registrationData) {
-        try {
-          // Actually enroll in program using existing API
-          const enrollment = await storage.createEnrollment({
-            childId: registrationData.childId,
-            programId: registrationData.programId,
-            parentId: userId,
-            status: 'pending'
-          });
-
-          responseMessage = `Perfect! I've enrolled ${registrationData.childName} in the ${registrationData.programName} program. You'll receive confirmation details soon!`;
-          actionData = { type: 'program_enrolled', enrollment };
-        } catch (error) {
-          responseMessage = "I had trouble processing the enrollment. Let me help you with the program selection again.";
-        }
-      } else {
-        // Generate intelligent response based on intent and sentiment
-        switch (nlpAnalysis.intent) {
-          case 'register_child':
-            responseMessage = await generateRegistrationResponse(extractedInfo, nlpAnalysis, userId);
-            break;
-          case 'find_programs':
-            responseMessage = await generateProgramResponse(extractedInfo, nlpAnalysis, userId);
-            break;
-          case 'schedule_inquiry':
-            responseMessage = generateScheduleResponse(nlpAnalysis);
-            break;
-          case 'cost_inquiry':
-            responseMessage = generateCostResponse(nlpAnalysis);
-            break;
-          default:
-            responseMessage = generateGeneralResponse(nlpAnalysis);
-        }
-      }
-
-      res.json({
-        response: responseMessage,
-        analysis: nlpAnalysis,
-        extractedInfo,
-        actionData
-      });
-
-    } catch (error) {
-      console.error('AI Assistant Error:', error);
-      res.status(500).json({ 
-        error: 'Failed to process message',
-        response: "I'm here to help! Could you tell me more about what you're looking for?"
-      });
-    }
-  });
+  // AI Enrollment Assistant with Anthropic AI
+  app.post('/api/ai/enrollment-assistant', isAuthenticated, processEnrollmentMessage);
 
   // Enhanced response generation functions with real data integration
   async function generateRegistrationResponse(extractedInfo: any, analysis: any, userId: string): Promise<string> {
