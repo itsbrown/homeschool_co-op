@@ -219,6 +219,7 @@ export class MemStorage implements IStorage {
     this.initializeSampleEvents();
     this.initializeSampleKnowledgeBases();
     this.initializeSampleClasses().catch(console.error);
+    this.initializeChildren().catch(console.error);
 
     this.createUser({
       username: "admin",
@@ -1278,6 +1279,46 @@ export class MemStorage implements IStorage {
         instructorId: classData.instructorId
       });
     });
+  }
+
+  private async initializeChildren() {
+    // Load children from the actual JSON file
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
+      
+      if (fs.existsSync(childrenFilePath)) {
+        const childrenData = JSON.parse(fs.readFileSync(childrenFilePath, 'utf-8'));
+        console.log(`👶 Loading ${childrenData.length} children from children.json`);
+        
+        childrenData.forEach((childData: any) => {
+          // Ensure the child has required fields and set defaults for missing ones
+          const normalizedChild = {
+            ...childData,
+            // Handle dates properly
+            birthDate: childData.birthDate ? new Date(childData.birthDate) : new Date(),
+            createdAt: childData.createdAt ? new Date(childData.createdAt) : new Date(),
+            updatedAt: childData.updatedAt ? new Date(childData.updatedAt) : new Date()
+          };
+          
+          // Add to store with existing ID
+          this.childrenStore.set(childData.id, normalizedChild as Child);
+          
+          // Update counter to be higher than max ID
+          if (childData.id >= this.childIdCounter) {
+            this.childIdCounter = childData.id + 1;
+          }
+        });
+        
+        console.log(`✅ Successfully loaded ${this.childrenStore.size} children into storage`);
+        console.log(`👶 Available child IDs: [${Array.from(this.childrenStore.keys()).join(', ')}]`);
+      } else {
+        console.log('⚠️ children.json not found, no children loaded into storage');
+      }
+    } catch (error) {
+      console.error('❌ Error loading children from JSON:', error);
+    }
   }
 
   // Marketing Links Methods
