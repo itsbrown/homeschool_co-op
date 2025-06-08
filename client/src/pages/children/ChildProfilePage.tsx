@@ -73,6 +73,30 @@ export default function ChildProfilePage() {
     enabled: !!id,
   });
 
+  // Fetch enrollment data for this child
+  const { data: enrollments, isLoading: enrollmentsLoading } = useQuery({
+    queryKey: [`/api/enrollments/child/${id}`],
+    queryFn: async () => {
+      try {
+        const token = localStorage.getItem('supabase_token');
+        const response = await fetch(`/api/enrollments/child/${id}`, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching enrollments:', error);
+        return [];
+      }
+    },
+    enabled: !!id
+  });
+
   if (isLoading) {
     return (
       <ParentAppShell>
@@ -327,10 +351,34 @@ export default function ChildProfilePage() {
                 <CardDescription>Classes and programs this student is enrolled in</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Enrollment information will be displayed here.</p>
-                </div>
+                {enrollmentsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading enrollments...</p>
+                  </div>
+                ) : enrollments && enrollments.length > 0 ? (
+                  <div className="space-y-4">
+                    {enrollments.map((enrollment: any) => (
+                      <div key={enrollment.id} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold">{enrollment.className}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Enrolled on {new Date(enrollment.enrollmentDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <Badge variant="default">{enrollment.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No current enrollments found.</p>
+                    <p className="text-sm mt-2">Browse available programs to enroll in classes.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
