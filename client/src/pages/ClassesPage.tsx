@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { DashboardShell } from "@/components/ui/dashboard-shell";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -81,7 +81,7 @@ export default function ClassesPage() {
   };
   
   return (
-    <DashboardShell>
+    <ParentAppShell>
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Classes</h1>
@@ -246,6 +246,6 @@ export default function ClassesPage() {
           </div>
         </div>
       )}
-    </DashboardShell>
+    </ParentAppShell>
   );
 }
