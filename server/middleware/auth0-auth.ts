@@ -57,6 +57,8 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     }
 
     console.log('✅ Token verified successfully for:', user.email);
+    console.log('🔍 User object fields:', Object.keys(user));
+    console.log('🔍 User ID field:', user.id, 'Sub field:', user.sub);
 
     // Check for role override from role switcher
     const activeRoleHeader = req.headers['x-active-role'];
@@ -72,18 +74,21 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
       }
     }
 
+    // Use the correct user ID field (sub is the standard field for Supabase)
+    const userIdentifier = user.id || user.sub || user.email;
+    
     // Use the role from the token metadata - no database lookup needed
     req.user = {
       ...user,
       role: effectiveRole,
-      id: user.sub,
+      id: userIdentifier,
       email: user.email
     };
 
     // Also set req.auth for compatibility with existing code
     req.auth = {
-      userId: user.sub,
-      supabaseId: user.sub,
+      userId: userIdentifier,
+      supabaseId: userIdentifier,
       email: user.email,
       role: effectiveRole,
       isActive: true,
