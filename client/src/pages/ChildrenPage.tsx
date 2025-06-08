@@ -39,11 +39,11 @@ export default function ChildrenPage() {
   
   return (
     <ParentAppShell>
-      <div className="container py-10 max-w-7xl">
-        <div className="flex items-center justify-between mb-8">
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Children</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-3xl font-bold">Children</h1>
+            <p className="text-muted-foreground mt-1">
               Manage your children's profiles and program enrollments
             </p>
           </div>
