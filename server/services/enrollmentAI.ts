@@ -61,11 +61,15 @@ When helping register a new child, collect these details in order:
 
 Once you have collected all required information, summarize it and ask for confirmation before proceeding with registration.
 
-REGISTRATION CONFIRMATION:
-When the parent says "yes" or confirms registration after you've summarized the details, immediately use this exact format to trigger registration:
-[REGISTER_CHILD: {name: "FirstName LastName", age: X, grade: "Grade", phone: "Phone", address: "Address", emergency1: "Contact1", emergency2: "Contact2", medical: "Medical Info", caregiver: "Caregiver Info"}]
+REGISTRATION PROCESSING:
+1. When a parent provides child information (name, age/grade, interests), immediately process the registration
+2. For confirmations like "yes", "confirm", "register" - DO NOT restart conversation, use collected information
+3. Use this format: [REGISTER_CHILD: firstName: [first], lastName: [last], birthdate: [date], gradeLevel: [grade], interests: [array], learningStyle: [style]]
 
-IMPORTANT: If the parent confirms with "yes" or similar confirmation after you've shown them a summary, proceed with registration using the information you have, even if some details like gender are incomplete. You can process basic registrations and allow updates later.
+CONFIRMATION RESPONSES:
+- Never respond to "yes" by asking "What's your child's name?" 
+- Always use previously collected information when user confirms
+- Process registration immediately when sufficient data is available
 
 CONVERSATION GUIDELINES:
 - Be helpful, friendly, and conversational
@@ -128,6 +132,49 @@ export async function processEnrollmentMessage(
         ).join('\n\n')}`
       : 'No programs are currently available.';
     
+    // Handle confirmation messages to prevent conversation restart
+    const isConfirmation = /^(yes|confirm|register|ok|proceed|sure)$/i.test(message.trim());
+    if (isConfirmation && chatHistory.length > 0) {
+      const lastAssistantMessage = chatHistory.filter(msg => msg.role === "assistant").pop();
+      if (lastAssistantMessage && lastAssistantMessage.content.includes("Should I register")) {
+        // Extract registration details from the confirmation context
+        const nameMatches = lastAssistantMessage.content.match(/register\s+\*\*([^*]+)\*\*/i) || 
+                           lastAssistantMessage.content.match(/\*\*([A-Za-z]+(?:\s+[A-Za-z]+)*)\*\*/);
+        const ageMatches = lastAssistantMessage.content.match(/\*\*Age:\*\*\s*(\d+)/) ||
+                          lastAssistantMessage.content.match(/Age:\s*(\d+)/) ||
+                          lastAssistantMessage.content.match(/(\d+)\s*years?\s*old/i);
+        const gradeMatches = lastAssistantMessage.content.match(/\*\*Grade:\*\*\s*([^*\n]+)/) ||
+                            lastAssistantMessage.content.match(/Grade:\s*([^*\n]+)/);
+        
+        if (nameMatches) {
+          const fullName = nameMatches[1];
+          const nameParts = fullName.split(' ');
+          const firstName = nameParts[0] || 'Student';
+          const lastName = nameParts.slice(1).join(' ') || 'Student';
+          const age = ageMatches ? parseInt(ageMatches[1]) : 8;
+          const grade = gradeMatches ? gradeMatches[1].trim() : "3rd Grade";
+          
+          const currentYear = new Date().getFullYear();
+          const birthYear = currentYear - age;
+          const birthdate = `${birthYear}-06-15`;
+          
+          return {
+            message: `Excellent! I'm registering ${firstName} ${lastName} now with the information you provided.`,
+            action: {
+              type: "register_child",
+              firstName,
+              lastName,
+              birthdate,
+              gradeLevel: grade,
+              interests: [],
+              learningStyle: "visual",
+              specialNeeds: ""
+            }
+          };
+        }
+      }
+    }
+
     // Build the complete context
     const fullContext = `${childrenContext}\n\n${programsContext}`;
     
