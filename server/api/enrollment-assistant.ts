@@ -2,17 +2,9 @@ import { Request, Response } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
 import { formatZodError } from "../utils";
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
+import { processEnrollmentMessage } from "../services/enrollmentAI";
 
-// Initialize AI service clients
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// AI service handled by enrollmentAI service
 
 // Input validation schema
 const messageSchema = z.object({
@@ -101,7 +93,7 @@ function calculateAge(birthdate: string): number {
 /**
  * Process a request from the enrollment assistant
  */
-export const processEnrollmentMessage = async (req: Request, res: Response) => {
+export const handleEnrollmentMessage = async (req: Request, res: Response) => {
   try {
     // Validate input
     const parseResult = messageSchema.safeParse(req.body);
@@ -121,9 +113,15 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "You need to be logged in to use the enrollment assistant" });
     }
 
-    // Use available identifier for user context
-    const currentUserId = req.auth.userId || req.auth.supabaseId || req.auth.email;
-    console.log('✅ AI Assistant authenticated for user:', req.auth.email, 'ID:', currentUserId);
+    // Use the service function that contains confirmation handling logic
+    const response = await processEnrollmentMessage(
+      req.auth.email,
+      message,
+      childrenIds,
+      history
+    );
+    
+    return res.json(response);
     
     // Get comprehensive school data for context
     const children = [];

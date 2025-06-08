@@ -136,6 +136,11 @@ export async function processEnrollmentMessage(
     const isConfirmation = /^(yes|confirm|register|ok|proceed|sure|y)$/i.test(message.trim());
     console.log("🔍 Checking confirmation:", { message: message.trim(), isConfirmation, historyLength: chatHistory.length });
     
+    // Force confirmation handling for testing
+    if (message.trim().toLowerCase() === "yes") {
+      console.log("🔍 FORCE CONFIRMATION DETECTED");
+    }
+    
     if (isConfirmation && chatHistory.length > 0) {
       const lastAssistantMessage = chatHistory.filter(msg => msg.role === "assistant").pop();
       console.log("🔍 Last assistant message exists:", !!lastAssistantMessage);
@@ -185,13 +190,17 @@ export async function processEnrollmentMessage(
             message: `Perfect! I'm registering ${firstName} ${lastName} right now with the information you provided.`,
             action: {
               type: "register_child",
-              firstName,
-              lastName,
-              birthdate,
-              gradeLevel: grade,
-              interests: [],
-              learningStyle: "visual",
-              specialNeeds: ""
+              registrationData: {
+                name: `${firstName} ${lastName}`,
+                age: age,
+                grade: grade,
+                phone: "",
+                address: "",
+                emergency1: "",
+                emergency2: "",
+                medical: "",
+                caregiver: ""
+              }
             }
           };
         } else {
