@@ -83,7 +83,13 @@ export default function EnrollmentAssistant() {
   
   // Auto scroll to bottom of messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+    
+    // Delay scroll to ensure DOM is updated
+    const timeoutId = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timeoutId);
   }, [messages]);
   
   const handleSendMessage = async () => {
@@ -266,7 +272,7 @@ export default function EnrollmentAssistant() {
         </div>
         
         {/* Messages */}
-        <div className="space-y-4 max-h-96 overflow-y-auto">
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto scroll-smooth pb-4" id="messages-container">
           {messages.map((message) => (
             <div
               key={message.id}
