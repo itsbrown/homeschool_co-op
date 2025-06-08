@@ -147,10 +147,15 @@ router.get('/categories/names', async (req, res) => {
 // Enroll a child in a class
 router.post('/:id/enroll', async (req, res) => {
   try {
+    console.log(`📝 ENROLLMENT REQUEST: Class ${req.params.id}, Body:`, req.body);
+    
     const classId = parseInt(req.params.id);
     const { childId } = req.body;
 
+    console.log(`📝 ENROLLMENT PARSED: classId=${classId}, childId=${childId}`);
+
     if (isNaN(classId) || !childId) {
+      console.log(`📝 ENROLLMENT VALIDATION FAILED: Invalid classId or childId`);
       return res.status(400).json({ message: 'Invalid class ID or child ID' });
     }
 
