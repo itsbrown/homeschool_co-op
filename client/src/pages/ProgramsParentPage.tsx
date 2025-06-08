@@ -401,63 +401,29 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               ) : childrenError ? (
                 <div className="text-sm text-destructive">Error loading children: {JSON.stringify(childrenError)}</div>
               ) : (
-                <div className="relative">
-                  <Select 
-                    value={selectedChildId} 
-                    onValueChange={(value) => {
-                      console.log("🔄 Select value changed:", value);
-                      setSelectedChildId(value);
-                    }}
-                    onOpenChange={(open) => {
-                      console.log("🔄 Select dropdown opened/closed:", open);
-                    }}
-                  >
-                    <SelectTrigger 
-                      id="child-select"
-                      onClick={(e) => {
-                        console.log("🔄 SelectTrigger clicked");
-                        e.stopPropagation();
-                      }}
-                    >
-                      <SelectValue placeholder="Choose a child" />
-                    </SelectTrigger>
-                    <SelectContent 
-                      className="z-50"
-                      onPointerDownOutside={(e) => {
-                        console.log("🔄 Pointer down outside SelectContent");
-                        e.preventDefault();
-                      }}
-                      onEscapeKeyDown={(e) => {
-                        console.log("🔄 Escape key pressed in SelectContent");
-                      }}
-                    >
-                      {(() => {
-                        console.log("🔄 Rendering SelectContent with children:", children);
-                        return null;
-                      })()}
-                      {children && children.length > 0 ? (
-                        children.map((child: any) => {
-                          console.log("🔄 Rendering SelectItem for child:", child);
-                          return (
-                            <SelectItem 
-                              key={child.id} 
-                              value={child.id.toString()}
-                              onSelect={(value) => {
-                                console.log("🔄 SelectItem onSelect:", value);
-                              }}
-                            >
-                              {child.firstName} {child.lastName}
-                            </SelectItem>
-                          );
-                        })
-                      ) : (
-                        <SelectItem value="" disabled>
-                          No children available
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <select
+                  id="child-select"
+                  value={selectedChildId}
+                  onChange={(e) => {
+                    console.log("🔄 Native select value changed:", e.target.value);
+                    setSelectedChildId(e.target.value);
+                  }}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="" disabled>Choose a child</option>
+                  {children && children.length > 0 ? (
+                    children.map((child: any) => {
+                      console.log("🔄 Rendering option for child:", child);
+                      return (
+                        <option key={child.id} value={child.id.toString()}>
+                          {child.firstName} {child.lastName}
+                        </option>
+                      );
+                    })
+                  ) : (
+                    <option value="" disabled>No children available</option>
+                  )}
+                </select>
               )}
             </div>
           </div>
