@@ -25,6 +25,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; classId?: number; classTitle?: string }>({ open: false });
+  const [viewDetailsDialog, setViewDetailsDialog] = useState<{ open: boolean; classData?: any }>({ open: false });
   const [selectedChildId, setSelectedChildId] = useState<string>("");
 
   const { toast } = useToast();
@@ -340,9 +341,21 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                         )}
                       </div>
                     </CardContent>
-                    <CardFooter>
+                    <CardFooter className="gap-2">
                       <Button 
-                        className="w-full"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setViewDetailsDialog({ 
+                            open: true, 
+                            classData: classItem 
+                          });
+                        }}
+                      >
+                        View Details
+                      </Button>
+                      <Button 
+                        className="flex-1"
                         onClick={() => {
                           console.log("🔄 Enroll button clicked for class:", classItem.title, "ID:", classItem.id);
                           console.log("🔄 Current children data:", children);
@@ -457,6 +470,109 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               disabled={!selectedChildId || enrollmentMutation.isPending || childrenLoading}
             >
               {enrollmentMutation.isPending ? "Enrolling..." : "Enroll"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Details Dialog */}
+      <Dialog open={viewDetailsDialog.open} onOpenChange={(open) => setViewDetailsDialog({ open })}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{viewDetailsDialog.classData?.title}</DialogTitle>
+            <DialogDescription>
+              Complete class information and details
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewDetailsDialog.classData && (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="font-semibold">Category</Label>
+                  <Badge variant={viewDetailsDialog.classData.category === "academic" ? "default" : "secondary"}>
+                    {viewDetailsDialog.classData.categoryName || viewDetailsDialog.classData.category}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-semibold">Price</Label>
+                  <p className="text-lg font-semibold text-primary">
+                    {formatCurrency(viewDetailsDialog.classData.price)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label className="font-semibold">Description</Label>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {viewDetailsDialog.classData.description || "No description provided"}
+                </p>
+              </div>
+
+              {/* Class Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {viewDetailsDialog.classData.startDate && viewDetailsDialog.classData.endDate && (
+                  <div className="space-y-2">
+                    <Label className="font-semibold flex items-center">
+                      <CalendarIcon className="h-4 w-4 mr-2" />
+                      Class Dates
+                    </Label>
+                    <div className="space-y-1">
+                      <p className="text-sm">Start: {new Date(viewDetailsDialog.classData.startDate).toLocaleDateString()}</p>
+                      <p className="text-sm">End: {new Date(viewDetailsDialog.classData.endDate).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                )}
+
+                {viewDetailsDialog.classData.numSessions && (
+                  <div className="space-y-2">
+                    <Label className="font-semibold flex items-center">
+                      <BookOpen className="h-4 w-4 mr-2" />
+                      Sessions
+                    </Label>
+                    <p className="text-sm">{viewDetailsDialog.classData.numSessions} sessions</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Enrollment Information */}
+              <div className="space-y-2">
+                <Label className="font-semibold flex items-center">
+                  <Users className="h-4 w-4 mr-2" />
+                  Enrollment Status
+                </Label>
+                <div className="flex items-center gap-4">
+                  <p className="text-sm">Current Enrollments: {viewDetailsDialog.classData.totalOrders || 0}</p>
+                  {viewDetailsDialog.classData.totalWaitlisted > 0 && (
+                    <p className="text-sm text-amber-600">Waitlisted: {viewDetailsDialog.classData.totalWaitlisted}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setViewDetailsDialog({ open: false })}
+            >
+              Close
+            </Button>
+            <Button 
+              onClick={() => {
+                if (viewDetailsDialog.classData) {
+                  setViewDetailsDialog({ open: false });
+                  setEnrollmentDialog({ 
+                    open: true, 
+                    classId: viewDetailsDialog.classData.id, 
+                    classTitle: viewDetailsDialog.classData.title 
+                  });
+                }
+              }}
+            >
+              Enroll Now
             </Button>
           </DialogFooter>
         </DialogContent>
