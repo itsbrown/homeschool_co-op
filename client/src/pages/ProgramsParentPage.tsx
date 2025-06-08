@@ -511,42 +511,107 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 </p>
               </div>
 
-              {/* Class Details */}
+              {/* Schedule and Logistics */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {viewDetailsDialog.classData.startDate && viewDetailsDialog.classData.endDate && (
+                {viewDetailsDialog.classData.schedule && (
                   <div className="space-y-2">
                     <Label className="font-semibold flex items-center">
-                      <CalendarIcon className="h-4 w-4 mr-2" />
-                      Class Dates
+                      <CalendarDays className="h-4 w-4 mr-2" />
+                      Schedule
                     </Label>
-                    <div className="space-y-1">
-                      <p className="text-sm">Start: {new Date(viewDetailsDialog.classData.startDate).toLocaleDateString()}</p>
-                      <p className="text-sm">End: {new Date(viewDetailsDialog.classData.endDate).toLocaleDateString()}</p>
-                    </div>
+                    <p className="text-sm">{viewDetailsDialog.classData.schedule}</p>
                   </div>
                 )}
 
-                {viewDetailsDialog.classData.numSessions && (
+                {viewDetailsDialog.classData.location && (
                   <div className="space-y-2">
                     <Label className="font-semibold flex items-center">
-                      <BookOpen className="h-4 w-4 mr-2" />
-                      Sessions
+                      <Backpack className="h-4 w-4 mr-2" />
+                      Location
                     </Label>
-                    <p className="text-sm">{viewDetailsDialog.classData.numSessions} sessions</p>
+                    <p className="text-sm">{viewDetailsDialog.classData.location}</p>
                   </div>
                 )}
               </div>
 
-              {/* Enrollment Information */}
-              <div className="space-y-2">
+              {/* Class Dates */}
+              {viewDetailsDialog.classData.startDate && viewDetailsDialog.classData.endDate && (
+                <div className="space-y-2">
+                  <Label className="font-semibold flex items-center">
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    Class Dates
+                  </Label>
+                  <div className="flex gap-4">
+                    <p className="text-sm">Start: {new Date(viewDetailsDialog.classData.startDate).toLocaleDateString()}</p>
+                    <p className="text-sm">End: {new Date(viewDetailsDialog.classData.endDate).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Instructor Information */}
+              {viewDetailsDialog.classData.instructorName && (
+                <div className="space-y-2">
+                  <Label className="font-semibold flex items-center">
+                    <Users className="h-4 w-4 mr-2" />
+                    Instructor
+                  </Label>
+                  <p className="text-sm">{viewDetailsDialog.classData.instructorName}</p>
+                </div>
+              )}
+
+              {/* Capacity and Enrollment Information */}
+              <div className="space-y-3">
                 <Label className="font-semibold flex items-center">
                   <Users className="h-4 w-4 mr-2" />
-                  Enrollment Status
+                  Class Capacity
                 </Label>
-                <div className="flex items-center gap-4">
-                  <p className="text-sm">Current Enrollments: {viewDetailsDialog.classData.totalOrders || 0}</p>
+                <div className="space-y-3">
+                  {/* Capacity Tally */}
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-medium">Enrolled:</span>
+                        <span className="text-sm font-semibold text-green-600">
+                          {viewDetailsDialog.classData.enrollmentCount || 0}
+                        </span>
+                      </div>
+                      <span className="text-muted-foreground">/</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-medium">Capacity:</span>
+                        <span className="text-sm font-semibold">
+                          {viewDetailsDialog.classData.capacity || viewDetailsDialog.classData.maxStudents || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-medium">Available:</span>
+                      <span className="text-sm font-semibold text-blue-600">
+                        {viewDetailsDialog.classData.capacity || viewDetailsDialog.classData.maxStudents ? 
+                          Math.max(0, (viewDetailsDialog.classData.capacity || viewDetailsDialog.classData.maxStudents) - (viewDetailsDialog.classData.enrollmentCount || 0)) : 
+                          'N/A'
+                        }
+                      </span>
+                      <span className="text-xs text-muted-foreground">seats</span>
+                    </div>
+                  </div>
+
+                  {/* Waitlist Information */}
                   {viewDetailsDialog.classData.totalWaitlisted > 0 && (
-                    <p className="text-sm text-amber-600">Waitlisted: {viewDetailsDialog.classData.totalWaitlisted}</p>
+                    <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
+                      <span className="text-sm text-amber-700">
+                        <strong>{viewDetailsDialog.classData.totalWaitlisted}</strong> students on waitlist
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Full Class Warning */}
+                  {(viewDetailsDialog.classData.capacity || viewDetailsDialog.classData.maxStudents) && 
+                   (viewDetailsDialog.classData.enrollmentCount || 0) >= (viewDetailsDialog.classData.capacity || viewDetailsDialog.classData.maxStudents) && (
+                    <div className="flex items-center gap-2 p-2 bg-red-50 rounded border border-red-200">
+                      <span className="text-sm text-red-700 font-medium">
+                        This class is currently full
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
