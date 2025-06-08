@@ -1550,6 +1550,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/migration", migrationRouter);
   app.use("/api/school-admin/marketing-links", marketingLinksRouter);
   
+  // Import and register enrollments API router
+  const enrollmentsRouter = await import("./api/enrollments");
+  app.use("/api/enrollments", enrollmentsRouter.default);
+  
   // Import and register users API router
   const usersRouter = await import("./api/users");
   app.use("/api/users", usersRouter.default);
