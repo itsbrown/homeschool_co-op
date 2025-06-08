@@ -84,12 +84,25 @@ export default function EnrollmentAssistant() {
   // Auto scroll to bottom of messages
   useEffect(() => {
     const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: "smooth",
+          block: "end",
+          inline: "nearest"
+        });
+      }
     };
     
-    // Delay scroll to ensure DOM is updated
-    const timeoutId = setTimeout(scrollToBottom, 100);
-    return () => clearTimeout(timeoutId);
+    // Multiple attempts to ensure scrolling works
+    const timeoutId1 = setTimeout(scrollToBottom, 50);
+    const timeoutId2 = setTimeout(scrollToBottom, 200);
+    const timeoutId3 = setTimeout(scrollToBottom, 500);
+    
+    return () => {
+      clearTimeout(timeoutId1);
+      clearTimeout(timeoutId2);
+      clearTimeout(timeoutId3);
+    };
   }, [messages]);
   
   const handleSendMessage = async () => {
@@ -232,6 +245,60 @@ export default function EnrollmentAssistant() {
     }
   };
   
+  const handleQuickResponse = async (response: string) => {
+    // Create user message for the quick response
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: response,
+      timestamp: new Date()
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    
+    try {
+      // Send the quick response through the same flow
+      if (session?.access_token) {
+        localStorage.setItem('supabase_token', session.access_token);
+      }
+
+      const response_data = await apiRequest("POST", "/api/ai/enrollment-assistant", {
+        message: response,
+        childrenIds: Array.isArray(children) ? children.map((child: any) => child.id) : [],
+        history: [...messages, userMessage].map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+      });
+      
+      const data = await response_data.json();
+      
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: data.response || data.message || "I'm sorry, I couldn't generate a response.",
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
+      
+      if (data.action) {
+        handleAssistantAction(data.action);
+      }
+      
+    } catch (error) {
+      console.error("Error sending quick response:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process your response.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -299,6 +366,28 @@ export default function EnrollmentAssistant() {
                 <span className="text-xs opacity-70 block mt-1">
                   {message.timestamp.toLocaleTimeString()}
                 </span>
+                
+                {/* Quick action buttons for assistant messages */}
+                {message.role === "assistant" && message.content.toLowerCase().includes("should i") && (
+                  <div className="flex gap-2 mt-3">
+                    <Button 
+                      size="sm" 
+                      onClick={() => handleQuickResponse("yes")}
+                      disabled={isLoading}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                    >
+                      yes
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => handleQuickResponse("no")}
+                      disabled={isLoading}
+                    >
+                      no
+                    </Button>
+                  </div>
+                )}
               </div>
               
               {message.role === "user" && (
