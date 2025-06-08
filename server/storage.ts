@@ -159,6 +159,8 @@ export class MemStorage implements IStorage {
   private programEnrollmentsStore: Map<number, ProgramEnrollment>;
   private classesStore: Map<number, Class>;
   private activitiesStore: Map<number, Activity>;
+  private marketingLinksStore: Map<number, MarketingLink>;
+  private linkAnalyticsStore: Map<number, LinkAnalytics>;
   
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -172,6 +174,8 @@ export class MemStorage implements IStorage {
   private programEnrollmentIdCounter: number;
   private classIdCounter: number;
   private activityIdCounter: number;
+  private marketingLinkIdCounter: number;
+  private linkAnalyticsIdCounter: number;
 
   constructor() {
     this.usersStore = new Map();
@@ -186,6 +190,8 @@ export class MemStorage implements IStorage {
     this.programEnrollmentsStore = new Map();
     this.classesStore = new Map();
     this.activitiesStore = new Map();
+    this.marketingLinksStore = new Map();
+    this.linkAnalyticsStore = new Map();
     
     this.userIdCounter = 1;
     this.curriculumIdCounter = 1;
@@ -199,6 +205,8 @@ export class MemStorage implements IStorage {
     this.programEnrollmentIdCounter = 1;
     this.classIdCounter = 1;
     this.activityIdCounter = 1;
+    this.marketingLinkIdCounter = 1;
+    this.linkAnalyticsIdCounter = 1;
     
     // Initialize with a default admin user
     
@@ -1310,6 +1318,93 @@ export class MemStorage implements IStorage {
         instructorId: classData.instructorId
       });
     });
+  }
+
+  // Marketing Links Methods
+  async createMarketingLink(data: InsertMarketingLink): Promise<MarketingLink> {
+    const id = this.marketingLinkIdCounter++;
+    const now = new Date();
+    const marketingLink: MarketingLink = {
+      id,
+      createdAt: now,
+      updatedAt: now,
+      ...data
+    };
+    this.marketingLinksStore.set(id, marketingLink);
+    return marketingLink;
+  }
+
+  async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
+    return this.marketingLinksStore.get(id);
+  }
+
+  async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
+    for (const link of this.marketingLinksStore.values()) {
+      if (link.campaignId === campaignId) {
+        return link;
+      }
+    }
+    return undefined;
+  }
+
+  async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
+    return Array.from(this.marketingLinksStore.values()).filter(
+      link => link.schoolId === schoolId
+    );
+  }
+
+  async updateMarketingLink(id: number, data: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
+    const existing = this.marketingLinksStore.get(id);
+    if (!existing) return undefined;
+
+    const updated: MarketingLink = {
+      ...existing,
+      ...data,
+      updatedAt: new Date()
+    };
+    this.marketingLinksStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteMarketingLink(id: number): Promise<boolean> {
+    return this.marketingLinksStore.delete(id);
+  }
+
+  async createLinkAnalytics(data: InsertLinkAnalytics): Promise<LinkAnalytics> {
+    const id = this.linkAnalyticsIdCounter++;
+    const analytics: LinkAnalytics = {
+      id,
+      timestamp: new Date(),
+      ...data
+    };
+    this.linkAnalyticsStore.set(id, analytics);
+    return analytics;
+  }
+
+  async incrementLinkClick(linkId: number): Promise<void> {
+    await this.createLinkAnalytics({
+      linkId,
+      event: 'click',
+      ipAddress: null,
+      userAgent: null,
+      referrer: null
+    });
+  }
+
+  async incrementLinkConversion(linkId: number): Promise<void> {
+    await this.createLinkAnalytics({
+      linkId,
+      event: 'conversion',
+      ipAddress: null,
+      userAgent: null,
+      referrer: null
+    });
+  }
+
+  async getLinkAnalytics(linkId: number): Promise<LinkAnalytics[]> {
+    return Array.from(this.linkAnalyticsStore.values()).filter(
+      analytics => analytics.linkId === linkId
+    );
   }
 }
 

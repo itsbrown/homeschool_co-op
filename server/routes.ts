@@ -1548,6 +1548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/activities", activitiesRouter);
   app.use("/api/migration", migrationRouter);
+  app.use("/api/school-admin/marketing-links", marketingLinksRouter);
   
   // Import and register users API router
   const usersRouter = await import("./api/users");

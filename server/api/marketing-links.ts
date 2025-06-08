@@ -1,7 +1,7 @@
 import express from "express";
 import { storage } from "../storage";
 import { insertMarketingLinkSchema, insertLinkAnalyticsSchema } from "@shared/schema";
-import { validateAuth } from "../middleware/auth";
+import { jwtCheck } from "../middleware/auth0-auth";
 import crypto from "crypto";
 
 const router = express.Router();
