@@ -103,10 +103,7 @@ export async function processEnrollmentMessage(
     
     // Fetch available classes/programs - get all classes and filter for published ones
     const allClasses = await storage.getClasses({ page: 1, limit: 100, status: "" });
-    const programs = allClasses.filter(c => c.isPublished || c.status === "published");
-    
-    console.log(`📚 AI Service - Found ${programs.length} available programs/classes`);
-    console.log(`📚 Programs data:`, programs.map(p => ({ id: p.id, title: p.title, status: p.status, isPublished: p.isPublished })));
+    const programs = allClasses.filter(c => c.isPublished === true || c.status === "published");
     
     // Format context about available data
     const childrenContext = children.length > 0
