@@ -804,6 +804,14 @@ export class MemStorage implements IStorage {
     
     return true;
   }
+
+  async getAllEnrollments(): Promise<any[]> {
+    if (!this.classEnrollments) {
+      console.log(`📝 No classEnrollments array exists`);
+      return [];
+    }
+    return this.classEnrollments;
+  }
   
   // Class methods
   async getClassById(id: number): Promise<Class | undefined> {

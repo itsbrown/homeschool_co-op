@@ -103,6 +103,31 @@ export default function ChildProfilePage() {
     enabled: !!id
   });
 
+  // Unenrollment mutation
+  const unenrollmentMutation = useMutation({
+    mutationFn: async (enrollmentId: number) => {
+      return apiRequest('DELETE', `/api/enrollments/${enrollmentId}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Unenrollment Successful",
+        description: "The child has been successfully removed from the class.",
+      });
+      setConfirmDialog({ open: false, enrollmentId: null, className: "" });
+      // Invalidate enrollment queries to refresh the UI
+      queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unenrollment Failed",
+        description: error.message || "There was an error removing the child from the class.",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (isLoading) {
     return (
       <ParentAppShell>
@@ -373,7 +398,22 @@ export default function ChildProfilePage() {
                               Enrolled on {new Date(enrollment.enrollmentDate).toLocaleDateString()}
                             </p>
                           </div>
-                          <Badge variant="default">{enrollment.status}</Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default">{enrollment.status}</Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setConfirmDialog({ 
+                                open: true, 
+                                enrollmentId: enrollment.id, 
+                                className: enrollment.className 
+                              })}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Remove
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -390,6 +430,37 @@ export default function ChildProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Confirmation Dialog for Unenrollment */}
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Unenrollment</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this child from "{confirmDialog.className}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialog({ open: false, enrollmentId: null, className: "" })}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (confirmDialog.enrollmentId) {
+                  unenrollmentMutation.mutate(confirmDialog.enrollmentId);
+                }
+              }}
+              disabled={unenrollmentMutation.isPending}
+            >
+              {unenrollmentMutation.isPending ? "Removing..." : "Remove"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ParentAppShell>
   );
 }
