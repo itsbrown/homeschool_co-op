@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { storage } from '../storage';
 
 const router = Router();
 
