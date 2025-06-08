@@ -743,7 +743,7 @@ export class MemStorage implements IStorage {
 
   // Class Enrollment methods
   async createEnrollment(enrollment: any): Promise<any> {
-    // For now, just save to a simple array in memory
+    // Save to memory array
     if (!this.classEnrollments) {
       this.classEnrollments = [];
     }
@@ -751,6 +751,16 @@ export class MemStorage implements IStorage {
     console.log(`📝 ENROLLMENT STORED: Child ${enrollment.childId} enrolled in class ${enrollment.classId}`);
     console.log(`📝 Total enrollments in memory: ${this.classEnrollments.length}`);
     console.log(`📝 All enrollments:`, this.classEnrollments);
+    
+    // Save to file for persistence
+    try {
+      console.log(`💾 About to save enrollments to file...`);
+      await this.saveEnrollmentsToFile();
+      console.log(`💾 Save operation completed`);
+    } catch (error) {
+      console.error(`❌ Error in createEnrollment save operation:`, error);
+    }
+    
     return enrollment;
   }
 
@@ -1312,22 +1322,32 @@ export class MemStorage implements IStorage {
     }
   }
 
-  private async saveEnrollmentsToFile() {
+  private saveEnrollmentsToFile() {
     try {
-      const fs = await import('fs');
-      const path = await import('path');
+      const fs = require('fs');
+      const path = require('path');
       const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
+      
+      console.log(`💾 Attempting to save ${this.classEnrollments.length} enrollments to file: ${enrollmentsFilePath}`);
+      console.log(`💾 Enrollment data to save:`, JSON.stringify(this.classEnrollments, null, 2));
       
       // Ensure data directory exists
       const dataDir = path.dirname(enrollmentsFilePath);
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
+        console.log(`📁 Created data directory: ${dataDir}`);
       }
       
-      fs.writeFileSync(enrollmentsFilePath, JSON.stringify(this.classEnrollments, null, 2));
-      console.log(`💾 Saved ${this.classEnrollments.length} enrollments to enrollments.json`);
+      const enrollmentData = JSON.stringify(this.classEnrollments, null, 2);
+      fs.writeFileSync(enrollmentsFilePath, enrollmentData);
+      console.log(`✅ Successfully saved ${this.classEnrollments.length} enrollments to enrollments.json`);
+      
+      // Verify the file was written
+      const savedData = fs.readFileSync(enrollmentsFilePath, 'utf-8');
+      console.log(`🔍 Verification - File contents: ${savedData.substring(0, 100)}...`);
     } catch (error) {
       console.error('❌ Error saving enrollments to file:', error);
+      console.error('❌ Error details:', error.message);
     }
   }
 
