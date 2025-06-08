@@ -1320,12 +1320,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/programs/:id', isAuthenticated, requireAdmin, programsApi.deleteProgram);
 
   // Program Enrollments routes
-  app.get('/api/enrollments', jwtCheck, programEnrollmentsApi.getMyChildrenEnrollments);
+  app.get('/api/program-enrollments', jwtCheck, programEnrollmentsApi.getMyChildrenEnrollments);
   app.get('/api/programs/:programId/enrollments', isAuthenticated, requireEducator, programEnrollmentsApi.getProgramEnrollments);
-  app.get('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.getEnrollmentById);
-  app.post('/api/enrollments', isAuthenticated, programEnrollmentsApi.createEnrollment);
-  app.put('/api/enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
-  app.delete('/api/enrollments/:id', isAuthenticated, requireAdmin, programEnrollmentsApi.deleteEnrollment);
+  app.get('/api/program-enrollments/:id', isAuthenticated, programEnrollmentsApi.getEnrollmentById);
+  app.post('/api/program-enrollments', isAuthenticated, programEnrollmentsApi.createEnrollment);
+  app.put('/api/program-enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
+  app.delete('/api/program-enrollments/:id', isAuthenticated, requireAdmin, programEnrollmentsApi.deleteEnrollment);
 
   // AI Enrollment Assistant with NLP and Action Capabilities
   app.post('/api/ai/enrollment-assistant', isAuthenticated, async (req, res) => {

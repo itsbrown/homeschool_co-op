@@ -38,7 +38,7 @@ router.delete('/:enrollmentId', async (req: any, res) => {
     console.log(`❌ Unenrolling enrollment ID: ${enrollmentId}`);
 
     // Get the enrollment first to verify ownership
-    const allEnrollments = await storage.getEnrollmentsByChildId(0); // Get all enrollments
+    const allEnrollments = await storage.getAllEnrollments();
     const enrollmentToRemove = allEnrollments.find((e: any) => e.id === enrollmentId);
     
     if (!enrollmentToRemove) {
