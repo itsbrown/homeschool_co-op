@@ -72,6 +72,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   // Debug children data
   console.log("Children query state:", { children, childrenLoading, childrenError, isAuthenticated });
+  console.log("Children data details:", { childrenType: typeof children, childrenLength: Array.isArray(children) ? children.length : 'not array', childrenData: children });
 
 
 
