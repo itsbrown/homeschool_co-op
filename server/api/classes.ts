@@ -144,4 +144,69 @@ router.get('/categories/names', async (req, res) => {
   }
 });
 
+// Enroll a child in a class
+router.post('/:id/enroll', async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const { childId } = req.body;
+
+    if (isNaN(classId) || !childId) {
+      return res.status(400).json({ message: 'Invalid class ID or child ID' });
+    }
+
+    // Get the class to verify it exists
+    const classItem = await storage.getClassById(classId);
+    if (!classItem) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+
+    // Get the child to verify it exists
+    const child = await storage.getChildById(childId);
+    if (!child) {
+      return res.status(404).json({ message: 'Child not found' });
+    }
+
+    // Create enrollment record
+    const enrollment = {
+      id: Date.now(), // Simple ID generation
+      classId: classId,
+      childId: childId,
+      childName: `${child.firstName} ${child.lastName}`,
+      className: classItem.title,
+      enrollmentDate: new Date().toISOString(),
+      status: 'enrolled'
+    };
+
+    // Save enrollment to storage
+    await storage.createEnrollment(enrollment);
+
+    // Update child's classes array
+    const updatedClasses = child.classes || [];
+    if (!updatedClasses.some(c => c.id === classId)) {
+      updatedClasses.push({
+        id: classId,
+        title: classItem.title,
+        enrollmentDate: new Date().toISOString(),
+        status: 'enrolled'
+      });
+      
+      await storage.updateChild(childId, {
+        ...child,
+        classes: updatedClasses
+      });
+    }
+
+    console.log(`✅ Successfully enrolled ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
+    
+    res.json({ 
+      message: 'Enrollment successful',
+      enrollment: enrollment
+    });
+
+  } catch (error) {
+    console.error('Error enrolling child in class:', error);
+    res.status(500).json({ message: 'Failed to enroll child in class' });
+  }
+});
+
 export default router;

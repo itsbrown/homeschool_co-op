@@ -116,6 +116,9 @@ export interface IStorage {
   updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined>;
   deleteProgramEnrollment(id: number): Promise<void>;
   
+  // Class Enrollment methods
+  createEnrollment(enrollment: any): Promise<any>;
+  
   // Class methods
   getClassById(id: number): Promise<Class | undefined>;
   getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]>;
@@ -729,6 +732,16 @@ export class MemStorage implements IStorage {
 
   async deleteProgramEnrollment(id: number): Promise<void> {
     this.programEnrollmentsStore.delete(id);
+  }
+
+  // Class Enrollment methods
+  async createEnrollment(enrollment: any): Promise<any> {
+    // For now, just save to a simple array in memory
+    if (!this.classEnrollments) {
+      this.classEnrollments = [];
+    }
+    this.classEnrollments.push(enrollment);
+    return enrollment;
   }
   
   // Class methods
