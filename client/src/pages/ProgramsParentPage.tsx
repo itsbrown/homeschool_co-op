@@ -42,7 +42,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   });
 
   // Fetch children from authenticated parent endpoint
-  const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery({
+  const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<any[]>({
     queryKey: ["/api/parent/children"],
     enabled: isAuthenticated,
   });
@@ -390,15 +390,18 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                     <SelectValue placeholder="Choose a child" />
                   </SelectTrigger>
                   <SelectContent>
-                    {children && children.length > 0 ? (
-                      children.map((child: any) => (
-                        <SelectItem key={child.id} value={child.id.toString()}>
-                          {child.firstName} {child.lastName}
-                        </SelectItem>
-                      ))
+                    {Array.isArray(children) && children.length > 0 ? (
+                      children.map((child: any) => {
+                        console.log("Rendering child:", child);
+                        return (
+                          <SelectItem key={child.id} value={child.id.toString()}>
+                            {child.firstName} {child.lastName}
+                          </SelectItem>
+                        );
+                      })
                     ) : (
                       <SelectItem value="no-children" disabled>
-                        No children found
+                        No children found - Children count: {Array.isArray(children) ? children.length : 0}
                       </SelectItem>
                     )}
                   </SelectContent>
