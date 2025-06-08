@@ -422,41 +422,59 @@ ASSISTANT CAPABILITIES:
     // Process actions that require database operations
     let processedAction = action;
     
-    if (action && action.type === "register_child" && action.registrationData) {
+    console.log("🔍 Processing action:", JSON.stringify(action, null, 2));
+    
+    if (action && (action.type === "register_child" || action.firstName)) {
       try {
-        const regData = action.registrationData;
+        // Handle both new and old action formats
+        const regData = action.registrationData || action;
         
-        // Parse the child's name
-        const nameParts = regData.name.split(' ');
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.slice(1).join(' ') || '';
+        // Handle different data formats
+        let firstName, lastName, birthdate, grade;
         
-        // Calculate birthdate from age (approximate)
-        const currentYear = new Date().getFullYear();
-        const birthYear = currentYear - regData.age;
-        const approximateBirthdate = `${birthYear}-06-15`; // Use mid-year as default
+        if (regData.name) {
+          // New format with name string
+          const nameParts = regData.name.split(' ');
+          firstName = nameParts[0] || '';
+          lastName = nameParts.slice(1).join(' ') || '';
+          
+          // Calculate birthdate from age
+          const currentYear = new Date().getFullYear();
+          const birthYear = currentYear - regData.age;
+          birthdate = `${birthYear}-06-15`;
+          grade = regData.grade;
+        } else {
+          // Old format with separate fields
+          firstName = regData.firstName || '';
+          lastName = regData.lastName || '';
+          birthdate = regData.birthdate || '';
+          grade = regData.gradeLevel || '';
+        }
         
         // Format the child data for registration
         const childData = {
           firstName,
           lastName,
-          birthdate: approximateBirthdate,
-          gradeLevel: regData.grade,
+          birthdate,
+          gradeLevel: grade,
           parentId: req.auth.userId || req.auth.email, // Use available user identifier
           parentEmail: req.auth.email,
-          contactPhone: regData.phone,
-          homeAddress: regData.address,
-          emergencyContact1: regData.emergency1,
+          contactPhone: regData.phone || '',
+          homeAddress: regData.address || '',
+          emergencyContact1: regData.emergency1 || '',
           emergencyContact2: regData.emergency2 || '',
           medicalInfo: regData.medical || 'None',
           additionalCaregiver: regData.caregiver || 'None',
-          interests: [],
-          learningStyle: null,
-          specialNeeds: regData.medical !== 'None' ? regData.medical : null,
+          interests: regData.interests || [],
+          learningStyle: regData.learningStyle || null,
+          specialNeeds: (regData.specialNeeds && regData.specialNeeds !== '') ? regData.specialNeeds : null,
           school: 'American Seekers Academy',
           allergies: null,
           profileImage: null
         };
+        
+        // Debug: Log the child data being sent
+        console.log("🔍 Attempting to register child with data:", JSON.stringify(childData, null, 2));
         
         // Create the child in the database
         const newChild = await storage.createChild(childData);
