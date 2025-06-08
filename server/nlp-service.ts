@@ -1,10 +1,34 @@
 import { LanguageServiceClient } from '@google-cloud/language';
 
 // Initialize Google Cloud Natural Language client
-const language = new LanguageServiceClient({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
+let language: LanguageServiceClient | null = null;
+
+// Only initialize if credentials are properly configured
+try {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    // Check if credentials is a file path or JSON string
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('{')) {
+      // It's a JSON string
+      const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+      language = new LanguageServiceClient({
+        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        credentials,
+      });
+    } else {
+      // It's a file path
+      language = new LanguageServiceClient({
+        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      });
+    }
+    console.log('Google Cloud NLP initialized successfully');
+  } else {
+    console.log('Google Cloud NLP credentials not configured, using fallback analysis');
+  }
+} catch (error) {
+  console.warn('Failed to initialize Google Cloud NLP:', error instanceof Error ? error.message : String(error));
+  language = null;
+}
 
 export interface NLPAnalysis {
   intent: 'register_child' | 'find_programs' | 'schedule_inquiry' | 'cost_inquiry' | 'general_question';
@@ -21,6 +45,12 @@ export interface NLPAnalysis {
 export class NLPService {
   
   async analyzeUserInput(text: string): Promise<NLPAnalysis> {
+    // If Google Cloud NLP is not available, use fallback analysis
+    if (!language) {
+      console.log('Using fallback NLP analysis');
+      return this.fallbackAnalysis(text);
+    }
+
     try {
       const document = {
         content: text,
