@@ -1322,10 +1322,10 @@ export class MemStorage implements IStorage {
     }
   }
 
-  private saveEnrollmentsToFile() {
+  private async saveEnrollmentsToFile() {
     try {
-      const fs = require('fs');
-      const path = require('path');
+      const fs = await import('fs');
+      const path = await import('path');
       const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
       
       console.log(`💾 Attempting to save ${this.classEnrollments.length} enrollments to file: ${enrollmentsFilePath}`);

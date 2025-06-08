@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": 1749406557889,
+    "classId": 1,
+    "childId": 1,
+    "childName": "Adaluna Brown",
+    "className": "American History for Young Learners",
+    "enrollmentDate": "2025-06-08T18:15:57.889Z",
+    "status": "enrolled"
+  },
+  {
+    "id": 1749406568124,
+    "classId": 2,
+    "childId": 2,
+    "childName": "Hermione Brown",
+    "className": "Introduction to Coding for Kids",
+    "enrollmentDate": "2025-06-08T18:16:08.124Z",
+    "status": "enrolled"
+  }
+]
