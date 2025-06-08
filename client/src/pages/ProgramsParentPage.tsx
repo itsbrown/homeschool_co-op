@@ -44,8 +44,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Fetch children from authenticated parent endpoint
   const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery({
     queryKey: ["/api/parent/children"],
-    enabled: true,
+    enabled: isAuthenticated,
   });
+
+  // Debug children data
+  console.log("Children query state:", { children, childrenLoading, childrenError, isAuthenticated });
   
 
 
@@ -377,25 +380,40 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           <div className="space-y-4">
             <div>
               <Label htmlFor="child-select">Select Child</Label>
-              <Select value={selectedChildId} onValueChange={setSelectedChildId}>
-                <SelectTrigger id="child-select">
-                  <SelectValue placeholder="Choose a child" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.isArray(children) && children.map((child: any) => (
-                    <SelectItem key={child.id} value={child.id.toString()}>
-                      {child.firstName} {child.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {childrenLoading ? (
+                <div className="text-sm text-muted-foreground">Loading children...</div>
+              ) : childrenError ? (
+                <div className="text-sm text-destructive">Error loading children</div>
+              ) : (
+                <Select value={selectedChildId} onValueChange={setSelectedChildId}>
+                  <SelectTrigger id="child-select">
+                    <SelectValue placeholder="Choose a child" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {children && children.length > 0 ? (
+                      children.map((child: any) => (
+                        <SelectItem key={child.id} value={child.id.toString()}>
+                          {child.firstName} {child.lastName}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-children" disabled>
+                        No children found
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => setEnrollmentDialog({ open: false })}
+              onClick={() => {
+                setEnrollmentDialog({ open: false });
+                setSelectedChildId("");
+              }}
             >
               Cancel
             </Button>
@@ -408,7 +426,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                   });
                 }
               }}
-              disabled={!selectedChildId || enrollmentMutation.isPending}
+              disabled={!selectedChildId || enrollmentMutation.isPending || childrenLoading}
             >
               {enrollmentMutation.isPending ? "Enrolling..." : "Enroll"}
             </Button>
