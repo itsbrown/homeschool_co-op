@@ -96,6 +96,8 @@ app.use((err: any, req: any, res: any, next: any) => {
 
 import marketingLinksRouter from './api/marketing-links';
 import paymentHistoryRouter from './api/payment-history';
+import parentRouter from './api/parent';
 
 app.use('/api/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
+app.use('/api/parent', parentRouter);

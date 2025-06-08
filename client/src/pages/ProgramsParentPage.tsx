@@ -26,7 +26,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; classId?: number; classTitle?: string }>({ open: false });
   const [selectedChildId, setSelectedChildId] = useState<string>("");
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
@@ -41,15 +41,38 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     enabled: true,
   });
 
-  // Fetch children from authenticated parent endpoint
-  const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<any[]>({
+  // Fetch children for enrollment
+  const { 
+    data: children, 
+    isLoading: childrenLoading, 
+    error: childrenError 
+  } = useQuery({
     queryKey: ["/api/parent/children"],
     enabled: isAuthenticated,
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/parent/children', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch children: ${response.statusText}`);
+      }
+
+      return response.json();
+    },
   });
 
   // Debug children data
   console.log("Children query state:", { children, childrenLoading, childrenError, isAuthenticated });
-  
+
 
 
   // Enrollment mutation
@@ -146,7 +169,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Check if there are any summer camp classes
   const summerCamps = classesData.classes.filter(c => c.category === "summer-camp");
   const classesList = classesData.classes.filter(c => c.category === "academic" || c.category === "membership");
-  
+
   // Debug logging for filtered lists
   console.log('All classes:', classesData.classes);
   console.log('Filtered classesList:', classesList);
@@ -376,7 +399,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               Select which child you would like to enroll in "{enrollmentDialog.classTitle}".
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="child-select">Select Child</Label>
@@ -412,7 +435,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               )}
             </div>
           </div>
-          
+
           <DialogFooter>
             <Button 
               variant="outline" 
