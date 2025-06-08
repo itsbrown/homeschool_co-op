@@ -380,10 +380,13 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           <div className="space-y-4">
             <div>
               <Label htmlFor="child-select">Select Child</Label>
+              <div className="text-xs text-muted-foreground mb-2">
+                Debug: Children loaded: {Array.isArray(children) ? children.length : 0} | Auth: {isAuthenticated ? 'Yes' : 'No'} | Loading: {childrenLoading ? 'Yes' : 'No'}
+              </div>
               {childrenLoading ? (
                 <div className="text-sm text-muted-foreground">Loading children...</div>
               ) : childrenError ? (
-                <div className="text-sm text-destructive">Error loading children</div>
+                <div className="text-sm text-destructive">Error loading children: {JSON.stringify(childrenError)}</div>
               ) : (
                 <Select value={selectedChildId} onValueChange={setSelectedChildId}>
                   <SelectTrigger id="child-select">
@@ -401,7 +404,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       })
                     ) : (
                       <SelectItem value="no-children" disabled>
-                        No children found - Children count: {Array.isArray(children) ? children.length : 0}
+                        No children found - Count: {Array.isArray(children) ? children.length : 'Not array'} | Data type: {typeof children}
                       </SelectItem>
                     )}
                   </SelectContent>
