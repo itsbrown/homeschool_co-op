@@ -101,8 +101,12 @@ export async function processEnrollmentMessage(
       }
     }
     
-    // Fetch available programs
-    const programs = await storage.getPublishedPrograms();
+    // Fetch available classes/programs - get all classes and filter for published ones
+    const allClasses = await storage.getClasses({ page: 1, limit: 100, status: "" });
+    const programs = allClasses.filter(c => c.isPublished || c.status === "published");
+    
+    console.log(`📚 AI Service - Found ${programs.length} available programs/classes`);
+    console.log(`📚 Programs data:`, programs.map(p => ({ id: p.id, title: p.title, status: p.status, isPublished: p.isPublished })));
     
     // Format context about available data
     const childrenContext = children.length > 0
@@ -123,12 +127,16 @@ export async function processEnrollmentMessage(
            Title: ${program.title}
            Description: ${program.description}
            Age Range: ${program.ageRange || 'All ages'}
+           Grade Level: ${program.gradeLevel || 'All grades'}
            Category: ${program.category || 'General'}
-           Instructor: ${program.instructorName}
+           Instructor: ${program.instructorName || 'TBD'}
            Schedule: ${program.schedule || 'Flexible'}
            Location: ${program.location || 'Online'}
            Capacity: ${program.capacity} students
-           Enrollment Status: ${program.isEnrollmentOpen ? 'Open' : 'Closed'}`
+           Price: $${(program.price / 100).toFixed(2)}
+           Start Date: ${program.startDate || 'TBD'}
+           End Date: ${program.endDate || 'TBD'}
+           Status: ${program.status || (program.isPublished ? 'Open' : 'Closed')}`
         ).join('\n\n')}`
       : 'No programs are currently available.';
     
