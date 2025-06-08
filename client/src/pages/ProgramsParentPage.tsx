@@ -401,40 +401,63 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               ) : childrenError ? (
                 <div className="text-sm text-destructive">Error loading children: {JSON.stringify(childrenError)}</div>
               ) : (
-                <Select 
-                  value={selectedChildId} 
-                  onValueChange={(value) => {
-                    console.log("🔄 Select value changed:", value);
-                    setSelectedChildId(value);
-                  }}
-                  onOpenChange={(open) => {
-                    console.log("🔄 Select dropdown opened/closed:", open);
-                  }}
-                >
-                  <SelectTrigger id="child-select">
-                    <SelectValue placeholder="Choose a child" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(() => {
-                      console.log("🔄 Rendering SelectContent with children:", children);
-                      return null;
-                    })()}
-                    {children && children.length > 0 ? (
-                      children.map((child: any) => {
-                        console.log("🔄 Rendering SelectItem for child:", child);
-                        return (
-                          <SelectItem key={child.id} value={child.id.toString()}>
-                            {child.firstName} {child.lastName}
-                          </SelectItem>
-                        );
-                      })
-                    ) : (
-                      <SelectItem value="" disabled>
-                        No children available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <Select 
+                    value={selectedChildId} 
+                    onValueChange={(value) => {
+                      console.log("🔄 Select value changed:", value);
+                      setSelectedChildId(value);
+                    }}
+                    onOpenChange={(open) => {
+                      console.log("🔄 Select dropdown opened/closed:", open);
+                    }}
+                  >
+                    <SelectTrigger 
+                      id="child-select"
+                      onClick={(e) => {
+                        console.log("🔄 SelectTrigger clicked");
+                        e.stopPropagation();
+                      }}
+                    >
+                      <SelectValue placeholder="Choose a child" />
+                    </SelectTrigger>
+                    <SelectContent 
+                      className="z-50"
+                      onPointerDownOutside={(e) => {
+                        console.log("🔄 Pointer down outside SelectContent");
+                        e.preventDefault();
+                      }}
+                      onEscapeKeyDown={(e) => {
+                        console.log("🔄 Escape key pressed in SelectContent");
+                      }}
+                    >
+                      {(() => {
+                        console.log("🔄 Rendering SelectContent with children:", children);
+                        return null;
+                      })()}
+                      {children && children.length > 0 ? (
+                        children.map((child: any) => {
+                          console.log("🔄 Rendering SelectItem for child:", child);
+                          return (
+                            <SelectItem 
+                              key={child.id} 
+                              value={child.id.toString()}
+                              onSelect={(value) => {
+                                console.log("🔄 SelectItem onSelect:", value);
+                              }}
+                            >
+                              {child.firstName} {child.lastName}
+                            </SelectItem>
+                          );
+                        })
+                      ) : (
+                        <SelectItem value="" disabled>
+                          No children available
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
             </div>
           </div>
