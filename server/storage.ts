@@ -11,7 +11,9 @@ import {
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
   classes, type Class, type InsertClass,
   activities, type Activity, type InsertActivity,
-  roleInvitations, type RoleInvitation, type InsertRoleInvitation
+  roleInvitations, type RoleInvitation, type InsertRoleInvitation,
+  marketingLinks, type MarketingLink, type InsertMarketingLink,
+  linkAnalytics, type LinkAnalytics, type InsertLinkAnalytics
 } from "@shared/schema";
 
 export interface IStorage {
@@ -127,6 +129,21 @@ export interface IStorage {
   createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation>;
   acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined>;
   getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]>;
+  
+  // Marketing Link methods
+  getMarketingLinkById(id: number): Promise<MarketingLink | undefined>;
+  getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined>;
+  getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]>;
+  createMarketingLink(link: InsertMarketingLink): Promise<MarketingLink>;
+  updateMarketingLink(id: number, link: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined>;
+  deleteMarketingLink(id: number): Promise<void>;
+  incrementLinkClick(campaignId: string): Promise<void>;
+  incrementLinkConversion(campaignId: string): Promise<void>;
+  
+  // Link Analytics methods
+  createLinkAnalytics(analytics: InsertLinkAnalytics): Promise<LinkAnalytics>;
+  getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]>;
+  getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]>;
 }
 
 export class MemStorage implements IStorage {

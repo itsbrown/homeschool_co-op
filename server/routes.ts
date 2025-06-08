@@ -24,6 +24,7 @@ import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
 import { processEnrollmentMessage } from "./api/enrollment-assistant";
 import migrationRouter from "./routes/migration";
+import marketingLinksRouter from "./api/marketing-links";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';

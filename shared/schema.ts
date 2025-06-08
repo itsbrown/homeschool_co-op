@@ -623,3 +623,80 @@ export type Class = typeof classes.$inferSelect;
 export const classesRelations = relations(classes, ({ one }) => ({
   instructor: one(users, { fields: [classes.instructorId], references: [users.id] }),
 }));
+
+// Marketing Links table for school admin marketing campaigns
+export const marketingLinks = pgTable("marketing_links", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  campaignId: text("campaign_id").notNull().unique(), // Unique identifier for the campaign
+  campaignName: text("campaign_name").notNull(), // User-friendly campaign name
+  utmSource: text("utm_source").notNull(), // e.g., "facebook", "google", "email"
+  utmMedium: text("utm_medium").notNull(), // e.g., "cpc", "social", "email"
+  utmCampaign: text("utm_campaign").notNull(), // e.g., "spring_enrollment_2025"
+  utmContent: text("utm_content"), // Optional UTM content parameter
+  utmTerm: text("utm_term"), // Optional UTM term parameter
+  targetAudience: text("target_audience"), // e.g., "parents_k12", "homeschool_families"
+  callToAction: text("call_to_action").default("Register Now").notNull(),
+  landingPageType: text("landing_page_type", { enum: ["school_overview", "class_specific", "custom"] }).default("school_overview").notNull(),
+  targetClassId: integer("target_class_id").references(() => classes.id), // Optional specific class to highlight
+  customMessage: text("custom_message"), // Custom message for landing page
+  qrCodeUrl: text("qr_code_url"), // Generated QR code image URL
+  clickCount: integer("click_count").default(0).notNull(),
+  conversionCount: integer("conversion_count").default(0).notNull(), // Enrollments from this link
+  lastClicked: timestamp("last_clicked"),
+  isActive: boolean("is_active").default(true).notNull(),
+  expirationDate: timestamp("expiration_date"), // Optional campaign expiration
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingLinkSchema = createInsertSchema(marketingLinks)
+  .omit({ id: true, createdAt: true, updatedAt: true, clickCount: true, conversionCount: true, lastClicked: true, qrCodeUrl: true })
+  .extend({
+    utmContent: z.string().nullable().default(null),
+    utmTerm: z.string().nullable().default(null),
+    targetAudience: z.string().nullable().default(null),
+    targetClassId: z.number().nullable().default(null),
+    customMessage: z.string().nullable().default(null),
+    expirationDate: z.date().nullable().default(null),
+  });
+export type InsertMarketingLink = z.infer<typeof insertMarketingLinkSchema>;
+export type MarketingLink = typeof marketingLinks.$inferSelect;
+
+// Link Analytics table for detailed tracking
+export const linkAnalytics = pgTable("link_analytics", {
+  id: serial("id").primaryKey(),
+  linkId: integer("link_id").notNull().references(() => marketingLinks.id, { onDelete: "cascade" }),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  userAgent: text("user_agent"),
+  referrer: text("referrer"),
+  ipAddress: text("ip_address"),
+  actionType: text("action_type", { enum: ["click", "page_view", "enrollment_started", "enrollment_completed"] }).notNull(),
+  sessionId: text("session_id"), // Track user session across actions
+  conversionValue: integer("conversion_value"), // Value in cents if applicable
+  metadata: jsonb("metadata").default({}).notNull(), // Additional tracking data
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertLinkAnalyticsSchema = createInsertSchema(linkAnalytics)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    userAgent: z.string().nullable().default(null),
+    referrer: z.string().nullable().default(null),
+    ipAddress: z.string().nullable().default(null),
+    sessionId: z.string().nullable().default(null),
+    conversionValue: z.number().nullable().default(null),
+  });
+export type InsertLinkAnalytics = z.infer<typeof insertLinkAnalyticsSchema>;
+export type LinkAnalytics = typeof linkAnalytics.$inferSelect;
+
+// Define marketing links relations
+export const marketingLinksRelations = relations(marketingLinks, ({ one, many }) => ({
+  school: one(schools, { fields: [marketingLinks.schoolId], references: [schools.id] }),
+  targetClass: one(classes, { fields: [marketingLinks.targetClassId], references: [classes.id] }),
+  analytics: many(linkAnalytics),
+}));
+
+export const linkAnalyticsRelations = relations(linkAnalytics, ({ one }) => ({
+  link: one(marketingLinks, { fields: [linkAnalytics.linkId], references: [marketingLinks.id] }),
+}));
