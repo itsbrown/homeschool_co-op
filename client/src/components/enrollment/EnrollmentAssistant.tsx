@@ -248,32 +248,90 @@ export default function EnrollmentAssistant() {
     );
   }
   
+  // Show conversation view if there are messages
+  if (messages.length > 0) {
+    return (
+      <div className="w-full max-w-4xl mx-auto p-4 space-y-6">
+        {/* Conversation Header */}
+        <div className="text-center border-b pb-4">
+          <h2 className="text-2xl font-semibold">AI Enrollment Assistant</h2>
+          <p className="text-muted-foreground">Get personalized help with finding and enrolling in programs</p>
+        </div>
+        
+        {/* Messages */}
+        <div className="space-y-4 max-h-96 overflow-y-auto">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex gap-3 ${
+                message.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              {message.role === "assistant" && (
+                <Avatar className="w-8 h-8 shrink-0">
+                  <AvatarFallback className="bg-primary/10">
+                    <Bot className="w-4 h-4" />
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              
+              <div
+                className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                  message.role === "user"
+                    ? "bg-primary text-primary-foreground ml-auto"
+                    : "bg-muted"
+                }`}
+              >
+                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <span className="text-xs opacity-70 block mt-1">
+                  {message.timestamp.toLocaleTimeString()}
+                </span>
+              </div>
+              
+              {message.role === "user" && (
+                <Avatar className="w-8 h-8 shrink-0">
+                  <AvatarFallback className="bg-primary/10">
+                    <User className="w-4 h-4" />
+                  </AvatarFallback>
+                </Avatar>
+              )}
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+        
+        {/* Input Area */}
+        <div className="border-t pt-4">
+          <div className="relative">
+            <Input
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your message..."
+              className="pr-12 py-3"
+              disabled={isLoading}
+            />
+            <Button 
+              onClick={handleSendMessage} 
+              size="icon" 
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8" 
+              disabled={isLoading || !inputMessage.trim()}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <SendIcon className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show initial interface when no messages
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[70vh] p-4 bg-background/95">
-      {/* Messages Area - Only show when conversation has started and no messages have been exchanged yet */}
-      {messages.length === 1 && (
-        <div className="w-full max-w-2xl mx-auto text-center mb-8">
-          <div className="text-2xl font-medium mb-2">{messages[0].content.split('\n')[0]}</div>
-          {messages[0].content.split('\n').length > 1 && (
-            <div className="text-xl text-muted-foreground">
-              {messages[0].content.split('\n').slice(1).join('\n')}
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* If conversation has more messages, show just the latest response at the top */}
-      {messages.length > 1 && messages[messages.length - 1]?.content && (
-        <div className="w-full max-w-2xl mx-auto text-center mb-8">
-          <div className="text-2xl font-medium mb-2">{messages[messages.length - 1].content.split('\n')[0]}</div>
-          {messages[messages.length - 1].content.split('\n').length > 1 && (
-            <div className="text-xl text-muted-foreground">
-              {messages[messages.length - 1].content.split('\n').slice(1).join('\n')}
-            </div>
-          )}
-        </div>
-      )}
-      
       {/* Input Area */}
       <div className="w-full max-w-2xl mx-auto">
         <div className="relative">
@@ -319,25 +377,23 @@ export default function EnrollmentAssistant() {
         </div>
       </div>
       
-      {/* Sample Prompts - Show only at the beginning */}
-      {messages.length <= 1 && (
-        <div className="w-full max-w-2xl mx-auto mt-8 flex flex-wrap justify-center gap-2">
-          {samplePrompts.map((prompt, index) => (
-            <Button 
-              key={index}
-              variant="outline" 
-              size="sm"
-              className="text-xs bg-background hover:bg-muted/30 border border-muted-foreground/20"
-              onClick={() => {
-                setInputMessage(prompt);
-                setTimeout(() => handleSendMessage(), 100);
-              }}
-            >
-              {prompt}
-            </Button>
-          ))}
-        </div>
-      )}
+      {/* Sample Prompts */}
+      <div className="w-full max-w-2xl mx-auto mt-8 flex flex-wrap justify-center gap-2">
+        {samplePrompts.map((prompt, index) => (
+          <Button 
+            key={index}
+            variant="outline" 
+            size="sm"
+            className="text-xs bg-background hover:bg-muted/30 border border-muted-foreground/20"
+            onClick={() => {
+              setInputMessage(prompt);
+              setTimeout(() => handleSendMessage(), 100);
+            }}
+          >
+            {prompt}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }
