@@ -331,15 +331,15 @@ export default function EnrollmentAssistant() {
   // Show conversation view if there are messages
   if (messages.length > 0) {
     return (
-      <div className="w-full max-w-4xl mx-auto p-4 space-y-6">
+      <div className="flex flex-col h-full">
         {/* Conversation Header */}
-        <div className="text-center border-b pb-4">
-          <h2 className="text-2xl font-semibold">AI Enrollment Assistant</h2>
-          <p className="text-muted-foreground">Get personalized help with finding and enrolling in programs</p>
+        <div className="text-center border-b pb-4 px-4 pt-4 bg-gray-50">
+          <h2 className="text-xl font-semibold">AI Enrollment Assistant</h2>
+          <p className="text-muted-foreground text-sm">Get personalized help with finding and enrolling in programs</p>
         </div>
         
         {/* Messages */}
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto scroll-smooth pb-4" id="messages-container">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4" id="messages-container">
           {messages.map((message) => (
             <div
               key={message.id}
@@ -403,7 +403,7 @@ export default function EnrollmentAssistant() {
         </div>
         
         {/* Input Area */}
-        <div className="border-t pt-4">
+        <div className="border-t bg-white p-4 flex-shrink-0">
           <div className="relative">
             <Input
               value={inputMessage}
@@ -433,7 +433,15 @@ export default function EnrollmentAssistant() {
 
   // Show initial interface when no messages
   return (
-    <div className="w-full flex flex-col items-center justify-center min-h-[70vh] p-4 bg-background/95">
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="text-center border-b pb-4 px-4 pt-4 bg-gray-50">
+        <h2 className="text-xl font-semibold">AI Enrollment Assistant</h2>
+        <p className="text-muted-foreground text-sm">Get personalized help with finding and enrolling in programs</p>
+      </div>
+      
+      {/* Welcome Content */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
       {/* Input Area */}
       <div className="w-full max-w-2xl mx-auto">
         <div className="relative">
@@ -479,22 +487,23 @@ export default function EnrollmentAssistant() {
         </div>
       </div>
       
-      {/* Sample Prompts */}
-      <div className="w-full max-w-2xl mx-auto mt-8 flex flex-wrap justify-center gap-2">
-        {samplePrompts.map((prompt, index) => (
-          <Button 
-            key={index}
-            variant="outline" 
-            size="sm"
-            className="text-xs bg-background hover:bg-muted/30 border border-muted-foreground/20"
-            onClick={() => {
-              setInputMessage(prompt);
-              setTimeout(() => handleSendMessage(), 100);
-            }}
-          >
-            {prompt}
-          </Button>
-        ))}
+        {/* Sample Prompts */}
+        <div className="w-full max-w-2xl mx-auto mt-8 flex flex-wrap justify-center gap-2">
+          {samplePrompts.map((prompt, index) => (
+            <Button 
+              key={index}
+              variant="outline" 
+              size="sm"
+              className="text-xs bg-background hover:bg-muted/30 border border-muted-foreground/20"
+              onClick={() => {
+                setInputMessage(prompt);
+                setTimeout(() => handleSendMessage(), 100);
+              }}
+            >
+              {prompt}
+            </Button>
+          ))}
+        </div>
       </div>
     </div>
   );
