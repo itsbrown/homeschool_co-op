@@ -774,6 +774,36 @@ export class MemStorage implements IStorage {
     console.log(`📝 Enrollments found:`, enrollments);
     return enrollments;
   }
+
+  async removeEnrollment(enrollmentId: number): Promise<boolean> {
+    if (!this.classEnrollments) {
+      console.log(`❌ No classEnrollments array exists for enrollment ${enrollmentId}`);
+      return false;
+    }
+    
+    const initialLength = this.classEnrollments.length;
+    this.classEnrollments = this.classEnrollments.filter(enrollment => enrollment.id !== enrollmentId);
+    const finalLength = this.classEnrollments.length;
+    
+    if (initialLength === finalLength) {
+      console.log(`❌ Enrollment ${enrollmentId} not found`);
+      return false;
+    }
+    
+    console.log(`❌ ENROLLMENT REMOVED: ID ${enrollmentId}`);
+    console.log(`📝 Total enrollments remaining: ${this.classEnrollments.length}`);
+    
+    // Save to file for persistence
+    try {
+      console.log(`💾 About to save enrollments to file after removal...`);
+      await this.saveEnrollmentsToFile();
+      console.log(`💾 Save operation completed after removal`);
+    } catch (error) {
+      console.error(`❌ Error in removeEnrollment save operation:`, error);
+    }
+    
+    return true;
+  }
   
   // Class methods
   async getClassById(id: number): Promise<Class | undefined> {

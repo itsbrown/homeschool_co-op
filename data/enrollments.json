@@ -16,5 +16,14 @@
     "className": "Macaroni",
     "enrollmentDate": "2025-06-08T18:26:07.025Z",
     "status": "enrolled"
+  },
+  {
+    "id": 1749407259489,
+    "classId": 2,
+    "childId": 2,
+    "childName": "Hermione Brown",
+    "className": "Seekers Full Day 9AM - 2PM",
+    "enrollmentDate": "2025-06-08T18:27:39.489Z",
+    "status": "enrolled"
   }
 ]

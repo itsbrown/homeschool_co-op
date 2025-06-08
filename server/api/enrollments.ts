@@ -26,4 +26,31 @@ router.get('/child/:childId', async (req, res) => {
   }
 });
 
+// Unenroll a child from a class
+router.delete('/:enrollmentId', async (req, res) => {
+  try {
+    const enrollmentId = parseInt(req.params.enrollmentId);
+    
+    if (isNaN(enrollmentId)) {
+      return res.status(400).json({ message: 'Invalid enrollment ID' });
+    }
+
+    console.log(`❌ Unenrolling enrollment ID: ${enrollmentId}`);
+    
+    // Remove the enrollment
+    const success = await storage.removeEnrollment(enrollmentId);
+    
+    if (success) {
+      console.log(`✅ Successfully unenrolled enrollment ID: ${enrollmentId}`);
+      res.json({ message: 'Unenrollment successful' });
+    } else {
+      console.log(`❌ Failed to find enrollment ID: ${enrollmentId}`);
+      res.status(404).json({ message: 'Enrollment not found' });
+    }
+  } catch (error) {
+    console.error('Error removing enrollment:', error);
+    res.status(500).json({ message: 'Failed to unenroll' });
+  }
+});
+
 export default router;
