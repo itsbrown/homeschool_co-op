@@ -1,7 +1,6 @@
 import express from "express";
 import { storage } from "../storage";
 import { insertMarketingLinkSchema, insertLinkAnalyticsSchema } from "@shared/schema";
-import { jwtCheck } from "../middleware/auth0-auth";
 import crypto from "crypto";
 
 const router = express.Router();
@@ -11,34 +10,23 @@ function generateCampaignId(): string {
   return crypto.randomBytes(8).toString('hex');
 }
 
-// Generate QR code URL (placeholder for now - would integrate with QR service)
+// Generate QR code URL (using a free QR code service)
 function generateQRCodeUrl(campaignId: string, schoolId: number): string {
   const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
-  const linkUrl = `https://${baseUrl}/school/${schoolId}/enroll/${campaignId}`;
-  // In production, this would call a QR code generation service
-  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(linkUrl)}`;
+  const enrollUrl = `https://${baseUrl}/school/${schoolId}/enroll/${campaignId}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(enrollUrl)}`;
 }
 
-// Create new marketing link
-router.post("/", validateAuth, async (req, res) => {
+// Create marketing link
+router.post("/", async (req, res) => {
   try {
-    const userPayload = req.auth as any;
-    
-    // Verify user is school admin
-    if (userPayload.role !== 'schoolAdmin') {
-      return res.status(403).json({ error: "Only school administrators can create marketing links" });
-    }
+    // For demo purposes, use school ID = 1
+    const schoolId = 1;
 
-    // Get user's school ID
-    const user = await storage.getUserByEmail(userPayload.email);
-    if (!user || !user.schoolId) {
-      return res.status(404).json({ error: "School not found for user" });
-    }
-
-    // Validate request body
+    // Validate request data
     const validatedData = insertMarketingLinkSchema.parse({
       ...req.body,
-      schoolId: user.schoolId,
+      schoolId,
       campaignId: generateCampaignId(),
     });
 
@@ -58,7 +46,7 @@ router.post("/", validateAuth, async (req, res) => {
     res.json({
       ...updatedLink,
       trackingUrl,
-      shortUrl: `https://${baseUrl}/ml/${marketingLink.campaignId}`, // Short URL for social media
+      shortUrl: `https://${baseUrl}/l/${marketingLink.campaignId}`
     });
   } catch (error) {
     console.error("Error creating marketing link:", error);
@@ -66,124 +54,74 @@ router.post("/", validateAuth, async (req, res) => {
   }
 });
 
-// Get all marketing links for school
-router.get("/", validateAuth, async (req, res) => {
+// Get marketing links for a school
+router.get("/", async (req, res) => {
   try {
-    const userPayload = req.auth as any;
-    
-    // Verify user is school admin
-    if (userPayload.role !== 'schoolAdmin') {
-      return res.status(403).json({ error: "Only school administrators can view marketing links" });
-    }
-
-    // Get user's school ID
-    const user = await storage.getUserByEmail(userPayload.email);
-    if (!user || !user.schoolId) {
-      return res.status(404).json({ error: "School not found for user" });
-    }
-
-    const marketingLinks = await storage.getMarketingLinksBySchoolId(user.schoolId);
+    // For demo purposes, use school ID = 1
+    const schoolId = 1;
+    const links = await storage.getMarketingLinksBySchoolId(schoolId);
     
     // Add tracking URLs to each link
     const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
-    const linksWithUrls = marketingLinks.map(link => ({
+    const enrichedLinks = links.map(link => ({
       ...link,
       trackingUrl: `https://${baseUrl}/school/${link.schoolId}/enroll/${link.campaignId}?utm_source=${link.utmSource}&utm_medium=${link.utmMedium}&utm_campaign=${link.utmCampaign}`,
-      shortUrl: `https://${baseUrl}/ml/${link.campaignId}`,
+      shortUrl: `https://${baseUrl}/l/${link.campaignId}`
     }));
 
-    res.json({ links: linksWithUrls });
+    res.json(enrichedLinks);
   } catch (error) {
     console.error("Error fetching marketing links:", error);
     res.status(500).json({ error: "Failed to fetch marketing links" });
   }
 });
 
-// Get analytics for specific marketing link
-router.get("/:linkId/analytics", validateAuth, async (req, res) => {
+// Get marketing link by ID
+router.get("/:id", async (req, res) => {
   try {
-    const userPayload = req.auth as any;
-    const linkId = parseInt(req.params.linkId);
+    const id = parseInt(req.params.id);
+    const link = await storage.getMarketingLinkById(id);
     
-    // Verify user is school admin
-    if (userPayload.role !== 'schoolAdmin') {
-      return res.status(403).json({ error: "Only school administrators can view analytics" });
-    }
-
-    // Get user's school ID
-    const user = await storage.getUserByEmail(userPayload.email);
-    if (!user || !user.schoolId) {
-      return res.status(404).json({ error: "School not found for user" });
-    }
-
-    // Verify link belongs to user's school
-    const marketingLink = await storage.getMarketingLinkById(linkId);
-    if (!marketingLink || marketingLink.schoolId !== user.schoolId) {
+    if (!link) {
       return res.status(404).json({ error: "Marketing link not found" });
     }
 
-    // Get date range from query params
-    const { startDate, endDate } = req.query;
-    const start = startDate ? new Date(startDate as string) : undefined;
-    const end = endDate ? new Date(endDate as string) : undefined;
-
-    const analytics = await storage.getLinkAnalyticsByLinkId(linkId, start, end);
-
-    // Aggregate analytics data
-    const aggregated = {
-      totalClicks: analytics.filter(a => a.actionType === 'click').length,
-      totalPageViews: analytics.filter(a => a.actionType === 'page_view').length,
-      enrollmentStarted: analytics.filter(a => a.actionType === 'enrollment_started').length,
-      enrollmentCompleted: analytics.filter(a => a.actionType === 'enrollment_completed').length,
-      conversionRate: 0,
-      recentActivity: analytics.slice(-10).reverse(), // Last 10 activities
-      dailyStats: aggregateDailyStats(analytics),
-    };
-
-    if (aggregated.totalClicks > 0) {
-      aggregated.conversionRate = (aggregated.enrollmentCompleted / aggregated.totalClicks) * 100;
-    }
+    // Add tracking URL
+    const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
+    const trackingUrl = `https://${baseUrl}/school/${link.schoolId}/enroll/${link.campaignId}?utm_source=${link.utmSource}&utm_medium=${link.utmMedium}&utm_campaign=${link.utmCampaign}`;
 
     res.json({
-      link: marketingLink,
-      analytics: aggregated,
+      ...link,
+      trackingUrl,
+      shortUrl: `https://${baseUrl}/l/${link.campaignId}`
     });
   } catch (error) {
-    console.error("Error fetching marketing link analytics:", error);
-    res.status(500).json({ error: "Failed to fetch analytics" });
+    console.error("Error fetching marketing link:", error);
+    res.status(500).json({ error: "Failed to fetch marketing link" });
   }
 });
 
 // Update marketing link
-router.put("/:linkId", validateAuth, async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
-    const userPayload = req.auth as any;
-    const linkId = parseInt(req.params.linkId);
+    const id = parseInt(req.params.id);
+    const validatedData = insertMarketingLinkSchema.partial().parse(req.body);
     
-    // Verify user is school admin
-    if (userPayload.role !== 'schoolAdmin') {
-      return res.status(403).json({ error: "Only school administrators can update marketing links" });
-    }
-
-    // Get user's school ID
-    const user = await storage.getUserByEmail(userPayload.email);
-    if (!user || !user.schoolId) {
-      return res.status(404).json({ error: "School not found for user" });
-    }
-
-    // Verify link belongs to user's school
-    const existingLink = await storage.getMarketingLinkById(linkId);
-    if (!existingLink || existingLink.schoolId !== user.schoolId) {
-      return res.status(404).json({ error: "Marketing link not found" });
-    }
-
-    // Update marketing link
-    const updatedLink = await storage.updateMarketingLink(linkId, req.body);
+    const updatedLink = await storage.updateMarketingLink(id, validatedData);
+    
     if (!updatedLink) {
       return res.status(404).json({ error: "Marketing link not found" });
     }
 
-    res.json(updatedLink);
+    // Add tracking URL
+    const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
+    const trackingUrl = `https://${baseUrl}/school/${updatedLink.schoolId}/enroll/${updatedLink.campaignId}?utm_source=${updatedLink.utmSource}&utm_medium=${updatedLink.utmMedium}&utm_campaign=${updatedLink.utmCampaign}`;
+
+    res.json({
+      ...updatedLink,
+      trackingUrl,
+      shortUrl: `https://${baseUrl}/l/${updatedLink.campaignId}`
+    });
   } catch (error) {
     console.error("Error updating marketing link:", error);
     res.status(500).json({ error: "Failed to update marketing link" });
@@ -191,29 +129,15 @@ router.put("/:linkId", validateAuth, async (req, res) => {
 });
 
 // Delete marketing link
-router.delete("/:linkId", validateAuth, async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    const userPayload = req.auth as any;
-    const linkId = parseInt(req.params.linkId);
+    const id = parseInt(req.params.id);
+    const deleted = await storage.deleteMarketingLink(id);
     
-    // Verify user is school admin
-    if (userPayload.role !== 'schoolAdmin') {
-      return res.status(403).json({ error: "Only school administrators can delete marketing links" });
-    }
-
-    // Get user's school ID
-    const user = await storage.getUserByEmail(userPayload.email);
-    if (!user || !user.schoolId) {
-      return res.status(404).json({ error: "School not found for user" });
-    }
-
-    // Verify link belongs to user's school
-    const existingLink = await storage.getMarketingLinkById(linkId);
-    if (!existingLink || existingLink.schoolId !== user.schoolId) {
+    if (!deleted) {
       return res.status(404).json({ error: "Marketing link not found" });
     }
 
-    await storage.deleteMarketingLink(linkId);
     res.json({ success: true });
   } catch (error) {
     console.error("Error deleting marketing link:", error);
@@ -221,87 +145,58 @@ router.delete("/:linkId", validateAuth, async (req, res) => {
   }
 });
 
-// Track link interaction (public endpoint)
-router.put("/track/:campaignId", async (req, res) => {
+// Track link click (public endpoint)
+router.get("/track/:campaignId", async (req, res) => {
   try {
     const { campaignId } = req.params;
-    const { actionType, sessionId, metadata } = req.body;
+    const link = await storage.getMarketingLinkByCampaignId(campaignId);
     
-    // Get marketing link
-    const marketingLink = await storage.getMarketingLinkByCampaignId(campaignId);
-    if (!marketingLink || !marketingLink.isActive) {
-      return res.status(404).json({ error: "Marketing link not found or inactive" });
+    if (!link) {
+      return res.status(404).json({ error: "Campaign not found" });
     }
 
-    // Check expiration
-    if (marketingLink.expirationDate && new Date() > marketingLink.expirationDate) {
-      return res.status(410).json({ error: "Marketing link has expired" });
-    }
-
-    // Extract request metadata
-    const userAgent = req.headers['user-agent'];
-    const referrer = req.headers.referer;
-    const ipAddress = req.ip || req.connection.remoteAddress;
-
-    // Create analytics record
+    // Record analytics
     await storage.createLinkAnalytics({
-      linkId: marketingLink.id,
-      actionType,
-      userAgent,
-      referrer,
-      ipAddress,
-      sessionId,
-      metadata,
+      linkId: link.id,
+      event: 'click',
+      ipAddress: req.ip || null,
+      userAgent: req.get('User-Agent') || null,
+      referrer: req.get('Referer') || null
     });
 
-    // Update click/conversion counters
-    if (actionType === 'click') {
-      await storage.incrementLinkClick(campaignId);
-    } else if (actionType === 'enrollment_completed') {
-      await storage.incrementLinkConversion(campaignId);
-    }
-
-    res.json({ success: true });
+    // Redirect to enrollment page
+    const enrollmentUrl = `/school/${link.schoolId}/enroll/${campaignId}?utm_source=${link.utmSource}&utm_medium=${link.utmMedium}&utm_campaign=${link.utmCampaign}`;
+    res.redirect(enrollmentUrl);
   } catch (error) {
-    console.error("Error tracking link interaction:", error);
-    res.status(500).json({ error: "Failed to track interaction" });
+    console.error("Error tracking link click:", error);
+    res.status(500).json({ error: "Failed to track link" });
   }
 });
 
-// Helper function to aggregate daily stats
-function aggregateDailyStats(analytics: any[]) {
-  const dailyStats: { [key: string]: any } = {};
-  
-  analytics.forEach(record => {
-    const date = record.timestamp.toISOString().split('T')[0];
+// Get analytics for a marketing link
+router.get("/:id/analytics", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const analytics = await storage.getLinkAnalytics(id);
     
-    if (!dailyStats[date]) {
-      dailyStats[date] = {
-        date,
-        clicks: 0,
-        pageViews: 0,
-        enrollmentStarted: 0,
-        enrollmentCompleted: 0,
-      };
-    }
-    
-    switch (record.actionType) {
-      case 'click':
-        dailyStats[date].clicks++;
-        break;
-      case 'page_view':
-        dailyStats[date].pageViews++;
-        break;
-      case 'enrollment_started':
-        dailyStats[date].enrollmentStarted++;
-        break;
-      case 'enrollment_completed':
-        dailyStats[date].enrollmentCompleted++;
-        break;
-    }
-  });
-  
-  return Object.values(dailyStats).sort((a: any, b: any) => a.date.localeCompare(b.date));
-}
+    // Calculate summary statistics
+    const totalClicks = analytics.filter(a => a.event === 'click').length;
+    const totalConversions = analytics.filter(a => a.event === 'conversion').length;
+    const conversionRate = totalClicks > 0 ? (totalConversions / totalClicks) * 100 : 0;
+
+    res.json({
+      totalClicks,
+      totalConversions,
+      conversionRate: Math.round(conversionRate * 100) / 100,
+      analytics: analytics.map(a => ({
+        ...a,
+        timestamp: a.timestamp.toISOString()
+      }))
+    });
+  } catch (error) {
+    console.error("Error fetching analytics:", error);
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
 
 export default router;
