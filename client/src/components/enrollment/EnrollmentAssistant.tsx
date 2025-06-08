@@ -114,7 +114,7 @@ export default function EnrollmentAssistant() {
       const assistantMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: data.message,
+        content: data.response || data.message || "I'm sorry, I couldn't generate a response.",
         timestamp: new Date()
       };
       
