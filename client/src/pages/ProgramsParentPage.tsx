@@ -48,7 +48,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     error: childrenError 
   } = useQuery({
     queryKey: ["/api/parent/children"],
-    enabled: isAuthenticated,
+    enabled: true, // Always enabled since API handles auth
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
       if (!token) {
