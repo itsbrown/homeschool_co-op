@@ -218,7 +218,7 @@ export class MemStorage implements IStorage {
     // Add sample events for testing the calendar
     this.initializeSampleEvents();
     this.initializeSampleKnowledgeBases();
-    this.initializeSampleClasses();
+    this.initializeSampleClasses().catch(console.error);
 
     this.createUser({
       username: "admin",
@@ -1207,7 +1207,56 @@ export class MemStorage implements IStorage {
     return updatedActivity;
   }
 
-  private initializeSampleClasses() {
+  private async initializeSampleClasses() {
+    // Load classes from the actual JSON file
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const classesFilePath = path.join(process.cwd(), 'data', 'classes.json');
+      
+      if (fs.existsSync(classesFilePath)) {
+        const classesData = JSON.parse(fs.readFileSync(classesFilePath, 'utf-8'));
+        console.log(`🏫 Loading ${classesData.length} classes from classes.json`);
+        
+        classesData.forEach((classData: any) => {
+          // Ensure the class has required fields and set defaults for missing ones
+          const normalizedClass = {
+            ...classData,
+            // Set required fields with defaults if missing
+            category: classData.category || 'general',
+            isPublished: classData.isPublished !== false,
+            status: classData.status || 'published',
+            instructorId: classData.instructorId || 1,
+            // Handle dates properly
+            startDate: classData.startDate ? new Date(classData.startDate) : new Date(),
+            endDate: classData.endDate ? new Date(classData.endDate) : new Date(),
+            createdAt: classData.createdAt ? new Date(classData.createdAt) : new Date(),
+            updatedAt: classData.updatedAt ? new Date(classData.updatedAt) : new Date()
+          };
+          
+          // Add to store with existing ID
+          this.classesStore.set(classData.id, normalizedClass as Class);
+          
+          // Update counter to be higher than max ID
+          if (classData.id >= this.classIdCounter) {
+            this.classIdCounter = classData.id + 1;
+          }
+        });
+        
+        console.log(`✅ Successfully loaded ${this.classesStore.size} classes into storage`);
+        console.log(`📊 Available class IDs: [${Array.from(this.classesStore.keys()).join(', ')}]`);
+      } else {
+        console.log('⚠️ classes.json not found, using fallback sample classes');
+        this.createFallbackClasses();
+      }
+    } catch (error) {
+      console.error('❌ Error loading classes from JSON:', error);
+      this.createFallbackClasses();
+    }
+  }
+
+  private createFallbackClasses() {
+    // Fallback sample classes only if JSON loading fails
     const sampleClasses = [
       {
         title: "Introduction to Mathematics",
@@ -1216,128 +1265,10 @@ export class MemStorage implements IStorage {
         description: "A comprehensive introduction to basic mathematical concepts for beginners.",
         price: 49.99,
         startDate: new Date("2025-07-01"),
-        endDate: new Date("2025-08-15"), 
-        numSessions: 8,
-        sessionDuration: 60,
-        maxCapacity: 20,
-        currentEnrollment: 15,
-        ageGroup: "6-8",
-        gradeLevel: "1-2",
-        difficulty: "beginner",
-        location: "Online",
-        meetingType: "virtual",
-        schedule: "Tuesdays and Thursdays, 3:00 PM - 4:00 PM",
-        prerequisites: "None",
-        materials: ["Workbook", "Calculator"],
-        objectives: ["Basic addition and subtraction", "Number recognition"],
+        endDate: new Date("2025-08-15"),
         instructorId: 1,
         isPublished: true,
-        status: "active",
-        enrollmentOpen: true
-      },
-      {
-        title: "Creative Writing Workshop",
-        category: "language-arts", 
-        categoryName: "Language Arts",
-        description: "Develop your creative writing skills through fun exercises and storytelling.",
-        price: 39.99,
-        startDate: new Date("2025-07-15"),
-        endDate: new Date("2025-08-30"),
-        numSessions: 6,
-        sessionDuration: 90,
-        maxCapacity: 15,
-        currentEnrollment: 8,
-        ageGroup: "9-12",
-        gradeLevel: "4-6",
-        difficulty: "intermediate",
-        location: "Online",
-        meetingType: "virtual", 
-        schedule: "Saturdays, 10:00 AM - 11:30 AM",
-        prerequisites: "Basic reading and writing skills",
-        materials: ["Journal", "Pen/Pencil"],
-        objectives: ["Creative storytelling", "Character development"],
-        instructorId: 2,
-        isPublished: true,
-        status: "active",
-        enrollmentOpen: true
-      },
-      {
-        title: "Science Explorers Lab",
-        category: "science",
-        categoryName: "Science", 
-        description: "Hands-on science experiments and discoveries for curious young minds.",
-        price: 59.99,
-        startDate: new Date("2025-08-01"),
-        endDate: new Date("2025-09-15"),
-        numSessions: 10,
-        sessionDuration: 75,
-        maxCapacity: 12,
-        currentEnrollment: 10,
-        ageGroup: "8-11",
-        gradeLevel: "3-5",
-        difficulty: "intermediate",
-        location: "In-person",
-        meetingType: "in-person",
-        schedule: "Wednesdays, 4:00 PM - 5:15 PM", 
-        prerequisites: "None",
-        materials: ["Lab kit", "Safety goggles"],
-        objectives: ["Scientific method", "Basic chemistry"],
-        instructorId: 1,
-        isPublished: true,
-        status: "active",
-        enrollmentOpen: true
-      },
-      {
-        title: "Art & Design Fundamentals",
-        category: "arts",
-        categoryName: "Arts",
-        description: "Learn the basics of drawing, painting, and design principles.",
-        price: 44.99,
-        startDate: new Date("2025-07-08"),
-        endDate: new Date("2025-08-22"),
-        numSessions: 8,
-        sessionDuration: 90,
-        maxCapacity: 16,
-        currentEnrollment: 12,
-        ageGroup: "7-10",
-        gradeLevel: "2-4",
-        difficulty: "beginner",
-        location: "Online",
-        meetingType: "virtual",
-        schedule: "Mondays and Fridays, 2:00 PM - 3:30 PM",
-        prerequisites: "None",
-        materials: ["Art supplies kit", "Sketchbook"],
-        objectives: ["Basic drawing techniques", "Color theory"],
-        instructorId: 3,
-        isPublished: true,
-        status: "active",
-        enrollmentOpen: true
-      },
-      {
-        title: "Coding for Kids",
-        category: "technology",
-        categoryName: "Technology",
-        description: "Introduction to programming concepts through fun games and projects.",
-        price: 54.99,
-        startDate: new Date("2025-08-05"),
-        endDate: new Date("2025-09-20"),
-        numSessions: 8,
-        sessionDuration: 60,
-        maxCapacity: 18,
-        currentEnrollment: 14,
-        ageGroup: "9-13",
-        gradeLevel: "4-7",
-        difficulty: "beginner",
-        location: "Online",
-        meetingType: "virtual",
-        schedule: "Saturdays, 1:00 PM - 2:00 PM",
-        prerequisites: "Basic computer skills",
-        materials: ["Computer/tablet", "Internet access"],
-        objectives: ["Programming basics", "Problem solving"],
-        instructorId: 2,
-        isPublished: true,
-        status: "active",
-        enrollmentOpen: true
+        status: "published"
       }
     ];
 
