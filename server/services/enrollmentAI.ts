@@ -133,18 +133,39 @@ export async function processEnrollmentMessage(
       : 'No programs are currently available.';
     
     // Handle confirmation messages to prevent conversation restart
-    const isConfirmation = /^(yes|confirm|register|ok|proceed|sure)$/i.test(message.trim());
+    const isConfirmation = /^(yes|confirm|register|ok|proceed|sure|y)$/i.test(message.trim());
+    console.log("🔍 Checking confirmation:", { message: message.trim(), isConfirmation, historyLength: chatHistory.length });
+    
     if (isConfirmation && chatHistory.length > 0) {
       const lastAssistantMessage = chatHistory.filter(msg => msg.role === "assistant").pop();
+      console.log("🔍 Last assistant message exists:", !!lastAssistantMessage);
+      console.log("🔍 Contains registration prompt:", lastAssistantMessage?.content.includes("Should I register"));
+      
       if (lastAssistantMessage && lastAssistantMessage.content.includes("Should I register")) {
-        // Extract registration details from the confirmation context
-        const nameMatches = lastAssistantMessage.content.match(/register\s+\*\*([^*]+)\*\*/i) || 
-                           lastAssistantMessage.content.match(/\*\*([A-Za-z]+(?:\s+[A-Za-z]+)*)\*\*/);
+        console.log("🔍 Confirmation detected, processing registration from context:");
+        console.log("📝 Last assistant message:", lastAssistantMessage.content);
+        
+        // Multiple pattern attempts to extract name
+        const namePatterns = [
+          /register\s+\*\*([^*]+)\*\*/i,
+          /\*\*([A-Za-z]+\s+[A-Za-z]+)\*\*/,
+          /register\s+([A-Za-z]+\s+[A-Za-z]+)/i,
+          /([A-Za-z]+\s+[A-Za-z]+)\s+at\s+American/i
+        ];
+        
+        let nameMatches = null;
+        for (const pattern of namePatterns) {
+          nameMatches = lastAssistantMessage.content.match(pattern);
+          if (nameMatches) break;
+        }
+        
         const ageMatches = lastAssistantMessage.content.match(/\*\*Age:\*\*\s*(\d+)/) ||
-                          lastAssistantMessage.content.match(/Age:\s*(\d+)/) ||
-                          lastAssistantMessage.content.match(/(\d+)\s*years?\s*old/i);
+                          lastAssistantMessage.content.match(/Age:\*\*\s*(\d+)/) ||
+                          lastAssistantMessage.content.match(/(\d+)/);
         const gradeMatches = lastAssistantMessage.content.match(/\*\*Grade:\*\*\s*([^*\n]+)/) ||
-                            lastAssistantMessage.content.match(/Grade:\s*([^*\n]+)/);
+                            lastAssistantMessage.content.match(/Grade:\*\*\s*([^*\n]+)/);
+        
+        console.log("🔍 Pattern matches:", { nameMatches, ageMatches, gradeMatches });
         
         if (nameMatches) {
           const fullName = nameMatches[1];
@@ -158,8 +179,10 @@ export async function processEnrollmentMessage(
           const birthYear = currentYear - age;
           const birthdate = `${birthYear}-06-15`;
           
+          console.log("✅ Extracted registration data:", { firstName, lastName, age, grade, birthdate });
+          
           return {
-            message: `Excellent! I'm registering ${firstName} ${lastName} now with the information you provided.`,
+            message: `Perfect! I'm registering ${firstName} ${lastName} right now with the information you provided.`,
             action: {
               type: "register_child",
               firstName,
@@ -171,6 +194,8 @@ export async function processEnrollmentMessage(
               specialNeeds: ""
             }
           };
+        } else {
+          console.log("❌ No name found in confirmation context, falling back to AI");
         }
       }
     }
