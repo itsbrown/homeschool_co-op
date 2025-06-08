@@ -38,7 +38,8 @@ export async function apiRequest(
   }
 
   // Use relative URL since frontend and backend run on same port
-  const response = await fetch(`/api${url}`, config);
+  const finalUrl = url.startsWith('/api') ? url : `/api${url}`;
+  const response = await fetch(finalUrl, config);
 
   // Handle auth errors without throwing to prevent redirect loops
   if (response.status === 401) {
