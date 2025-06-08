@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth0";
+import { useSupabase } from "@/components/SupabaseProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +41,7 @@ interface EnrollmentAction {
 
 export default function EnrollmentAssistant() {
   const { user, isAuthenticated } = useAuth();
+  const { session } = useSupabase();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -99,6 +101,14 @@ export default function EnrollmentAssistant() {
     setIsLoading(true);
     
     try {
+      // Ensure we have a valid session token
+      if (!session?.access_token) {
+        throw new Error("Authentication session not available. Please sign in again.");
+      }
+
+      // Store the current token in localStorage for apiRequest to use
+      localStorage.setItem('supabase_token', session.access_token);
+
       // Send message to AI assistant
       const response = await apiRequest("POST", "/api/ai/enrollment-assistant", {
         message: inputMessage,

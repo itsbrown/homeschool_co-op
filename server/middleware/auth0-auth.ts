@@ -2,12 +2,28 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { supabase } from '../lib/supabase';
 
-// Supabase JWT verification middleware
+// Supabase JWT verification middleware with fallback for development
 export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      // Development mode: Allow bypass with default user
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🛠️ Development mode: Using default user for unauthenticated request');
+        req.auth = {
+          userId: 'dev-user',
+          supabaseId: 'dev-user',
+          email: 'coreycreates@gmail.com',
+          role: 'parent',
+          isActive: true,
+          payload: {
+            email: 'coreycreates@gmail.com',
+            role: 'parent'
+          }
+        };
+        return next();
+      }
       return res.status(401).json({ message: 'No token provided' });
     }
 
@@ -19,6 +35,24 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
 
     if (error || !user) {
       console.log('❌ Token verification failed:', error?.message);
+      
+      // Development fallback
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🛠️ Development mode: Using fallback user due to token error');
+        req.auth = {
+          userId: 'dev-user',
+          supabaseId: 'dev-user',
+          email: 'coreycreates@gmail.com',
+          role: 'parent',
+          isActive: true,
+          payload: {
+            email: 'coreycreates@gmail.com',
+            role: 'parent'
+          }
+        };
+        return next();
+      }
+      
       return res.status(401).json({ message: 'Token verification failed' });
     }
 
