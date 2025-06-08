@@ -94,3 +94,8 @@ app.use((err: any, req: any, res: any, next: any) => {
   res.status(500).json({ message: "Internal server error", error: err.message });
 });
 
+import marketingLinksRouter from './api/marketing-links';
+import paymentHistoryRouter from './api/payment-history';
+
+app.use('/api/marketing-links', marketingLinksRouter);
+app.use('/api/payments', paymentHistoryRouter);

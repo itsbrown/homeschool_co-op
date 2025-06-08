@@ -69,17 +69,31 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   
   // Get payment data for the parent (and optionally filtered by child)
   const { data: payments, isLoading, refetch } = useQuery({
-    queryKey: ["/api/payments", childId],
-    queryFn: () => {
+    queryKey: ["/api/payments/history", childId],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
       const url = childId 
-        ? `/api/payments?childId=${childId}` 
-        : '/api/payments';
-      return fetch(url)
-        .then(res => res.json())
-        .catch(() => {
-          // For now, return mock data (this would be replaced with actual API calls)
-          return mockPayments;
-        });
+        ? `/api/payments/history?childId=${childId}` 
+        : '/api/payments/history';
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        // Fallback to mock data for development
+        console.warn('Payment history API failed, using mock data');
+        return mockPayments;
+      }
+
+      return response.json();
     },
   });
   
