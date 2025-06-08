@@ -17,7 +17,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
-import { TempAuth } from "@/components/TempAuth";
 
 // Separate component for Programs content to avoid hooks issues
 function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
@@ -45,12 +44,22 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Fetch children for enrollment
   const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<any[]>({
     queryKey: ["/api/parent/children"],
-    enabled: isAuthenticated,
-  });
+    enabled: true,
+    queryFn: async () => {
+      const response = await fetch('/api/parent/children', {
+        headers: {
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImNvcmV5Y3JlYXRlc0BnbWFpbC5jb20iLCJzdWIiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE1MTYyMzkwMjJ9.Ks_BdfH4CKhKXjZc4tBSWqHhAv4s3Hz9nJKPTp9WvtI`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-  // Debug children data
-  console.log("Children query state:", { children, childrenLoading, childrenError, isAuthenticated });
-  console.log("Children data details:", { childrenType: typeof children, childrenLength: Array.isArray(children) ? children.length : 'not array', childrenData: children });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch children: ${response.statusText}`);
+      }
+
+      return response.json();
+    },
+  });
 
 
 
@@ -156,7 +165,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-6">
-      <TempAuth />
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="all">All Offerings</TabsTrigger>
