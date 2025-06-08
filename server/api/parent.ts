@@ -1,17 +1,30 @@
 import { Router } from 'express';
-import { verifySupabaseToken } from '../middleware/unified-auth';
 import fs from 'fs';
 import path from 'path';
 
 const router = Router();
 
 // Get children for the authenticated parent
-router.get('/children', verifySupabaseToken, async (req, res) => {
+router.get('/children', async (req, res) => {
   try {
     // Get the authenticated user's email from the token
-    const userEmail = req.user.email;
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
 
-    console.log('👨‍👩‍👧‍👦 Parent requesting children for email:', userEmail);
+    const token = authHeader.split(' ')[1];
+    
+    // Decode the Supabase JWT to get user email
+    let userEmail;
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+      userEmail = payload.email;
+      console.log('👨‍👩‍👧‍👦 Parent requesting children for email:', userEmail);
+    } catch (error) {
+      console.error('❌ Error decoding token:', error);
+      return res.status(401).json({ message: 'Invalid token' });
+    }
 
     if (!userEmail) {
       return res.status(401).json({ message: 'Email not found in token' });
