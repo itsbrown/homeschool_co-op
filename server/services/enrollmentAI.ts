@@ -102,7 +102,7 @@ export async function processEnrollmentMessage(
     }
     
     // Fetch available programs
-    const programs = await storage.getAllPublishedPrograms();
+    const programs = await storage.getPublishedPrograms();
     
     // Format context about available data
     const childrenContext = children.length > 0
