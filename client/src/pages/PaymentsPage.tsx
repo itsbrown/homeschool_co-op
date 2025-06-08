@@ -2,11 +2,13 @@ import React from "react";
 import { useLocation } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import PaymentManagement from "@/components/payments/PaymentManagement";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 
 export default function PaymentsPage() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { activeRole } = useRole();
   
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -30,7 +32,7 @@ export default function PaymentsPage() {
   }
   
   // Ensure only parents can access this page
-  if (user && user.role !== 'parent') {
+  if (user && activeRole !== 'parent') {
     return (
       <ParentAppShell>
         <div className="container mx-auto py-6">
