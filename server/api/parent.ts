@@ -59,25 +59,42 @@ router.get('/children', async (req, res) => {
     console.log(`🔍 Found ${userChildren.length} children for parent ${userEmail}:`, 
       userChildren.map((c: any) => `${c.firstName} ${c.lastName}`));
 
-    // Transform to expected format
-    const transformedChildren = userChildren.map((child: any) => ({
-      id: child.id,
-      name: `${child.firstName} ${child.lastName}`,
-      firstName: child.firstName,
-      lastName: child.lastName,
-      gradeLevel: child.gradeLevel || 'N/A',
-      age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
-      birthdate: child.birthdate,
-      parentName: userEmail,
-      email: userEmail,
-      enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      status: 'Active',
-      classes: [],
-      avatar: child.profileImage || '',
-      interests: child.interests || [],
-      allergies: child.allergies || 'None specified',
-      specialNeeds: child.specialNeeds || '',
-      school: child.school || 'American Seekers Academy'
+    // Transform to expected format and include enrolled classes
+    const transformedChildren = await Promise.all(userChildren.map(async (child: any) => {
+      const enrollments = await storage.getEnrollmentsByChildId(child.id);
+      console.log(`📚 Found ${enrollments.length} enrollments for child ${child.firstName} ${child.lastName}:`, enrollments);
+      
+      // Get class details for each enrollment
+      const enrolledClasses = await Promise.all(enrollments.map(async (enrollment: any) => {
+        const classData = await storage.getClassById(enrollment.classId);
+        console.log(`🎓 Class data for enrollment:`, classData?.title || 'Not found');
+        return classData ? {
+          id: classData.id,
+          title: classData.title,
+          enrollmentDate: enrollment.enrollmentDate,
+          status: enrollment.status || 'enrolled'
+        } : null;
+      }));
+
+      return {
+        id: child.id,
+        name: `${child.firstName} ${child.lastName}`,
+        firstName: child.firstName,
+        lastName: child.lastName,
+        gradeLevel: child.gradeLevel || 'N/A',
+        age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
+        birthdate: child.birthdate,
+        parentName: userEmail,
+        email: userEmail,
+        enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        status: 'Active',
+        classes: enrolledClasses.filter(Boolean), // Remove any null entries
+        avatar: child.profileImage || '',
+        interests: child.interests || [],
+        allergies: child.allergies || 'None specified',
+        specialNeeds: child.specialNeeds || '',
+        school: child.school || 'American Seekers Academy'
+      };
     }));
 
     res.json(transformedChildren);

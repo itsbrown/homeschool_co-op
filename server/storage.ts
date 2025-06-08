@@ -745,6 +745,13 @@ export class MemStorage implements IStorage {
     this.classEnrollments.push(enrollment);
     return enrollment;
   }
+
+  async getEnrollmentsByChildId(childId: number): Promise<any[]> {
+    if (!this.classEnrollments) {
+      return [];
+    }
+    return this.classEnrollments.filter(enrollment => enrollment.childId === childId);
+  }
   
   // Class methods
   async getClassById(id: number): Promise<Class | undefined> {
