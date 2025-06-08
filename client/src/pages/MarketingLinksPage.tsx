@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, ExternalLink, QrCode, BarChart3, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { AppShell } from "@/components/AppShell";
+import AppShell from "@/components/layout/AppShell";
 
 interface MarketingLink {
   id: number;
@@ -475,6 +475,6 @@ export default function MarketingLinksPage() {
           )}
         </Tabs>
       </div>
-    </SchoolAdminAppShell>
+    </AppShell>
   );
 }
