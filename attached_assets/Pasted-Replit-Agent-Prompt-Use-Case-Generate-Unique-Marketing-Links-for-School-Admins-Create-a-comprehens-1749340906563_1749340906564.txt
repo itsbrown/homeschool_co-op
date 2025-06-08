@@ -1,0 +1,63 @@
+Replit Agent Prompt
+Use Case: Generate Unique Marketing Links for School Admins
+
+Create a comprehensive marketing link generation system for the ASA Platform that allows school administrators to create unique, trackable links for their marketing campaigns (Facebook Ads, Google Ads, etc.) that direct parents to their school's details page for enrollment.
+
+Requirements:
+
+School Marketing Dashboard
+
+Add a new section to /schools/my-school page with marketing tools
+Include link generation interface with customization options
+Display analytics for generated links (clicks, conversions, registrations)
+Allow bulk link generation for different campaigns
+Unique Link Generation System
+
+Generate unique marketing links in format: /school/{schoolId}/enroll/{campaignId}
+Include UTM parameters for tracking (source, medium, campaign)
+Store link metadata: creation date, campaign name, source platform
+Generate QR codes for offline marketing materials
+Enhanced School Landing Page
+
+Create dedicated landing page at /school/{schoolId}/enroll/{campaignId?}
+Display school information, available classes, pricing, and enrollment options
+Include prominent "Register Child" button that pre-fills school selection
+Add testimonials and school highlights section
+Mobile-optimized design for social media traffic
+Database Schema Updates
+
+Create marketing_links table with fields: id, schoolId, campaignId, utmSource, utmMedium, utmCampaign, clickCount, conversionCount, createdAt
+Create link_analytics table for detailed tracking: linkId, timestamp, userAgent, referrer, ipAddress, actionType
+Add indexes for performance on frequently queried fields
+Analytics & Tracking
+
+Track link clicks, page views, and registration conversions
+Create analytics dashboard showing campaign performance
+Export capabilities for campaign reports
+Integration with existing school admin analytics
+API Endpoints
+
+POST /api/school-admin/marketing-links - Create new marketing link
+GET /api/school-admin/marketing-links - List school's marketing links
+GET /api/school-admin/marketing-analytics/{linkId} - Get link performance
+PUT /api/marketing-links/{campaignId}/track - Track link interaction
+User Experience Features
+
+Link preview generation for social media sharing
+Customizable call-to-action buttons
+A/B testing capabilities for different landing page versions
+Integration with existing enrollment assistant for guided registration
+Technical Implementation:
+
+Use existing Supabase authentication and database
+Integrate with current school admin dashboard layout
+Maintain existing role-based permissions (school-admin role)
+Use existing UI components and styling patterns
+Ensure mobile responsiveness for social media traffic
+Success Metrics:
+
+Track conversion rates from marketing links to actual enrollments
+Monitor click-through rates for different campaign types
+Measure time-to-enrollment from initial link click
+Please implement this system following the existing ASA Platform architecture patterns, using TypeScript, React, and the current database structure. Ensure all components integrate seamlessly with the existing school admin workflow.
+
