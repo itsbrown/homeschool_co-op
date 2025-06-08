@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": 1749407107800,
+    "classId": 4,
+    "childId": 1,
+    "childName": "Adaluna Brown",
+    "className": "Macaroni",
+    "enrollmentDate": "2025-06-08T18:25:07.800Z",
+    "status": "enrolled"
+  },
+  {
+    "id": 1749407167025,
+    "classId": 1,
+    "childId": 2,
+    "childName": "Hermione Brown",
+    "className": "Macaroni",
+    "enrollmentDate": "2025-06-08T18:26:07.025Z",
+    "status": "enrolled"
+  }
+]

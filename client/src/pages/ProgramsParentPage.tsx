@@ -54,15 +54,18 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     mutationFn: async ({ classId, childId }: { classId: number; childId: string }) => {
       return apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       toast({
         title: "Enrollment Successful",
         description: "Your child has been successfully enrolled in the class.",
       });
       setEnrollmentDialog({ open: false });
       setSelectedChildId("");
+      // Invalidate all enrollment-related queries
       queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+      // Invalidate the specific child enrollment query
+      queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${variables.childId}`] });
     },
     onError: (error: any) => {
       toast({
