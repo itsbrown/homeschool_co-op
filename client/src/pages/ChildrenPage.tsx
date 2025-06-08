@@ -1,7 +1,7 @@
 import React from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { Redirect, Link } from "wouter";
-import PageLayout from "@/components/layout/PageLayout";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
@@ -38,7 +38,7 @@ export default function ChildrenPage() {
   }
   
   return (
-    <PageLayout>
+    <ParentAppShell>
       <div className="container py-10 max-w-7xl">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -187,6 +187,6 @@ export default function ChildrenPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </PageLayout>
+    </ParentAppShell>
   );
 }
