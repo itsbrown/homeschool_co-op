@@ -118,6 +118,7 @@ export interface IStorage {
   
   // Class Enrollment methods
   createEnrollment(enrollment: any): Promise<any>;
+  getEnrollmentsByChildId(childId: number): Promise<any[]>;
   
   // Class methods
   getClassById(id: number): Promise<Class | undefined>;
@@ -217,6 +218,9 @@ export class MemStorage implements IStorage {
     
     // Add sample events for testing the calendar
     this.initializeSampleEvents();
+    
+    // Load enrollments from file
+    this.initializeEnrollments().catch(console.error);
     this.initializeSampleKnowledgeBases();
     this.initializeSampleClasses().catch(console.error);
     this.initializeChildren().catch(console.error);
@@ -1279,6 +1283,52 @@ export class MemStorage implements IStorage {
         instructorId: classData.instructorId
       });
     });
+  }
+
+  private async initializeEnrollments() {
+    // Load enrollments from the actual JSON file
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
+      
+      if (fs.existsSync(enrollmentsFilePath)) {
+        const enrollmentsData = JSON.parse(fs.readFileSync(enrollmentsFilePath, 'utf-8'));
+        console.log(`📚 Loading ${enrollmentsData.length} enrollments from enrollments.json`);
+        
+        this.classEnrollments = enrollmentsData.map((enrollment: any) => ({
+          ...enrollment,
+          enrollmentDate: enrollment.enrollmentDate ? new Date(enrollment.enrollmentDate) : new Date()
+        }));
+        
+        console.log(`✅ Successfully loaded ${this.classEnrollments.length} enrollments into storage`);
+      } else {
+        console.log('📚 No enrollments.json found, starting with empty enrollments');
+        this.classEnrollments = [];
+      }
+    } catch (error) {
+      console.error('❌ Error loading enrollments from JSON:', error);
+      this.classEnrollments = [];
+    }
+  }
+
+  private async saveEnrollmentsToFile() {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
+      
+      // Ensure data directory exists
+      const dataDir = path.dirname(enrollmentsFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      fs.writeFileSync(enrollmentsFilePath, JSON.stringify(this.classEnrollments, null, 2));
+      console.log(`💾 Saved ${this.classEnrollments.length} enrollments to enrollments.json`);
+    } catch (error) {
+      console.error('❌ Error saving enrollments to file:', error);
+    }
   }
 
   private async initializeChildren() {
