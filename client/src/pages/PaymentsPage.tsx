@@ -47,18 +47,17 @@ export default function PaymentsPage() {
   
   return (
     <ParentAppShell>
-      <div className="container mx-auto py-6">
-        <h1 className="text-3xl font-bold mb-6">Payments</h1>
-        
-        <div className="space-y-6">
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-start">
           <div>
-            <p className="text-muted-foreground">
+            <h1 className="text-3xl font-bold">Payments</h1>
+            <p className="text-muted-foreground mt-1">
               View and manage payments for your children's programs and classes
             </p>
           </div>
-          
-          <PaymentManagement />
         </div>
+        
+        <PaymentManagement />
       </div>
     </ParentAppShell>
   );
