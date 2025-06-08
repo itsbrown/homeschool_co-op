@@ -397,19 +397,20 @@ export default function ParentDashboard() {
       
       {/* AI Assistant Modal */}
       {isAssistantModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl h-[80vh] m-4">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">AI Enrollment Assistant</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] m-4 flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b bg-gray-50 rounded-t-lg">
+              <h2 className="text-xl font-semibold text-gray-800">AI Enrollment Assistant</h2>
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={() => setIsAssistantModalOpen(false)}
+                className="hover:bg-gray-200"
               >
                 ✕
               </Button>
             </div>
-            <div className="h-full pb-16">
+            <div className="flex-1 overflow-hidden">
               <EnrollmentAssistant />
             </div>
           </div>
