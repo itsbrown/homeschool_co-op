@@ -46,8 +46,6 @@ export const handleEnrollmentMessage = async (req: Request, res: Response) => {
     
     const { message, childrenIds = [], history = [] } = parseResult.data;
     
-    console.log('🔧 DEBUG - API Route received:', { message, childrenIds, historyLength: history.length });
-    
     // Check authentication - require at least email or user ID
     if (!req.auth?.email && !req.auth?.userId && !req.auth?.supabaseId) {
       console.log('❌ Authentication failed - req.auth:', req.auth);

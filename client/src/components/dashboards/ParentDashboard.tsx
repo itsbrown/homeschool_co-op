@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard, RefreshCw } from "lucide-react";
 import { useAuth } from "@/components/SupabaseProvider";
-import EnrollmentAssistantModal from "@/components/enrollment/EnrollmentAssistantModal";
+import EnrollmentAssistant from "@/components/enrollment/EnrollmentAssistant";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -396,10 +396,25 @@ export default function ParentDashboard() {
       </Button>
       
       {/* AI Assistant Modal */}
-      <EnrollmentAssistantModal 
-        isOpen={isAssistantModalOpen} 
-        onClose={() => setIsAssistantModalOpen(false)} 
-      />
+      {isAssistantModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl h-[80vh] m-4">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">AI Enrollment Assistant</h2>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setIsAssistantModalOpen(false)}
+              >
+                ✕
+              </Button>
+            </div>
+            <div className="h-full pb-16">
+              <EnrollmentAssistant />
+            </div>
+          </div>
+        </div>
+      )}
       </div>
   );
 }
