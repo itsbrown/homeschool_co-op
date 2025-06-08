@@ -1328,7 +1328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/program-enrollments/:id', isAuthenticated, requireAdmin, programEnrollmentsApi.deleteEnrollment);
 
   // AI Enrollment Assistant with Anthropic AI
-  app.post('/api/ai/enrollment-assistant', isAuthenticated, processEnrollmentMessage);
+  app.post('/api/ai/enrollment-assistant', jwtCheck, processEnrollmentMessage);
 
   // Enhanced response generation functions with real data integration
   async function generateRegistrationResponse(extractedInfo: any, analysis: any, userId: string): Promise<string> {

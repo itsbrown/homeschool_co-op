@@ -25,31 +25,55 @@ const messageSchema = z.object({
 });
 
 // System prompt for the AI assistant
-const SYSTEM_PROMPT = `You are an AI enrollment assistant for an educational platform. 
-Your goal is to help parents find suitable programs for their children and assist with the enrollment and registration process.
+const SYSTEM_PROMPT = `You are the official AI enrollment assistant for American Seekers Academy, a comprehensive educational institution dedicated to providing quality education and fostering academic excellence.
 
-AVAILABLE INFORMATION:
-1. The parent's children and their details
-2. Available educational programs
+ABOUT AMERICAN SEEKERS ACADEMY:
+American Seekers Academy is an innovative educational institution offering diverse programs, courses, and learning opportunities for students of all ages. We pride ourselves on personalized education, experienced instructors, and comprehensive learning resources.
 
-TASKS YOU CAN PERFORM:
-1. Register new children in the system
-2. Recommend programs based on a child's age, interests, and learning style
-3. Answer questions about programs (schedule, curriculum, cost, etc.)
-4. Guide the enrollment process and create enrollment requests
-5. Provide information about existing enrollments
+YOUR ROLE & CAPABILITIES:
+As the official AI enrollment assistant, you have access to complete, real-time information about:
 
-CONVERSATION GUIDELINES:
-- Be helpful, friendly, and conversational
-- Ask clarifying questions if needed
-- When recommending programs, explain why they might be a good fit
-- If a request cannot be fulfilled, explain why and suggest alternatives
-- When enrollment is requested, confirm details before proceeding
-- When registering a child, ask for all necessary information if not provided
+SCHOOL OPERATIONS:
+- All available programs, classes, and courses with detailed information
+- Instructor profiles, specializations, and qualifications  
+- Educational resources, knowledge bases, and learning materials
+- Curriculum offerings across all subjects and grade levels
+- Individual lessons and educational activities
+- School policies, procedures, and enrollment requirements
+- Pricing, payment options, and financial assistance information
+- Scheduling, locations, and facility information
+
+STUDENT SERVICES:
+1. Child Registration & Enrollment Management
+2. Program Recommendations based on student profiles
+3. Academic Planning & Course Selection
+4. Instructor Matching & Assignment
+5. Resource & Material Recommendations
+6. Scheduling Coordination & Conflict Resolution
+7. Payment Processing & Financial Planning
+8. Academic Progress Tracking & Support
+
+CONVERSATION APPROACH:
+- Act as a knowledgeable school representative with access to all current information
+- Provide specific, accurate details about programs, instructors, and resources
+- Make personalized recommendations based on student needs and interests
+- Explain costs, schedules, and requirements clearly
+- Guide families through enrollment processes step-by-step
+- Connect families with appropriate instructors and programs
+- Answer questions about school policies and procedures confidently
+- Suggest educational materials and activities that align with student goals
+
+PROFESSIONAL STANDARDS:
+- Always use authentic, current data from the school's systems
+- Provide accurate pricing, availability, and scheduling information
+- Ensure recommendations match student age, grade level, and learning preferences
+- Respect family privacy and maintain confidentiality
+- Direct complex issues to appropriate school staff when necessary
+- Follow all school enrollment policies and procedures
 
 RESPONSE FORMAT:
-Your responses should be friendly, concise, and focused on helping the parent.
-If you need to perform a specific action like enrollment or recommendation, include the action details in a structured format.
+Your responses should be professional, informative, and focused on helping families succeed.
+If you need to perform specific actions, include structured details.
 
 ACTIONS:
 - To register a new child: [REGISTER_CHILD: firstName: John, lastName: Doe, birthdate: 2015-05-15, gradeLevel: 4, interests: science,math, learningStyle: visual]
@@ -96,7 +120,7 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "You need to be logged in to use the enrollment assistant" });
     }
     
-    // Get data for context
+    // Get comprehensive school data for context
     const children = [];
     for (const childId of childrenIds) {
       const child = await storage.getChildById(childId);
@@ -105,10 +129,18 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
       }
     }
     
-    // Get available programs
-    const programs = await storage.getPublishedPrograms();
+    // Get all available school information
+    const [programs, instructors, knowledgeBases, activities, curricula, lessons, schools] = await Promise.all([
+      storage.getPublishedPrograms(),
+      storage.getAllUsers().then(users => users.filter(user => user.role === 'instructor')),
+      storage.getPublicKnowledgeBases(50), // Get up to 50 knowledge bases
+      storage.getPublicActivities(50), // Get up to 50 activities
+      storage.getPublicCurricula(50), // Get up to 50 curricula
+      storage.getPublicLessons(50), // Get up to 50 lessons
+      storage.getSchools()
+    ]);
     
-    // Format context
+    // Format comprehensive context
     const childrenContext = children.length > 0
       ? `CHILDREN INFORMATION:\n${children.map(child => 
           `Child ID: ${child.id}
@@ -127,17 +159,126 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
            Title: ${program.title}
            Description: ${program.description || 'No description provided'}
            Age Range: ${program.ageRange || 'All ages'}
+           Grade Levels: ${program.gradeLevels?.join(', ') || 'All grades'}
            Category: ${program.category || 'General'}
            Start Date: ${program.startDate ? new Date(program.startDate).toLocaleDateString() : 'Not specified'}
            End Date: ${program.endDate ? new Date(program.endDate).toLocaleDateString() : 'Not specified'}
+           Schedule: ${program.schedule || 'Flexible scheduling'}
            Price: $${program.price || 0}
+           Location: ${program.locationName || program.location || 'Online/TBD'}
            Max Capacity: ${program.maxCapacity || 'Unlimited'} students
+           Current Enrollment: ${program.enrollmentCount || 0} students
+           Instructor: ${program.instructorName || 'TBD'}
+           Materials Included: ${program.materialsIncluded ? 'Yes' : 'No'}
+           Prerequisites: ${program.prerequisites || 'None'}
            Enrollment Status: ${program.isPublished ? 'Open' : 'Closed'}`
         ).join('\n\n')}`
       : 'No programs are currently available.';
+
+    const instructorsContext = instructors.length > 0
+      ? `SCHOOL INSTRUCTORS:\n${instructors.map(instructor => 
+          `Instructor ID: ${instructor.id}
+           Name: ${instructor.firstName} ${instructor.lastName}
+           Email: ${instructor.email}
+           Specializations: ${instructor.specializations?.join(', ') || 'General instruction'}
+           Bio: ${instructor.bio || 'No bio available'}
+           Years Experience: ${instructor.yearsExperience || 'Not specified'}
+           Certifications: ${instructor.certifications?.join(', ') || 'None listed'}`
+        ).join('\n\n')}`
+      : 'No instructor information available.';
+
+    const knowledgeBasesContext = knowledgeBases.length > 0
+      ? `KNOWLEDGE RESOURCES:\n${knowledgeBases.map(kb => 
+          `Resource ID: ${kb.id}
+           Title: ${kb.title}
+           Subject: ${kb.subject}
+           Description: ${kb.description || 'No description'}
+           Difficulty Level: ${kb.difficulty}
+           Price: $${kb.price || 0}
+           Downloads: ${kb.downloadCount} times
+           Author: ${kb.authorId || 'School Staff'}`
+        ).join('\n\n')}`
+      : 'No knowledge base resources available.';
+
+    const activitiesContext = activities.length > 0
+      ? `EDUCATIONAL ACTIVITIES:\n${activities.map(activity => 
+          `Activity ID: ${activity.id}
+           Title: ${activity.title}
+           Type: ${activity.type}
+           Subject: ${activity.subject}
+           Age Range: ${activity.ageRange}
+           Description: ${activity.description || 'Engaging educational activity'}
+           Difficulty: ${activity.difficulty || 'Beginner'}
+           Downloads: ${activity.downloadCount || 0} times`
+        ).join('\n\n')}`
+      : 'No activities available.';
+
+    const curriculaContext = curricula.length > 0
+      ? `CURRICULUM OFFERINGS:\n${curricula.map(curriculum => 
+          `Curriculum ID: ${curriculum.id}
+           Title: ${curriculum.title}
+           Subject: ${curriculum.subject}
+           Grade Level: ${curriculum.gradeLevel}
+           Description: ${curriculum.description || 'Comprehensive curriculum'}
+           Learning Styles: ${curriculum.learningStyles?.join(', ') || 'All learning styles'}
+           Price: $${curriculum.price || 0}`
+        ).join('\n\n')}`
+      : 'No curriculum information available.';
+
+    const lessonsContext = lessons.length > 0
+      ? `INDIVIDUAL LESSONS:\n${lessons.map(lesson => 
+          `Lesson ID: ${lesson.id}
+           Title: ${lesson.title}
+           Subject: ${lesson.subject}
+           Grade Level: ${lesson.gradeLevel}
+           Duration: ${lesson.duration} minutes
+           Description: ${lesson.description || 'Educational lesson'}
+           Status: ${lesson.status || 'Available'}`
+        ).join('\n\n')}`
+      : 'No individual lessons available.';
+
+    const schoolsContext = schools.length > 0
+      ? `SCHOOL INFORMATION:\n${schools.map(school => 
+          `School ID: ${school.id}
+           Name: ${school.name}
+           Address: ${school.address || 'Contact for location'}
+           Phone: ${school.phone || 'Contact for phone'}
+           Email: ${school.email || 'Contact for email'}
+           Website: ${school.website || 'No website listed'}
+           Principal: ${school.principalName || 'Contact school'}
+           Grades Served: ${school.gradesServed?.join(', ') || 'All grades'}
+           Student Capacity: ${school.capacity || 'Contact for capacity'}
+           Mission: ${school.mission || 'Providing quality education'}`
+        ).join('\n\n')}`
+      : 'School information not available.';
     
-    // Full context for the AI
-    const fullContext = `${childrenContext}\n\n${programsContext}`;
+    // Full context for the AI with comprehensive school data
+    const fullContext = `AMERICAN SEEKERS ACADEMY - COMPREHENSIVE SCHOOL INFORMATION
+
+${schoolsContext}
+
+${childrenContext}
+
+${programsContext}
+
+${instructorsContext}
+
+${knowledgeBasesContext}
+
+${curriculaContext}
+
+${lessonsContext}
+
+${activitiesContext}
+
+ASSISTANT CAPABILITIES:
+- Answer questions about programs, classes, instructors, and school policies
+- Help with child registration and enrollment processes
+- Provide information about educational resources and activities
+- Assist with scheduling and program selection
+- Explain pricing, payment options, and enrollment requirements
+- Connect families with appropriate instructors and programs
+- Suggest educational materials and activities based on child's needs and interests`;
     
     // Prepare messages for the AI
     const messages = [
