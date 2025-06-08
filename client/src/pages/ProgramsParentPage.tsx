@@ -339,11 +339,18 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                     <CardFooter>
                       <Button 
                         className="w-full"
-                        onClick={() => setEnrollmentDialog({ 
-                          open: true, 
-                          classId: classItem.id, 
-                          classTitle: classItem.title 
-                        })}
+                        onClick={() => {
+                          console.log("🔄 Enroll button clicked for class:", classItem.title, "ID:", classItem.id);
+                          console.log("🔄 Current children data:", children);
+                          console.log("🔄 Children loading state:", childrenLoading);
+                          console.log("🔄 Children error state:", childrenError);
+                          setEnrollmentDialog({ 
+                            open: true, 
+                            classId: classItem.id, 
+                            classTitle: classItem.title 
+                          });
+                          console.log("🔄 Enrollment dialog state set");
+                        }}
                       >
                         Enroll Now
                       </Button>
@@ -365,7 +372,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       </Tabs>
 
       {/* Enrollment Dialog */}
-      <Dialog open={enrollmentDialog.open} onOpenChange={(open) => setEnrollmentDialog({ open })}>
+      <Dialog open={enrollmentDialog.open} onOpenChange={(open) => {
+        console.log("🔄 Dialog onOpenChange triggered, open:", open);
+        setEnrollmentDialog({ open });
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Enroll in Class</DialogTitle>
@@ -380,22 +390,44 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               <div className="text-xs text-muted-foreground mb-2">
                 Debug: Children loaded: {Array.isArray(children) ? children.length : 0} | Auth: {isAuthenticated ? 'Yes' : 'No'} | Loading: {childrenLoading ? 'Yes' : 'No'}
               </div>
+              {(() => {
+                console.log("🔄 Rendering select section - children:", children);
+                console.log("🔄 Children loading:", childrenLoading);
+                console.log("🔄 Children error:", childrenError);
+                return null;
+              })()}
               {childrenLoading ? (
                 <div className="text-sm text-muted-foreground">Loading children...</div>
               ) : childrenError ? (
                 <div className="text-sm text-destructive">Error loading children: {JSON.stringify(childrenError)}</div>
               ) : (
-                <Select value={selectedChildId} onValueChange={setSelectedChildId}>
+                <Select 
+                  value={selectedChildId} 
+                  onValueChange={(value) => {
+                    console.log("🔄 Select value changed:", value);
+                    setSelectedChildId(value);
+                  }}
+                  onOpenChange={(open) => {
+                    console.log("🔄 Select dropdown opened/closed:", open);
+                  }}
+                >
                   <SelectTrigger id="child-select">
                     <SelectValue placeholder="Choose a child" />
                   </SelectTrigger>
                   <SelectContent>
+                    {(() => {
+                      console.log("🔄 Rendering SelectContent with children:", children);
+                      return null;
+                    })()}
                     {children && children.length > 0 ? (
-                      children.map((child: any) => (
-                        <SelectItem key={child.id} value={child.id.toString()}>
-                          {child.firstName} {child.lastName}
-                        </SelectItem>
-                      ))
+                      children.map((child: any) => {
+                        console.log("🔄 Rendering SelectItem for child:", child);
+                        return (
+                          <SelectItem key={child.id} value={child.id.toString()}>
+                            {child.firstName} {child.lastName}
+                          </SelectItem>
+                        );
+                      })
                     ) : (
                       <SelectItem value="" disabled>
                         No children available
