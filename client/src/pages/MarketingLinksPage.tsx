@@ -65,23 +65,28 @@ export default function MarketingLinksPage() {
   // Fetch marketing links
   const { data: links = [], isLoading } = useQuery<MarketingLink[]>({
     queryKey: ["/marketing-links"],
-    queryFn: () => apiRequest("/marketing-links", { method: "GET" })
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/marketing-links");
+      return response.json();
+    }
   });
 
   // Fetch analytics for selected link
   const { data: analytics } = useQuery<LinkAnalytics>({
     queryKey: ["/marketing-links", selectedLink?.id, "analytics"],
-    queryFn: () => apiRequest(`/marketing-links/${selectedLink?.id}/analytics`, { method: "GET" }),
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/marketing-links/${selectedLink?.id}/analytics`);
+      return response.json();
+    },
     enabled: !!selectedLink
   });
 
   // Create marketing link mutation
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => 
-      apiRequest("/marketing-links", {
-        method: "POST",
-        body: JSON.stringify(data)
-      }),
+    mutationFn: async (data: typeof formData) => {
+      const response = await apiRequest("POST", "/marketing-links", data);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/marketing-links"] });
       setShowCreateForm(false);
@@ -110,10 +115,10 @@ export default function MarketingLinksPage() {
 
   // Delete marketing link mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => 
-      apiRequest(`/marketing-links/${id}`, {
-        method: "DELETE"
-      }),
+    mutationFn: async (id: number) => {
+      const response = await apiRequest("DELETE", `/marketing-links/${id}`);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/marketing-links"] });
       toast({
