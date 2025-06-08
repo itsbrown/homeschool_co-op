@@ -6,24 +6,33 @@ let language: LanguageServiceClient | null = null;
 // Only initialize if credentials are properly configured
 try {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_CLOUD_PROJECT_ID) {
-    // Check if credentials is a file path or JSON string
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('{')) {
-      // It's a JSON string
-      const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    const creds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    
+    // Check if it's a JSON string (service account key)
+    if (creds.startsWith('{')) {
+      const credentials = JSON.parse(creds);
       language = new LanguageServiceClient({
         projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
         credentials,
       });
-    } else {
-      // It's a file path
+      console.log('Google Cloud NLP initialized with JSON credentials');
+    } 
+    // Check if it's a file path (ends with .json)
+    else if (creds.endsWith('.json')) {
       language = new LanguageServiceClient({
         projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-        keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+        keyFilename: creds,
       });
+      console.log('Google Cloud NLP initialized with key file');
     }
-    console.log('Google Cloud NLP initialized successfully');
+    // If it's an API key or other format, skip Google Cloud NLP
+    else {
+      console.log('Google Cloud NLP credentials appear to be an API key, not service account credentials. Using fallback analysis');
+      language = null;
+    }
   } else {
     console.log('Google Cloud NLP credentials not configured, using fallback analysis');
+    language = null;
   }
 } catch (error) {
   console.warn('Failed to initialize Google Cloud NLP:', error instanceof Error ? error.message : String(error));
