@@ -1,13 +1,16 @@
+
 import React from "react";
 import { useLocation } from "wouter";
 import AppShell from "@/components/layout/AppShell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import FamilySchedule from "@/components/schedule/FamilySchedule";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 
 export default function SchedulePage() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { activeRole } = useRole();
   
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -31,7 +34,7 @@ export default function SchedulePage() {
   }
   
   // Ensure only parents can access this page
-  if (user && user.role !== 'parent') {
+  if (user && activeRole !== 'parent') {
     return (
       <AppShell>
         <div className="container mx-auto p-4 text-center">
