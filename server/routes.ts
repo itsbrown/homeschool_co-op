@@ -22,7 +22,7 @@ import schoolsRouter from "./api/schools";
 import schoolAdminRouter from "./api/school-admin";
 import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
-import { processEnrollmentMessage } from "./api/enrollment-assistant";
+import { handleEnrollmentMessage } from "./api/enrollment-assistant";
 import migrationRouter from "./routes/migration";
 import marketingLinksRouter from "./api/marketing-links";
 import archiver from 'archiver';
@@ -1328,7 +1328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/program-enrollments/:id', isAuthenticated, requireAdmin, programEnrollmentsApi.deleteEnrollment);
 
   // AI Enrollment Assistant with Anthropic AI
-  app.post('/api/ai/enrollment-assistant', jwtCheck, processEnrollmentMessage);
+  app.post('/api/ai/enrollment-assistant', jwtCheck, handleEnrollmentMessage);
 
   // Enhanced response generation functions with real data integration
   async function generateRegistrationResponse(extractedInfo: any, analysis: any, userId: string): Promise<string> {
@@ -2126,7 +2126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI Enrollment Assistant endpoint
-  app.post("/api/ai/enrollment-assistant", jwtCheck, processEnrollmentMessage);
+  app.post("/api/ai/enrollment-assistant", jwtCheck, handleEnrollmentMessage);
 
   // Serve uploaded files (including PDFs)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
