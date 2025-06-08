@@ -422,37 +422,66 @@ ASSISTANT CAPABILITIES:
     // Process actions that require database operations
     let processedAction = action;
     
-    if (action && action.type === "register_child") {
+    if (action && action.type === "register_child" && action.registrationData) {
       try {
-        // Get the parent user
-        const user = await storage.getUser(req.auth.userId);
+        const regData = action.registrationData;
         
-        if (!user || user.role !== "parent") {
-          return res.status(403).json({ 
-            message: "Only parents can register children",
-            aiResponse
-          });
-        }
+        // Parse the child's name
+        const nameParts = regData.name.split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        
+        // Calculate birthdate from age (approximate)
+        const currentYear = new Date().getFullYear();
+        const birthYear = currentYear - regData.age;
+        const approximateBirthdate = `${birthYear}-06-15`; // Use mid-year as default
         
         // Format the child data for registration
         const childData = {
-          firstName: action.firstName,
-          lastName: action.lastName,
-          birthdate: action.birthdate,
-          gradeLevel: action.gradeLevel,
-          parentId: user.id,
-          interests: action.interests,
-          learningStyle: action.learningStyle || null,
-          specialNeeds: action.specialNeeds || null,
-          // These can be updated later
-          school: null,
+          firstName,
+          lastName,
+          birthdate: approximateBirthdate,
+          gradeLevel: regData.grade,
+          parentId: req.auth.userId || req.auth.email, // Use available user identifier
+          parentEmail: req.auth.email,
+          contactPhone: regData.phone,
+          homeAddress: regData.address,
+          emergencyContact1: regData.emergency1,
+          emergencyContact2: regData.emergency2 || '',
+          medicalInfo: regData.medical || 'None',
+          additionalCaregiver: regData.caregiver || 'None',
+          interests: [],
+          learningStyle: null,
+          specialNeeds: regData.medical !== 'None' ? regData.medical : null,
+          school: 'American Seekers Academy',
           allergies: null,
-          medicalInfo: null,
           profileImage: null
         };
         
         // Create the child in the database
         const newChild = await storage.createChild(childData);
+        
+        // Log successful registration
+        console.log(`✅ Child registered successfully: ${firstName} ${lastName} (ID: ${newChild.id})`);
+        
+        // Update the AI response to reflect successful registration
+        aiResponse = `🎉 **Registration Complete!**
+
+**${firstName} ${lastName}** has been successfully registered at American Seekers Academy!
+
+**Registration Details:**
+- **Student ID:** ${newChild.id}
+- **Grade:** ${regData.grade}
+- **Parent Contact:** ${regData.phone}
+- **Emergency Contact:** ${regData.emergency1}
+
+**Next Steps:**
+1. You can now enroll ${firstName} in available programs and classes
+2. Browse our available programs by asking me about specific subjects or age groups
+3. Schedule a tour or meeting with our staff
+4. Complete any additional enrollment paperwork
+
+Would you like me to help you find suitable programs for ${firstName}, or do you have any other questions about our academy?`;
         
         // Update the action with the new child ID
         processedAction = {

@@ -10,11 +10,22 @@ interface ChatMessage {
 }
 
 interface EnrollmentAction {
-  type: "view_programs" | "enroll" | "view_children" | "recommend";
+  type: "view_programs" | "enroll" | "view_children" | "recommend" | "register_child";
   programId?: number;
   childId?: number;
   interestArea?: string;
   ageRange?: string;
+  registrationData?: {
+    name: string;
+    age: number;
+    grade: string;
+    phone: string;
+    address: string;
+    emergency1: string;
+    emergency2?: string;
+    medical: string;
+    caregiver?: string;
+  };
 }
 
 interface AIResponse {
@@ -23,29 +34,50 @@ interface AIResponse {
 }
 
 // System prompt for the AI assistant
-const SYSTEM_PROMPT = `You are an AI enrollment assistant for an educational platform. 
-Your goal is to help parents find suitable programs for their children and assist with the enrollment process.
+const SYSTEM_PROMPT = `You are an AI enrollment assistant for American Seekers Academy. 
+Your goal is to help parents register their children and find suitable programs.
 
 AVAILABLE INFORMATION:
 1. The parent's children and their details
 2. Available educational programs
 
 TASKS YOU CAN PERFORM:
-1. Recommend programs based on a child's age, interests, and learning style
-2. Answer questions about programs (schedule, curriculum, cost, etc.)
-3. Guide the enrollment process and create enrollment requests
-4. Provide information about existing enrollments
+1. Help register new children by collecting required information
+2. Recommend programs based on a child's age, interests, and learning style
+3. Answer questions about programs (schedule, curriculum, cost, etc.)
+4. Guide the enrollment process and create enrollment requests
+5. Provide information about existing enrollments
+
+CHILD REGISTRATION PROCESS:
+When helping register a new child, collect these details in order:
+1. Child's first and last name
+2. Child's age or birth date
+3. Grade level or academic level
+4. Parent contact information (phone number)
+5. Home address
+6. Emergency contacts (at least one)
+7. Any medical information or special needs
+8. Any additional caregivers
+
+Once you have collected all required information, summarize it and ask for confirmation before proceeding with registration.
+
+REGISTRATION CONFIRMATION:
+When the parent says "yes" or confirms registration after you've summarized the details, immediately use this exact format to trigger registration:
+[REGISTER_CHILD: {name: "FirstName LastName", age: X, grade: "Grade", phone: "Phone", address: "Address", emergency1: "Contact1", emergency2: "Contact2", medical: "Medical Info", caregiver: "Caregiver Info"}]
+
+IMPORTANT: If the parent confirms with "yes" or similar confirmation after you've shown them a summary, proceed with registration using the information you have, even if some details like gender are incomplete. You can process basic registrations and allow updates later.
 
 CONVERSATION GUIDELINES:
 - Be helpful, friendly, and conversational
 - Ask clarifying questions if needed
 - When recommending programs, explain why they might be a good fit
 - If a request cannot be fulfilled, explain why and suggest alternatives
-- When enrollment is requested, confirm details before proceeding
+- When collecting registration info, guide parents step by step
+- Always confirm details before finalizing registration
 
 RESPONSE FORMAT:
 Your responses should be friendly, concise, and focused on helping the parent.
-If you need to perform a specific action like enrollment or recommendation, include the action details in a structured format.`;
+If you need to perform a specific action like registration or enrollment, include the action details in the specified format.`;
 
 /**
  * Process a user message and generate an AI response for the enrollment assistant
@@ -156,6 +188,45 @@ function parseActionFromResponse(response: string): EnrollmentAction | undefined
   const recommendPattern = /\[\s*RECOMMEND\s*:\s*(.*?)\s*\]/i;
   const viewChildrenPattern = /\[\s*VIEW_CHILDREN\s*\]/i;
   const viewProgramsPattern = /\[\s*VIEW_PROGRAMS\s*(?::\s*(.*?))?\s*\]/i;
+  const registerPattern = /\[\s*REGISTER_CHILD\s*:\s*\{(.*?)\}\s*\]/i;
+  
+  // Check for child registration action
+  const registerMatch = response.match(registerPattern);
+  if (registerMatch) {
+    try {
+      // Parse the registration data from the match
+      const dataString = registerMatch[1];
+      const registrationData: any = {};
+      
+      // Extract key-value pairs from the string
+      const pairs = dataString.split(',');
+      for (const pair of pairs) {
+        const [key, value] = pair.split(':').map(s => s.trim());
+        if (key && value) {
+          const cleanKey = key.replace(/"/g, '');
+          const cleanValue = value.replace(/"/g, '');
+          registrationData[cleanKey] = cleanValue;
+        }
+      }
+      
+      return {
+        type: "register_child",
+        registrationData: {
+          name: registrationData.name || '',
+          age: parseInt(registrationData.age) || 0,
+          grade: registrationData.grade || '',
+          phone: registrationData.phone || '',
+          address: registrationData.address || '',
+          emergency1: registrationData.emergency1 || '',
+          emergency2: registrationData.emergency2 || '',
+          medical: registrationData.medical || 'None',
+          caregiver: registrationData.caregiver || 'None'
+        }
+      };
+    } catch (error) {
+      console.error('Error parsing registration data:', error);
+    }
+  }
   
   // Check for enrollment action
   const enrollMatch = response.match(enrollPattern);
