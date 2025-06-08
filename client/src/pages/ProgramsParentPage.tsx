@@ -389,9 +389,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               <Label htmlFor="child-select">Select Child</Label>
               <div className="text-xs text-muted-foreground mb-2">
                 Debug: Children loaded: {Array.isArray(children) ? children.length : 0} | Auth: {isAuthenticated ? 'Yes' : 'No'} | Loading: {childrenLoading ? 'Yes' : 'No'}
+                {children && children.length > 0 && (
+                  <div>Children: {children.map(c => `${c.firstName} ${c.lastName}`).join(', ')}</div>
+                )}
               </div>
               {(() => {
-                console.log("🔄 Rendering select section - children:", children);
+                console.log("🔄 DETAILED Children data:", JSON.stringify(children, null, 2));
                 console.log("🔄 Children loading:", childrenLoading);
                 console.log("🔄 Children error:", childrenError);
                 return null;
