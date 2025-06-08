@@ -45,20 +45,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<any[]>({
     queryKey: ["/api/parent/children"],
     enabled: true,
-    queryFn: async () => {
-      const response = await fetch('/api/parent/children', {
-        headers: {
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImNvcmV5Y3JlYXRlc0BnbWFpbC5jb20iLCJzdWIiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE1MTYyMzkwMjJ9.Ks_BdfH4CKhKXjZc4tBSWqHhAv4s3Hz9nJKPTp9WvtI`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch children: ${response.statusText}`);
-      }
-
-      return response.json();
-    },
   });
 
 
@@ -404,18 +390,15 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                     <SelectValue placeholder="Choose a child" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.isArray(children) && children.length > 0 ? (
-                      children.map((child: any) => {
-                        console.log("Rendering child:", child);
-                        return (
-                          <SelectItem key={child.id} value={child.id.toString()}>
-                            {child.firstName} {child.lastName}
-                          </SelectItem>
-                        );
-                      })
+                    {children && children.length > 0 ? (
+                      children.map((child: any) => (
+                        <SelectItem key={child.id} value={child.id.toString()}>
+                          {child.firstName} {child.lastName}
+                        </SelectItem>
+                      ))
                     ) : (
-                      <SelectItem value="no-children" disabled>
-                        No children found - Count: {Array.isArray(children) ? children.length : 'Not array'} | Data type: {typeof children}
+                      <SelectItem value="" disabled>
+                        No children available
                       </SelectItem>
                     )}
                   </SelectContent>
