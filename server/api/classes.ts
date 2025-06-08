@@ -177,8 +177,11 @@ router.post('/:id/enroll', async (req, res) => {
       status: 'enrolled'
     };
 
+    console.log(`📝 ENROLLMENT OBJECT CREATED:`, enrollment);
+
     // Save enrollment to storage
-    await storage.createEnrollment(enrollment);
+    const savedEnrollment = await storage.createEnrollment(enrollment);
+    console.log(`📝 ENROLLMENT SAVED RESULT:`, savedEnrollment);
 
     // Note: Child enrollment tracking will be handled separately
     // For now, just create the enrollment record

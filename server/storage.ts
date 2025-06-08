@@ -743,14 +743,21 @@ export class MemStorage implements IStorage {
       this.classEnrollments = [];
     }
     this.classEnrollments.push(enrollment);
+    console.log(`📝 ENROLLMENT STORED: Child ${enrollment.childId} enrolled in class ${enrollment.classId}`);
+    console.log(`📝 Total enrollments in memory: ${this.classEnrollments.length}`);
+    console.log(`📝 All enrollments:`, this.classEnrollments);
     return enrollment;
   }
 
   async getEnrollmentsByChildId(childId: number): Promise<any[]> {
     if (!this.classEnrollments) {
+      console.log(`📝 No classEnrollments array exists for child ${childId}`);
       return [];
     }
-    return this.classEnrollments.filter(enrollment => enrollment.childId === childId);
+    const enrollments = this.classEnrollments.filter(enrollment => enrollment.childId === childId);
+    console.log(`📝 ENROLLMENT QUERY: Child ${childId} has ${enrollments.length} enrollments`);
+    console.log(`📝 Enrollments found:`, enrollments);
+    return enrollments;
   }
   
   // Class methods
