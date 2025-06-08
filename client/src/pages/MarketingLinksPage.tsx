@@ -64,26 +64,26 @@ export default function MarketingLinksPage() {
 
   // Fetch marketing links
   const { data: links = [], isLoading } = useQuery<MarketingLink[]>({
-    queryKey: ["/api/school-admin/marketing-links"],
-    queryFn: () => apiRequest("/api/school-admin/marketing-links")
+    queryKey: ["/marketing-links"],
+    queryFn: () => apiRequest("/marketing-links", { method: "GET" })
   });
 
   // Fetch analytics for selected link
   const { data: analytics } = useQuery<LinkAnalytics>({
-    queryKey: ["/api/school-admin/marketing-links", selectedLink?.id, "analytics"],
-    queryFn: () => apiRequest(`/api/school-admin/marketing-links/${selectedLink?.id}/analytics`),
+    queryKey: ["/marketing-links", selectedLink?.id, "analytics"],
+    queryFn: () => apiRequest(`/marketing-links/${selectedLink?.id}/analytics`, { method: "GET" }),
     enabled: !!selectedLink
   });
 
   // Create marketing link mutation
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) => 
-      apiRequest("/api/school-admin/marketing-links", {
+      apiRequest("/marketing-links", {
         method: "POST",
         body: JSON.stringify(data)
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/marketing-links"] });
+      queryClient.invalidateQueries({ queryKey: ["/marketing-links"] });
       setShowCreateForm(false);
       setFormData({
         name: "",
@@ -111,11 +111,11 @@ export default function MarketingLinksPage() {
   // Delete marketing link mutation
   const deleteMutation = useMutation({
     mutationFn: (id: number) => 
-      apiRequest(`/api/school-admin/marketing-links/${id}`, {
+      apiRequest(`/marketing-links/${id}`, {
         method: "DELETE"
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/marketing-links"] });
+      queryClient.invalidateQueries({ queryKey: ["/marketing-links"] });
       toast({
         title: "Marketing link deleted",
         description: "The marketing link has been deleted successfully."
