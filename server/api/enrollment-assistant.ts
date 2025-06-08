@@ -92,7 +92,7 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
     const { message, childrenIds = [], history = [] } = parseResult.data;
     
     // Check authentication
-    if (!req.session.userId) {
+    if (!req.auth?.userId) {
       return res.status(401).json({ message: "You need to be logged in to use the enrollment assistant" });
     }
     
@@ -186,7 +186,7 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
     if (action && action.type === "register_child") {
       try {
         // Get the parent user
-        const user = await storage.getUser(req.session.userId);
+        const user = await storage.getUser(req.auth.userId);
         
         if (!user || user.role !== "parent") {
           return res.status(403).json({ 
