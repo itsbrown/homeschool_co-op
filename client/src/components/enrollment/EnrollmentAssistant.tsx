@@ -263,7 +263,7 @@ export default function EnrollmentAssistant() {
       )}
       
       {/* If conversation has more messages, show just the latest response at the top */}
-      {messages.length > 1 && (
+      {messages.length > 1 && messages[messages.length - 1]?.content && (
         <div className="w-full max-w-2xl mx-auto text-center mb-8">
           <div className="text-2xl font-medium mb-2">{messages[messages.length - 1].content.split('\n')[0]}</div>
           {messages[messages.length - 1].content.split('\n').length > 1 && (
