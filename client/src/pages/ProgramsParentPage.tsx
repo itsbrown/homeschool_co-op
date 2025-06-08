@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import { TempAuth } from "@/components/TempAuth";
 
 // Separate component for Programs content to avoid hooks issues
 function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
@@ -42,32 +43,9 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   });
 
   // Fetch children for enrollment
-  const { 
-    data: children, 
-    isLoading: childrenLoading, 
-    error: childrenError 
-  } = useQuery({
+  const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<any[]>({
     queryKey: ["/api/parent/children"],
-    enabled: true, // Always enabled since API handles auth
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
-      const response = await fetch('/api/parent/children', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch children: ${response.statusText}`);
-      }
-
-      return response.json();
-    },
+    enabled: isAuthenticated,
   });
 
   // Debug children data
@@ -178,6 +156,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-6">
+      <TempAuth />
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="all">All Offerings</TabsTrigger>
