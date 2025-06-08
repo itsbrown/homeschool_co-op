@@ -129,16 +129,70 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
       }
     }
     
-    // Get all available school information
-    const [programs, instructors, knowledgeBases, activities, curricula, lessons, schools] = await Promise.all([
-      storage.getPublishedPrograms(),
-      storage.getAllUsers().then(users => users.filter(user => user.role === 'instructor')),
-      storage.getPublicKnowledgeBases(50), // Get up to 50 knowledge bases
-      storage.getPublicActivities(50), // Get up to 50 activities
-      storage.getPublicCurricula(50), // Get up to 50 curricula
-      storage.getPublicLessons(50), // Get up to 50 lessons
-      storage.getSchools()
-    ]);
+    // Get user context to determine school affiliation
+    const currentUser = await storage.getUserByEmail(req.auth.email);
+    const userSchoolId = currentUser?.schoolId || 1; // Default to first school if not specified
+    
+    // Get available data based on what storage methods exist
+    let programs = [];
+    let instructors = [];
+    let knowledgeBases = [];
+    let activities = [];
+    let curricula = [];
+    let lessons = [];
+    let schools = [];
+    let classes = [];
+
+    try {
+      // Get programs/classes (using available methods)
+      if (typeof storage.getPublishedPrograms === 'function') {
+        programs = await storage.getPublishedPrograms();
+      } else if (typeof storage.getPrograms === 'function') {
+        programs = await storage.getPrograms();
+      } else if (typeof storage.getClasses === 'function') {
+        classes = await storage.getClasses();
+      }
+
+      // Get instructors
+      if (typeof storage.getAllUsers === 'function') {
+        const users = await storage.getAllUsers();
+        instructors = users.filter(user => user.role === 'instructor');
+      }
+
+      // Get schools
+      if (typeof storage.getSchools === 'function') {
+        schools = await storage.getSchools();
+      }
+
+      // Try to get additional educational resources if methods exist
+      if (typeof storage.getPublicKnowledgeBases === 'function') {
+        knowledgeBases = await storage.getPublicKnowledgeBases(50);
+      } else if (typeof storage.getKnowledgeBases === 'function') {
+        knowledgeBases = await storage.getKnowledgeBases();
+      }
+
+      if (typeof storage.getPublicActivities === 'function') {
+        activities = await storage.getPublicActivities(50);
+      } else if (typeof storage.getActivities === 'function') {
+        activities = await storage.getActivities();
+      }
+
+      if (typeof storage.getPublicCurricula === 'function') {
+        curricula = await storage.getPublicCurricula(50);
+      } else if (typeof storage.getCurricula === 'function') {
+        curricula = await storage.getCurricula();
+      }
+
+      if (typeof storage.getPublicLessons === 'function') {
+        lessons = await storage.getPublicLessons(50);
+      } else if (typeof storage.getLessons === 'function') {
+        lessons = await storage.getLessons();
+      }
+
+    } catch (error) {
+      console.error('Error fetching school data for AI assistant:', error);
+      // Continue with empty arrays if data fetching fails
+    }
     
     // Format comprehensive context
     const childrenContext = children.length > 0
@@ -174,6 +228,28 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
            Enrollment Status: ${program.isPublished ? 'Open' : 'Closed'}`
         ).join('\n\n')}`
       : 'No programs are currently available.';
+
+    const classesContext = classes.length > 0
+      ? `AVAILABLE CLASSES:\n${classes.map(cls => 
+          `Class ID: ${cls.id}
+           Title: ${cls.title}
+           Description: ${cls.description || 'No description provided'}
+           Category: ${cls.category || 'General'}
+           Age Range: ${cls.ageRange || 'All ages'}
+           Grade Levels: ${cls.gradeLevels?.join(', ') || 'All grades'}
+           Schedule: ${cls.schedule || 'Flexible scheduling'}
+           Price: $${cls.price || 0}
+           Location: ${cls.location || 'Online/TBD'}
+           Max Capacity: ${cls.maxCapacity || 'Unlimited'} students
+           Current Enrollment: ${cls.enrollmentCount || 0} students
+           Instructor: ${cls.instructorName || cls.instructor || 'TBD'}
+           Duration: ${cls.duration || 'Variable'} minutes
+           Materials: ${cls.materials || 'Basic supplies'}
+           Start Date: ${cls.startDate ? new Date(cls.startDate).toLocaleDateString() : 'Ongoing'}
+           End Date: ${cls.endDate ? new Date(cls.endDate).toLocaleDateString() : 'Ongoing'}
+           Status: ${cls.isPublished ? 'Open for enrollment' : 'Closed'}`
+        ).join('\n\n')}`
+      : '';
 
     const instructorsContext = instructors.length > 0
       ? `SCHOOL INSTRUCTORS:\n${instructors.map(instructor => 
@@ -261,6 +337,8 @@ ${childrenContext}
 
 ${programsContext}
 
+${classesContext}
+
 ${instructorsContext}
 
 ${knowledgeBasesContext}
@@ -271,6 +349,20 @@ ${lessonsContext}
 
 ${activitiesContext}
 
+SCHOOL-SPECIFIC CONTEXT:
+- Current user school ID: ${userSchoolId}
+- User email: ${req.auth.email}
+- Available data sources: ${[
+  programs.length > 0 ? 'Programs' : null,
+  classes.length > 0 ? 'Classes' : null,
+  instructors.length > 0 ? 'Instructors' : null,
+  knowledgeBases.length > 0 ? 'Knowledge Bases' : null,
+  activities.length > 0 ? 'Activities' : null,
+  curricula.length > 0 ? 'Curricula' : null,
+  lessons.length > 0 ? 'Lessons' : null,
+  schools.length > 0 ? 'Schools' : null
+].filter(Boolean).join(', ')}
+
 ASSISTANT CAPABILITIES:
 - Answer questions about programs, classes, instructors, and school policies
 - Help with child registration and enrollment processes
@@ -278,7 +370,8 @@ ASSISTANT CAPABILITIES:
 - Assist with scheduling and program selection
 - Explain pricing, payment options, and enrollment requirements
 - Connect families with appropriate instructors and programs
-- Suggest educational materials and activities based on child's needs and interests`;
+- Suggest educational materials and activities based on child's needs and interests
+- Access real-time data about class availability, instructor schedules, and enrollment status`;
     
     // Prepare messages for the AI
     const messages = [
