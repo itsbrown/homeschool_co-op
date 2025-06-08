@@ -2115,6 +2115,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test authentication endpoint
+  app.get("/api/test-auth", jwtCheck, (req: any, res) => {
+    res.json({
+      message: "Authentication successful",
+      user: req.auth,
+      email: req.auth?.email,
+      userId: req.auth?.userId
+    });
+  });
+
+  // AI Enrollment Assistant endpoint
+  app.post("/api/ai/enrollment-assistant", jwtCheck, processEnrollmentMessage);
+
   // Serve uploaded files (including PDFs)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

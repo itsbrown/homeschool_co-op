@@ -116,9 +116,14 @@ export const processEnrollmentMessage = async (req: Request, res: Response) => {
     const { message, childrenIds = [], history = [] } = parseResult.data;
     
     // Check authentication
-    if (!req.auth?.userId) {
+    if (!req.auth?.userId && !req.auth?.supabaseId) {
+      console.log('❌ Authentication failed - req.auth:', req.auth);
       return res.status(401).json({ message: "You need to be logged in to use the enrollment assistant" });
     }
+
+    // Use either userId or supabaseId for backward compatibility
+    const currentUserId = req.auth.userId || req.auth.supabaseId;
+    console.log('✅ AI Assistant authenticated for user:', req.auth.email, 'ID:', currentUserId);
     
     // Get comprehensive school data for context
     const children = [];
