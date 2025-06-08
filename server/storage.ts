@@ -179,6 +179,7 @@ export class MemStorage implements IStorage {
   private activityIdCounter: number;
   private marketingLinkIdCounter: number;
   private linkAnalyticsIdCounter: number;
+  private classEnrollments: any[];
 
   constructor() {
     this.usersStore = new Map();
@@ -195,6 +196,7 @@ export class MemStorage implements IStorage {
     this.activitiesStore = new Map();
     this.marketingLinksStore = new Map();
     this.linkAnalyticsStore = new Map();
+    this.classEnrollments = [];
     
     this.userIdCounter = 1;
     this.curriculumIdCounter = 1;

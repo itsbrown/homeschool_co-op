@@ -180,21 +180,8 @@ router.post('/:id/enroll', async (req, res) => {
     // Save enrollment to storage
     await storage.createEnrollment(enrollment);
 
-    // Update child's classes array
-    const updatedClasses = child.classes || [];
-    if (!updatedClasses.some(c => c.id === classId)) {
-      updatedClasses.push({
-        id: classId,
-        title: classItem.title,
-        enrollmentDate: new Date().toISOString(),
-        status: 'enrolled'
-      });
-      
-      await storage.updateChild(childId, {
-        ...child,
-        classes: updatedClasses
-      });
-    }
+    // Note: Child enrollment tracking will be handled separately
+    // For now, just create the enrollment record
 
     console.log(`✅ Successfully enrolled ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
     

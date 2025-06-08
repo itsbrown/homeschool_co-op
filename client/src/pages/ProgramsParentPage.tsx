@@ -62,6 +62,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       setEnrollmentDialog({ open: false });
       setSelectedChildId("");
       queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
     },
     onError: (error: any) => {
       toast({
