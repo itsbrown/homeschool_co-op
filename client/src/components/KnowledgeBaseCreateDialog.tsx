@@ -40,7 +40,7 @@ const validationSchema = insertKnowledgeBaseSchema.extend({
   tags: z.string().optional(),
   objectives: z.string().optional(),
   fileUpload: z.instanceof(FileList).optional(),
-});
+}).omit({ files: true, metadata: true });
 
 type FormValues = z.infer<typeof validationSchema>;
 
@@ -84,14 +84,51 @@ export function KnowledgeBaseCreateDialog({
 
   const createKnowledgeBaseMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/knowledge-bases", data);
+      // First create the knowledge base
+      const kb = await apiRequest("POST", "/api/knowledge-bases", data);
+      
+      // If files are uploaded, process them with AI
+      if (selectedFiles.length > 0) {
+        const formData = new FormData();
+        selectedFiles.forEach(file => {
+          formData.append('files', file.file);
+        });
+        
+        // Upload files for AI processing
+        const uploadResponse = await fetch(`/api/knowledge-bases/${kb.id}/upload`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${user?.token || ''}`,
+          },
+        });
+        
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload files for AI processing');
+        }
+        
+        const result = await uploadResponse.json();
+        
+        // Show processing status
+        toast({
+          title: "AI Processing Started",
+          description: `Files uploaded successfully. AI analysis is processing your content.`,
+        });
+        
+        return { ...kb, processingJobId: result.jobId };
+      }
+      
+      return kb;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/author/me"] });
+      
       toast({
         title: "Success",
-        description: "Knowledge base created successfully",
+        description: result.processingJobId 
+          ? "Knowledge base created and AI processing started" 
+          : "Knowledge base created successfully",
       });
       onOpenChange(false);
     },
