@@ -527,6 +527,12 @@ export class MemStorage implements IStorage {
     };
     
     this.knowledgeBaseStore.set(id, knowledgeBase);
+    
+    // Persist to disk
+    await this.saveKnowledgeBasesToDisk();
+    console.log(`✅ Knowledge base created and saved to disk with ID: ${id}, title: "${knowledgeBase.title}"`);
+    console.log(`📊 Total knowledge bases in storage: ${this.knowledgeBaseStore.size}`);
+    
     return knowledgeBase;
   }
   
