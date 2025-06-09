@@ -84,7 +84,7 @@ class AnthropicService {
         max_tokens: maxTokens,
       });
 
-      const content = response.content[0].text;
+      const content = (response.content[0] as any).text;
       
       if (!content) {
         throw new Error("Anthropic returned empty response");
@@ -164,7 +164,52 @@ Respond with valid JSON only.`;
 
   try {
     const response = await anthropicService.generateContent(prompt, true, 2000);
-    return JSON.parse(response);
+    
+    // Clean up the response to fix common JSON issues
+    let cleanedResponse = response.trim();
+    
+    // Remove any markdown code blocks
+    if (cleanedResponse.startsWith('```json')) {
+      cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    }
+    if (cleanedResponse.startsWith('```')) {
+      cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    // Try to find and extract valid JSON by counting braces
+    const jsonStart = cleanedResponse.indexOf('{');
+    if (jsonStart === -1) {
+      throw new Error("No JSON object found in response");
+    }
+    
+    let braceCount = 0;
+    let jsonEnd = -1;
+    
+    for (let i = jsonStart; i < cleanedResponse.length; i++) {
+      if (cleanedResponse[i] === '{') {
+        braceCount++;
+      } else if (cleanedResponse[i] === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          jsonEnd = i;
+          break;
+        }
+      }
+    }
+    
+    if (jsonEnd === -1) {
+      throw new Error("Incomplete JSON object in response");
+    }
+    
+    cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
+    
+    // Fix common JSON issues
+    cleanedResponse = cleanedResponse
+      .replace(/,(\s*[}\]])/g, '$1')  // Remove trailing commas
+      .replace(/([{,]\s*)(\w+):/g, '$1"$2":')  // Quote unquoted keys
+      .replace(/:\s*'([^']*)'/g, ': "$1"');  // Replace single quotes with double quotes
+    
+    return JSON.parse(cleanedResponse);
   } catch (error) {
     console.error("AI curriculum generation failed:", error);
     // Return a basic curriculum structure as fallback
