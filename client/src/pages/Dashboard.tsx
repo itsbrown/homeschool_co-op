@@ -45,6 +45,21 @@ export default function Dashboard() {
     );
   }
 
+  // For super admin, admin, educator - show educator dashboard with AI tools
+  if (user && ['superAdmin', 'admin', 'educator'].includes(userRole)) {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* AI Status Panel */}
+        <div className="container mx-auto pt-6 pb-2">
+          <AIStatusPanel />
+        </div>
+        
+        {/* Role-specific Dashboard */}
+        <RoleDashboard />
+      </div>
+    );
+  }
+
   return (
     <AppShell>
       {/* AI Status Panel */}
