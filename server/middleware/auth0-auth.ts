@@ -63,7 +63,12 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     // Check for role override from role switcher
     const activeRoleHeader = req.headers['x-active-role'];
     const multiRoleUsers = ['coreycreates@gmail.com'];
+    
+    // Set default roles for specific users
     let effectiveRole = user.user_metadata?.role || 'parent';
+    if (user.email === 'contact.americanseekersacademy@gmail.com') {
+      effectiveRole = 'school-admin';
+    }
 
     // Allow role switching for multi-role users
     if (user.email && multiRoleUsers.includes(user.email) && activeRoleHeader) {
