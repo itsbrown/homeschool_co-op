@@ -30,6 +30,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   
   // Curriculum methods
   getCurriculum(id: number): Promise<Curriculum | undefined>;
@@ -271,6 +272,16 @@ export class MemStorage implements IStorage {
       name: "Test Educator",
       subscription: "educator"
     });
+    
+    // School admin user for American Seekers Academy
+    this.createUser({
+      username: "contact",
+      email: "contact.americanseekersacademy@gmail.com",
+      password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
+      role: "schoolAdmin",
+      name: "Corey Creates",
+      subscription: "school"
+    });
   }
 
   // User methods
@@ -296,6 +307,17 @@ export class MemStorage implements IStorage {
     const user: User = { ...insertUser, id, createdAt: now };
     this.usersStore.set(id, user);
     return user;
+  }
+  
+  async updateUser(id: number, updateData: Partial<InsertUser>): Promise<User | undefined> {
+    const existingUser = this.usersStore.get(id);
+    if (!existingUser) {
+      return undefined;
+    }
+    
+    const updatedUser: User = { ...existingUser, ...updateData };
+    this.usersStore.set(id, updatedUser);
+    return updatedUser;
   }
   
   // Curriculum methods
