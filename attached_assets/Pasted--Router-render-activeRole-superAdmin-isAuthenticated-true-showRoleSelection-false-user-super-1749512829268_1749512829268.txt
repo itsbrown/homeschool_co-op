@@ -1,0 +1,26 @@
+🔐 Router render - activeRole: superAdmin isAuthenticated: true showRoleSelection: false user: superadmin@americanseekersacademy.com location: /schools/knowledge-base/3
+🔄 RoleContext useEffect triggered - user: superadmin@americanseekersacademy.com
+🔄 Role check for user: superadmin@americanseekersacademy.com
+🔄 hasMultipleRoles: false savedRole: superAdmin
+🎯 Single role user - setting role: superAdmin
+🔄 RoleProvider rendering - activeRole: superAdmin, canSwitchRoles: false, showRoleSelection: false, user: superadmin@americanseekersacademy.com
+Auth state change: 
+Object {event: "INITIAL_SESSION", session: {…}}
+🔍 SupabaseProvider user state updated: 
+Object {email: "superadmin@americanseekersacademy.com", authenticated: true, userId: "ac3f50b8-0e07-401f-80b8-96af1de10106"}
+✅ Stored Supabase access token
+Warning: Each child in a list should have a unique &quot;key&quot; prop.
+
+Check the render method of `KnowledgeBaseDetailsPage`. See https://reactjs.org/link/warning-keys for more information.
+    at _c (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/ui/card.tsx:20:11)
+    at KnowledgeBaseDetailsPage (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/schools/KnowledgeBaseDetailsPage.tsx:204:18)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=dbabaa84:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=dbabaa84:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?v=jhSLcsX_JFN2JZ4I_VRGc:202:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=dbabaa84:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=dbabaa84:64:5)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at RoleProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/RoleContext.tsx:30:32)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=dbabaa84:2805:3)
+    at App
