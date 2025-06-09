@@ -37,7 +37,8 @@ export default function RoleDashboard() {
     case 'admin':
     case 'school_admin':
     case 'schoolAdmin':
-      return <AdminDashboard />;
+    case 'superAdmin':
+      return <EducatorDashboard />;
     case 'educator':
       return <EducatorDashboard />;
     case 'parent':
