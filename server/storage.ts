@@ -1050,9 +1050,10 @@ export class MemStorage implements IStorage {
   // Helper method to initialize sample knowledge bases
   private async initializeKnowledgeBases(): Promise<void> {
     try {
-      // First try to load from JSON file
       const fs = await import('fs');
       const path = await import('path');
+      
+      // First try to load from JSON file
       const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
       
       if (fs.existsSync(kbFilePath)) {
@@ -1073,11 +1074,61 @@ export class MemStorage implements IStorage {
         return;
       }
 
-      // If no file exists, load sample data as fallback
+      // Try to load from uploads directory
+      const uploadsPath = path.join(process.cwd(), 'uploads', 'knowledge-bases');
+      
+      if (fs.existsSync(uploadsPath)) {
+        const kbDirs = fs.readdirSync(uploadsPath).filter(item => {
+          return fs.statSync(path.join(uploadsPath, item)).isDirectory();
+        });
+        
+        let loadedCount = 0;
+        for (const kbId of kbDirs) {
+          const kbPath = path.join(uploadsPath, kbId);
+          const files = fs.readdirSync(kbPath);
+          
+          if (files.length > 0) {
+            // Create knowledge base entry from uploaded files
+            const kb: KnowledgeBase = {
+              id: this.knowledgeBaseIdCounter++,
+              title: kbId.includes('antoinette') ? 'Antoinette Brown Blackwell Collection' : 
+                     kbId.includes('american') ? 'American Seekers Academy' : 'Uploaded Knowledge Base',
+              description: `Knowledge base containing ${files.length} uploaded files`,
+              subject: 'General',
+              difficulty: 'All Levels',
+              authorId: 2, // Super admin
+              price: 0,
+              files: files.map(file => ({
+                url: `/uploads/knowledge-bases/${kbId}/${file}`,
+                type: path.extname(file).substring(1),
+                name: file
+              })),
+              metadata: { 
+                tags: ['uploaded', 'documents'], 
+                objectives: ['Access uploaded content']
+              },
+              isPublic: true,
+              downloadCount: 0,
+              purchasedBy: [],
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+            
+            this.knowledgeBaseStore.set(kb.id, kb);
+            loadedCount++;
+          }
+        }
+        
+        if (loadedCount > 0) {
+          console.log(`✅ Successfully loaded ${loadedCount} uploaded knowledge bases`);
+          return;
+        }
+      }
+
+      // Fallback to sample data if no uploads found
       this.initializeSampleKnowledgeBases();
     } catch (error) {
       console.error('Error loading knowledge bases:', error);
-      // Fallback to sample data
       this.initializeSampleKnowledgeBases();
     }
   }
