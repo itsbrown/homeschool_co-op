@@ -435,7 +435,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI curriculum generation
   app.post("/api/curricula/generate", isAuthenticated, async (req, res) => {
     try {
-      console.log("AI Curriculum Generation - Request received", { userId: req.session.userId });
+      const authData = (req as any).auth;
+      const userId = authData?.userId || 'dev-user';
+      console.log("AI Curriculum Generation - Request received", { userId });
       const { subject, gradeLevel, learningStyles, additionalDetails, knowledgeBaseIds } = req.body;
 
       // Validate form data
@@ -476,7 +478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("AI Curriculum Generation - Template generated successfully");
 
         // Convert to database format
-        curriculumData = curriculumTemplateToDbFormat(curriculumTemplate, req.session.userId);
+        curriculumData = curriculumTemplateToDbFormat(curriculumTemplate, userId);
 
         // Save to database
         curriculum = await storage.createCurriculum(curriculumData);
@@ -497,7 +499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               lessonTemplate,
               unit.title,
               curriculum.id,
-              req.session.userId,
+              userId,
               curriculumData.subject,
               curriculumData.gradeLevel
             );
