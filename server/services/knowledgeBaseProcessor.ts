@@ -185,7 +185,7 @@ class KnowledgeBaseProcessor {
           readabilityScore: analysis.readabilityScore
         }))
       },
-      processedAt: new Date().toISOString()
+      processedAt: new Date()
     };
 
     try {
@@ -202,7 +202,7 @@ class KnowledgeBaseProcessor {
   cleanupOldJobs(maxAgeHours: number = 24): void {
     const cutoffTime = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
 
-    for (const [jobId, job] of this.jobs.entries()) {
+    for (const [jobId, job] of Array.from(this.jobs.entries())) {
       if (job.startTime < cutoffTime && (job.status === 'completed' || job.status === 'failed')) {
         // Delete job files
         const jobDir = path.join(this.uploadsDir, jobId);

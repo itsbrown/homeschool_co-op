@@ -40,6 +40,7 @@ import parentRouter from "./api/parent";
 import { handleEnrollmentMessage } from "./api/enrollment-assistant";
 import migrationRouter from "./routes/migration";
 import marketingLinksRouter from "./api/marketing-links";
+import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';

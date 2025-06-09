@@ -490,6 +490,9 @@ export const knowledgeBases = pgTable("knowledge_bases", {
   isPublic: boolean("is_public").default(false).notNull(),
   downloadCount: integer("download_count").default(0).notNull(),
   purchasedBy: jsonb("purchased_by").default([]).notNull(), // array of user IDs
+  aiProcessed: boolean("ai_processed").default(false).notNull(),
+  aiInsights: jsonb("ai_insights"), // AI analysis results
+  processedAt: timestamp("processed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -500,7 +503,10 @@ export const insertKnowledgeBaseSchema = createInsertSchema(knowledgeBases).omit
   updatedAt: true, 
   authorId: true, 
   downloadCount: true,
-  purchasedBy: true 
+  purchasedBy: true,
+  aiProcessed: true,
+  aiInsights: true,
+  processedAt: true
 });
 export type InsertKnowledgeBase = z.infer<typeof insertKnowledgeBaseSchema>;
 export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
