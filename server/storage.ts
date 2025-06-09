@@ -1178,6 +1178,9 @@ export class MemStorage implements IStorage {
         
         if (loadedCount > 0) {
           console.log(`✅ Successfully loaded ${loadedCount} uploaded knowledge bases`);
+          // Also create representative knowledge bases to restore previously created content
+          this.createRepresentativeKnowledgeBases();
+          await this.saveKnowledgeBasesToDisk();
           return;
         }
       }
