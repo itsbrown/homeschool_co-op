@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import pdfParse from 'pdf-parse';
+// @ts-ignore
+const pdfParse = require('pdf-parse');
 import mammoth from 'mammoth';
 import { fileTypeFromBuffer } from 'file-type';
 

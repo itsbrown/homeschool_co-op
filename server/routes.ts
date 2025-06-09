@@ -2185,5 +2185,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Knowledge base file upload routes
+  app.post("/api/knowledge-bases/:id/upload", isAuthenticated, uploadKnowledgeBaseFiles);
+  app.get("/api/knowledge-bases/processing/:jobId", isAuthenticated, getProcessingStatus);
+  app.get("/api/knowledge-bases/processing-stats", isAuthenticated, getProcessingStats);
+
   return httpServer;
 }

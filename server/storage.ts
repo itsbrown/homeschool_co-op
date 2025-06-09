@@ -73,7 +73,7 @@ export interface IStorage {
   getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
   getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;
   createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase>;
-  updateKnowledgeBase(id: number, knowledgeBase: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined>;
+  updateKnowledgeBase(id: number, knowledgeBase: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined>;
   incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined>;
   addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined>;
   
@@ -992,7 +992,7 @@ export class MemStorage implements IStorage {
     return newKnowledgeBase;
   }
   
-  async updateKnowledgeBase(id: number, updateData: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
+  async updateKnowledgeBase(id: number, updateData: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined> {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
     
