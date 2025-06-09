@@ -139,6 +139,20 @@ function DashboardRouter() {
     );
   }
   
+  // For super admin, admin, educator - route to Dashboard component with AI tools
+  if (['superAdmin', 'admin', 'educator'].includes(activeRole)) {
+    console.log(`🎯 Routing superAdmin/admin/educator to Dashboard component with AI tools`);
+    return <Dashboard key={`dashboard-${activeRole}`} />;
+  }
+  
+  // For school admin - route to school admin interface
+  if (['school_admin', 'schoolAdmin'].includes(activeRole)) {
+    console.log(`🏫 Routing school admin to MySchoolPage`);
+    return <MySchoolPage key={`dashboard-${activeRole}`} />;
+  }
+  
+  // Default fallback to school admin page
+  console.log(`🔄 Default routing to MySchoolPage for role:`, activeRole);
   return <MySchoolPage key={`dashboard-${activeRole}`} />;
 }
 
