@@ -359,76 +359,32 @@ export default function KnowledgeBaseDetailsPage() {
   
   // Fetch knowledge base details based on ID
   const { data: knowledgeBase, isLoading, error } = useQuery({
-    queryKey: [`/api/schools/knowledge-bases/${id}`],
-    queryFn: async () => {
-      // For now, combine sample data with any locally stored knowledge bases
-      let localKbs = [];
-      try {
-        localKbs = JSON.parse(localStorage.getItem('knowledgeBases') || '[]');
-      } catch (e) {
-        console.error('Error parsing knowledge bases:', e);
-      }
-      
-      // Combine sample knowledge bases with local ones
-      const sampleKnowledgeBases = [
-        {
-          id: 1,
-          title: "American History Primary Documents",
-          description: "A comprehensive collection of primary documents from American history, including the Declaration of Independence, Constitution, and other significant historical texts.",
-          subjectArea: "History",
-          gradeLevel: ["9-12"],
-          status: "Published",
-          visibility: "School",
-          fileCount: 36,
-          size: "128 MB",
-          createdAt: "2023-09-15",
-          updatedAt: "2023-10-20",
-          tags: ["American History", "Primary Sources", "Constitution", "Revolution"],
-          creator: "Dr. Sarah Johnson",
-          rating: 4.8,
-          usageCount: 85,
-        },
-        {
-          id: 2,
-          title: "Middle School Mathematics",
-          description: "Core mathematics curriculum materials for grades 6-8, covering algebra, geometry, statistics, and more.",
-          subjectArea: "Mathematics",
-          gradeLevel: ["6-8"],
-          status: "Published",
-          visibility: "School",
-          fileCount: 42,
-          size: "95 MB",
-          createdAt: "2023-08-05",
-          updatedAt: "2023-11-10",
-          tags: ["Mathematics", "Algebra", "Geometry", "Middle School"],
-          creator: "Prof. Michael Chen",
-          rating: 4.6,
-          usageCount: 120,
-        },
-      ];
-      
-      const allKbs = [...sampleKnowledgeBases, ...localKbs];
-      
-      // Find the KB with the matching ID
-      const foundKb = allKbs.find(kb => kb.id === Number(id));
-      
-      if (!foundKb) {
-        throw new Error(`Knowledge base with ID ${id} not found`);
-      }
-      
-      return foundKb;
-    },
+    queryKey: [`/api/knowledge-bases/${id}`],
+    enabled: !!id,
   });
 
-  // Fetch files for the knowledge base
-  const { data: files = sampleFiles } = useQuery({
-    queryKey: [`/api/schools/knowledge-bases/${id}/files`],
-    enabled: !!knowledgeBase,
-    queryFn: async () => {
-      // For now, return sample files
-      return sampleFiles;
-    },
-  });
+  // Transform the fetched knowledge base data to match UI expectations
+  const displayKnowledgeBase = knowledgeBase ? {
+    id: knowledgeBase.id,
+    title: knowledgeBase.title,
+    description: knowledgeBase.description,
+    subjectArea: knowledgeBase.subject,
+    gradeLevel: knowledgeBase.difficulty ? [knowledgeBase.difficulty] : ["All Levels"],
+    status: knowledgeBase.isPublic ? "Published" : "Draft",
+    visibility: knowledgeBase.isPublic ? "Public" : "Private",
+    fileCount: knowledgeBase.files ? knowledgeBase.files.length : 0,
+    size: "N/A", 
+    createdAt: knowledgeBase.createdAt ? new Date(knowledgeBase.createdAt).toLocaleDateString() : 'N/A',
+    updatedAt: knowledgeBase.updatedAt ? new Date(knowledgeBase.updatedAt).toLocaleDateString() : 'N/A',
+    tags: knowledgeBase.metadata?.tags || [],
+    creator: "Admin",
+    rating: 4.5,
+    usageCount: knowledgeBase.downloadCount || 0,
+    files: knowledgeBase.files || []
+  } : null;
+
+  // Use files from the knowledge base data
+  const files = displayKnowledgeBase?.files || [];
 
   if (isLoading) {
     return (
@@ -441,7 +397,7 @@ export default function KnowledgeBaseDetailsPage() {
     );
   }
 
-  if (error || !knowledgeBase) {
+  if (error || !displayKnowledgeBase) {
     return (
       <SchoolAdminLayout pageTitle="Knowledge Base - Error">
         <div className="max-w-4xl mx-auto p-6">
