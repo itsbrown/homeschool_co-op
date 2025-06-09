@@ -84,7 +84,7 @@ export function KnowledgeBaseCreateDialog({
 
   const createKnowledgeBaseMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("/api/knowledge-bases", "POST", data);
+      return apiRequest("POST", "/api/knowledge-bases", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases/public"] });
@@ -311,9 +311,7 @@ export function KnowledgeBaseCreateDialog({
             </svg>
           </button>
         </div>
-        {/* Log dialog visibility for debugging */}
-        <div className="sr-only">{console.log("Custom dialog content rendered, dialog state:", open)}</div>
-        
+        {/* Dialog content */}
         <Form {...form}>
           <form 
             onSubmit={(e) => {
@@ -348,6 +346,7 @@ export function KnowledgeBaseCreateDialog({
                       placeholder="Describe your knowledge base and what it contains"
                       className="min-h-[100px]"
                       {...field}
+                      value={field.value ?? ""}
                     />
                   </FormControl>
                   <FormMessage />
