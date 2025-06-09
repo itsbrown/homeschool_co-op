@@ -447,7 +447,7 @@ export default function KnowledgeBaseDetailsPage() {
   const uniqueTags = Array.from(new Set(allTags));
 
   return (
-    <SchoolAdminLayout pageTitle={`Knowledge Base - ${knowledgeBase.title}`}>
+    <SchoolAdminLayout pageTitle={`Knowledge Base - ${displayKnowledgeBase.title}`}>
       {/* Hidden file input for uploads */}
       <input
         type="file"
@@ -463,7 +463,7 @@ export default function KnowledgeBaseDetailsPage() {
           <DialogHeader>
             <DialogTitle>Upload Files</DialogTitle>
             <DialogDescription>
-              Add files to the {knowledgeBase.title} knowledge base.
+              Add files to the {displayKnowledgeBase.title} knowledge base.
             </DialogDescription>
           </DialogHeader>
           
