@@ -62,6 +62,7 @@ export function KnowledgeBaseCreateDialog({
   console.log("KnowledgeBaseCreateDialog rendered, open:", open);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<FileData[]>([]);
 
@@ -191,15 +192,8 @@ export function KnowledgeBaseCreateDialog({
       
       console.log("Submitting simplified payload:", payload);
       
-      // Use a simpler, direct fetch call
-      const response = await fetch('/api/knowledge-bases', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        credentials: 'include' // Important for cookies/session
-      });
+      // Use the apiRequest function which handles authentication automatically
+      const response = await apiRequest("POST", "/api/knowledge-bases", payload);
       
       const responseText = await response.text();
       console.log("Response status:", response.status);
