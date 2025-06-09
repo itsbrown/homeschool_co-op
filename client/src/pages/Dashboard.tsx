@@ -50,15 +50,15 @@ export default function Dashboard() {
   if (user && ['superAdmin', 'admin', 'educator'].includes(userRole)) {
     console.log('🎯 Routing to Educator Dashboard for role:', userRole);
     return (
-      <div className="min-h-screen bg-background">
+      <AppShell>
         {/* AI Status Panel */}
-        <div className="container mx-auto pt-6 pb-2">
+        <div className="mb-6">
           <AIStatusPanel />
         </div>
         
         {/* Role-specific Dashboard */}
         <RoleDashboard />
-      </div>
+      </AppShell>
     );
   }
 
