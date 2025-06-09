@@ -47,7 +47,7 @@ type FormValues = z.infer<typeof validationSchema>;
 interface FileData {
   name: string;
   type: string;
-  url: string; // This would be a data URL in our case
+  file: File;
 }
 
 type KnowledgeBaseCreateDialogProps = {
@@ -62,9 +62,10 @@ export function KnowledgeBaseCreateDialog({
   console.log("KnowledgeBaseCreateDialog rendered, open:", open);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<FileData[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<FileData[]>([]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(validationSchema),
@@ -181,7 +182,7 @@ export function KnowledgeBaseCreateDialog({
               resolve({
                 name: file.name,
                 type: file.type,
-                url: e.target?.result as string,
+                file: file,
               });
             };
             
@@ -542,7 +543,7 @@ export function KnowledgeBaseCreateDialog({
                     Upload PDFs, documents, slides, or other educational resources
                   </FormDescription>
                   <FormMessage />
-                  {uploadedFiles.length > 0 && (
+                  {selectedFiles.length > 0 && (
                     <div className="mt-2">
                       <p className="text-sm font-medium mb-1">Files to upload:</p>
                       <ul className="space-y-2">
