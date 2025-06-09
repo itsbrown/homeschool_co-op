@@ -12,7 +12,7 @@ const anthropic = new Anthropic({
 });
 
 // Check if Anthropic API key is available
-const isAnthropicAvailable = !!process.env.ANTHROPIC_API_KEY;
+const anthropicApiKeyAvailable = !!process.env.ANTHROPIC_API_KEY;
 
 class AnthropicService {
   private static instance: AnthropicService;
@@ -20,8 +20,8 @@ class AnthropicService {
   private status: "operational" | "degraded" | "down";
 
   private constructor() {
-    this.available = isAnthropicAvailable;
-    this.status = isAnthropicAvailable ? "operational" : "down";
+    this.available = anthropicApiKeyAvailable;
+    this.status = anthropicApiKeyAvailable ? "operational" : "down";
   }
 
   public static getInstance(): AnthropicService {
@@ -59,7 +59,7 @@ class AnthropicService {
     return {
       system: systemMessage?.content || "",
       messages: conversationMessages.map(msg => ({
-        role: msg.role,
+        role: msg.role as "user" | "assistant",
         content: msg.content
       }))
     };
@@ -105,6 +105,93 @@ class AnthropicService {
       throw new Error(`Anthropic API error: ${error.message}`);
     }
   }
+
+  /**
+   * Generate content with a simple prompt
+   */
+  public async generateContent(prompt: string, jsonMode = false, maxTokens = 1000): Promise<string> {
+    const messages: ChatMessage[] = [
+      {
+        role: "user",
+        content: jsonMode ? `${prompt}\n\nPlease respond with valid JSON only.` : prompt
+      }
+    ];
+    
+    return this.generateChatCompletion(messages, maxTokens);
+  }
 }
 
 export const anthropicService = AnthropicService.getInstance();
+
+// Helper function to check if Anthropic is available
+export function isAnthropicAvailable(): boolean {
+  return !!process.env.ANTHROPIC_API_KEY;
+}
+
+// Curriculum generation function
+export async function generateAICurriculum(params: any): Promise<any> {
+  const { subject, gradeLevel, learningStyles, additionalDetails } = params;
+  
+  const prompt = `Create a comprehensive curriculum for ${subject} at ${gradeLevel} grade level.
+
+Learning Styles to accommodate: ${learningStyles.join(", ")}
+${additionalDetails ? `Additional Requirements: ${additionalDetails}` : ""}
+
+Please provide a structured curriculum with the following format:
+{
+  "title": "Curriculum Title",
+  "description": "Brief description of the curriculum",
+  "objectives": ["Learning objective 1", "Learning objective 2", "Learning objective 3"],
+  "units": [
+    {
+      "title": "Unit 1 Title",
+      "description": "Unit description",
+      "lessons": [
+        {
+          "title": "Lesson Title",
+          "description": "Lesson description",
+          "duration": 45,
+          "activities": ["Activity 1", "Activity 2"],
+          "materials": ["Material 1", "Material 2"],
+          "assessment": "Assessment method"
+        }
+      ]
+    }
+  ]
+}
+
+Respond with valid JSON only.`;
+
+  try {
+    const response = await anthropicService.generateContent(prompt, true, 2000);
+    return JSON.parse(response);
+  } catch (error) {
+    console.error("AI curriculum generation failed:", error);
+    // Return a basic curriculum structure as fallback
+    return {
+      title: `${subject} Curriculum for ${gradeLevel}`,
+      description: `A comprehensive ${subject} curriculum designed for ${gradeLevel} students incorporating ${learningStyles.join(", ")} learning styles.`,
+      objectives: [
+        "Develop understanding of core concepts",
+        "Build critical thinking skills",
+        "Apply knowledge to real-world situations"
+      ],
+      units: [
+        {
+          title: "Introduction to " + subject,
+          description: "Foundational concepts and principles",
+          lessons: [
+            {
+              title: "Getting Started",
+              description: "Introduction to the subject matter",
+              duration: 45,
+              activities: ["Discussion", "Reading"],
+              materials: ["Textbook", "Worksheets"],
+              assessment: "Participation and comprehension check"
+            }
+          ]
+        }
+      ]
+    };
+  }
+}
