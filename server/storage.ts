@@ -509,6 +509,10 @@ export class MemStorage implements IStorage {
     
     return publicBases;
   }
+
+  async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
+    return Array.from(this.knowledgeBaseStore.values());
+  }
   
   async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
     const id = this.knowledgeBaseIdCounter++;

@@ -1865,20 +1865,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         gradeLevel: kb.difficulty ? [kb.difficulty] : ["All Levels"],
         status: kb.isPublic ? "Published" : "Draft",
         visibility: kb.isPublic ? "Public" : "Private",
-        fileCount: kb.fileCount || 0,
-        size: kb.totalSize || "0 MB",
-        createdAt: kb.createdAt ? kb.createdAt.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        updatedAt: kb.updatedAt ? kb.updatedAt.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        tags: kb.tags || [],
-        creator: kb.authorName || "Unknown",
-        rating: kb.rating || 0,
-        usageCount: kb.usageCount || 0,
+        fileCount: kb.files ? kb.files.length : 0,
+        size: "0 MB", // Default size since not available in current data
+        createdAt: kb.createdAt ? new Date(kb.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        updatedAt: kb.updatedAt ? new Date(kb.updatedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        tags: kb.metadata?.tags || [],
+        creator: "Admin", // Default creator since authorName not available
+        rating: 4.5, // Default rating
+        usageCount: kb.downloadCount || 0,
       }));
 
       res.json(transformedKnowledgeBases);
     } catch (error) {
       console.error("Error fetching knowledge bases:", error);
-      res.status(500).json({ message: "Internal server error" });
+      console.error("Error details:", error.message);
+      res.status(500).json({ message: "Internal server error", error: error.message });
     }
   });
 
