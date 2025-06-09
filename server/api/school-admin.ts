@@ -135,9 +135,9 @@ router.get("/my-school", async (req, res) => {
       console.log('🔍 Querying public.users for email:', user.email);
       const { data: userData, error: userError } = await supabaseAdmin
         .from('users')
-        .select('id')
+        .select('id, role')
         .eq('email', user.email)
-        .eq('role', 'schoolAdmin')
+        .in('role', ['schoolAdmin', 'superAdmin'])
         .single();
 
       if (userError || !userData) {
@@ -148,9 +148,34 @@ router.get("/my-school", async (req, res) => {
         });
       }
 
-      console.log('✅ Found user ID:', userData.id);
+      console.log('✅ Found user ID:', userData.id, 'Role:', userData.role);
 
-      // Query the public.schools table
+      // Handle super admin differently - they can access any school or get default school
+      if (userData.role === 'superAdmin') {
+        console.log('🔑 Super admin detected - providing default school access');
+        // Return a default school object for super admin
+        const defaultSchool = {
+          id: 1,
+          name: "American Seekers Academy",
+          type: "academy", 
+          admin_id: userData.id,
+          city: "Multiple Locations",
+          state: "Nationwide",
+          zip_code: "00000",
+          phone_number: "555-0123",
+          email: "contact@americanseekersacademy.com",
+          website: "americanseekersacademy.com",
+          description: "Premier homeschool academy serving families nationwide",
+          status: "active",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        console.log('🚀 Returning default school data for super admin:', defaultSchool.name);
+        return res.json(defaultSchool);
+      }
+
+      // For regular school admins, query the public.schools table
       console.log('🔍 Querying public.schools for admin_id:', userData.id);
       const { data: schoolData, error: schoolError } = await supabaseAdmin
         .from('schools')

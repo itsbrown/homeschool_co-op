@@ -242,7 +242,8 @@ export class MemStorage implements IStorage {
       password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
       role: "superAdmin",
       name: "Super Administrator",
-      subscription: "institutional"
+      subscription: "institutional",
+      supabaseId: "ac3f50b8-0e07-401f-80b8-96af1de10106"
     });
     
     // Sample educator user
