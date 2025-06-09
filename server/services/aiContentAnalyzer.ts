@@ -204,7 +204,7 @@ function generateFallbackAnalysis(content: string): ContentAnalysis {
     .toLowerCase()
     .match(/\b[a-z]{4,}\b/g) || [];
   
-  const uniqueTerms = [...new Set(keyTerms)]
+  const uniqueTerms = Array.from(new Set(keyTerms))
     .filter(term => !isCommonWord(term))
     .slice(0, 5);
 
