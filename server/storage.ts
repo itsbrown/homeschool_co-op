@@ -235,6 +235,16 @@ export class MemStorage implements IStorage {
       subscription: "individual"
     });
     
+    // Super Admin user
+    this.createUser({
+      username: "superadmin",
+      email: "superadmin@americanseekersacademy.com",
+      password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
+      role: "superAdmin",
+      name: "Super Administrator",
+      subscription: "institutional"
+    });
+    
     // Sample educator user
     this.createUser({
       username: "sarah",
