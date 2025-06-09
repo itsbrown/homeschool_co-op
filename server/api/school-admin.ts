@@ -146,17 +146,11 @@ router.get("/my-school", async (req, res) => {
       // Query the MemStorage to get user data by email
       console.log('🔍 Querying MemStorage for email:', user.email);
       
-      // Get all users for debugging
-      const allUsers = await storage.getAllUsers();
-      console.log('📋 Total users in storage:', allUsers.length);
-      console.log('📋 Users with emails:', allUsers.map(u => u.email));
-      
       const userData = await storage.getUserByEmail(user.email);
       console.log('🔍 User lookup result:', userData ? { id: userData.id, email: userData.email, role: userData.role } : 'NOT FOUND');
 
       if (!userData) {
         console.error('User lookup error: User not found in storage');
-        console.log('🔍 Available users:', allUsers.map(u => ({ email: u.email, role: u.role })));
         return res.status(404).json({ 
           message: "School admin user not found",
           error: "User not found in storage"
