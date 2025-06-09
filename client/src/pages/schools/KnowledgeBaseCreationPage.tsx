@@ -66,6 +66,7 @@ const gradeLevels = [
 export default function KnowledgeBaseCreationPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
