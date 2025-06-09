@@ -47,6 +47,11 @@ export function useAuth() {
     const metadata = user?.user_metadata || user?.app_metadata || {};
     let role = metadata.role || metadata.roles?.[0];
     
+    // Super admin role assignment for the super admin email
+    if (user?.email === 'superadmin@americanseekersacademy.com') {
+      role = 'superAdmin';
+    }
+    
     // School admin role assignment for known admin emails
     if (user?.email === 'contact.americanseekersacademy@gmail.com' || user?.email === 'coreycreates@gmail.com') {
       role = 'school_admin';
