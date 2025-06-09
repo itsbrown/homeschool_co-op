@@ -1088,13 +1088,44 @@ export class MemStorage implements IStorage {
           const files = fs.readdirSync(kbPath);
           
           if (files.length > 0) {
+            // Try to read first file to extract title
+            let title = 'Uploaded Knowledge Base';
+            let subject = 'General';
+            
+            try {
+              const firstFile = files[0];
+              const filePath = path.join(kbPath, firstFile);
+              const content = fs.readFileSync(filePath, 'utf8');
+              
+              // Extract title from content
+              const lines = content.split('\n');
+              const firstLine = lines[0]?.trim();
+              
+              if (firstLine && firstLine.length > 0) {
+                title = firstLine.replace(/^#+\s*/, ''); // Remove markdown headers
+                
+                // Determine subject based on content
+                const contentLower = content.toLowerCase();
+                if (contentLower.includes('history') || contentLower.includes('revolutionary')) {
+                  subject = 'History';
+                } else if (contentLower.includes('math') || contentLower.includes('mathematics')) {
+                  subject = 'Mathematics';
+                } else if (contentLower.includes('science') || contentLower.includes('physics')) {
+                  subject = 'Science';
+                } else if (contentLower.includes('english') || contentLower.includes('writing')) {
+                  subject = 'Language Arts';
+                }
+              }
+            } catch (error) {
+              // Keep default title if file reading fails
+            }
+            
             // Create knowledge base entry from uploaded files
             const kb: KnowledgeBase = {
               id: this.knowledgeBaseIdCounter++,
-              title: kbId.includes('antoinette') ? 'Antoinette Brown Blackwell Collection' : 
-                     kbId.includes('american') ? 'American Seekers Academy' : 'Uploaded Knowledge Base',
+              title: title,
               description: `Knowledge base containing ${files.length} uploaded files`,
-              subject: 'General',
+              subject: subject,
               difficulty: 'All Levels',
               authorId: 2, // Super admin
               price: 0,
