@@ -96,11 +96,11 @@ export function KnowledgeBaseCreateDialog({
         });
         
         // Upload files for AI processing
-        const uploadResponse = await fetch(`/api/knowledge-bases/${kb.id}/upload`, {
+        const uploadResponse = await fetch(`/api/knowledge-bases/${(kb as any).id}/upload`, {
           method: 'POST',
           body: formData,
           headers: {
-            'Authorization': `Bearer ${user?.token || ''}`,
+            'Authorization': `Bearer ${(user as any)?.token || ''}`,
           },
         });
         
@@ -127,7 +127,7 @@ export function KnowledgeBaseCreateDialog({
       
       toast({
         title: "Success",
-        description: result.processingJobId 
+        description: (result as any).processingJobId 
           ? "Knowledge base created and AI processing started" 
           : "Knowledge base created successfully",
       });
@@ -202,7 +202,7 @@ export function KnowledgeBaseCreateDialog({
       }
       
       // Update state with all successfully processed files
-      setUploadedFiles(prev => [...prev, ...newFiles]);
+      setSelectedFiles(prev => [...prev, ...newFiles]);
     };
     
     await processFiles();
@@ -221,7 +221,7 @@ export function KnowledgeBaseCreateDialog({
         difficulty: data.difficulty || "beginner",
         price: parseInt(data.price?.toString() || "0"),
         isPublic: Boolean(data.isPublic),
-        files: uploadedFiles,
+        files: selectedFiles,
         metadata: {
           tags: data.tags ? data.tags.split(",").map(tag => tag.trim()) : [],
           objectives: data.objectives ? data.objectives.split("\n").filter(o => o.trim().length > 0) : [],
@@ -251,7 +251,7 @@ export function KnowledgeBaseCreateDialog({
       
       // Success handling
       form.reset();
-      setUploadedFiles([]);
+      setSelectedFiles([]);
       setIsSubmitting(false);
       onOpenChange(false);
       
@@ -547,7 +547,7 @@ export function KnowledgeBaseCreateDialog({
                     <div className="mt-2">
                       <p className="text-sm font-medium mb-1">Files to upload:</p>
                       <ul className="space-y-2">
-                        {uploadedFiles.map((file, index) => (
+                        {selectedFiles.map((file, index) => (
                           <li key={index} className="flex items-center justify-between border rounded p-2 bg-gray-50">
                             <div className="flex items-center">
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-blue-500">
@@ -560,9 +560,9 @@ export function KnowledgeBaseCreateDialog({
                               type="button" 
                               className="text-red-500 hover:bg-red-50 p-1 rounded-full"
                               onClick={() => {
-                                const newFiles = [...uploadedFiles];
+                                const newFiles = [...selectedFiles];
                                 newFiles.splice(index, 1);
-                                setUploadedFiles(newFiles);
+                                setSelectedFiles(newFiles);
                               }}
                               aria-label="Remove file"
                             >
