@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { nlpService } from "./nlp-service";
@@ -6,6 +6,21 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
 import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema } from "@shared/schema";
+
+// Extend Request interface for authentication
+interface AuthenticatedRequest extends Request {
+  auth?: {
+    userId: string;
+    supabaseId: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+    payload: {
+      email: string;
+      role: string;
+    };
+  };
+}
 // Removed session-based children router - using Auth0 endpoints instead
 import * as emergencyContactsApi from "./api/emergency-contacts";
 import * as programsApi from "./api/programs";
@@ -795,8 +810,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         // Get user's knowledge bases if user is authenticated
-        if (req.session.userId) {
-          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(req.session.userId);
+        if (req.auth?.userId) {
+          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(req.auth.userId);
         }
       } catch (userError) {
         console.error("Error fetching user knowledge bases:", userError);
@@ -832,7 +847,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if knowledge base is public or user is authenticated and is the author
-      const isAuthor = req.session.userId && knowledgeBase.authorId === req.session.userId;
+      const isAuthor = req.auth?.userId && knowledgeBase.authorId === req.auth.userId;
       if (!knowledgeBase.isPublic && !isAuthor) {
         return res.status(403).json({ message: "You don't have permission to access this knowledge base" });
       }
@@ -846,13 +861,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/knowledge-bases", isAuthenticated, async (req, res) => {
     try {
-      console.log("Received knowledge base creation request from:", req.session.userId);
+      console.log("Received knowledge base creation request from:", req.auth?.userId);
       console.log("Request body:", JSON.stringify(req.body, null, 2));
-      console.log("Session:", JSON.stringify(req.session, null, 2));
+      console.log("Auth:", JSON.stringify(req.auth, null, 2));
 
-      // Check if user ID is available in session
-      if (!req.session.userId) {
-        console.log("User not authenticated in session");
+      // Check if user ID is available in auth
+      if (!req.auth?.userId) {
+        console.log("User not authenticated in auth");
         return res.status(401).json({ message: "User not authenticated" });
       }
 
@@ -866,7 +881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const knowledgeBase = await storage.createKnowledgeBase({
           ...validatedData,
-          authorId: req.session.userId
+          authorId: req.auth?.userId
         });
 
         console.log("Knowledge base created with ID:", knowledgeBase.id);
