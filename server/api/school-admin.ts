@@ -78,6 +78,18 @@ router.get("/test", (req, res) => {
   res.json({ message: "School admin router is working!" });
 });
 
+// Debug route to check users in storage
+router.get("/debug-users", async (req, res) => {
+  try {
+    const allUsers = await storage.getAllUsers();
+    console.log("📋 All users in storage:", allUsers.map(u => ({ id: u.id, email: u.email, role: u.role })));
+    res.json(allUsers.map(u => ({ id: u.id, email: u.email, role: u.role, supabaseId: u.supabaseId })));
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
 // Removed problematic authentication middleware that was blocking PATCH requests
 
 // School admin login now handled through Supabase authentication
@@ -128,23 +140,35 @@ router.get("/my-school", async (req, res) => {
     // Use admin client to query the schools table with service role permissions
     const { supabaseAdmin } = await import('../db/supabase');
 
-    console.log('🔍 Attempting to query database...');
+    console.log('🔍 Attempting to query user storage...');
 
     try {
-      // Query the public.users table to get user data by email
-      console.log('🔍 Querying public.users for email:', user.email);
-      const { data: userData, error: userError } = await supabaseAdmin
-        .from('users')
-        .select('id, role')
-        .eq('email', user.email)
-        .in('role', ['schoolAdmin', 'superAdmin'])
-        .single();
+      // Query the MemStorage to get user data by email
+      console.log('🔍 Querying MemStorage for email:', user.email);
+      
+      // Get all users for debugging
+      const allUsers = await storage.getAllUsers();
+      console.log('📋 Total users in storage:', allUsers.length);
+      console.log('📋 Users with emails:', allUsers.map(u => u.email));
+      
+      const userData = await storage.getUserByEmail(user.email);
+      console.log('🔍 User lookup result:', userData ? { id: userData.id, email: userData.email, role: userData.role } : 'NOT FOUND');
 
-      if (userError || !userData) {
-        console.error('User lookup error:', userError?.message);
+      if (!userData) {
+        console.error('User lookup error: User not found in storage');
+        console.log('🔍 Available users:', allUsers.map(u => ({ email: u.email, role: u.role })));
         return res.status(404).json({ 
           message: "School admin user not found",
-          error: userError?.message
+          error: "User not found in storage"
+        });
+      }
+
+      // Check if user has appropriate role
+      if (!['schoolAdmin', 'superAdmin'].includes(userData.role)) {
+        console.error('User role error: Insufficient permissions');
+        return res.status(403).json({ 
+          message: "User does not have admin permissions",
+          error: "Invalid role: " + userData.role
         });
       }
 
