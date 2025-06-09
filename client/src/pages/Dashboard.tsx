@@ -29,13 +29,7 @@ export default function Dashboard() {
   }
   
   // Use ParentAppShell for parent users, standard AppShell for others
-  let userRole = user?.role || 'parent';
-  
-  // Force superAdmin role for the super admin email
-  if (user?.email === 'superadmin@americanseekersacademy.com') {
-    userRole = 'superAdmin';
-    console.log('🚀 Forcing superAdmin role for super admin email');
-  }
+  const userRole = user?.role || 'parent';
   
   console.log('🏠 Dashboard page - User role:', userRole);
   console.log('🔍 User email:', user?.email);

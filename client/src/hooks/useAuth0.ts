@@ -47,15 +47,23 @@ export function useAuth() {
     const metadata = user?.user_metadata || user?.app_metadata || {};
     let role = metadata.role || metadata.roles?.[0];
     
+    console.log('🔍 getUserRole - user:', user?.email);
+    console.log('🔍 getUserRole - metadata:', metadata);
+    console.log('🔍 getUserRole - extracted role:', role);
+    
     // Super admin role assignment for the super admin email
     if (user?.email === 'superadmin@americanseekersacademy.com') {
       role = 'superAdmin';
+      console.log('🚀 Applied superAdmin role for super admin email');
     }
     
     // School admin role assignment for known admin emails
     if (user?.email === 'contact.americanseekersacademy@gmail.com' || user?.email === 'coreycreates@gmail.com') {
       role = 'school_admin';
+      console.log('🏫 Applied school_admin role for known admin email');
     }
+    
+    console.log('🔍 getUserRole - final role:', role);
     
     // Default to parent role for all users unless they have an invitation
     return role || 'parent';
