@@ -48,17 +48,16 @@ Please provide a JSON response with the following structure:
 Focus on educational value and learning outcomes.`;
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514', // the newest Anthropic model is "claude-sonnet-4-20250514" which was released May 14, 2025. Use this by default unless user has already selected claude-3-7-sonnet-20250219
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const analysisText = response.content[0].type === 'text' ? response.content[0].text : '';
+    const analysisText = (response.content[0] as any).text || '';
     
     try {
       const analysis = JSON.parse(analysisText);
       
-      // Validate and provide defaults
       return {
         summary: analysis.summary || 'Educational content requiring further analysis',
         keyTopics: Array.isArray(analysis.keyTopics) ? analysis.keyTopics : [],
@@ -87,7 +86,6 @@ Focus on educational value and learning outcomes.`;
  */
 export async function generateContentEmbedding(content: string): Promise<ContentEmbedding> {
   try {
-    // Since Anthropic doesn't provide embeddings directly, we'll use semantic analysis
     const prompt = `Analyze this content for semantic understanding and extract key information:
 
 Content: "${content.substring(0, 3000)}..."
@@ -105,16 +103,15 @@ Provide a JSON response with:
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const analysisText = response.content[0].text;
+    const analysisText = (response.content[0] as any).text || '';
     
     try {
       const analysis = JSON.parse(analysisText);
       
-      // Generate a simple embedding based on content analysis
       const embedding = generateSimpleEmbedding(content, analysis.semanticKeywords || []);
       
       return {
-        content: content.substring(0, 1000), // Store first 1000 chars for reference
+        content: content.substring(0, 1000),
         embedding,
         topics: Array.isArray(analysis.topics) ? analysis.topics : [],
         concepts: Array.isArray(analysis.concepts) ? analysis.concepts : []
@@ -148,7 +145,6 @@ export async function processExtractedContent(
   const analyses: (ContentAnalysis & { fileName: string })[] = [];
   const embeddings: (ContentEmbedding & { fileName: string })[] = [];
 
-  // Process each file
   for (const file of extractedFiles) {
     if (file.content && file.content.length > 0) {
       const [analysis, embedding] = await Promise.all([
@@ -161,7 +157,6 @@ export async function processExtractedContent(
     }
   }
 
-  // Generate overall analysis
   const allTopics = new Set<string>();
   const allSubjects = new Set<string>();
   let totalWords = 0;
@@ -182,7 +177,6 @@ export async function processExtractedContent(
     totalWords += file.metadata.words;
   });
 
-  // Determine most common grade level
   const gradeLevels = analyses.map(a => a.gradeLevel);
   const suggestedGradeLevel = getMostCommon(gradeLevels) || 'General';
 
@@ -197,20 +191,15 @@ export async function processExtractedContent(
   return { analyses, embeddings, overallAnalysis };
 }
 
-/**
- * Fallback analysis when AI processing fails
- */
 function generateFallbackAnalysis(content: string): ContentAnalysis {
   const words = content.split(/\s+/).length;
   const sentences = content.split(/[.!?]+/).length;
   const avgWordsPerSentence = words / sentences;
 
-  // Simple readability estimation
-  let readabilityScore = 70; // Default
+  let readabilityScore = 70;
   if (avgWordsPerSentence < 10) readabilityScore = 85;
   else if (avgWordsPerSentence > 20) readabilityScore = 45;
 
-  // Extract potential topics from content
   const keyTerms = content
     .toLowerCase()
     .match(/\b[a-z]{4,}\b/g) || [];
@@ -231,24 +220,17 @@ function generateFallbackAnalysis(content: string): ContentAnalysis {
   };
 }
 
-/**
- * Generate simple embedding based on content
- */
 function generateSimpleEmbedding(content: string, keywords: string[] = []): number[] {
-  // Create a simple 384-dimensional embedding based on content features
   const embedding = new Array(384).fill(0);
   
-  // Use content hash and features to generate consistent embeddings
   const contentLower = content.toLowerCase();
   const contentHash = simpleHash(contentLower);
   
-  // Fill embedding with values based on content characteristics
   for (let i = 0; i < 384; i++) {
     const seed = contentHash + i;
-    embedding[i] = (Math.sin(seed) + 1) / 2; // Normalize to 0-1
+    embedding[i] = (Math.sin(seed) + 1) / 2;
   }
   
-  // Adjust based on keywords
   keywords.forEach((keyword, index) => {
     const keywordHash = simpleHash(keyword);
     const position = keywordHash % 384;
@@ -275,7 +257,7 @@ function simpleHash(str: string): number {
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & hash;
   }
   return Math.abs(hash);
 }
