@@ -344,6 +344,7 @@ function Router() {
       <Route path="/schools/students/:id/edit" component={StudentRegistrationPage} />
       <Route path="/schools/students/register" component={StudentRegistrationPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
+      <Route path="/schools/knowledge-base/create" component={KnowledgeBaseCreationPage} />
       <Route path="/schools/knowledge-base/new" component={KnowledgeBaseCreationPage} />
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
