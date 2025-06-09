@@ -37,6 +37,7 @@ export default function Dashboard() {
   console.log('🔍 Final determined role:', userRole);
   
   if (user && userRole === 'parent') {
+    console.log('🎯 Routing to ParentAppShell for parent user');
     return (
       <ParentAppShell>
         {/* Parent Dashboard with register child button and AI assistant */}
@@ -47,6 +48,7 @@ export default function Dashboard() {
 
   // For super admin, admin, educator - show educator dashboard with AI tools
   if (user && ['superAdmin', 'admin', 'educator'].includes(userRole)) {
+    console.log('🎯 Routing to Educator Dashboard for role:', userRole);
     return (
       <div className="min-h-screen bg-background">
         {/* AI Status Panel */}
@@ -59,6 +61,8 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  console.log('🎯 Routing to default AppShell for role:', userRole);
 
   return (
     <AppShell>
