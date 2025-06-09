@@ -146,7 +146,12 @@ export default function Sidebar() {
                   <div>
                     <div className="text-sm font-medium">{user.user_metadata?.full_name || user.email}</div>
                     <div className="text-xs text-muted-foreground">
-                      {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
+                      {activeRole === 'parent' ? 'Parent Account' : 
+                       activeRole === 'superAdmin' ? 'Super Administrator' :
+                       activeRole === 'admin' ? 'Administrator' :
+                       activeRole === 'educator' ? 'Educator' :
+                       activeRole === 'school_admin' || activeRole === 'schoolAdmin' ? 'School Administrator' :
+                       'User'}
                     </div>
                   </div>
                 </div>
@@ -227,7 +232,12 @@ export default function Sidebar() {
                     <div>
                       <div className="text-sm font-medium">{user.user_metadata?.full_name || user.email}</div>
                       <div className="text-xs text-muted-foreground">
-                        {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
+                        {activeRole === 'parent' ? 'Parent Account' : 
+                         activeRole === 'superAdmin' ? 'Super Administrator' :
+                         activeRole === 'admin' ? 'Administrator' :
+                         activeRole === 'educator' ? 'Educator' :
+                         activeRole === 'school_admin' || activeRole === 'schoolAdmin' ? 'School Administrator' :
+                         'User'}
                       </div>
                     </div>
                   </div>
