@@ -4,9 +4,10 @@ import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Upload, ArrowLeft, Plus, X, Info } from "lucide-react";
 import { saveKnowledgeBase } from "@/lib/storage";
+import { apiRequest } from "@/lib/queryClient";
 
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -147,43 +148,40 @@ export default function KnowledgeBaseCreationPage() {
   // Set up mutation for creating a knowledge base
   const createKnowledgeBaseMutation = useMutation({
     mutationFn: async (data: { knowledgeBase: KnowledgeBaseFormValues, files: File[], tags: string[] }) => {
-      // In a real implementation, this would be a multipart form data post to upload files
       console.log("Creating knowledge base with data:", {
         ...data.knowledgeBase,
         tags: data.tags
       });
       console.log("Uploading files:", data.files);
       
-      // Create a new knowledge base record
-      const newKnowledgeBase = {
-        id: Math.floor(Math.random() * 10000),
+      // Map frontend form data to backend schema
+      const kbData = {
         title: data.knowledgeBase.title,
         description: data.knowledgeBase.description,
-        subjectArea: data.knowledgeBase.subjectArea,
-        gradeLevel: data.knowledgeBase.gradeLevel,
-        status: data.knowledgeBase.status,
-        visibility: data.knowledgeBase.visibility,
-        fileCount: data.files.length,
-        size: `${Math.round(data.files.reduce((acc, file) => acc + file.size, 0) / 1024 / 1024)} MB`,
-        createdAt: new Date().toISOString().split('T')[0],
-        updatedAt: new Date().toISOString().split('T')[0],
-        tags: data.tags.length > 0 ? data.tags : ["Learning Resources"],
-        creator: "School Admin",
-        rating: 0,
-        usageCount: 0
+        subject: data.knowledgeBase.subjectArea,
+        difficulty: "All Levels", // Default since not captured in form
+        price: 0,
+        files: data.files.map(file => ({
+          url: `/uploads/${file.name}`,
+          type: file.name.split('.').pop() || 'unknown',
+          name: file.name
+        })),
+        metadata: {
+          tags: data.tags.length > 0 ? data.tags : ["Learning Resources"],
+          objectives: ["Educational content"]
+        },
+        isPublic: data.knowledgeBase.visibility === "Public"
       };
       
-      // Store using our storage utility
-      saveKnowledgeBase(newKnowledgeBase);
-      
-      // Simulate API call delay
-      return new Promise<{ id: number }>((resolve) => {
-        setTimeout(() => {
-          resolve({ id: newKnowledgeBase.id });
-        }, 1000);
-      });
+      // Call the actual backend API
+      const response = await apiRequest("POST", "/api/knowledge-bases", kbData);
+      return response;
     },
     onSuccess: () => {
+      // Invalidate and refetch knowledge base queries
+      queryClient.invalidateQueries({ queryKey: ["/api/schools/knowledge-bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-bases"] });
+      
       toast({
         title: "Knowledge Base Created",
         description: "Your knowledge base has been created successfully.",
