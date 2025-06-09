@@ -852,11 +852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if knowledge base is public or user is authenticated and is the author
       const authData = (req as any).auth;
-      console.log("Permission check - Auth data:", authData);
-      console.log("Permission check - KB authorId:", knowledgeBase.authorId);
-      console.log("Permission check - KB isPublic:", knowledgeBase.isPublic);
       const isAuthor = authData?.userId && String(knowledgeBase.authorId) === String(authData.userId);
-      console.log("Permission check - isAuthor:", isAuthor);
       if (!knowledgeBase.isPublic && !isAuthor) {
         return res.status(403).json({ message: "You don't have permission to access this knowledge base" });
       }
