@@ -67,7 +67,8 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     // Set default roles for specific users
     let effectiveRole = user.user_metadata?.role || 'parent';
     if (user.email === 'contact.americanseekersacademy@gmail.com') {
-      effectiveRole = 'school-admin';
+      effectiveRole = 'schoolAdmin';
+      console.log('🏫 Setting schoolAdmin role for contact.americanseekersacademy@gmail.com');
     }
 
     // Allow role switching for multi-role users
