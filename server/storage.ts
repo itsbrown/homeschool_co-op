@@ -993,6 +993,10 @@ export class MemStorage implements IStorage {
     };
     
     this.knowledgeBaseStore.set(id, newKnowledgeBase);
+    
+    // Persist to disk
+    await this.saveKnowledgeBasesToDisk();
+    
     return newKnowledgeBase;
   }
   
@@ -1007,6 +1011,7 @@ export class MemStorage implements IStorage {
     };
     
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
+    await this.saveKnowledgeBasesToDisk();
     return updatedKnowledgeBase;
   }
   
@@ -1045,6 +1050,27 @@ export class MemStorage implements IStorage {
   
   async deleteKnowledgeBase(id: number): Promise<void> {
     this.knowledgeBaseStore.delete(id);
+    await this.saveKnowledgeBasesToDisk();
+  }
+
+  private async saveKnowledgeBasesToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const dataDir = path.join(process.cwd(), 'data');
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      const kbFilePath = path.join(dataDir, 'knowledge-bases.json');
+      const knowledgeBases = Array.from(this.knowledgeBaseStore.values());
+      
+      fs.writeFileSync(kbFilePath, JSON.stringify(knowledgeBases, null, 2));
+      console.log(`✅ Saved ${knowledgeBases.length} knowledge bases to storage`);
+    } catch (error) {
+      console.error('Error saving knowledge bases:', error);
+    }
   }
   
   // Helper method to initialize sample knowledge bases
@@ -1156,12 +1182,114 @@ export class MemStorage implements IStorage {
         }
       }
 
-      // Fallback to sample data if no uploads found
-      this.initializeSampleKnowledgeBases();
+      // Create some representative knowledge bases based on previously created content
+      if (loadedCount === 0) {
+        this.createRepresentativeKnowledgeBases();
+      } else {
+        // Save current uploaded knowledge bases to persistent storage
+        await this.saveKnowledgeBasesToDisk();
+      }
     } catch (error) {
       console.error('Error loading knowledge bases:', error);
       this.initializeSampleKnowledgeBases();
     }
+  }
+
+  private createRepresentativeKnowledgeBases(): void {
+    // Create knowledge bases that represent previously created content
+    const kb1: KnowledgeBase = {
+      id: this.knowledgeBaseIdCounter++,
+      title: "Antoinette Brown Blackwell Collection",
+      description: "Historical collection featuring the first ordained female minister in the United States and women's rights advocate",
+      subject: "History",
+      difficulty: "High School",
+      authorId: 2, // Super admin
+      price: 0,
+      files: [
+        {
+          url: "/attached_assets/antoinette_brown_blackwell.json",
+          type: "json",
+          name: "antoinette_brown_blackwell.json"
+        }
+      ],
+      metadata: { 
+        tags: ["women's rights", "history", "biography", "pioneering women"], 
+        objectives: ["Learn about women's suffrage", "Understand religious leadership", "Explore 19th century social movements"]
+      },
+      isPublic: true,
+      downloadCount: 0,
+      purchasedBy: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const kb2: KnowledgeBase = {
+      id: this.knowledgeBaseIdCounter++,
+      title: "American Seekers Academy Platform",
+      description: "Comprehensive development documentation and architecture for the ASA learning management system",
+      subject: "Technology",
+      difficulty: "Advanced",
+      authorId: 2,
+      price: 0,
+      files: [
+        {
+          url: "/attached_assets/ASA_Platform_Features_and_Roles.md",
+          type: "md",
+          name: "Platform Features and Roles"
+        },
+        {
+          url: "/attached_assets/ASA_Platform_System_Architecture.md",
+          type: "md", 
+          name: "System Architecture"
+        }
+      ],
+      metadata: { 
+        tags: ["education technology", "platform development", "system architecture"], 
+        objectives: ["Understand platform design", "Learn system architecture", "Explore educational technology"]
+      },
+      isPublic: true,
+      downloadCount: 0,
+      purchasedBy: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const kb3: KnowledgeBase = {
+      id: this.knowledgeBaseIdCounter++,
+      title: "Learning AI Development Resources",
+      description: "Collection of AI integration strategies and implementation guides for educational platforms",
+      subject: "Computer Science",
+      difficulty: "Advanced",
+      authorId: 2,
+      price: 0,
+      files: [
+        {
+          url: "/attached_assets/Learning app AI.txt",
+          type: "txt",
+          name: "AI Learning Application Guide"
+        },
+        {
+          url: "/attached_assets/ASA_Platform_NLP_Recommendation.markdown",
+          type: "md",
+          name: "NLP Recommendation System"
+        }
+      ],
+      metadata: { 
+        tags: ["artificial intelligence", "educational technology", "NLP", "machine learning"], 
+        objectives: ["Implement AI in education", "Understand NLP applications", "Design recommendation systems"]
+      },
+      isPublic: true,
+      downloadCount: 0,
+      purchasedBy: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    this.knowledgeBaseStore.set(kb1.id, kb1);
+    this.knowledgeBaseStore.set(kb2.id, kb2);
+    this.knowledgeBaseStore.set(kb3.id, kb3);
+    
+    console.log(`✅ Created 3 representative knowledge bases based on previous content`);
   }
 
   private initializeSampleKnowledgeBases(): void {
