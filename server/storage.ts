@@ -222,7 +222,7 @@ export class MemStorage implements IStorage {
     
     // Load enrollments from file
     this.initializeEnrollments().catch(console.error);
-    this.initializeSampleKnowledgeBases();
+    this.initializeKnowledgeBases().catch(console.error);
     this.initializeSampleClasses().catch(console.error);
     this.initializeChildren().catch(console.error);
 
@@ -1048,6 +1048,40 @@ export class MemStorage implements IStorage {
   }
   
   // Helper method to initialize sample knowledge bases
+  private async initializeKnowledgeBases(): Promise<void> {
+    try {
+      // First try to load from JSON file
+      const fs = await import('fs');
+      const path = await import('path');
+      const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
+      
+      if (fs.existsSync(kbFilePath)) {
+        const data = fs.readFileSync(kbFilePath, 'utf8');
+        const knowledgeBases = JSON.parse(data);
+        
+        for (const kb of knowledgeBases) {
+          this.knowledgeBaseStore.set(kb.id, {
+            ...kb,
+            createdAt: new Date(kb.createdAt),
+            updatedAt: new Date(kb.updatedAt)
+          });
+          if (kb.id >= this.knowledgeBaseIdCounter) {
+            this.knowledgeBaseIdCounter = kb.id + 1;
+          }
+        }
+        console.log(`✅ Successfully loaded ${knowledgeBases.length} knowledge bases from storage`);
+        return;
+      }
+
+      // If no file exists, load sample data as fallback
+      this.initializeSampleKnowledgeBases();
+    } catch (error) {
+      console.error('Error loading knowledge bases:', error);
+      // Fallback to sample data
+      this.initializeSampleKnowledgeBases();
+    }
+  }
+
   private initializeSampleKnowledgeBases(): void {
     // Sample knowledge base 1: Mathematics
     const kb1: KnowledgeBase = {
