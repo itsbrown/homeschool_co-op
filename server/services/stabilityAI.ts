@@ -74,50 +74,48 @@ export async function generateStabilityColoringPage(
 
 function createStabilityPrompt(subject: string, elements: string[], ageRange: string): string {
   const [minAge] = ageRange.split('-').map(Number);
-  const complexity = minAge <= 5 ? 'simple and clear' : minAge <= 8 ? 'moderately detailed' : 'detailed';
+  const complexity = minAge <= 5 ? 'very simple' : minAge <= 8 ? 'simple' : 'moderately simple';
   
-  return `Traditional coloring book page featuring ${subject} with ${elements.join(', ')}. Clean bold black outlines only, thick 3-4 pixel line art, no fills or colors. Professional coloring book style with solid continuous lines perfect for children ages ${ageRange}. ${complexity} educational illustration. Pure black lines on white background, no sketchy or thin lines. Bold closed shapes ideal for coloring with crayons. Traditional children's coloring book quality with thick clean borders.`;
+  return `Simple coloring book page featuring ${subject} with ${elements.join(', ')}. Single bold black outlines only, clean thick lines, no fills or colors. ${complexity} illustration with minimal background detail. Large clear shapes perfect for children ages ${ageRange}. Pure black lines on white background, no double lines, no textures, no detailed patterns. No grass texture, no background clutter. Clean simple outlines ideal for coloring with crayons. Traditional children's coloring book with single bold borders only.`;
 }
 
 async function convertToColoringPage(imageBuffer: Buffer, ageRange: string): Promise<Buffer> {
   const [minAge] = ageRange.split('-').map(Number);
   
-  // Enhanced processing for thick coloring book lines
+  // Simplified processing for clean coloring book lines
   const processedImage = await sharp(imageBuffer)
     .grayscale()
     .normalize()
     .modulate({ 
-      brightness: 1.4,
-      saturation: 0
+      brightness: 1.6,
+      saturation: 0,
+      lightness: 1.2
     })
-    // Apply stronger edge detection for thicker lines
+    // Reduce background noise and detail
+    .blur(1)
+    // Strong edge detection for main outlines only
+    .convolve({
+      width: 3,
+      height: 3,
+      kernel: [-1, -1, -1, -1, 8, -1, -1, -1, -1]
+    })
+    .threshold(200)
+    .negate()
+    // Remove small details and noise
     .convolve({
       width: 5,
       height: 5,
       kernel: [
-        -1, -1, -1, -1, -1,
-        -1, -2, -2, -2, -1,
-        -1, -2, 16, -2, -1,
-        -1, -2, -2, -2, -1,
-        -1, -1, -1, -1, -1
+        0, 0, 1, 0, 0,
+        0, 1, 1, 1, 0,
+        1, 1, 1, 1, 1,
+        0, 1, 1, 1, 0,
+        0, 0, 1, 0, 0
       ]
     })
+    .threshold(220)
+    // Clean and simplify
     .threshold(180)
-    .negate()
-    // Dilate to thicken lines
-    .convolve({
-      width: 3,
-      height: 3,
-      kernel: [1, 1, 1, 1, 1, 1, 1, 1, 1]
-    })
-    .threshold(200)
-    // Clean up with morphological closing
-    .convolve({
-      width: 3,
-      height: 3,
-      kernel: [0, 1, 0, 1, 1, 1, 0, 1, 0]
-    })
-    .threshold(150)
     .png()
     .toBuffer();
 

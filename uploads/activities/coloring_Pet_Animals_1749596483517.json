@@ -1,0 +1,32 @@
+{
+  "title": "My Friendly Pet Pals",
+  "description": "A simple coloring page featuring three common pets with clean outlines perfect for young artists to color and learn about pet animals.",
+  "instructions": "Color the cat, dog, and rabbit using your favorite colors. Try to stay inside the lines!",
+  "content": {
+    "image": "Three pet animals arranged in a friendly scene - a cat sitting with its tail curled, a dog with floppy ears standing, and a rabbit with long ears sitting beside them. All outlines are simple, clean single lines with no intricate details.",
+    "elements": [
+      "Cat",
+      "Dog",
+      "Rabbit"
+    ],
+    "learningFacts": [
+      "Cats like to clean themselves with their tongues",
+      "Dogs need daily exercise and walks",
+      "Rabbits have strong back legs for hopping",
+      "Pets need fresh water every day",
+      "All pets need love and care from their owners"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Pet_Animals_1749596488365.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor control",
+    "animal recognition",
+    "color identification",
+    "patience"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}

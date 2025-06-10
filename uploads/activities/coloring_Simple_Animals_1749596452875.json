@@ -1,0 +1,32 @@
+{
+  "title": "Friendly Farm Animals Coloring",
+  "description": "A simple coloring page featuring easy-to-color farm animals with clean outlines, perfect for young artists to practice fine motor skills while learning about common animals.",
+  "instructions": "Color the animals using your favorite colors. Try to stay inside the lines. Can you name each animal as you color it?",
+  "content": {
+    "image": "A barnyard scene with simple outlines of a smiling pig, fluffy sheep, friendly cow, and happy chicken. Each animal is drawn with clean single lines that are easy to follow.",
+    "elements": [
+      "Pig",
+      "Sheep",
+      "Cow",
+      "Chicken"
+    ],
+    "learningFacts": [
+      "Pigs are very smart animals that can learn tricks",
+      "Sheep grow wool that can be used to make clothes",
+      "Cows give us milk that we can drink",
+      "Chickens lay eggs that we can eat"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Simple_Animals_1749596458235.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor control",
+    "animal recognition",
+    "color identification",
+    "following instructions"
+  ],
+  "ageRange": "5-8",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}
