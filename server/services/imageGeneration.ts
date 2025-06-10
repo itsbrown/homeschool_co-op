@@ -71,35 +71,49 @@ export async function generateColoringPageImage(
  */
 async function tryHuggingFaceGeneration(prompt: string): Promise<ImageGenerationResult> {
   try {
-    const response = await fetch('/api/image-services/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        prompt: prompt + ' simple coloring page black and white outlines',
-        service: 'huggingface'
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
+    // Import and use the Hugging Face service directly
+    const { generateCustomImage, isHuggingFaceAvailable } = await import('./huggingfaceService');
     
-    if (result.success && result.imageUrl) {
-      return {
-        success: true,
-        imageUrl: result.imageUrl,
-        base64: result.base64
-      };
-    } else {
+    if (!isHuggingFaceAvailable()) {
       return {
         success: false,
-        error: result.error || 'Failed to generate image'
+        error: 'Hugging Face service is not available'
       };
     }
+
+    const imagePath = await generateCustomImage(prompt);
+    
+    if (!imagePath) {
+      return {
+        success: false,
+        error: 'Failed to generate image - no path returned'
+      };
+    }
+
+    // Convert to URL format
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    if (!fs.default.existsSync(imagePath)) {
+      return {
+        success: false,
+        error: 'Generated image file does not exist'
+      };
+    }
+
+    // Create relative URL
+    const filename = path.default.basename(imagePath);
+    const imageUrl = `/uploads/images/${filename}`;
+    
+    // Read as base64
+    const imageBuffer = fs.default.readFileSync(imagePath);
+    const base64 = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+
+    return {
+      success: true,
+      imageUrl: imageUrl,
+      base64: base64
+    };
     
   } catch (error) {
     console.error('Hugging Face generation error:', error);

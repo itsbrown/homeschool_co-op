@@ -219,4 +219,78 @@ router.get('/test-coloring-pdf', async (req, res) => {
   }
 });
 
+/**
+ * @route POST /api/image-services/generate
+ * @desc Generate coloring page images with custom prompts
+ * @access Public
+ */
+router.post('/generate', async (req, res) => {
+  try {
+    const { prompt, service = 'huggingface' } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Prompt is required for image generation'
+      });
+    }
+
+    if (!isHuggingFaceAvailable()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Image generation service is not available. Please check API configuration.'
+      });
+    }
+
+    console.log('Generating custom coloring page image with prompt:', prompt);
+    
+    // Use the existing Hugging Face service but with custom prompt
+    const { generateCustomImage } = await import('../services/huggingfaceService');
+    
+    const imagePath = await generateCustomImage(prompt);
+    
+    if (!imagePath) {
+      throw new Error('Image generation failed - no image path returned');
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(imagePath)) {
+      throw new Error('Image generation returned a path but the file does not exist');
+    }
+
+    // Prepare relative URL from absolute path
+    const relativePath = '/uploads/images/' + path.basename(imagePath);
+    const imageUrl = `${req.protocol}://${req.get('host')}${relativePath}`;
+    
+    // Read image as base64 for direct embedding
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString('base64');
+    
+    res.json({
+      success: true,
+      status: 'success',
+      message: 'Coloring page image generated successfully',
+      imageUrl: imageUrl,
+      imagePath: relativePath,
+      base64: `data:image/png;base64,${base64Image}`,
+      data: {
+        imageUrl: imageUrl,
+        imagePath: relativePath,
+        base64: `data:image/png;base64,${base64Image}`,
+        timestamp: new Date(),
+        service: 'Hugging Face'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error generating custom coloring page:', error);
+    res.status(500).json({
+      success: false,
+      status: 'error',
+      message: 'Failed to generate coloring page image',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 export default router;

@@ -344,3 +344,81 @@ export async function generateLineArt(
     }
   }
 }
+
+/**
+ * Generate a custom coloring page image using Hugging Face
+ * @param prompt Custom prompt for image generation
+ * @returns Path to the generated image file
+ */
+export async function generateCustomImage(prompt: string): Promise<string> {
+  if (!isHuggingFaceAvailable()) {
+    throw new Error('Hugging Face API is not available');
+  }
+
+  try {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'images');
+    await ensureDirectoryExists(uploadDir);
+
+    // Create a specialized prompt for coloring pages
+    const coloringPrompt = `${prompt} simple black and white line art coloring page, clean outlines, no shading, suitable for children to color, educational drawing, minimalist style, black lines on white background`;
+
+    console.log('Generating custom coloring page with prompt:', coloringPrompt);
+
+    const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
+    
+    // Generate the image
+    const response = await hf.textToImage({
+      model: 'stabilityai/stable-diffusion-2-1',
+      inputs: coloringPrompt,
+      parameters: {
+        negative_prompt: 'color, shading, shadows, realistic, photographic, complex details, cluttered',
+        num_inference_steps: 20,
+        guidance_scale: 7.5,
+        width: 512,
+        height: 512,
+      }
+    });
+
+    // Convert response to buffer
+    const buffer = Buffer.from(await (response as any).arrayBuffer());
+    
+    // Generate unique filename
+    const timestamp = Date.now();
+    const outputFilename = `coloring_page_${timestamp}.png`;
+    const outputPath = path.join(uploadDir, outputFilename);
+    
+    // Write image to file
+    await writeFileAsync(outputPath, buffer);
+    
+    console.log(`Custom coloring page generated and saved to ${outputPath}`);
+    return outputPath;
+    
+  } catch (error) {
+    console.error('Error generating custom coloring page:', error);
+    
+    // Create a fallback SVG coloring page
+    try {
+      console.log('Generating fallback SVG coloring page');
+      const uploadDir = path.join(process.cwd(), 'uploads', 'images');
+      await ensureDirectoryExists(uploadDir);
+      
+      const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+        <rect x="10" y="10" width="492" height="492" fill="white" stroke="black" stroke-width="2"/>
+        <circle cx="256" cy="150" r="60" fill="none" stroke="black" stroke-width="3"/>
+        <rect x="200" y="220" width="112" height="80" fill="none" stroke="black" stroke-width="3"/>
+        <polygon points="156,320 356,320 306,420 206,420" fill="none" stroke="black" stroke-width="3"/>
+        <text x="256" y="460" font-family="Arial" font-size="16" text-anchor="middle" fill="black">
+          ${prompt.substring(0, 30)}...
+        </text>
+      </svg>`;
+      
+      const fallbackPath = path.join(uploadDir, `fallback_coloring_${Date.now()}.svg`);
+      await writeFileAsync(fallbackPath, fallbackSvg);
+      return fallbackPath;
+      
+    } catch (fallbackError) {
+      console.error('Fallback SVG creation failed:', fallbackError);
+      throw new Error(`Failed to generate coloring page: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}

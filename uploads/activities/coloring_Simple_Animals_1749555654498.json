@@ -1,0 +1,46 @@
+{
+  "title": "Friendly Farm Animals",
+  "description": "A simple coloring page featuring basic farm animal shapes that helps children recognize common animals while practicing fine motor skills.",
+  "instructions": "Color each animal using your favorite colors. Try to stay inside the lines. You can use the suggested colors or choose your own!",
+  "content": {
+    "image": "A farm scene with simple outlines of a cow, pig, chicken, sheep, and horse. Each animal is drawn with basic shapes and clear outlines perfect for young children to color.",
+    "elements": [
+      {
+        "name": "Cow",
+        "description": "The cow has black and white spots. Can you color the spots?"
+      },
+      {
+        "name": "Pig",
+        "description": "Pigs are often pink. You can color this pig pink or any color you like!"
+      },
+      {
+        "name": "Chicken",
+        "description": "The chicken has feathers. You can color it yellow, brown, or red."
+      },
+      {
+        "name": "Sheep",
+        "description": "Sheep have fluffy wool. You can color the wool white or light gray."
+      },
+      {
+        "name": "Horse",
+        "description": "Horses can be brown, black, or white. Which color will you choose?"
+      }
+    ],
+    "learningFacts": [
+      "Cows give us milk that we can drink",
+      "Pigs have curly tails and are very smart animals",
+      "Chickens lay eggs that we can eat",
+      "Sheep's wool is used to make warm clothes",
+      "Horses can run very fast and help people on farms"
+    ]
+  },
+  "targetSkills": [
+    "animal recognition",
+    "fine motor skills",
+    "color identification",
+    "following instructions"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}

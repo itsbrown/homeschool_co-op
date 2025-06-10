@@ -1,0 +1,50 @@
+{
+  "title": "Breaking Barriers: Antoinette Brown Blackwell's Legacy",
+  "description": "This historically accurate coloring page depicts Antoinette Brown Blackwell, the first woman ordained as a minister in the United States and a pioneering advocate for women's rights in the 19th century. Students will learn about her contributions to women's suffrage, religious leadership, and social reform while engaging with important historical imagery.",
+  "instructions": "Use this coloring page to explore the life and legacy of Antoinette Brown Blackwell. Color the portrait and surrounding elements while reflecting on the historical facts provided. Consider using period-appropriate colors for clothing and settings. After coloring, discuss how Blackwell's pioneering work connects to modern gender equality movements.",
+  "content": {
+    "image": "A detailed portrait of Antoinette Brown Blackwell in period-appropriate 19th century dress with her characteristic upswept hair and thoughtful expression. She is depicted at a desk with books, a quill pen, and papers representing her scholarly work. The background includes symbolic elements: a pulpit representing her role as the first ordained female minister, a ballot box symbolizing her suffrage work, and protest signs with slogans from the women's rights movement of her era.",
+    "elements": [
+      {
+        "name": "Antoinette Brown Blackwell",
+        "description": "The central portrait showing Blackwell in her mid-30s, when she was actively breaking barriers in ministry and advocacy"
+      },
+      {
+        "name": "Religious elements",
+        "description": "The pulpit, Bible, and church imagery representing her groundbreaking role as the first ordained female minister in the United States"
+      },
+      {
+        "name": "Suffrage symbols",
+        "description": "Ballot box, protest signs, and papers representing her work in the women's suffrage movement"
+      },
+      {
+        "name": "Books and writing materials",
+        "description": "Representing her scholarly work, including her writings on women's rights and philosophy"
+      },
+      {
+        "name": "Timeline border",
+        "description": "A decorative border containing key dates: 1825 (birth), 1853 (ordination), 1878 (publication of 'The Sexes Throughout Nature'), 1920 (women's suffrage victory), 1921 (death)"
+      }
+    ],
+    "learningFacts": [
+      "Antoinette Brown Blackwell (1825-1921) was the first woman ordained as a minister in the United States in 1853.",
+      "She was a graduate of Oberlin College, one of the first American colleges to admit women and African Americans.",
+      "Blackwell was a contemporary and colleague of suffragists Elizabeth Cady Stanton and Susan B. Anthony.",
+      "She published 'The Sexes Throughout Nature' in 1875, challenging Charles Darwin's views on female inferiority.",
+      "As both a minister and scientist, she uniquely combined religious and scientific arguments for women's equality.",
+      "Blackwell lived to see the passage of the 19th Amendment in 1920, which granted women the right to vote.",
+      "She was also a mother of five children while maintaining her career as a writer, minister, and activist.",
+      "Blackwell's sister-in-law, Elizabeth Blackwell, was the first woman to receive a medical degree in the United States."
+    ]
+  },
+  "targetSkills": [
+    "Historical analysis",
+    "Visual interpretation",
+    "Understanding social movements",
+    "Connecting historical events to modern issues",
+    "Critical thinking about gender equality"
+  ],
+  "ageRange": "15-18",
+  "difficulty": "intermediate",
+  "timeRequired": "45"
+}
