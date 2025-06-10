@@ -93,7 +93,7 @@ export default function AIWorksheetGenerator() {
     if (generatedActivity?.jobId && generatedActivity?.message?.includes("queued")) {
       const pollInterval = setInterval(async () => {
         try {
-          const response = await fetch(`/api/activity-status/${generatedActivity.jobId}`);
+          const response = await fetch(`/api/activities/job/${generatedActivity.jobId}`);
           const data = await response.json();
           
           // Check if the job is complete
@@ -149,7 +149,7 @@ export default function AIWorksheetGenerator() {
   // Activity generation mutation
   const activityMutation = useMutation({
     mutationFn: async (params: ActivityGenerationParams) => {
-      const response = await fetch('/api/activity-gen', {
+      const response = await fetch('/api/activities/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -878,7 +878,7 @@ export default function AIWorksheetGenerator() {
                               }
                               
                               // Fall back to the regular job status endpoint
-                              const jobResponse = await fetch(`/api/activity-status/${generatedActivity.jobId}`);
+                              const jobResponse = await fetch(`/api/activities/job/${generatedActivity.jobId}`);
                               if (jobResponse.ok) {
                                 const jobData = await jobResponse.json();
                                 
