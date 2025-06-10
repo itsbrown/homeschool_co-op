@@ -1,0 +1,42 @@
+{
+  "title": "Wild America: Native Animal Friends",
+  "description": "A fun coloring page featuring native American animals in their natural habitats. This activity helps children learn about important wildlife while practicing fine motor skills.",
+  "instructions": "Color each animal using your favorite colors. Try to use colors that match what these animals look like in real life! Read the fun facts while you color to learn about these amazing American animals.",
+  "content": {
+    "image": "A nature scene with four native American animals: a bald eagle soaring above, a North American bison grazing on prairie grass, a black bear standing by a stream with fish, and a desert tortoise on sandy ground. Each animal is in its natural habitat with simple background elements.",
+    "elements": [
+      {
+        "name": "Bald Eagle",
+        "description": "The national bird of America with a white head and brown body"
+      },
+      {
+        "name": "American Bison",
+        "description": "A large, shaggy brown animal with a big head and horns"
+      },
+      {
+        "name": "Black Bear",
+        "description": "A medium-sized bear with black fur and a brown snout"
+      },
+      {
+        "name": "Desert Tortoise",
+        "description": "A slow-moving reptile with a dome-shaped shell"
+      }
+    ],
+    "learningFacts": [
+      "The bald eagle is the national symbol of the United States",
+      "American bison (sometimes called buffalo) are the largest land mammals in North America",
+      "Black bears are excellent climbers and can run up to 35 miles per hour",
+      "Desert tortoises can live up to 80 years in the wild",
+      "All these animals are native to North America and important to American ecosystems"
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "natural science",
+    "color identification"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}

@@ -8,7 +8,7 @@ const writeFileAsync = promisify(fs.writeFile);
 /**
  * Create an educational SVG coloring page based on the prompt
  */
-function createEducationalSVG(prompt: string): string {
+export function createEducationalSVG(prompt: string): string {
   const lowerPrompt = prompt.toLowerCase();
   
   // Determine the type of educational content based on the prompt

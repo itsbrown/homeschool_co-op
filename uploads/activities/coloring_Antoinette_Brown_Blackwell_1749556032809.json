@@ -1,0 +1,49 @@
+{
+  "title": "Antoinette Brown Blackwell: Breaking Barriers",
+  "description": "This coloring page features Antoinette Brown Blackwell, the first woman ordained as a minister in the United States and a pioneering advocate for women's rights during the 19th century.",
+  "instructions": "Color this historical scene showing Antoinette Brown Blackwell in key moments of her life. Use the color suggestions or choose your own colors. As you color, read the learning facts to discover more about this remarkable woman who helped pave the way for gender equality.",
+  "content": {
+    "image": "A detailed portrait-style coloring page divided into four connected scenes: 1) Antoinette Brown Blackwell preaching at a pulpit in the First Congregational Church of Butler and Savannah, New York in 1853, wearing period-appropriate clothing; 2) Blackwell speaking at a women's rights convention alongside Elizabeth Cady Stanton and Susan B. Anthony; 3) Blackwell in her study writing at a desk surrounded by books; 4) The exterior of Blackwell's home in Elizabeth, New Jersey where she lived with her family.",
+    "elements": [
+      {
+        "name": "Antoinette Brown Blackwell",
+        "description": "The central figure wearing mid-19th century dress with her characteristic determined expression"
+      },
+      {
+        "name": "First Congregational Church",
+        "description": "The historic church where she became the first ordained female minister in America"
+      },
+      {
+        "name": "Women's Rights Convention",
+        "description": "A gathering of early suffragists with banners and period-appropriate clothing"
+      },
+      {
+        "name": "Writing Desk",
+        "description": "Her workspace with books, papers and writing implements from the 1800s"
+      },
+      {
+        "name": "Blackwell Home",
+        "description": "Her Victorian-style family home in Elizabeth, New Jersey"
+      }
+    ],
+    "learningFacts": [
+      "Antoinette Brown Blackwell (1825-1921) was the first woman to be ordained as a mainstream Protestant minister in the United States in 1853.",
+      "She graduated from Oberlin College in Ohio, one of the first American colleges to accept female students.",
+      "Besides being a minister, Blackwell was an active suffragist who fought for women's right to vote.",
+      "She married Samuel Blackwell in 1856 and had seven children while continuing her work.",
+      "Blackwell wrote several books including 'Studies in General Science' and 'The Sexes Throughout Nature,' applying scientific principles to argue for gender equality.",
+      "She lived long enough to see women gain the right to vote with the 19th Amendment in 1920, just before her death at age 96.",
+      "Blackwell worked alongside famous suffragists like Elizabeth Cady Stanton and Susan B. Anthony.",
+      "She combined religious leadership with scientific study and social activism throughout her long life."
+    ]
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Understanding of women's rights history",
+    "Recognition of pioneering figures",
+    "Cultural context of 19th century America"
+  ],
+  "ageRange": "12-14",
+  "difficulty": "intermediate",
+  "timeRequired": "30-45"
+}

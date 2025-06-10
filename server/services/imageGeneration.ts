@@ -46,16 +46,46 @@ export async function generateColoringPageImage(
       return huggingFaceResult;
     }
 
-    // If Hugging Face fails, try other available services
-    console.log('Hugging Face image generation failed, trying alternative methods');
+    // If Hugging Face fails, use fallback SVG generation
+    console.log('Hugging Face image generation failed, generating fallback SVG');
     
-    // Return a structured response indicating image generation is needed
-    return {
-      success: true,
-      imageUrl: null,
-      base64: null,
-      error: null
-    };
+    try {
+      // Import and use fallback SVG generation
+      const { createEducationalSVG } = await import('./huggingfaceService');
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      // Generate educational SVG based on the prompt
+      const svgContent = createEducationalSVG(prompt);
+      
+      // Create uploads directory if it doesn't exist
+      const uploadDir = path.default.join(process.cwd(), 'uploads', 'images');
+      await fs.default.promises.mkdir(uploadDir, { recursive: true });
+      
+      // Save SVG to file
+      const timestamp = Date.now();
+      const filename = `coloring_fallback_${timestamp}.svg`;
+      const filepath = path.default.join(uploadDir, filename);
+      
+      await fs.default.promises.writeFile(filepath, svgContent);
+      
+      // Create URL and base64
+      const imageUrl = `/uploads/images/${filename}`;
+      const base64 = `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`;
+      
+      return {
+        success: true,
+        imageUrl: imageUrl,
+        base64: base64
+      };
+      
+    } catch (fallbackError) {
+      console.error('Fallback SVG generation failed:', fallbackError);
+      return {
+        success: false,
+        error: 'Both primary and fallback image generation failed'
+      };
+    }
     
   } catch (error) {
     console.error('Error generating coloring page image:', error);

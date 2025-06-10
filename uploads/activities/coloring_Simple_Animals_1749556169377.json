@@ -1,0 +1,45 @@
+{
+  "title": "Friendly Farm Animals",
+  "description": "A simple coloring page featuring adorable farm animals that helps children learn about different animals while practicing fine motor skills and creativity.",
+  "instructions": "Color each animal using your favorite colors. Try to stay inside the lines. After coloring, you can tell a story about these farm animals!",
+  "content": {
+    "image": "A simple farm scene with four easy-to-color animals: a smiling cow, a fluffy sheep, a happy pig, and a proud rooster. Each animal is drawn with simple outlines and minimal details, perfect for young children to color.",
+    "elements": [
+      {
+        "name": "Cow",
+        "description": "The cow has spots that you can color black, brown, or any color you like!"
+      },
+      {
+        "name": "Sheep",
+        "description": "The fluffy sheep can be colored white or light gray. You can make the face a different color!"
+      },
+      {
+        "name": "Pig",
+        "description": "Pigs are often pink, but you can color this pig any color you want!"
+      },
+      {
+        "name": "Rooster",
+        "description": "Roosters have colorful feathers. Try using red, orange, and yellow!"
+      },
+      {
+        "name": "Barn",
+        "description": "The barn in the background can be colored red with a brown roof."
+      }
+    ],
+    "learningFacts": [
+      "Cows give us milk that we can drink or use to make cheese and yogurt.",
+      "Sheep grow wool that can be used to make warm clothes.",
+      "Pigs are very smart animals that can learn tricks and solve puzzles.",
+      "Roosters crow in the morning to wake up the farm."
+    ]
+  },
+  "targetSkills": [
+    "fine motor control",
+    "color recognition",
+    "animal identification",
+    "creativity"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
