@@ -174,14 +174,33 @@ export default function AIWorksheetGenerator() {
   // Activity generation mutation
   const activityMutation = useMutation({
     mutationFn: async (params: ActivityGenerationParams) => {
-      const response = await fetch('/api/activities/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(params),
-      });
-      return response.json();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+      
+      try {
+        const response = await fetch('/api/activities/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(params),
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+        
+        return response.json();
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          throw new Error('Request timeout - activity generation is taking longer than expected');
+        }
+        throw error;
+      }
     },
     onSuccess: (data) => {
       // Handle successful generation

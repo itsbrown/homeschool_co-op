@@ -1,0 +1,69 @@
+{
+  "title": "Fun with Addition: Counting Adventures",
+  "description": "This worksheet helps young learners practice basic addition skills with numbers 1-10 through engaging, illustrated problems.",
+  "instructions": "Solve each addition problem by counting the objects and writing the answer in the box. You can use your fingers to help count if needed!",
+  "content": {
+    "questions": [
+      {
+        "question": "2 apples + 3 apples = ?",
+        "type": "short_answer",
+        "answer": "5"
+      },
+      {
+        "question": "4 stars + 1 star = ?",
+        "type": "short_answer",
+        "answer": "5"
+      },
+      {
+        "question": "3 dogs + 2 dogs = ?",
+        "type": "short_answer",
+        "answer": "5"
+      },
+      {
+        "question": "5 flowers + 5 flowers = ?",
+        "type": "short_answer",
+        "answer": "10"
+      },
+      {
+        "question": "1 ball + 6 balls = ?",
+        "type": "short_answer",
+        "answer": "7"
+      },
+      {
+        "question": "7 fish + 2 fish = ?",
+        "type": "short_answer",
+        "answer": "9"
+      },
+      {
+        "question": "8 butterflies + 2 butterflies = ?",
+        "type": "short_answer",
+        "answer": "10"
+      },
+      {
+        "question": "3 + 3 = ?",
+        "type": "short_answer",
+        "answer": "6"
+      },
+      {
+        "question": "4 + 4 = ?",
+        "type": "short_answer",
+        "answer": "8"
+      },
+      {
+        "question": "2 + 5 = ?",
+        "type": "short_answer",
+        "answer": "7"
+      }
+    ],
+    "answerKey": true
+  },
+  "targetSkills": [
+    "basic addition",
+    "counting",
+    "number recognition",
+    "visual math"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}
