@@ -1,0 +1,50 @@
+{
+  "title": "Wild America: Native Animal Friends",
+  "description": "A fun coloring page featuring native American animals in their natural habitats. This activity helps children learn about wildlife while developing fine motor skills and creativity.",
+  "instructions": "Color each animal using crayons or colored pencils. Try to use realistic colors, or get creative with your own special colors! When you're done, see if you can remember the fun facts about each animal.",
+  "content": {
+    "image": "A forest scene with an American bald eagle soaring above pine trees, a North American bison grazing in a meadow, and a grizzly bear standing by a stream with fish jumping. Small details include wildflowers, a few butterflies, and a small rabbit hiding in the grass.",
+    "elements": [
+      {
+        "name": "Bald Eagle",
+        "description": "America's national bird with white head and brown body"
+      },
+      {
+        "name": "American Bison",
+        "description": "Large, shaggy brown animal with a big head"
+      },
+      {
+        "name": "Grizzly Bear",
+        "description": "Big bear with a hump on its shoulders"
+      },
+      {
+        "name": "Pine Trees",
+        "description": "Tall trees with needle-like leaves"
+      },
+      {
+        "name": "Stream",
+        "description": "Flowing water where the bear is fishing"
+      },
+      {
+        "name": "Wildflowers",
+        "description": "Small colorful flowers in the meadow"
+      }
+    ],
+    "learningFacts": [
+      "The bald eagle is the national symbol of the United States",
+      "American bison (sometimes called buffalo) are the largest land animals in North America",
+      "Grizzly bears can smell food from miles away",
+      "Bald eagles build the largest nests of any bird in North America",
+      "Bison can run up to 35 miles per hour"
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "nature appreciation",
+    "color identification"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}
