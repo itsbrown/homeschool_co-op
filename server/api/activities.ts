@@ -14,6 +14,17 @@ import { processKnowledgeBases } from "../services/knowledgeBaseExtraction";
 
 const router = express.Router();
 
+/**
+ * Helper function to determine difficulty level from age range
+ */
+function getDifficultyFromAge(ageRange: string): 'beginner' | 'intermediate' | 'advanced' {
+  const [minAge] = ageRange.split('-').map(Number);
+  
+  if (minAge <= 6) return 'beginner';
+  if (minAge <= 12) return 'intermediate';
+  return 'advanced';
+}
+
 // Configure file upload middleware
 router.use(fileUpload.default({
   limits: {
@@ -165,35 +176,37 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
       try {
         console.log('🎨 Enhancing coloring activity with actual SVG image...');
         
-        // Import image generation service
-        const { createEducationalSVG } = await import('../services/huggingfaceService');
+        // Import Colorify AI service for professional coloring pages
+        const { generateColoringPage, isColorifyAIAvailable } = await import('../services/colorifyAI');
         
         // Extract elements from the generated activity
         const elements = generatedActivity.content.elements 
           ? generatedActivity.content.elements.map((el: any) => typeof el === 'string' ? el : el.name)
           : ['Educational Element 1', 'Educational Element 2', 'Educational Element 3'];
         
-        console.log('🔍 Extracted elements for SVG generation:', elements);
+        console.log('🔍 Extracted elements for coloring page generation:', elements);
         
-        // Create a detailed prompt for SVG generation
-        const svgPrompt = `${params.subject} coloring page with ${elements.join(', ')} suitable for ages ${params.ageRange}`;
+        // Determine difficulty based on age range
+        const difficulty = getDifficultyFromAge(params.ageRange);
         
-        // Generate the SVG content
-        const svgResult = await createEducationalSVG(svgPrompt);
-        const svgContent = typeof svgResult === 'string' ? svgResult : svgResult.svgContent || svgResult.imageUrl || '';
+        // Generate professional coloring page using Colorify AI
+        const coloringResult = await generateColoringPage(
+          params.subject,
+          elements,
+          params.ageRange,
+          difficulty
+        );
         
-        // Save SVG to file
-        const svgFilename = `coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
-        const svgPath = path.join(activitiesDir, svgFilename);
-        await fs.writeFile(svgPath, svgContent);
+        const imageUrl = coloringResult.localPath;
+        console.log('✅ Generated coloring page:', imageUrl);
         
-        // Update the activity content with actual SVG
+        // Update the activity content with professional coloring page
         generatedActivity.content = {
           ...generatedActivity.content,
           type: 'image-coloring-page',
-          imageUrl: `/uploads/activities/${svgFilename}`,
-          svgContent: svgContent,
+          imageUrl: imageUrl,
           elements: elements,
+          coloringProvider: isColorifyAIAvailable() ? 'colorify-ai' : 'enhanced-svg',
           learningFacts: generatedActivity.content.learningFacts || [
             `This coloring page features ${elements.join(', ')} related to ${params.subject}`,
             `Coloring helps develop fine motor skills and creativity`,
@@ -201,7 +214,7 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
           ]
         };
         
-        console.log('✅ Enhanced coloring activity with SVG image:', `/uploads/activities/${svgFilename}`);
+        console.log('✅ Enhanced coloring activity with professional image:', imageUrl);
       } catch (imageError) {
         console.error('❌ Error enhancing coloring activity with SVG:', imageError);
         // Continue with the original generated activity if SVG enhancement fails

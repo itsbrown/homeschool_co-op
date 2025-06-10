@@ -1,0 +1,42 @@
+{
+  "title": "Antoinette Brown Blackwell: Voting for Change",
+  "description": "A historical coloring page showing Antoinette Brown Blackwell voting, highlighting her role as a women's rights advocate who fought for women's suffrage in the 1800s.",
+  "instructions": "Color this picture of Antoinette Brown Blackwell casting her vote. Use your favorite colors and try to stay inside the lines. As you color, think about how brave she was to stand up for women's right to vote!",
+  "content": {
+    "image": "Antoinette Brown Blackwell standing proudly at a voting booth. She is wearing a long Victorian-style dress with a high collar and her hair is pulled back. She is placing her ballot into a ballot box labeled 'VOTES'. There are other people in the background watching this historic moment. She has a determined, happy expression on her face.",
+    "elements": [
+      {
+        "name": "Antoinette",
+        "description": "Antoinette is wearing a long dress typical of the 1800s"
+      },
+      {
+        "name": "Ballot Box",
+        "description": "The box where Antoinette is placing her vote"
+      },
+      {
+        "name": "Voting Booth",
+        "description": "The small area where people vote privately"
+      },
+      {
+        "name": "Background People",
+        "description": "Other citizens watching this important moment"
+      }
+    ],
+    "learningFacts": [
+      "Antoinette Brown Blackwell fought for women's right to vote in the 1800s",
+      "Women weren't allowed to vote in America until 1920",
+      "Antoinette was also America's first woman minister",
+      "She believed girls and women should have the same rights as boys and men",
+      "Brave people like Antoinette helped change unfair rules"
+    ]
+  },
+  "targetSkills": [
+    "historical awareness",
+    "fine motor skills",
+    "civic education",
+    "gender equality concepts"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "intermediate",
+  "timeRequired": "20"
+}
