@@ -503,17 +503,52 @@ export default function AIWorksheetGenerator() {
             
             {activityType === "coloring" && activity?.content && (
               <div className="space-y-4">
-                <p className="italic">{activity.content?.image || "Image description not available"}</p>
+                {/* Display actual coloring page image if available */}
+                {activity.content?.imageUrl && (
+                  <div className="mb-4">
+                    <h4 className="font-medium mb-2">Coloring Page:</h4>
+                    <div className="border rounded-lg p-4 bg-gray-50">
+                      <img 
+                        src={activity.content.imageUrl} 
+                        alt="Coloring page" 
+                        className="max-w-full h-auto mx-auto"
+                        style={{ maxHeight: '500px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Show description and instructions */}
+                <p className="italic">{activity.content?.description || "Educational coloring activity"}</p>
+                
+                {/* Elements to color */}
                 {activity.content?.elements && (
                   <div className="space-y-2">
                     <h4 className="font-medium">Elements to Color:</h4>
                     <ul className="list-disc list-inside">
                       {activity.content.elements.map((el: any, i: number) => (
-                        <li key={i}>{el?.name || `Element ${i+1}`}: {el?.description || "No description"}</li>
+                        <li key={i}>
+                          {typeof el === 'string' ? el : (el?.name || `Element ${i+1}`)}
+                          {el?.description && `: ${el.description}`}
+                        </li>
                       ))}
                     </ul>
                   </div>
                 )}
+                
+                {/* Drawing instructions for text-based fallback */}
+                {activity.content?.drawingInstructions && (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+                    <h4 className="font-medium text-blue-800 mb-2">Drawing Instructions:</h4>
+                    <ul className="list-disc list-inside text-blue-700">
+                      {activity.content.drawingInstructions.map((instruction: string, i: number) => (
+                        <li key={i}>{instruction}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* Learning facts */}
                 {activity.content?.learningFacts && (
                   <div className="mt-4">
                     <h4 className="font-medium">Learning Facts:</h4>
@@ -522,6 +557,13 @@ export default function AIWorksheetGenerator() {
                         <li key={i}>{fact || "No fact available"}</li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                
+                {/* Note about image generation */}
+                {activity.content?.note && (
+                  <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
+                    <p className="text-amber-800 text-sm">{activity.content.note}</p>
                   </div>
                 )}
               </div>

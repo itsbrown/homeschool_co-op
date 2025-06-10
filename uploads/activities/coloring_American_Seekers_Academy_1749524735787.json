@@ -1,0 +1,63 @@
+{
+  "title": "Classical Wisdom: American Seekers Academy Emblem",
+  "description": "This coloring page features a symbolic emblem representing the American Seekers Academy, incorporating classical elements and symbols that represent knowledge, wisdom, and intellectual pursuit. By coloring this emblem, students will reflect on the classical traditions of education while expressing creativity.",
+  "instructions": "Use colored pencils or markers to bring this emblem to life. Consider the symbolic meaning of each element as you choose your colors. The coloring includes detailed line work that requires precision and patience. After completing, reflect on how the classical elements represent educational values.",
+  "content": {
+    "image": "A circular emblem representing the American Seekers Academy. At the center is an open book with radiating light. Surrounding the book are the four classical elements: an earth symbol (bottom), water waves (left), flames (right), and clouds (top). A laurel wreath encircles these elements. An owl perches atop the emblem, symbolizing wisdom. A banner across the bottom reads 'American Seekers Academy' with the Latin phrase 'Lux et Veritas' (Light and Truth) beneath it. The background features a constellation pattern representing the pursuit of knowledge.",
+    "elements": [
+      {
+        "name": "Central Book",
+        "description": "The open book represents learning and knowledge - consider using gold for the radiating light to symbolize enlightenment"
+      },
+      {
+        "name": "Earth Symbol",
+        "description": "Represents foundation and stability - browns and greens would be appropriate"
+      },
+      {
+        "name": "Water Waves",
+        "description": "Represents flow of ideas and adaptability - various shades of blue"
+      },
+      {
+        "name": "Flames",
+        "description": "Represents passion for learning - reds, oranges, and yellows"
+      },
+      {
+        "name": "Clouds/Air",
+        "description": "Represents higher thinking and aspiration - light blues and whites"
+      },
+      {
+        "name": "Owl",
+        "description": "Symbol of wisdom in classical tradition - browns and grays with yellow eyes"
+      },
+      {
+        "name": "Laurel Wreath",
+        "description": "Classical symbol of achievement - green with gold highlights"
+      },
+      {
+        "name": "Banner",
+        "description": "Contains the academy name - consider a deep blue or maroon background with gold lettering"
+      },
+      {
+        "name": "Constellation Background",
+        "description": "Represents the vastness of knowledge - deep blue with white or silver stars"
+      }
+    ],
+    "learningFacts": [
+      "The four classical elements (earth, water, fire, and air) were believed by ancient Greeks to compose all matter in the universe",
+      "The owl was sacred to Athena, the Greek goddess of wisdom and learning",
+      "Laurel wreaths were awarded to victors in ancient Greek competitions, symbolizing achievement and honor",
+      "The phrase 'Lux et Veritas' (Light and Truth) has been used by many educational institutions including Yale University",
+      "Constellation patterns were used by ancient civilizations for navigation and timekeeping, representing humanity's early scientific endeavors"
+    ]
+  },
+  "targetSkills": [
+    "Artistic expression",
+    "Symbol interpretation",
+    "Classical knowledge",
+    "Fine motor control",
+    "Cultural literacy"
+  ],
+  "ageRange": "15-18",
+  "difficulty": "intermediate",
+  "timeRequired": "45"
+}

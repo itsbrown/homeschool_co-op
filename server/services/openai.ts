@@ -33,12 +33,12 @@ import { askVirtualTutor } from './anthropic';
  * @param difficulty Difficulty level
  * @returns A complete activity object
  */
-function generateFallbackActivity(
+async function generateFallbackActivity(
   subject: string,
   ageRange: string,
   activityType: string,
   difficulty: string
-): any {
+): Promise<any> {
   const capitalizedSubject = subject.charAt(0).toUpperCase() + subject.slice(1);
   const today = new Date().toLocaleDateString();
   
@@ -82,7 +82,10 @@ function generateFallbackActivity(
       };
       
     case 'coloring':
-      // Create subject-appropriate elements instead of hardcoding American symbols
+      // Import image generation service
+      const { generateColoringPageImage, createColoringPageFallback } = await import('./imageGeneration');
+      
+      // Create subject-appropriate elements
       let elements = [];
       let description = "";
       
@@ -127,15 +130,46 @@ function generateFallbackActivity(
         ];
         description = `Color these ${capitalizedSubject} elements while learning about this educational topic.`;
       }
-      
-      return {
-        ...activity,
-        content: {
-          theme: `Educational ${capitalizedSubject} Coloring Activity`,
-          elements: elements,
-          description: description
+
+      // Try to generate actual coloring page image
+      try {
+        const imageResult = await generateColoringPageImage(subject, ageRange, elements);
+        
+        if (imageResult.success && imageResult.imageUrl) {
+          return {
+            ...activity,
+            content: {
+              type: 'image-coloring-page',
+              theme: `Educational ${capitalizedSubject} Coloring Activity`,
+              elements: elements,
+              description: description,
+              imageUrl: imageResult.imageUrl,
+              base64: imageResult.base64,
+              learningFacts: [
+                `This coloring page features ${elements.join(', ')} related to ${subject}`,
+                `Coloring helps develop fine motor skills and creativity`,
+                `Each element represents an important aspect of ${subject} learning`
+              ]
+            }
+          };
+        } else {
+          // Fall back to text-based description with instructions for manual creation
+          console.log('Image generation not available, providing text-based coloring page');
+          const fallback = createColoringPageFallback(subject, ageRange, elements);
+          return {
+            ...activity,
+            content: fallback.content
+          };
         }
-      };
+      } catch (error) {
+        console.error('Error generating coloring page image:', error);
+        // Fall back to text-based description
+        const fallback = createColoringPageFallback(subject, ageRange, elements);
+        return {
+          ...activity,
+          content: fallback.content
+        };
+      }
       
     case 'wordsearch':
       return {

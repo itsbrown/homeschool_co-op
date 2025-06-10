@@ -1,0 +1,71 @@
+{
+  "title": "American Seekers Academy: Symbols of Knowledge",
+  "description": "This intermediate coloring page features classical symbols and icons representing education, wisdom, and discovery. Students will learn about traditional academic symbols while expressing creativity through coloring.",
+  "instructions": "Color each element according to your preference. Consider the meaning behind each symbol as you color. Try using traditional colors for some elements and creative colors for others. Read the learning facts to understand the significance of each symbol.",
+  "content": {
+    "image": "A detailed illustration of a classical academy building with columns at the entrance and 'American Seekers Academy' inscribed on the architrave. Surrounding the building are various classical symbols of knowledge and learning: an owl perched on an open book, a laurel wreath, a torch, a globe, a quill pen with inkwell, a scroll, an apple, a telescope, a compass and square, and a lyre. The background features stars and a rising sun symbolizing enlightenment.",
+    "elements": [
+      {
+        "name": "Academy Building",
+        "description": "The central neoclassical building with columns representing the institution of learning"
+      },
+      {
+        "name": "Owl",
+        "description": "Symbol of wisdom and knowledge, perched on an open book"
+      },
+      {
+        "name": "Laurel Wreath",
+        "description": "Ancient symbol of achievement and honor"
+      },
+      {
+        "name": "Torch",
+        "description": "Represents enlightenment and the illumination of minds"
+      },
+      {
+        "name": "Globe",
+        "description": "Symbolizes world knowledge and exploration"
+      },
+      {
+        "name": "Quill and Inkwell",
+        "description": "Traditional writing implements representing literature and communication"
+      },
+      {
+        "name": "Scroll",
+        "description": "Ancient form of recording knowledge and important documents"
+      },
+      {
+        "name": "Apple",
+        "description": "Traditional symbol of education and teachers"
+      },
+      {
+        "name": "Telescope",
+        "description": "Represents scientific discovery and looking toward the future"
+      },
+      {
+        "name": "Compass and Square",
+        "description": "Symbols of mathematics, architecture, and precise thinking"
+      },
+      {
+        "name": "Lyre",
+        "description": "Classical instrument representing arts and music education"
+      }
+    ],
+    "learningFacts": [
+      "The owl was sacred to Athena, the Greek goddess of wisdom and learning.",
+      "Laurel wreaths were awarded to victors in ancient Greek competitions, symbolizing achievement.",
+      "The torch has symbolized enlightenment since ancient times, representing how knowledge dispels darkness.",
+      "Quill pens were the primary writing instruments for over 1,000 years until the invention of the steel pen in the 1800s.",
+      "The seven liberal arts of classical education included grammar, logic, rhetoric, arithmetic, geometry, music, and astronomy.",
+      "Neoclassical architecture, with its columns and symmetry, was popular for educational institutions as it recalled ancient Greek centers of learning."
+    ]
+  },
+  "targetSkills": [
+    "Art appreciation",
+    "Cultural symbolism",
+    "Fine motor skills",
+    "Historical knowledge"
+  ],
+  "ageRange": "12-14",
+  "difficulty": "intermediate",
+  "timeRequired": "45"
+}
