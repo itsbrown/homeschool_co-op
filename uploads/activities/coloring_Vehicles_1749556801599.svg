@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+    <rect x="0" y="0" width="512" height="512" fill="white"/>
+    
+    <!-- House -->
+    <rect x="180" y="250" width="152" height="120" fill="none" stroke="black" stroke-width="3"/>
+    <polygon points="180,250 256,180 332,250" fill="none" stroke="black" stroke-width="3"/>
+    <rect x="200" y="300" width="30" height="50" fill="none" stroke="black" stroke-width="2"/>
+    <rect x="280" y="290" width="40" height="40" fill="none" stroke="black" stroke-width="2"/>
+    <line x1="280" y1="310" x2="320" y2="310" stroke="black" stroke-width="1"/>
+    <line x1="300" y1="290" x2="300" y2="330" stroke="black" stroke-width="1"/>
+    
+    <!-- Tree -->
+    <rect x="120" y="300" width="20" height="70" fill="none" stroke="black" stroke-width="3"/>
+    <circle cx="130" cy="280" r="40" fill="none" stroke="black" stroke-width="3"/>
+    
+    <!-- Clouds -->
+    <circle cx="100" cy="80" r="20" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="120" cy="80" r="25" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="140" cy="80" r="20" fill="none" stroke="black" stroke-width="2"/>
+    
+    <circle cx="350" cy="60" r="15" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="365" cy="60" r="20" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="380" cy="60" r="15" fill="none" stroke="black" stroke-width="2"/>
+    
+    <text x="256" y="460" font-family="Arial" font-size="14" text-anchor="middle" fill="black">
+      Vehicles coloring page with Car, Truck, 
+    </text>
+  </svg>

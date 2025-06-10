@@ -1,0 +1,32 @@
+{
+  "title": "Vehicles on the Go!",
+  "description": "A fun coloring page featuring different types of vehicles that children encounter in everyday life. This activity helps children recognize various transportation methods while developing fine motor skills.",
+  "instructions": "Color each vehicle using your favorite colors. Try to stay inside the lines and make each vehicle look different!",
+  "content": {
+    "image": "A simple outline drawing showing four different vehicles: a car on a road, a truck carrying boxes, an airplane flying in the sky with clouds, and a bicycle with a basket near a tree.",
+    "elements": [
+      "Car",
+      "Truck",
+      "Airplane",
+      "Bicycle"
+    ],
+    "learningFacts": [
+      "Cars have four wheels and help people travel on roads",
+      "Trucks are bigger than cars and can carry heavy things",
+      "Airplanes have wings that help them fly through the sky",
+      "Bicycles have two wheels and need people to pedal them to move"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/coloring_Vehicles_1749556801599.svg",
+    "svgContent": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\">\n    <rect x=\"0\" y=\"0\" width=\"512\" height=\"512\" fill=\"white\"/>\n    \n    <!-- House -->\n    <rect x=\"180\" y=\"250\" width=\"152\" height=\"120\" fill=\"none\" stroke=\"black\" stroke-width=\"3\"/>\n    <polygon points=\"180,250 256,180 332,250\" fill=\"none\" stroke=\"black\" stroke-width=\"3\"/>\n    <rect x=\"200\" y=\"300\" width=\"30\" height=\"50\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <rect x=\"280\" y=\"290\" width=\"40\" height=\"40\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <line x1=\"280\" y1=\"310\" x2=\"320\" y2=\"310\" stroke=\"black\" stroke-width=\"1\"/>\n    <line x1=\"300\" y1=\"290\" x2=\"300\" y2=\"330\" stroke=\"black\" stroke-width=\"1\"/>\n    \n    <!-- Tree -->\n    <rect x=\"120\" y=\"300\" width=\"20\" height=\"70\" fill=\"none\" stroke=\"black\" stroke-width=\"3\"/>\n    <circle cx=\"130\" cy=\"280\" r=\"40\" fill=\"none\" stroke=\"black\" stroke-width=\"3\"/>\n    \n    <!-- Clouds -->\n    <circle cx=\"100\" cy=\"80\" r=\"20\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <circle cx=\"120\" cy=\"80\" r=\"25\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <circle cx=\"140\" cy=\"80\" r=\"20\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    \n    <circle cx=\"350\" cy=\"60\" r=\"15\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <circle cx=\"365\" cy=\"60\" r=\"20\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <circle cx=\"380\" cy=\"60\" r=\"15\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    \n    <text x=\"256\" y=\"460\" font-family=\"Arial\" font-size=\"14\" text-anchor=\"middle\" fill=\"black\">\n      Vehicles coloring page with Car, Truck, \n    </text>\n  </svg>"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "vehicle recognition",
+    "color identification",
+    "following instructions"
+  ],
+  "ageRange": "3-6",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}
