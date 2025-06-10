@@ -24,6 +24,13 @@ interface KnowledgeBase {
   subject: string;
   authorId: number;
   isPublic: boolean;
+  files?: Array<{
+    name: string;
+    size: number;
+    type: string;
+    url: string;
+  }>;
+  fileCount?: number;
 }
 
 export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSelectorProps) {
