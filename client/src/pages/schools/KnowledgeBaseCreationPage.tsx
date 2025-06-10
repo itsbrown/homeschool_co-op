@@ -155,18 +155,41 @@ export default function KnowledgeBaseCreationPage() {
       });
       console.log("Uploading files:", data.files);
       
-      // Map frontend form data to backend schema
+      // First, upload all files to get their actual URLs
+      let uploadedFileData = [];
+      
+      if (data.files.length > 0) {
+        const formData = new FormData();
+        data.files.forEach(file => {
+          formData.append('files', file);
+        });
+
+        const uploadResponse = await fetch('/api/file-upload/knowledge-base', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error(`File upload failed: ${uploadResponse.statusText}`);
+        }
+
+        const uploadResult = await uploadResponse.json();
+        
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.message || 'File upload failed');
+        }
+        
+        uploadedFileData = uploadResult.files;
+      }
+      
+      // Map frontend form data to backend schema with actual uploaded file URLs
       const kbData = {
         title: data.knowledgeBase.title,
         description: data.knowledgeBase.description,
         subject: data.knowledgeBase.subjectArea,
         difficulty: "All Levels", // Default since not captured in form
         price: 0,
-        files: data.files.map(file => ({
-          url: `/uploads/${file.name}`,
-          type: file.name.split('.').pop() || 'unknown',
-          name: file.name
-        })),
+        files: uploadedFileData,
         metadata: {
           tags: data.tags.length > 0 ? data.tags : ["Learning Resources"],
           objectives: ["Educational content"]

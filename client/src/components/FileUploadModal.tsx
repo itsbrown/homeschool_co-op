@@ -153,9 +153,9 @@ export function FileUploadModal({
     setIsUploading(true);
     
     try {
-      // Process uploads sequentially for demo
+      // Process uploads sequentially
       for (const item of uploadItems.filter(i => i.status === 'pending')) {
-        await simulateUpload(item);
+        await uploadFile(item);
       }
 
       const successfulFiles = uploadItems

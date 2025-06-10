@@ -1,21 +1,9 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import * as fileUpload from "express-fileupload";
 import { UploadedFile } from "express-fileupload";
 
 const router = express.Router();
-
-// Configure file upload middleware specifically for knowledge base files
-router.use(fileUpload.default({
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max file size
-  },
-  abortOnLimit: true,
-  useTempFiles: true,
-  tempFileDir: path.join(process.cwd(), 'uploads', 'temp'),
-  createParentPath: true,
-}));
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -27,6 +15,7 @@ if (!fs.existsSync(uploadsDir)) {
 router.post('/knowledge-base', async (req, res) => {
   try {
     console.log('📁 File upload request received');
+    console.log('📄 Request files:', req.files);
     
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ 
@@ -36,10 +25,29 @@ router.post('/knowledge-base', async (req, res) => {
     }
 
     const uploadedFiles: any[] = [];
-    const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
+    
+    // Handle both single and multiple files
+    let fileList: UploadedFile[] = [];
+    
+    if (req.files.files) {
+      if (Array.isArray(req.files.files)) {
+        fileList = req.files.files as UploadedFile[];
+      } else {
+        fileList = [req.files.files as UploadedFile];
+      }
+    } else {
+      // Check for other possible field names
+      const firstKey = Object.keys(req.files)[0];
+      const firstFile = req.files[firstKey];
+      if (Array.isArray(firstFile)) {
+        fileList = firstFile as UploadedFile[];
+      } else {
+        fileList = [firstFile as UploadedFile];
+      }
+    }
 
-    for (const file of files.filter(Boolean)) {
-      const uploadedFile = file as UploadedFile;
+    for (const uploadedFile of fileList) {
+      if (!uploadedFile) continue;
       
       // Generate unique filename
       const timestamp = Date.now();
