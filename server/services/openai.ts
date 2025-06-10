@@ -642,7 +642,7 @@ export async function generateEducationalActivity(
           `;
           
           // Use the askVirtualTutor function which is designed for educational content
-          const anthropicResult = await askVirtualTutor(subject, anthropicPrompt, ageRange, "visual");
+          const anthropicResult = await askVirtualTutor(anthropicPrompt, subject, ageRange, "visual");
           
           // Try to extract and parse the JSON
           const jsonMatch = anthropicResult.match(/\{[\s\S]*\}/);
@@ -651,7 +651,14 @@ export async function generateEducationalActivity(
               const parsedResult = JSON.parse(jsonMatch[0]);
               
               // If this is a coloring activity, enhance it with actual image generation
+              console.log('Checking for coloring activity enhancement:', {
+                activityType: activityType.toLowerCase(),
+                hasContent: !!parsedResult.content,
+                isColoring: activityType.toLowerCase() === 'coloring'
+              });
+              
               if (activityType.toLowerCase() === 'coloring' && parsedResult.content) {
+                console.log('Enhancing coloring activity with actual image generation...');
                 try {
                   const { generateColoringPageWithImage } = await import('./anthropic');
                   
@@ -659,6 +666,8 @@ export async function generateEducationalActivity(
                   const elements = parsedResult.content.elements 
                     ? parsedResult.content.elements.map((el: any) => typeof el === 'string' ? el : el.name)
                     : ['Educational Element 1', 'Educational Element 2', 'Educational Element 3'];
+                  
+                  console.log('Extracted elements for image generation:', elements);
                   
                   // Generate enhanced content with actual image
                   const enhancedContent = await generateColoringPageWithImage(
@@ -668,12 +677,18 @@ export async function generateEducationalActivity(
                     parsedResult.description || parsedResult.content.image || `A coloring page about ${subject}`
                   );
                   
+                  console.log('Enhanced content generated:', {
+                    type: enhancedContent.type,
+                    hasImageUrl: !!enhancedContent.imageUrl,
+                    hasBase64: !!enhancedContent.base64
+                  });
+                  
                   // Update the activity with enhanced content
                   parsedResult.content = enhancedContent;
                   
-                  console.log('Enhanced Anthropic coloring activity with actual image generation');
+                  console.log('✅ Enhanced Anthropic coloring activity with actual image generation');
                 } catch (imageError) {
-                  console.error('Error enhancing Anthropic coloring activity with image:', imageError);
+                  console.error('❌ Error enhancing Anthropic coloring activity with image:', imageError);
                   // Continue with the original parsed result if image enhancement fails
                 }
               }

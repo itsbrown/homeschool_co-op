@@ -1,0 +1,41 @@
+{
+  "title": "Jungle Friends Coloring Adventure",
+  "description": "A fun jungle-themed coloring page featuring four friendly animals in their natural habitat. This activity helps children develop fine motor skills while learning about jungle animals.",
+  "instructions": "Color each animal using your favorite colors. Try to stay inside the lines. Can you name each animal as you color it?",
+  "content": {
+    "image": "A jungle scene with a monkey hanging from a tree branch, an elephant standing by a waterhole, a lion resting under a shady tree, and a colorful parrot perched on a branch.",
+    "elements": [
+      {
+        "name": "Monkey",
+        "description": "A playful monkey swinging from a tree branch with a long tail"
+      },
+      {
+        "name": "Elephant",
+        "description": "A big elephant with large ears and a long trunk near a waterhole"
+      },
+      {
+        "name": "Lion",
+        "description": "A majestic lion with a fluffy mane resting under a tree"
+      },
+      {
+        "name": "Parrot",
+        "description": "A bright parrot with beautiful wings sitting on a branch"
+      }
+    ],
+    "learningFacts": [
+      "Monkeys use their tails to help them balance and swing in trees",
+      "Elephants use their trunks to drink water and pick up food",
+      "Lions sleep up to 20 hours a day",
+      "Parrots can learn to copy words and sounds they hear"
+    ]
+  },
+  "targetSkills": [
+    "Fine motor skills",
+    "Animal recognition",
+    "Color identification",
+    "Following instructions"
+  ],
+  "ageRange": "4-6",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}

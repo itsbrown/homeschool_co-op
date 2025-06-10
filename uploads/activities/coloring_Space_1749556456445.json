@@ -1,0 +1,63 @@
+{
+  "title": "Cosmic Coloring Adventure",
+  "description": "A fun space-themed coloring page that introduces young students to our solar system, stars, and space exploration through an engaging visual activity.",
+  "instructions": "Color each part of the space scene using your favorite colors. You can use the suggested colors or choose your own! Remember that space has many beautiful and bright colors.",
+  "content": {
+    "image": "A space scene featuring the Sun, Earth, Moon, Mars, Saturn with its rings, stars of different sizes, a rocket ship blasting off, and an astronaut floating in space.",
+    "elements": [
+      {
+        "name": "Sun",
+        "description": "The bright star at the center of our solar system (try yellow or orange)"
+      },
+      {
+        "name": "Earth",
+        "description": "Our home planet with continents and oceans (try blue and green)"
+      },
+      {
+        "name": "Moon",
+        "description": "Earth's natural satellite (try gray or light yellow)"
+      },
+      {
+        "name": "Mars",
+        "description": "The red planet (try red or orange)"
+      },
+      {
+        "name": "Saturn",
+        "description": "The planet with beautiful rings (try gold for the planet and white for the rings)"
+      },
+      {
+        "name": "Stars",
+        "description": "Twinkling lights in space (try yellow, white, or light blue)"
+      },
+      {
+        "name": "Rocket Ship",
+        "description": "A spacecraft launching into space (try white, red, or blue)"
+      },
+      {
+        "name": "Astronaut",
+        "description": "A person exploring space in a spacesuit (try white for the suit)"
+      },
+      {
+        "name": "Background",
+        "description": "The darkness of space (try dark blue, purple, or black)"
+      }
+    ],
+    "learningFacts": [
+      "The Sun is a star that gives us light and heat",
+      "Earth is the third planet from the Sun",
+      "Mars is called the red planet because of its reddish color",
+      "Saturn has beautiful rings made of ice and rock",
+      "Astronauts wear special suits to protect them in space",
+      "The Moon orbits around Earth"
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "astronomy basics",
+    "creativity"
+  ],
+  "ageRange": "5-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}

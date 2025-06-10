@@ -1,0 +1,45 @@
+{
+  "title": "Shapes Adventure: Circle, Square, Triangle",
+  "description": "A simple coloring page featuring basic shapes for young learners to identify, color, and enjoy while developing shape recognition skills.",
+  "instructions": "Color each shape using your favorite colors. Try to use a different color for each shape!",
+  "content": {
+    "image": "A friendly scene with a large smiling sun (circle) in the top corner, a house made from a square with a triangle roof, and flowers with circle centers and triangle petals. Each shape is clearly outlined with bold black lines for easy coloring.",
+    "elements": [
+      {
+        "name": "Circle Sun",
+        "description": "Color the big circle sun yellow or orange"
+      },
+      {
+        "name": "Square House",
+        "description": "Color the square part of the house red, blue, or brown"
+      },
+      {
+        "name": "Triangle Roof",
+        "description": "Color the triangle roof green or purple"
+      },
+      {
+        "name": "Circle Flower Centers",
+        "description": "Color the small circles in the flowers yellow"
+      },
+      {
+        "name": "Triangle Petals",
+        "description": "Color the triangle petals pink, red, or orange"
+      }
+    ],
+    "learningFacts": [
+      "A circle is round and has no corners",
+      "A square has 4 equal sides and 4 corners",
+      "A triangle has 3 sides and 3 corners",
+      "Shapes are all around us in everyday objects"
+    ]
+  },
+  "targetSkills": [
+    "shape recognition",
+    "fine motor skills",
+    "color identification",
+    "following directions"
+  ],
+  "ageRange": "3-5",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}
