@@ -16,7 +16,8 @@ import {
   Home,
   LogOut,
   User,
-  LucideIcon
+  LucideIcon,
+  Wand2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -29,6 +30,11 @@ const schoolNavItems: {
   icon: LucideIcon;
   subitems?: { title: string; href: string }[];
 }[] = [
+  {
+    title: 'AI Tools Dashboard',
+    href: '/',
+    icon: Wand2,
+  },
   {
     title: 'Dashboard',
     href: '/schools/dashboard',
