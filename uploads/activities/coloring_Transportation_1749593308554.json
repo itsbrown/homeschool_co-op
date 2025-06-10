@@ -1,0 +1,37 @@
+{
+  "title": "Transportation Adventure Coloring",
+  "description": "A fun coloring activity featuring different modes of transportation that helps young children learn about vehicles while developing fine motor skills.",
+  "instructions": "Color each vehicle using your favorite colors. Try to stay inside the lines. Talk about where each vehicle travels (road, sky, or tracks).",
+  "content": {
+    "image": "A simple scene showing three main vehicles: a car driving on a road, an airplane flying in the sky with clouds, and a train on railroad tracks. Each vehicle has simple, bold outlines perfect for young children to color.",
+    "elements": [
+      {
+        "name": "Car",
+        "description": "A friendly-looking car with four wheels driving on a road"
+      },
+      {
+        "name": "Airplane",
+        "description": "A smiling airplane with wings and windows flying among fluffy clouds"
+      },
+      {
+        "name": "Train",
+        "description": "A cheerful train with a few cars traveling on railroad tracks"
+      }
+    ],
+    "learningFacts": [
+      "Cars travel on roads and have wheels",
+      "Airplanes fly in the sky and have wings",
+      "Trains run on special tracks called railways",
+      "Transportation helps people and things move from one place to another"
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "transportation knowledge",
+    "vocabulary development"
+  ],
+  "ageRange": "3-6",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}

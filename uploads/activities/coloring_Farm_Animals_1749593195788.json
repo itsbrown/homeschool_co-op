@@ -1,0 +1,41 @@
+{
+  "title": "Happy Farm Friends",
+  "description": "A fun farm scene coloring page featuring friendly farm animals and a classic red barn. This coloring activity helps children learn about farm animals while developing fine motor skills and creativity.",
+  "instructions": "Color the farm animals and barn using your favorite colors. Try to stay inside the lines. You can use red for the barn, pink for the pig, brown or black for the cow spots, and yellow for the chicken's beak.",
+  "content": {
+    "image": "A simple farm scene with a red barn in the background, a smiling cow grazing on grass, a happy pig playing in mud, and a chicken pecking at seeds near a fence.",
+    "elements": [
+      {
+        "name": "Barn",
+        "description": "The large building where farm animals can sleep and stay safe"
+      },
+      {
+        "name": "Cow",
+        "description": "A friendly spotted cow with a bell around its neck"
+      },
+      {
+        "name": "Pig",
+        "description": "A cute pig with a curly tail sitting in a mud puddle"
+      },
+      {
+        "name": "Chicken",
+        "description": "A fluffy chicken with wings, beak, and feet"
+      }
+    ],
+    "learningFacts": [
+      "Cows give us milk that we can drink or use to make cheese and butter",
+      "Pigs are very smart animals and like to play in mud to stay cool",
+      "Chickens lay eggs that we can eat for breakfast",
+      "Barns keep farm animals safe and protected from weather"
+    ]
+  },
+  "targetSkills": [
+    "fine motor control",
+    "color recognition",
+    "animal identification",
+    "following instructions"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}

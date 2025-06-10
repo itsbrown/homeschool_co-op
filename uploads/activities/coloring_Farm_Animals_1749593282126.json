@@ -1,0 +1,41 @@
+{
+  "title": "Happy Farm Friends",
+  "description": "A cheerful farm scene featuring friendly animals and a big red barn for young children to color and learn about farm life.",
+  "instructions": "Color the farm animals and barn using your favorite colors. Try to stay inside the lines. You can use red for the barn, pink for the pig, brown or black for the cow, and yellow for the chickens - or choose your own colors!",
+  "content": {
+    "image": "A simple farm scene with a big red barn in the background, a smiling cow standing in a grassy field, a happy pig rolling in mud, and two chickens pecking at seeds near a fence.",
+    "elements": [
+      {
+        "name": "Barn",
+        "description": "The large building where farmers store hay and tools"
+      },
+      {
+        "name": "Cow",
+        "description": "A friendly cow with black and white spots"
+      },
+      {
+        "name": "Pig",
+        "description": "A cute pink pig with a curly tail"
+      },
+      {
+        "name": "Chickens",
+        "description": "Two yellow chickens with orange beaks and feet"
+      }
+    ],
+    "learningFacts": [
+      "Cows give us milk which we can drink or use to make cheese and butter",
+      "Pigs are very smart animals and can learn tricks",
+      "Chickens lay eggs that we can eat",
+      "Barns keep farm animals safe and warm"
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "animal identification",
+    "farm knowledge"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}

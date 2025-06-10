@@ -171,35 +171,43 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
     const filename = `${params.activityType}_${params.subject.replace(/\s+/g, '_')}_${timestamp}.json`;
     const outputFilePath = path.join(activitiesDir, filename);
     
-    // Generate professional coloring pages using DALL-E 3
+    // Generate professional coloring pages using advanced SVG generation
     if (params.activityType.toLowerCase() === 'coloring' && generatedActivity.content) {
       try {
-        console.log('🎨 Creating professional coloring page with DALL-E 3...');
-        
-        const { generateRealColoringPage } = await import('../services/realColoringPageGenerator');
+        console.log('🎨 Creating professional coloring page with advanced SVG generation...');
         
         // Extract elements from the generated activity
         const elements = generatedActivity.content.elements 
           ? generatedActivity.content.elements.map((el: any) => typeof el === 'string' ? el : el.name)
           : ['Educational Element 1', 'Educational Element 2', 'Educational Element 3'];
         
-        console.log('🔍 Elements for DALL-E coloring page:', elements);
+        console.log('🔍 Elements for professional coloring page:', elements);
         
-        // Generate professional coloring page using DALL-E 3
-        const svgContent = await generateRealColoringPage(
-          params.subject,
-          elements,
-          params.ageRange
-        );
+        // Try DALL-E first, fallback to advanced SVG if it fails
+        let svgContent: string;
+        let provider: string;
+        
+        try {
+          const { generateRealColoringPage } = await import('../services/realColoringPageGenerator');
+          svgContent = await generateRealColoringPage(params.subject, elements, params.ageRange);
+          provider = 'dall-e-3';
+          console.log('✅ Generated coloring page using DALL-E 3');
+        } catch (dalleError) {
+          console.log('🔄 DALL-E unavailable, using advanced SVG generation...');
+          const { generateAdvancedColoringPage } = await import('../services/alternativeColoringGenerator');
+          svgContent = await generateAdvancedColoringPage(params.subject, elements, params.ageRange);
+          provider = 'advanced-svg';
+          console.log('✅ Generated coloring page using advanced SVG');
+        }
         
         // Save the professional coloring page to file
         const timestamp = Date.now();
-        const svgFilename = `dalle_coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
+        const svgFilename = `professional_coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
         const svgPath = path.join(activitiesDir, svgFilename);
         await fs.writeFile(svgPath, svgContent);
         
         const imageUrl = `/uploads/activities/${svgFilename}`;
-        console.log('✅ Generated DALL-E coloring page:', imageUrl);
+        console.log('✅ Generated professional coloring page:', imageUrl);
         
         // Update the activity content with professional coloring page
         generatedActivity.content = {
@@ -207,18 +215,18 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
           type: 'image-coloring-page',
           imageUrl: imageUrl,
           elements: elements,
-          coloringProvider: 'dall-e-3',
+          coloringProvider: provider,
           learningFacts: generatedActivity.content.learningFacts || [
             `This coloring page features ${elements.join(', ')} related to ${params.subject}`,
-            `Professional illustration created with AI image generation`,
-            `Educational content designed for children ages ${params.ageRange}`
+            `Professional illustration designed for educational use`,
+            `Age-appropriate content for children ${params.ageRange} years old`
           ]
         };
         
-        console.log('✅ Enhanced coloring activity with DALL-E image:', imageUrl);
+        console.log('✅ Enhanced coloring activity with professional image:', imageUrl);
       } catch (imageError) {
-        console.error('❌ Error creating DALL-E coloring page:', imageError);
-        // Continue with the original generated activity if image generation fails
+        console.error('❌ Error creating professional coloring page:', imageError);
+        // Continue with the original generated activity if all image generation fails
       }
     }
 
