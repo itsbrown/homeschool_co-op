@@ -1,0 +1,46 @@
+{
+  "title": "Dinosaur Friends: A Prehistoric Coloring Adventure",
+  "description": "A fun coloring page featuring three famous dinosaurs that helps children learn about different dinosaur types while developing fine motor skills and creativity.",
+  "instructions": "Color each dinosaur using your favorite colors. Try to use different colors for each dinosaur to tell them apart. You can use the learning facts below to help you decide what colors might be realistic!",
+  "content": {
+    "image": "A prehistoric scene with three dinosaurs in a lush landscape. A large T-Rex stands on the left with its small arms and big teeth. In the center is a Triceratops with its three horns and shield-like frill. On the right is a long-necked Brontosaurus reaching up to eat leaves from a tall tree. There are also some plants, rocks, and a volcano in the background.",
+    "elements": [
+      {
+        "name": "Tyrannosaurus Rex (T-Rex)",
+        "description": "The fierce dinosaur with big teeth and tiny arms"
+      },
+      {
+        "name": "Triceratops",
+        "description": "The dinosaur with three horns and a shield on its head"
+      },
+      {
+        "name": "Brontosaurus",
+        "description": "The gentle giant with a very long neck and tail"
+      },
+      {
+        "name": "Plants",
+        "description": "Ferns, trees, and other prehistoric plants"
+      },
+      {
+        "name": "Background",
+        "description": "Sky, mountains, and volcano"
+      }
+    ],
+    "learningFacts": [
+      "T-Rex was one of the largest meat-eating dinosaurs, about 40 feet long!",
+      "Triceratops used its horns to protect itself from predators.",
+      "Brontosaurus had a very long neck to reach leaves high up in trees.",
+      "Dinosaurs lived millions of years ago during a time called the Mesozoic Era.",
+      "Scientists learn about dinosaurs by studying fossils."
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "creativity",
+    "dinosaur recognition",
+    "following instructions"
+  ],
+  "ageRange": "5-8",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}

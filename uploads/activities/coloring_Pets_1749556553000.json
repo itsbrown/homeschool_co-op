@@ -1,0 +1,41 @@
+{
+  "title": "Our Furry and Feathery Friends",
+  "description": "A fun coloring page featuring common pets that helps young children recognize different animals and their characteristics while developing fine motor skills.",
+  "instructions": "Color each pet using your favorite colors. Try to use colors that match what these animals might look like in real life!",
+  "content": {
+    "image": "A friendly scene with four pets: a smiling dog with floppy ears, a cat with whiskers curled up, a small bird perched on a branch, and a fish swimming in a round bowl with plants.",
+    "elements": [
+      {
+        "name": "Dog",
+        "description": "A happy dog with a wagging tail and floppy ears. Dogs can be brown, black, white, or spotted."
+      },
+      {
+        "name": "Cat",
+        "description": "A curled up cat with whiskers and pointy ears. Cats can be orange, gray, black, white, or spotted."
+      },
+      {
+        "name": "Bird",
+        "description": "A small bird with wings and a beak sitting on a branch. Birds can be colorful with blue, yellow, green, or red feathers."
+      },
+      {
+        "name": "Fish",
+        "description": "A fish swimming in a round bowl with water plants. Fish can be orange, blue, red, or rainbow-colored."
+      }
+    ],
+    "learningFacts": [
+      "Dogs are known as 'man's best friend' and need daily walks.",
+      "Cats clean themselves by licking their fur.",
+      "Birds have feathers that help them fly.",
+      "Fish breathe underwater through their gills."
+    ]
+  },
+  "targetSkills": [
+    "animal recognition",
+    "fine motor skills",
+    "color identification",
+    "nature appreciation"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}
