@@ -23,30 +23,56 @@ export async function generateColoringPageImage(
   elements: string[]
 ): Promise<ImageGenerationResult> {
   
-  // Create a detailed prompt for coloring page generation
-  const prompt = `Create a simple black and white coloring page suitable for ages ${ageRange}. 
-  Subject: ${subject}
-  
-  The image should include these elements: ${elements.join(', ')}
-  
-  Style requirements:
-  - Simple, clear black outlines on white background
-  - No shading or filled areas - just outlines to color
-  - Age-appropriate complexity for ${ageRange}
-  - Educational and engaging
-  - Clean lines suitable for coloring
-  - No text or words in the image
-  
-  Make it a simple line drawing that children can easily color.`;
-
   try {
-    // Try Hugging Face first if available
+    // Use professional AI coloring page generator with Claude
+    const { generateProfessionalColoringPage } = await import('./professionalColoringPages');
+    
+    console.log(`🎨 Generating professional AI coloring page for: ${subject}`);
+    const svgContent = await generateProfessionalColoringPage(subject, elements, ageRange);
+    
+    // Save the SVG to file
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const timestamp = Date.now();
+    const filename = `professional_coloring_${subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'activities');
+    await fs.mkdir(uploadsDir, { recursive: true });
+    const filePath = path.join(uploadsDir, filename);
+    await fs.writeFile(filePath, svgContent);
+    
+    const imageUrl = `/uploads/activities/${filename}`;
+    console.log(`✅ Generated professional coloring page: ${imageUrl}`);
+    
+    return {
+      success: true,
+      imageUrl: imageUrl,
+      base64: null
+    };
+    
+  } catch (error) {
+    console.error('❌ Professional AI coloring page generation failed:', error);
+    
+    // Try Hugging Face as backup
+    const prompt = `Create a simple black and white coloring page suitable for ages ${ageRange}. 
+    Subject: ${subject}
+    
+    The image should include these elements: ${elements.join(', ')}
+    
+    Style requirements:
+    - Simple, clear black outlines on white background
+    - No shading or filled areas - just outlines to color
+    - Age-appropriate complexity for ${ageRange}
+    - Educational and engaging
+    - Clean lines suitable for coloring
+    - No text or words in the image
+    
+    Make it a simple line drawing that children can easily color.`;
+
     const huggingFaceResult = await tryHuggingFaceGeneration(prompt);
     if (huggingFaceResult.success) {
       return huggingFaceResult;
     }
 
-    // If Hugging Face fails, use fallback SVG generation
     console.log('Hugging Face image generation failed, generating fallback SVG');
     
     try {
