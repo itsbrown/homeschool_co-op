@@ -1,0 +1,34 @@
+{
+  "title": "Garden Flowers Coloring Adventure",
+  "description": "A simple coloring activity featuring common garden flowers with clear outlines, helping children learn about different flower types while developing fine motor skills.",
+  "instructions": "Color the different flowers using your favorite colors. Try to use colors that match real flowers or be creative with your own color choices!",
+  "content": {
+    "image": "A garden scene with simple, clear outlines of different flowers including a sunflower, tulip, rose, daisy, and daffodil. Each flower has distinct petals and stems with leaves.",
+    "elements": [
+      "Sunflower",
+      "Tulip",
+      "Rose",
+      "Daisy",
+      "Daffodil"
+    ],
+    "learningFacts": [
+      "Sunflowers turn to face the sun throughout the day",
+      "Tulips are one of the first flowers to bloom in spring",
+      "Roses come in many colors including red, pink, yellow, and white",
+      "Daisies close their petals at night and open them in the morning",
+      "Bees and butterflies help flowers by moving pollen between them"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Garden_Flowers_1749596642162.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor control",
+    "color recognition",
+    "plant identification",
+    "creativity"
+  ],
+  "ageRange": "5-9",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
