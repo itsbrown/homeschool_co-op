@@ -496,4 +496,39 @@ router.get("/ocr-status", (_req, res) => {
   });
 });
 
+// Get individual activity by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const activityId = parseInt(req.params.id);
+    
+    if (isNaN(activityId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid activity ID"
+      });
+    }
+
+    // Try to get the activity from storage
+    const activity = await storage.getActivityById(activityId, 1); // Use default user ID for now
+    
+    if (!activity) {
+      return res.status(404).json({
+        success: false,
+        error: "Activity not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      activity
+    });
+  } catch (error) {
+    console.error("Error fetching activity:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch activity"
+    });
+  }
+});
+
 export default router;
