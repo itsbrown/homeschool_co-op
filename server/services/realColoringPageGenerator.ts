@@ -64,20 +64,7 @@ function createImagePrompt(subject: string, elements: string[], ageRange: string
   const [minAge] = ageRange.split('-').map(Number);
   const complexity = minAge <= 5 ? 'simple and clear' : minAge <= 8 ? 'moderately detailed' : 'detailed';
   
-  return `Create a ${complexity} educational illustration perfect for a children's coloring book featuring ${subject}. 
-
-Include these specific elements: ${elements.join(', ')}.
-
-Style requirements:
-- Clean, bold outlines suitable for coloring
-- Age-appropriate for children ${ageRange} years old
-- Educational and engaging composition
-- Clear, well-defined shapes and forms
-- Minimal shading or texture (will be converted to line art)
-- Professional children's book illustration quality
-- Anatomically correct but child-friendly proportions
-
-The illustration should look like it belongs in a high-quality educational coloring book published by Dover Publications or Highlights Magazine.`;
+  return `Black and white line art coloring page illustration of ${subject} with ${elements.join(', ')}. ${complexity} design for children ages ${ageRange}. Bold outlines, no fills, no shading, no colors. Educational coloring book style like Dover Publications. Clean simple shapes perfect for coloring.`;
 }
 
 async function downloadImage(url: string): Promise<Buffer> {

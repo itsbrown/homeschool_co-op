@@ -1,0 +1,48 @@
+{
+  "title": "George Washington: Father of Our Nation",
+  "description": "This coloring page features George Washington, America's first president, in a historic scene. Students will learn about Washington's life and contributions while engaging in a creative activity.",
+  "instructions": "Color this image of George Washington using colored pencils or crayons. Read the learning facts to discover interesting information about our first president as you color.",
+  "content": {
+    "image": "George Washington standing in front of Mount Vernon, his Virginia plantation home. He is wearing his Revolutionary War uniform with a tricorn hat. The scene includes a cherry tree to the side, the American flag with 13 stars, and Washington crossing the Delaware River in the background.",
+    "elements": [
+      {
+        "name": "George Washington",
+        "description": "Color his uniform blue with gold buttons and trim. His hair was powdered white."
+      },
+      {
+        "name": "Mount Vernon",
+        "description": "Color the mansion white with a red roof, surrounded by green gardens."
+      },
+      {
+        "name": "American Flag",
+        "description": "Color the 13 stars white, the stripes alternating red and white, and the field blue."
+      },
+      {
+        "name": "Cherry Tree",
+        "description": "Color the trunk brown, leaves green, and cherries red."
+      },
+      {
+        "name": "Delaware River",
+        "description": "Color the river blue with white caps for the waves."
+      }
+    ],
+    "learningFacts": [
+      "George Washington was born on February 22, 1732, in Virginia.",
+      "He became the first President of the United States in 1789.",
+      "Before becoming president, Washington led the Continental Army during the American Revolution.",
+      "Washington's home, Mount Vernon, is now a historic site that people can visit.",
+      "He served two terms as president and established many traditions that presidents still follow today.",
+      "The story about Washington chopping down a cherry tree is a legend and probably didn't actually happen.",
+      "Washington's face appears on the U.S. one-dollar bill and the quarter coin."
+    ]
+  },
+  "targetSkills": [
+    "historical knowledge",
+    "fine motor skills",
+    "reading comprehension",
+    "creativity"
+  ],
+  "ageRange": "8-12",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}

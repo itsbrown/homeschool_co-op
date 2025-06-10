@@ -183,22 +183,11 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
         
         console.log('🔍 Elements for professional coloring page:', elements);
         
-        // Try DALL-E first, fallback to advanced SVG if it fails
-        let svgContent: string;
-        let provider: string;
-        
-        try {
-          const { generateRealColoringPage } = await import('../services/realColoringPageGenerator');
-          svgContent = await generateRealColoringPage(params.subject, elements, params.ageRange);
-          provider = 'dall-e-3';
-          console.log('✅ Generated coloring page using DALL-E 3');
-        } catch (dalleError) {
-          console.log('🔄 DALL-E unavailable, using advanced SVG generation...');
-          const { generateAdvancedColoringPage } = await import('../services/alternativeColoringGenerator');
-          svgContent = await generateAdvancedColoringPage(params.subject, elements, params.ageRange);
-          provider = 'advanced-svg';
-          console.log('✅ Generated coloring page using advanced SVG');
-        }
+        // Use Stability AI for professional image generation
+        const { generateStabilityColoringPage } = await import('../services/stabilityAI');
+        const svgContent = await generateStabilityColoringPage(params.subject, elements, params.ageRange);
+        const provider = 'stability-ai';
+        console.log('✅ Generated professional coloring page using Stability AI');
         
         // Save the professional coloring page to file
         const timestamp = Date.now();
