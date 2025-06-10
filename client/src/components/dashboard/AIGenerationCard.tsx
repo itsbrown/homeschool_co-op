@@ -141,14 +141,7 @@ export default function AIGenerationCard() {
           </div>
         </Tabs>
       </CardContent>
-      <CardFooter className="bg-muted/50 px-6 py-4">
-        <Button asChild className="w-full">
-          <Link href={`/ai-generator/${activeTab}`}>
-            <Wand2 className="mr-2 h-4 w-4" />
-            Start {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Generator
-          </Link>
-        </Button>
-      </CardFooter>
+
     </Card>
   );
 }

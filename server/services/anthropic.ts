@@ -337,3 +337,11 @@ export async function askVirtualTutor(
     return "I apologize, but I'm having trouble processing your question at the moment. Please try again later.";
   }
 }
+
+/**
+ * Check if Anthropic service is available
+ * @returns boolean indicating if Anthropic is available
+ */
+export function isAnthropicAvailable(): boolean {
+  return anthropicService.isAvailable();
+}

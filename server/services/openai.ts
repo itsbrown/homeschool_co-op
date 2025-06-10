@@ -20,7 +20,7 @@ export async function checkOpenAIStatus() {
 }
 
 // Import Anthropic service for fallback
-import { generateCurriculumWithAI } from './anthropic';
+import { generateCurriculumWithAI, isAnthropicAvailable } from './anthropic';
 
 // Move imports to top-level to avoid circular dependencies
 import { askVirtualTutor } from './anthropic';
