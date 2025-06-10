@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import fileUpload from "express-fileupload";
 import path from "path";
 import { backupService } from './services/backupService';
+import fileUploadRouter from './api/file-upload';
 
 const app = express();
 // Increase the size limit to 50MB for file uploads
@@ -50,6 +51,9 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Register file upload routes
+app.use('/api/file-upload', fileUploadRouter);
 
 (async () => {
   const server = await registerRoutes(app);

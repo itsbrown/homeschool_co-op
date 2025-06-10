@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import { useDropzone } from "react-dropzone";
 import { 
   Upload, 
   FileText, 
@@ -96,25 +97,54 @@ export function FileUploadModal({
     setUploadItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const simulateUpload = async (item: FileUploadItem) => {
-    return new Promise<void>((resolve) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += Math.random() * 30;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(interval);
-          setUploadItems(prev => 
-            prev.map(i => i.id === item.id ? { ...i, status: 'success', progress } : i)
-          );
-          resolve();
-        } else {
-          setUploadItems(prev => 
-            prev.map(i => i.id === item.id ? { ...i, progress, status: 'uploading' } : i)
-          );
-        }
-      }, 200 + Math.random() * 300);
-    });
+  const uploadFile = async (item: FileUploadItem) => {
+    try {
+      setUploadItems(prev => 
+        prev.map(prevItem => 
+          prevItem.id === item.id 
+            ? { ...prevItem, status: 'uploading', progress: 0 }
+            : prevItem
+        )
+      );
+
+      const formData = new FormData();
+      formData.append('files', item.file);
+
+      const response = await fetch('/api/file-upload/knowledge-base', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setUploadItems(prev => 
+          prev.map(prevItem => 
+            prevItem.id === item.id 
+              ? { ...prevItem, status: 'success', progress: 100 }
+              : prevItem
+          )
+        );
+      } else {
+        throw new Error(result.message || 'Upload failed');
+      }
+    } catch (error) {
+      setUploadItems(prev => 
+        prev.map(prevItem => 
+          prevItem.id === item.id 
+            ? { 
+                ...prevItem, 
+                status: 'error', 
+                error: error instanceof Error ? error.message : 'Upload failed'
+              }
+            : prevItem
+        )
+      );
+    }
   };
 
   const handleUpload = async () => {
