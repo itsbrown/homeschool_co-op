@@ -648,7 +648,37 @@ export async function generateEducationalActivity(
           const jsonMatch = anthropicResult.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             try {
-              return JSON.parse(jsonMatch[0]);
+              const parsedResult = JSON.parse(jsonMatch[0]);
+              
+              // If this is a coloring activity, enhance it with actual image generation
+              if (activityType.toLowerCase() === 'coloring' && parsedResult.content) {
+                try {
+                  const { generateColoringPageWithImage } = await import('./anthropic');
+                  
+                  // Extract elements from the parsed result
+                  const elements = parsedResult.content.elements 
+                    ? parsedResult.content.elements.map((el: any) => typeof el === 'string' ? el : el.name)
+                    : ['Educational Element 1', 'Educational Element 2', 'Educational Element 3'];
+                  
+                  // Generate enhanced content with actual image
+                  const enhancedContent = await generateColoringPageWithImage(
+                    subject,
+                    ageRange,
+                    elements,
+                    parsedResult.description || parsedResult.content.image || `A coloring page about ${subject}`
+                  );
+                  
+                  // Update the activity with enhanced content
+                  parsedResult.content = enhancedContent;
+                  
+                  console.log('Enhanced Anthropic coloring activity with actual image generation');
+                } catch (imageError) {
+                  console.error('Error enhancing Anthropic coloring activity with image:', imageError);
+                  // Continue with the original parsed result if image enhancement fails
+                }
+              }
+              
+              return parsedResult;
             } catch (parseError) {
               console.error("Failed to parse Anthropic JSON response:", parseError);
               

@@ -1,0 +1,53 @@
+{
+  "title": "Fun on the Farm: Animal Friends Coloring Page",
+  "description": "A simple farm scene featuring four friendly farm animals for young children to color. This coloring activity introduces common farm animals while developing fine motor skills and creativity.",
+  "instructions": "Color each animal using your favorite colors. Try to stay inside the lines. You can use the suggested colors or choose your own!",
+  "content": {
+    "image": "A simple farm scene with four friendly farm animals standing on grass with a barn in the background. The animals include a cow, pig, chicken, and sheep.",
+    "elements": [
+      {
+        "name": "Cow",
+        "description": "A friendly cow with black spots. You could color the spots black and the body white."
+      },
+      {
+        "name": "Pig",
+        "description": "A smiling pig with a curly tail. Pigs are often pink."
+      },
+      {
+        "name": "Chicken",
+        "description": "A small chicken with wings and a beak. You could color it yellow, brown, or white."
+      },
+      {
+        "name": "Sheep",
+        "description": "A fluffy sheep with curly wool. You could color the wool white or light gray."
+      },
+      {
+        "name": "Barn",
+        "description": "A simple barn in the background. Barns are often red with white trim."
+      },
+      {
+        "name": "Grass",
+        "description": "The ground where the animals are standing. Grass is usually green."
+      },
+      {
+        "name": "Sky",
+        "description": "The sky above the farm. You could color it blue."
+      }
+    ],
+    "learningFacts": [
+      "Cows give us milk, which we can drink or use to make cheese and butter.",
+      "Pigs are very smart animals that like to play in mud to stay cool.",
+      "Chickens lay eggs that we can eat for breakfast.",
+      "Sheep grow wool that can be used to make warm clothes like sweaters."
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "animal identification",
+    "creativity"
+  ],
+  "ageRange": "4-6",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}

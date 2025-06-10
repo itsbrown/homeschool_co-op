@@ -339,6 +339,69 @@ export async function askVirtualTutor(
 }
 
 /**
+ * Generate enhanced coloring page content with actual images using Anthropic + image generation
+ * @param subject The subject for the coloring page
+ * @param ageRange The target age range
+ * @param elements Array of elements to include
+ * @param description Basic description
+ * @returns Enhanced activity with image URL
+ */
+export async function generateColoringPageWithImage(
+  subject: string,
+  ageRange: string,
+  elements: string[],
+  description: string
+): Promise<any> {
+  try {
+    // Import image generation service
+    const { generateColoringPageImage } = await import('./imageGeneration');
+    
+    // Generate the actual coloring page image
+    const imageResult = await generateColoringPageImage(subject, ageRange, elements);
+    
+    if (imageResult.success && imageResult.imageUrl) {
+      // Return enhanced content with actual image
+      return {
+        type: 'image-coloring-page',
+        theme: `Educational ${subject} Coloring Activity`,
+        description: description,
+        imageUrl: imageResult.imageUrl,
+        base64: imageResult.base64,
+        elements: elements,
+        learningFacts: [
+          `This coloring page features ${elements.join(', ')} related to ${subject}`,
+          `Coloring helps develop fine motor skills and creativity`,
+          `Each element represents an important aspect of ${subject} learning`
+        ]
+      };
+    } else {
+      // Return text-based content if image generation fails
+      return {
+        type: 'text-coloring-page',
+        description: description,
+        image: `A coloring page featuring ${elements.join(', ')} related to ${subject}`,
+        elements: elements.map(el => ({
+          name: el,
+          description: `Color the ${el} using your favorite colors`
+        }))
+      };
+    }
+  } catch (error) {
+    console.error('Error generating coloring page with image:', error);
+    // Return basic text content as fallback
+    return {
+      type: 'text-coloring-page',
+      description: description,
+      image: `A coloring page featuring ${elements.join(', ')} related to ${subject}`,
+      elements: elements.map(el => ({
+        name: el,
+        description: `Color the ${el} using your favorite colors`
+      }))
+    };
+  }
+}
+
+/**
  * Check if Anthropic service is available
  * @returns boolean indicating if Anthropic is available
  */

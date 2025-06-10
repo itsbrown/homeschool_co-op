@@ -1,0 +1,54 @@
+{
+  "title": "Under the Sea Adventure",
+  "description": "A fun ocean-themed coloring page that introduces young children to various sea creatures while developing fine motor skills and creativity.",
+  "instructions": "Color the ocean animals using your favorite colors. Try to use blue for the ocean water and different colors for each sea creature!",
+  "content": {
+    "image": "An underwater ocean scene with friendly sea creatures. In the center is a smiling dolphin jumping through waves. Around it swim colorful fish of different sizes. A sea turtle glides near coral at the bottom. Bubbles float up throughout the scene. A small octopus hides partially behind seaweed in the corner. Gentle waves appear at the top of the image representing the ocean surface.",
+    "elements": [
+      {
+        "name": "Dolphin",
+        "description": "The friendly dolphin in the middle of the page"
+      },
+      {
+        "name": "Fish",
+        "description": "The different sized fish swimming around"
+      },
+      {
+        "name": "Sea Turtle",
+        "description": "The turtle swimming near the bottom"
+      },
+      {
+        "name": "Octopus",
+        "description": "The small octopus hiding in the corner"
+      },
+      {
+        "name": "Ocean Water",
+        "description": "The water filling the background"
+      },
+      {
+        "name": "Coral",
+        "description": "The colorful coral at the bottom of the ocean"
+      },
+      {
+        "name": "Seaweed",
+        "description": "The tall plants growing from the ocean floor"
+      }
+    ],
+    "learningFacts": [
+      "Dolphins are mammals, not fish!",
+      "Sea turtles can hold their breath underwater for hours",
+      "Octopuses have three hearts",
+      "Fish use their gills to breathe underwater",
+      "Coral reefs are home to many ocean animals"
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "ocean animal identification",
+    "creativity"
+  ],
+  "ageRange": "5-7",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
