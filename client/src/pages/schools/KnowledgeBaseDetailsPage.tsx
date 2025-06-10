@@ -208,49 +208,81 @@ export default function KnowledgeBaseDetailsPage() {
     setUploadingFiles(prev => prev.filter((_, i) => i !== index));
   };
   
-  // Simulate file upload process
-  const uploadFiles = () => {
+  // Real file upload process
+  const uploadFiles = async () => {
     if (uploadingFiles.length === 0) return;
     
     setIsUploading(true);
     setUploadProgress(0);
     
-    // Simulate progress
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsUploading(false);
-            
-            // Create new file objects to add to our sample files
-            const newFiles = uploadingFiles.map((file, index) => ({
-              id: sampleFiles.length + index + 1,
-              name: file.name,
-              type: getFileType(file.name),
-              size: formatFileSize(file.size),
-              uploadedAt: new Date().toISOString().split('T')[0],
-              tags: ["Newly Uploaded", "User Content"],
-              description: `User uploaded file: ${file.name}`
-            }));
-            
-            // Add files to the knowledge base (in a real app, this would be done via API)
-            sampleFiles.push(...newFiles);
-            
-            // Clear uploaded files and close dialog
-            setUploadingFiles([]);
-            setUploadOpen(false);
-            
-            toast({
-              title: "Files Uploaded Successfully",
-              description: `${uploadingFiles.length} files have been added to the knowledge base.`,
-            });
-          }, 500);
-          return 100;
-        }
-        return prev + (Math.random() * 15);
+    try {
+      // Upload files to server
+      const formData = new FormData();
+      uploadingFiles.forEach(file => {
+        formData.append('files', file);
       });
-    }, 300);
+
+      setUploadProgress(30);
+
+      const uploadResponse = await fetch('/api/file-upload/knowledge-base', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+      }
+
+      const uploadResult = await uploadResponse.json();
+      
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.message || 'Upload failed');
+      }
+
+      setUploadProgress(70);
+
+      // Update the knowledge base record with new files
+      const currentFiles = knowledgeBase?.files || [];
+      const updatedFiles = [...currentFiles, ...uploadResult.files];
+
+      const updateResponse = await fetch(`/api/knowledge-bases/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: updatedFiles
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        throw new Error(`Failed to update knowledge base: ${updateResponse.statusText}`);
+      }
+
+      setUploadProgress(100);
+
+      // Refresh the knowledge base data
+      refetch();
+      
+      // Clear uploaded files and close dialog
+      setUploadingFiles([]);
+      setUploadOpen(false);
+      setIsUploading(false);
+      
+      toast({
+        title: "Files Uploaded Successfully",
+        description: `${uploadingFiles.length} files have been added to the knowledge base.`,
+      });
+
+    } catch (error) {
+      setIsUploading(false);
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload files",
+        variant: "destructive",
+      });
+    }
   };
   
   // Helper function to determine file type based on extension

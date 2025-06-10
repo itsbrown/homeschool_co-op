@@ -922,7 +922,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if user is the author
-      if (knowledgeBase.authorId !== req.session.userId) {
+      const authData = (req as any).auth;
+      if (knowledgeBase.authorId !== authData?.userId) {
         return res.status(403).json({ message: "You don't have permission to update this knowledge base" });
       }
 
