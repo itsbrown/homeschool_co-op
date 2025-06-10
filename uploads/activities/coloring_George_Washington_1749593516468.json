@@ -1,0 +1,35 @@
+{
+  "title": "George Washington: Father of Our Country",
+  "description": "This coloring page features George Washington in a historical setting with elements from colonial America. Students will learn about our first president while enjoying a creative activity.",
+  "instructions": "Color the image of George Washington and the colonial elements. Use the suggested colors or choose your own. Take your time with details like Washington's uniform and the American flag.",
+  "content": {
+    "image": "George Washington standing tall in his Continental Army uniform with a tricorn hat. He is positioned near the Delaware River with a colonial flag, his horse, and Mount Vernon in the background. The scene includes a cherry tree and colonial soldiers.",
+    "elements": [
+      "George Washington",
+      "American Flag",
+      "Mount Vernon",
+      "Delaware River",
+      "Cherry Tree",
+      "Colonial Soldiers"
+    ],
+    "learningFacts": [
+      "George Washington was born on February 22, 1732",
+      "He became the first President of the United States in 1789",
+      "Washington led the Continental Army during the American Revolution",
+      "He lived at his plantation called Mount Vernon in Virginia",
+      "Washington served two terms as president and established many presidential traditions"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_George_Washington_1749593565799.svg",
+    "coloringProvider": "advanced-svg"
+  },
+  "targetSkills": [
+    "historical knowledge",
+    "fine motor skills",
+    "attention to detail",
+    "color recognition"
+  ],
+  "ageRange": "8-12",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}

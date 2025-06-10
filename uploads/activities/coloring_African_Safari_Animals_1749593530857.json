@@ -1,0 +1,35 @@
+{
+  "title": "Safari Adventure Coloring",
+  "description": "A fun African safari scene featuring four popular animals that children can color while learning about wildlife",
+  "instructions": "Color each animal using your favorite colors. You can use the learning facts below to help you choose realistic colors, or use your imagination to create a colorful safari!",
+  "content": {
+    "image": "A safari scene with a large elephant standing near a water hole, a lion resting under an acacia tree, a tall giraffe reaching for leaves, and a zebra grazing in the foreground. The background shows the African savanna with mountains in the distance.",
+    "elements": [
+      "Elephant",
+      "Lion",
+      "Giraffe",
+      "Zebra",
+      "Savanna",
+      "Sky"
+    ],
+    "learningFacts": [
+      "African elephants are the largest land animals on Earth",
+      "Lions live in groups called prides",
+      "Giraffes have spotted patterns that are unique like human fingerprints",
+      "Zebras have black and white stripes that help protect them from flies",
+      "These animals all live in the African savanna"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_African_Safari_Animals_1749593588882.svg",
+    "coloringProvider": "advanced-svg"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "creativity",
+    "color identification"
+  ],
+  "ageRange": "5-8",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}

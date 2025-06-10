@@ -1,0 +1,122 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Sky and background clouds -->
+  <path d="M0 0 L1024 0 L1024 300 Q900 280 850 300 Q800 270 750 290 Q700 260 650 280 Q600 250 550 270 Q500 240 450 260 Q400 230 350 250 Q300 220 250 240 Q200 210 150 230 Q100 200 50 220 L0 240 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Sun -->
+  <circle cx="150" cy="120" r="40" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M150 60 L150 40 M190 120 L210 120 M150 180 L150 200 M110 120 L90 120 M177 93 L191 79 M177 147 L191 161 M123 93 L109 79 M123 147 L109 161" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Distant mountains -->
+  <path d="M0 300 Q100 250 200 280 Q300 240 400 270 Q500 230 600 260 Q700 220 800 250 Q900 210 1024 240 L1024 320 L0 320 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Acacia trees in background -->
+  <path d="M100 320 L120 280 Q140 260 180 270 Q220 250 240 280 Q220 290 200 285 Q180 295 160 290 Q140 300 120 295 Q100 305 90 300 Q95 320 100 320 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M115 320 L115 280" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <path d="M800 320 L820 270 Q840 250 880 260 Q920 240 940 270 Q920 280 900 275 Q880 285 860 280 Q840 290 820 285 Q800 295 790 290 Q795 320 800 320 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M815 320 L815 270" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Giraffe (tallest, positioned left-center) -->
+  <path d="M250 800 Q240 780 250 760 Q260 740 270 720 Q280 700 285 680 Q290 660 295 640 Q300 620 305 600 Q310 580 315 560 Q320 540 325 520 Q330 500 335 480 Q340 460 345 440 Q350 420 355 400 Q360 380 365 360 Q370 340 375 330" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Giraffe head -->
+  <path d="M375 330 Q390 320 405 330 Q415 340 420 355 Q415 370 405 375 Q390 380 375 375 Q360 370 355 355 Q360 340 375 330 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Giraffe ears -->
+  <path d="M380 340 Q375 330 385 325 Q395 330 390 340 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M400 340 Q405 330 415 325 Q420 330 415 340 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Giraffe horns -->
+  <path d="M385 330 L385 320 M405 330 L405 320" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <circle cx="385" cy="318" r="2" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <circle cx="405" cy="318" r="2" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Giraffe eyes and nose -->
+  <circle cx="385" cy="350" r="3" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <circle cx="405" cy="350" r="3" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M395 365 Q390 370 395 375 Q400 370 395 365 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Giraffe body -->
+  <path d="M250 800 Q230 780 240 750 Q250 720 260 700 Q270 680 280 670 Q290 660 310 665 Q330 670 340 680 Q350 690 345 710 Q340 730 335 750 Q330 770 320 790 Q310 800 290 805 Q270 800 250 800 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Giraffe legs -->
+  <path d="M260 800 L255 850 Q250 870 260 875 Q270 870 265 850 L270 800" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M280 800 L275 850 Q270 870 280 875 Q290 870 285 850 L290 800" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M310 800 L305 850 Q300 870 310 875 Q320 870 315 850 L320 800" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M330 800 L325 850 Q320 870 330 875 Q340 870 335 850 L340 800" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Giraffe spots -->
+  <path d="M290 500 Q295 495 300 500 Q295 505 290 500 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M270 600 Q275 595 280 600 Q275 605 270 600 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M310 550 Q315 545 320 550 Q315 555 310 550 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M280 720 Q285 715 290 720 Q285 725 280 720 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M320 680 Q325 675 330 680 Q325 685 320 680 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Elephant (large, positioned right-center) -->
+  <path d="M650 600 Q680 580 720 590 Q760 600 780 630 Q790 660 785 690 Q780 720 770 750 Q760 780 740 800 Q720 810 690 805 Q660 800 640 780 Q620 760 615 730 Q610 700 620 670 Q630 640 650 600 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Elephant head -->
+  <path d="M720 590 Q750 580 780 590 Q800 610 805 640 Q800 670 780 680 Q750 685 720 680 Q690 675 680 645 Q685 615 720 590 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Elephant trunk -->
+  <path d="M720 680 Q710 700 705 720 Q700 740 695 760 Q690 780 685 800 Q680 820 675 840 Q670 850 660 845 Q665 835 670 820 Q675 800 680 780 Q685 760 690 740 Q695 720 700 700 Q705 685 720 680" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Elephant ears -->
+  <path d="M720 590 Q690 580 670 590 Q650 610 655 640 Q660 670 680 680 Q700 675 720 670" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M780 590 Q810 580 830 590 Q850 610 845 640 Q840 670 820 680 Q800 675 780 670" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Elephant eyes -->
+  <circle cx="740" cy="620" r="5" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <circle cx="770" cy="620" r="5" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Elephant tusks -->
+  <path d="M720 650 Q710 660 705 670 Q715 665 720 650 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M780 650 Q790 660 795 670 Q785 665 780 650 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Elephant legs -->
+  <path d="M650 800 L645 850 Q640 870 650 875 Q660 870 655 850 L660 800" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M680 800 L675 850 Q670 870 680 875 Q690 870 685 850 L690 800" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M720 800 L715 850 Q710 870 720 875 Q730 870 725 850 L730 800" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M750 800 L745 850 Q740 870 750 875 Q760 870 755 850 L760 800" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Lion (positioned left foreground) -->
+  <path d="M100 650 Q130 630 160 640 Q190 650 200 680 Q195 710 185 730 Q175 750 155 760 Q135 765 115 760 Q95 755 85 735 Q75 715 80 695 Q85 675 100 650 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Lion head -->
+  <path d="M160 640 Q185 630 205 640 Q220 655 225 675 Q220 695 205 705 Q185 710 160 705 Q135 700 130 680 Q135 660 160 640 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Lion mane -->
+  <path d="M160 640 Q140 620 120 630 Q100 640 95 660 Q100 680 120 685 Q140 680 160 675 Q180 620 200 630 Q220 640 225 660 Q220 680 200 685 Q180 680 160 675" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Lion facial features -->
+  <circle cx="170" cy="665" r="3" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <circle cx="190" cy="665" r="3" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M180 680 Q175 685 180 690 Q185 685 180 680 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M180 690 L180 695" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Lion ears -->
+  <path d="M165 650 Q160 640 170 635 Q180 640 175 650 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M185 650 Q180 640 190 635 Q200 640 195 650 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Lion legs -->
+  <path d="M120 760 L115 800 Q110 820 120 825 Q130 820 125 800 L130 760" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M140 760 L135 800 Q130 820 140 825 Q150 820 145 800 L150 760" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M170 760 L165 800 Q160 820 170 825 Q180 820 175 800 L180 760" stroke="#000000" stroke-width="3" fill="none"/>
+  <path d="M190 760 L185 800 Q180 820 190 825 Q200 820 195 800 L200 760" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Lion tail -->
+  <path d="M100 720 Q80 730 70 750 Q75 760 85 755 Q95 745 100 730" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <circle cx="70" cy="755" r="5" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Zebra (positioned right foreground) -->
+  <path d="M500 650 Q530 630 560 640 Q590 650 600 680 Q595 710 585 730 Q575 750 555 760 Q535 765 515 760 Q495 755 485 735 Q475 715 480 695 Q485 675 500 650 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Zebra head -->
+  <path d="M560 640 Q585 630 605 640 Q620 655 625 675 Q620 695 605 705 Q585 710 560 705 Q535 700 530 680 Q535 660 560 640 Z" stroke="#000000" stroke-width="3" fill="none"/>
+  
+  <!-- Zebra ears -->
+  <path d="M570 650 Q565 635 575 630 Q585 635 580 650 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  <path d="M590 650 Q585 635 595 630 Q605 635 600 650 Z" stroke="#000000" stroke-width="2.1" fill="none"/>
+  
+  <!-- Zebra mane -->
+  <path d="M560 640 </svg>

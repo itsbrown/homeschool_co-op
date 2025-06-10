@@ -1,0 +1,103 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Mountains -->
+  <path d="M0 400 Q200 350 400 380 Q600 340 800 370 Q900 360 1024 380 L1024 500 L0 500 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Mount Vernon Building -->
+  <path d="M650 280 L850 280 L850 420 L650 420 Z" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M630 280 L630 300 L870 300 L870 280 L750 250 Z" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M680 300 L680 350 L720 350 L720 300 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M780 300 L780 350 L820 350 L820 300 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M700 360 L700 420" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M750 360 L750 420" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M800 360 L800 420" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Delaware River -->
+  <path d="M0 500 Q200 480 400 490 Q600 470 800 485 Q900 480 1024 490 L1024 550 Q900 530 800 535 Q600 520 400 540 Q200 530 0 550 Z" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M100 510 Q150 505 200 510" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M300 520 Q350 515 400 520" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M500 510 Q550 505 600 510" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Cherry Tree -->
+  <path d="M80 350 L80 500" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M50 300 Q80 280 110 300 Q120 320 100 340 Q90 360 80 350 Q70 360 60 340 Q40 320 50 300 Z" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M60 310 C65 305 75 305 80 310" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M85 315 C90 310 100 310 105 315" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M70 330 C75 325 85 325 90 330" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M55 320 C60 315 70 315 75 320" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- American Flag -->
+  <path d="M900 200 L900 350" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M900 200 L980 200 L980 280 L900 280 Z" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M900 220 L980 220" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M900 240 L980 240" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M900 260 L980 260" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M900 200 L950 200 L950 240 L900 240 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M910 210 L915 208 L920 210 L918 215 L920 220 L915 218 L910 220 L912 215 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M930 210 L935 208 L940 210 L938 215 L940 220 L935 218 L930 220 L932 215 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M910 230 L915 228 L920 230 L918 235 L920 240 L915 238 L910 240 L912 235 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M930 230 L935 228 L940 230 L938 235 L940 240 L935 238 L930 240 L932 235 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- George Washington -->
+  <path d="M300 200 Q310 180 330 185 Q350 180 360 200 Q365 220 360 240 Q350 260 330 265 Q310 260 300 240 Q295 220 300 200 Z" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M315 200 Q320 195 325 200" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M335 200 Q340 195 345 200" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M320 215 Q330 210 340 215" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M325 230 Q330 225 335 230" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M310 190 Q320 175 330 180 Q340 175 350 190" stroke="#000000" stroke-width="2.5" fill="none"/>
+  
+  <!-- Washington's Body -->
+  <path d="M330 265 L330 380 L370 380 L370 265" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M315 280 L315 320 L385 320 L385 280" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M340 290 L340 310" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M350 290 L350 310" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M360 290 L360 310" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Washington's Arms -->
+  <path d="M315 290 L290 310 L290 340 L300 340 L315 320" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M385 290 L410 310 L410 340 L400 340 L385 320" stroke="#000000" stroke-width="2.5" fill="none"/>
+  
+  <!-- Washington's Legs -->
+  <path d="M340 380 L340 450 L350 450 L350 380" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M360 380 L360 450 L370 450 L370 380" stroke="#000000" stroke-width="2.5" fill="none"/>
+  
+  <!-- Colonial Soldiers -->
+  <path d="M450 320 Q455 300 465 305 Q475 300 480 320 Q485 340 480 360 Q475 380 465 385 Q455 380 450 360 Q445 340 450 320 Z" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M465 385 L465 450" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M450 400 L450 430 L480 430 L480 400" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M455 330 Q460 325 465 330" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M470 330 Q475 325 480 330" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M460 345 Q465 340 470 345" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Second Colonial Soldier -->
+  <path d="M520 325 Q525 305 535 310 Q545 305 550 325 Q555 345 550 365 Q545 385 535 390 Q525 385 520 365 Q515 345 520 325 Z" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M535 390 L535 450" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M520 405 L520 435 L550 435 L550 405" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M525 335 Q530 330 535 335" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M540 335 Q545 330 550 335" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M530 350 Q535 345 540 350" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Muskets -->
+  <path d="M440 350 L420 370" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M415 365 L425 375" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M560 355 L580 375" stroke="#000000" stroke-width="2.5" fill="none"/>
+  <path d="M575 370 L585 380" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Ground Details -->
+  <path d="M0 450 Q100 440 200 450 Q300 440 400 450 Q500 440 600 450 Q700 440 800 450 Q900 440 1024 450" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M150 460 Q170 455 190 460" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M250 465 Q270 460 290 465" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M350 460 Q370 455 390 460" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M550 465 Q570 460 590 465" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Grass Details -->
+  <path d="M50 470 L52 460 L54 470" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M120 475 L122 465 L124 475" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M200 470 L202 460 L204 470" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M280 475 L282 465 L284 475" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M420 470 L422 460 L424 470" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M600 475 L602 465 L604 475" stroke="#000000" stroke-width="1.75" fill="none"/>
+  
+  <!-- Clouds -->
+  <path d="M150 100 Q170 80 190 100 Q210 80 230 100 Q240 120 220 140 Q200 150 180 140 Q160 150 140 140 Q130 120 150 100 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+  <path d="M700 120 Q720 100 740 120 Q760 100 780 120 Q790 140 770 160 Q750 170 730 160 Q710 170 690 160 Q680 140 700 120 Z" stroke="#000000" stroke-width="1.75" fill="none"/>
+</svg>
