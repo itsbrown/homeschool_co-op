@@ -100,24 +100,33 @@ export default function AIWorksheetGenerator() {
           if (data.status === "completed" && data.result) {
             clearInterval(pollInterval);
             
-            // Log the result to understand the data structure
-            console.log('Job completed with result:', data.result);
+            // Extract the activity data from the nested structure
+            const activityData = data.result.data?.activity || data.result.activity || data.result;
+            const activityId = data.activityId || data.id || activityData?.id;
             
-            // Process the result to ensure we have the activity ID at the top level
+            // Process the result with the correct structure
             const processedResult = {
-              ...data.result,
-              // The activity ID should come from data.result.data.activity.id
-              id: data.result.id || 
-                  data.result.data?.activity?.id || 
-                  (data.result.data?.activity && typeof data.result.data.activity === 'object' ? data.result.data.activity.id : null)
+              success: true,
+              id: activityId,
+              activityId: activityId,
+              title: activityData?.title || "Generated Activity",
+              content: activityData?.content || activityData,
+              type: activityData?.type,
+              subject: activityData?.subject,
+              difficulty: activityData?.difficulty,
+              ageRange: activityData?.ageRange,
+              url: activityData?.url,
+              // Include the full result for debugging
+              fullResult: data.result
             };
             
-            console.log('Processed result with extracted ID:', processedResult);
+            console.log('Activity generation completed successfully:', processedResult);
             setGeneratedActivity(processedResult);
+            setSelectedTab("preview");
             
             toast({
-              title: "Activity Ready!",
-              description: "Your activity has been generated successfully.",
+              title: "Activity Generated!",
+              description: "Your activity has been created successfully.",
               variant: "default",
             });
           } 

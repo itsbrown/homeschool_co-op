@@ -1,0 +1,55 @@
+{
+  "title": "Classical Wisdom: American Seekers Academy Emblem",
+  "description": "This coloring page features a symbolic representation of academic pursuit through classical imagery, representing the spirit of American Seekers Academy. Students will explore classical symbolism while reflecting on educational values.",
+  "instructions": "Color this detailed emblem using colored pencils or markers. Consider the symbolic meaning of each element as you choose your colors. The numbered sections correspond to the elements described below.",
+  "content": {
+    "image": "A circular emblem featuring an open book at the center with a torch of knowledge rising from it. The book rests on a shield with stars and stripes. An eagle soars above, carrying an olive branch. Surrounding the central image are classical Greek columns, a laurel wreath, and a banner with 'American Seekers Academy' inscribed. In the background are constellation patterns symbolizing guidance and discovery.",
+    "elements": [
+      {
+        "name": "Open Book",
+        "description": "Represents knowledge and learning - consider using warm colors like gold or deep red"
+      },
+      {
+        "name": "Torch",
+        "description": "Symbolizes enlightenment and the pursuit of truth - traditional colors include orange and yellow flames"
+      },
+      {
+        "name": "Eagle",
+        "description": "Represents freedom and the American spirit - typically colored with brown and white"
+      },
+      {
+        "name": "Shield",
+        "description": "Represents protection of knowledge and values - traditional American colors of red, white, and blue"
+      },
+      {
+        "name": "Greek Columns",
+        "description": "Symbolize the classical foundations of education - typically marble white or light gray"
+      },
+      {
+        "name": "Laurel Wreath",
+        "description": "Represents achievement and honor - traditionally colored green"
+      },
+      {
+        "name": "Constellations",
+        "description": "Symbolize guidance and discovery - use dark blue background with gold or silver stars"
+      }
+    ],
+    "learningFacts": [
+      "The torch has been a symbol of enlightenment since ancient Greece, representing the illumination that knowledge brings to darkness",
+      "Eagles in American symbolism date back to 1782 when the bird was chosen as the national emblem for its strength and longevity",
+      "Greek columns represent the three classical orders: Doric (simplicity), Ionic (balance), and Corinthian (ornate detail)",
+      "Laurel wreaths were awarded to victors in ancient Greek competitions, symbolizing achievement and honor",
+      "Constellations were used by ancient navigators as guides, much like education guides students through life"
+    ]
+  },
+  "targetSkills": [
+    "Art appreciation",
+    "Symbol interpretation",
+    "Cultural literacy",
+    "American heritage understanding",
+    "Classical knowledge"
+  ],
+  "ageRange": "15-18",
+  "difficulty": "intermediate",
+  "timeRequired": "45"
+}

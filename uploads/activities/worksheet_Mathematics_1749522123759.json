@@ -1,0 +1,87 @@
+{
+  "title": "Math Adventure: Addition and Subtraction Challenge",
+  "description": "This worksheet helps students practice basic addition and subtraction skills through fun, engaging problems that build computational fluency.",
+  "instructions": "Solve each problem by adding or subtracting the numbers. Show your work in the space provided. You can use mental math strategies or write out your steps.",
+  "content": {
+    "questions": [
+      {
+        "question": "45 + 37 = ?",
+        "type": "short_answer",
+        "answer": "82"
+      },
+      {
+        "question": "93 - 28 = ?",
+        "type": "short_answer",
+        "answer": "65"
+      },
+      {
+        "question": "What is 64 + 59?",
+        "type": "multiple_choice",
+        "answer": "123",
+        "options": [
+          "123",
+          "113",
+          "133",
+          "143"
+        ]
+      },
+      {
+        "question": "125 - 47 = ?",
+        "type": "short_answer",
+        "answer": "78"
+      },
+      {
+        "question": "If you have 86 stickers and give away 39, how many do you have left?",
+        "type": "short_answer",
+        "answer": "47"
+      },
+      {
+        "question": "What is 138 + 67?",
+        "type": "multiple_choice",
+        "answer": "205",
+        "options": [
+          "195",
+          "205",
+          "215",
+          "225"
+        ]
+      },
+      {
+        "question": "256 - 178 = ?",
+        "type": "short_answer",
+        "answer": "78"
+      },
+      {
+        "question": "True or False: 347 + 265 = 612",
+        "type": "true_false",
+        "answer": "true"
+      },
+      {
+        "question": "If a video game costs $85 and you have $150, how much money will you have left after buying it?",
+        "type": "short_answer",
+        "answer": "$65"
+      },
+      {
+        "question": "What is 492 - 237?",
+        "type": "multiple_choice",
+        "answer": "255",
+        "options": [
+          "245",
+          "255",
+          "265",
+          "275"
+        ]
+      }
+    ],
+    "answerKey": true
+  },
+  "targetSkills": [
+    "addition with regrouping",
+    "subtraction with regrouping",
+    "mental math",
+    "problem-solving"
+  ],
+  "ageRange": "10-12",
+  "difficulty": "easy",
+  "timeRequired": "20"
+}
