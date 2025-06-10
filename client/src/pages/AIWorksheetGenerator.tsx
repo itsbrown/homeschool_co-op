@@ -90,7 +90,7 @@ export default function AIWorksheetGenerator() {
   
   // Poll for job completion if we have a background job
   React.useEffect(() => {
-    if (generatedActivity?.jobId && generatedActivity?.message?.includes("queued")) {
+    if (generatedActivity?.jobId && generatedActivity?.message && !generatedActivity?.id) {
       const pollInterval = setInterval(async () => {
         try {
           const response = await fetch(`/api/activities/job/${generatedActivity.jobId}`);

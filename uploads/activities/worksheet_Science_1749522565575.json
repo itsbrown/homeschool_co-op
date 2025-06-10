@@ -1,0 +1,120 @@
+{
+  "title": "Amazing Animal Facts: Discover the Wild World!",
+  "description": "This fun worksheet helps students learn fascinating facts about animals while testing their knowledge through engaging questions.",
+  "instructions": "Read each question carefully and circle the correct answer. For true/false questions, circle T for true or F for false.",
+  "content": {
+    "questions": [
+      {
+        "question": "Which animal sleeps upside down?",
+        "type": "multiple_choice",
+        "answer": "Bat",
+        "options": [
+          "Bat",
+          "Elephant",
+          "Penguin",
+          "Lion"
+        ]
+      },
+      {
+        "question": "A group of lions is called a pride.",
+        "type": "true_false",
+        "answer": "True",
+        "options": [
+          "True",
+          "False"
+        ]
+      },
+      {
+        "question": "How many hearts does an octopus have?",
+        "type": "multiple_choice",
+        "answer": "3",
+        "options": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      {
+        "question": "Butterflies taste with their _______.",
+        "type": "multiple_choice",
+        "answer": "Feet",
+        "options": [
+          "Tongue",
+          "Feet",
+          "Ears",
+          "Wings"
+        ]
+      },
+      {
+        "question": "Cats can't taste sweet things.",
+        "type": "true_false",
+        "answer": "True",
+        "options": [
+          "True",
+          "False"
+        ]
+      },
+      {
+        "question": "Which animal can grow a new tail if it loses one?",
+        "type": "multiple_choice",
+        "answer": "Lizard",
+        "options": [
+          "Lizard",
+          "Rabbit",
+          "Elephant",
+          "Giraffe"
+        ]
+      },
+      {
+        "question": "Polar bears have black skin under their white fur.",
+        "type": "true_false",
+        "answer": "True",
+        "options": [
+          "True",
+          "False"
+        ]
+      },
+      {
+        "question": "Which is the fastest land animal?",
+        "type": "multiple_choice",
+        "answer": "Cheetah",
+        "options": [
+          "Cheetah",
+          "Horse",
+          "Tiger",
+          "Kangaroo"
+        ]
+      },
+      {
+        "question": "What color is a giraffe's tongue?",
+        "type": "multiple_choice",
+        "answer": "Blue-black",
+        "options": [
+          "Pink",
+          "Red",
+          "Blue-black",
+          "Yellow"
+        ]
+      },
+      {
+        "question": "Dolphins sleep with one eye open.",
+        "type": "true_false",
+        "answer": "True",
+        "options": [
+          "True",
+          "False"
+        ]
+      }
+    ],
+    "answerKey": true
+  },
+  "targetSkills": [
+    "Animal knowledge",
+    "Reading comprehension",
+    "Critical thinking"
+  ],
+  "ageRange": "8-10",
+  "difficulty": "easy",
+  "timeRequired": "15"
+}

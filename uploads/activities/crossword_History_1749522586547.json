@@ -1,0 +1,106 @@
+{
+  "title": "American Revolution Crossword Challenge",
+  "description": "Test your knowledge of key figures and terms from the American Revolution with this crossword puzzle. Learn about the important people and events that shaped the birth of the United States.",
+  "instructions": "Read each clue carefully and fill in the correct answer in the corresponding numbered spaces. All answers relate to the American Revolution period (1763-1789).",
+  "content": {
+    "words": [
+      {
+        "word": "WASHINGTON",
+        "clue": "First President of the United States and Commander of the Continental Army",
+        "row": 1,
+        "col": 1,
+        "direction": "across"
+      },
+      {
+        "word": "DECLARATION",
+        "clue": "Document written primarily by Thomas Jefferson announcing independence from Britain",
+        "row": 3,
+        "col": 1,
+        "direction": "down"
+      },
+      {
+        "word": "LEXINGTON",
+        "clue": "Town where the 'shot heard round the world' was fired",
+        "row": 2,
+        "col": 5,
+        "direction": "across"
+      },
+      {
+        "word": "FRANKLIN",
+        "clue": "Diplomat, scientist, and Founding Father who helped negotiate the Treaty of Paris",
+        "row": 1,
+        "col": 10,
+        "direction": "down"
+      },
+      {
+        "word": "LOYALISTS",
+        "clue": "Americans who remained faithful to the British Crown",
+        "row": 6,
+        "col": 3,
+        "direction": "across"
+      },
+      {
+        "word": "PATRIOTS",
+        "clue": "Americans who supported independence from Great Britain",
+        "row": 4,
+        "col": 8,
+        "direction": "down"
+      },
+      {
+        "word": "TAXATION",
+        "clue": "British policy that led to the slogan 'No ___ without representation'",
+        "row": 9,
+        "col": 1,
+        "direction": "across"
+      },
+      {
+        "word": "JEFFERSON",
+        "clue": "Principal author of the Declaration of Independence",
+        "row": 5,
+        "col": 2,
+        "direction": "across"
+      },
+      {
+        "word": "REDCOATS",
+        "clue": "Nickname for British soldiers based on their uniforms",
+        "row": 7,
+        "col": 6,
+        "direction": "across"
+      },
+      {
+        "word": "YORKTOWN",
+        "clue": "Final major battle of the Revolutionary War",
+        "row": 3,
+        "col": 12,
+        "direction": "down"
+      },
+      {
+        "word": "STAMP",
+        "clue": "Controversial 1765 act requiring tax payments on printed materials",
+        "row": 8,
+        "col": 4,
+        "direction": "across"
+      },
+      {
+        "word": "COLONIES",
+        "clue": "The thirteen British territories that became the first U.S. states",
+        "row": 10,
+        "col": 5,
+        "direction": "across"
+      }
+    ],
+    "size": {
+      "width": 15,
+      "height": 12
+    }
+  },
+  "targetSkills": [
+    "Historical knowledge",
+    "Vocabulary development",
+    "Critical thinking",
+    "American history comprehension"
+  ],
+  "ageRange": "12-14",
+  "difficulty": "medium",
+  "timeRequired": "20-30"
+}
