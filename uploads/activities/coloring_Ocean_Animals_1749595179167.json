@@ -1,0 +1,39 @@
+{
+  "title": "Underwater Ocean Adventure",
+  "description": "Explore the fascinating world beneath the waves with this ocean-themed coloring page. Students will learn about different sea creatures while developing fine motor skills and creativity.",
+  "instructions": "Color each sea creature and ocean element using the suggested colors or your own choices. Try to stay within the lines and use different shades to create depth and texture.",
+  "content": {
+    "image": "A detailed underwater ocean scene featuring a coral reef with various sea creatures swimming around. The scene includes a sea turtle, colorful fish, an octopus, a dolphin, a starfish, and seaweed plants swaying in the current.",
+    "elements": [
+      "Coral Reef",
+      "Sea Turtle",
+      "Tropical Fish",
+      "Octopus",
+      "Dolphin",
+      "Starfish",
+      "Seaweed and Plants",
+      "Ocean Water"
+    ],
+    "learningFacts": [
+      "Coral reefs are home to 25% of all marine species even though they cover less than 1% of the ocean floor.",
+      "Sea turtles can hold their breath underwater for several hours when resting.",
+      "Octopuses have three hearts and blue blood.",
+      "Dolphins are mammals, not fish, and need to come to the surface to breathe air.",
+      "Starfish can regrow their arms if they lose one.",
+      "The ocean covers more than 70% of Earth's surface."
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Ocean_Animals_1749595185114.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "marine biology basics",
+    "creativity",
+    "following instructions"
+  ],
+  "ageRange": "6-10",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}
