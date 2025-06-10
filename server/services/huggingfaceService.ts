@@ -18,22 +18,15 @@ export async function createEducationalColoringPage(
   console.log(`👶 Age range: ${ageRange}`);
 
   try {
-    // Try DALL-E 3 first for highest quality
-    const { generateEducationalColoringPage } = await import('./aiImageGenerator.js');
-    const imageUrl = await generateEducationalColoringPage(prompt, elements, ageRange);
+    // Use Stability AI for professional image generation
+    const { generateStabilityColoringPage } = await import('./stabilityAI');
+    const svgContent = await generateStabilityColoringPage(prompt, elements, ageRange);
     
-    if (imageUrl.startsWith('http')) {
-      // Successfully generated DALL-E image
-      console.log(`✅ Generated DALL-E coloring page: ${imageUrl}`);
-      return { imageUrl, type: 'ai-image' };
-    } else {
-      // Fallback SVG was returned
-      console.log(`🔄 Using detailed SVG fallback`);
-      return { svgContent: imageUrl, type: 'svg' };
-    }
+    console.log(`✅ Generated Stability AI coloring page (${svgContent.length} characters)`);
+    return { svgContent, type: 'svg' };
     
   } catch (error) {
-    console.error('❌ AI image generation failed, using detailed SVG:', error);
+    console.error('❌ Stability AI generation failed, using detailed SVG:', error);
     
     // Fallback to detailed SVG generation
     const svgContent = await createDetailedSVGFallback(prompt, elements);

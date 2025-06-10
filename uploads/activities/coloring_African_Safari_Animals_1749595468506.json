@@ -1,0 +1,37 @@
+{
+  "title": "Safari Adventure: African Wildlife Coloring",
+  "description": "Explore the exciting world of African safari animals through this detailed coloring page featuring elephants, lions, and giraffes in their natural habitat.",
+  "instructions": "Color each animal using realistic colors or your imagination! Use the learning facts at the bottom to help you understand these amazing animals better.",
+  "content": {
+    "image": "A savanna scene with a family of elephants near a watering hole, a pride of lions resting under an acacia tree, and a tower of giraffes reaching for leaves in the distance. The background includes baobab trees, tall grass, and a setting sun.",
+    "elements": [
+      "Elephants",
+      "Lions",
+      "Giraffes",
+      "Acacia Trees",
+      "Baobab Trees",
+      "Savanna Grass",
+      "Sky"
+    ],
+    "learningFacts": [
+      "Elephants can live up to 70 years and communicate through rumbling sounds that can travel long distances",
+      "Lions are the only cats that live in groups called prides",
+      "Giraffes have unique spotted patterns - no two giraffes have exactly the same pattern",
+      "African elephants have larger ears than Asian elephants, shaped like the continent of Africa",
+      "A giraffe's neck has the same number of vertebrae (seven) as humans, just much longer ones"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_African_Safari_Animals_1749595473694.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "natural habitat awareness",
+    "color selection",
+    "African wildlife knowledge"
+  ],
+  "ageRange": "6-10",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}

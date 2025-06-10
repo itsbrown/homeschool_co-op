@@ -24,11 +24,11 @@ export async function generateColoringPageImage(
 ): Promise<ImageGenerationResult> {
   
   try {
-    // Use professional coloring page generator with Claude
-    const { generateProfessionalColoringPage } = await import('./professionalColoringPages');
+    // Use Stability AI for professional coloring page generation
+    const { generateStabilityColoringPage } = await import('./stabilityAI');
     
     console.log(`🎨 Generating professional AI coloring page for: ${subject}`);
-    const svgContent = await generateProfessionalColoringPage(subject, elements, ageRange);
+    const svgContent = await generateStabilityColoringPage(subject, elements, ageRange);
     
     // Save the SVG to file
     const fs = await import('fs/promises');
@@ -46,7 +46,7 @@ export async function generateColoringPageImage(
     return {
       success: true,
       imageUrl: imageUrl,
-      base64: null
+      base64: undefined
     };
     
   } catch (error) {
