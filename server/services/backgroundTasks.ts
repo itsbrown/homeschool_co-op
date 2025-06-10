@@ -59,6 +59,16 @@ class BackgroundTaskManager extends EventEmitter {
     return this.jobs.get(id);
   }
 
+  getJobResult(id: string): any {
+    const job = this.jobs.get(id);
+    return job?.result;
+  }
+
+  getJobStatus(id: string): string | undefined {
+    const job = this.jobs.get(id);
+    return job?.status;
+  }
+
   updateJob(id: string, updates: Partial<BackgroundJob>): void {
     const job = this.jobs.get(id);
     if (job) {

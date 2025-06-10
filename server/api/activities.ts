@@ -5,7 +5,7 @@ import fs from "fs/promises";
 import { storage } from "../storage";
 import { checkOpenAIStatus, generateEducationalActivity } from "../services/openai";
 import { InsertActivity } from "../../shared/schema";
-import { backgroundTaskManager } from "../services/backgroundTasks";
+// Background task manager removed for stability
 import { generateActivityWithOCR, saveFileForOCR } from "../services/ocrActivityGenerator";
 import { isDocumentAIAvailable } from "../services/documentAI";
 import * as fileUpload from "express-fileupload";
@@ -238,74 +238,30 @@ router.post("/generate", async (req, res) => {
       }
     }
 
-    // Start background activity generation
-    const jobId = `activity_gen_${Date.now()}`;
-    backgroundTaskManager.createJob(jobId, "activity_generation", async () => {
-      try {
-        const result = await generateActivity(params, userId, ocrFilePath);
-        const activityId = result && 'activity' in result ? result.activity?.id : null;
-        
-        // Log the result with extracted activity ID
-        console.log('Activity generation completed with result:', JSON.stringify({
-          success: true,
-          activityId,
-          hasActivity: result && 'activity' in result ? !!result.activity : false
-        }));
-        
-        // If the result doesn't have an explicit activityId field, add it to make it easier to find
-        if (activityId && result && typeof result === 'object') {
-          // Add the activityId field directly to the result for easier access
-          (result as any).activityId = activityId;
-        }
-        
-        return result;
-      } catch (err) {
-        console.error('Error in activity generation job:', err);
-        return { success: false, error: String(err) };
-      }
-    });
-
-    // Check for immediate completion (this can happen during testing or low load)
-    const jobResult = backgroundTaskManager.getJobResult(jobId);
-    
-    // For immediately completed jobs, include the activity ID in the initial response
-    if (jobResult && jobResult.status === 'completed') {
-      // Try to extract activity ID from various possible locations
-      let activityId = null;
+    // Generate activity directly
+    try {
+      const result = await generateActivity(params, userId, ocrFilePath);
       
-      if (jobResult.result?.activity?.id) {
-        activityId = jobResult.result.activity.id;
-      } else if (jobResult.result?.id) {
-        activityId = jobResult.result.id;
-      } else if (jobResult.result?.activityId) {
-        activityId = (jobResult.result as any).activityId;
-      } else if (jobResult.result?.data?.activity?.id) {
-        activityId = jobResult.result.data.activity.id;
-      }
-      
-      if (activityId) {
-        console.log('Immediately returning activity ID:', activityId);
-        res.json({
+      if (result && 'activity' in result && result.activity) {
+        return res.json({
           success: true,
-          message: "Activity generation job completed",
-          jobId,
-          activityId,
-          id: activityId, // Include both formats for backwards compatibility
+          message: "Activity generated successfully",
+          id: result.activity.id,
+          activityId: result.activity.id,
+          data: result
         });
       } else {
-        res.json({
-          success: true,
-          message: "Activity generation job completed but no ID found",
-          jobId,
-          id: null,
+        return res.status(500).json({
+          success: false,
+          message: "Activity generation failed - no activity returned"
         });
       }
-    } else {
-      res.json({
-        success: true, 
-        message: "Activity generation job started",
-        jobId,
-        id: null, // Include at least a null ID so client can distinguish absence
+    } catch (error) {
+      console.error('Activity generation error:', error);
+      return res.status(500).json({
+        success: false,
+        message: "Activity generation failed",
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   } catch (error) {
