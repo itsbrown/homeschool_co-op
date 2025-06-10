@@ -402,7 +402,12 @@ export default function AIWorksheetGenerator() {
       );
     }
     
-    const activity = generatedActivity.activityContent;
+    // Extract activity content from the response structure
+    const activity = generatedActivity.activityContent || 
+                    generatedActivity.data?.activityContent || 
+                    generatedActivity.data?.activity?.content ||
+                    generatedActivity.data?.activity;
+    
     if (!activity) {
       return (
         <div className="border p-6 rounded-lg bg-white">

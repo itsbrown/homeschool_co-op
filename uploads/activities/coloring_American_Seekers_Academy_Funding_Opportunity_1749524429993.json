@@ -1,0 +1,54 @@
+{
+  "title": "The Seven Virtues Seekers' Journey",
+  "description": "This coloring page introduces students to the seven classical virtues through symbols and imagery, connecting to the theme of the American Seekers Academy. Students will learn about important character traits while enjoying a creative coloring experience.",
+  "instructions": "Color each virtue symbol using different colors. Think about what each virtue means as you color. Use lighter colors for backgrounds and darker colors for the main symbols. Try to use colors that you think represent each virtue!",
+  "content": {
+    "image": "A large circular emblem with 'American Seekers Academy' at the top in banner style. In the center is a compass rose. Around the compass are seven distinct sections, each containing a classical symbol representing one of the seven virtues: a lion (Courage/Fortitude), scales (Justice), a heart (Love/Charity), an olive branch (Peace/Temperance), a lamp (Wisdom/Prudence), an anchor (Hope/Faith), and wheat sheaf (Humility).",
+    "elements": [
+      {
+        "name": "Lion",
+        "description": "Symbol of Courage/Fortitude - the strength to face challenges"
+      },
+      {
+        "name": "Scales",
+        "description": "Symbol of Justice - treating everyone fairly"
+      },
+      {
+        "name": "Heart",
+        "description": "Symbol of Love/Charity - caring for others"
+      },
+      {
+        "name": "Olive Branch",
+        "description": "Symbol of Peace/Temperance - self-control and moderation"
+      },
+      {
+        "name": "Lamp",
+        "description": "Symbol of Wisdom/Prudence - making good choices"
+      },
+      {
+        "name": "Anchor",
+        "description": "Symbol of Hope/Faith - believing in good things to come"
+      },
+      {
+        "name": "Wheat Sheaf",
+        "description": "Symbol of Humility - being modest and kind"
+      }
+    ],
+    "learningFacts": [
+      "The seven virtues were important values in classical education",
+      "Ancient Greeks and Romans studied these virtues to become better citizens",
+      "These virtues are still important character traits today",
+      "The American Seekers Academy encourages students to develop these virtues",
+      "Symbols help us remember important ideas and values"
+    ]
+  },
+  "targetSkills": [
+    "character education",
+    "symbolic thinking",
+    "fine motor skills",
+    "cultural literacy"
+  ],
+  "ageRange": "9-11",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}
