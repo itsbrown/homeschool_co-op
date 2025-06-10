@@ -36,9 +36,17 @@ interface KnowledgeBase {
 export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSelectorProps) {
   const [currentSelection, setCurrentSelection] = useState<string>("");
 
-  const { data: knowledgeBases, isLoading, isError } = useQuery({
+  const { data: knowledgeBases, isLoading, isError } = useQuery<KnowledgeBase[]>({
     queryKey: ["/api/knowledge-base/combined"],
+    queryFn: () => fetch('/api/knowledge-base/combined').then(res => res.json()),
   });
+
+  // Debug logging
+  useEffect(() => {
+    if (knowledgeBases) {
+      console.log('📚 Loaded knowledge bases:', knowledgeBases.length, knowledgeBases);
+    }
+  }, [knowledgeBases]);
 
   const handleAddSelection = () => {
     if (currentSelection && !selectedIds.includes(Number(currentSelection))) {
@@ -52,7 +60,7 @@ export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSe
   };
 
   const getKnowledgeBaseById = (id: number) => {
-    return knowledgeBases?.find((kb: KnowledgeBase) => kb.id === id);
+    return Array.isArray(knowledgeBases) ? knowledgeBases.find((kb: KnowledgeBase) => kb.id === id) : undefined;
   };
 
   if (isLoading) {
@@ -72,7 +80,7 @@ export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSe
     );
   }
 
-  if (!knowledgeBases || knowledgeBases.length === 0) {
+  if (!knowledgeBases || !Array.isArray(knowledgeBases) || knowledgeBases.length === 0) {
     return (
       <div className="text-center p-4 border border-dashed border-gray-300 rounded-md">
         <Library className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
@@ -95,7 +103,7 @@ export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSe
             <SelectValue placeholder="Select a knowledge base" />
           </SelectTrigger>
           <SelectContent>
-            {knowledgeBases.map((kb: KnowledgeBase) => (
+            {Array.isArray(knowledgeBases) && knowledgeBases.map((kb: KnowledgeBase) => (
               <SelectItem 
                 key={kb.id} 
                 value={kb.id.toString()}
