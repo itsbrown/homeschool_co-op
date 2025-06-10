@@ -228,7 +228,14 @@ export default function AIWorksheetGenerator() {
       }
     },
     onError: (error) => {
-      // Handle error
+      // Add error notification
+      addNotification({
+        type: 'error',
+        title: 'Network Error',
+        message: 'Unable to connect to the server. Please check your connection and try again.',
+        actionable: false
+      });
+      
       console.error("Error generating activity:", error);
       toast({
         title: "Error",

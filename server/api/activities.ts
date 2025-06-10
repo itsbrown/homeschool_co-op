@@ -284,14 +284,11 @@ router.get("/job/:jobId", (req, res) => {
     });
   }
   
-  const jobStatus = backgroundTaskManager.getJobStatus(jobId);
-  
-  if (!jobStatus) {
-    return res.status(404).json({
-      success: false,
-      error: "Job not found",
-    });
-  }
+  // Background processing removed - return not found
+  return res.status(404).json({
+    success: false,
+    error: "Background job processing has been simplified - activities are now generated directly",
+  });
   
   // Format the response based on job status
   let message: string;
