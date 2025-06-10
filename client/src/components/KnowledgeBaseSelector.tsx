@@ -21,24 +21,27 @@ interface KnowledgeBaseSelectorProps {
 interface KnowledgeBase {
   id: number;
   title: string;
-  subject: string;
-  authorId: number;
-  isPublic: boolean;
-  files?: Array<{
-    name: string;
-    size: number;
-    type: string;
-    url: string;
-  }>;
-  fileCount?: number;
+  description: string;
+  subjectArea: string;
+  gradeLevel: string[];
+  status: string;
+  visibility: string;
+  fileCount: number;
+  size: string;
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+  creator: string;
+  rating: number;
+  usageCount: number;
 }
 
 export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSelectorProps) {
   const [currentSelection, setCurrentSelection] = useState<string>("");
 
   const { data: knowledgeBases, isLoading, isError } = useQuery<KnowledgeBase[]>({
-    queryKey: ["/api/knowledge-base/combined"],
-    queryFn: () => fetch('/api/knowledge-base/combined').then(res => res.json()),
+    queryKey: ["/api/schools/knowledge-bases"],
+    queryFn: () => fetch('/api/schools/knowledge-bases').then(res => res.json()),
   });
 
   // Debug logging
@@ -109,7 +112,13 @@ export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSe
                 value={kb.id.toString()}
                 disabled={selectedIds.includes(kb.id)}
               >
-                {kb.title} {kb.isPublic && <span className="text-xs">(Public)</span>}
+                <div className="flex items-center justify-between w-full">
+                  <span>{kb.title}</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>({kb.fileCount} files)</span>
+                    {kb.visibility === 'Public' && <span>(Public)</span>}
+                  </div>
+                </div>
               </SelectItem>
             ))}
           </SelectContent>
@@ -128,7 +137,10 @@ export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSe
             return (
               <Badge key={id} variant="secondary" className="px-3 py-1 flex items-center gap-1">
                 <BookOpen className="h-3 w-3" />
-                {kb.title}
+                <span className="flex items-center gap-1">
+                  {kb.title}
+                  <span className="text-xs opacity-70">({kb.fileCount} files)</span>
+                </span>
                 <button 
                   onClick={() => handleRemoveSelection(id)}
                   className="ml-1 text-xs rounded-full hover:bg-background p-1 transition-colors"
