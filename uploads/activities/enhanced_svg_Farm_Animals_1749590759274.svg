@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    <rect x="0" y="0" width="1024" height="1024" fill="white"/>
+    
+    <!-- Barn with detailed features -->
+    <rect x="300" y="200" width="400" height="300" fill="none" stroke="black" stroke-width="4"/>
+    <polygon points="300,200 500,100 700,200" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="450" y="350" width="100" height="150" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="350" y="250" width="80" height="120" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="590" y="250" width="80" height="120" fill="none" stroke="black" stroke-width="4"/>
+    
+    <!-- Barn roof details -->
+    <line x1="350" y1="150" x2="650" y2="150" stroke="black" stroke-width="2"/>
+    <rect x="480" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Cow - detailed and proportional -->
+    <ellipse cx="150" cy="650" rx="80" ry="40" fill="none" stroke="black" stroke-width="4"/>
+    <ellipse cx="120" cy="600" rx="35" ry="25" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="110" cy="590" r="4" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="130" cy="590" r="4" fill="none" stroke="black" stroke-width="2"/>
+    <ellipse cx="105" cy="605" rx="8" ry="4" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Cow ears and horns -->
+    <ellipse cx="90" cy="580" rx="8" ry="15" fill="none" stroke="black" stroke-width="2"/>
+    <ellipse cx="140" cy="580" rx="8" ry="15" fill="none" stroke="black" stroke-width="2"/>
+    <path d="M 100 570 Q 95 560 100 555" fill="none" stroke="black" stroke-width="2"/>
+    <path d="M 130 570 Q 135 560 130 555" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Cow legs and udder -->
+    <rect x="100" y="690" width="12" height="40" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="120" y="690" width="12" height="40" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="160" y="690" width="12" height="40" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="180" y="690" width="12" height="40" fill="none" stroke="black" stroke-width="4"/>
+    <ellipse cx="140" cy="680" rx="15" ry="10" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Cow spots -->
+    <circle cx="130" cy="630" r="8" fill="none" stroke="black" stroke-width="2"/>
+    <ellipse cx="160" cy="645" rx="12" ry="8" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="170" cy="665" r="6" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Pig - detailed and cute -->
+    <ellipse cx="800" cy="650" rx="60" ry="35" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="780" cy="610" r="25" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="770" cy="600" r="3" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="790" cy="600" r="3" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Pig snout and ears -->
+    <ellipse cx="760" cy="615" rx="8" ry="6" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="755" cy="613" r="2" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="765" cy="613" r="2" fill="none" stroke="black" stroke-width="2"/>
+    <polygon points="770,590 775,580 780,590" fill="none" stroke="black" stroke-width="2"/>
+    <polygon points="780,590 785,580 790,590" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Pig legs and tail -->
+    <rect x="770" y="685" width="10" height="25" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="785" y="685" width="10" height="25" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="810" y="685" width="10" height="25" fill="none" stroke="black" stroke-width="4"/>
+    <rect x="825" y="685" width="10" height="25" fill="none" stroke="black" stroke-width="4"/>
+    <path d="M 860 640 Q 875 630 870 645 Q 865 660 875 655" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Chicken - detailed -->
+    <ellipse cx="450" cy="680" rx="35" ry="25" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="430" cy="650" r="18" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="425" cy="645" r="2" fill="none" stroke="black" stroke-width="2"/>
+    <polygon points="415,650 405,655 415,660" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Chicken comb and wattles -->
+    <path d="M 420 630 Q 415 620 420 625 Q 425 615 430 625 Q 435 620 440 630" fill="none" stroke="black" stroke-width="2"/>
+    <ellipse cx="410" cy="655" rx="4" ry="6" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Chicken feet and tail -->
+    <path d="M 440 705 L 435 715 M 440 705 L 440 715 M 440 705 L 445 715" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M 460 705 L 455 715 M 460 705 L 460 715 M 460 705 L 465 715" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M 485 670 Q 500 660 510 675 Q 505 685 490 680" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Sheep - fluffy and detailed -->
+    <circle cx="600" cy="650" r="45" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="570" cy="630" r="20" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="630" cy="630" r="20" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="580" cy="680" r="25" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="620" cy="680" r="25" fill="none" stroke="black" stroke-width="4"/>
+    
+    <!-- Sheep head -->
+    <ellipse cx="520" cy="620" rx="25" ry="20" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="510" cy="615" r="3" fill="none" stroke="black" stroke-width="2"/>
+    <circle cx="530" cy="615" r="3" fill="none" stroke="black" stroke-width="2"/>
+    <ellipse cx="505" cy="625" rx="6" ry="4" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Sheep ears and legs -->
+    <ellipse cx="500" cy="605" rx="6" ry="12" fill="none" stroke="black" stroke-width="2"/>
+    <ellipse cx="540" cy="605" rx="6" ry="12" fill="none" stroke="black" stroke-width="2"/>
+    <rect x="580" y="695" width="8" height="20" fill="none" stroke="black" stroke-width="2"/>
+    <rect x="595" y="695" width="8" height="20" fill="none" stroke="black" stroke-width="2"/>
+    <rect x="610" y="695" width="8" height="20" fill="none" stroke="black" stroke-width="2"/>
+    <rect x="625" y="695" width="8" height="20" fill="none" stroke="black" stroke-width="2"/>
+    
+    <!-- Ground and grass -->
+    <line x1="0" y1="730" x2="1024" y2="730" stroke="black" stroke-width="4" stroke-dasharray="20,10"/>
+    <path d="M 50 730 Q 60 710 55 690" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M 200 730 Q 210 710 205 690" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M 350 730 Q 360 710 355 690" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M 500 730 Q 510 710 505 690" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M 650 730 Q 660 710 655 690" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M 800 730 Q 810 710 805 690" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M 950 730 Q 960 710 955 690" stroke="black" stroke-width="2" fill="none"/>
+    
+    <!-- Fence -->
+    <line x1="100" y1="550" x2="100" y2="580" stroke="black" stroke-width="4"/>
+    <line x1="150" y1="550" x2="150" y2="580" stroke="black" stroke-width="4"/>
+    <line x1="200" y1="550" x2="200" y2="580" stroke="black" stroke-width="4"/>
+    <line x1="250" y1="550" x2="250" y2="580" stroke="black" stroke-width="4"/>
+    <line x1="80" y1="565" x2="270" y2="565" stroke="black" stroke-width="2"/>
+    
+    <!-- Sun -->
+    <circle cx="150" cy="150" r="40" fill="none" stroke="black" stroke-width="4"/>
+    <line x1="110" y1="110" x2="120" y2="120" stroke="black" stroke-width="2"/>
+    <line x1="190" y1="110" x2="180" y2="120" stroke="black" stroke-width="2"/>
+    <line x1="110" y1="190" x2="120" y2="180" stroke="black" stroke-width="2"/>
+    <line x1="190" y1="190" x2="180" y2="180" stroke="black" stroke-width="2"/>
+    <line x1="70" y1="150" x2="90" y2="150" stroke="black" stroke-width="2"/>
+    <line x1="210" y1="150" x2="230" y2="150" stroke="black" stroke-width="2"/>
+    <line x1="150" y1="70" x2="150" y2="90" stroke="black" stroke-width="2"/>
+    <line x1="150" y1="210" x2="150" y2="230" stroke="black" stroke-width="2"/>
+    
+    <!-- Clouds -->
+    <circle cx="800" cy="120" r="25" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="825" cy="115" r="30" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="850" cy="120" r="25" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="810" cy="140" r="20" fill="none" stroke="black" stroke-width="4"/>
+    <circle cx="840" cy="140" r="20" fill="none" stroke="black" stroke-width="4"/>
+  </svg>

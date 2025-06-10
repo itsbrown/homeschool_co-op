@@ -1,0 +1,32 @@
+{
+  "title": "Happy Farm Friends Coloring Page",
+  "description": "A fun coloring page featuring friendly farm animals that helps children learn about common animals found on a farm while developing fine motor skills and creativity.",
+  "instructions": "Color each animal using your favorite colors. Try to stay inside the lines. You can use the suggested colors or choose your own!",
+  "content": {
+    "image": "A simple farm scene with four main animals: a smiling cow, a happy pig, a fluffy sheep, and a cheerful chicken. The animals are arranged in a barnyard setting with simple outlines that are easy for young children to color.",
+    "elements": [
+      "Cow",
+      "Pig",
+      "Chicken",
+      "Sheep"
+    ],
+    "learningFacts": [
+      "Cows give us milk that we can drink or use to make cheese and butter.",
+      "Pigs are very smart animals that like to roll in mud to stay cool.",
+      "Chickens lay eggs that we can eat for breakfast.",
+      "Sheep grow wool that can be used to make warm clothing like sweaters."
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/enhanced_svg_Farm_Animals_1749590759274.svg",
+    "coloringProvider": "enhanced-svg"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "color identification",
+    "creativity"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
