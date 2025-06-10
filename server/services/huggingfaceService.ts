@@ -6,23 +6,80 @@ import { promisify } from 'util';
 const writeFileAsync = promisify(fs.writeFile);
 
 /**
- * Create an educational SVG coloring page based on the prompt
+ * Create a detailed educational coloring page using AI image generation
  */
-export function createEducationalSVG(prompt: string): string {
-  const lowerPrompt = prompt.toLowerCase();
-  
-  // Determine the type of educational content based on the prompt
-  if (lowerPrompt.includes('animal') || lowerPrompt.includes('cat') || lowerPrompt.includes('dog') || lowerPrompt.includes('bird')) {
-    return createAnimalSVG(prompt);
-  } else if (lowerPrompt.includes('history') || lowerPrompt.includes('american') || lowerPrompt.includes('flag') || lowerPrompt.includes('liberty')) {
-    return createHistorySVG(prompt);
-  } else if (lowerPrompt.includes('math') || lowerPrompt.includes('number') || lowerPrompt.includes('shape')) {
-    return createMathSVG(prompt);
-  } else if (lowerPrompt.includes('science') || lowerPrompt.includes('plant') || lowerPrompt.includes('space')) {
-    return createScienceSVG(prompt);
-  } else {
-    return createGeneralSVG(prompt);
+export async function createEducationalColoringPage(
+  prompt: string, 
+  elements: string[] = [], 
+  ageRange: string = '5-8'
+): Promise<{ imageUrl?: string; svgContent?: string; type: 'ai-image' | 'svg' }> {
+  console.log(`🎨 Creating AI-powered coloring page for: ${prompt}`);
+  console.log(`🔍 Elements: ${elements.join(', ')}`);
+  console.log(`👶 Age range: ${ageRange}`);
+
+  try {
+    // Try DALL-E 3 first for highest quality
+    const { generateEducationalColoringPage } = await import('./aiImageGenerator.js');
+    const imageUrl = await generateEducationalColoringPage(prompt, elements, ageRange);
+    
+    if (imageUrl.startsWith('http')) {
+      // Successfully generated DALL-E image
+      console.log(`✅ Generated DALL-E coloring page: ${imageUrl}`);
+      return { imageUrl, type: 'ai-image' };
+    } else {
+      // Fallback SVG was returned
+      console.log(`🔄 Using detailed SVG fallback`);
+      return { svgContent: imageUrl, type: 'svg' };
+    }
+    
+  } catch (error) {
+    console.error('❌ AI image generation failed, using detailed SVG:', error);
+    
+    // Fallback to detailed SVG generation
+    const svgContent = await createDetailedSVGFallback(prompt, elements);
+    return { svgContent, type: 'svg' };
   }
+}
+
+/**
+ * Create detailed SVG fallback when AI generation fails
+ */
+async function createDetailedSVGFallback(prompt: string, elements: string[]): Promise<string> {
+  const { 
+    createDetailedVehiclesSVG, 
+    createDetailedSeaCreaturesSVG, 
+    createDetailedForestAnimalsSVG, 
+    createDetailedHistoricalFigureSVG, 
+    createDetailedSpaceSVG, 
+    createDetailedGardenSVG, 
+    createDetailedGeneralSVG 
+  } = await import('./detailedSVGGenerator.js');
+
+  const allText = (prompt + ' ' + elements.join(' ')).toLowerCase();
+  
+  if (allText.includes('vehicle') || allText.includes('car') || allText.includes('truck') || allText.includes('airplane') || allText.includes('bicycle')) {
+    return createDetailedVehiclesSVG(prompt, elements);
+  } else if (allText.includes('sea') || allText.includes('ocean') || allText.includes('fish') || allText.includes('octopus') || allText.includes('seahorse')) {
+    return createDetailedSeaCreaturesSVG(prompt, elements);
+  } else if (allText.includes('forest') || allText.includes('animal') || allText.includes('deer') || allText.includes('rabbit') || allText.includes('squirrel')) {
+    return createDetailedForestAnimalsSVG(prompt, elements);
+  } else if (allText.includes('antoinette') || allText.includes('minister') || allText.includes('church') || allText.includes('blackwell')) {
+    return createDetailedHistoricalFigureSVG(prompt, elements);
+  } else if (allText.includes('space') || allText.includes('planet') || allText.includes('star') || allText.includes('rocket')) {
+    return createDetailedSpaceSVG(prompt, elements);
+  } else if (allText.includes('garden') || allText.includes('flower') || allText.includes('plant') || allText.includes('butterfly')) {
+    return createDetailedGardenSVG(prompt, elements);
+  } else {
+    return createDetailedGeneralSVG(prompt, elements);
+  }
+}
+
+/**
+ * Legacy function for backward compatibility - now redirects to AI generation
+ */
+export async function createEducationalSVG(prompt: string, elements: string[] = []): Promise<string> {
+  const result = await createEducationalColoringPage(prompt, elements);
+  return result.svgContent || result.imageUrl || '';
 }
 
 /**

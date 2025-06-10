@@ -1,0 +1,41 @@
+{
+  "title": "Antoinette Brown Blackwell: America's First Woman Minister",
+  "description": "This historically accurate coloring page depicts Antoinette Brown Blackwell in her ministerial attire from the 1850s, highlighting her groundbreaking achievement as the first ordained woman minister in the United States and her contributions to women's rights.",
+  "instructions": "Color this portrait of Antoinette Brown Blackwell using colored pencils or markers. Pay attention to the details of her 19th-century clothing and the historical setting. Read the learning facts as you color to learn more about this important historical figure.",
+  "content": {
+    "image": "A portrait of Antoinette Brown Blackwell in her ministerial attire from the 1850s. She is wearing a simple, high-necked dark dress with a white collar typical of the period. Her hair is parted in the middle and pulled back in a simple bun. She stands at a pulpit with a Bible open before her. Behind her is a church interior with wooden pews and stained glass windows. To one side is a small table with books about women's rights and social reform. A banner near her reads 'Equality for All.'",
+    "elements": [
+      "Antoinette Brown Blackwell",
+      "Ministerial dress",
+      "White collar",
+      "Bible",
+      "Pulpit",
+      "Church interior",
+      "Books",
+      "Banner"
+    ],
+    "learningFacts": [
+      "Antoinette Brown Blackwell became the first ordained woman minister in the United States in 1853.",
+      "She attended Oberlin College when very few women pursued higher education.",
+      "Besides being a minister, she was an active suffragist who fought for women's right to vote.",
+      "Blackwell was also a published author who wrote about women's rights and social reform.",
+      "She balanced her career with family life, having seven children while continuing her work.",
+      "Her persistence helped pave the way for women in religious leadership positions.",
+      "She lived during the 19th century when women had very limited rights and opportunities.",
+      "Blackwell often spoke publicly on controversial topics, which was unusual for women at that time.",
+      "She lived a long life (1825-1921) and saw many changes in women's rights during her lifetime."
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/coloring_Antoinette_Brown_Blackwell_1749558044370.svg",
+    "svgContent": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\">\n    <rect x=\"0\" y=\"0\" width=\"512\" height=\"512\" fill=\"white\"/>\n    \n    <!-- House -->\n    <rect x=\"180\" y=\"250\" width=\"152\" height=\"120\" fill=\"none\" stroke=\"black\" stroke-width=\"3\"/>\n    <polygon points=\"180,250 256,180 332,250\" fill=\"none\" stroke=\"black\" stroke-width=\"3\"/>\n    <rect x=\"200\" y=\"300\" width=\"30\" height=\"50\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <rect x=\"280\" y=\"290\" width=\"40\" height=\"40\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <line x1=\"280\" y1=\"310\" x2=\"320\" y2=\"310\" stroke=\"black\" stroke-width=\"1\"/>\n    <line x1=\"300\" y1=\"290\" x2=\"300\" y2=\"330\" stroke=\"black\" stroke-width=\"1\"/>\n    \n    <!-- Tree -->\n    <rect x=\"120\" y=\"300\" width=\"20\" height=\"70\" fill=\"none\" stroke=\"black\" stroke-width=\"3\"/>\n    <circle cx=\"130\" cy=\"280\" r=\"40\" fill=\"none\" stroke=\"black\" stroke-width=\"3\"/>\n    \n    <!-- Clouds -->\n    <circle cx=\"100\" cy=\"80\" r=\"20\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <circle cx=\"120\" cy=\"80\" r=\"25\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <circle cx=\"140\" cy=\"80\" r=\"20\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    \n    <circle cx=\"350\" cy=\"60\" r=\"15\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <circle cx=\"365\" cy=\"60\" r=\"20\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    <circle cx=\"380\" cy=\"60\" r=\"15\" fill=\"none\" stroke=\"black\" stroke-width=\"2\"/>\n    \n    <text x=\"256\" y=\"460\" font-family=\"Arial\" font-size=\"14\" text-anchor=\"middle\" fill=\"black\">\n      Antoinette Brown Blackwell coloring page\n    </text>\n  </svg>"
+  },
+  "targetSkills": [
+    "Historical awareness",
+    "Visual arts",
+    "Women's history",
+    "Social justice understanding"
+  ],
+  "ageRange": "12-14",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}
