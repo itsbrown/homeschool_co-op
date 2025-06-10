@@ -1,0 +1,41 @@
+{
+  "title": "Busy Garden Insects Coloring Adventure",
+  "description": "A fun coloring page featuring friendly garden insects that helps children learn about common bugs while developing fine motor skills and creativity.",
+  "instructions": "Color each insect using your favorite colors. Try to use colors that match real insects, or be creative and make them your own!",
+  "content": {
+    "image": "A sunny garden scene with four large, easy-to-color insects: a butterfly with detailed wings hovering over a flower, a smiling bee flying near a beehive, a ladybug sitting on a leaf, and a caterpillar crawling on a branch.",
+    "elements": [
+      {
+        "name": "Butterfly",
+        "description": "A butterfly with big wings spread open, showing patterns that can be colored"
+      },
+      {
+        "name": "Bee",
+        "description": "A friendly bee with stripes on its body and transparent wings"
+      },
+      {
+        "name": "Ladybug",
+        "description": "A round ladybug with spots on its back and tiny legs"
+      },
+      {
+        "name": "Caterpillar",
+        "description": "A long caterpillar with many segments making up its body"
+      }
+    ],
+    "learningFacts": [
+      "Butterflies start life as caterpillars before they transform",
+      "Bees collect nectar from flowers to make honey",
+      "Ladybugs help gardens by eating tiny pests called aphids",
+      "Caterpillars eat lots of leaves to grow big before becoming butterflies"
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "insect identification",
+    "nature appreciation"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}

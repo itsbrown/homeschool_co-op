@@ -160,6 +160,53 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
     const filename = `${params.activityType}_${params.subject.replace(/\s+/g, '_')}_${timestamp}.json`;
     const outputFilePath = path.join(activitiesDir, filename);
     
+    // Enhance coloring activities with actual SVG images
+    if (params.activityType.toLowerCase() === 'coloring' && generatedActivity.content) {
+      try {
+        console.log('🎨 Enhancing coloring activity with actual SVG image...');
+        
+        // Import image generation service
+        const { createEducationalSVG } = await import('../services/huggingfaceService');
+        
+        // Extract elements from the generated activity
+        const elements = generatedActivity.content.elements 
+          ? generatedActivity.content.elements.map((el: any) => typeof el === 'string' ? el : el.name)
+          : ['Educational Element 1', 'Educational Element 2', 'Educational Element 3'];
+        
+        console.log('🔍 Extracted elements for SVG generation:', elements);
+        
+        // Create a detailed prompt for SVG generation
+        const svgPrompt = `${params.subject} coloring page with ${elements.join(', ')} suitable for ages ${params.ageRange}`;
+        
+        // Generate the SVG content
+        const svgContent = createEducationalSVG(svgPrompt);
+        
+        // Save SVG to file
+        const svgFilename = `coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
+        const svgPath = path.join(activitiesDir, svgFilename);
+        await fs.writeFile(svgPath, svgContent);
+        
+        // Update the activity content with actual SVG
+        generatedActivity.content = {
+          ...generatedActivity.content,
+          type: 'image-coloring-page',
+          imageUrl: `/uploads/activities/${svgFilename}`,
+          svgContent: svgContent,
+          elements: elements,
+          learningFacts: generatedActivity.content.learningFacts || [
+            `This coloring page features ${elements.join(', ')} related to ${params.subject}`,
+            `Coloring helps develop fine motor skills and creativity`,
+            `Each element represents an important aspect of ${params.subject} learning`
+          ]
+        };
+        
+        console.log('✅ Enhanced coloring activity with SVG image:', `/uploads/activities/${svgFilename}`);
+      } catch (imageError) {
+        console.error('❌ Error enhancing coloring activity with SVG:', imageError);
+        // Continue with the original generated activity if SVG enhancement fails
+      }
+    }
+
     await fs.writeFile(outputFilePath, JSON.stringify(generatedActivity, null, 2));
 
     // Save activity in database
