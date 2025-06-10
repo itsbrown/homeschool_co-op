@@ -1,0 +1,65 @@
+{
+  "title": "Our Solar System: Planet Exploration",
+  "description": "A fun and educational coloring activity that helps students learn about the eight planets in our solar system while developing fine motor skills and creativity.",
+  "instructions": "Color each planet using the suggested colors or your own creative choices. Read the learning facts to discover interesting information about each planet as you color.",
+  "content": {
+    "image": "A detailed illustration of our solar system showing the Sun in the center with the eight planets orbiting around it in their correct order: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. Each planet is drawn with its distinctive features - Saturn has rings, Jupiter has the Great Red Spot, Earth shows continents and oceans, etc.",
+    "elements": [
+      {
+        "name": "Sun",
+        "description": "Color the Sun yellow or orange"
+      },
+      {
+        "name": "Mercury",
+        "description": "Color Mercury gray or brown"
+      },
+      {
+        "name": "Venus",
+        "description": "Color Venus yellowish-white"
+      },
+      {
+        "name": "Earth",
+        "description": "Color Earth blue and green"
+      },
+      {
+        "name": "Mars",
+        "description": "Color Mars reddish-orange"
+      },
+      {
+        "name": "Jupiter",
+        "description": "Color Jupiter with bands of orange, brown, and white"
+      },
+      {
+        "name": "Saturn",
+        "description": "Color Saturn yellowish with white rings"
+      },
+      {
+        "name": "Uranus",
+        "description": "Color Uranus light blue"
+      },
+      {
+        "name": "Neptune",
+        "description": "Color Neptune dark blue"
+      }
+    ],
+    "learningFacts": [
+      "Mercury is the smallest planet and closest to the Sun",
+      "Venus is the hottest planet even though Mercury is closer to the Sun",
+      "Earth is the only planet known to have life",
+      "Mars is called the Red Planet because of iron oxide (rust) on its surface",
+      "Jupiter is the largest planet in our solar system",
+      "Saturn has beautiful rings made of ice and rock",
+      "Uranus rotates on its side like a rolling ball",
+      "Neptune has the strongest winds in the solar system, reaching 1,200 miles per hour"
+    ]
+  },
+  "targetSkills": [
+    "astronomy knowledge",
+    "planet identification",
+    "solar system understanding",
+    "fine motor skills"
+  ],
+  "ageRange": "8-10",
+  "difficulty": "medium",
+  "timeRequired": "20"
+}
