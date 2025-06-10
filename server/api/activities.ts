@@ -176,29 +176,31 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
       try {
         console.log('🎨 Enhancing coloring activity with actual SVG image...');
         
-        // Import Colorify AI service for professional coloring pages
-        const { generateColoringPage, isColorifyAIAvailable } = await import('../services/colorifyAI');
+        // Import professional coloring page service
+        const { generateProfessionalColoringPage } = await import('../services/professionalColoringPages');
         
         // Extract elements from the generated activity
         const elements = generatedActivity.content.elements 
           ? generatedActivity.content.elements.map((el: any) => typeof el === 'string' ? el : el.name)
           : ['Educational Element 1', 'Educational Element 2', 'Educational Element 3'];
         
-        console.log('🔍 Extracted elements for coloring page generation:', elements);
+        console.log('🔍 Extracted elements for professional coloring page:', elements);
         
-        // Determine difficulty based on age range
-        const difficulty = getDifficultyFromAge(params.ageRange);
-        
-        // Generate professional coloring page using Colorify AI
-        const coloringResult = await generateColoringPage(
+        // Generate professional coloring page using Claude AI
+        const svgContent = await generateProfessionalColoringPage(
           params.subject,
           elements,
-          params.ageRange,
-          difficulty
+          params.ageRange
         );
         
-        const imageUrl = coloringResult.localPath;
-        console.log('✅ Generated coloring page:', imageUrl);
+        // Save the professional SVG to file
+        const timestamp = Date.now();
+        const svgFilename = `professional_coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
+        const svgPath = path.join(activitiesDir, svgFilename);
+        await fs.writeFile(svgPath, svgContent);
+        
+        const imageUrl = `/uploads/activities/${svgFilename}`;
+        console.log('✅ Generated professional coloring page:', imageUrl);
         
         // Update the activity content with professional coloring page
         generatedActivity.content = {
@@ -206,7 +208,7 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
           type: 'image-coloring-page',
           imageUrl: imageUrl,
           elements: elements,
-          coloringProvider: isColorifyAIAvailable() ? 'colorify-ai' : 'enhanced-svg',
+          coloringProvider: 'ai-generated',
           learningFacts: generatedActivity.content.learningFacts || [
             `This coloring page features ${elements.join(', ')} related to ${params.subject}`,
             `Coloring helps develop fine motor skills and creativity`,

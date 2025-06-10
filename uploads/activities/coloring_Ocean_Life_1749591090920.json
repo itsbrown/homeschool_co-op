@@ -1,0 +1,35 @@
+{
+  "title": "Under the Sea Adventure",
+  "description": "A fun ocean-themed coloring page featuring whales, dolphins, fish, and coral that introduces young children to marine life while developing fine motor skills.",
+  "instructions": "Color each sea creature using your favorite colors. Try to use different colors for different parts of the ocean scene!",
+  "content": {
+    "image": "An underwater ocean scene with a large whale swimming at the top, a playful dolphin jumping through waves in the middle, colorful fish swimming around coral reefs at the bottom, with seaweed and bubbles scattered throughout.",
+    "elements": [
+      "Blue Whale",
+      "Dolphin",
+      "Tropical Fish",
+      "Coral Reef",
+      "Seaweed",
+      "Ocean Water"
+    ],
+    "learningFacts": [
+      "Blue whales are the largest animals on Earth - even bigger than dinosaurs!",
+      "Dolphins are very smart animals that communicate with each other using clicks and whistles.",
+      "Coral reefs are living things made up of tiny animals called coral polyps.",
+      "The ocean covers more than 70% of our planet Earth.",
+      "Fish breathe underwater using special organs called gills."
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/enhanced_svg_Ocean_Life_1749591090922.svg",
+    "coloringProvider": "enhanced-svg"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "marine life knowledge",
+    "creativity"
+  ],
+  "ageRange": "5-8",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
