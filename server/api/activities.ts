@@ -171,39 +171,54 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
     const filename = `${params.activityType}_${params.subject.replace(/\s+/g, '_')}_${timestamp}.json`;
     const outputFilePath = path.join(activitiesDir, filename);
     
-    // Generate professional coloring pages using unified system
+    // Generate professional coloring pages using Claude AI
     if (params.activityType.toLowerCase() === 'coloring' && generatedActivity.content) {
       try {
-        const { generateColoringPage } = await import('../services/unifiedColoringPageGenerator');
+        console.log('🎨 Enhancing coloring activity with professional SVG image...');
+        
+        const { generateProfessionalColoringPage } = await import('../services/professionalColoringPages');
         
         // Extract elements from the generated activity
         const elements = generatedActivity.content.elements 
           ? generatedActivity.content.elements.map((el: any) => typeof el === 'string' ? el : el.name)
           : ['Educational Element 1', 'Educational Element 2', 'Educational Element 3'];
         
-        const result = await generateColoringPage({
-          subject: params.subject,
-          elements,
-          ageRange: params.ageRange,
-          difficulty: getDifficultyFromAge(params.ageRange)
-        });
+        console.log('🔍 Extracted elements for professional coloring page:', elements);
         
-        if (result.success && result.imageUrl) {
-          generatedActivity.content = {
-            ...generatedActivity.content,
-            type: 'image-coloring-page',
-            imageUrl: result.imageUrl,
-            elements: elements,
-            coloringProvider: 'unified-ai',
-            learningFacts: generatedActivity.content.learningFacts || [
-              `This coloring page features ${elements.join(', ')} related to ${params.subject}`,
-              `Coloring helps develop fine motor skills and creativity`,
-              `Each element represents an important aspect of ${params.subject} learning`
-            ]
-          };
-        }
+        // Generate professional coloring page using Claude AI
+        const svgContent = await generateProfessionalColoringPage(
+          params.subject,
+          elements,
+          params.ageRange
+        );
+        
+        // Save the professional SVG to file
+        const timestamp = Date.now();
+        const svgFilename = `professional_coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
+        const svgPath = path.join(activitiesDir, svgFilename);
+        await fs.writeFile(svgPath, svgContent);
+        
+        const imageUrl = `/uploads/activities/${svgFilename}`;
+        console.log('✅ Generated professional coloring page:', imageUrl);
+        
+        // Update the activity content with professional coloring page
+        generatedActivity.content = {
+          ...generatedActivity.content,
+          type: 'image-coloring-page',
+          imageUrl: imageUrl,
+          elements: elements,
+          coloringProvider: 'claude-ai',
+          learningFacts: generatedActivity.content.learningFacts || [
+            `This coloring page features ${elements.join(', ')} related to ${params.subject}`,
+            `Coloring helps develop fine motor skills and creativity`,
+            `Each element represents an important aspect of ${params.subject} learning`
+          ]
+        };
+        
+        console.log('✅ Enhanced coloring activity with professional image:', imageUrl);
       } catch (imageError) {
-        console.error('❌ Error generating coloring page:', imageError);
+        console.error('❌ Error enhancing coloring activity with SVG:', imageError);
+        // Continue with the original generated activity if SVG enhancement fails
       }
     }
 

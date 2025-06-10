@@ -24,27 +24,33 @@ export async function generateColoringPageImage(
 ): Promise<ImageGenerationResult> {
   
   try {
-    // Use unified coloring page generator
-    const { generateColoringPage } = await import('./unifiedColoringPageGenerator');
+    // Use professional coloring page generator with Claude
+    const { generateProfessionalColoringPage } = await import('./professionalColoringPages');
     
-    const result = await generateColoringPage({
-      subject,
-      elements,
-      ageRange
-    });
+    console.log(`🎨 Generating professional AI coloring page for: ${subject}`);
+    const svgContent = await generateProfessionalColoringPage(subject, elements, ageRange);
     
-    if (result.success && result.imageUrl) {
-      return {
-        success: true,
-        imageUrl: result.imageUrl,
-        base64: null
-      };
-    }
+    // Save the SVG to file
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const timestamp = Date.now();
+    const filename = `professional_coloring_${subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'activities');
+    await fs.mkdir(uploadsDir, { recursive: true });
+    const filePath = path.join(uploadsDir, filename);
+    await fs.writeFile(filePath, svgContent);
     
-    throw new Error(result.error || 'Coloring page generation failed');
+    const imageUrl = `/uploads/activities/${filename}`;
+    console.log(`✅ Generated professional coloring page: ${imageUrl}`);
+    
+    return {
+      success: true,
+      imageUrl: imageUrl,
+      base64: null
+    };
     
   } catch (error) {
-    console.error('❌ Unified coloring page generation failed:', error);
+    console.error('❌ Professional AI coloring page generation failed:', error);
     
     // Try Hugging Face as backup
     const prompt = `Create a simple black and white coloring page suitable for ages ${ageRange}. 
