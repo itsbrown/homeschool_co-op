@@ -565,7 +565,7 @@ export async function generateEducationalActivity(
         
         // Generate a fallback activity based on the given parameters
         console.warn("Creating fallback educational activity for: " + subject + " - " + activityType);
-        return generateFallbackActivity(subject, ageRange, activityType, difficulty);
+        return await generateFallbackActivity(subject, ageRange, activityType, difficulty);
       }
     } catch (openaiError: unknown) {
       const errorMessage = openaiError instanceof Error ? openaiError.message : String(openaiError);
