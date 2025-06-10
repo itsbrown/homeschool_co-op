@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+        <rect x="10" y="10" width="492" height="492" fill="white" stroke="black" stroke-width="2"/>
+        <circle cx="256" cy="150" r="60" fill="none" stroke="black" stroke-width="3"/>
+        <rect x="200" y="220" width="112" height="80" fill="none" stroke="black" stroke-width="3"/>
+        <polygon points="156,320 356,320 306,420 206,420" fill="none" stroke="black" stroke-width="3"/>
+        <text x="256" y="460" font-family="Arial" font-size="16" text-anchor="middle" fill="black">
+          simple cat outline for colorin...
+        </text>
+      </svg>
