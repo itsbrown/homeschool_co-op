@@ -1,0 +1,40 @@
+{
+  "title": "Dinosaur Discovery: Prehistoric World",
+  "description": "A detailed dinosaur scene featuring various dinosaur species in their natural habitat. This coloring page helps students learn about different dinosaurs while developing fine motor skills and creativity.",
+  "instructions": "Color the dinosaurs and their environment using crayons, colored pencils, or markers. Use the learning facts below to help you choose realistic colors for each dinosaur!",
+  "content": {
+    "image": "A prehistoric scene showing five different dinosaurs in their natural habitat. The scene includes a large Tyrannosaurus rex standing tall on the right, a long-necked Brachiosaurus reaching for tree leaves in the background, a horned Triceratops grazing on plants in the foreground, a Pteranodon flying overhead, and a small Velociraptor crouching near some rocks. The background includes volcanoes, prehistoric plants, and a river flowing through the landscape.",
+    "elements": [
+      "Tyrannosaurus Rex",
+      "Brachiosaurus",
+      "Triceratops",
+      "Pteranodon",
+      "Velociraptor",
+      "Prehistoric Plants",
+      "Volcano",
+      "River"
+    ],
+    "learningFacts": [
+      "Dinosaurs lived during the Mesozoic Era, which lasted from about 252 to 66 million years ago.",
+      "Tyrannosaurus rex could grow up to 40 feet long and had teeth as big as bananas!",
+      "Brachiosaurus could reach heights of 40-50 feet, making it one of the tallest dinosaurs.",
+      "Triceratops used its three horns and large frill to defend itself from predators.",
+      "Scientists believe many dinosaurs had colorful skin, and some even had feathers!",
+      "Pteranodons weren't dinosaurs but flying reptiles called pterosaurs.",
+      "Velociraptors were actually much smaller than shown in movies - about the size of a turkey."
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Dinosaurs_1749595921055.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "Fine motor skills",
+    "Dinosaur identification",
+    "Paleontology basics",
+    "Color recognition",
+    "Creativity"
+  ],
+  "ageRange": "6-10",
+  "difficulty": "intermediate",
+  "timeRequired": "30-45"
+}

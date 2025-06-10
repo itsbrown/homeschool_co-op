@@ -1,0 +1,38 @@
+{
+  "title": "Happy Farm Friends",
+  "description": "A fun farm scene coloring page featuring friendly farm animals in their natural environment. This coloring activity helps children learn about farm animals while developing fine motor skills.",
+  "instructions": "Color the farm animals and their surroundings using your favorite colors. Try to use realistic colors for the animals if you can, or be creative with your own special colors!",
+  "content": {
+    "image": "A cheerful farm scene with a red barn in the background, a smiling sun in the sky, and several farm animals in the foreground. The animals include a cow, a pig, a horse, a sheep, some chickens, and a friendly farmer. All elements have thick, bold outlines perfect for young colorists.",
+    "elements": [
+      "Barn",
+      "Cow",
+      "Pig",
+      "Horse",
+      "Sheep",
+      "Chickens",
+      "Farmer",
+      "Sun",
+      "Fence"
+    ],
+    "learningFacts": [
+      "Cows give us milk, which we can drink or use to make cheese and butter",
+      "Sheep's wool is used to make warm clothes like sweaters",
+      "Chickens lay eggs that we can eat",
+      "Pigs are very smart animals",
+      "Horses help farmers with work around the farm"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Farm_Animals_1749595852656.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "color identification",
+    "farm knowledge"
+  ],
+  "ageRange": "5-8",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}
