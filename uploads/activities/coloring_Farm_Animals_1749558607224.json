@@ -1,0 +1,53 @@
+{
+  "title": "Happy Farm Friends Coloring Page",
+  "description": "A fun coloring page featuring friendly farm animals that helps children learn about different animals found on a farm while developing fine motor skills and creativity.",
+  "instructions": "Color each animal using your favorite colors. Try to stay inside the lines. You can use the suggested colors or choose your own!",
+  "content": {
+    "image": "A simple farm scene with four main animals: a cow standing in a grassy field, a pig by a mud puddle, a chicken near a feed bowl, and a sheep by a fence. There's also a small barn in the background.",
+    "elements": [
+      {
+        "name": "Cow",
+        "description": "The cow has spots and is standing in the field. Cows are often black and white or brown."
+      },
+      {
+        "name": "Pig",
+        "description": "The pig is near a mud puddle. Pigs are often pink or light brown."
+      },
+      {
+        "name": "Chicken",
+        "description": "The chicken is pecking near a feed bowl. Chickens can be brown, white, or red."
+      },
+      {
+        "name": "Sheep",
+        "description": "The sheep is standing by a fence. Sheep are usually white or cream colored."
+      },
+      {
+        "name": "Barn",
+        "description": "The barn is in the background. Barns are often red with a brown or black roof."
+      },
+      {
+        "name": "Grass",
+        "description": "The grass covers the ground. Grass is usually green."
+      },
+      {
+        "name": "Sky",
+        "description": "The sky is at the top of the page. The sky is usually blue."
+      }
+    ],
+    "learningFacts": [
+      "Cows give us milk that we can drink or use to make cheese and butter.",
+      "Pigs are very smart animals and like to roll in mud to stay cool.",
+      "Chickens lay eggs that we can eat for breakfast.",
+      "Sheep grow wool that can be used to make warm clothes like sweaters."
+    ]
+  },
+  "targetSkills": [
+    "fine motor control",
+    "color recognition",
+    "animal identification",
+    "creativity"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}

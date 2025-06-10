@@ -179,7 +179,8 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
         const svgPrompt = `${params.subject} coloring page with ${elements.join(', ')} suitable for ages ${params.ageRange}`;
         
         // Generate the SVG content
-        const svgContent = createEducationalSVG(svgPrompt);
+        const svgResult = await createEducationalSVG(svgPrompt);
+        const svgContent = typeof svgResult === 'string' ? svgResult : svgResult.svgContent || svgResult.imageUrl || '';
         
         // Save SVG to file
         const svgFilename = `coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;

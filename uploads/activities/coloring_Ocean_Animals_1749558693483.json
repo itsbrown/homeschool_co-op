@@ -1,0 +1,46 @@
+{
+  "title": "Under the Sea Adventure",
+  "description": "A fun ocean-themed coloring page featuring a whale, dolphin, and starfish that introduces young children to marine life while developing fine motor skills and creativity.",
+  "instructions": "Color the ocean animals using your favorite colors! Try using blue for the ocean, gray for the whale, gray or blue for the dolphin, and orange or red for the starfish.",
+  "content": {
+    "image": "An underwater ocean scene with a large gentle whale swimming at the bottom, a playful dolphin jumping through waves in the middle, and a colorful starfish resting on a rock. Seaweed and small bubbles decorate the background.",
+    "elements": [
+      {
+        "name": "Whale",
+        "description": "The big friendly whale at the bottom of the ocean"
+      },
+      {
+        "name": "Dolphin",
+        "description": "The playful dolphin jumping through the water"
+      },
+      {
+        "name": "Starfish",
+        "description": "The star-shaped starfish on the rock"
+      },
+      {
+        "name": "Ocean",
+        "description": "The water all around the animals"
+      },
+      {
+        "name": "Seaweed",
+        "description": "The green plants growing from the ocean floor"
+      }
+    ],
+    "learningFacts": [
+      "Whales are mammals, not fish. They breathe air through blowholes.",
+      "Dolphins are very smart and use clicking sounds to talk to each other.",
+      "Starfish aren't actually fish! They're called sea stars.",
+      "Whales are some of the biggest animals on Earth.",
+      "Dolphins live in groups called pods."
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "marine life knowledge",
+    "creativity"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
