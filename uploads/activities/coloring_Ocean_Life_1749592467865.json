@@ -1,0 +1,37 @@
+{
+  "title": "Underwater Wonders: Ocean Life Coloring Adventure",
+  "description": "Dive into the magical world beneath the waves with this ocean-themed coloring page. Students will learn about different sea creatures while exercising creativity and fine motor skills.",
+  "instructions": "Color each sea creature and coral reef element. Try to use realistic colors or get creative with your own color choices! Read the fun facts as you color to learn about ocean life.",
+  "content": {
+    "image": "An underwater scene showing a large whale swimming in the background, a playful dolphin jumping through the middle, various colorful fish swimming around, and a detailed coral reef at the bottom with sea anemones, starfish, and different coral formations.",
+    "elements": [
+      "Blue Whale",
+      "Dolphin",
+      "Clownfish",
+      "Angelfish",
+      "Coral Reef",
+      "Starfish",
+      "Seaweed"
+    ],
+    "learningFacts": [
+      "Oceans cover more than 70% of Earth's surface.",
+      "Coral reefs are home to 25% of all marine life.",
+      "Dolphins can hold their breath underwater for up to 10 minutes.",
+      "Blue whales can grow up to 100 feet long - as long as 3 school buses!",
+      "Fish use their gills to breathe underwater.",
+      "Starfish can regrow their arms if they lose one."
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Ocean_Life_1749592522070.svg",
+    "coloringProvider": "ai-generated"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "marine biology basics",
+    "creativity"
+  ],
+  "ageRange": "6-9",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}

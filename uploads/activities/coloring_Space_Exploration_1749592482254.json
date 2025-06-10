@@ -1,0 +1,38 @@
+{
+  "title": "Cosmic Explorers: Journey Through Space",
+  "description": "An exciting space scene featuring a rocket ship, planets, astronaut, and stars that introduces children to space exploration concepts while developing fine motor skills and creativity.",
+  "instructions": "Color each element of the space scene using colored pencils or crayons. Follow the suggested colors or use your imagination to create your own cosmic adventure!",
+  "content": {
+    "image": "A detailed space exploration scene with a large rocket launching from Earth, an astronaut floating in space, the Sun, Moon, and planets of our solar system, and twinkling stars in the background.",
+    "elements": [
+      "Rocket Ship",
+      "Astronaut",
+      "Earth",
+      "Moon",
+      "Mars",
+      "Saturn",
+      "Stars",
+      "Comet"
+    ],
+    "learningFacts": [
+      "Astronauts train for years before going to space",
+      "The International Space Station orbits Earth about 16 times each day",
+      "Mars is called the Red Planet because of iron minerals in its soil",
+      "Saturn's rings are made of ice, rock, and dust particles",
+      "It takes light from the Sun about 8 minutes to reach Earth"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Space_Exploration_1749592534740.svg",
+    "coloringProvider": "ai-generated"
+  },
+  "targetSkills": [
+    "fine motor control",
+    "creativity",
+    "astronomy knowledge",
+    "color recognition",
+    "following instructions"
+  ],
+  "ageRange": "7-10",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}
