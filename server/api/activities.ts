@@ -381,63 +381,10 @@ router.get("/job/:jobId/activity-id", (req, res) => {
     });
   }
   
-  try {
-    const jobStatus = backgroundTaskManager.getJobStatus(jobId);
-    
-    if (!jobStatus) {
-      return res.status(404).json({
-        success: false,
-        error: "Job not found",
-      });
-    }
-    
-    if (jobStatus.status !== "completed") {
-      return res.status(400).json({
-        success: false,
-        error: "Job not completed yet",
-      });
-    }
-    
-    // Extract activity ID from various possible locations
-    let activityId = null;
-    
-    // Check all possible paths where the activity ID might be located
-    if (jobStatus.result?.activity?.id) {
-      activityId = jobStatus.result.activity.id;
-    } else if (jobStatus.result?.id) {
-      activityId = jobStatus.result.id;
-    } else if (jobStatus.result && 'activityId' in jobStatus.result) {
-      activityId = (jobStatus.result as any).activityId;
-    } else if (jobStatus.result?.data?.activity?.id) {
-      activityId = jobStatus.result.data.activity.id;
-    } else if (jobStatus.result?.data?.id) {
-      activityId = jobStatus.result.data.id;
-    } else if (jobStatus.result?.data && typeof jobStatus.result.data === 'object' && 'activityId' in jobStatus.result.data) {
-      activityId = (jobStatus.result.data as any).activityId;
-    }
-    
-    // If we found an ID, return it
-    if (activityId !== null) {
-      return res.json({
-        success: true,
-        activityId
-      });
-    } else {
-      // If no ID was found, return a more detailed error
-      return res.status(404).json({
-        success: false,
-        error: "Activity ID not found in job result",
-        resultKeys: jobStatus.result ? Object.keys(jobStatus.result) : [],
-        dataKeys: jobStatus.result?.data ? Object.keys(jobStatus.result.data) : []
-      });
-    }
-  } catch (error) {
-    console.error('Error getting activity ID from job:', error);
-    return res.status(500).json({
-      success: false,
-      error: "Failed to extract activity ID"
-    });
-  }
+  return res.status(404).json({
+    success: false,
+    error: "Background job processing has been simplified - activities are now generated directly"
+  });
 });
 
 router.get("/ocr-status", (_req, res) => {

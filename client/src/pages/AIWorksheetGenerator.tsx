@@ -185,42 +185,44 @@ export default function AIWorksheetGenerator() {
     },
     onSuccess: (data) => {
       // Handle successful generation
-      if (data.success) {
-        // Log the entire data structure to understand its shape
-        console.log('Activity generation response:', data);
+      if (data.success && data.id) {
+        // Add success notification for direct generation
+        const activityType = form.getValues().activityType;
+        const subject = form.getValues().subject;
         
-        // Add notification for background job started
-        if (data.jobId) {
-          addNotification({
-            type: 'info',
-            title: 'Activity Generation Started',
-            message: `Your ${form.getValues().activityType} is being generated in the background. You'll be notified when it's ready.`,
-            metadata: {
-              jobId: data.jobId,
-              activityType: form.getValues().activityType,
-              subject: form.getValues().subject,
-            }
-          });
-        }
+        addNotification({
+          type: 'success',
+          title: 'Activity Generated Successfully!',
+          message: `Your ${activityType} for ${subject} has been created and is ready to view.`,
+          actionable: true,
+          metadata: {
+            activityId: data.id,
+            activityType: activityType,
+            subject: subject,
+            downloadUrl: data.data?.activity?.url
+          }
+        });
         
-        // Normalize the data structure to ensure we have the activity ID
-        const processedData = {
-          ...data,
-          // If data contains a nested 'data.activity' object with an ID, make sure it's accessible at the top level too
-          id: data.id || (data.data?.activity?.id) || null
-        };
-        
-        setGeneratedActivity(processedData);
+        setGeneratedActivity(data);
         setSelectedTab("preview");
+        
         toast({
           title: "Activity Generated!",
           description: "Your activity has been created successfully.",
           variant: "default",
         });
       } else {
+        // Add error notification
+        addNotification({
+          type: 'error',
+          title: 'Generation Failed',
+          message: data.message || data.error || "Activity generation failed",
+          actionable: false
+        });
+        
         toast({
           title: "Generation Failed",
-          description: data.error || "Unknown error occurred",
+          description: data.message || data.error || "Unknown error occurred",
           variant: "destructive",
         });
       }
