@@ -131,17 +131,19 @@ export default function AIGenerationCard() {
                 <p className="text-sm text-muted-foreground mt-1 mb-4">
                   Create activities based on subject, grade level, and duration
                 </p>
-                <div className="flex justify-end">
-                  <Button size="sm" asChild>
-                    <Link href="/activities/create">Create Activity</Link>
-                  </Button>
-                </div>
               </div>
             </TabsContent>
           </div>
         </Tabs>
       </CardContent>
-
+      <CardFooter className="bg-muted/50 px-6 py-4">
+        <Button asChild className="w-full">
+          <Link href={`/ai-generator/${activeTab}`}>
+            <Wand2 className="mr-2 h-4 w-4" />
+            Start {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Generator
+          </Link>
+        </Button>
+      </CardFooter>
     </Card>
   );
 }
