@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
 import { RoleProvider, useRole } from "@/contexts/RoleContext";
+import { NotificationProvider } from "@/hooks/useNotifications";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -383,12 +384,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <SupabaseProvider>
         <RoleProvider>
-          <AIStatusProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Router />
-            </TooltipProvider>
-          </AIStatusProvider>
+          <NotificationProvider>
+            <AIStatusProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Router />
+              </TooltipProvider>
+            </AIStatusProvider>
+          </NotificationProvider>
         </RoleProvider>
       </SupabaseProvider>
     </QueryClientProvider>
