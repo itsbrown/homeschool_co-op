@@ -1,0 +1,50 @@
+{
+  "title": "Under the Sea Adventure",
+  "description": "A fun ocean scene coloring page that introduces children to marine life and ocean ecosystems. Students will learn about different sea creatures while engaging in a creative activity.",
+  "instructions": "Color the ocean scene using your favorite colors. Try to use realistic colors for the animals if you can, or be creative and make your own colorful ocean world!",
+  "content": {
+    "image": "An underwater ocean scene featuring a large whale swimming in the background, a playful dolphin jumping through waves, several colorful fish swimming among coral reefs at the bottom, and seaweed swaying in the current.",
+    "elements": [
+      {
+        "name": "Blue Whale",
+        "description": "The largest animal on Earth - try coloring it blue-gray"
+      },
+      {
+        "name": "Dolphin",
+        "description": "A friendly dolphin jumping - color it gray with a white belly"
+      },
+      {
+        "name": "Tropical Fish",
+        "description": "Small colorful fish swimming around the coral - use bright colors like orange, yellow, and blue"
+      },
+      {
+        "name": "Coral Reef",
+        "description": "Home to many sea creatures - coral can be pink, purple, orange, or red"
+      },
+      {
+        "name": "Seaweed",
+        "description": "Plants growing from the ocean floor - color them different shades of green"
+      },
+      {
+        "name": "Ocean Water",
+        "description": "The water surrounding everything - use light blue or turquoise"
+      }
+    ],
+    "learningFacts": [
+      "Blue whales are the largest animals to ever live on Earth - even bigger than dinosaurs!",
+      "Dolphins are very intelligent mammals that breathe air and live in family groups called pods",
+      "Coral reefs are home to 25% of all marine species even though they cover less than 1% of the ocean floor",
+      "Fish breathe underwater using special organs called gills",
+      "The ocean covers more than 70% of our planet's surface"
+    ]
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "marine biology basics",
+    "creativity"
+  ],
+  "ageRange": "6-9",
+  "difficulty": "beginner",
+  "timeRequired": "20"
+}
