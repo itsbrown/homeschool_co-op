@@ -17,7 +17,9 @@ import {
   LogOut,
   User,
   LucideIcon,
-  Wand2
+  Wand2,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -30,11 +32,6 @@ const schoolNavItems: {
   icon: LucideIcon;
   subitems?: { title: string; href: string }[];
 }[] = [
-  {
-    title: 'AI Tools Dashboard',
-    href: '/',
-    icon: Wand2,
-  },
   {
     title: 'Dashboard',
     href: '/schools/dashboard',
@@ -66,6 +63,17 @@ const schoolNavItems: {
     icon: Database,
   },
   {
+    title: 'AI Tools',
+    href: '/ai-generator',
+    icon: Wand2,
+    subitems: [
+      { title: 'Lesson Generator', href: '/lessons/ai-generator' },
+      { title: 'Worksheet Generator', href: '/ai-generator/worksheet' },
+      { title: 'Activity Generator', href: '/ai-generator/activity' },
+      { title: 'OCR Tools', href: '/ai-generator/ocr' }
+    ]
+  },
+  {
     title: 'Calendar',
     href: '/schools/calendar',
     icon: Calendar,
@@ -82,9 +90,20 @@ export default function Sidebar() {
   const { user, signOut, isAuthenticated } = useAuth();
   const { activeRole } = useRole();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
+  };
+
+  const toggleExpanded = (itemTitle: string) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(itemTitle)) {
+      newExpanded.delete(itemTitle);
+    } else {
+      newExpanded.add(itemTitle);
+    }
+    setExpandedItems(newExpanded);
   };
 
   const handleLogout = async () => {
@@ -119,22 +138,70 @@ export default function Sidebar() {
         <div className="flex-1 overflow-auto py-2">
           <nav className="grid gap-1 px-2">
             {schoolNavItems.map((item) => {
-              const isActive = location === item.href || location.startsWith(`${item.href}/`);
+              const isActive = location === item.href || location.startsWith(`${item.href}/`) ||
+                (item.subitems && item.subitems.some(sub => location === sub.href || location.startsWith(`${sub.href}/`)));
+              const isExpanded = expandedItems.has(item.title);
 
               return (
                 <div key={item.href}>
-                  <Link href={item.href}>
-                    <div
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
-                        isActive ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100",
-                        isCollapsed ? "justify-center" : "justify-start"
+                  {item.subitems ? (
+                    // Menu item with subitems (expandable)
+                    <div>
+                      <div
+                        onClick={() => toggleExpanded(item.title)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                          isActive ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100",
+                          isCollapsed ? "justify-center" : "justify-between"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <item.icon className={cn("h-5 w-5", isActive ? "text-white" : "text-muted-foreground")} />
+                          {!isCollapsed && <span>{item.title}</span>}
+                        </div>
+                        {!isCollapsed && (
+                          isExpanded ? 
+                            <ChevronDown className={cn("h-4 w-4", isActive ? "text-white" : "text-muted-foreground")} /> :
+                            <ChevronRight className={cn("h-4 w-4", isActive ? "text-white" : "text-muted-foreground")} />
+                        )}
+                      </div>
+                      
+                      {/* Subitems */}
+                      {isExpanded && !isCollapsed && (
+                        <div className="ml-6 mt-1 space-y-1">
+                          {item.subitems.map((subitem) => {
+                            const isSubActive = location === subitem.href || location.startsWith(`${subitem.href}/`);
+                            return (
+                              <Link key={subitem.href} href={subitem.href}>
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all cursor-pointer",
+                                    isSubActive ? "bg-blue-500 text-white" : "text-gray-600 hover:bg-gray-50"
+                                  )}
+                                >
+                                  <span>{subitem.title}</span>
+                                </div>
+                              </Link>
+                            );
+                          })}
+                        </div>
                       )}
-                    >
-                      <item.icon className={cn("h-5 w-5", isActive ? "text-white" : "text-muted-foreground")} />
-                      {!isCollapsed && <span>{item.title}</span>}
                     </div>
-                  </Link>
+                  ) : (
+                    // Regular menu item without subitems
+                    <Link href={item.href}>
+                      <div
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                          isActive ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100",
+                          isCollapsed ? "justify-center" : "justify-start"
+                        )}
+                      >
+                        <item.icon className={cn("h-5 w-5", isActive ? "text-white" : "text-muted-foreground")} />
+                        {!isCollapsed && <span>{item.title}</span>}
+                      </div>
+                    </Link>
+                  )}
                 </div>
               );
             })}
