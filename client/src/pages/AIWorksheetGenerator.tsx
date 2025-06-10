@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
+import { useNotifications } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -62,6 +63,7 @@ const activityFormSchema = z.object({
 export default function AIWorksheetGenerator() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { addNotification } = useNotifications();
   const [generatedActivity, setGeneratedActivity] = React.useState<any>(null);
   const [selectedTab, setSelectedTab] = React.useState<string>("form");
   const [isGeneratingPdf, setIsGeneratingPdf] = React.useState<boolean>(false);
@@ -103,6 +105,20 @@ export default function AIWorksheetGenerator() {
             // Extract the activity data from the nested structure
             const activityData = data.result.data?.activity || data.result.activity || data.result;
             const activityId = data.activityId || data.id || activityData?.id;
+            
+            // Add completion notification
+            addNotification({
+              type: 'success',
+              title: 'Activity Ready!',
+              message: `Your ${activityData?.type || 'activity'} "${activityData?.title || 'Generated Activity'}" has been created successfully.`,
+              actionable: true,
+              metadata: {
+                activityId: activityId,
+                downloadUrl: activityData?.url,
+                activityType: activityData?.type,
+                subject: activityData?.subject,
+              }
+            });
             
             // Process the result with the correct structure
             const processedResult = {
@@ -172,6 +188,20 @@ export default function AIWorksheetGenerator() {
       if (data.success) {
         // Log the entire data structure to understand its shape
         console.log('Activity generation response:', data);
+        
+        // Add notification for background job started
+        if (data.jobId) {
+          addNotification({
+            type: 'info',
+            title: 'Activity Generation Started',
+            message: `Your ${form.getValues().activityType} is being generated in the background. You'll be notified when it's ready.`,
+            metadata: {
+              jobId: data.jobId,
+              activityType: form.getValues().activityType,
+              subject: form.getValues().subject,
+            }
+          });
+        }
         
         // Normalize the data structure to ensure we have the activity ID
         const processedData = {

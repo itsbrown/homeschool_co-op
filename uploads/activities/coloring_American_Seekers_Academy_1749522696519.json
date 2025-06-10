@@ -1,0 +1,67 @@
+{
+  "title": "Virtues & Disciplines: The Seeker's Path",
+  "description": "This advanced coloring page features classical symbols representing virtues and academic disciplines that embody the spirit of scholarly pursuit. Students will reflect on these timeless ideals while creating a visually meaningful representation of intellectual growth.",
+  "instructions": "Color each symbolic element according to your interpretation of its meaning. Consider how different colors might represent different aspects of each virtue or discipline. After coloring, reflect on which symbols resonate most with your personal educational journey.",
+  "content": {
+    "image": "A classical composition featuring an open book at the center surrounded by symbolic representations of virtues and disciplines. The design includes an owl (wisdom), scales (justice), torch (enlightenment), laurel wreath (achievement), compass (direction), quill pen (expression), olive branch (peace), scroll (knowledge), lyre (arts), and microscope (scientific inquiry). These elements are arranged in a harmonious circular pattern with decorative Latin phrases and geometric patterns connecting them.",
+    "elements": [
+      {
+        "name": "Owl",
+        "description": "Symbol of wisdom and scholarly insight"
+      },
+      {
+        "name": "Scales",
+        "description": "Representing justice, balance, and ethical reasoning"
+      },
+      {
+        "name": "Torch",
+        "description": "Symbolizing enlightenment and the illumination of knowledge"
+      },
+      {
+        "name": "Laurel Wreath",
+        "description": "Denoting achievement and excellence"
+      },
+      {
+        "name": "Compass",
+        "description": "Representing direction, purpose, and mathematical precision"
+      },
+      {
+        "name": "Quill Pen",
+        "description": "Symbol of writing, expression, and communication"
+      },
+      {
+        "name": "Olive Branch",
+        "description": "Representing peace, harmony, and reconciliation"
+      },
+      {
+        "name": "Scroll",
+        "description": "Symbolizing preserved knowledge and historical understanding"
+      },
+      {
+        "name": "Lyre",
+        "description": "Representing the arts, creativity, and aesthetic appreciation"
+      },
+      {
+        "name": "Microscope",
+        "description": "Symbol of scientific inquiry and detailed observation"
+      }
+    ],
+    "learningFacts": [
+      "Classical symbols have been used throughout history to represent complex ideas and virtues in visual form",
+      "The seven liberal arts of classical education included grammar, logic, rhetoric, arithmetic, geometry, music, and astronomy",
+      "The concept of 'virtues' has been central to educational philosophy since ancient Greece",
+      "Visual symbolism provides a universal language that transcends cultural and linguistic barriers",
+      "The integration of arts and sciences was fundamental to Renaissance thinking about education"
+    ]
+  },
+  "targetSkills": [
+    "symbolic interpretation",
+    "cultural literacy",
+    "philosophical reflection",
+    "artistic expression",
+    "historical context"
+  ],
+  "ageRange": "15-18",
+  "difficulty": "intermediate",
+  "timeRequired": "45"
+}

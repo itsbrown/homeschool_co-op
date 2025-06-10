@@ -5,7 +5,7 @@ import fs from "fs/promises";
 import { storage } from "../storage";
 import { checkOpenAIStatus, generateEducationalActivity } from "../services/openai";
 import { InsertActivity } from "../../shared/schema";
-import backgroundTaskManager from "../services/backgroundTasks";
+import { backgroundTaskManager } from "../services/backgroundTasks";
 import { generateActivityWithOCR, saveFileForOCR } from "../services/ocrActivityGenerator";
 import { isDocumentAIAvailable } from "../services/documentAI";
 import * as fileUpload from "express-fileupload";
