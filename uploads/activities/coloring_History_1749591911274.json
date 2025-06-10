@@ -1,0 +1,61 @@
+{
+  "title": "Founding Fathers: Architects of Liberty",
+  "description": "This detailed coloring page features America's Founding Fathers at the signing of the Declaration of Independence, helping students visualize key historical figures while learning about their contributions to American independence.",
+  "instructions": "Color this historical scene depicting the Founding Fathers at the signing of the Declaration of Independence. Use the color guide suggestions or choose your own colors. As you color, read the learning facts to deepen your understanding of these historical figures and their significance.",
+  "content": {
+    "image": "A detailed illustration of the Founding Fathers gathered in Independence Hall for the signing of the Declaration of Independence. The scene shows Thomas Jefferson presenting the document, with Benjamin Franklin, John Adams, and other signers gathered around. George Washington stands prominently in his military uniform. The room features period-appropriate furniture, a large table with the Declaration, quill pens, and colonial flags.",
+    "elements": [
+      {
+        "name": "Thomas Jefferson",
+        "description": "The principal author of the Declaration of Independence, wearing colonial attire"
+      },
+      {
+        "name": "Benjamin Franklin",
+        "description": "The elder statesman who later secured French support, recognizable by his spectacles and simple attire"
+      },
+      {
+        "name": "George Washington",
+        "description": "Commander of the Continental Army, in his military uniform"
+      },
+      {
+        "name": "John Adams",
+        "description": "A key advocate for independence, standing near Jefferson"
+      },
+      {
+        "name": "John Hancock",
+        "description": "President of the Continental Congress, seated at the table preparing to sign with his famously large signature"
+      },
+      {
+        "name": "Declaration of Independence",
+        "description": "The document on the table, with visible text 'We hold these truths...'"
+      },
+      {
+        "name": "Independence Hall",
+        "description": "The room's architectural details including windows, columns, and wooden paneling"
+      },
+      {
+        "name": "Colonial Flags",
+        "description": "Early American flags displayed in the background"
+      }
+    ],
+    "learningFacts": [
+      "The Declaration of Independence was adopted on July 4, 1776, but most delegates signed it on August 2, 1776.",
+      "Thomas Jefferson was just 33 years old when he drafted the Declaration of Independence.",
+      "Benjamin Franklin, at 70, was the oldest signer of the Declaration.",
+      "John Hancock, as President of the Continental Congress, signed first and with the largest signature.",
+      "George Washington was not present at the signing as he was commanding troops in New York.",
+      "The Declaration's famous phrase 'all men are created equal' would later inspire abolitionists and civil rights movements.",
+      "Of the 56 signers, many risked their fortunes, families, and lives for the cause of independence.",
+      "The Revolutionary War had already begun when the Declaration was signed, with fighting at Lexington and Concord in April 1775."
+    ]
+  },
+  "targetSkills": [
+    "Historical knowledge",
+    "Visual recognition of historical figures",
+    "Understanding of American Revolution",
+    "Appreciation for democratic principles"
+  ],
+  "ageRange": "15-18",
+  "difficulty": "intermediate",
+  "timeRequired": "45"
+}

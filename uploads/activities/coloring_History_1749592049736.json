@@ -1,0 +1,56 @@
+{
+  "title": "Founding Fathers: Architects of American Liberty",
+  "description": "This coloring page features key Founding Fathers of the United States, highlighting the revolutionary leaders who shaped American independence and established the nation's government. Through coloring, students will recognize these historical figures while reinforcing knowledge about their contributions during the Revolutionary period.",
+  "instructions": "Color the portrait of the Founding Fathers gathered together. Use the color guide suggestions or choose your own colors. As you color, read the learning facts to connect each figure with their historical contributions.",
+  "content": {
+    "image": "A detailed illustration showing five prominent Founding Fathers gathered around a table with the Declaration of Independence. The image includes George Washington (standing tall in military uniform), Thomas Jefferson (holding a quill pen), Benjamin Franklin (with glasses and walking stick), John Adams (with a serious expression), and Alexander Hamilton (youngest of the group). An American flag with 13 stars is visible in the background, along with a quill pen, inkwell, and historical documents on the table.",
+    "elements": [
+      {
+        "name": "George Washington",
+        "description": "First President and Commander of the Continental Army - consider using blue for his uniform with gold accents"
+      },
+      {
+        "name": "Thomas Jefferson",
+        "description": "Author of the Declaration of Independence - consider using red for his coat"
+      },
+      {
+        "name": "Benjamin Franklin",
+        "description": "Diplomat and inventor - consider using brown for his suit"
+      },
+      {
+        "name": "John Adams",
+        "description": "Second President and advocate for independence - consider using green for his attire"
+      },
+      {
+        "name": "Alexander Hamilton",
+        "description": "First Treasury Secretary - consider using purple for his coat"
+      },
+      {
+        "name": "Declaration of Independence",
+        "description": "The document on the table - use yellowed parchment colors"
+      },
+      {
+        "name": "American Flag",
+        "description": "The early American flag with 13 stars in the background - use red, white, and blue"
+      }
+    ],
+    "learningFacts": [
+      "George Washington led the Continental Army to victory in the Revolutionary War before becoming the first U.S. President.",
+      "Thomas Jefferson authored the Declaration of Independence, which was adopted on July 4, 1776.",
+      "Benjamin Franklin secured crucial French support during the Revolutionary War, which helped America win independence.",
+      "John Adams served on the committee that drafted the Declaration of Independence and later became the second President.",
+      "Alexander Hamilton created America's financial system and founded the first national bank.",
+      "The Founding Fathers established precedents for constitutional government that continue to influence democracies worldwide.",
+      "The Treaty of Paris (1783) officially ended the Revolutionary War and recognized American independence."
+    ]
+  },
+  "targetSkills": [
+    "Historical knowledge",
+    "Recognition of key historical figures",
+    "Understanding of Revolutionary War period",
+    "Visual-historical connections"
+  ],
+  "ageRange": "15-18",
+  "difficulty": "intermediate",
+  "timeRequired": "30-45"
+}
