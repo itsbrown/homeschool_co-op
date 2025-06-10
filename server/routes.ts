@@ -1888,6 +1888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/parent", parentRouter);
   app.use("/api/admin/role-invitations", roleInvitationsRouter);
+  app.use("/api/activities", activitiesRouter);
 
   // Student registration endpoint for school admins
   app.post("/api/students/register", async (req, res) => {
