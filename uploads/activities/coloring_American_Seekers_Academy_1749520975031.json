@@ -1,0 +1,59 @@
+{
+  "title": "Seekers of Knowledge: American Academy Emblem",
+  "description": "This classical-inspired coloring page features symbolic elements representing education, wisdom, and the pursuit of knowledge. Students will explore traditional academic imagery while reflecting on the values of higher learning.",
+  "instructions": "Color this detailed emblem representing American Seekers Academy. Each element has symbolic meaning in classical education. Use colored pencils for best results and consider the suggested colors, though you may choose your own color scheme. Take time to reflect on the meaning of each symbol as you color.",
+  "content": {
+    "image": "A circular emblem featuring a central open book surrounded by classical educational symbols including an owl, laurel wreath, torch of knowledge, quill pen, scroll, Doric column, and a shield with stars and stripes. The words 'American Seekers Academy' arch across the top of the circular design, with 'Lux et Veritas' (Light and Truth) on a banner below.",
+    "elements": [
+      {
+        "name": "Open Book",
+        "description": "Central element representing knowledge and learning. Consider coloring in rich brown leather tones with gold-edged pages."
+      },
+      {
+        "name": "Owl",
+        "description": "Perched atop the book, symbolizing wisdom. Traditional gray or brown tones work well."
+      },
+      {
+        "name": "Laurel Wreath",
+        "description": "Encircling the design, representing achievement and honor. Color in various shades of green."
+      },
+      {
+        "name": "Torch",
+        "description": "On the right side, symbolizing enlightenment. Use warm yellows, oranges and reds for the flame."
+      },
+      {
+        "name": "Quill Pen",
+        "description": "On the left side, representing writing and communication. White or light brown with a metallic nib."
+      },
+      {
+        "name": "Doric Column",
+        "description": "Behind the book, symbolizing strength and classical education. Use marble-like white or cream colors."
+      },
+      {
+        "name": "Shield",
+        "description": "At the bottom, featuring stars and stripes representing American values. Traditional red, white, and blue."
+      },
+      {
+        "name": "Banner",
+        "description": "With 'Lux et Veritas' motto. Consider a deep blue or burgundy with gold lettering."
+      }
+    ],
+    "learningFacts": [
+      "The owl has been a symbol of wisdom and knowledge since ancient Greek civilization, where it was associated with Athena, goddess of wisdom.",
+      "The Latin phrase 'Lux et Veritas' (Light and Truth) is used as a motto by several prestigious American universities.",
+      "Laurel wreaths were awarded to victors in ancient Greece, symbolizing achievement and honor.",
+      "Classical architectural elements like Doric columns represent the foundations of Western education traditions.",
+      "The open book is one of the most universal symbols of learning across cultures and time periods."
+    ]
+  },
+  "targetSkills": [
+    "Art appreciation",
+    "Cultural symbolism",
+    "Classical imagery recognition",
+    "Educational history",
+    "Fine motor skills"
+  ],
+  "ageRange": "15-18",
+  "difficulty": "intermediate",
+  "timeRequired": "45"
+}
