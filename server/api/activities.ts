@@ -171,35 +171,35 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
     const filename = `${params.activityType}_${params.subject.replace(/\s+/g, '_')}_${timestamp}.json`;
     const outputFilePath = path.join(activitiesDir, filename);
     
-    // Generate professional coloring pages using Claude AI
+    // Generate professional coloring pages using DALL-E 3
     if (params.activityType.toLowerCase() === 'coloring' && generatedActivity.content) {
       try {
-        console.log('🎨 Enhancing coloring activity with professional SVG image...');
+        console.log('🎨 Creating professional coloring page with DALL-E 3...');
         
-        const { generateProfessionalColoringPage } = await import('../services/professionalColoringPages');
+        const { generateRealColoringPage } = await import('../services/realColoringPageGenerator');
         
         // Extract elements from the generated activity
         const elements = generatedActivity.content.elements 
           ? generatedActivity.content.elements.map((el: any) => typeof el === 'string' ? el : el.name)
           : ['Educational Element 1', 'Educational Element 2', 'Educational Element 3'];
         
-        console.log('🔍 Extracted elements for professional coloring page:', elements);
+        console.log('🔍 Elements for DALL-E coloring page:', elements);
         
-        // Generate professional coloring page using Claude AI
-        const svgContent = await generateProfessionalColoringPage(
+        // Generate professional coloring page using DALL-E 3
+        const svgContent = await generateRealColoringPage(
           params.subject,
           elements,
           params.ageRange
         );
         
-        // Save the professional SVG to file
+        // Save the professional coloring page to file
         const timestamp = Date.now();
-        const svgFilename = `professional_coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
+        const svgFilename = `dalle_coloring_${params.subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
         const svgPath = path.join(activitiesDir, svgFilename);
         await fs.writeFile(svgPath, svgContent);
         
         const imageUrl = `/uploads/activities/${svgFilename}`;
-        console.log('✅ Generated professional coloring page:', imageUrl);
+        console.log('✅ Generated DALL-E coloring page:', imageUrl);
         
         // Update the activity content with professional coloring page
         generatedActivity.content = {
@@ -207,18 +207,18 @@ async function generateActivity(params: ActivityGenerationRequest, userId: numbe
           type: 'image-coloring-page',
           imageUrl: imageUrl,
           elements: elements,
-          coloringProvider: 'claude-ai',
+          coloringProvider: 'dall-e-3',
           learningFacts: generatedActivity.content.learningFacts || [
             `This coloring page features ${elements.join(', ')} related to ${params.subject}`,
-            `Coloring helps develop fine motor skills and creativity`,
-            `Each element represents an important aspect of ${params.subject} learning`
+            `Professional illustration created with AI image generation`,
+            `Educational content designed for children ages ${params.ageRange}`
           ]
         };
         
-        console.log('✅ Enhanced coloring activity with professional image:', imageUrl);
+        console.log('✅ Enhanced coloring activity with DALL-E image:', imageUrl);
       } catch (imageError) {
-        console.error('❌ Error enhancing coloring activity with SVG:', imageError);
-        // Continue with the original generated activity if SVG enhancement fails
+        console.error('❌ Error creating DALL-E coloring page:', imageError);
+        // Continue with the original generated activity if image generation fails
       }
     }
 

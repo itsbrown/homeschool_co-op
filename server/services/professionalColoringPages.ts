@@ -14,76 +14,125 @@ export async function generateProfessionalColoringPage(
   elements: string[],
   ageRange: string
 ): Promise<string> {
-  console.log(`🎨 Generating professional coloring page: ${subject} for ages ${ageRange}`);
+  console.log(`🎨 Creating professional coloring page: ${subject} for ages ${ageRange}`);
 
   try {
-    const prompt = createDetailedColoringPrompt(subject, elements, ageRange);
+    const prompt = createProfessionalIllustrationPrompt(subject, elements, ageRange);
     
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4000,
-      system: `You are a professional children's book illustrator and coloring book artist. Create detailed, high-quality SVG coloring pages that are:
-      - Age-appropriate with proper complexity levels
-      - Educational and engaging for children
-      - Professional illustration quality with anatomically correct but child-friendly designs
-      - Optimized for coloring with proper line weights and closed shapes
-      - No text within the coloring areas
-      - Clean, detailed outlines suitable for children to color`,
+      system: `You are a master children's book illustrator who creates professional-quality coloring pages for educational publishers like Dover Publications, Highlights Magazine, and Scholastic.
+
+Your task is to generate detailed SVG coloring page illustrations that rival published coloring books. Each illustration must be:
+
+PROFESSIONAL STANDARDS:
+- Museum-quality line art with perfect proportions
+- Rich in educational detail and visual interest
+- Age-appropriate complexity with proper developmental considerations
+- Anatomically accurate but child-friendly character designs
+- Composition follows professional illustration principles
+
+TECHNICAL EXCELLENCE:
+- Clean, precise SVG paths with proper stroke weights
+- All shapes completely closed for easy coloring
+- Strategic line variation for visual hierarchy
+- Optimized for both screen viewing and printing
+
+EDUCATIONAL VALUE:
+- Scientifically accurate representations
+- Environmental context that teaches about habitats/settings
+- Multiple learning opportunities within each illustration
+- Engaging storytelling through visual composition
+
+You must return ONLY the complete SVG code - no explanations, no markdown formatting, just pure SVG starting with <svg> and ending with </svg>.`,
       messages: [{
-        role: 'user',
+        role: 'user',  
         content: prompt
       }]
     });
 
     const textContent = response.content.find(block => block.type === 'text');
     if (!textContent || textContent.type !== 'text') {
-      throw new Error('No text content in response');
+      throw new Error('No text response from Claude');
     }
-    const svgContent = extractSVGFromResponse(textContent.text);
+
+    const svgContent = extractAndValidateSVG(textContent.text);
     
-    if (!svgContent || svgContent.length < 100) {
-      throw new Error('Generated SVG content is too short or invalid');
+    if (!svgContent) {
+      throw new Error('Failed to extract valid SVG from Claude response');
     }
 
     console.log(`✅ Generated professional coloring page (${svgContent.length} characters)`);
     return svgContent;
 
   } catch (error) {
-    console.error('❌ Failed to generate professional coloring page:', error);
-    throw error;
+    console.error('❌ Professional coloring page generation failed:', error);
+    // Return a high-quality template instead of basic shapes
+    return createProfessionalTemplate(subject, elements, ageRange);
   }
 }
 
-function createDetailedColoringPrompt(subject: string, elements: string[], ageRange: string): string {
-  const [minAge, maxAge] = ageRange.split('-').map(Number);
-  const lineWeight = minAge <= 4 ? 4 : minAge <= 7 ? 3 : 2.5;
-  const complexity = minAge <= 5 ? 'simple but detailed' : minAge <= 10 ? 'moderately detailed' : 'highly detailed';
+function createProfessionalIllustrationPrompt(subject: string, elements: string[], ageRange: string): string {
+  const [minAge] = ageRange.split('-').map(Number);
+  const strokeWidth = minAge <= 4 ? 3 : minAge <= 8 ? 2.5 : 2;
 
-  return `Create a professional-quality SVG coloring page featuring "${subject}" for children aged ${ageRange}.
+  return `Create a detailed SVG coloring page illustration about "${subject}" with these specific elements: ${elements.join(', ')}.
 
-REQUIRED ELEMENTS: ${elements.join(', ')}
+This is for children ages ${ageRange}, so make it age-appropriate with proper complexity.
 
-TECHNICAL SPECIFICATIONS:
-- SVG dimensions: 1024x1024 viewBox
-- Line weight: ${lineWeight}px for main outlines, ${lineWeight/2}px for details
-- All shapes must be closed with no gaps
-- Use only black outlines (#000000) on white background (#FFFFFF)
-- No fills, gradients, or shading - outline only
-- ${complexity} level appropriate for age ${ageRange}
+EXAMPLE STRUCTURE (adapt for your subject):
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main subject elements with detailed paths -->
+  <path d="M..." fill="none" stroke="#000" stroke-width="${strokeWidth}"/>
+  <circle cx="..." cy="..." r="..." fill="none" stroke="#000" stroke-width="${strokeWidth}"/>
+  <!-- Add environmental details and context -->
+  <path d="M..." fill="none" stroke="#000" stroke-width="1.5"/>
+</svg>
 
-ARTISTIC REQUIREMENTS:
-- Professional children's book illustration quality
-- Anatomically accurate but child-friendly proportions
-- Engaging composition with clear focal points  
-- Educational value showcasing the subject matter
-- Proper spacing between elements for easy coloring
-- Include background elements and environmental context
-- Make animals/characters cute and appealing to children
+REQUIREMENTS:
+- Professional illustration quality with anatomically correct proportions
+- Rich detail appropriate for educational coloring books
+- All shapes must be closed paths for easy coloring
+- Include environmental context (backgrounds, settings)
+- Use varied stroke weights for visual hierarchy
+- Make characters appealing and child-friendly
+- Scientific accuracy combined with artistic appeal
 
-SUBJECT-SPECIFIC GUIDANCE:
-${getSubjectGuidance(subject, elements)}
+For ${subject}:
+${getSubjectSpecificInstructions(subject, elements)}
 
-OUTPUT: Return ONLY the complete SVG code, starting with <svg> and ending with </svg>. No explanations or additional text.`;
+Return ONLY the complete SVG code with no explanations or markdown formatting.`;
+}
+
+function getSubjectSpecificInstructions(subject: string, elements: string[]): string {
+  const theme = subject.toLowerCase();
+  
+  if (theme.includes('ocean') || theme.includes('sea') || theme.includes('marine')) {
+    return `- Create an underwater scene with coral reefs, seaweed, and ocean floor
+- Make sea creatures anatomically accurate with proper proportions
+- Include water movement lines and bubbles for atmosphere
+- Add starfish, shells, and coral details for educational value`;
+  }
+  
+  if (theme.includes('farm') || theme.includes('barn') || theme.includes('animal')) {
+    return `- Design a complete farm setting with barn, fencing, and pastoral elements
+- Make farm animals anatomically correct with realistic proportions
+- Include farm equipment, hay bales, and agricultural details
+- Show animals in natural farm behaviors and interactions`;
+  }
+  
+  if (theme.includes('space') || theme.includes('planet') || theme.includes('rocket')) {
+    return `- Create an accurate space scene with proper celestial proportions
+- Include realistic rocket designs and space equipment
+- Add stars, planets, and space phenomena for educational context
+- Make astronauts and equipment scientifically accurate`;
+  }
+  
+  return `- Create a detailed scene with proper environmental context
+- Make all elements anatomically/scientifically accurate
+- Include background details that enhance the educational value
+- Ensure proper proportions and realistic representations`;
 }
 
 function getSubjectGuidance(subject: string, elements: string[]): string {
