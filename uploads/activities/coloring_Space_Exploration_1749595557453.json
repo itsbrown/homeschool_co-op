@@ -1,0 +1,41 @@
+{
+  "title": "Cosmic Explorers: Journey Through Space",
+  "description": "A detailed space exploration scene that introduces children to rockets, planets, astronauts, and space stations. This coloring activity helps students learn about space exploration while developing fine motor skills and creativity.",
+  "instructions": "Color each element of the space scene using your favorite colors. Try to use realistic colors for some parts (like Earth's blue oceans and green continents) and be creative with others (like alien planets or spacecraft). Read the learning facts as you color to learn more about space exploration!",
+  "content": {
+    "image": "A detailed space exploration scene showing a large rocket launching from Earth, astronauts floating in space conducting a spacewalk, the International Space Station orbiting Earth, the Moon with a lunar lander, Mars with a rover, Saturn with its rings, and a few distant stars and galaxies.",
+    "elements": [
+      "Earth",
+      "Rocket",
+      "Astronauts",
+      "International Space Station",
+      "Moon",
+      "Mars",
+      "Saturn",
+      "Stars and Galaxies"
+    ],
+    "learningFacts": [
+      "Astronauts train underwater to practice spacewalks because it simulates the feeling of floating in space",
+      "The International Space Station travels around Earth at about 17,500 miles per hour",
+      "A journey to Mars would take astronauts about 7-9 months with current technology",
+      "Saturn's rings are made mostly of ice particles, with some rock and dust",
+      "Space rockets need to travel at 25,000 mph to escape Earth's gravity",
+      "Astronauts grow about 2 inches taller in space because their spine stretches without gravity",
+      "The Moon is about 238,855 miles away from Earth",
+      "Space is completely silent because there is no air to carry sound waves"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Space_Exploration_1749595562574.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "astronomy knowledge",
+    "fine motor skills",
+    "creativity",
+    "scientific vocabulary",
+    "space exploration concepts"
+  ],
+  "ageRange": "7-12",
+  "difficulty": "intermediate",
+  "timeRequired": "30"
+}
