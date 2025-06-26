@@ -82,26 +82,30 @@ function createStabilityPrompt(subject: string, elements: string[], ageRange: st
 async function convertToColoringPage(imageBuffer: Buffer, ageRange: string): Promise<Buffer> {
   const [minAge] = ageRange.split('-').map(Number);
   
-  // Simplified processing for clean coloring book lines - BLACK on WHITE
+  // Process for traditional coloring book: BLACK lines on WHITE background
   const processedImage = await sharp(imageBuffer)
     .grayscale()
     .normalize()
+    // Enhance contrast to make lines more prominent
     .modulate({ 
-      brightness: 1.3,
-      saturation: 0
+      brightness: 1.2,
+      saturation: 0,
+      lightness: 1.1
     })
-    // Edge detection for outlines
+    // Strong edge detection for clear outlines
     .convolve({
       width: 3,
       height: 3,
       kernel: [-1, -1, -1, -1, 8, -1, -1, -1, -1]
     })
-    .threshold(150)
-    // Ensure black lines on white background (no negation)
-    .linear(1, 0)
-    // Clean up small artifacts
-    .median(2)
+    // Threshold to create binary image (black and white only)
+    .threshold(128, { greyscale: false })
+    // Ensure proper orientation: dark areas become black (0), light areas become white (255)
+    .negate(false)
+    // Apply threshold again to ensure clean binary result
     .threshold(200)
+    // Final cleanup to remove noise
+    .median(1)
     .png()
     .toBuffer();
 

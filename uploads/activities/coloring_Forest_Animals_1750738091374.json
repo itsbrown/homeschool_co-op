@@ -1,0 +1,34 @@
+{
+  "title": "Friendly Forest Friends",
+  "description": "A simple forest animal coloring page featuring adorable woodland creatures in their natural habitat. This activity helps children learn about forest animals while developing fine motor skills.",
+  "instructions": "Color the forest animals using crayons, colored pencils, or markers. Try to use colors that match what these animals look like in real life!",
+  "content": {
+    "image": "A forest scene with simple outlines of a fox, owl, squirrel, deer, and rabbit. The animals are surrounded by trees, mushrooms, and a small stream.",
+    "elements": [
+      "Fox",
+      "Owl",
+      "Squirrel",
+      "Deer",
+      "Rabbit"
+    ],
+    "learningFacts": [
+      "Foxes have bushy tails that help them stay balanced when running",
+      "Owls can turn their heads almost all the way around to see behind them",
+      "Squirrels collect and store nuts for the winter months",
+      "Male deer grow new antlers every year",
+      "Rabbits have powerful back legs for jumping away from danger"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Forest_Animals_1750738097755.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "nature awareness",
+    "color identification"
+  ],
+  "ageRange": "4-8",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}

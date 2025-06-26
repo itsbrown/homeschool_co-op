@@ -1,0 +1,34 @@
+{
+  "title": "Woodland Friends Forest Adventure",
+  "description": "A delightful forest scene featuring five friendly woodland animals (fox, owl, deer, rabbit, and squirrel) for children to color while learning about forest habitats and animals.",
+  "instructions": "Color the forest animals using your favorite colors. Try to use colors that these animals might have in real life, or be creative with your own special colors!",
+  "content": {
+    "image": "A black and white outline drawing of a forest scene with five woodland animals arranged in a balanced composition. The image features a fox sitting near a tree stump, an owl perched on a branch, a deer standing gracefully with its head slightly raised, a rabbit with long ears sitting in grass, and a squirrel holding an acorn. All animals have friendly expressions. The outlines are thick and bold with minimal background elements like simple trees, mushrooms, and a few flowers. Each animal has a blank space near it for a label.",
+    "elements": [
+      "Fox",
+      "Owl",
+      "Deer",
+      "Rabbit",
+      "Squirrel"
+    ],
+    "learningFacts": [
+      "Foxes are clever animals that can run up to 45 miles per hour!",
+      "Owls can turn their heads almost all the way around to see behind them.",
+      "Male deer grow new antlers every year.",
+      "Rabbits have strong back legs that help them hop very fast.",
+      "Squirrels collect and store nuts to eat during winter."
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Animals_1750960631375.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "color selection",
+    "nature appreciation"
+  ],
+  "ageRange": "6-8",
+  "difficulty": "intermediate",
+  "timeRequired": "20"
+}

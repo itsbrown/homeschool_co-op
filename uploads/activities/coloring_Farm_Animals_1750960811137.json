@@ -1,0 +1,34 @@
+{
+  "title": "Happy Farm Animals",
+  "description": "A fun coloring sheet featuring simple farm animal outlines that helps children learn about common animals found on a farm while developing fine motor skills.",
+  "instructions": "Color the farm animals using your favorite colors. Try to use colors that match what these animals might look like in real life!",
+  "content": {
+    "image": "A farm scene with simple outlines of a cow, pig, chicken, sheep, and horse. Each animal is drawn with clear black lines on a white background, with enough space between them for easy coloring.",
+    "elements": [
+      "Cow",
+      "Pig",
+      "Chicken",
+      "Sheep",
+      "Horse"
+    ],
+    "learningFacts": [
+      "Cows give us milk that we can drink or use to make cheese",
+      "Pigs are very smart animals that can learn tricks",
+      "Chickens lay eggs that we can eat",
+      "Sheep's wool is used to make warm clothing",
+      "Horses have helped farmers work for thousands of years"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Farm_Animals_1750960816639.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "color association",
+    "farm knowledge"
+  ],
+  "ageRange": "5-8",
+  "difficulty": "beginner",
+  "timeRequired": "15"
+}
