@@ -60,11 +60,19 @@ export async function generateStabilityColoringPage(
     // Convert to coloring page format
     const coloringPageBuffer = await convertToColoringPage(imageBuffer, ageRange);
     
-    // Convert to SVG with embedded image
-    const svgContent = await convertToSVG(coloringPageBuffer, subject, ageRange);
-
-    console.log(`✅ Generated Stability AI coloring page (${svgContent.length} characters)`);
-    return svgContent;
+    // Save as PNG file and return file path
+    const timestamp = Date.now();
+    const filename = `professional_coloring_${subject.replace(/\s+/g, '_')}_${timestamp}.png`;
+    const filePath = path.join('uploads', 'activities', filename);
+    
+    // Ensure the directory exists
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    
+    // Save the PNG file
+    await fs.writeFile(filePath, coloringPageBuffer);
+    
+    console.log(`✅ Generated Stability AI coloring page PNG: ${filename} (${coloringPageBuffer.length} bytes)`);
+    return `/${filePath}`;
 
   } catch (error) {
     console.error('❌ Stability AI coloring page generation failed:', error);

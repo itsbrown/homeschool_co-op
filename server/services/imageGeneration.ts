@@ -28,24 +28,13 @@ export async function generateColoringPageImage(
     const { generateStabilityColoringPage } = await import('./stabilityAI');
     
     console.log(`🎨 Generating professional AI coloring page for: ${subject}`);
-    const svgContent = await generateStabilityColoringPage(subject, elements, ageRange);
+    const filePath = await generateStabilityColoringPage(subject, elements, ageRange);
     
-    // Save the SVG to file
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    const timestamp = Date.now();
-    const filename = `professional_coloring_${subject.replace(/\s+/g, '_')}_${timestamp}.svg`;
-    const uploadsDir = path.join(process.cwd(), 'uploads', 'activities');
-    await fs.mkdir(uploadsDir, { recursive: true });
-    const filePath = path.join(uploadsDir, filename);
-    await fs.writeFile(filePath, svgContent);
-    
-    const imageUrl = `/uploads/activities/${filename}`;
-    console.log(`✅ Generated professional coloring page: ${imageUrl}`);
+    console.log(`✅ Generated professional coloring page: ${filePath}`);
     
     return {
       success: true,
-      imageUrl: imageUrl,
+      imageUrl: filePath,
       base64: undefined
     };
     

@@ -1,0 +1,32 @@
+{
+  "title": "Dinosaur Discovery Coloring Page",
+  "description": "A simple coloring page featuring friendly dinosaur outlines that introduce young children to different types of dinosaurs while developing fine motor skills and creativity.",
+  "instructions": "Color the dinosaurs using crayons or colored pencils. Try to use different colors for each dinosaur!",
+  "content": {
+    "image": "Simple black outline drawing of three dinosaurs: a Triceratops with its three horns and frill, a Tyrannosaurus Rex with small arms and big teeth, and a long-necked Brachiosaurus eating from a tree. All dinosaurs have simple, child-friendly features with thick black outlines on white background.",
+    "elements": [
+      "Triceratops",
+      "Tyrannosaurus Rex",
+      "Brachiosaurus"
+    ],
+    "learningFacts": [
+      "Triceratops had three horns on its face",
+      "T-Rex was one of the largest meat-eating dinosaurs",
+      "Brachiosaurus was one of the tallest dinosaurs and ate plants",
+      "Dinosaurs lived millions of years ago",
+      "Scientists who study dinosaurs are called paleontologists"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Dinosaurs_1750961249603.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "dinosaur identification",
+    "creativity"
+  ],
+  "ageRange": "5-8",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
