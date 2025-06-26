@@ -57,22 +57,21 @@ export async function generateStabilityColoringPage(
     const imageBase64 = responseData.artifacts[0].base64;
     const imageBuffer = Buffer.from(imageBase64, 'base64');
 
-    // Convert to coloring page format
+    // Convert to coloring page format with proper black lines on white background
     const coloringPageBuffer = await convertToColoringPage(imageBuffer, ageRange);
     
-    // Save as PNG file and return file path
-    const timestamp = Date.now();
-    const filename = `professional_coloring_${subject.replace(/\s+/g, '_')}_${timestamp}.png`;
-    const filePath = path.join('uploads', 'activities', filename);
+    // Create SVG wrapper with embedded PNG for proper display
+    const base64Image = coloringPageBuffer.toString('base64');
+    const svgContent = `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Professional ${subject} coloring page for ages ${ageRange} -->
+  <rect width="1024" height="1024" fill="white"/>
+  <image href="data:image/png;base64,${base64Image}" 
+         x="0" y="0" 
+         width="1024" height="1024"/>
+</svg>`;
     
-    // Ensure the directory exists
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    
-    // Save the PNG file
-    await fs.writeFile(filePath, coloringPageBuffer);
-    
-    console.log(`✅ Generated Stability AI coloring page PNG: ${filename} (${coloringPageBuffer.length} bytes)`);
-    return `/${filePath}`;
+    console.log(`✅ Generated Stability AI coloring page (${svgContent.length} characters)`);
+    return svgContent;
 
   } catch (error) {
     console.error('❌ Stability AI coloring page generation failed:', error);

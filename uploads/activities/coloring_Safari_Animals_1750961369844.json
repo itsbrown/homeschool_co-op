@@ -1,0 +1,34 @@
+{
+  "title": "Safari Adventure Coloring",
+  "description": "A fun coloring activity featuring simple outlines of safari animals to help young children learn about wildlife while developing fine motor skills.",
+  "instructions": "Color the safari animals using crayons, colored pencils, or markers. Try to use colors that match what these animals look like in real life!",
+  "content": {
+    "image": "A simple scene with five safari animals: a lion with a mane, a tall giraffe with spots, an elephant with big ears and trunk, a zebra with stripes, and a monkey hanging from a tree branch. All animals are drawn with simple black outlines on white background.",
+    "elements": [
+      "Lion",
+      "Giraffe",
+      "Elephant",
+      "Zebra",
+      "Monkey"
+    ],
+    "learningFacts": [
+      "Lions live in groups called prides",
+      "Giraffes can be up to 18 feet tall",
+      "Elephants use their trunks to grab food and drink water",
+      "No two zebras have exactly the same pattern of stripes",
+      "Monkeys use their tails to help them balance in trees"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Safari_Animals_1750961376103.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "animal recognition",
+    "color recognition",
+    "creativity"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
