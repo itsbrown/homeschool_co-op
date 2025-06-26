@@ -1,0 +1,34 @@
+{
+  "title": "Ocean Fish Friends",
+  "description": "A simple coloring page featuring various ocean fish with clear outlines for young children to color and learn about marine life.",
+  "instructions": "Color the different fish using your favorite colors! Try to use colors that real fish might have in the ocean.",
+  "content": {
+    "image": "A simple underwater scene with several types of fish swimming. The image includes a clownfish, angelfish, starfish, pufferfish, and seahorse, all with simple black outlines on white background.",
+    "elements": [
+      "Clownfish",
+      "Angelfish",
+      "Starfish",
+      "Pufferfish",
+      "Seahorse"
+    ],
+    "learningFacts": [
+      "Fish breathe underwater using gills",
+      "The ocean is home to thousands of different fish species",
+      "Some fish like clownfish live in sea anemones",
+      "Seahorses swim upright and can change colors",
+      "Starfish are not actually fish - they're sea stars!"
+    ],
+    "type": "image-coloring-page",
+    "imageUrl": "/uploads/activities/professional_coloring_Ocean_Fish_1750960962926.svg",
+    "coloringProvider": "stability-ai"
+  },
+  "targetSkills": [
+    "fine motor skills",
+    "color recognition",
+    "marine life awareness",
+    "following instructions"
+  ],
+  "ageRange": "4-7",
+  "difficulty": "beginner",
+  "timeRequired": "15-20"
+}
