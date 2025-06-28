@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
-import { sendEmail } from "../services/email";
+// Email service will be implemented separately
 
 const router = Router();
 
