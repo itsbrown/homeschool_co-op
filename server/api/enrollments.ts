@@ -6,6 +6,12 @@ const router = express.Router();
 // Get enrollments for a specific child
 router.get('/child/:childId', async (req, res) => {
   try {
+    // Handle special case for "register" route
+    if (req.params.childId === 'register') {
+      console.log('📚 Register route accessed - returning empty enrollments');
+      return res.json([]);
+    }
+    
     const childId = parseInt(req.params.childId);
     
     if (isNaN(childId)) {
