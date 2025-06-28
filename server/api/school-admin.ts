@@ -1428,6 +1428,23 @@ router.get("/knowledge-bases", async (req, res) => {
 // Get individual student endpoint
 router.get('/students/:id', async (req, res) => {
   try {
+    // Handle special case for "register" route
+    if (req.params.id === 'register') {
+      console.log('🎓 Register route accessed - returning empty student template');
+      return res.json({
+        id: null,
+        firstName: '',
+        lastName: '',
+        birthdate: '',
+        gradeLevel: '',
+        parentEmail: '',
+        specialNeeds: '',
+        interests: [],
+        notes: '',
+        emergencyContact: ''
+      });
+    }
+    
     const studentId = parseInt(req.params.id);
     console.log('🎓 Fetching individual student by ID:', studentId);
 

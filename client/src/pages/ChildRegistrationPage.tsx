@@ -22,10 +22,10 @@ export default function ChildRegistrationPage() {
   const { data: childData, isLoading: childLoading } = useQuery({
     queryKey: ["/api/children", childId],
     queryFn: () => 
-      childId 
+      childId && !isNaN(Number(childId))
         ? fetch(`/api/children/${childId}`).then(res => res.json())
         : Promise.resolve(null),
-    enabled: !!childId,
+    enabled: !!childId && !isNaN(Number(childId)),
   });
   
   if (authLoading) {
