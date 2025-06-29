@@ -308,10 +308,10 @@ function Router() {
       <Route path="/classes" component={ClassesPage} />
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/view" component={ChildrenViewPage} />
-      <Route path="/children/:id" component={ChildProfilePage} />
       <Route path="/children/register" component={ChildRegistrationPage} />
       <Route path="/children/register/confirm" component={ChildRegistrationConfirmation} />
       <Route path="/children/register/success" component={ChildRegistrationSuccess} />
+      <Route path="/children/:id" component={ChildProfilePage} />
       <Route path="/children/:id/edit" component={ChildProfileEditPage} />
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/schedule" component={SchedulePage} />

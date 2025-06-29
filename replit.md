@@ -104,6 +104,13 @@ The ASA Learning Platform is a comprehensive adaptive learning application desig
 
 ## Recent Changes
 
+### June 29, 2025 - User Interface Fixes
+- Fixed child registration routing conflict where `/children/register` was incorrectly showing detail view
+- Reordered routes to prioritize specific paths over dynamic parameters
+- Fixed API endpoints to handle "register" route parameter correctly
+- Resolved "Student not found with ID: NaN" and "Invalid child ID" errors
+- Child registration form now displays properly for new parent accounts
+
 ### June 28, 2025 - Production Security Hardening
 - **CRITICAL**: Removed development authentication bypasses from auth middleware
 - Eliminated hardcoded fallback users that posed security vulnerabilities
