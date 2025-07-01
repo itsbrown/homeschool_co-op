@@ -97,7 +97,10 @@
     "gradeLevel": "1st Grade",
     "parentId": 6,
     "specialNeeds": "",
-    "interests": ["Reading", "Soccer"],
+    "interests": [
+      "Reading",
+      "Soccer"
+    ],
     "school": "American Seekers Academy",
     "learningStyle": "Visual",
     "allergies": "None",
@@ -118,7 +121,10 @@
     "gradeLevel": "3rd Grade",
     "parentId": 6,
     "specialNeeds": "",
-    "interests": ["Art", "Music"],
+    "interests": [
+      "Art",
+      "Music"
+    ],
     "school": "American Seekers Academy",
     "learningStyle": "Auditory",
     "allergies": "Peanuts",
@@ -141,7 +147,10 @@
     "parentEmail": "parent@gmail.com",
     "parent_email": "parent@gmail.com",
     "parentPhone": null,
-    "interests": ["reading", "art"],
+    "interests": [
+      "reading",
+      "art"
+    ],
     "learningStyle": "visual",
     "specialNeeds": null,
     "allergies": null,
