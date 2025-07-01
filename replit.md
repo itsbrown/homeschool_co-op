@@ -104,6 +104,14 @@ The ASA Learning Platform is a comprehensive adaptive learning application desig
 
 ## Recent Changes
 
+### July 1, 2025 - UX Improvements and Child Display Fixes
+- **Fixed Children Tab in Parent Dashboard**: Updated data mapping to properly display child names using firstName/lastName instead of name property
+- **Added Age Calculation**: Children cards now show calculated age from birthdate and grade level
+- **Fixed Enrollment Dropdown**: Child selection dropdown in class enrollment now properly displays "Child Parent" for parent@gmail.com
+- **Consolidated Navigation**: Merged separate `/programs` and `/classes` pages into unified "Classes & Programs" experience
+- **Simplified Page Structure**: Reduced tabs from 4 to 2 (Browse Classes, Summer Camps) for clearer parent UX
+- **Updated Routing**: `/classes` now redirects to `/programs` for consistent navigation experience
+
 ### June 29, 2025 - User Interface Fixes
 - Fixed child registration routing conflict where `/children/register` was incorrectly showing detail view
 - Reordered routes to prioritize specific paths over dynamic parameters
