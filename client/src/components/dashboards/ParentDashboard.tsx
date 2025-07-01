@@ -311,22 +311,40 @@ export default function ParentDashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {childrenData.map((child: any) => (
-                    <div key={child.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <User className="h-5 w-5 text-blue-600" />
+                  {childrenData.map((child: any) => {
+                    // Calculate age from birthdate
+                    const calculateAge = (birthdate: string) => {
+                      if (!birthdate) return 'Unknown';
+                      const today = new Date();
+                      const birth = new Date(birthdate);
+                      let age = today.getFullYear() - birth.getFullYear();
+                      const monthDiff = today.getMonth() - birth.getMonth();
+                      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                        age--;
+                      }
+                      return age;
+                    };
+
+                    const fullName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
+                    const age = calculateAge(child.birthdate);
+
+                    return (
+                      <div key={child.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <User className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{fullName}</p>
+                            <p className="text-sm text-muted-foreground">Age: {age} • Grade: {child.gradeLevel || 'Not specified'}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{child.name}</p>
-                          <p className="text-sm text-muted-foreground">Age: {child.age}</p>
-                        </div>
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={`/children/${child.id}`}>View Profile</Link>
+                        </Button>
                       </div>
-                      <Button size="sm" variant="outline" asChild>
-                        <Link href={`/children/${child.id}`}>View Profile</Link>
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div className="flex justify-end mt-2">
                     <Button asChild>
                       <Link href="/children/register">Register New Child</Link>
