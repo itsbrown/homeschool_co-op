@@ -118,8 +118,8 @@ export default function ChildRegistrationConfirmation() {
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["/api/children"] });
       
-      // Navigate to success page
-      setLocation("/children/register/success");
+      // Navigate back to children page to see the new child
+      setLocation("/children");
     } catch (error) {
       console.error("Error registering child:", error);
       toast({

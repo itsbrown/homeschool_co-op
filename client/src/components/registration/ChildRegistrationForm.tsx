@@ -132,8 +132,8 @@ export default function ChildRegistrationForm({
       if (onSuccess) {
         onSuccess(result.id);
       } else {
-        // Otherwise, redirect to the success page
-        setLocation("/child-registration-success");
+        // Otherwise, redirect back to the children page to show the new child
+        setLocation("/children");
       }
     } catch (error: any) {
       toast({
