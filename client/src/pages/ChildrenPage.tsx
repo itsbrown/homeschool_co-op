@@ -10,6 +10,56 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 
+// Child Enrollments Component
+function ChildEnrollments({ childId }: { childId: number }) {
+  const { data: enrollments = [], isLoading } = useQuery({
+    queryKey: [`/api/children/${childId}/enrollments`],
+    enabled: !!childId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="animate-pulse space-y-2">
+        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+      </div>
+    );
+  }
+
+  if (!enrollments || enrollments.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+        <p>No active enrollments found</p>
+        <p className="text-sm">Browse our programs to find the perfect fit</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {enrollments.map((enrollment: any) => (
+        <div key={enrollment.id} className="border rounded-lg p-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <h4 className="font-medium">{enrollment.className}</h4>
+              <p className="text-sm text-muted-foreground">
+                Enrolled on {new Date(enrollment.enrollmentDate).toLocaleDateString()}
+              </p>
+            </div>
+            <Badge 
+              variant={enrollment.status === 'enrolled' ? 'default' : 'secondary'}
+              className={enrollment.status === 'enrolled' ? 'bg-green-100 text-green-800' : ''}
+            >
+              {enrollment.status}
+            </Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface Child {
   id: number;
   firstName: string;
@@ -156,11 +206,7 @@ export default function ChildrenPage() {
                           </Button>
                         </div>
                         
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                          <p>No active enrollments found</p>
-                          <p className="text-sm">Browse our programs to find the perfect fit</p>
-                        </div>
+                        <ChildEnrollments childId={child.id} />
                       </div>
                     </CardContent>
                   </Card>

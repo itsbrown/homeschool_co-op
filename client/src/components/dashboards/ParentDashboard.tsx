@@ -359,7 +359,7 @@ export default function ParentDashboard() {
             <CardContent>
               {enrollmentsLoading ? (
                 <div className="text-center py-8">Loading enrollment information...</div>
-              ) : enrollmentsData?.length === 0 ? (
+              ) : !enrollmentsData || enrollmentsData.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <BookOpen className="h-12 w-12 mx-auto mb-2" />
                   <p>No active enrollments</p>
@@ -369,7 +369,24 @@ export default function ParentDashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Enrollment cards would go here */}
+                  {enrollmentsData.map((enrollment: any) => (
+                    <div key={enrollment.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">{enrollment.className}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {enrollment.childName} • Enrolled on {new Date(enrollment.enrollmentDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Badge 
+                          variant={enrollment.status === 'enrolled' ? 'default' : 'secondary'}
+                          className={enrollment.status === 'enrolled' ? 'bg-green-100 text-green-800' : ''}
+                        >
+                          {enrollment.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
                   <div className="flex justify-end mt-2">
                     <Button asChild>
                       <Link href="/programs">Browse More Programs</Link>
