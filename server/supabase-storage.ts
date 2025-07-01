@@ -254,32 +254,114 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getChildrenByParentEmail(parentEmail: string): Promise<any[]> {
+    console.log('🔍 Supabase getChildrenByParentEmail called for:', parentEmail);
+    
     const { data, error } = await supabase
       .from('children')
       .select('*')
       .eq('parent_email', parentEmail);
     
     if (error) {
-      console.error('Error fetching children by parent email:', error);
+      console.error('❌ Supabase error fetching children by parent email:', error);
       return [];
     }
     
-    return data || [];
+    console.log('📊 Raw Supabase children data:', data);
+    
+    if (!data || data.length === 0) {
+      console.log('📊 No children found in Supabase for parent:', parentEmail);
+      return [];
+    }
+    
+    // Map field names from database to expected format
+    const mappedChildren = data.map(child => ({
+      id: child.id,
+      firstName: child.first_name,
+      lastName: child.last_name,
+      birthdate: child.birthdate,
+      gradeLevel: child.grade_level,
+      gender: child.gender,
+      parentEmail: child.parent_email,
+      parentPhone: child.parent_phone,
+      interests: child.interests,
+      learningStyle: child.learning_style,
+      specialNeeds: child.special_needs,
+      allergies: child.allergies,
+      medicalInfo: child.medical_info,
+      school: child.school,
+      profileImage: child.profile_image,
+      emergencyContact: child.emergency_contact,
+      emergencyPhone: child.emergency_phone,
+      createdAt: child.created_at,
+      updatedAt: child.updated_at
+    }));
+    
+    console.log('📊 Mapped children data:', mappedChildren);
+    return mappedChildren;
   }
 
   async createChild(childData: any): Promise<any> {
+    console.log('📝 Supabase createChild called with data:', childData);
+    
+    // Map field names to match database schema
+    const mappedData = {
+      first_name: childData.firstName,
+      last_name: childData.lastName,
+      birthdate: childData.birthdate,
+      grade_level: childData.gradeLevel,
+      gender: childData.gender,
+      parent_email: childData.parentEmail,
+      parent_phone: childData.parentPhone,
+      interests: childData.interests,
+      learning_style: childData.learningStyle,
+      special_needs: childData.specialNeeds,
+      allergies: childData.allergies,
+      medical_info: childData.medicalInfo,
+      school: childData.school,
+      profile_image: childData.profileImage,
+      emergency_contact: childData.emergencyContact,
+      emergency_phone: childData.emergencyPhone,
+      created_at: childData.createdAt || new Date().toISOString(),
+      updated_at: childData.updatedAt || new Date().toISOString()
+    };
+    
+    console.log('📝 Mapped data for Supabase:', mappedData);
+    
     const { data, error } = await supabase
       .from('children')
-      .insert(childData)
+      .insert(mappedData)
       .select()
       .single();
     
     if (error) {
-      console.error('Error creating child:', error);
-      throw error;
+      console.error('❌ Supabase error creating child:', error);
+      throw new Error(`Failed to create child: ${error.message}`);
     }
     
-    return data;
+    console.log('✅ Child created in Supabase:', data);
+    
+    // Map back to expected format
+    return {
+      id: data.id,
+      firstName: data.first_name,
+      lastName: data.last_name,
+      birthdate: data.birthdate,
+      gradeLevel: data.grade_level,
+      gender: data.gender,
+      parentEmail: data.parent_email,
+      parentPhone: data.parent_phone,
+      interests: data.interests,
+      learningStyle: data.learning_style,
+      specialNeeds: data.special_needs,
+      allergies: data.allergies,
+      medicalInfo: data.medical_info,
+      school: data.school,
+      profileImage: data.profile_image,
+      emergencyContact: data.emergency_contact,
+      emergencyPhone: data.emergency_phone,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
   }
 
   // Stub implementations for other storage methods - implement as needed

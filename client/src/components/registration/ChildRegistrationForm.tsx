@@ -61,7 +61,7 @@ export default function ChildRegistrationForm({
 }: ChildRegistrationFormProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+
   // Define the available interests
   const availableInterests = [
     { value: "science", label: "Science" },
@@ -75,7 +75,7 @@ export default function ChildRegistrationForm({
     { value: "nature", label: "Nature & Environment" },
     { value: "languages", label: "Foreign Languages" },
   ];
-  
+
   // Set up the form
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -96,38 +96,38 @@ export default function ChildRegistrationForm({
       ...defaultValues
     },
   });
-  
+
   // Handle form submission
   const onSubmit = async (data: FormValues) => {
     try {
       const endpoint = childId 
         ? `/api/children/${childId}` 
-        : "/api/children";
-      
+        : "/api/parent/children";
+
       const method = childId ? "PATCH" : "POST";
-      
+
       const response = await apiRequest(method, endpoint, data);
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to register child");
       }
-      
+
       const result = await response.json();
-      
+
       // Store the registered child ID in session storage for future use
       sessionStorage.setItem('registeredChildId', JSON.stringify(result.id));
-      
+
       // Invalidate the children query to ensure the UI updates
       queryClient.invalidateQueries({ queryKey: ["/api/children"] });
-      
+
       toast({
         title: childId ? "Child Updated" : "Child Registered",
         description: childId
           ? "Your child's information has been updated successfully"
           : "Your child has been registered successfully",
       });
-      
+
       // If onSuccess callback is provided, call it with the child ID
       if (onSuccess) {
         onSuccess(result.id);
@@ -143,7 +143,7 @@ export default function ChildRegistrationForm({
       });
     }
   };
-  
+
   return (
     <Card className="w-full max-w-3xl mx-auto">
       <CardHeader>
@@ -171,7 +171,7 @@ export default function ChildRegistrationForm({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="lastName"
@@ -185,7 +185,7 @@ export default function ChildRegistrationForm({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="birthdate"
@@ -202,7 +202,7 @@ export default function ChildRegistrationForm({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="gradeLevel"
@@ -236,7 +236,7 @@ export default function ChildRegistrationForm({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="gender"
@@ -257,7 +257,7 @@ export default function ChildRegistrationForm({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="primaryLanguage"
@@ -271,7 +271,7 @@ export default function ChildRegistrationForm({
                 )}
               />
             </div>
-            
+
             <div className="space-y-4">
               <FormField
                 control={form.control}
@@ -322,7 +322,7 @@ export default function ChildRegistrationForm({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="learningStyle"
@@ -350,7 +350,7 @@ export default function ChildRegistrationForm({
                   </FormItem>
                 )}
               />
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
@@ -371,7 +371,7 @@ export default function ChildRegistrationForm({
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="allergies"
@@ -389,7 +389,7 @@ export default function ChildRegistrationForm({
                   )}
                 />
               </div>
-              
+
               <FormField
                 control={form.control}
                 name="notes"
@@ -407,7 +407,7 @@ export default function ChildRegistrationForm({
                 )}
               />
             </div>
-            
+
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={() => setLocation("/dashboard")}>
                 Cancel

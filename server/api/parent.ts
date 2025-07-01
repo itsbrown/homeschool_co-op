@@ -48,82 +48,167 @@ router.get('/children', async (req, res) => {
       });
     }
 
-    // Read children from file
-    const childrenPath = path.join(process.cwd(), 'data', 'children.json');
+    // Get children by parent email from storage
+    console.log('🔍 Attempting to fetch children from storage...');
+    const children = await storage.getChildrenByParentEmail(userEmail);
 
-    if (!fs.existsSync(childrenPath)) {
-      console.log('📁 No children file found, returning empty array');
-      return res.json([]);
-    }
+    console.log(`🔍 Found ${children.length} children for parent ${userEmail}:`, children);
 
-    const childrenData = JSON.parse(fs.readFileSync(childrenPath, 'utf8'));
-
-    // Filter children by parent email OR parent ID
-    // First, find children that match by email
-    const childrenByEmail = childrenData.filter((child: any) => 
-      child.parentEmail === userEmail
-    );
-
-    // For children with parentId but no parentEmail, we need to determine if they belong to this user
-    // Based on the data structure, parentId 1 appears to be associated with coreycreates@gmail.com
-    const isMainAccount = userEmail === 'coreycreates@gmail.com';
-    const childrenByParentId = childrenData.filter((child: any) => 
-      !child.parentEmail && child.parentId === 1 && isMainAccount
-    );
-
-    // Combine both sets and remove duplicates
-    const userChildren = [...childrenByEmail, ...childrenByParentId];
-
-    console.log(`🔍 Found ${userChildren.length} children for parent ${userEmail}:`, 
-      userChildren.map((c: any) => `${c.firstName} ${c.lastName}`));
-
-    if (userChildren.length === 0) {
+    if (!children || children.length === 0) {
       console.log('ℹ️ No children found for this user.');
-      return res.json([]); // Return an empty array if no children are found
+      return res.status(200).json([]);
     }
 
-    // Transform to expected format and include enrolled classes
-    const transformedChildren = await Promise.all(userChildren.map(async (child: any) => {
-      const enrollments = await storage.getEnrollmentsByChildId(child.id);
-      console.log(`📚 Found ${enrollments.length} enrollments for child ${child.firstName} ${child.lastName}:`, enrollments);
-
-      // Get class details for each enrollment
-      const enrolledClasses = await Promise.all(enrollments.map(async (enrollment: any) => {
-        const classData = await storage.getClassById(enrollment.classId);
-        console.log(`🎓 Class data for enrollment:`, classData?.title || 'Not found');
-        return classData ? {
-          id: classData.id,
-          title: classData.title,
-          enrollmentDate: enrollment.enrollmentDate,
-          status: enrollment.status || 'enrolled'
-        } : null;
-      }));
-
-      return {
-        id: child.id,
-        name: `${child.firstName} ${child.lastName}`,
-        firstName: child.firstName,
-        lastName: child.lastName,
-        gradeLevel: child.gradeLevel || 'N/A',
-        age: child.birthdate ? Math.floor((Date.now() - new Date(child.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 'N/A',
-        birthdate: child.birthdate,
-        parentName: userEmail,
-        email: userEmail,
-        enrollmentDate: child.createdAt ? new Date(child.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        status: 'Active',
-        classes: enrolledClasses.filter(Boolean), // Remove any null entries
-        avatar: child.profileImage || '',
-        interests: child.interests || [],
-        allergies: child.allergies || 'None specified',
-        specialNeeds: child.specialNeeds || '',
-        school: child.school || 'American Seekers Academy'
-      };
+    // Transform children data to ensure consistent format
+    const transformedChildren = children.map(child => ({
+      id: child.id,
+      firstName: child.firstName || child.first_name,
+      lastName: child.lastName || child.last_name,
+      birthdate: child.birthdate,
+      gradeLevel: child.gradeLevel || child.grade_level,
+      parentId: child.parentId || child.parent_id,
+      parentEmail: child.parentEmail || child.parent_email || userEmail,
+      specialNeeds: child.specialNeeds || child.special_needs,
+      interests: child.interests,
+      school: child.school,
+      learningStyle: child.learningStyle || child.learning_style,
+      allergies: child.allergies,
+      medicalInfo: child.medicalInfo || child.medical_info,
+      profileImage: child.profileImage || child.profile_image,
+      createdAt: child.createdAt || child.created_at,
+      updatedAt: child.updatedAt || child.updated_at
     }));
 
-    res.json(transformedChildren);
+    return res.status(200).json(transformedChildren);
   } catch (error) {
-    console.error('❌ Error fetching parent children:', error);
-    res.status(500).json({ message: 'Error fetching children' });
+    console.error('❌ Error fetching children:', error);
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: 'CHILDREN_FETCH_ERROR',
+      debug: 'Failed to fetch children from database'
+    });
+  }
+});
+
+// Register a new child
+router.post('/children', async (req, res) => {
+  try {
+    console.log('👶 Child registration API called');
+
+    // Get the authenticated user's email from the token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No valid authorization header found for child registration');
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_AUTH_HEADER'
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    // Decode the Supabase JWT to get user email
+    let userEmail;
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+      userEmail = payload.email;
+      console.log('👶 Parent registering child for email:', userEmail);
+    } catch (error) {
+      console.error('❌ Error decoding token for child registration:', error);
+      return res.status(401).json({ 
+        message: 'Invalid token',
+        error: 'TOKEN_DECODE_ERROR'
+      });
+    }
+
+    if (!userEmail) {
+      console.log('❌ No email found in token for child registration');
+      return res.status(401).json({ 
+        message: 'Email not found in token',
+        error: 'NO_EMAIL_IN_TOKEN'
+      });
+    }
+
+    const { 
+      firstName, 
+      lastName, 
+      birthdate, 
+      gradeLevel, 
+      gender,
+      interests, 
+      learningStyle, 
+      specialNeeds, 
+      allergies, 
+      medicalInfo,
+      school,
+      profileImage,
+      emergencyContact,
+      emergencyPhone,
+      parentPhone
+    } = req.body;
+
+    console.log('👶 Child registration data:', { firstName, lastName, gradeLevel, userEmail });
+
+    // Validate required fields
+    if (!firstName || !lastName || !birthdate || !gradeLevel) {
+      console.log('❌ Missing required fields for child registration');
+      return res.status(400).json({ 
+        message: 'Missing required fields',
+        required: ['firstName', 'lastName', 'birthdate', 'gradeLevel']
+      });
+    }
+
+    // Calculate age from birthdate
+    const birthDate = new Date(birthdate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+
+    // Create the new child object
+    const newChild = {
+      firstName,
+      lastName,
+      birthdate,
+      gradeLevel,
+      gender: gender || null,
+      parentEmail: userEmail,
+      parentPhone: parentPhone || null,
+      interests: interests || null,
+      learningStyle: learningStyle || null,
+      specialNeeds: specialNeeds || null,
+      allergies: allergies || null,
+      medicalInfo: medicalInfo || null,
+      school: school || null,
+      profileImage: profileImage || null,
+      emergencyContact: emergencyContact || null,
+      emergencyPhone: emergencyPhone || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    console.log('👶 Creating child in storage:', newChild);
+
+    // Save to storage (this will handle both file and database storage)
+    const savedChild = await storage.createChild(newChild);
+
+    console.log('✅ Child registered successfully:', savedChild);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Child registered successfully',
+      child: savedChild
+    });
+
+  } catch (error) {
+    console.error('❌ Error registering child:', error);
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: 'CHILD_REGISTRATION_ERROR',
+      debug: error.message
+    });
   }
 });
 
