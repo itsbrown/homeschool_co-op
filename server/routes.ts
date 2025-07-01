@@ -2110,6 +2110,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Children registration endpoint for parents
+  app.post("/api/children", isAuthenticated, async (req, res) => {
+    console.log('👶 Child registration endpoint hit');
+    console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+
+    try {
+      const {
+        firstName,
+        lastName,
+        birthdate,
+        gradeLevel,
+        specialNeeds,
+        medicalNotes,
+        interests,
+        emergencyContact
+      } = req.body;
+
+      // Get parent email from Supabase authentication
+      const supabaseAuth = (req as any).supabaseAuth;
+      if (!supabaseAuth || !supabaseAuth.email) {
+        console.error('❌ No authenticated user found');
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+
+      const parentEmail = supabaseAuth.email;
+      console.log('👤 Creating child for parent:', parentEmail);
+
+      // Create child data object
+      const childData = {
+        firstName,
+        lastName,
+        birthdate,
+        gradeLevel,
+        parentEmail,
+        specialNeeds: specialNeeds || null,
+        medicalInfo: medicalNotes || null,
+        interests: interests || [],
+        emergencyContact: emergencyContact || null,
+        profileImage: null,
+        school: null,
+        learningStyle: null,
+        allergies: null
+      };
+
+      console.log('📋 Child data to create:', JSON.stringify(childData, null, 2));
+
+      // Create the child using storage
+      const newChild = await storage.createChild(childData);
+      
+      console.log('✅ Child created successfully:', {
+        id: newChild.id,
+        firstName: newChild.firstName,
+        lastName: newChild.lastName
+      });
+
+      res.json({
+        success: true,
+        message: 'Child registered successfully',
+        child: {
+          id: newChild.id,
+          firstName: newChild.firstName,
+          lastName: newChild.lastName,
+          parentEmail: parentEmail
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error registering child:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Failed to register child',
+        error: error.message 
+      });
+    }
+  });
+
   // Test authentication endpoint
   app.get("/api/test-auth", jwtCheck, (req: any, res) => {
     res.json({
