@@ -18,6 +18,8 @@ const connectWithRetry = async (maxRetries = 5, retryDelay = 5000) => {
       
       // Handle connection string directly, bypassing URL parsing
       // For PostgreSQL URL with special characters, extract components directly
+      let newPool: Pool;
+      
       try {
         // Extract the protocol, username, password, host, port, and database
         if (connectionString && connectionString.startsWith('postgresql://')) {
@@ -37,7 +39,7 @@ const connectWithRetry = async (maxRetries = 5, retryDelay = 5000) => {
               const password = credentials.substring(colonIndex + 1);
               
               // Create a proper connection config directly
-              const newPool = new Pool({
+              newPool = new Pool({
                 user: username,
                 password: password,
                 host: hostPart.split(':')[0],
@@ -49,22 +51,20 @@ const connectWithRetry = async (maxRetries = 5, retryDelay = 5000) => {
               });
               
               console.log("Using direct connection configuration");
-              return newPool;
+            } else {
+              throw new Error('Could not parse credentials');
             }
+          } else {
+            throw new Error('Could not parse connection string');
           }
+        } else {
+          throw new Error('Invalid connection string format');
         }
-        
-        // Fallback to standard connection string if parsing fails
-        console.log("Using standard connection string");
-        return new Pool({
-          connectionString,
-          ssl: {
-            rejectUnauthorized: false
-          }
-        });
       } catch (parseError) {
         console.error('Error parsing database URL:', parseError);
-        return new Pool({
+        // Fallback to standard connection string if parsing fails
+        console.log("Using standard connection string");
+        newPool = new Pool({
           connectionString,
           ssl: {
             rejectUnauthorized: false

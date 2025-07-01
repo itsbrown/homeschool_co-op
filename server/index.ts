@@ -63,7 +63,8 @@ app.use('/api/file-upload', fileUploadRouter);
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    console.error('❌ Error handled:', err.message, err.stack);
+    // Don't throw the error again - this was causing the server to crash
   });
 
   // importantly only setup vite in development and after
