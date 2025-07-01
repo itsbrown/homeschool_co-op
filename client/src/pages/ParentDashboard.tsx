@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, BookOpen, Calendar, Bell, Plus, User, GraduationCap } from "lucide-react";
 import Header from "@/components/layout/Header";
 import ParentSidebar from "@/components/layout/ParentSidebar";
+import { AlertCircle } from "lucide-react";
+import Link from "next/link";
 
 interface Child {
   id: number;
@@ -16,6 +18,11 @@ interface Child {
   dateOfBirth: string;
   gradeLevel: string;
   parentId: string;
+  birthdate?: string;
+  age?: number;
+  school?: string;
+  interests?: string | string[];
+  learningStyle?: string;
 }
 
 interface Program {
@@ -32,7 +39,7 @@ export default function ParentDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
 
   // Query for children data
-  const { data: children = [], isLoading: childrenLoading } = useQuery<Child[]>({
+  const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<Child[]>({
     queryKey: ["/api/parent/children"],
     enabled: !!user,
   });
@@ -48,6 +55,8 @@ export default function ParentDashboard() {
     queryKey: ["/api/program-enrollments"],
     enabled: !!user,
   });
+
+  const isLoadingChildren = childrenLoading;
 
   return (
     <div className="flex h-screen bg-background">
@@ -174,65 +183,119 @@ export default function ParentDashboard() {
               </div>
             </TabsContent>
 
-            <TabsContent value="children" className="space-y-4">
+            <TabsContent value="children" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-semibold">My Children</h2>
+                <p className="text-muted-foreground">Manage your children's profiles and information</p>
+              </div>
+              <Button asChild>
+                <Link href="/children/register">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Register New Child
+                </Link>
+              </Button>
+            </div>
+
+            {isLoadingChildren ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : childrenError ? (
               <Card>
-                <CardHeader>
-                  <CardTitle>My Children</CardTitle>
-                  <CardDescription>
-                    Manage your children's profiles and information
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {childrenLoading ? (
-                    <div>Loading children...</div>
-                  ) : children.length === 0 ? (
-                    <div className="text-center py-8">
-                      <User className="mx-auto h-12 w-12 text-muted-foreground" />
-                      <h3 className="mt-2 text-sm font-semibold text-gray-900">No children registered</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Get started by adding your first child's profile.
-                      </p>
-                      <div className="mt-6">
-                        <Button>
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add Child
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {children.map((child: Child) => (
-                        <Card key={child.id} className="border-2">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-lg">
-                              {child.firstName} {child.lastName}
-                            </CardTitle>
-                            <CardDescription>
-                              Grade {child.gradeLevel}
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2">
-                              <div className="text-sm">
-                                <strong>Date of Birth:</strong> {new Date(child.dateOfBirth).toLocaleDateString()}
-                              </div>
-                              <div className="flex space-x-2">
-                                <Button size="sm" variant="outline">
-                                  Edit Profile
-                                </Button>
-                                <Button size="sm">
-                                  View Enrollments
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
+                <CardContent className="pt-6">
+                  <div className="text-center text-red-600">
+                    <AlertCircle className="h-12 w-12 mx-auto mb-4" />
+                    <p>Error loading children data</p>
+                    <p className="text-sm text-muted-foreground mt-2">{childrenError.message}</p>
+                  </div>
                 </CardContent>
               </Card>
-            </TabsContent>
+            ) : children && children.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {children.map((child) => {
+                  // Calculate age from birthdate if not provided
+                  let age = child.age;
+                  if (!age && child.birthdate) {
+                    const birthDate = new Date(child.birthdate);
+                    const today = new Date();
+                    age = today.getFullYear() - birthDate.getFullYear();
+                    const monthDiff = today.getMonth() - birthDate.getMonth();
+                    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                      age--;
+                    }
+                  }
+
+                  return (
+                    <Card key={child.id}>
+                      <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <User className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold">{child.firstName} {child.lastName}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {age ? `Age: ${age}` : 'Age: Not specified'}
+                            </p>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" className="ml-auto" asChild>
+                          <Link href={`/children/${child.id}`}>
+                            View Profile
+                          </Link>
+                        </Button>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Grade:</span>
+                            <span>{child.gradeLevel || 'Not specified'}</span>
+                          </div>
+                          {child.school && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">School:</span>
+                              <span>{child.school}</span>
+                            </div>
+                          )}
+                          {child.interests && child.interests.length > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Interests:</span>
+                              <span>{Array.isArray(child.interests) ? child.interests.join(", ") : child.interests}</span>
+                            </div>
+                          )}
+                          {child.learningStyle && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Learning Style:</span>
+                              <span>{child.learningStyle}</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No Children Registered</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Register your first child to get started with managing their education journey.
+                    </p>
+                    <Button asChild>
+                      <Link href="/children/register">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Register New Child
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
             <TabsContent value="programs" className="space-y-4">
               <Card>
