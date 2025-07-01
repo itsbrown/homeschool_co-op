@@ -1497,6 +1497,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Import and register enrollments API router
   const enrollmentsRouter = await import("./api/enrollments");
   app.use("/api/enrollments", enrollmentsRouter.default);
+
+  // Add children enrollments endpoint
+  app.get("/api/children/:id/enrollments", async (req, res) => {
+    try {
+      const childId = parseInt(req.params.id);
+      
+      if (isNaN(childId)) {
+        return res.status(400).json({ message: 'Invalid child ID' });
+      }
+
+      console.log(`📚 Fetching enrollments for child ID: ${childId}`);
+      
+      // Get enrollments for this child
+      const enrollments = await storage.getEnrollmentsByChildId(childId);
+      
+      console.log(`📚 Found ${enrollments.length} enrollments for child ${childId}:`, enrollments);
+      
+      res.json(enrollments);
+    } catch (error) {
+      console.error('Error fetching child enrollments:', error);
+      res.status(500).json({ message: 'Failed to fetch enrollments' });
+    }
+  });
   
   // Import and register users API router
   const usersRouter = await import("./api/users");
