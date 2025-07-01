@@ -20,7 +20,7 @@ import ParentAppShell from "@/components/layout/ParentAppShell";
 
 // Separate component for Programs content to avoid hooks issues
 function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = useState("classes");
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -153,6 +153,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   console.log('All classes:', classesData.classes);
   console.log('Filtered classesList:', classesList);
   console.log('Summer camps:', summerCamps);
+  console.log('classesLoading:', classesLoading);
+  console.log('classesList.length:', classesList.length);
 
   return (
     <div className="space-y-6">
