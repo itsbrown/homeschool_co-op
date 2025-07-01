@@ -291,6 +291,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                             classId: classItem.id, 
                             classTitle: classItem.title 
                           });
+                          setSelectedChildId(""); // Reset child selection
                           console.log("🔄 Enrollment dialog state set");
                         }}
                       >
@@ -382,39 +383,36 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                     console.log("  - First child:", children?.[0]);
                     return null;
                   })()}
-                  <Select 
+                  <select 
+                    className="w-full p-2 border border-input bg-background rounded-md"
                     value={selectedChildId} 
-                    onValueChange={(value) => {
-                      console.log("🎯 Select value changed:", value);
-                      setSelectedChildId(value);
+                    onChange={(e) => {
+                      console.log("🎯 Select value changed:", e.target.value);
+                      setSelectedChildId(e.target.value);
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a child" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.isArray(children) && children.length > 0 ? (
-                        children.map((child: any) => {
-                          const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
-                          const childValue = child.id?.toString() || '';
-                          console.log(`🔍 Rendering child: ${childName} (ID: ${childValue})`);
-                          
-                          return (
-                            <SelectItem 
-                              key={child.id} 
-                              value={childValue}
-                            >
-                              {childName}
-                            </SelectItem>
-                          );
-                        })
-                      ) : (
-                        <SelectItem value="no-children" disabled>
-                          No children found
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                    <option value="">Choose a child</option>
+                    {Array.isArray(children) && children.length > 0 ? 
+                      children.map((child: any) => {
+                        const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
+                        const childValue = String(child.id);
+                        console.log(`🔍 Rendering child: ${childName} (ID: ${childValue})`);
+                        
+                        return (
+                          <option 
+                            key={child.id}
+                            value={childValue}
+                          >
+                            {childName}
+                          </option>
+                        );
+                      })
+                      : 
+                      <option value="" disabled>
+                        No children found
+                      </option>
+                    }
+                  </select>
                 </div>
               )}
             </div>
