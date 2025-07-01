@@ -1938,6 +1938,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/parent", parentRouter);
 
+  // General enrollments endpoint for dashboard
+  app.get("/api/enrollments", async (req: any, res) => {
+    try {
+      const user = req.auth;
+      if (!user || !user.email) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      console.log('📚 Fetching all enrollments for parent:', user.email);
+      
+      // Get all children for this parent
+      const children = await storage.getChildrenByParentEmail(user.email);
+      console.log(`👶 Found ${children.length} children for parent ${user.email}`);
+      
+      if (children.length === 0) {
+        return res.json([]);
+      }
+
+      // Get enrollments for all children
+      let allEnrollments: any[] = [];
+      for (const child of children) {
+        const childEnrollments = await storage.getEnrollmentsByChildId(child.id);
+        allEnrollments = allEnrollments.concat(childEnrollments);
+      }
+
+      console.log(`📚 Found ${allEnrollments.length} total enrollments for parent ${user.email}`);
+      res.json(allEnrollments);
+    } catch (error) {
+      console.error('Error fetching enrollments:', error);
+      res.status(500).json({ message: 'Failed to fetch enrollments' });
+    }
+  });
+
   // Registration routes
   const registrationRouter = (await import("./api/registration")).default;
   app.use("/api/registration", registrationRouter);
