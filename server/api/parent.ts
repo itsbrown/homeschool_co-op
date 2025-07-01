@@ -50,6 +50,16 @@ router.get('/children', async (req, res) => {
 
     // Get children by parent email from storage
     console.log('🔍 Attempting to fetch children from storage...');
+    
+    // Debug: Get all children to see what's in storage
+    const allChildren = await storage.getAllChildren();
+    console.log('🔍 All children in storage:', allChildren.map(c => ({ 
+      id: c.id, 
+      firstName: c.firstName, 
+      lastName: c.lastName, 
+      parentEmail: c.parentEmail || c.parent_email 
+    })));
+    
     const children = await storage.getChildrenByParentEmail(userEmail);
 
     console.log(`🔍 Found ${children.length} children for parent ${userEmail}:`, children);
@@ -175,6 +185,7 @@ router.post('/children', async (req, res) => {
       gradeLevel,
       gender: gender || null,
       parentEmail: userEmail,
+      parent_email: userEmail, // Ensure both field names are set for compatibility
       parentPhone: parentPhone || null,
       interests: interests || null,
       learningStyle: learningStyle || null,
