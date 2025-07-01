@@ -450,19 +450,44 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                   </div>
                 ) : (
                 <div className="relative">
+                  {(() => {
+                    console.log("🔍 Select rendering debug:");
+                    console.log("  - Children array:", children);
+                    console.log("  - Array length:", children?.length);
+                    console.log("  - First child:", children?.[0]);
+                    return null;
+                  })()}
                   <Select 
                     value={selectedChildId} 
-                    onValueChange={setSelectedChildId}
+                    onValueChange={(value) => {
+                      console.log("🎯 Select value changed:", value);
+                      setSelectedChildId(value);
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a child" />
                     </SelectTrigger>
                     <SelectContent>
-                      {children.map((child: any) => (
-                        <SelectItem key={child.id} value={child.id.toString()}>
-                          {child.firstName} {child.lastName}
+                      {Array.isArray(children) && children.length > 0 ? (
+                        children.map((child: any) => {
+                          const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
+                          const childValue = child.id?.toString() || '';
+                          console.log(`🔍 Rendering child: ${childName} (ID: ${childValue})`);
+                          
+                          return (
+                            <SelectItem 
+                              key={child.id} 
+                              value={childValue}
+                            >
+                              {childName}
+                            </SelectItem>
+                          );
+                        })
+                      ) : (
+                        <SelectItem value="no-children" disabled>
+                          No children found
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
