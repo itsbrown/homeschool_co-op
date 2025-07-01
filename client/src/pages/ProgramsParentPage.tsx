@@ -403,47 +403,69 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="child-select">Select Child</Label>
-              <div className="text-xs text-muted-foreground mb-2">
-                Debug: Children loaded: {Array.isArray(children) ? children.length : 0} | Auth: {isAuthenticated ? 'Yes' : 'No'} | Loading: {childrenLoading ? 'Yes' : 'No'}
-                {children && children.length > 0 && (
-                  <div>Children: {children.map(c => `${c.firstName} ${c.lastName}`).join(', ')}</div>
-                )}
-              </div>
-              {(() => {
-                console.log("🔄 DETAILED Children data:", JSON.stringify(children, null, 2));
-                console.log("🔄 Children loading:", childrenLoading);
-                console.log("🔄 Children error:", childrenError);
-                return null;
-              })()}
-              {childrenLoading ? (
-                <div className="text-sm text-muted-foreground">Loading children...</div>
-              ) : childrenError ? (
-                <div className="text-sm text-destructive">Error loading children: {JSON.stringify(childrenError)}</div>
-              ) : (
-                <select
-                  id="child-select"
-                  value={selectedChildId}
-                  onChange={(e) => {
-                    console.log("🔄 Native select value changed:", e.target.value);
-                    setSelectedChildId(e.target.value);
-                  }}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="" disabled>Choose a child</option>
-                  {children && children.length > 0 ? (
-                    children.map((child: any) => {
-                      console.log("🔄 Rendering option for child:", child);
-                      return (
-                        <option key={child.id} value={child.id.toString()}>
+                <Label htmlFor="child-select">Select Child</Label>
+                <div className="text-xs text-muted-foreground mb-2">
+                  Debug: Children: {Array.isArray(children) ? children.length : 0} | Auth: {isAuthenticated ? 'Yes' : 'No'} | Loading: {childrenLoading ? 'Yes' : 'No'} | User: {user?.email || 'None'}
+                </div>
+                {(() => {
+                  console.log("🔄 Enrollment Dialog Debug:");
+                  console.log("  - Children:", children);
+                  console.log("  - Children loading:", childrenLoading);
+                  console.log("  - Children error:", childrenError);
+                  console.log("  - Is authenticated:", isAuthenticated);
+                  console.log("  - User:", user);
+                  return null;
+                })()}
+
+                {!isAuthenticated ? (
+                  <div className="text-sm text-destructive">
+                    Please log in to select a child for enrollment.
+                  </div>
+                ) : childrenLoading ? (
+                  <div className="text-sm text-muted-foreground flex items-center gap-2">
+                    <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                    Loading children...
+                  </div>
+                ) : childrenError ? (
+                  <div className="text-sm text-destructive">
+                    Error loading children: {childrenError?.message || 'Unknown error'}
+                    <br />
+                    <span className="text-xs">Please try logging out and back in.</span>
+                  </div>
+                ) : !children || children.length === 0 ? (
+                  <div className="text-sm text-muted-foreground p-4 border border-dashed rounded-lg text-center">
+                    <p className="mb-2">No children registered yet.</p>
+                    <p className="text-xs">You need to register a child before enrolling in classes.</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-2"
+                      onClick={() => {
+                        setEnrollmentDialog({ open: false });
+                        window.location.href = '/children/register';
+                      }}
+                    >
+                      Register a Child
+                    </Button>
+                  </div>
+                ) : (
+                <div className="relative">
+                  <Select 
+                    value={selectedChildId} 
+                    onValueChange={setSelectedChildId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a child" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {children.map((child: any) => (
+                        <SelectItem key={child.id} value={child.id.toString()}>
                           {child.firstName} {child.lastName}
-                        </option>
-                      );
-                    })
-                  ) : (
-                    <option value="" disabled>No children available</option>
-                  )}
-                </select>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
             </div>
           </div>

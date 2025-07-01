@@ -8,14 +8,22 @@ const router = Router();
 // Get children for the authenticated parent
 router.get('/children', async (req, res) => {
   try {
+    console.log('👨‍👩‍👧‍👦 Children API called - Headers:', Object.keys(req.headers));
+
     // Get the authenticated user's email from the token
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Authentication required' });
+      console.log('❌ No valid authorization header found');
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_AUTH_HEADER',
+        debug: 'Please log in to access children data'
+      });
     }
 
     const token = authHeader.split(' ')[1];
-    
+    console.log('🔑 Token received, length:', token.length);
+
     // Decode the Supabase JWT to get user email
     let userEmail;
     try {
@@ -24,11 +32,20 @@ router.get('/children', async (req, res) => {
       console.log('👨‍👩‍👧‍👦 Parent requesting children for email:', userEmail);
     } catch (error) {
       console.error('❌ Error decoding token:', error);
-      return res.status(401).json({ message: 'Invalid token' });
+      return res.status(401).json({ 
+        message: 'Invalid token',
+        error: 'TOKEN_DECODE_ERROR',
+        debug: 'Token could not be decoded'
+      });
     }
 
     if (!userEmail) {
-      return res.status(401).json({ message: 'Email not found in token' });
+      console.log('❌ No email found in token payload');
+      return res.status(401).json({ 
+        message: 'Email not found in token',
+        error: 'NO_EMAIL_IN_TOKEN',
+        debug: 'Token does not contain email information'
+      });
     }
 
     // Read children from file
@@ -60,11 +77,16 @@ router.get('/children', async (req, res) => {
     console.log(`🔍 Found ${userChildren.length} children for parent ${userEmail}:`, 
       userChildren.map((c: any) => `${c.firstName} ${c.lastName}`));
 
+    if (userChildren.length === 0) {
+      console.log('ℹ️ No children found for this user.');
+      return res.json([]); // Return an empty array if no children are found
+    }
+
     // Transform to expected format and include enrolled classes
     const transformedChildren = await Promise.all(userChildren.map(async (child: any) => {
       const enrollments = await storage.getEnrollmentsByChildId(child.id);
       console.log(`📚 Found ${enrollments.length} enrollments for child ${child.firstName} ${child.lastName}:`, enrollments);
-      
+
       // Get class details for each enrollment
       const enrolledClasses = await Promise.all(enrollments.map(async (enrollment: any) => {
         const classData = await storage.getClassById(enrollment.classId);
