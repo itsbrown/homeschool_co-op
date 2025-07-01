@@ -305,7 +305,7 @@ function Router() {
       <Route path="/registration" component={RegistrationPage} />
       <Route path="/programs" component={ProgramsParentPage} />
       <Route path="/programs/browse" component={ProgramsBrowseRedirect} />
-      <Route path="/classes" component={ClassesPage} />
+      <Route path="/classes" component={ProgramsBrowseRedirect} />
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/view" component={ChildrenViewPage} />
       <Route path="/children/register" component={ChildRegistrationPage} />

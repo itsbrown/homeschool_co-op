@@ -156,90 +156,13 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="all">All Offerings</TabsTrigger>
-          <TabsTrigger value="programs">Programs</TabsTrigger>
-          <TabsTrigger value="classes">Classes</TabsTrigger>
+      <Tabs defaultValue="classes" value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="classes">Browse Classes</TabsTrigger>
           <TabsTrigger value="camps">Summer Camps</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Programs Card */}
-            <Card className="flex flex-col">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Academic Programs</CardTitle>
-                  <CardDescription>Long-term structured learning paths</CardDescription>
-                </div>
-                <BookOpen className="h-8 w-8 text-primary" />
-              </CardHeader>
-              <CardContent className="flex-1">
-                <p>Our academic programs provide comprehensive educational paths designed to build skills progressively.</p>
-              </CardContent>
-              <CardFooter>
-                <Button className="w-full" onClick={() => setActiveTab("programs")}>Browse Programs</Button>
-              </CardFooter>
-            </Card>
 
-            {/* Classes Card */}
-            <Card className="flex flex-col">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Classes</CardTitle>
-                  <CardDescription>Individual classes and short courses</CardDescription>
-                </div>
-                <Users className="h-8 w-8 text-primary" />
-              </CardHeader>
-              <CardContent className="flex-1">
-                <p>Join our wide variety of individual classes on specific topics, from science to arts and more.</p>
-              </CardContent>
-              <CardFooter>
-                <Button className="w-full" onClick={() => setActiveTab("classes")}>Browse Classes</Button>
-              </CardFooter>
-            </Card>
-
-            {/* Summer Camps Card */}
-            <Card className="flex flex-col md:col-span-2">
-              <CardHeader className="flex flex-row items-center justify-between bg-primary/5 rounded-t-lg">
-                <div>
-                  <CardTitle>Summer Camps 2025</CardTitle>
-                  <CardDescription>Engaging summer learning experiences</CardDescription>
-                </div>
-                <Sparkles className="h-8 w-8 text-primary" />
-              </CardHeader>
-              <CardContent className="flex-1">
-                <p className="mb-4">Our summer camps offer immersive learning experiences during school breaks. Discover creativity, technology, and outdoor adventures!</p>
-                <div className="flex gap-2 flex-wrap">
-                  <Badge variant="outline" className="bg-primary/5">STEM Exploration</Badge>
-                  <Badge variant="outline" className="bg-primary/5">Art & Design</Badge>
-                  <Badge variant="outline" className="bg-primary/5">Coding Adventures</Badge>
-                  <Badge variant="outline" className="bg-primary/5">Outdoor Learning</Badge>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button className="w-full" onClick={() => setActiveTab("camps")}>
-                  <CalendarDays className="mr-2 h-4 w-4" />
-                  Explore Summer Camps
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-
-          {/* Featured Programs Section */}
-          <h3 className="text-xl font-bold mt-8">Featured Programs</h3>
-          <div className="space-y-4">
-            <ProgramList isAdmin={isAdmin} childId={childId || undefined} limit={3} featured={true} />
-            <div className="flex justify-center">
-              <Button variant="outline" onClick={() => setActiveTab("programs")}>View All Programs</Button>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="programs">
-          <ProgramList isAdmin={isAdmin} childId={childId || undefined} />
-        </TabsContent>
 
         <TabsContent value="classes">
           <div className="space-y-6">
@@ -722,9 +645,9 @@ export default function ProgramsParentPage() {
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Programs</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Classes & Programs</h2>
             <p className="text-muted-foreground">
-              Browse and register for available programs and classes
+              Browse and enroll your children in educational classes and summer programs
             </p>
           </div>
         </div>
