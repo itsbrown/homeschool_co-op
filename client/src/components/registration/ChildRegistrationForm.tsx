@@ -129,6 +129,9 @@ export default function ChildRegistrationForm({
       });
 
       // If onSuccess callback is provided, call it with the child ID
+      // Invalidate the children query to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+      
       if (onSuccess) {
         onSuccess(result.id);
       } else {

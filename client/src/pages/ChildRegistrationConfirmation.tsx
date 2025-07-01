@@ -116,6 +116,7 @@ export default function ChildRegistrationConfirmation() {
       sessionStorage.removeItem('childRegistrationData');
       
       // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
       queryClient.invalidateQueries({ queryKey: ["/api/children"] });
       
       // Navigate back to children page to see the new child
