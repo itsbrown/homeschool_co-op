@@ -1939,7 +1939,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/parent", parentRouter);
 
   // General enrollments endpoint for dashboard
-  app.get("/api/enrollments", async (req: any, res) => {
+  app.get("/api/enrollments", isAuthenticated, async (req: any, res) => {
     try {
       const user = req.auth;
       if (!user || !user.email) {
