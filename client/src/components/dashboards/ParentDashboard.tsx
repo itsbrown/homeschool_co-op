@@ -28,18 +28,18 @@ export default function ParentDashboard() {
         if (!token) {
           throw new Error('No authentication token found');
         }
-        
+
         const response = await fetch("/api/parent/children", {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         });
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const children = await response.json();
         return children;
       } catch (error) {
@@ -75,20 +75,20 @@ export default function ParentDashboard() {
       console.log('🔐 Getting Auth0 token...');
       const token = await getAccessTokenSilently();
       console.log('✅ Token received, length:', token?.length);
-      
+
       console.log('📡 Making sync request...');
       const response = await apiRequest("POST", "/api/sync-children", undefined, { token });
       console.log('📨 Response received:', response.status);
-      
+
       const result = await response.json();
       console.log('📊 Sync result:', result);
       console.log('🔍 Debug info:', result.debug);
-      
+
       toast({
         title: "Sync Complete",
         description: `Successfully synced ${result.syncedChildren} children with your account`,
       });
-      
+
       // Refresh children data
       queryClient.invalidateQueries({ queryKey: ["/api/children"] });
     } catch (error) {
@@ -424,7 +424,7 @@ export default function ParentDashboard() {
         <Bot className="h-6 w-6" />
         <span className="sr-only">AI Enrollment Assistant</span>
       </Button>
-      
+
       {/* AI Assistant Modal */}
       {isAssistantModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">

@@ -20,6 +20,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { apiRequest } from "@/lib/queryClient";
+import { DollarSign } from "lucide-react";
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   items: {
@@ -117,6 +118,11 @@ export default function ParentSidebar() {
       href: "/payments",
       title: "Payments",
       icon: <CreditCard className="h-5 w-5" />,
+    },
+    {
+      href: "/billing",
+      title: "Billing & Balance",
+      icon: <DollarSign className="h-5 w-5" />,
     },
     {
       href: "/enrollment-assistant",
