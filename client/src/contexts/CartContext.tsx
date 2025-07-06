@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -41,19 +40,19 @@ type CartAction =
 
 const calculateCartTotals = (items: CartItem[]): { subtotal: number; discounts: any; total: number } => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
-  
+
   // Group items by child to calculate sibling discount
   const childrenWithClasses = items.reduce((acc, item) => {
     acc[item.childId] = (acc[item.childId] || 0) + 1;
     return acc;
   }, {} as Record<number, number>);
-  
+
   const uniqueChildren = Object.keys(childrenWithClasses).length;
-  
+
   // Apply 10% sibling discount if more than one child
   const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0;
   const siblingDiscount = subtotal * siblingDiscountRate;
-  
+
   // Apply "Free After Three" - 4th child and beyond are free
   let freeAfterThreeDiscount = 0;
   if (uniqueChildren >= 4) {
@@ -61,9 +60,9 @@ const calculateCartTotals = (items: CartItem[]): { subtotal: number; discounts: 
     const averagePricePerChild = subtotal / uniqueChildren;
     freeAfterThreeDiscount = averagePricePerChild * freeChildren;
   }
-  
+
   const total = Math.max(0, subtotal - siblingDiscount - freeAfterThreeDiscount);
-  
+
   return {
     subtotal,
     discounts: {
@@ -81,15 +80,15 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       const existingItemIndex = state.cart.items.findIndex(
         item => item.classId === action.payload.classId && item.childId === action.payload.childId
       );
-      
+
       if (existingItemIndex >= 0) {
         // Item already exists, don't add duplicate
         return state;
       }
-      
+
       const newItems = [...state.cart.items, action.payload];
       const totals = calculateCartTotals(newItems);
-      
+
       return {
         ...state,
         cart: {
@@ -98,11 +97,11 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         },
       };
     }
-    
+
     case 'REMOVE_ITEM': {
       const newItems = state.cart.items.filter(item => item.id !== action.payload);
       const totals = calculateCartTotals(newItems);
-      
+
       return {
         ...state,
         cart: {
@@ -111,13 +110,13 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         },
       };
     }
-    
+
     case 'UPDATE_ITEM': {
       const newItems = state.cart.items.map(item =>
         item.id === action.payload.id ? { ...item, ...action.payload.updates } : item
       );
       const totals = calculateCartTotals(newItems);
-      
+
       return {
         ...state,
         cart: {
@@ -126,7 +125,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         },
       };
     }
-    
+
     case 'CLEAR_CART':
       return {
         ...state,
@@ -137,19 +136,19 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           total: 0,
         },
       };
-    
+
     case 'OPEN_CART':
       return { ...state, isOpen: true };
-    
+
     case 'CLOSE_CART':
       return { ...state, isOpen: false };
-    
+
     case 'LOAD_CART':
       return {
         ...state,
         cart: action.payload,
       };
-    
+
     default:
       return state;
   }
@@ -216,12 +215,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...item,
       id: `${item.classId}-${item.childId}-${Date.now()}`,
     };
-    
+
     // Check if item already exists
     const exists = state.cart.items.some(
       cartItem => cartItem.classId === item.classId && cartItem.childId === item.childId
     );
-    
+
     if (exists) {
       toast({
         title: "Already in Cart",
@@ -230,7 +229,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return;
     }
-    
+
     dispatch({ type: 'ADD_ITEM', payload: newItem });
     toast({
       title: "Added to Cart",

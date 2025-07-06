@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/components/SupabaseProvider';
@@ -70,7 +69,7 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
           title: "Payment Successful!",
           description: "Your balance has been paid successfully.",
         });
-        
+
         // Refresh the page to show updated balances
         window.location.reload();
       }

@@ -1,4 +1,3 @@
-
 import { Router } from 'express';
 import { storage } from '../storage';
 
@@ -44,15 +43,15 @@ router.get('/summary', async (req, res) => {
     // Calculate balances for each enrollment
     for (const child of children) {
       const childEnrollments = allEnrollments.filter(e => e.childId === child.id);
-      
+
       for (const enrollment of childEnrollments) {
         const classInfo = allClasses.find(c => c.id === enrollment.classId);
         const classPrice = classInfo ? classInfo.price : 90000; // Default $900
-        
+
         // Check if payment was made (from payment history or enrollment data)
         const amountPaid = enrollment.amount || 0;
         const balance = classPrice - amountPaid;
-        
+
         if (balance > 0) {
           totalBalance += balance;
           enrollmentDetails.push({
@@ -92,7 +91,7 @@ router.get('/summary', async (req, res) => {
 router.post('/pay-balance', async (req, res) => {
   try {
     console.log('💳 Creating payment intent for outstanding balance');
-    
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ message: 'Authentication required' });
@@ -121,7 +120,7 @@ router.post('/pay-balance', async (req, res) => {
     const children = await storage.getChildrenByParentEmail(userEmail);
     const childIds = children.map(child => child.id);
     const allEnrollments = await storage.getAllEnrollments();
-    
+
     const selectedEnrollments = allEnrollments.filter(e => 
       enrollmentIds.includes(e.id) && childIds.includes(e.childId)
     );
