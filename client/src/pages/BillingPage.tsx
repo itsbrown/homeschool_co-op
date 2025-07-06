@@ -134,6 +134,9 @@ export default function BillingPage() {
     enabled: !!isAuthenticated && !!user,
     retry: 3,
     retryDelay: 1000,
+    suspense: false,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
   });
 
   const formatCurrency = (amount: number) => {
