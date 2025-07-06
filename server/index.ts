@@ -5,6 +5,8 @@ import fileUpload from "express-fileupload";
 import path from "path";
 import { backupService } from './services/backupService';
 import fileUploadRouter from './api/file-upload';
+import paymentHistoryRouter from './api/payment-history';
+import stripeRoutes from './api/stripe';
 
 const app = express();
 // Increase the size limit to 50MB for file uploads
@@ -105,4 +107,4 @@ import parentRouter from './api/parent';
 
 app.use('/api/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
-app.use('/api/parent', parentRouter);
+app.use('/api/stripe', stripeRoutes);

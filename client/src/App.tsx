@@ -30,6 +30,8 @@ import KnowledgeBaseDetail from "@/pages/KnowledgeBaseDetail";
 import KnowledgeBaseEdit from "@/pages/KnowledgeBaseEdit";
 import Checkout from "@/pages/Checkout";
 import CheckoutSuccess from "@/pages/CheckoutSuccess";
+import CartCheckout from "@/pages/CartCheckout";
+import CartSuccess from "@/pages/CartSuccess";
 import { RegistrationPage } from "@/pages/RegistrationPage";
 import { ProgramsPage } from "@/pages/ProgramsPage";
 import ProgramsParentPage from "@/pages/ProgramsParentPage";
@@ -106,10 +108,10 @@ import RoleSelectionComponent from "@/components/RoleSelection";
 function DashboardRouter() {
   const { user } = useAuth();
   const { activeRole, showRoleSelection, setActiveRole } = useRole();
-  
+
   console.log(`🚀 DashboardRouter called!`);
   console.log(`🔍 DashboardRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
-  
+
   // Check localStorage directly
   const currentSavedRole = localStorage.getItem('activeRole');
   console.log(`🔍 DashboardRouter LocalStorage check - savedRole:`, currentSavedRole);
@@ -129,10 +131,10 @@ function DashboardRouter() {
       console.log(`❌ Not showing role selection - conditions not met`);
     }
   }
-  
+
   // Show dashboard based on selected role
   console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
-  
+
   if (activeRole === 'parent') {
     return (
       <ParentAppShell key={`dashboard-${activeRole}`}>
@@ -140,19 +142,19 @@ function DashboardRouter() {
       </ParentAppShell>
     );
   }
-  
+
   // For super admin, admin, educator - route to Dashboard component with AI tools
   if (['superAdmin', 'admin', 'educator'].includes(activeRole)) {
     console.log(`🎯 Routing superAdmin/admin/educator to Dashboard component with AI tools`);
     return <Dashboard key={`dashboard-${activeRole}`} />;
   }
-  
+
   // For school admin - route to school admin interface
   if (['school_admin', 'schoolAdmin'].includes(activeRole)) {
     console.log(`🏫 Routing school admin to MySchoolPage`);
     return <MySchoolPage key={`dashboard-${activeRole}`} />;
   }
-  
+
   // Default fallback to school admin page
   console.log(`🔄 Default routing to MySchoolPage for role:`, activeRole);
   return <MySchoolPage key={`dashboard-${activeRole}`} />;
@@ -162,7 +164,7 @@ function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
   const { activeRole, showRoleSelection, setActiveRole } = useRole();
   const [location] = useLocation();
-  
+
   console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
 
   // Handle OAuth callbacks (Auth0 and Supabase)
@@ -300,7 +302,9 @@ function Router() {
       <Route path="/knowledge-base/:id/edit" component={KnowledgeBaseEdit} />
       <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
       <Route path="/checkout" component={Checkout} />
-      <Route path="/checkout-success" component={CheckoutSuccess} />
+      <Route path="/checkout/success" component={CheckoutSuccess} />
+      <Route path="/cart/checkout" component={CartCheckout} />
+      <Route path="/cart/success" component={CartSuccess} />
 
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
@@ -320,7 +324,7 @@ function Router() {
       <Route path="/payments" component={PaymentsPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
-      
+
       {/* Dashboard route */}
       <Route path="/dashboard" component={DashboardRouter} />
 

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
+import { useCart } from "@/contexts/CartContext";
 import { ProgramList } from "@/components/registration/ProgramList";
 import { ProgramEnrollmentForm } from "@/components/registration/ProgramEnrollmentForm";
 import { EnrollmentList } from "@/components/registration/EnrollmentList";
@@ -12,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack } from "lucide-react";
+import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack, ShoppingCart, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -27,10 +28,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; classId?: number; classTitle?: string }>({ open: false });
   const [viewDetailsDialog, setViewDetailsDialog] = useState<{ open: boolean; classData?: any }>({ open: false });
   const [selectedChildId, setSelectedChildId] = useState<string>("");
+  const [addToCartDialog, setAddToCartDialog] = useState<{ open: boolean; classData?: any }>({ open: false });
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
+  const { addItem, hasItem } = useCart();
 
   // Get childId from URL query parameters if present
   const urlParams = new URLSearchParams(window.location.search);
@@ -147,6 +150,33 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       currency: 'USD',
       minimumFractionDigits: 2
     }).format(amount / 100);
+  };
+
+  // Add to cart function
+  const handleAddToCart = (classData: any, childId: number) => {
+    const child = children.find(c => c.id === childId);
+    if (!child) {
+      toast({
+        title: "Error",
+        description: "Child not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    addItem({
+      classId: classData.id,
+      className: classData.title,
+      childId: childId,
+      childName: `${child.firstName} ${child.lastName}`,
+      price: classData.price,
+      description: classData.description,
+      startDate: classData.startDate,
+      endDate: classData.endDate,
+      schedule: classData.schedule,
+    });
+
+    setAddToCartDialog({ open: false });
   };
 
   // Check if there are any summer camp classes
@@ -282,6 +312,19 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                         }}
                       >
                         View Details
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setAddToCartDialog({ 
+                            open: true, 
+                            classData: classItem 
+                          });
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add to Cart
                       </Button>
                       <Button 
                         className="flex-1"
@@ -444,6 +487,83 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               disabled={!selectedChildId || enrollmentMutation.isPending || childrenLoading}
             >
               {enrollmentMutation.isPending ? "Enrolling..." : "Enroll"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add to Cart Dialog */}
+      <Dialog open={addToCartDialog.open} onOpenChange={(open) => setAddToCartDialog({ open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add to Cart</DialogTitle>
+            <DialogDescription>
+              Select which child you would like to add to cart for "{addToCartDialog.classData?.title}".
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="cart-child-select">Select Child</Label>
+              {!isAuthenticated ? (
+                <div className="text-sm text-destructive">
+                  Please log in to select a child.
+                </div>
+              ) : childrenLoading ? (
+                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                  Loading children...
+                </div>
+              ) : !children || children.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-4 border border-dashed rounded-lg text-center">
+                  <p className="mb-2">No children registered yet.</p>
+                  <p className="text-xs">You need to register a child before adding classes to cart.</p>
+                </div>
+              ) : (
+                <div className="space-y-2 mt-2">
+                  {children.map((child: any) => {
+                    const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
+                    const isAlreadyInCart = addToCartDialog.classData && hasItem(addToCartDialog.classData.id, child.id);
+                    
+                    return (
+                      <div key={child.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <div className="font-medium">{childName}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {child.gradeLevel} • Age {new Date().getFullYear() - new Date(child.birthdate).getFullYear()}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          disabled={isAlreadyInCart}
+                          onClick={() => handleAddToCart(addToCartDialog.classData, child.id)}
+                        >
+                          {isAlreadyInCart ? (
+                            <>
+                              <ShoppingCart className="h-4 w-4 mr-1" />
+                              In Cart
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setAddToCartDialog({ open: false })}
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

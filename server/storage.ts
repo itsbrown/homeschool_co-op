@@ -24,45 +24,45 @@ export interface IStorage {
   getAllActivities(): Promise<Activity[]>;
   getAllPayments(): Promise<Payment[]>;
   getAllEnrollments(): Promise<Enrollment[]>;
-  
+
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
-  
+
   // Curriculum methods
   getCurriculum(id: number): Promise<Curriculum | undefined>;
   getCurriculaByAuthor(authorId: number): Promise<Curriculum[]>;
   createCurriculum(curriculum: InsertCurriculum): Promise<Curriculum>;
   updateCurriculum(id: number, curriculum: Partial<InsertCurriculum>): Promise<Curriculum | undefined>;
-  
+
   // Lesson methods
   getLesson(id: number): Promise<Lesson | undefined>;
   getLessonsByCurriculum(curriculumId: number): Promise<Lesson[]>;
   getLessonsByAuthor(authorId: number): Promise<Lesson[]>;
   createLesson(lesson: InsertLesson): Promise<Lesson>;
   updateLesson(id: number, lesson: Partial<InsertLesson>): Promise<Lesson | undefined>;
-  
+
   // Event methods
   getEvent(id: number): Promise<Event | undefined>;
   getEventsByOrganizer(organizerId: number): Promise<Event[]>;
   getUpcomingEvents(userId: number): Promise<Event[]>;
   getAllEvents(userId: number): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
-  
+
   // Marketplace methods
   getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined>;
   getMarketplaceItemsBySeller(sellerId: number): Promise<MarketplaceItem[]>;
   getTopSellingItems(limit: number): Promise<MarketplaceItem[]>;
   createMarketplaceItem(item: InsertMarketplaceItem): Promise<MarketplaceItem>;
   updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<MarketplaceItem | undefined>;
-  
+
   // Knowledge Base methods
   getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined>;
   getKnowledgeBaseById(id: number, userId: number): Promise<KnowledgeBase | undefined>;
-  
+
   // Activity methods
   getActivityById(id: number, userId: number): Promise<Activity | undefined>;
   getActivitiesByAuthor(authorId: number): Promise<Activity[]>;
@@ -76,7 +76,7 @@ export interface IStorage {
   updateKnowledgeBase(id: number, knowledgeBase: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined>;
   incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined>;
   addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined>;
-  
+
   // Child methods
   getChildById(id: number): Promise<Child | undefined>;
   getChildrenByParentId(parentId: number): Promise<Child[]>;
@@ -85,21 +85,21 @@ export interface IStorage {
   createChild(child: InsertChild & { parentId: number }): Promise<Child>;
   updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined>;
   deleteChild(id: number): Promise<void>;
-  
+
   // Role invitation methods
   createRoleInvitation(invitation: any): Promise<any>;
   getRoleInvitations(): Promise<any[]>;
   getActiveRoleInvitation(token: string): Promise<any>;
   acceptRoleInvitation(token: string): Promise<void>;
   revokeRoleInvitation(id: number): Promise<void>;
-  
+
   // Emergency Contact methods
   getEmergencyContactById(id: number): Promise<EmergencyContact | undefined>;
   getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]>;
   createEmergencyContact(contact: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact>;
   updateEmergencyContact(id: number, contact: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined>;
   deleteEmergencyContact(id: number): Promise<void>;
-  
+
   // Program methods
   getProgramById(id: number): Promise<Program | undefined>;
   getPublishedPrograms(category?: string, gradeLevel?: string): Promise<Program[]>;
@@ -107,7 +107,7 @@ export interface IStorage {
   createProgram(program: InsertProgram & { instructorId: number }): Promise<Program>;
   updateProgram(id: number, program: Partial<InsertProgram>): Promise<Program | undefined>;
   deleteProgram(id: number): Promise<void>;
-  
+
   // Program Enrollment methods
   getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined>;
   getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]>;
@@ -116,11 +116,11 @@ export interface IStorage {
   createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment>;
   updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined>;
   deleteProgramEnrollment(id: number): Promise<void>;
-  
+
   // Class Enrollment methods
   createEnrollment(enrollment: any): Promise<any>;
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
-  
+
   // Class methods
   getClassById(id: number): Promise<Class | undefined>;
   getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]>;
@@ -128,13 +128,13 @@ export interface IStorage {
   createClass(classData: InsertClass & { instructorId: number }): Promise<Class>;
   updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
   deleteClass(id: number): Promise<void>;
-  
+
   // Role Invitation methods
   getActiveRoleInvitation(email: string): Promise<RoleInvitation | undefined>;
   createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation>;
   acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined>;
   getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]>;
-  
+
   // Marketing Link methods
   getMarketingLinkById(id: number): Promise<MarketingLink | undefined>;
   getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined>;
@@ -144,7 +144,7 @@ export interface IStorage {
   deleteMarketingLink(id: number): Promise<void>;
   incrementLinkClick(campaignId: string): Promise<void>;
   incrementLinkConversion(campaignId: string): Promise<void>;
-  
+
   // Link Analytics methods
   createLinkAnalytics(analytics: InsertLinkAnalytics): Promise<LinkAnalytics>;
   getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]>;
@@ -166,7 +166,7 @@ export class MemStorage implements IStorage {
   private activitiesStore: Map<number, Activity>;
   private marketingLinksStore: Map<number, MarketingLink>;
   private linkAnalyticsStore: Map<number, LinkAnalytics>;
-  
+
   private userIdCounter: number;
   private curriculumIdCounter: number;
   private lessonIdCounter: number;
@@ -199,7 +199,7 @@ export class MemStorage implements IStorage {
     this.marketingLinksStore = new Map();
     this.linkAnalyticsStore = new Map();
     this.classEnrollments = [];
-    
+
     this.userIdCounter = 1;
     this.curriculumIdCounter = 1;
     this.lessonIdCounter = 1;
@@ -214,12 +214,12 @@ export class MemStorage implements IStorage {
     this.activityIdCounter = 1;
     this.marketingLinkIdCounter = 1;
     this.linkAnalyticsIdCounter = 1;
-    
+
     // Initialize with a default admin user
-    
+
     // Add sample events for testing the calendar
     this.initializeSampleEvents();
-    
+
     // Load enrollments from file
     this.initializeEnrollments().catch(console.error);
     this.initializeKnowledgeBases().catch(console.error);
@@ -234,7 +234,7 @@ export class MemStorage implements IStorage {
       name: "Admin User",
       subscription: "individual"
     });
-    
+
     // Super Admin user
     this.createUser({
       username: "superadmin",
@@ -245,7 +245,7 @@ export class MemStorage implements IStorage {
       subscription: "institutional",
       supabaseId: "ac3f50b8-0e07-401f-80b8-96af1de10106"
     });
-    
+
     // Sample educator user
     this.createUser({
       username: "sarah",
@@ -255,7 +255,7 @@ export class MemStorage implements IStorage {
       name: "Sarah Johnson",
       subscription: "educator"
     });
-    
+
     // Test users for each role
     this.createUser({
       username: "learner",
@@ -265,7 +265,7 @@ export class MemStorage implements IStorage {
       name: "Test Learner",
       subscription: "free"
     });
-    
+
     this.createUser({
       username: "parent",
       email: "parent@example.com",
@@ -274,7 +274,7 @@ export class MemStorage implements IStorage {
       name: "Test Parent",
       subscription: "family"
     });
-    
+
     this.createUser({
       username: "educator",
       email: "educator@example.com",
@@ -283,7 +283,7 @@ export class MemStorage implements IStorage {
       name: "Test Educator",
       subscription: "educator"
     });
-    
+
     // School admin user for American Seekers Academy
     this.createUser({
       username: "contact",
@@ -305,7 +305,7 @@ export class MemStorage implements IStorage {
       (user) => user.username === username,
     );
   }
-  
+
   async getUserByEmail(email: string): Promise<User | undefined> {
     return Array.from(this.usersStore.values()).find(
       (user) => user.email === email,
@@ -319,29 +319,29 @@ export class MemStorage implements IStorage {
     this.usersStore.set(id, user);
     return user;
   }
-  
+
   async updateUser(id: number, updateData: Partial<InsertUser>): Promise<User | undefined> {
     const existingUser = this.usersStore.get(id);
     if (!existingUser) {
       return undefined;
     }
-    
+
     const updatedUser: User = { ...existingUser, ...updateData };
     this.usersStore.set(id, updatedUser);
     return updatedUser;
   }
-  
+
   // Curriculum methods
   async getCurriculum(id: number): Promise<Curriculum | undefined> {
     return this.curriculaStore.get(id);
   }
-  
+
   async getCurriculaByAuthor(authorId: number): Promise<Curriculum[]> {
     return Array.from(this.curriculaStore.values()).filter(
       curriculum => curriculum.authorId === authorId
     );
   }
-  
+
   async createCurriculum(insertCurriculum: InsertCurriculum): Promise<Curriculum> {
     const id = this.curriculumIdCounter++;
     const now = new Date();
@@ -349,38 +349,38 @@ export class MemStorage implements IStorage {
     this.curriculaStore.set(id, curriculum);
     return curriculum;
   }
-  
+
   async updateCurriculum(id: number, updateData: Partial<InsertCurriculum>): Promise<Curriculum | undefined> {
     const curriculum = this.curriculaStore.get(id);
     if (!curriculum) return undefined;
-    
+
     const updatedCurriculum = {
       ...curriculum,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.curriculaStore.set(id, updatedCurriculum);
     return updatedCurriculum;
   }
-  
+
   // Lesson methods
   async getLesson(id: number): Promise<Lesson | undefined> {
     return this.lessonsStore.get(id);
   }
-  
+
   async getLessonsByCurriculum(curriculumId: number): Promise<Lesson[]> {
     return Array.from(this.lessonsStore.values()).filter(
       lesson => lesson.curriculumId === curriculumId
     );
   }
-  
+
   async getLessonsByAuthor(authorId: number): Promise<Lesson[]> {
     return Array.from(this.lessonsStore.values()).filter(
       lesson => lesson.authorId === authorId
     );
   }
-  
+
   async createLesson(insertLesson: InsertLesson): Promise<Lesson> {
     const id = this.lessonIdCounter++;
     const now = new Date();
@@ -388,32 +388,32 @@ export class MemStorage implements IStorage {
     this.lessonsStore.set(id, lesson);
     return lesson;
   }
-  
+
   async updateLesson(id: number, updateData: Partial<InsertLesson>): Promise<Lesson | undefined> {
     const lesson = this.lessonsStore.get(id);
     if (!lesson) return undefined;
-    
+
     const updatedLesson = {
       ...lesson,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.lessonsStore.set(id, updatedLesson);
     return updatedLesson;
   }
-  
+
   // Event methods
   async getEvent(id: number): Promise<Event | undefined> {
     return this.eventsStore.get(id);
   }
-  
+
   async getEventsByOrganizer(organizerId: number): Promise<Event[]> {
     return Array.from(this.eventsStore.values()).filter(
       event => event.organizerId === organizerId
     );
   }
-  
+
   async getUpcomingEvents(userId: number): Promise<Event[]> {
     const now = new Date();
     return Array.from(this.eventsStore.values())
@@ -421,13 +421,13 @@ export class MemStorage implements IStorage {
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
       .slice(0, 5);
   }
-  
+
   async getAllEvents(userId: number): Promise<Event[]> {
     // For now, return all events - in a real app we would filter based on permissions
     return Array.from(this.eventsStore.values())
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   }
-  
+
   async createEvent(insertEvent: InsertEvent): Promise<Event> {
     const id = this.eventIdCounter++;
     const now = new Date();
@@ -435,24 +435,24 @@ export class MemStorage implements IStorage {
     this.eventsStore.set(id, event);
     return event;
   }
-  
+
   // Marketplace methods
   async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
     return this.marketplaceItemsStore.get(id);
   }
-  
+
   async getMarketplaceItemsBySeller(sellerId: number): Promise<MarketplaceItem[]> {
     return Array.from(this.marketplaceItemsStore.values()).filter(
       item => item.sellerId === sellerId
     );
   }
-  
+
   async getTopSellingItems(limit: number): Promise<MarketplaceItem[]> {
     return Array.from(this.marketplaceItemsStore.values())
       .sort((a, b) => b.sales - a.sales)
       .slice(0, limit);
   }
-  
+
   async createMarketplaceItem(insertItem: InsertMarketplaceItem): Promise<MarketplaceItem> {
     const id = this.marketplaceItemIdCounter++;
     const now = new Date();
@@ -466,54 +466,54 @@ export class MemStorage implements IStorage {
     this.marketplaceItemsStore.set(id, item);
     return item;
   }
-  
+
   async updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<MarketplaceItem | undefined> {
     const item = this.marketplaceItemsStore.get(id);
     if (!item) return undefined;
-    
+
     const updatedItem = {
       ...item,
       sales: item.sales + sales,
       revenue: item.revenue + revenue
     };
-    
+
     this.marketplaceItemsStore.set(id, updatedItem);
     return updatedItem;
   }
-  
+
   // Knowledge Base methods
   async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
     return this.knowledgeBaseStore.get(id);
   }
-  
+
   async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
     return Array.from(this.knowledgeBaseStore.values()).filter(
       kb => kb.authorId === authorId
     );
   }
-  
+
   async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
     return Array.from(this.knowledgeBaseStore.values()).filter(
       kb => kb.subject.toLowerCase() === subject.toLowerCase()
     );
   }
-  
+
   async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
     const publicBases = Array.from(this.knowledgeBaseStore.values()).filter(
       kb => kb.isPublic
     );
-    
+
     if (limit) {
       return publicBases.slice(0, limit);
     }
-    
+
     return publicBases;
   }
 
   async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
     return Array.from(this.knowledgeBaseStore.values());
   }
-  
+
   async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
     const id = this.knowledgeBaseIdCounter++;
     const now = new Date();
@@ -525,58 +525,58 @@ export class MemStorage implements IStorage {
       downloadCount: 0,
       purchasedBy: []
     };
-    
+
     this.knowledgeBaseStore.set(id, knowledgeBase);
-    
+
     // Persist to disk
     await this.saveKnowledgeBasesToDisk();
     console.log(`✅ Knowledge base created and saved to disk with ID: ${id}, title: "${knowledgeBase.title}"`);
     console.log(`📊 Total knowledge bases in storage: ${this.knowledgeBaseStore.size}`);
-    
+
     return knowledgeBase;
   }
-  
+
   async updateKnowledgeBase(id: number, updateData: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
-    
+
     const updatedKnowledgeBase = {
       ...knowledgeBase,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
     return updatedKnowledgeBase;
   }
-  
+
   async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
-    
+
     const updatedKnowledgeBase = {
       ...knowledgeBase,
       downloadCount: knowledgeBase.downloadCount + 1
     };
-    
+
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
     return updatedKnowledgeBase;
   }
-  
+
   async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
-    
+
     // Check if user has already purchased
     if (knowledgeBase.purchasedBy.includes(userId)) {
       return knowledgeBase;
     }
-    
+
     const updatedKnowledgeBase = {
       ...knowledgeBase,
       purchasedBy: [...knowledgeBase.purchasedBy, userId]
     };
-    
+
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
     return updatedKnowledgeBase;
   }
@@ -597,43 +597,43 @@ export class MemStorage implements IStorage {
   async createChild(childData: InsertChild & { parentId: number }): Promise<Child> {
     const id = this.childIdCounter++;
     const now = new Date();
-    
+
     const child: Child = {
       ...childData,
       id,
       createdAt: now,
       updatedAt: now
     };
-    
+
     this.childrenStore.set(id, child);
-    
+
     // Save to persistent storage
     await this.saveChildrenToDisk();
-    
+
     return child;
   }
 
   async updateChild(id: number, updateData: Partial<InsertChild>): Promise<Child | undefined> {
     const child = this.childrenStore.get(id);
     if (!child) return undefined;
-    
+
     const updatedChild: Child = {
       ...child,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.childrenStore.set(id, updatedChild);
-    
+
     // Save to persistent storage
     await this.saveChildrenToDisk();
-    
+
     return updatedChild;
   }
 
   async deleteChild(id: number): Promise<void> {
     this.childrenStore.delete(id);
-    
+
     // Save to persistent storage
     await this.saveChildrenToDisk();
   }
@@ -642,21 +642,21 @@ export class MemStorage implements IStorage {
     try {
       const fs = await import('fs');
       const path = await import('path');
-      
+
       const dataDir = path.join(process.cwd(), 'data');
       const filePath = path.join(dataDir, 'children.json');
-      
+
       // Ensure data directory exists
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
-      
+
       // Convert Map to Array for JSON serialization
       const children = Array.from(this.childrenStore.values());
-      
+
       // Write to file
       fs.writeFileSync(filePath, JSON.stringify(children, null, 2));
-      
+
       console.log(`💾 Successfully saved ${children.length} children to disk`);
     } catch (error) {
       console.error('❌ Error saving children to disk:', error);
@@ -679,14 +679,14 @@ export class MemStorage implements IStorage {
   async createEmergencyContact(contactData: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact> {
     const id = this.emergencyContactIdCounter++;
     const now = new Date();
-    
+
     const contact: EmergencyContact = {
       ...contactData,
       id,
       createdAt: now,
       updatedAt: now
     };
-    
+
     this.emergencyContactsStore.set(id, contact);
     return contact;
   }
@@ -694,13 +694,13 @@ export class MemStorage implements IStorage {
   async updateEmergencyContact(id: number, updateData: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
     const contact = this.emergencyContactsStore.get(id);
     if (!contact) return undefined;
-    
+
     const updatedContact: EmergencyContact = {
       ...contact,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.emergencyContactsStore.set(id, updatedContact);
     return updatedContact;
   }
@@ -716,15 +716,15 @@ export class MemStorage implements IStorage {
 
   async getPublishedPrograms(category?: string, gradeLevel?: string): Promise<Program[]> {
     let programs = Array.from(this.programsStore.values()).filter(program => program.isPublished);
-    
+
     if (category) {
       programs = programs.filter(program => program.category === category);
     }
-    
+
     if (gradeLevel) {
       programs = programs.filter(program => program.gradeLevels && program.gradeLevels.includes(gradeLevel));
     }
-    
+
     return programs;
   }
 
@@ -735,14 +735,14 @@ export class MemStorage implements IStorage {
   async createProgram(programData: InsertProgram & { instructorId: number }): Promise<Program> {
     const id = this.programIdCounter++;
     const now = new Date();
-    
+
     const program: Program = {
       ...programData,
       id,
       createdAt: now,
       updatedAt: now
     };
-    
+
     this.programsStore.set(id, program);
     return program;
   }
@@ -750,13 +750,13 @@ export class MemStorage implements IStorage {
   async updateProgram(id: number, updateData: Partial<InsertProgram>): Promise<Program | undefined> {
     const program = this.programsStore.get(id);
     if (!program) return undefined;
-    
+
     const updatedProgram: Program = {
       ...program,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.programsStore.set(id, updatedProgram);
     return updatedProgram;
   }
@@ -790,14 +790,14 @@ export class MemStorage implements IStorage {
   async createProgramEnrollment(enrollmentData: InsertProgramEnrollment): Promise<ProgramEnrollment> {
     const id = this.programEnrollmentIdCounter++;
     const now = new Date();
-    
+
     const enrollment: ProgramEnrollment = {
       ...enrollmentData,
       id,
       createdAt: now,
       updatedAt: now
     };
-    
+
     this.programEnrollmentsStore.set(id, enrollment);
     return enrollment;
   }
@@ -805,13 +805,13 @@ export class MemStorage implements IStorage {
   async updateProgramEnrollment(id: number, updateData: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
     const enrollment = this.programEnrollmentsStore.get(id);
     if (!enrollment) return undefined;
-    
+
     const updatedEnrollment: ProgramEnrollment = {
       ...enrollment,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.programEnrollmentsStore.set(id, updatedEnrollment);
     return updatedEnrollment;
   }
@@ -830,16 +830,17 @@ export class MemStorage implements IStorage {
     console.log(`📝 ENROLLMENT STORED: Child ${enrollment.childId} enrolled in class ${enrollment.classId}`);
     console.log(`📝 Total enrollments in memory: ${this.classEnrollments.length}`);
     console.log(`📝 All enrollments:`, this.classEnrollments);
-    
+
     // Save to file for persistence
     try {
       console.log(`💾 About to save enrollments to file...`);
       await this.saveEnrollmentsToFile();
+```python
       console.log(`💾 Save operation completed`);
     } catch (error) {
       console.error(`❌ Error in createEnrollment save operation:`, error);
     }
-    
+
     return enrollment;
   }
 
@@ -859,19 +860,19 @@ export class MemStorage implements IStorage {
       console.log(`❌ No classEnrollments array exists for enrollment ${enrollmentId}`);
       return false;
     }
-    
+
     const initialLength = this.classEnrollments.length;
     this.classEnrollments = this.classEnrollments.filter(enrollment => enrollment.id !== enrollmentId);
     const finalLength = this.classEnrollments.length;
-    
+
     if (initialLength === finalLength) {
       console.log(`❌ Enrollment ${enrollmentId} not found`);
       return false;
     }
-    
+
     console.log(`❌ ENROLLMENT REMOVED: ID ${enrollmentId}`);
     console.log(`📝 Total enrollments remaining: ${this.classEnrollments.length}`);
-    
+
     // Save to file for persistence
     try {
       console.log(`💾 About to save enrollments to file after removal...`);
@@ -880,7 +881,7 @@ export class MemStorage implements IStorage {
     } catch (error) {
       console.error(`❌ Error in removeEnrollment save operation:`, error);
     }
-    
+
     return true;
   }
 
@@ -891,17 +892,17 @@ export class MemStorage implements IStorage {
     }
     return this.classEnrollments;
   }
-  
+
   // Class methods
   async getClassById(id: number): Promise<Class | undefined> {
     return this.classesStore.get(id);
   }
-  
+
   async getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]> {
     const { page, limit, search = "", category = "", status = "" } = options;
-    
+
     let filteredClasses = Array.from(this.classesStore.values());
-    
+
     // Apply filters
     if (search) {
       const searchLower = search.toLowerCase();
@@ -910,34 +911,34 @@ export class MemStorage implements IStorage {
         classItem.description.toLowerCase().includes(searchLower)
       );
     }
-    
+
     if (category) {
       filteredClasses = filteredClasses.filter(classItem => 
         classItem.category.toLowerCase() === category.toLowerCase()
       );
     }
-    
+
     if (status === "published") {
       filteredClasses = filteredClasses.filter(classItem => classItem.isPublished);
     } else if (status === "draft") {
       filteredClasses = filteredClasses.filter(classItem => !classItem.isPublished);
     }
-    
+
     // Sort by creation date (newest first)
     filteredClasses.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    
+
     // Apply pagination
     const startIndex = (page - 1) * limit;
     const endIndex = page * limit;
-    
+
     return filteredClasses.slice(startIndex, endIndex);
   }
-  
+
   async getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number> {
     const { search = "", category = "", status = "" } = options;
-    
+
     let filteredClasses = Array.from(this.classesStore.values());
-    
+
     // Apply filters
     if (search) {
       const searchLower = search.toLowerCase();
@@ -946,26 +947,26 @@ export class MemStorage implements IStorage {
         classItem.description.toLowerCase().includes(searchLower)
       );
     }
-    
+
     if (category) {
       filteredClasses = filteredClasses.filter(classItem => 
         classItem.category.toLowerCase() === category.toLowerCase()
       );
     }
-    
+
     if (status === "published") {
       filteredClasses = filteredClasses.filter(classItem => classItem.isPublished);
     } else if (status === "draft") {
       filteredClasses = filteredClasses.filter(classItem => !classItem.isPublished);
     }
-    
+
     return filteredClasses.length;
   }
-  
+
   async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
     const id = this.classIdCounter++;
     const now = new Date();
-    
+
     const newClass: Class = {
       ...classData,
       id,
@@ -973,58 +974,58 @@ export class MemStorage implements IStorage {
       updatedAt: now,
       enrollmentCount: 0
     };
-    
+
     this.classesStore.set(id, newClass);
     return newClass;
   }
-  
+
   async updateClass(id: number, updateData: Partial<InsertClass>): Promise<Class | undefined> {
     const classItem = this.classesStore.get(id);
     if (!classItem) return undefined;
-    
+
     const updatedClass: Class = {
       ...classItem,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.classesStore.set(id, updatedClass);
     return updatedClass;
   }
-  
+
   async deleteClass(id: number): Promise<void> {
     this.classesStore.delete(id);
   }
-  
+
   // Knowledge Base methods
   async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
     return this.knowledgeBaseStore.get(id);
   }
-  
+
   async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
     const publicKnowledgeBases = Array.from(this.knowledgeBaseStore.values())
       .filter(kb => kb.isPublic)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    
+
     return limit ? publicKnowledgeBases.slice(0, limit) : publicKnowledgeBases;
   }
-  
+
   async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
     return Array.from(this.knowledgeBaseStore.values())
       .filter(kb => kb.isPublic && kb.subject.toLowerCase() === subject.toLowerCase())
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
-  
+
   async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
     return Array.from(this.knowledgeBaseStore.values())
       .filter(kb => kb.authorId === authorId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
-  
+
   async createKnowledgeBase(knowledgeBaseData: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase> {
     const id = this.knowledgeBaseIdCounter++;
     const now = new Date();
-    
+
     const newKnowledgeBase: KnowledgeBase = {
       ...knowledgeBaseData,
       id,
@@ -1033,63 +1034,63 @@ export class MemStorage implements IStorage {
       downloadCount: 0,
       purchasedBy: []
     };
-    
+
     this.knowledgeBaseStore.set(id, newKnowledgeBase);
-    
+
     // Persist to disk
     await this.saveKnowledgeBasesToDisk();
-    
+
     return newKnowledgeBase;
   }
-  
+
   async updateKnowledgeBase(id: number, updateData: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined> {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
-    
+
     const updatedKnowledgeBase: KnowledgeBase = {
       ...knowledgeBase,
       ...updateData,
       updatedAt: new Date()
     };
-    
+
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
     await this.saveKnowledgeBasesToDisk();
     return updatedKnowledgeBase;
   }
-  
+
   async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
-    
+
     const updatedKnowledgeBase: KnowledgeBase = {
       ...knowledgeBase,
       downloadCount: knowledgeBase.downloadCount + 1,
       updatedAt: new Date()
     };
-    
+
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
     return updatedKnowledgeBase;
   }
-  
+
   async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
-    
+
     // Check if user has already purchased
     if (knowledgeBase.purchasedBy.includes(userId)) {
       return knowledgeBase;
     }
-    
+
     const updatedKnowledgeBase: KnowledgeBase = {
       ...knowledgeBase,
       purchasedBy: [...knowledgeBase.purchasedBy, userId],
       updatedAt: new Date()
     };
-    
+
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
     return updatedKnowledgeBase;
   }
-  
+
   async deleteKnowledgeBase(id: number): Promise<void> {
     this.knowledgeBaseStore.delete(id);
     await this.saveKnowledgeBasesToDisk();
@@ -1099,35 +1100,35 @@ export class MemStorage implements IStorage {
     try {
       const fs = await import('fs');
       const path = await import('path');
-      
+
       const dataDir = path.join(process.cwd(), 'data');
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
-      
+
       const kbFilePath = path.join(dataDir, 'knowledge-bases.json');
       const knowledgeBases = Array.from(this.knowledgeBaseStore.values());
-      
+
       fs.writeFileSync(kbFilePath, JSON.stringify(knowledgeBases, null, 2));
       console.log(`✅ Saved ${knowledgeBases.length} knowledge bases to storage`);
     } catch (error) {
       console.error('Error saving knowledge bases:', error);
     }
   }
-  
+
   // Helper method to initialize sample knowledge bases
   private async initializeKnowledgeBases(): Promise<void> {
     try {
       const fs = await import('fs');
       const path = await import('path');
-      
+
       // First try to load from JSON file
       const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
-      
+
       if (fs.existsSync(kbFilePath)) {
         const data = fs.readFileSync(kbFilePath, 'utf8');
         const knowledgeBases = JSON.parse(data);
-        
+
         for (const kb of knowledgeBases) {
           this.knowledgeBaseStore.set(kb.id, {
             ...kb,
@@ -1144,34 +1145,34 @@ export class MemStorage implements IStorage {
 
       // Try to load from uploads directory
       const uploadsPath = path.join(process.cwd(), 'uploads', 'knowledge-bases');
-      
+
       if (fs.existsSync(uploadsPath)) {
         const kbDirs = fs.readdirSync(uploadsPath).filter(item => {
           return fs.statSync(path.join(uploadsPath, item)).isDirectory();
         });
-        
+
         let loadedCount = 0;
         for (const kbId of kbDirs) {
           const kbPath = path.join(uploadsPath, kbId);
           const files = fs.readdirSync(kbPath);
-          
+
           if (files.length > 0) {
             // Try to read first file to extract title
             let title = 'Uploaded Knowledge Base';
             let subject = 'General';
-            
+
             try {
               const firstFile = files[0];
               const filePath = path.join(kbPath, firstFile);
               const content = fs.readFileSync(filePath, 'utf8');
-              
+
               // Extract title from content
               const lines = content.split('\n');
               const firstLine = lines[0]?.trim();
-              
+
               if (firstLine && firstLine.length > 0) {
                 title = firstLine.replace(/^#+\s*/, ''); // Remove markdown headers
-                
+
                 // Determine subject based on content
                 const contentLower = content.toLowerCase();
                 if (contentLower.includes('history') || contentLower.includes('revolutionary')) {
@@ -1187,7 +1188,7 @@ export class MemStorage implements IStorage {
             } catch (error) {
               // Keep default title if file reading fails
             }
-            
+
             // Create knowledge base entry from uploaded files
             const kb: KnowledgeBase = {
               id: this.knowledgeBaseIdCounter++,
@@ -1212,12 +1213,12 @@ export class MemStorage implements IStorage {
               createdAt: new Date(),
               updatedAt: new Date()
             };
-            
+
             this.knowledgeBaseStore.set(kb.id, kb);
             loadedCount++;
           }
         }
-        
+
         if (loadedCount > 0) {
           console.log(`✅ Successfully loaded ${loadedCount} uploaded knowledge bases`);
           // Also create representative knowledge bases to restore previously created content
@@ -1333,7 +1334,7 @@ export class MemStorage implements IStorage {
     this.knowledgeBaseStore.set(kb1.id, kb1);
     this.knowledgeBaseStore.set(kb2.id, kb2);
     this.knowledgeBaseStore.set(kb3.id, kb3);
-    
+
     console.log(`✅ Created 3 representative knowledge bases based on previous content`);
   }
 
@@ -1359,7 +1360,7 @@ export class MemStorage implements IStorage {
       updatedAt: new Date()
     };
     this.knowledgeBaseStore.set(kb1.id, kb1);
-    
+
     // Sample knowledge base 2: Science
     const kb2: KnowledgeBase = {
       id: this.knowledgeBaseIdCounter++,
@@ -1381,7 +1382,7 @@ export class MemStorage implements IStorage {
       updatedAt: new Date()
     };
     this.knowledgeBaseStore.set(kb2.id, kb2);
-    
+
     // Sample knowledge base 3: Language Arts
     const kb3: KnowledgeBase = {
       id: this.knowledgeBaseIdCounter++,
@@ -1403,7 +1404,7 @@ export class MemStorage implements IStorage {
       updatedAt: new Date()
     };
     this.knowledgeBaseStore.set(kb3.id, kb3);
-    
+
     // Sample knowledge base 4: History
     const kb4: KnowledgeBase = {
       id: this.knowledgeBaseIdCounter++,
@@ -1426,14 +1427,14 @@ export class MemStorage implements IStorage {
     };
     this.knowledgeBaseStore.set(kb4.id, kb4);
   }
-  
+
   // Helper method to initialize sample events for the calendar
   private initializeSampleEvents(): void {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
     const currentDay = now.getDate();
-    
+
     // Sample event 1: Class - Today
     const event1: Event = {
       id: this.eventIdCounter++,
@@ -1447,7 +1448,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date()
     };
     this.eventsStore.set(event1.id, event1);
-    
+
     // Sample event 2: Meeting - Tomorrow
     const event2: Event = {
       id: this.eventIdCounter++,
@@ -1461,7 +1462,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date()
     };
     this.eventsStore.set(event2.id, event2);
-    
+
     // Sample event 3: Workshop - Next week
     const event3: Event = {
       id: this.eventIdCounter++,
@@ -1475,7 +1476,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date()
     };
     this.eventsStore.set(event3.id, event3);
-    
+
     // Sample event 4: Camp - Later this month
     const event4: Event = {
       id: this.eventIdCounter++,
@@ -1489,7 +1490,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date()
     };
     this.eventsStore.set(event4.id, event4);
-    
+
     // Sample event 5: Other - Next month
     const event5: Event = {
       id: this.eventIdCounter++,
@@ -1504,12 +1505,12 @@ export class MemStorage implements IStorage {
     };
     this.eventsStore.set(event5.id, event5);
   }
-  
+
   // Activity methods
   async createActivity(activity: InsertActivity): Promise<Activity> {
     const id = this.activityIdCounter++;
     const now = new Date();
-    
+
     const newActivity: Activity = {
       ...activity,
       id,
@@ -1518,71 +1519,71 @@ export class MemStorage implements IStorage {
       downloadCount: 0,
       isPublic: activity.isPublic || false
     };
-    
+
     this.activitiesStore.set(id, newActivity);
     return newActivity;
   }
-  
+
   async getActivityById(id: number, userId: number = 0): Promise<Activity | undefined> {
     const activity = this.activitiesStore.get(id);
-    
+
     // Check if activity exists and is either public, owned by the user, or user is a guest (userId = 0)
     if (activity && (activity.isPublic || activity.authorId === userId || userId === 0)) {
       return activity;
     }
-    
+
     return undefined;
   }
-  
+
   async getActivitiesByAuthor(authorId: number): Promise<Activity[]> {
     const activities: Activity[] = [];
-    
+
     for (const activity of this.activitiesStore.values()) {
       if (activity.authorId === authorId) {
         activities.push(activity);
       }
     }
-    
+
     // Sort by most recently created
     return activities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
-  
+
   async updateActivityDownloadCount(id: number): Promise<Activity | undefined> {
     const activity = this.activitiesStore.get(id);
-    
+
     if (!activity) {
       return undefined;
     }
-    
+
     const updatedActivity: Activity = {
       ...activity,
       downloadCount: activity.downloadCount + 1,
       updatedAt: new Date()
     };
-    
+
     this.activitiesStore.set(id, updatedActivity);
     return updatedActivity;
   }
-  
+
   async updateActivityPdfUrl(id: number, pdfUrl: string): Promise<Activity | undefined> {
     const activity = this.activitiesStore.get(id);
-    
+
     if (!activity) {
       console.error(`Activity with ID ${id} not found for PDF URL update`);
       return undefined;
     }
-    
+
     console.log(`Updating activity ${id} with PDF URL: ${pdfUrl}`);
-    
+
     const updatedActivity: Activity = {
       ...activity,
       pdfUrl: pdfUrl,
       updatedAt: new Date()
     };
-    
+
     this.activitiesStore.set(id, updatedActivity);
     console.log(`Activity ${id} successfully updated with PDF URL`);
-    
+
     return updatedActivity;
   }
 
@@ -1592,11 +1593,11 @@ export class MemStorage implements IStorage {
       const fs = await import('fs');
       const path = await import('path');
       const classesFilePath = path.join(process.cwd(), 'data', 'classes.json');
-      
+
       if (fs.existsSync(classesFilePath)) {
         const classesData = JSON.parse(fs.readFileSync(classesFilePath, 'utf-8'));
         console.log(`🏫 Loading ${classesData.length} classes from classes.json`);
-        
+
         classesData.forEach((classData: any) => {
           // Ensure the class has required fields and set defaults for missing ones
           const normalizedClass = {
@@ -1612,16 +1613,16 @@ export class MemStorage implements IStorage {
             createdAt: classData.createdAt ? new Date(classData.createdAt) : new Date(),
             updatedAt: classData.updatedAt ? new Date(classData.updatedAt) : new Date()
           };
-          
+
           // Add to store with existing ID
           this.classesStore.set(classData.id, normalizedClass as Class);
-          
+
           // Update counter to be higher than max ID
           if (classData.id >= this.classIdCounter) {
             this.classIdCounter = classData.id + 1;
           }
         });
-        
+
         console.log(`✅ Successfully loaded ${this.classesStore.size} classes into storage`);
         console.log(`📊 Available class IDs: [${Array.from(this.classesStore.keys()).join(', ')}]`);
       } else {
@@ -1665,16 +1666,16 @@ export class MemStorage implements IStorage {
       const fs = await import('fs');
       const path = await import('path');
       const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
-      
+
       if (fs.existsSync(enrollmentsFilePath)) {
         const enrollmentsData = JSON.parse(fs.readFileSync(enrollmentsFilePath, 'utf-8'));
         console.log(`📚 Loading ${enrollmentsData.length} enrollments from enrollments.json`);
-        
+
         this.classEnrollments = enrollmentsData.map((enrollment: any) => ({
           ...enrollment,
           enrollmentDate: enrollment.enrollmentDate ? new Date(enrollment.enrollmentDate) : new Date()
         }));
-        
+
         console.log(`✅ Successfully loaded ${this.classEnrollments.length} enrollments into storage`);
       } else {
         console.log('📚 No enrollments.json found, starting with empty enrollments');
@@ -1691,21 +1692,21 @@ export class MemStorage implements IStorage {
       const fs = await import('fs');
       const path = await import('path');
       const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
-      
+
       console.log(`💾 Attempting to save ${this.classEnrollments.length} enrollments to file: ${enrollmentsFilePath}`);
       console.log(`💾 Enrollment data to save:`, JSON.stringify(this.classEnrollments, null, 2));
-      
+
       // Ensure data directory exists
       const dataDir = path.dirname(enrollmentsFilePath);
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
         console.log(`📁 Created data directory: ${dataDir}`);
       }
-      
+
       const enrollmentData = JSON.stringify(this.classEnrollments, null, 2);
       fs.writeFileSync(enrollmentsFilePath, enrollmentData);
       console.log(`✅ Successfully saved ${this.classEnrollments.length} enrollments to enrollments.json`);
-      
+
       // Verify the file was written
       const savedData = fs.readFileSync(enrollmentsFilePath, 'utf-8');
       console.log(`🔍 Verification - File contents: ${savedData.substring(0, 100)}...`);
@@ -1721,11 +1722,11 @@ export class MemStorage implements IStorage {
       const fs = await import('fs');
       const path = await import('path');
       const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
-      
+
       if (fs.existsSync(childrenFilePath)) {
         const childrenData = JSON.parse(fs.readFileSync(childrenFilePath, 'utf-8'));
         console.log(`👶 Loading ${childrenData.length} children from children.json`);
-        
+
         childrenData.forEach((childData: any) => {
           // Ensure the child has required fields and set defaults for missing ones
           const normalizedChild = {
@@ -1735,16 +1736,16 @@ export class MemStorage implements IStorage {
             createdAt: childData.createdAt ? new Date(childData.createdAt) : new Date(),
             updatedAt: childData.updatedAt ? new Date(childData.updatedAt) : new Date()
           };
-          
+
           // Add to store with existing ID
           this.childrenStore.set(childData.id, normalizedChild as Child);
-          
+
           // Update counter to be higher than max ID
           if (childData.id >= this.childIdCounter) {
             this.childIdCounter = childData.id + 1;
           }
         });
-        
+
         console.log(`✅ Successfully loaded ${this.childrenStore.size} children into storage`);
         console.log(`👶 Available child IDs: [${Array.from(this.childrenStore.keys()).join(', ')}]`);
       } else {
