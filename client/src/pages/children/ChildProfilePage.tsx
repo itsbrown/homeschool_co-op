@@ -116,8 +116,11 @@ export default function ChildProfilePage() {
       setConfirmDialog({ open: false, enrollmentId: null, className: "" });
       // Invalidate enrollment queries to refresh the UI
       queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/children/${id}/enrollments`] });
       queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
     },
     onError: (error: any) => {
       toast({

@@ -65,8 +65,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       // Invalidate all enrollment-related queries
       queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
-      // Invalidate the specific child enrollment query
+      // Invalidate the specific child enrollment query - both query patterns
       queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${variables.childId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/children/${variables.childId}/enrollments`] });
+      // Invalidate parent dashboard enrollment queries
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
     },
     onError: (error: any) => {
       toast({
