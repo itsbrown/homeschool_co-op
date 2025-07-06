@@ -835,7 +835,6 @@ export class MemStorage implements IStorage {
     try {
       console.log(`💾 About to save enrollments to file...`);
       await this.saveEnrollmentsToFile();
-```python
       console.log(`💾 Save operation completed`);
     } catch (error) {
       console.error(`❌ Error in createEnrollment save operation:`, error);
