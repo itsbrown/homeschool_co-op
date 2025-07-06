@@ -34,6 +34,17 @@ router.get('/summary', async (req, res) => {
 
     // Get children and their enrollments
     const children = await storage.getChildrenByParentEmail(userEmail);
+    if (!children || children.length === 0) {
+      console.log(`💰 No children found for parent ${userEmail}`);
+      return res.status(200).json({
+        totalBalance: 0,
+        totalBalanceFormatted: '0.00',
+        enrollmentCount: 0,
+        enrollmentDetails: [],
+        parentEmail: userEmail
+      });
+    }
+
     const allEnrollments = await storage.getAllEnrollments();
     const allClasses = await storage.getAllClasses();
 
@@ -46,7 +57,7 @@ router.get('/summary', async (req, res) => {
 
       for (const enrollment of childEnrollments) {
         const classInfo = allClasses.find(c => c.id === enrollment.classId);
-        const classPrice = classInfo ? classInfo.price : 90000; // Default $900
+        const classPrice = classInfo ? (classInfo.price || 90000) : 90000; // Default $900
 
         // Check if payment was made (from payment history or enrollment data)
         const amountPaid = enrollment.amount || 0;
@@ -61,8 +72,8 @@ router.get('/summary', async (req, res) => {
             classPrice: classPrice,
             amountPaid: amountPaid,
             balance: balance,
-            enrollmentDate: enrollment.enrollmentDate,
-            status: enrollment.status
+            enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
+            status: enrollment.status || 'enrolled'
           });
         }
       }

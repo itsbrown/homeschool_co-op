@@ -126,8 +126,14 @@ export default function BillingPage() {
 
   // Fetch billing summary
   const { data: billingSummary, isLoading, error } = useQuery<BillingSummary>({
-    queryKey: ['/api/billing/summary'],
-    enabled: !!isAuthenticated,
+    queryKey: ['billing-summary'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/billing/summary');
+      return response;
+    },
+    enabled: !!isAuthenticated && !!user,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const formatCurrency = (amount: number) => {
