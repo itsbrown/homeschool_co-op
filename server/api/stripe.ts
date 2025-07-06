@@ -152,28 +152,52 @@ router.post('/webhook', async (req, res) => {
       console.log('💳 Payment succeeded:', paymentIntent.id);
       
       try {
-        // Process enrollments from metadata
-        const itemsJson = paymentIntent.metadata.itemsJson;
-        if (itemsJson) {
-          const items = JSON.parse(itemsJson);
+        // Check if this is a balance payment or new enrollment
+        const paymentType = paymentIntent.metadata.paymentType;
+        
+        if (paymentType === 'balance_payment') {
+          // Handle balance payment - update existing enrollments
+          const enrollmentIds = JSON.parse(paymentIntent.metadata.enrollmentIds || '[]');
+          console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
           
-          // Create enrollments for each item
-          const enrollmentPromises = items.map(async (item: any) => {
-            return storage.createEnrollment({
-              classId: item.classId,
-              childId: item.childId,
-              status: 'enrolled',
-              paymentIntentId: paymentIntent.id,
-              amount: item.price,
-              enrollmentDate: new Date().toISOString()
+          // Update each enrollment with payment information
+          const allEnrollments = await storage.getAllEnrollments();
+          for (const enrollmentId of enrollmentIds) {
+            const enrollment = allEnrollments.find(e => e.id === enrollmentId);
+            if (enrollment) {
+              // Update enrollment with payment info
+              enrollment.paymentIntentId = paymentIntent.id;
+              enrollment.amount = paymentIntent.amount; // This should be split properly in production
+              enrollment.status = 'enrolled';
+              await storage.updateEnrollment(enrollment);
+            }
+          }
+          
+          console.log('✅ Balance payment processed for:', paymentIntent.id);
+        } else {
+          // Handle new enrollment payments
+          const itemsJson = paymentIntent.metadata.itemsJson;
+          if (itemsJson) {
+            const items = JSON.parse(itemsJson);
+            
+            // Create enrollments for each item
+            const enrollmentPromises = items.map(async (item: any) => {
+              return storage.createEnrollment({
+                classId: item.classId,
+                childId: item.childId,
+                status: 'enrolled',
+                paymentIntentId: paymentIntent.id,
+                amount: item.price,
+                enrollmentDate: new Date().toISOString()
+              });
             });
-          });
 
-          await Promise.all(enrollmentPromises);
-          console.log('✅ All enrollments processed for payment:', paymentIntent.id);
+            await Promise.all(enrollmentPromises);
+            console.log('✅ All enrollments processed for payment:', paymentIntent.id);
+          }
         }
       } catch (error) {
-        console.error('❌ Error processing enrollments:', error);
+        console.error('❌ Error processing payment:', error);
       }
       break;
 

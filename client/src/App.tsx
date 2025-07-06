@@ -54,7 +54,7 @@ import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import ClassCreationPage from "./pages/admin/ClassCreationPage";
 import ClassesPage from "./pages/ClassesPage";
 import CalendarPage from "./pages/CalendarPage";
-import ProgramsBrowseRedirect from "./pages/ProgramsBrowseRedirect";
+import ProgramsBrowseRedirect from "@/pages/ProgramsBrowseRedirect";
 import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
 import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
@@ -62,6 +62,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
+import { lazy } from 'react';
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -305,6 +306,7 @@ function Router() {
       <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route path="/cart/checkout" component={CartCheckout} />
       <Route path="/cart/success" component={CartSuccess} />
+      <Route path="/billing" component={lazy(() => import('./pages/BillingPage'))} />
 
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
