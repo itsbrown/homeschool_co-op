@@ -606,6 +606,10 @@ export class MemStorage implements IStorage {
     };
     
     this.childrenStore.set(id, child);
+    
+    // Save to persistent storage
+    await this.saveChildrenToDisk();
+    
     return child;
   }
 
@@ -620,11 +624,43 @@ export class MemStorage implements IStorage {
     };
     
     this.childrenStore.set(id, updatedChild);
+    
+    // Save to persistent storage
+    await this.saveChildrenToDisk();
+    
     return updatedChild;
   }
 
   async deleteChild(id: number): Promise<void> {
     this.childrenStore.delete(id);
+    
+    // Save to persistent storage
+    await this.saveChildrenToDisk();
+  }
+
+  private async saveChildrenToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const dataDir = path.join(process.cwd(), 'data');
+      const filePath = path.join(dataDir, 'children.json');
+      
+      // Ensure data directory exists
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      // Convert Map to Array for JSON serialization
+      const children = Array.from(this.childrenStore.values());
+      
+      // Write to file
+      fs.writeFileSync(filePath, JSON.stringify(children, null, 2));
+      
+      console.log(`💾 Successfully saved ${children.length} children to disk`);
+    } catch (error) {
+      console.error('❌ Error saving children to disk:', error);
+    }
   }
 
   async getAllChildren(): Promise<Child[]> {
