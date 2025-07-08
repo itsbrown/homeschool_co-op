@@ -46,7 +46,7 @@ router.get('/summary', async (req, res) => {
     }
 
     const allEnrollments = await storage.getAllEnrollments();
-    const allClasses = await storage.getAllClasses();
+    const allClasses = await storage.getClasses({ page: 1, limit: 1000 });
 
     let totalBalance = 0;
     const enrollmentDetails = [];

@@ -62,7 +62,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
-import { lazy } from 'react';
+import BillingPage from "@/pages/BillingPage";
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -306,7 +306,7 @@ function Router() {
       <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route path="/cart/checkout" component={CartCheckout} />
       <Route path="/cart/success" component={CartSuccess} />
-      <Route path="/billing" component={lazy(() => import('./pages/BillingPage'))} />
+      <Route path="/billing" component={BillingPage} />
 
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />

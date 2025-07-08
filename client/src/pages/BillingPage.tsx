@@ -131,7 +131,7 @@ export default function BillingPage() {
     queryFn: async () => {
       try {
         const response = await apiRequest('GET', '/api/billing/summary');
-        return response;
+        return await response.json();
       } catch (error) {
         console.error('Billing summary error:', error);
         throw error;
@@ -196,8 +196,9 @@ export default function BillingPage() {
             totalAmount: totalAmount,
           });
 
-          if (response.clientSecret) {
-            setClientSecret(response.clientSecret);
+          const data = await response.json();
+          if (data.clientSecret) {
+            setClientSecret(data.clientSecret);
             setShowPayment(true);
           }
         } catch (error: any) {
