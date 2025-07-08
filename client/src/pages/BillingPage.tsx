@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -123,20 +123,27 @@ export default function BillingPage() {
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
+  const [isPending, startTransition] = useTransition();
 
   // Fetch billing summary
   const { data: billingSummary, isLoading, error } = useQuery<BillingSummary>({
     queryKey: ['billing-summary'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/billing/summary');
-      return response;
+      try {
+        const response = await apiRequest('GET', '/api/billing/summary');
+        return response;
+      } catch (error) {
+        console.error('Billing summary error:', error);
+        throw error;
+      }
     },
     enabled: !!isAuthenticated && !!user,
-    retry: 3,
-    retryDelay: 1000,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     suspense: false,
     staleTime: 0,
     refetchOnWindowFocus: false,
+    notifyOnChangeProps: ['data', 'error', 'isLoading'],
   });
 
   const formatCurrency = (amount: number) => {
@@ -169,7 +176,7 @@ export default function BillingPage() {
       .reduce((total, detail) => total + detail.balance, 0);
   };
 
-  const handlePaySelected = async () => {
+  const handlePaySelected = () => {
     if (selectedEnrollments.length === 0) {
       toast({
         title: "No Enrollments Selected",
@@ -179,24 +186,26 @@ export default function BillingPage() {
       return;
     }
 
-    try {
-      const totalAmount = getSelectedTotal();
-      const response = await apiRequest('POST', '/api/billing/pay-balance', {
-        enrollmentIds: selectedEnrollments,
-        totalAmount: totalAmount,
-      });
+    startTransition(async () => {
+      try {
+        const totalAmount = getSelectedTotal();
+        const response = await apiRequest('POST', '/api/billing/pay-balance', {
+          enrollmentIds: selectedEnrollments,
+          totalAmount: totalAmount,
+        });
 
-      if (response.clientSecret) {
-        setClientSecret(response.clientSecret);
-        setShowPayment(true);
+        if (response.clientSecret) {
+          setClientSecret(response.clientSecret);
+          setShowPayment(true);
+        }
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: "Failed to initialize payment. Please try again.",
+          variant: "destructive",
+        });
       }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to initialize payment. Please try again.",
-        variant: "destructive",
-      });
-    }
+    });
   };
 
   if (!isAuthenticated) {
@@ -351,11 +360,20 @@ export default function BillingPage() {
                   </div>
                   <Button 
                     onClick={handlePaySelected}
-                    disabled={selectedEnrollments.length === 0}
+                    disabled={selectedEnrollments.length === 0 || isPending}
                     size="lg"
                   >
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Pay Selected ({formatCurrency(getSelectedTotal())})
+                    {isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Preparing Payment...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Pay Selected ({formatCurrency(getSelectedTotal())})
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
