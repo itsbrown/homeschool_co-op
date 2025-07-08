@@ -57,7 +57,12 @@ router.get('/summary', async (req, res) => {
 
       for (const enrollment of childEnrollments) {
         const classInfo = allClasses.find(c => c.id === enrollment.classId);
-        const classPrice = classInfo ? (classInfo.price || 90000) : 90000; // Default $900
+        let classPrice = classInfo ? (classInfo.price || 90000) : 90000; // Default $900
+        
+        // Ensure price is in cents - if it's a small number, it's likely in dollars
+        if (classPrice < 10000) {
+          classPrice = classPrice * 100; // Convert dollars to cents
+        }
 
         // Check if payment was made (from payment history or enrollment data)
         const amountPaid = enrollment.amount || 0;
