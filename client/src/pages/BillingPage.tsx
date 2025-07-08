@@ -176,7 +176,7 @@ export default function BillingPage() {
       .reduce((total, detail) => total + detail.balance, 0);
   };
 
-  const handlePaySelected = () => {
+  const handlePaySelected = async () => {
     if (selectedEnrollments.length === 0) {
       toast({
         title: "No Enrollments Selected",
@@ -186,25 +186,28 @@ export default function BillingPage() {
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const totalAmount = getSelectedTotal();
-        const response = await apiRequest('POST', '/api/billing/pay-balance', {
-          enrollmentIds: selectedEnrollments,
-          totalAmount: totalAmount,
-        });
+    startTransition(() => {
+      // Start the async operation but don't await it inside startTransition
+      (async () => {
+        try {
+          const totalAmount = getSelectedTotal();
+          const response = await apiRequest('POST', '/api/billing/pay-balance', {
+            enrollmentIds: selectedEnrollments,
+            totalAmount: totalAmount,
+          });
 
-        if (response.clientSecret) {
-          setClientSecret(response.clientSecret);
-          setShowPayment(true);
+          if (response.clientSecret) {
+            setClientSecret(response.clientSecret);
+            setShowPayment(true);
+          }
+        } catch (error: any) {
+          toast({
+            title: "Error",
+            description: "Failed to initialize payment. Please try again.",
+            variant: "destructive",
+          });
         }
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: "Failed to initialize payment. Please try again.",
-          variant: "destructive",
-        });
-      }
+      })();
     });
   };
 
