@@ -52,14 +52,23 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    console.log('💳 Payment form submitted');
 
     if (!stripe || !elements) {
+      console.error('❌ Stripe or Elements not loaded');
+      toast({
+        title: "Payment Error",
+        description: "Payment system not ready. Please try again.",
+        variant: "destructive",
+      });
       return;
     }
 
+    console.log('🔄 Processing payment for amount:', totalAmount);
     setProcessing(true);
 
     try {
+      console.log('📤 Confirming payment with Stripe...');
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
@@ -68,13 +77,17 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
         redirect: 'if_required',
       });
 
+      console.log('📥 Stripe response:', { error, paymentIntent });
+
       if (error) {
+        console.error('❌ Payment failed:', error);
         toast({
           title: "Payment Failed",
-          description: error.message,
+          description: error.message || "Payment could not be processed.",
           variant: "destructive",
         });
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        console.log('✅ Payment successful:', paymentIntent.id);
         toast({
           title: "Payment Successful!",
           description: "Your balance has been paid successfully.",
@@ -82,15 +95,29 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
 
         // Refresh the page to show updated balances
         window.location.reload();
+      } else {
+        console.warn('⚠️ Unexpected payment result:', paymentIntent);
+        toast({
+          title: "Payment Status Unknown",
+          description: "Please check your payment status and try again if needed.",
+          variant: "destructive",
+        });
       }
     } catch (error: any) {
-      console.error("Payment error:", error);
+      console.error('❌ Payment processing error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
       toast({
         title: "Payment Failed",
-        description: "There was an error processing your payment.",
+        description: error.message || "There was an error processing your payment.",
         variant: "destructive",
       });
     } finally {
+      console.log('🏁 Payment processing complete');
       setProcessing(false);
     }
   };
@@ -135,15 +162,38 @@ export default function BillingPage() {
   const [clientSecret, setClientSecret] = useState<string>('');
   const [isPending, startTransition] = useTransition();
 
+  // Debug logging for state changes
+  React.useEffect(() => {
+    console.log('🔄 BillingPage state updated:', {
+      isAuthenticated,
+      userEmail: user?.email,
+      selectedEnrollments,
+      showPayment,
+      isPending,
+      hasClientSecret: !!clientSecret
+    });
+  }, [isAuthenticated, user, selectedEnrollments, showPayment, isPending, clientSecret]);
+
   // Fetch billing summary
   const { data: billingSummary, isLoading, error } = useQuery<BillingSummary>({
     queryKey: ['billing-summary'],
     queryFn: async () => {
       try {
+        console.log('📊 Fetching billing summary...');
         const response = await apiRequest('GET', '/api/billing/summary');
-        return await response.json();
+        console.log('📊 Billing summary response:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          console.error('❌ Billing summary failed:', errorData);
+          throw new Error(`Billing summary failed: ${errorData.message || response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('✅ Billing summary data:', data);
+        return data;
       } catch (error) {
-        console.error('Billing summary error:', error);
+        console.error('❌ Billing summary error:', error);
         throw error;
       }
     },
@@ -172,10 +222,16 @@ export default function BillingPage() {
   };
 
   const handleSelectEnrollment = (enrollmentId: number, isSelected: boolean) => {
+    console.log('📝 Enrollment selection changed:', { enrollmentId, isSelected });
+    
     if (isSelected) {
-      setSelectedEnrollments([...selectedEnrollments, enrollmentId]);
+      const newSelected = [...selectedEnrollments, enrollmentId];
+      console.log('✅ Added enrollment, new selection:', newSelected);
+      setSelectedEnrollments(newSelected);
     } else {
-      setSelectedEnrollments(selectedEnrollments.filter(id => id !== enrollmentId));
+      const newSelected = selectedEnrollments.filter(id => id !== enrollmentId);
+      console.log('❌ Removed enrollment, new selection:', newSelected);
+      setSelectedEnrollments(newSelected);
     }
   };
 
@@ -187,7 +243,10 @@ export default function BillingPage() {
   };
 
   const handlePaySelected = async () => {
+    console.log('🔄 Pay Selected button clicked');
+    
     if (selectedEnrollments.length === 0) {
+      console.log('❌ No enrollments selected');
       toast({
         title: "No Enrollments Selected",
         description: "Please select at least one enrollment to pay.",
@@ -197,33 +256,53 @@ export default function BillingPage() {
     }
 
     if (isPending) {
+      console.log('⏳ Already processing, ignoring click');
       return; // Prevent multiple clicks while processing
     }
+
+    console.log('🚀 Starting payment process for enrollments:', selectedEnrollments);
 
     startTransition(async () => {
       try {
         const totalAmount = getSelectedTotal();
+        console.log('💰 Total amount to pay:', totalAmount);
+        
+        console.log('📤 Sending payment request...');
         const response = await apiRequest('POST', '/api/billing/pay-balance', {
           enrollmentIds: selectedEnrollments,
           totalAmount: totalAmount,
         });
 
+        console.log('📥 Payment response received:', response.status, response.statusText);
+
         if (!response.ok) {
-          throw new Error('Failed to create payment intent');
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          console.error('❌ Payment request failed:', errorData);
+          throw new Error(`Payment request failed: ${errorData.message || response.statusText}`);
         }
 
         const data = await response.json();
+        console.log('✅ Payment response data:', data);
+        
         if (data.clientSecret) {
+          console.log('🔑 Client secret received, showing payment form');
           setClientSecret(data.clientSecret);
           setShowPayment(true);
         } else {
-          throw new Error('No client secret received');
+          console.error('❌ No client secret in response:', data);
+          throw new Error('No client secret received from server');
         }
       } catch (error: any) {
-        console.error('Payment initialization error:', error);
+        console.error('❌ Payment initialization error:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        
         toast({
-          title: "Error",
-          description: "Failed to initialize payment. Please try again.",
+          title: "Payment Error",
+          description: error.message || "Failed to initialize payment. Please try again.",
           variant: "destructive",
         });
       }
