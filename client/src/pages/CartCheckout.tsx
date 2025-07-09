@@ -15,11 +15,11 @@ import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2 } 
 import ParentAppShell from '@/components/layout/ParentAppShell';
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
-const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+const stripePublishableKey = import.meta.env.STRIPE_PUBLISHABLE_KEY;
 console.log('🔑 CartCheckout Stripe key check:', stripePublishableKey ? 'Present' : 'Missing');
 
 if (!stripePublishableKey || stripePublishableKey.trim() === '') {
-  console.error('❌ Missing VITE_STRIPE_PUBLIC_KEY environment variable');
+  console.error('❌ Missing STRIPE_PUBLISHABLE_KEY environment variable');
 }
 
 const stripePromise = stripePublishableKey && stripePublishableKey.trim() !== '' 
