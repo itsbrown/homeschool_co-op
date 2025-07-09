@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { storage } from '../storage';
+import Stripe from 'stripe';
 
 const router = Router();
 
@@ -146,7 +147,6 @@ router.post('/pay-balance', async (req, res) => {
     }
 
     // Create Stripe payment intent
-    const Stripe = require('stripe');
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
     const paymentIntent = await stripe.paymentIntents.create({
