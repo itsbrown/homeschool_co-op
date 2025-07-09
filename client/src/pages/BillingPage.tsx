@@ -13,7 +13,17 @@ import { apiRequest } from '@/lib/queryClient';
 import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2 } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+// Initialize Stripe outside component to avoid re-creating the Stripe object
+const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+console.log('🔑 Stripe publishable key check:', stripePublishableKey ? 'Present' : 'Missing');
+
+if (!stripePublishableKey || stripePublishableKey.trim() === '') {
+  console.error('❌ Missing VITE_STRIPE_PUBLIC_KEY environment variable');
+}
+
+const stripePromise = stripePublishableKey && stripePublishableKey.trim() !== '' 
+  ? loadStripe(stripePublishableKey) 
+  : null;
 
 interface EnrollmentDetail {
   enrollmentId: number;
@@ -384,7 +394,7 @@ export default function BillingPage() {
             </Card>
 
             {/* Payment Form */}
-            {showPayment && clientSecret && (
+            {showPayment && clientSecret && stripePromise && (
               <Card>
                 <CardHeader>
                   <CardTitle>Complete Payment</CardTitle>

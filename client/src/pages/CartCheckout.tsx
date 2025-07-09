@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/components/SupabaseProvider';
@@ -15,7 +14,17 @@ import { apiRequest } from '@/lib/queryClient';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2 } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+// Initialize Stripe outside component to avoid re-creating the Stripe object
+const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+console.log('🔑 CartCheckout Stripe key check:', stripePublishableKey ? 'Present' : 'Missing');
+
+if (!stripePublishableKey || stripePublishableKey.trim() === '') {
+  console.error('❌ Missing VITE_STRIPE_PUBLIC_KEY environment variable');
+}
+
+const stripePromise = stripePublishableKey && stripePublishableKey.trim() !== '' 
+  ? loadStripe(stripePublishableKey) 
+  : null;
 
 function CheckoutForm() {
   const stripe = useStripe();
@@ -60,12 +69,12 @@ function CheckoutForm() {
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         // Process bulk enrollments
         await processBulkEnrollments(paymentIntent.id);
-        
+
         toast({
           title: "Payment Successful!",
           description: "Your children have been enrolled in the selected classes.",
         });
-        
+
         clearCart();
         setLocation('/cart/success');
       }
@@ -335,9 +344,18 @@ export default function CartCheckout() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm />
-                </Elements>
+                {stripePromise ? (
+                  <Elements stripe={stripePromise} options={{ clientSecret }}>
+                    <CheckoutForm />
+                  </Elements>
+                ) : (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    <AlertDescription>
+                      Stripe is not properly initialized. Please check your Stripe publishable key.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
           </div>
