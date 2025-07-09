@@ -196,29 +196,37 @@ export default function BillingPage() {
       return;
     }
 
-    startTransition(() => {
-      // Start the async operation but don't await it inside startTransition
-      (async () => {
-        try {
-          const totalAmount = getSelectedTotal();
-          const response = await apiRequest('POST', '/api/billing/pay-balance', {
-            enrollmentIds: selectedEnrollments,
-            totalAmount: totalAmount,
-          });
+    if (isPending) {
+      return; // Prevent multiple clicks while processing
+    }
 
-          const data = await response.json();
-          if (data.clientSecret) {
-            setClientSecret(data.clientSecret);
-            setShowPayment(true);
-          }
-        } catch (error: any) {
-          toast({
-            title: "Error",
-            description: "Failed to initialize payment. Please try again.",
-            variant: "destructive",
-          });
+    startTransition(async () => {
+      try {
+        const totalAmount = getSelectedTotal();
+        const response = await apiRequest('POST', '/api/billing/pay-balance', {
+          enrollmentIds: selectedEnrollments,
+          totalAmount: totalAmount,
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create payment intent');
         }
-      })();
+
+        const data = await response.json();
+        if (data.clientSecret) {
+          setClientSecret(data.clientSecret);
+          setShowPayment(true);
+        } else {
+          throw new Error('No client secret received');
+        }
+      } catch (error: any) {
+        console.error('Payment initialization error:', error);
+        toast({
+          title: "Error",
+          description: "Failed to initialize payment. Please try again.",
+          variant: "destructive",
+        });
+      }
     });
   };
 
@@ -374,13 +382,18 @@ export default function BillingPage() {
                   </div>
                   <Button 
                     onClick={handlePaySelected}
-                    disabled={selectedEnrollments.length === 0 || isPending}
+                    disabled={selectedEnrollments.length === 0 || isPending || showPayment}
                     size="lg"
                   >
                     {isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Preparing Payment...
+                      </>
+                    ) : showPayment ? (
+                      <>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Payment Form Ready
                       </>
                     ) : (
                       <>
