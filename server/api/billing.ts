@@ -11,14 +11,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing STRIPE_SECRET_KEY environment variable');
 }
 
-if (!process.env.STRIPE_PUBLISHABLE_KEY) {
-  console.error('❌ STRIPE_PUBLISHABLE_KEY environment variable is not set');
-  throw new Error('Missing STRIPE_PUBLISHABLE_KEY environment variable');
-}
-
-console.log('🔑 Stripe keys validation:');
-console.log('🔑 Secret key starts with:', process.env.STRIPE_SECRET_KEY.substring(0, 15) + '...');
-console.log('🔑 Publishable key starts with:', process.env.STRIPE_PUBLISHABLE_KEY.substring(0, 15) + '...');
+console.log('🔑 Stripe server-side validation:');
+console.log('✅ Secret key starts with:', process.env.STRIPE_SECRET_KEY.substring(0, 15) + '...');
+console.log('ℹ️  Publishable key validation is handled client-side');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-12-18.acacia',
