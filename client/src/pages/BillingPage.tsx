@@ -21,9 +21,10 @@ if (!stripePublishableKey || stripePublishableKey.trim() === '') {
   console.error('❌ Missing VITE_STRIPE_PUBLIC_KEY environment variable');
 }
 
+// Always create stripePromise, even if key is missing (for better error handling)
 const stripePromise = stripePublishableKey && stripePublishableKey.trim() !== '' 
   ? loadStripe(stripePublishableKey) 
-  : null;
+  : Promise.resolve(null);
 
 interface EnrollmentDetail {
   enrollmentId: number;
@@ -50,37 +51,16 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
   const { toast } = useToast();
   const [processing, setProcessing] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [elementMounted, setElementMounted] = useState(false);
 
-  // Wait for PaymentElement to be ready
+  // Simplified readiness check - rely on Stripe's callbacks
   React.useEffect(() => {
-    if (stripe && elements) {
-      const checkElementsReady = async () => {
-        try {
-          // Check if PaymentElement is mounted and ready
-          const paymentElement = elements.getElement('payment');
-          if (paymentElement) {
-            console.log('✅ PaymentElement is mounted and ready');
-            setIsReady(true);
-          } else {
-            // Wait a bit longer for the element to mount
-            setTimeout(() => {
-              const retryElement = elements.getElement('payment');
-              if (retryElement) {
-                console.log('✅ PaymentElement is ready after retry');
-                setIsReady(true);
-              } else {
-                console.warn('⚠️ PaymentElement still not ready');
-              }
-            }, 1000);
-          }
-        } catch (error) {
-          console.error('❌ Error checking PaymentElement readiness:', error);
-        }
-      };
-
-      checkElementsReady();
+    // Only set ready when we have stripe, elements, and the element is mounted
+    if (stripe && elements && elementMounted) {
+      console.log('✅ All Stripe components ready');
+      setIsReady(true);
     }
-  }, [stripe, elements]);
+  }, [stripe, elements, elementMounted]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -189,14 +169,31 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
         <PaymentElement 
           onReady={() => {
             console.log('✅ PaymentElement onReady callback fired');
-            setIsReady(true);
+            setElementMounted(true);
           }}
           onLoaderStart={() => {
             console.log('🔄 PaymentElement loader started');
+            setElementMounted(false);
             setIsReady(false);
+          }}
+          onLoadError={(error) => {
+            console.error('❌ PaymentElement load error:', error);
+            toast({
+              title: "Payment Form Error",
+              description: "Failed to load payment form. Please refresh and try again.",
+              variant: "destructive",
+            });
           }}
           options={{
             layout: 'tabs',
+            paymentMethodOrder: ['card'],
+            fields: {
+              billingDetails: {
+                address: {
+                  country: 'never'
+                }
+              }
+            }
           }}
         />
       </div>
@@ -577,7 +574,7 @@ export default function BillingPage() {
             </Card>
 
             {/* Payment Form */}
-            {showPayment && clientSecret && stripePromise && (
+            {showPayment && clientSecret && (
               <Card className="border-green-200 bg-green-50/30" data-payment-form>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -589,21 +586,30 @@ export default function BillingPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {stripePromise ? (
-                    <Elements stripe={stripePromise} options={{ clientSecret }}>
+                  <React.Suspense fallback={
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <span>Initializing payment system...</span>
+                    </div>
+                  }>
+                    <Elements 
+                      stripe={stripePromise} 
+                      options={{ 
+                        clientSecret,
+                        appearance: {
+                          theme: 'stripe',
+                          variables: {
+                            colorPrimary: '#2563eb',
+                          }
+                        }
+                      }}
+                    >
                       <PaymentForm 
                         enrollmentIds={selectedEnrollments} 
                         totalAmount={getSelectedTotal()} 
                       />
                     </Elements>
-                  ) : (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        Stripe is not properly initialized. Please check your Stripe publishable key configuration.
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                  </React.Suspense>
                 </CardContent>
               </Card>
             )}
