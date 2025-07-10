@@ -127,7 +127,7 @@ export default function ParentSidebar() {
     {
       title: "Platform Subscription",
       href: "/platform-subscription",
-      icon: CreditCard,
+      icon: <CreditCard className="h-5 w-5" />,
     },
     {
       href: "/enrollment-assistant",
