@@ -288,6 +288,14 @@ export default function BillingPage() {
           console.log('🔑 Client secret received, showing payment form');
           setClientSecret(data.clientSecret);
           setShowPayment(true);
+          
+          // Auto-scroll to payment form after a brief delay
+          setTimeout(() => {
+            const paymentSection = document.querySelector('[data-payment-form]');
+            if (paymentSection) {
+              paymentSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }, 500);
         } else {
           console.error('❌ No client secret in response:', data);
           throw new Error('No client secret received from server');
@@ -458,49 +466,63 @@ export default function BillingPage() {
                     <p className="text-sm text-muted-foreground">
                       {selectedEnrollments.length} enrollment(s) selected
                     </p>
-                  </div>
-                  <Button 
-                    onClick={handlePaySelected}
-                    disabled={selectedEnrollments.length === 0 || isPending || showPayment}
-                    size="lg"
-                  >
-                    {isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Preparing Payment...
-                      </>
-                    ) : showPayment ? (
-                      <>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Payment Form Ready
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        Pay Selected ({formatCurrency(getSelectedTotal())})
-                      </>
+                    {showPayment && (
+                      <p className="text-sm text-green-600 font-medium">
+                        ✓ Payment form is ready below
+                      </p>
                     )}
-                  </Button>
+                  </div>
+                  {!showPayment && (
+                    <Button 
+                      onClick={handlePaySelected}
+                      disabled={selectedEnrollments.length === 0 || isPending}
+                      size="lg"
+                    >
+                      {isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Preparing Payment...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="mr-2 h-4 w-4" />
+                          Pay Selected ({formatCurrency(getSelectedTotal())})
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             {/* Payment Form */}
             {showPayment && clientSecret && stripePromise && (
-              <Card>
+              <Card className="border-green-200 bg-green-50/30" data-payment-form>
                 <CardHeader>
-                  <CardTitle>Complete Payment</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-green-600" />
+                    Secure Payment
+                  </CardTitle>
                   <CardDescription>
-                    Enter your payment information to pay {formatCurrency(getSelectedTotal())}
+                    Complete your payment of {formatCurrency(getSelectedTotal())} for {selectedEnrollments.length} enrollment(s)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Elements stripe={stripePromise} options={{ clientSecret }}>
-                    <PaymentForm 
-                      enrollmentIds={selectedEnrollments} 
-                      totalAmount={getSelectedTotal()} 
-                    />
-                  </Elements>
+                  {stripePromise ? (
+                    <Elements stripe={stripePromise} options={{ clientSecret }}>
+                      <PaymentForm 
+                        enrollmentIds={selectedEnrollments} 
+                        totalAmount={getSelectedTotal()} 
+                      />
+                    </Elements>
+                  ) : (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Stripe is not properly initialized. Please check your Stripe publishable key configuration.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </CardContent>
               </Card>
             )}
