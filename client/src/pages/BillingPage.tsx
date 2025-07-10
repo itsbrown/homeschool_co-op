@@ -241,6 +241,7 @@ export default function BillingPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
+  const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<{[enrollmentId: number]: number}>({});
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [isPending, startTransition] = useTransition();
@@ -322,7 +323,14 @@ export default function BillingPage() {
     if (!billingSummary) return 0;
     return billingSummary.enrollmentDetails
       .filter(detail => selectedEnrollments.includes(detail.enrollmentId))
-      .reduce((total, detail) => total + detail.nextPaymentAmount, 0);
+      .reduce((total, detail) => {
+        if (detail.paymentOptions) {
+          const selectedOptionIndex = selectedPaymentOptions[detail.enrollmentId] || 0;
+          const selectedOption = detail.paymentOptions[selectedOptionIndex];
+          return total + (selectedOption.amount - (selectedOption.discount || 0));
+        }
+        return total + detail.nextPaymentAmount;
+      }, 0);
   };
 
   const handlePaySelected = async () => {
@@ -351,9 +359,30 @@ export default function BillingPage() {
         console.log('💰 Total amount to pay:', totalAmount);
 
         console.log('📤 Sending payment request...');
+        // Build payment details with selected options
+        const paymentDetails = selectedEnrollments.map(enrollmentId => {
+          const enrollment = billingSummary.enrollmentDetails.find(d => d.enrollmentId === enrollmentId);
+          if (!enrollment) return null;
+          
+          const selectedOptionIndex = selectedPaymentOptions[enrollmentId] || 0;
+          const selectedOption = enrollment.paymentOptions?.[selectedOptionIndex] || {
+            type: enrollment.paymentType,
+            amount: enrollment.nextPaymentAmount,
+            description: 'Payment'
+          };
+          
+          return {
+            enrollmentId,
+            paymentType: selectedOption.type,
+            amount: selectedOption.amount - (selectedOption.discount || 0),
+            description: selectedOption.description
+          };
+        }).filter(Boolean);
+
         const response = await apiRequest('POST', '/api/billing/pay-balance', {
           enrollmentIds: selectedEnrollments,
           totalAmount: totalAmount,
+          paymentDetails: paymentDetails,
         });
 
         console.log('📥 Payment response received:', response.status, response.statusText);
@@ -508,15 +537,15 @@ export default function BillingPage() {
               <CardContent>
                 <div className="space-y-4">
                   {billingSummary.enrollmentDetails.map((detail) => (
-                    <div key={detail.enrollmentId} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center space-x-3">
+                    <div key={detail.enrollmentId} className="p-4 border rounded-lg">
+                      <div className="flex items-start space-x-3 mb-4">
                         <input
                           type="checkbox"
                           checked={selectedEnrollments.includes(detail.enrollmentId)}
                           onChange={(e) => handleSelectEnrollment(detail.enrollmentId, e.target.checked)}
-                          className="rounded"
+                          className="rounded mt-1"
                         />
-                        <div>
+                        <div className="flex-1">
                           <div className="font-medium">{detail.className}</div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
@@ -530,6 +559,40 @@ export default function BillingPage() {
                           </div>
                         </div>
                       </div>
+                      
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        {/* Payment Options */}
+                        {detail.paymentOptions && detail.paymentOptions.length > 1 && (
+                          <div className="flex-1">
+                            <div className="text-sm font-medium mb-2">Payment Option:</div>
+                            <div className="space-y-2">
+                              {detail.paymentOptions.map((option: any, index: number) => (
+                                <label key={index} className="flex items-center space-x-2 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name={`payment-option-${detail.enrollmentId}`}
+                                    checked={(selectedPaymentOptions[detail.enrollmentId] || 0) === index}
+                                    onChange={() => setSelectedPaymentOptions(prev => ({
+                                      ...prev,
+                                      [detail.enrollmentId]: index
+                                    }))}
+                                    className="rounded"
+                                  />
+                                  <span className="text-sm">
+                                    {option.description} - ${((option.amount - (option.discount || 0)) / 100).toFixed(2)}
+                                    {option.discount > 0 && (
+                                      <span className="text-green-600 text-xs ml-1">
+                                        (Save ${(option.discount / 100).toFixed(2)})
+                                      </span>
+                                    )}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Cost Breakdown */}
                       <div className="text-right">
                         <div className="flex justify-between text-sm">
                           <span>Total Cost:</span>
@@ -547,9 +610,39 @@ export default function BillingPage() {
                           <span>Remaining Balance:</span>
                           <span>${(detail.balance / 100).toFixed(2)}</span>
                         </div>
-                        <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-                          <strong>Next Payment ({detail.paymentType === 'deposit' ? 'Deposit' : 'Remaining Balance'}):</strong> 
-                          <span className="font-semibold text-blue-700"> ${(detail.nextPaymentAmount / 100).toFixed(2)}</span>
+                        {/* Payment Options */}
+                        <div className="mt-4 space-y-2">
+                          <div className="text-sm font-medium text-gray-700">Payment Options:</div>
+                          {detail.paymentOptions ? detail.paymentOptions.map((option: any, index: number) => (
+                            <div key={index} className="p-2 border rounded text-sm">
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium">{option.description}</span>
+                                <span className="font-semibold">
+                                  ${((option.amount - (option.discount || 0)) / 100).toFixed(2)}
+                                  {option.discount > 0 && (
+                                    <span className="text-green-600 text-xs ml-1">
+                                      (Save ${(option.discount / 100).toFixed(2)})
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                              {option.type === 'deposit' && (
+                                <div className="text-xs text-blue-600 mt-1">
+                                  Secures your spot, remaining balance due before class starts
+                                </div>
+                              )}
+                              {option.type === 'full_payment' && (
+                                <div className="text-xs text-green-600 mt-1">
+                                  Complete payment now, no future payments needed
+                                </div>
+                              )}
+                            </div>
+                          )) : (
+                            <div className="p-2 bg-blue-50 rounded text-sm">
+                              <strong>Next Payment ({detail.paymentType === 'deposit' ? 'Deposit' : 'Remaining Balance'}):</strong> 
+                              <span className="font-semibold text-blue-700"> ${(detail.nextPaymentAmount / 100).toFixed(2)}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

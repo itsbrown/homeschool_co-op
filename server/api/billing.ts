@@ -85,23 +85,35 @@ router.get('/summary', async (req, res) => {
         const amountPaid = enrollment.amount || 0;
         const balance = classPrice - amountPaid;
         
-        // Determine payment type needed
-        let paymentType = 'deposit';
-        let paymentAmount = depositRequired;
-        
-        if (amountPaid >= depositRequired) {
-          // Deposit paid, now working on remaining balance
-          paymentType = 'remaining_balance';
-          paymentAmount = balance;
-        } else if (amountPaid > 0) {
-          // Partial deposit paid
-          paymentAmount = depositRequired - amountPaid;
-        }
-
         if (balance > 0) {
-          // For billing summary, we want to show what they need to pay next (deposit first)
-          const nextPaymentNeeded = paymentAmount;
-          totalBalance += nextPaymentNeeded; // Only add the next required payment to total
+          // Provide multiple payment options
+          const paymentOptions = [];
+          
+          if (amountPaid < depositRequired) {
+            // Haven't paid deposit yet - offer deposit or full payment
+            paymentOptions.push({
+              type: 'deposit',
+              amount: depositRequired - amountPaid,
+              description: '10% Deposit'
+            });
+            paymentOptions.push({
+              type: 'full_payment',
+              amount: balance,
+              description: 'Pay in Full',
+              discount: balance > 50000 ? 500 : 0 // $5 discount for full payment over $500
+            });
+          } else {
+            // Deposit already paid - remaining balance only
+            paymentOptions.push({
+              type: 'remaining_balance',
+              amount: balance,
+              description: 'Remaining Balance'
+            });
+          }
+
+          // For the total balance calculation, use the minimum payment option (usually deposit)
+          const minPaymentAmount = Math.min(...paymentOptions.map(opt => opt.amount - (opt.discount || 0)));
+          totalBalance += minPaymentAmount;
           
           enrollmentDetails.push({
             enrollmentId: enrollment.id,
@@ -111,8 +123,10 @@ router.get('/summary', async (req, res) => {
             depositRequired: depositRequired,
             amountPaid: amountPaid,
             balance: balance,
-            paymentType: paymentType,
-            nextPaymentAmount: paymentAmount,
+            paymentOptions: paymentOptions,
+            // Keep legacy fields for backward compatibility
+            paymentType: paymentOptions[0].type,
+            nextPaymentAmount: paymentOptions[0].amount,
             enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
             status: enrollment.status || 'enrolled'
           });
