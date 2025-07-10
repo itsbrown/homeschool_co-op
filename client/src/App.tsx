@@ -63,6 +63,7 @@ import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
 import BillingPage from "@/pages/BillingPage";
+import PaymentPlans from "@/pages/PaymentPlans";
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -307,6 +308,7 @@ function Router() {
       <Route path="/cart/checkout" component={CartCheckout} />
       <Route path="/cart/success" component={CartSuccess} />
       <Route path="/billing" component={BillingPage} />
+      <Route path="/payment-plans" component={PaymentPlans} />
 
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
