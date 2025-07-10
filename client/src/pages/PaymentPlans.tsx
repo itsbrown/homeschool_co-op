@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
-interface PaymentPlan {
+interface PlatformSubscription {
   id: string;
   name: string;
   description: string;
@@ -20,7 +21,7 @@ interface PaymentPlan {
   stripePriceId?: string;
 }
 
-const paymentPlans: PaymentPlan[] = [
+const platformSubscriptions: PlatformSubscription[] = [
   {
     id: 'free',
     name: 'Free Explorer',
@@ -96,7 +97,7 @@ const paymentPlans: PaymentPlan[] = [
   }
 ];
 
-const annualDiscountPlans: PaymentPlan[] = paymentPlans.map(plan => ({
+const annualDiscountPlans: PlatformSubscription[] = platformSubscriptions.map(plan => ({
   ...plan,
   id: plan.id + '_annual',
   interval: 'year' as const,
@@ -104,7 +105,7 @@ const annualDiscountPlans: PaymentPlan[] = paymentPlans.map(plan => ({
   stripePriceId: plan.stripePriceId?.replace('monthly', 'yearly')
 }));
 
-export default function PaymentPlans() {
+export default function PlatformSubscriptionPlans() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -112,9 +113,9 @@ export default function PaymentPlans() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
 
-  const plans = isAnnual ? annualDiscountPlans : paymentPlans;
+  const plans = isAnnual ? annualDiscountPlans : platformSubscriptions;
 
-  const handleSelectPlan = async (plan: PaymentPlan) => {
+  const handleSelectPlan = async (plan: PlatformSubscription) => {
     if (!isAuthenticated) {
       toast({
         title: "Authentication Required",
@@ -129,7 +130,7 @@ export default function PaymentPlans() {
       // Handle free plan
       try {
         setProcessing(true);
-        await apiRequest("POST", "/api/subscriptions/free", {
+        await apiRequest("POST", "/api/platform-subscriptions/free", {
           planId: plan.id
         });
         
@@ -156,7 +157,7 @@ export default function PaymentPlans() {
       setProcessing(true);
       setSelectedPlan(plan.id);
       
-      const response = await apiRequest("POST", "/api/subscriptions/create", {
+      const response = await apiRequest("POST", "/api/platform-subscriptions/create", {
         planId: plan.id,
         stripePriceId: plan.stripePriceId,
         interval: plan.interval
@@ -198,11 +199,11 @@ export default function PaymentPlans() {
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          Choose Your Learning Journey
+          Platform Subscription Plans
         </h1>
         <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-          Flexible payment plans designed to make quality education accessible to every family. 
-          Start free and upgrade as your needs grow.
+          Access the ASA platform with AI-powered tools, curriculum generation, and learning management features. 
+          Choose the plan that fits your educational needs.
         </p>
         
         {/* Billing Toggle */}
@@ -236,7 +237,7 @@ export default function PaymentPlans() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {plans.map((plan) => {
           const isCurrentPlan = user?.subscription === plan.id.replace('_annual', '');
-          const monthlyPlan = paymentPlans.find(p => p.id === plan.id.replace('_annual', ''));
+          const monthlyPlan = platformSubscriptions.find(p => p.id === plan.id.replace('_annual', ''));
           const savings = isAnnual && monthlyPlan ? getSavings(monthlyPlan.price, plan.price) : 0;
           
           return (
@@ -312,34 +313,44 @@ export default function PaymentPlans() {
         })}
       </div>
 
-      {/* Payment Plans Benefits */}
+      {/* Platform Benefits */}
       <div className="mt-16 bg-gray-50 rounded-lg p-8">
-        <h2 className="text-2xl font-bold text-center mb-8">Why Choose Our Payment Plans?</h2>
+        <h2 className="text-2xl font-bold text-center mb-8">Platform Features & Benefits</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="text-center">
             <div className="bg-primary/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <Users className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="font-semibold mb-2">Family-Friendly</h3>
-            <p className="text-gray-600 text-sm">Plans designed for families of all sizes with flexible child limits</p>
+            <h3 className="font-semibold mb-2">AI-Powered Learning</h3>
+            <p className="text-gray-600 text-sm">Advanced AI tools for curriculum generation, worksheets, and personalized learning paths</p>
           </div>
           
           <div className="text-center">
             <div className="bg-primary/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <GraduationCap className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="font-semibold mb-2">No Contracts</h3>
-            <p className="text-gray-600 text-sm">Cancel anytime with no long-term commitments or hidden fees</p>
+            <h3 className="font-semibold mb-2">Flexible Access</h3>
+            <p className="text-gray-600 text-sm">Cancel anytime with no long-term commitments. Scale up or down based on your needs</p>
           </div>
           
           <div className="text-center">
             <div className="bg-primary/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
               <Star className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="font-semibold mb-2">Money-Back Guarantee</h3>
-            <p className="text-gray-600 text-sm">30-day money-back guarantee on all paid plans</p>
+            <h3 className="font-semibold mb-2">30-Day Guarantee</h3>
+            <p className="text-gray-600 text-sm">30-day money-back guarantee on all paid plans. Try risk-free</p>
           </div>
         </div>
+      </div>
+
+      <div className="mt-8 text-center">
+        <p className="text-gray-600 mb-4">
+          <strong>Note:</strong> This is your platform subscription for accessing ASA tools and features. 
+          Class enrollment fees are separate and handled by individual schools.
+        </p>
+        <Button variant="outline" onClick={() => navigate("/programs")}>
+          Browse School Programs →
+        </Button>
       </div>
     </div>
   );
