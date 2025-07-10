@@ -122,12 +122,12 @@ export default function ParentSidebar() {
     {
       title: 'Billing',
       href: '/billing',
-      icon: CreditCard,
+      icon: <CreditCard className="h-5 w-5" />,
     },
     {
       title: 'Payment Plans',
       href: '/payment-plans',
-      icon: Calendar,
+      icon: <Calendar className="h-5 w-5" />,
     },
     {
       href: "/enrollment-assistant",
