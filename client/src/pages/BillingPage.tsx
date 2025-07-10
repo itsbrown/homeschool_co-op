@@ -593,56 +593,57 @@ export default function BillingPage() {
                         )}
                         
                         {/* Cost Breakdown */}
-                      <div className="text-right">
-                        <div className="flex justify-between text-sm">
-                          <span>Total Cost:</span>
-                          <span>${(detail.classPrice / 100).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm text-blue-600">
-                          <span>Deposit Required (10%):</span>
-                          <span>${(detail.depositRequired / 100).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm text-green-600">
-                          <span>Amount Paid:</span>
-                          <span>${(detail.amountPaid / 100).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-lg font-semibold text-red-600">
-                          <span>Remaining Balance:</span>
-                          <span>${(detail.balance / 100).toFixed(2)}</span>
-                        </div>
-                        {/* Payment Options */}
-                        <div className="mt-4 space-y-2">
-                          <div className="text-sm font-medium text-gray-700">Payment Options:</div>
-                          {detail.paymentOptions ? detail.paymentOptions.map((option: any, index: number) => (
-                            <div key={index} className="p-2 border rounded text-sm">
-                              <div className="flex justify-between items-center">
-                                <span className="font-medium">{option.description}</span>
-                                <span className="font-semibold">
-                                  ${((option.amount - (option.discount || 0)) / 100).toFixed(2)}
-                                  {option.discount > 0 && (
-                                    <span className="text-green-600 text-xs ml-1">
-                                      (Save ${(option.discount / 100).toFixed(2)})
-                                    </span>
-                                  )}
-                                </span>
+                        <div className="text-right">
+                          <div className="flex justify-between text-sm">
+                            <span>Total Cost:</span>
+                            <span>${(detail.classPrice / 100).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm text-blue-600">
+                            <span>Deposit Required (10%):</span>
+                            <span>${(detail.depositRequired / 100).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm text-green-600">
+                            <span>Amount Paid:</span>
+                            <span>${(detail.amountPaid / 100).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-lg font-semibold text-red-600">
+                            <span>Remaining Balance:</span>
+                            <span>${(detail.balance / 100).toFixed(2)}</span>
+                          </div>
+                          {/* Payment Options */}
+                          <div className="mt-4 space-y-2">
+                            <div className="text-sm font-medium text-gray-700">Payment Options:</div>
+                            {detail.paymentOptions ? detail.paymentOptions.map((option: any, index: number) => (
+                              <div key={index} className="p-2 border rounded text-sm">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium">{option.description}</span>
+                                  <span className="font-semibold">
+                                    ${((option.amount - (option.discount || 0)) / 100).toFixed(2)}
+                                    {option.discount > 0 && (
+                                      <span className="text-green-600 text-xs ml-1">
+                                        (Save ${(option.discount / 100).toFixed(2)})
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                {option.type === 'deposit' && (
+                                  <div className="text-xs text-blue-600 mt-1">
+                                    Secures your spot, remaining balance due before class starts
+                                  </div>
+                                )}
+                                {option.type === 'full_payment' && (
+                                  <div className="text-xs text-green-600 mt-1">
+                                    Complete payment now, no future payments needed
+                                  </div>
+                                )}
                               </div>
-                              {option.type === 'deposit' && (
-                                <div className="text-xs text-blue-600 mt-1">
-                                  Secures your spot, remaining balance due before class starts
-                                </div>
-                              )}
-                              {option.type === 'full_payment' && (
-                                <div className="text-xs text-green-600 mt-1">
-                                  Complete payment now, no future payments needed
-                                </div>
-                              )}
-                            </div>
-                          )) : (
-                            <div className="p-2 bg-blue-50 rounded text-sm">
-                              <strong>Next Payment ({detail.paymentType === 'deposit' ? 'Deposit' : 'Remaining Balance'}):</strong> 
-                              <span className="font-semibold text-blue-700"> ${(detail.nextPaymentAmount / 100).toFixed(2)}</span>
-                            </div>
-                          )}
+                            )) : (
+                              <div className="p-2 bg-blue-50 rounded text-sm">
+                                <strong>Next Payment ({detail.paymentType === 'deposit' ? 'Deposit' : 'Remaining Balance'}):</strong> 
+                                <span className="font-semibold text-blue-700"> ${(detail.nextPaymentAmount / 100).toFixed(2)}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

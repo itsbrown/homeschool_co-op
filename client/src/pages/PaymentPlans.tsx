@@ -105,7 +105,7 @@ const annualDiscountPlans: PlatformSubscription[] = platformSubscriptions.map(pl
   stripePriceId: plan.stripePriceId?.replace('monthly', 'yearly')
 }));
 
-export default function PlatformSubscriptionPlans() {
+export default function PaymentPlans() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();

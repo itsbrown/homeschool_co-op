@@ -54,7 +54,7 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
           )}
         >
           <div className="flex items-center">
-            <span className="mr-2 h-5 w-5">{item.icon}</span>
+            <div className="mr-2 h-5 w-5">{item.icon}</div>
             <span>{item.title}</span>
           </div>
           {item.badge && (
