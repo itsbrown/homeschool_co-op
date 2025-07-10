@@ -1,8 +1,28 @@
 import { Router } from 'express';
-import { storage } from '../storage';
 import Stripe from 'stripe';
+import { storage } from '../storage';
+import { verifySupabaseToken } from '../middleware/unified-auth';
 
 const router = Router();
+
+// Initialize Stripe with validation
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('❌ STRIPE_SECRET_KEY environment variable is not set');
+  throw new Error('Missing STRIPE_SECRET_KEY environment variable');
+}
+
+if (!process.env.STRIPE_PUBLISHABLE_KEY) {
+  console.error('❌ STRIPE_PUBLISHABLE_KEY environment variable is not set');
+  throw new Error('Missing STRIPE_PUBLISHABLE_KEY environment variable');
+}
+
+console.log('🔑 Stripe keys validation:');
+console.log('🔑 Secret key starts with:', process.env.STRIPE_SECRET_KEY.substring(0, 15) + '...');
+console.log('🔑 Publishable key starts with:', process.env.STRIPE_PUBLISHABLE_KEY.substring(0, 15) + '...');
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2024-12-18.acacia',
+});
 
 // Get billing summary for authenticated parent
 router.get('/summary', async (req, res) => {
@@ -59,7 +79,7 @@ router.get('/summary', async (req, res) => {
       for (const enrollment of childEnrollments) {
         const classInfo = allClasses.find(c => c.id === enrollment.classId);
         let classPrice = classInfo ? (classInfo.price || 90000) : 90000; // Default $900
-        
+
         // Ensure price is in cents - if it's a small number, it's likely in dollars
         if (classPrice < 10000) {
           classPrice = classPrice * 100; // Convert dollars to cents
@@ -146,28 +166,45 @@ router.post('/pay-balance', async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized enrollments detected' });
     }
 
-    // Create Stripe payment intent
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+    // Create payment intent
+    console.log('💳 Creating Stripe payment intent with data:', {
+      amount: totalAmount,
+      currency: 'usd',
+      enrollmentIds,
+      parentEmail: userEmail,
+      stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 15)
+    });
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalAmount,
       currency: 'usd',
-      description: `Balance payment for ${selectedEnrollments.length} enrollment(s)`,
       metadata: {
-        parentEmail: userEmail,
+        paymentType: 'balance_payment',
         enrollmentIds: JSON.stringify(enrollmentIds),
-        paymentType: 'balance_payment'
+        parentEmail: userEmail,
+        enrollmentCount: enrollmentIds.length.toString(),
       },
       automatic_payment_methods: {
         enabled: true,
       },
     });
 
-    console.log('✅ Payment intent created for balance payment:', paymentIntent.id);
+    console.log('✅ Payment intent created successfully:', {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      status: paymentIntent.status,
+      clientSecretPrefix: paymentIntent.client_secret?.substring(0, 20) + '...'
+    });
+
+    // Validate the client secret format
+    if (!paymentIntent.client_secret) {
+      console.error('❌ No client secret returned from Stripe');
+      throw new Error('No client secret returned from Stripe');
+    }
 
     res.json({
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
     });
 
   } catch (error: any) {

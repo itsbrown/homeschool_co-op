@@ -16,15 +16,20 @@ import ParentAppShell from '@/components/layout/ParentAppShell';
 // Initialize Stripe outside component to avoid re-creating the Stripe object
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
 console.log('🔑 Stripe publishable key check:', stripePublishableKey ? 'Present' : 'Missing');
+console.log('🔑 Stripe publishable key starts with:', stripePublishableKey ? stripePublishableKey.substring(0, 15) + '...' : 'N/A');
 
 if (!stripePublishableKey || stripePublishableKey.trim() === '') {
   console.error('❌ Missing VITE_STRIPE_PUBLIC_KEY environment variable');
+  throw new Error('Missing VITE_STRIPE_PUBLIC_KEY environment variable');
 }
 
-// Always create stripePromise, even if key is missing (for better error handling)
-const stripePromise = stripePublishableKey && stripePublishableKey.trim() !== '' 
-  ? loadStripe(stripePublishableKey) 
-  : Promise.resolve(null);
+// Validate the key format
+if (!stripePublishableKey.startsWith('pk_test_') && !stripePublishableKey.startsWith('pk_live_')) {
+  console.error('❌ Invalid Stripe publishable key format');
+  throw new Error('Invalid Stripe publishable key format');
+}
+
+const stripePromise = loadStripe(stripePublishableKey);
 
 interface EnrollmentDetail {
   enrollmentId: number;
