@@ -49,6 +49,38 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
   const elements = useElements();
   const { toast } = useToast();
   const [processing, setProcessing] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+
+  // Wait for PaymentElement to be ready
+  React.useEffect(() => {
+    if (stripe && elements) {
+      const checkElementsReady = async () => {
+        try {
+          // Check if PaymentElement is mounted and ready
+          const paymentElement = elements.getElement('payment');
+          if (paymentElement) {
+            console.log('✅ PaymentElement is mounted and ready');
+            setIsReady(true);
+          } else {
+            // Wait a bit longer for the element to mount
+            setTimeout(() => {
+              const retryElement = elements.getElement('payment');
+              if (retryElement) {
+                console.log('✅ PaymentElement is ready after retry');
+                setIsReady(true);
+              } else {
+                console.warn('⚠️ PaymentElement still not ready');
+              }
+            }, 1000);
+          }
+        } catch (error) {
+          console.error('❌ Error checking PaymentElement readiness:', error);
+        }
+      };
+
+      checkElementsReady();
+    }
+  }, [stripe, elements]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -59,6 +91,28 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
       toast({
         title: "Payment Error",
         description: "Payment system not ready. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Additional check for PaymentElement readiness
+    const paymentElement = elements.getElement('payment');
+    if (!paymentElement) {
+      console.error('❌ PaymentElement not found');
+      toast({
+        title: "Payment Error",
+        description: "Payment form not ready. Please wait a moment and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isReady) {
+      console.error('❌ PaymentElement not ready');
+      toast({
+        title: "Payment Error",
+        description: "Payment form is still loading. Please wait a moment and try again.",
         variant: "destructive",
       });
       return;
@@ -131,17 +185,44 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <PaymentElement />
+      <div className="min-h-[120px]">
+        <PaymentElement 
+          onReady={() => {
+            console.log('✅ PaymentElement onReady callback fired');
+            setIsReady(true);
+          }}
+          onLoaderStart={() => {
+            console.log('🔄 PaymentElement loader started');
+            setIsReady(false);
+          }}
+          options={{
+            layout: 'tabs',
+          }}
+        />
+      </div>
+      
+      {!isReady && (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <span className="text-sm text-muted-foreground">Loading payment form...</span>
+        </div>
+      )}
+      
       <Button 
         type="submit" 
         className="w-full" 
-        disabled={!stripe || processing}
+        disabled={!stripe || !isReady || processing}
         size="lg"
       >
         {processing ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Processing Payment...
+          </>
+        ) : !isReady ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Loading Payment Form...
           </>
         ) : (
           <>
