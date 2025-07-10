@@ -120,9 +120,14 @@ export default function ParentSidebar() {
       icon: <CreditCard className="h-5 w-5" />,
     },
     {
-      href: "/billing",
-      title: "Billing & Balance",
-      icon: <DollarSign className="h-5 w-5" />,
+      title: 'Billing',
+      href: '/billing',
+      icon: CreditCard,
+    },
+    {
+      title: 'Payment Plans',
+      href: '/payment-plans',
+      icon: Calendar,
     },
     {
       href: "/enrollment-assistant",

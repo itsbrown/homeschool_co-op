@@ -322,7 +322,7 @@ export default function BillingPage() {
     if (!billingSummary) return 0;
     return billingSummary.enrollmentDetails
       .filter(detail => selectedEnrollments.includes(detail.enrollmentId))
-      .reduce((total, detail) => total + detail.balance, 0);
+      .reduce((total, detail) => total + detail.nextPaymentAmount, 0);
   };
 
   const handlePaySelected = async () => {
@@ -491,7 +491,7 @@ export default function BillingPage() {
                     <div className="text-2xl font-bold text-green-600">
                       {formatCurrency(getSelectedTotal())}
                     </div>
-                    <div className="text-sm text-muted-foreground">Selected to Pay</div>
+                    <div className="text-sm text-muted-foreground">Next Payment Due</div>
                   </div>
                 </div>
               </CardContent>
@@ -532,24 +532,25 @@ export default function BillingPage() {
                       </div>
                       <div className="text-right">
                         <div className="flex justify-between text-sm">
-                      <span>Total Cost:</span>
-                      <span>${(detail.classPrice / 100).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-blue-600">
-                      <span>Deposit Required (10%):</span>
-                      <span>${(detail.classPrice * 0.1 / 100).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-green-600">
-                      <span>Amount Paid:</span>
-                      <span>${(detail.amountPaid / 100).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-semibold text-red-600">
-                      <span>Balance:</span>
-                      <span>${(detail.balance / 100).toFixed(2)}</span>
-                    </div>
-                    <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-                      <strong>Next Payment:</strong> Deposit - ${(detail.classPrice * 0.1 / 100).toFixed(2)}
-                    </div>
+                          <span>Total Cost:</span>
+                          <span>${(detail.classPrice / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-blue-600">
+                          <span>Deposit Required (10%):</span>
+                          <span>${(detail.depositRequired / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-green-600">
+                          <span>Amount Paid:</span>
+                          <span>${(detail.amountPaid / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-semibold text-red-600">
+                          <span>Remaining Balance:</span>
+                          <span>${(detail.balance / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                          <strong>Next Payment ({detail.paymentType === 'deposit' ? 'Deposit' : 'Remaining Balance'}):</strong> 
+                          <span className="font-semibold text-blue-700"> ${(detail.nextPaymentAmount / 100).toFixed(2)}</span>
+                        </div>
                       </div>
                     </div>
                   ))}

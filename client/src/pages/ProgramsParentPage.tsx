@@ -62,7 +62,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       // Navigate to payment plan selection instead of showing success message
       const selectedClass = classes?.find(c => c.id === variables.classId);
       const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
-      
+
       if (selectedClass && selectedChild) {
         const enrollmentData = {
           enrollmentId: data.enrollment.id,
@@ -73,12 +73,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           amountPaid: 0,
           remainingBalance: selectedClass.price
         };
-        
+
         // Store enrollment data and navigate to payment plans
         sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
         navigate('/payment-plan');
       }
-      
+
       setEnrollmentDialog({ open: false });
       setSelectedChildId("");
       // Invalidate all enrollment-related queries
@@ -458,7 +458,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                         const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
                         const childValue = String(child.id);
                         console.log(`🔍 Rendering child: ${childName} (ID: ${childValue})`);
-                        
+
                         return (
                           <option 
                             key={child.id}
@@ -538,7 +538,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                   {children.map((child: any) => {
                     const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
                     const isAlreadyInCart = addToCartDialog.classData && hasItem(addToCartDialog.classData.id, child.id);
-                    
+
                     return (
                       <div key={child.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>

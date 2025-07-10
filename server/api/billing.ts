@@ -99,7 +99,10 @@ router.get('/summary', async (req, res) => {
         }
 
         if (balance > 0) {
-          totalBalance += balance;
+          // For billing summary, we want to show what they need to pay next (deposit first)
+          const nextPaymentNeeded = paymentAmount;
+          totalBalance += nextPaymentNeeded; // Only add the next required payment to total
+          
           enrollmentDetails.push({
             enrollmentId: enrollment.id,
             childName: `${child.firstName} ${child.lastName}`,
