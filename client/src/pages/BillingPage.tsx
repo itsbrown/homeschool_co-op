@@ -149,7 +149,7 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
         stack: error.stack,
         name: error.name
       });
-      
+
       toast({
         title: "Payment Failed",
         description: error.message || "There was an error processing your payment.",
@@ -202,14 +202,14 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
           }}
         />
       </div>
-      
+
       {!isReady && (
         <div className="flex items-center justify-center py-4">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           <span className="text-sm text-muted-foreground">Loading payment form...</span>
         </div>
       )}
-      
+
       <Button 
         type="submit" 
         className="w-full" 
@@ -265,13 +265,13 @@ export default function BillingPage() {
         console.log('📊 Fetching billing summary...');
         const response = await apiRequest('GET', '/api/billing/summary');
         console.log('📊 Billing summary response:', response.status, response.statusText);
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
           console.error('❌ Billing summary failed:', errorData);
           throw new Error(`Billing summary failed: ${errorData.message || response.statusText}`);
         }
-        
+
         const data = await response.json();
         console.log('✅ Billing summary data:', data);
         return data;
@@ -306,7 +306,7 @@ export default function BillingPage() {
 
   const handleSelectEnrollment = (enrollmentId: number, isSelected: boolean) => {
     console.log('📝 Enrollment selection changed:', { enrollmentId, isSelected });
-    
+
     if (isSelected) {
       const newSelected = [...selectedEnrollments, enrollmentId];
       console.log('✅ Added enrollment, new selection:', newSelected);
@@ -327,7 +327,7 @@ export default function BillingPage() {
 
   const handlePaySelected = async () => {
     console.log('🔄 Pay Selected button clicked');
-    
+
     if (selectedEnrollments.length === 0) {
       console.log('❌ No enrollments selected');
       toast({
@@ -349,7 +349,7 @@ export default function BillingPage() {
       try {
         const totalAmount = getSelectedTotal();
         console.log('💰 Total amount to pay:', totalAmount);
-        
+
         console.log('📤 Sending payment request...');
         const response = await apiRequest('POST', '/api/billing/pay-balance', {
           enrollmentIds: selectedEnrollments,
@@ -366,12 +366,12 @@ export default function BillingPage() {
 
         const data = await response.json();
         console.log('✅ Payment response data:', data);
-        
+
         if (data.clientSecret) {
           console.log('🔑 Client secret received, showing payment form');
           setClientSecret(data.clientSecret);
           setShowPayment(true);
-          
+
           // Auto-scroll to payment form after a brief delay
           setTimeout(() => {
             const paymentSection = document.querySelector('[data-payment-form]');
@@ -390,7 +390,7 @@ export default function BillingPage() {
           stack: error.stack,
           name: error.name
         });
-        
+
         toast({
           title: "Payment Error",
           description: error.message || "Failed to initialize payment. Please try again.",
@@ -531,12 +531,25 @@ export default function BillingPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold text-red-600">
-                          {formatCurrency(detail.balance)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatCurrency(detail.amountPaid)} paid of {formatCurrency(detail.classPrice)}
-                        </div>
+                        <div className="flex justify-between text-sm">
+                      <span>Total Cost:</span>
+                      <span>${(detail.classPrice / 100).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-blue-600">
+                      <span>Deposit Required (10%):</span>
+                      <span>${(detail.classPrice * 0.1 / 100).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Amount Paid:</span>
+                      <span>${(detail.amountPaid / 100).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-semibold text-red-600">
+                      <span>Balance:</span>
+                      <span>${(detail.balance / 100).toFixed(2)}</span>
+                    </div>
+                    <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                      <strong>Next Payment:</strong> Deposit - ${(detail.classPrice * 0.1 / 100).toFixed(2)}
+                    </div>
                       </div>
                     </div>
                   ))}

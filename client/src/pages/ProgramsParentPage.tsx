@@ -59,19 +59,33 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       return apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
     },
     onSuccess: (data, variables) => {
-      toast({
-        title: "Enrollment Successful",
-        description: "Your child has been successfully enrolled in the class.",
-      });
+      // Navigate to payment plan selection instead of showing success message
+      const selectedClass = classes?.find(c => c.id === variables.classId);
+      const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
+      
+      if (selectedClass && selectedChild) {
+        const enrollmentData = {
+          enrollmentId: data.enrollment.id,
+          className: selectedClass.title,
+          childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
+          totalCost: selectedClass.price,
+          depositRequired: Math.round(selectedClass.price * 0.1),
+          amountPaid: 0,
+          remainingBalance: selectedClass.price
+        };
+        
+        // Store enrollment data and navigate to payment plans
+        sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
+        navigate('/payment-plan');
+      }
+      
       setEnrollmentDialog({ open: false });
       setSelectedChildId("");
       // Invalidate all enrollment-related queries
       queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
-      // Invalidate the specific child enrollment query - both query patterns
       queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${variables.childId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/children/${variables.childId}/enrollments`] });
-      // Invalidate parent dashboard enrollment queries
       queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
     },

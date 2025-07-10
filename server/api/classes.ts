@@ -171,6 +171,11 @@ router.post('/:id/enroll', async (req, res) => {
       return res.status(404).json({ message: 'Child not found' });
     }
 
+    // Calculate deposit (10% of class price)
+    const classPrice = classItem.price || 90000; // Default $900 in cents
+    const depositAmount = Math.round(classPrice * 0.1); // 10% deposit
+    const remainingBalance = classPrice - depositAmount;
+
     // Create enrollment record
     const enrollment = {
       id: Date.now(), // Simple ID generation
@@ -179,7 +184,11 @@ router.post('/:id/enroll', async (req, res) => {
       childName: `${child.firstName} ${child.lastName}`,
       className: classItem.title,
       enrollmentDate: new Date().toISOString(),
-      status: 'enrolled'
+      status: 'pending_payment', // Changed to pending payment
+      amount: 0, // Amount paid so far
+      depositRequired: depositAmount,
+      totalCost: classPrice,
+      remainingBalance: classPrice // Full balance until deposit is paid
     };
 
     console.log(`📝 ENROLLMENT OBJECT CREATED:`, enrollment);

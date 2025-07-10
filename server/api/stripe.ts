@@ -72,7 +72,11 @@ router.post('/create-payment-intent', async (req, res) => {
     const uniqueChildren = [...new Set(items.map((item: any) => item.childName))];
     const classNames = items.map((item: any) => item.className);
     
-    const description = `Class enrollments for ${uniqueChildren.join(', ')}: ${classNames.join(', ')}`;
+    // Determine if this is a deposit or full payment
+    const isDepositPayment = items.some((item: any) => item.paymentType === 'deposit');
+    const paymentTypeDescription = isDepositPayment ? 'Deposit Payment' : 'Class Enrollment Payment';
+    
+    const description = `${paymentTypeDescription} for ${uniqueChildren.join(', ')}: ${classNames.join(', ')}`;
 
     // Calculate fees (you can add processing fees here if needed)
     const applicationFeeAmount = Math.round(total * 0.03); // 3% processing fee
@@ -98,12 +102,16 @@ router.post('/create-payment-intent', async (req, res) => {
         subtotal: subtotal.toString(),
         siblingDiscount: discounts.siblingDiscount.toString(),
         freeAfterThreeDiscount: discounts.freeAfterThree.toString(),
+        paymentType: isDepositPayment ? 'deposit' : 'full_payment',
         itemsJson: JSON.stringify(items.map((item: any) => ({
           classId: item.classId,
           className: item.className,
           childId: item.childId,
           childName: item.childName,
-          price: item.price
+          price: item.price,
+          paymentType: item.paymentType || 'deposit',
+          depositRequired: item.depositRequired,
+          totalCost: item.totalCost
         })))
       },
       automatic_payment_methods: {
@@ -177,23 +185,63 @@ router.post('/webhook', async (req, res) => {
         } else {
           // Handle new enrollment payments
           const itemsJson = paymentIntent.metadata.itemsJson;
+          const paymentType = paymentIntent.metadata.paymentType;
+          
           if (itemsJson) {
             const items = JSON.parse(itemsJson);
             
-            // Create enrollments for each item
-            const enrollmentPromises = items.map(async (item: any) => {
-              return storage.createEnrollment({
-                classId: item.classId,
-                childId: item.childId,
-                status: 'enrolled',
-                paymentIntentId: paymentIntent.id,
-                amount: item.price,
-                enrollmentDate: new Date().toISOString()
+            if (paymentType === 'deposit') {
+              // Handle deposit payments - update existing enrollments or create new ones
+              const enrollmentPromises = items.map(async (item: any) => {
+                // Check if enrollment already exists
+                const allEnrollments = await storage.getAllEnrollments();
+                const existingEnrollment = allEnrollments.find(e => 
+                  e.classId === item.classId && e.childId === item.childId
+                );
+                
+                if (existingEnrollment) {
+                  // Update existing enrollment with deposit payment
+                  existingEnrollment.amount = (existingEnrollment.amount || 0) + item.price;
+                  existingEnrollment.status = existingEnrollment.amount >= item.totalCost ? 'enrolled' : 'deposit_paid';
+                  existingEnrollment.paymentIntentId = paymentIntent.id;
+                  existingEnrollment.remainingBalance = item.totalCost - existingEnrollment.amount;
+                  return storage.updateEnrollment(existingEnrollment);
+                } else {
+                  // Create new enrollment with deposit status
+                  return storage.createEnrollment({
+                    classId: item.classId,
+                    childId: item.childId,
+                    status: 'deposit_paid',
+                    paymentIntentId: paymentIntent.id,
+                    amount: item.price,
+                    totalCost: item.totalCost,
+                    depositRequired: item.depositRequired,
+                    remainingBalance: item.totalCost - item.price,
+                    enrollmentDate: new Date().toISOString()
+                  });
+                }
               });
-            });
+              
+              await Promise.all(enrollmentPromises);
+              console.log('✅ All deposit payments processed for payment:', paymentIntent.id);
+            } else {
+              // Handle full payments - create enrollments or update to fully paid
+              const enrollmentPromises = items.map(async (item: any) => {
+                return storage.createEnrollment({
+                  classId: item.classId,
+                  childId: item.childId,
+                  status: 'enrolled',
+                  paymentIntentId: paymentIntent.id,
+                  amount: item.price,
+                  totalCost: item.totalCost,
+                  remainingBalance: 0,
+                  enrollmentDate: new Date().toISOString()
+                });
+              });
 
-            await Promise.all(enrollmentPromises);
-            console.log('✅ All enrollments processed for payment:', paymentIntent.id);
+              await Promise.all(enrollmentPromises);
+              console.log('✅ All full payments processed for payment:', paymentIntent.id);
+            }
           }
         }
       } catch (error) {

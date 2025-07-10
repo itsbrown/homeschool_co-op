@@ -80,9 +80,23 @@ router.get('/summary', async (req, res) => {
           classPrice = classPrice * 100; // Convert dollars to cents
         }
 
-        // Check if payment was made (from payment history or enrollment data)
+        // Calculate deposit and payment status
+        const depositRequired = Math.round(classPrice * 0.1); // 10% deposit
         const amountPaid = enrollment.amount || 0;
         const balance = classPrice - amountPaid;
+        
+        // Determine payment type needed
+        let paymentType = 'deposit';
+        let paymentAmount = depositRequired;
+        
+        if (amountPaid >= depositRequired) {
+          // Deposit paid, now working on remaining balance
+          paymentType = 'remaining_balance';
+          paymentAmount = balance;
+        } else if (amountPaid > 0) {
+          // Partial deposit paid
+          paymentAmount = depositRequired - amountPaid;
+        }
 
         if (balance > 0) {
           totalBalance += balance;
@@ -91,8 +105,11 @@ router.get('/summary', async (req, res) => {
             childName: `${child.firstName} ${child.lastName}`,
             className: enrollment.className || classInfo?.title || 'Unknown Class',
             classPrice: classPrice,
+            depositRequired: depositRequired,
             amountPaid: amountPaid,
             balance: balance,
+            paymentType: paymentType,
+            nextPaymentAmount: paymentAmount,
             enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
             status: enrollment.status || 'enrolled'
           });
