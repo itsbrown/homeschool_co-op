@@ -125,8 +125,8 @@ router.get('/summary', async (req, res) => {
             balance: balance,
             paymentOptions: paymentOptions,
             // Keep legacy fields for backward compatibility
-            paymentType: paymentOptions[0].type,
-            nextPaymentAmount: paymentOptions[0].amount,
+            paymentType: paymentOptions[0]?.type || 'deposit',
+            nextPaymentAmount: paymentOptions[0]?.amount || depositRequired,
             enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
             status: enrollment.status || 'enrolled'
           });

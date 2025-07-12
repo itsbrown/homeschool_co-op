@@ -39,9 +39,9 @@ import { SimpleClassesPage } from "./pages/SimpleClassesPage";
 import StaffInvitePage from "./pages/schools/StaffInvitePage";
 import StaffPositionsPage from "./pages/schools/StaffPositionsPage";
 import KnowledgeBaseCreationPage from "./pages/schools/KnowledgeBaseCreationPage";
-import RolesAndPermissionsPage from "./pages/admin/RolesAndPermissionsPage";
-import RoleManagementPage from "./pages/admin/RoleManagementPage";
-import FeaturesOverviewPage from "./pages/admin/FeaturesOverviewPage";
+import RolesAndPermissionsPage from "@/pages/admin/RolesAndPermissionsPage";
+import RoleManagementPage from "@/pages/admin/RoleManagementPage";
+import FeaturesOverviewPage from "@/pages/admin/FeaturesOverviewPage";
 import ChildRegistrationPage from "@/pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "@/pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "@/pages/ChildRegistrationSuccess";
@@ -102,7 +102,7 @@ import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
 import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
-import MarketingLinksPage from "./pages/MarketingLinksPage";
+import MarketingLinksPage from "@/pages/MarketingLinksPage";
 import ParentDashboard from "./components/dashboards/ParentDashboard";
 import ParentAppShell from "./components/layout/ParentAppShell";
 import AIStatusProvider from "@/contexts/AIStatusContext";
@@ -309,8 +309,16 @@ function Router() {
       <Route path="/cart/checkout" component={CartCheckout} />
       <Route path="/cart/success" component={CartSuccess} />
       <Route path="/billing" component={BillingPage} />
-      <Route path="/platform-subscription" component={PlatformSubscriptionPlans} />
-      <Route path="/class-payment-plans/:classId" component={ClassPaymentPlans} />
+      <Route path="/payment-plans" component={() => {
+            const PaymentPlansPage = React.lazy(() => import('./pages/PaymentPlansPage'));
+            return (
+              <React.Suspense fallback={<div>Loading...</div>}>
+                <PaymentPlansPage />
+              </React.Suspense>
+            );
+          }} />
+          
+          <Route path="/class-payment-plans/:classId" component={ClassPaymentPlans} />
 
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />

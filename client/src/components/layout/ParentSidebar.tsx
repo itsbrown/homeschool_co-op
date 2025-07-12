@@ -125,6 +125,11 @@ export default function ParentSidebar() {
       icon: <CreditCard className="h-5 w-5" />,
     },
     {
+      title: "Payment Plans",
+      href: "/payment-plans",
+      icon: <CreditCard className="h-5 w-5" />,
+    },
+    {
       title: "Platform Subscription",
       href: "/platform-subscription",
       icon: <CreditCard className="h-5 w-5" />,
