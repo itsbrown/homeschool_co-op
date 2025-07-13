@@ -224,7 +224,9 @@ router.get('/summary', async (req, res) => {
       if (!child) continue;
 
       // Calculate balance based on enrollment data
-      const totalAmount = enrollment.totalCost || classDetails.price || 0;
+      // Convert class price from cents to dollars if needed
+      const classPrice = classDetails.price || 0;
+      const totalAmount = enrollment.totalCost || (classPrice > 10000 ? classPrice / 100 : classPrice);
       const totalPaid = enrollment.amount || 0;
       const balance = totalAmount - totalPaid;
 
