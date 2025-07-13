@@ -331,42 +331,50 @@ export default function BillingPage() {
   };
 
   const getPaymentPlanAmount = () => {
-    const actualTotal = getSelectedTotal();
-    const baseAmount = actualTotal;
+    // Get the actual balances for selected enrollments (or all if none selected)
+    const enrollmentsToCalculate = selectedEnrollments.length > 0 
+      ? billingSummary.enrollmentDetails.filter(detail => selectedEnrollments.includes(detail.enrollmentId))
+      : billingSummary.enrollmentDetails;
+    
+    const totalBalance = enrollmentsToCalculate.reduce((total, detail) => total + detail.balance, 0);
 
     switch (selectedPaymentPlan) {
       case 'deposit_all':
-        // Pay 10% deposit for all enrollments
-        return Math.round(baseAmount * 0.1);
+        // Pay 10% deposit for selected enrollments
+        return Math.round(totalBalance * 0.1);
       case 'half_now':
         // Pay 50% now, 50% later
-        return Math.round(baseAmount * 0.5);
+        return Math.round(totalBalance * 0.5);
       case 'full_payment':
         // Pay everything with 5% discount if over $500
-        const discount = baseAmount > 50000 ? Math.round(baseAmount * 0.05) : 0;
-        return baseAmount - discount;
+        const discount = totalBalance > 50000 ? Math.round(totalBalance * 0.05) : 0;
+        return totalBalance - discount;
       case 'three_payments':
         // Split into 3 monthly payments - first payment amount
-        return Math.round(baseAmount / 3);
+        return Math.round(totalBalance / 3);
       default:
-        return baseAmount;
+        return totalBalance;
     }
   };
 
   const getPaymentPlanDescription = () => {
-    const actualTotal = getSelectedTotal();
-    const baseAmount = actualTotal;
+    // Get the actual balances for selected enrollments (or all if none selected)
+    const enrollmentsToCalculate = selectedEnrollments.length > 0 
+      ? billingSummary.enrollmentDetails.filter(detail => selectedEnrollments.includes(detail.enrollmentId))
+      : billingSummary.enrollmentDetails;
+    
+    const totalBalance = enrollmentsToCalculate.reduce((total, detail) => total + detail.balance, 0);
 
     switch (selectedPaymentPlan) {
       case 'deposit_all':
-        return `Pay 10% deposit (${formatCurrency(Math.round(baseAmount * 0.1))}) to secure all enrollments. Remaining balance due before classes start.`;
+        return `Pay 10% deposit (${formatCurrency(Math.round(totalBalance * 0.1))}) to secure selected enrollments. Remaining balance due before classes start.`;
       case 'half_now':
-        return `Pay 50% now (${formatCurrency(Math.round(baseAmount * 0.5))}), remaining 50% in 30 days.`;
+        return `Pay 50% now (${formatCurrency(Math.round(totalBalance * 0.5))}), remaining 50% in 30 days.`;
       case 'full_payment':
-        const discount = baseAmount > 50000 ? Math.round(baseAmount * 0.05) : 0;
+        const discount = totalBalance > 50000 ? Math.round(totalBalance * 0.05) : 0;
         return `Pay full amount now${discount > 0 ? ` with 5% discount (save ${formatCurrency(discount)})` : ''}. No future payments needed.`;
       case 'three_payments':
-        return `Split into 3 equal monthly payments of ${formatCurrency(Math.round(baseAmount / 3))} each.`;
+        return `Split into 3 equal monthly payments of ${formatCurrency(Math.round(totalBalance / 3))} each.`;
       default:
         return '';
     }
