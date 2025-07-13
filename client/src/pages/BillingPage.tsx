@@ -825,7 +825,7 @@ export default function BillingPage() {
                     >
                       <PaymentForm 
                         enrollmentIds={selectedEnrollments} 
-                        totalAmount={getSelectedTotal()} 
+                        totalAmount={getPaymentPlanAmount()} 
                       />
                     </Elements>
                   </React.Suspense>
