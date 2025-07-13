@@ -104,6 +104,14 @@ The ASA Learning Platform is a comprehensive adaptive learning application desig
 
 ## Recent Changes
 
+### July 13, 2025 - Shopping Cart Integration with Unenroll System Completed
+- **✅ Cart Auto-Loading**: Cart automatically loads pending_payment enrollments when parent dashboard opens
+- **✅ Real-time Cart Updates**: Cart refreshes when enrollments change (enrollment/unenrollment)
+- **✅ Fixed Price Display**: Corrected currency formatting to show proper dollar amounts ($1500 instead of $0.15)
+- **✅ Unenroll Integration**: When users unenroll, cart immediately removes the item and updates totals
+- **✅ Authentication Integration**: Cart uses proper Supabase token authentication for secure data access
+- **✅ Complete Payment Flow**: Cart shows all unpaid enrollments ready for checkout processing
+
 ### July 13, 2025 - Unenroll Functionality Successfully Implemented
 - **✅ Added Complete Unenroll System**: Implemented full unenroll functionality for pending_payment enrollments
 - **✅ Enhanced Storage Methods**: Added getEnrollmentById and deleteEnrollment methods to both MemStorage and DatabaseStorage

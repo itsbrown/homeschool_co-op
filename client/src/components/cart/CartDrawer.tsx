@@ -17,7 +17,7 @@ export default function CartDrawer() {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(amount / 100);
+    }).format(amount);
   };
 
   const handleCheckout = () => {
@@ -86,12 +86,12 @@ export default function CartDrawer() {
                     )}
                     {item.amountPaid > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        Paid: {formatCurrency((item.amountPaid || 0) / 100)}
+                        Paid: {formatCurrency(item.amountPaid || 0)}
                       </p>
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">{formatCurrency(item.price / 100)}</p>
+                    <p className="font-medium">{formatCurrency(item.price)}</p>
                     <p className="text-xs text-muted-foreground">
                       {item.remainingBalance ? 'Balance Due' : 'Total Due'}
                     </p>
