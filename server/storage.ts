@@ -2108,7 +2108,8 @@ class CombinedStorage {
   }
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
-    return this.dbStorage.getChildrenByParentEmail(parentEmail);
+    // In file-based storage, we use the MemStorage method
+    return this.memStorage.getChildrenByParentEmail(parentEmail);
   }
 
   async getAllChildren(): Promise<Child[]> {
@@ -2196,7 +2197,8 @@ class CombinedStorage {
   }
 
   async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
-    return this.dbStorage.getEnrollmentsByChildIds(childIds);
+    // Use MemStorage as the primary method since it has the implementation
+    return this.memStorage.getEnrollmentsByChildIds(childIds);
   }
 
   async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {
