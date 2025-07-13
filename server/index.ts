@@ -7,6 +7,9 @@ import { backupService } from './services/backupService';
 import fileUploadRouter from './api/file-upload';
 import paymentHistoryRouter from './api/payment-history';
 import stripeRoutes from './api/stripe';
+import marketingLinksRouter from './api/marketing-links';
+import parentRouter from './api/parent';
+import billingRouter from './api/billing';
 
 const app = express();
 // Increase the size limit to 50MB for file uploads
@@ -56,6 +59,10 @@ app.use((req, res, next) => {
 
 // Register file upload routes
 app.use('/api/file-upload', fileUploadRouter);
+app.use('/api/marketing-links', marketingLinksRouter);
+app.use('/api/payments', paymentHistoryRouter);
+app.use('/api/stripe', stripeRoutes);
+app.use('/api/billing', billingRouter);
 
 (async () => {
   const server = await registerRoutes(app);
@@ -94,19 +101,3 @@ app.use('/api/file-upload', fileUploadRouter);
     backupService.startAutomaticBackups(24); // Backup every 24 hours
   });
 })();
-
-// Global error handler to ensure JSON responses
-app.use((err: any, req: any, res: any, next: any) => {
-  console.error('❌ Server error:', err.message, err.stack);
-  res.status(500).json({ message: "Internal server error", error: err.message });
-});
-
-import marketingLinksRouter from './api/marketing-links';
-import paymentHistoryRouter from './api/payment-history';
-import parentRouter from './api/parent';
-import stripeRouter from './api/stripe';
-import billingRouter from './api/billing';
-app.use('/api/marketing-links', marketingLinksRouter);
-app.use('/api/payments', paymentHistoryRouter);
-app.use('/api/stripe', stripeRoutes);
-app.use('/api/billing', billingRouter);

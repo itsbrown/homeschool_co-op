@@ -703,10 +703,7 @@ export default function BillingPage() {
                           checked={selectedEnrollments.includes(detail.enrollmentId)}
                           onChange={(e) => handleSelectEnrollment(detail.enrollmentId, e.target.checked)}
                           className="rounded mt-1"
-                        /></div>
-                        <div className="text-xs text-gray-500 ml-6">
-                          Select individual enrollments or leave unselected to include all in payment plan
-                        </div>
+                        />
                         <div className="flex-1">
                           <div className="font-medium">{detail.className}</div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -720,6 +717,9 @@ export default function BillingPage() {
                             </span>
                           </div>
                         </div>
+                      </div>
+                      <div className="text-xs text-gray-500 ml-6 mb-4">
+                        Select individual enrollments or leave unselected to include all in payment plan
                       </div>
                       
                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
