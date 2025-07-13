@@ -251,14 +251,14 @@ export class FileStorage implements IStorage {
     const children = this.loadChildren();
     const id = children.length > 0 ? Math.max(...children.map(c => c.id)) + 1 : 1;
     const now = new Date();
-    
+
     const newChild: Child = {
       ...child,
       id,
       createdAt: now,
       updatedAt: now
     };
-    
+
     children.push(newChild);
     this.saveChildren(children);
     return newChild;
@@ -267,15 +267,15 @@ export class FileStorage implements IStorage {
   async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
     const children = this.loadChildren();
     const index = children.findIndex(c => c.id === id);
-    
+
     if (index === -1) return undefined;
-    
+
     children[index] = {
       ...children[index],
       ...child,
       updatedAt: new Date()
     };
-    
+
     this.saveChildren(children);
     return children[index];
   }
@@ -293,12 +293,12 @@ export class FileStorage implements IStorage {
   private loadChildren(): Child[] {
     try {
       const filePath = path.join(process.cwd(), 'data/children.json');
-      
+
       if (!fs.existsSync(filePath)) {
         console.log('⚠️ Children file not found at:', filePath);
         return [];
       }
-      
+
       const data = fs.readFileSync(filePath, 'utf-8');
       const children = JSON.parse(data);
       console.log(`📚 FileStorage loaded ${children.length} children:`, children.map(c => c.firstName + ' ' + c.lastName));
@@ -313,11 +313,11 @@ export class FileStorage implements IStorage {
     try {
       const dataDir = path.join(process.cwd(), 'data');
       const filePath = path.join(dataDir, 'children.json');
-      
+
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
-      
+
       fs.writeFileSync(filePath, JSON.stringify(children, null, 2));
     } catch (error) {
       console.error('Error saving children:', error);
@@ -431,7 +431,7 @@ export class FileStorage implements IStorage {
   async deleteClass(id: number): Promise<void> {
     await fileDb.deleteClass(id);
   }
-  
+
   async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
     return fileDb.getAllKnowledgeBases();
   }

@@ -183,39 +183,55 @@ router.get('/summary', async (req, res) => {
 
     console.log('🔍 Getting billing summary for:', userEmail);
 
-    // Get all enrollments for this parent
-    const allEnrollments = await storage.getAllProgramEnrollments();
-    const userEnrollments = allEnrollments.filter(enrollment => 
-      enrollment.parentEmail === userEmail
-    );
+    // Get all children for this parent
+    const children = await storage.getChildrenByParentEmail(userEmail);
+    if (!children || children.length === 0) {
+      console.log('📋 No children found for parent:', userEmail);
+      return res.json({
+        totalBalance: 0,
+        totalBalanceFormatted: '$0.00',
+        enrollmentCount: 0,
+        enrollmentDetails: [],
+        parentEmail: userEmail
+      });
+    }
 
-    console.log('📋 Found enrollments:', userEnrollments.length);
+    const childIds = children.map(child => child.id);
+    console.log('👶 Found children:', childIds);
+
+    // Get all enrollments for these children
+    const allEnrollments = await storage.getEnrollmentsByChildIds(childIds);
+    console.log('📋 Found enrollments:', allEnrollments.length);
 
     // Calculate enrollment details with balances
     const enrollmentDetails = [];
     let totalBalance = 0;
 
-    for (const enrollment of userEnrollments) {
-      // Get program details
-      const program = await storage.getProgramById(enrollment.programId);
-      if (!program) continue;
+    for (const enrollment of allEnrollments) {
+      // Get class details
+      const classDetails = await storage.getClassById(enrollment.classId);
+      if (!classDetails) continue;
 
       // Get child details
-      const child = await storage.getChildById(enrollment.childId);
+      const child = children.find(c => c.id === enrollment.childId);
       if (!child) continue;
 
-      const balance = (enrollment.totalAmount || 0) - (enrollment.totalPaid || 0);
+      // Calculate balance based on enrollment data
+      const totalAmount = enrollment.totalCost || classDetails.price || 0;
+      const totalPaid = enrollment.amount || 0;
+      const balance = totalAmount - totalPaid;
+
       if (balance > 0) {
         enrollmentDetails.push({
           enrollmentId: enrollment.id,
           childName: `${child.firstName} ${child.lastName}`,
-          className: program.title,
-          programId: program.id,
-          totalAmount: enrollment.totalAmount || 0,
-          totalPaid: enrollment.totalPaid || 0,
+          className: classDetails.title,
+          classPrice: totalAmount,
+          amountPaid: totalPaid,
           balance: balance,
           status: enrollment.status,
-          enrollmentDate: enrollment.createdAt
+          enrollmentDate: enrollment.enrollmentDate,
+          depositRequired: enrollment.depositRequired || Math.round(totalAmount * 0.1)
         });
         totalBalance += balance;
       }
