@@ -13,6 +13,8 @@ export default function CartButton() {
   };
 
   const itemCount = getItemCount();
+  
+  console.log('🛒 CartButton render - itemCount:', itemCount);
 
   return (
     <Button

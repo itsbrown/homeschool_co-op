@@ -246,6 +246,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         
         console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
+        console.log(`🛒 Cart items:`, cartItems);
+        console.log(`🛒 Cart totals:`, totals);
       } else {
         console.error('Failed to load enrollments:', response.status);
       }
