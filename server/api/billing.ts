@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { storage } from '../storage';
 import { insertPaymentSchema, type InsertPayment } from '@shared/schema';
 import { sendPaymentConfirmationEmail } from '../lib/email-service';
+import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
 
@@ -154,7 +155,29 @@ router.get('/payment-status/:paymentIntentId', async (req, res) => {
 // Get billing summary for a parent
 router.get('/summary', async (req, res) => {
   try {
-    const userEmail = req.auth?.payload?.email;
+    // Extract user email from Supabase token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization header missing' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the Supabase token
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.log('❌ Supabase auth error:', error);
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    const userEmail = user.email;
     if (!userEmail) {
       return res.status(401).json({ error: 'User email not found' });
     }
@@ -222,6 +245,67 @@ router.get('/summary', async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to get billing summary',
       details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Pay balance endpoint
+router.post('/pay-balance', async (req, res) => {
+  try {
+    // Extract user email from Supabase token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization header missing' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the Supabase token
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.log('❌ Supabase auth error:', error);
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    const userEmail = user.email;
+    if (!userEmail) {
+      return res.status(401).json({ error: 'User email not found' });
+    }
+
+    const { enrollmentIds, totalAmount, paymentDetails, paymentPlan } = req.body;
+
+    console.log('💳 Processing payment for:', userEmail, 'Amount:', totalAmount);
+
+    // Create payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalAmount), // Amount should already be in cents
+      currency: 'usd',
+      metadata: {
+        parentEmail: userEmail,
+        enrollmentIds: JSON.stringify(enrollmentIds),
+        paymentPlan: paymentPlan
+      }
+    });
+
+    console.log('✅ Payment intent created:', paymentIntent.id);
+
+    res.json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating payment intent:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create payment intent'
     });
   }
 });
