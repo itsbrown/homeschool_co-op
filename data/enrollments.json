@@ -34,5 +34,18 @@
     "className": "Seekers Full Day 9AM - 2PM",
     "enrollmentDate": "2025-07-06T03:49:20.932Z",
     "status": "enrolled"
+  },
+  {
+    "id": 1752407979553,
+    "classId": 4,
+    "childId": 8,
+    "childName": "Child Parent",
+    "className": "Macaroni",
+    "enrollmentDate": "2025-07-13T11:59:39.553Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]
