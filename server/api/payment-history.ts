@@ -1,154 +1,115 @@
-
 import { Router } from 'express';
-import Stripe from 'stripe';
+import { storage } from '../storage';
 
 const router = Router();
 
-// Initialize Stripe with proper error handling
-let stripe: Stripe | null = null;
-if (process.env.STRIPE_SECRET_KEY) {
-  stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: '2023-10-16',
-  });
-} else {
-  console.warn('⚠️ STRIPE_SECRET_KEY not found, payment history will not be available');
-}
-
-// Get payment history for authenticated user
+// Get payment history for a specific user
 router.get('/history', async (req, res) => {
   try {
-    if (!stripe) {
-      return res.status(503).json({ message: 'Payment service not available' });
-    }
+    const { email } = req.query;
     
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Authentication required' });
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Email parameter is required'
+      });
     }
 
-    // Get user email from token (similar to your parent.ts pattern)
-    const token = authHeader.split(' ')[1];
-    let userEmail;
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-      userEmail = payload.email;
-    } catch (error) {
-      return res.status(401).json({ message: 'Invalid token' });
-    }
-
-    // Retrieve payment intents for this customer
-    const paymentIntents = await stripe.paymentIntents.list({
-      limit: 100,
-      expand: ['data.customer'],
-    });
-
-    // Filter by customer email or metadata
-    const userPayments = paymentIntents.data.filter(payment => 
-      payment.metadata.userEmail === userEmail ||
-      (payment.customer && typeof payment.customer === 'object' && payment.customer.email === userEmail)
-    );
-
-    // Format response to match your PaymentManagement component
-    const formattedPayments = userPayments.map(payment => ({
+    const payments = await storage.getPaymentsByParentEmail(email);
+    
+    // Transform payments to include formatted data
+    const formattedPayments = payments.map(payment => ({
       id: payment.id,
-      date: new Date(payment.created * 1000).toISOString().split('T')[0],
-      amount: payment.amount / 100, // Convert from cents
-      description: payment.description || payment.metadata.title || 'Payment',
-      status: payment.status === 'succeeded' ? 'paid' : 
-              payment.status === 'processing' ? 'pending' : 
-              payment.status === 'canceled' ? 'failed' : payment.status,
-      method: payment.payment_method_types[0] || 'card',
-      programName: payment.metadata.programName || payment.metadata.title || 'Program',
-      childName: payment.metadata.childName || 'Child',
-      receiptUrl: payment.charges?.data?.[0]?.receipt_url || null,
-      stripePaymentIntentId: payment.id,
+      amount: payment.amount,
+      currency: payment.currency,
+      status: payment.status,
+      description: payment.description,
+      createdAt: payment.createdAt,
+      updatedAt: payment.updatedAt,
+      stripePaymentIntentId: payment.stripePaymentIntentId,
+      enrollmentIds: payment.enrollmentIds,
+      metadata: payment.metadata
     }));
 
-    res.json(formattedPayments);
+    res.json({
+      success: true,
+      payments: formattedPayments
+    });
   } catch (error) {
     console.error('Error fetching payment history:', error);
-    res.status(500).json({ message: 'Error fetching payment history' });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch payment history'
+    });
   }
 });
 
-// Get specific payment details
-router.get('/history/:paymentId', async (req, res) => {
+// Get all payments (admin only)
+router.get('/all', async (req, res) => {
   try {
-    if (!stripe) {
-      return res.status(503).json({ message: 'Payment service not available' });
-    }
+    const payments = await storage.getAllPayments();
     
+    res.json({
+      success: true,
+      payments: payments.map(payment => ({
+        id: payment.id,
+        parentEmail: payment.parentEmail,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: payment.status,
+        description: payment.description,
+        createdAt: payment.createdAt,
+        updatedAt: payment.updatedAt,
+        stripePaymentIntentId: payment.stripePaymentIntentId,
+        enrollmentIds: payment.enrollmentIds
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching all payments:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch payments'
+    });
+  }
+});
+
+// Get payment details by ID
+router.get('/:paymentId', async (req, res) => {
+  try {
     const { paymentId } = req.params;
     
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentId, {
-      expand: ['charges', 'customer']
-    });
+    const payments = await storage.getAllPayments();
+    const payment = payments.find(p => p.id === parseInt(paymentId));
+    
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payment not found'
+      });
+    }
 
     res.json({
-      id: paymentIntent.id,
-      amount: paymentIntent.amount / 100,
-      currency: paymentIntent.currency,
-      status: paymentIntent.status,
-      created: new Date(paymentIntent.created * 1000).toISOString(),
-      description: paymentIntent.description,
-      metadata: paymentIntent.metadata,
-      charges: paymentIntent.charges?.data?.map(charge => ({
-        id: charge.id,
-        amount: charge.amount / 100,
-        receipt_url: charge.receipt_url,
-        paid: charge.paid,
-        refunded: charge.refunded,
-      })),
+      success: true,
+      payment: {
+        id: payment.id,
+        parentEmail: payment.parentEmail,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: payment.status,
+        description: payment.description,
+        createdAt: payment.createdAt,
+        updatedAt: payment.updatedAt,
+        stripePaymentIntentId: payment.stripePaymentIntentId,
+        enrollmentIds: payment.enrollmentIds,
+        metadata: payment.metadata
+      }
     });
   } catch (error) {
     console.error('Error fetching payment details:', error);
-    res.status(500).json({ message: 'Error fetching payment details' });
-  }
-});
-
-// Get subscription history
-router.get('/subscriptions', async (req, res) => {
-  try {
-    if (!stripe) {
-      return res.status(503).json({ message: 'Payment service not available' });
-    }
-    
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    let userEmail;
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-      userEmail = payload.email;
-    } catch (error) {
-      return res.status(401).json({ message: 'Invalid token' });
-    }
-
-    // Find customer by email
-    const customers = await stripe.customers.list({
-      email: userEmail,
-      limit: 1,
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch payment details'
     });
-
-    if (customers.data.length === 0) {
-      return res.json([]);
-    }
-
-    const customer = customers.data[0];
-    
-    // Get subscriptions for this customer
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customer.id,
-      expand: ['data.latest_invoice'],
-    });
-
-    res.json(subscriptions.data);
-  } catch (error) {
-    console.error('Error fetching subscription history:', error);
-    res.status(500).json({ message: 'Error fetching subscription history' });
   }
 });
 

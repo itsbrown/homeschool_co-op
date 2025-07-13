@@ -13,7 +13,8 @@ import {
   activities, type Activity, type InsertActivity,
   roleInvitations, type RoleInvitation, type InsertRoleInvitation,
   marketingLinks, type MarketingLink, type InsertMarketingLink,
-  linkAnalytics, type LinkAnalytics, type InsertLinkAnalytics
+  linkAnalytics, type LinkAnalytics, type InsertLinkAnalytics,
+  payments, type Payment, type InsertPayment
 } from "@shared/schema";
 
 export interface IStorage {
@@ -23,7 +24,7 @@ export interface IStorage {
   getAllKnowledgeBases(): Promise<KnowledgeBase[]>;
   getAllActivities(): Promise<Activity[]>;
   getAllPayments(): Promise<Payment[]>;
-  getAllEnrollments(): Promise<Enrollment[]>;
+  getAllEnrollments(): Promise<ProgramEnrollment[]>;
 
   // User methods
   getUser(id: number): Promise<User | undefined>;
@@ -149,6 +150,12 @@ export interface IStorage {
   createLinkAnalytics(analytics: InsertLinkAnalytics): Promise<LinkAnalytics>;
   getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]>;
   getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]>;
+
+  // Payment methods
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]>;
+  getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
+  updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -166,6 +173,7 @@ export class MemStorage implements IStorage {
   private activitiesStore: Map<number, Activity>;
   private marketingLinksStore: Map<number, MarketingLink>;
   private linkAnalyticsStore: Map<number, LinkAnalytics>;
+  private paymentsStore: Map<number, Payment>;
 
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -181,6 +189,7 @@ export class MemStorage implements IStorage {
   private activityIdCounter: number;
   private marketingLinkIdCounter: number;
   private linkAnalyticsIdCounter: number;
+  private paymentIdCounter: number;
   private classEnrollments: any[];
 
   constructor() {
@@ -198,6 +207,7 @@ export class MemStorage implements IStorage {
     this.activitiesStore = new Map();
     this.marketingLinksStore = new Map();
     this.linkAnalyticsStore = new Map();
+    this.paymentsStore = new Map();
     this.classEnrollments = [];
 
     this.userIdCounter = 1;
@@ -214,6 +224,7 @@ export class MemStorage implements IStorage {
     this.activityIdCounter = 1;
     this.marketingLinkIdCounter = 1;
     this.linkAnalyticsIdCounter = 1;
+    this.paymentIdCounter = 1;
 
     // Initialize with a default admin user
 
@@ -1840,6 +1851,61 @@ export class MemStorage implements IStorage {
     return Array.from(this.linkAnalyticsStore.values()).filter(
       analytics => analytics.linkId === linkId
     );
+  }
+
+  async getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
+    return Array.from(this.linkAnalyticsStore.values()).filter(
+      analytics => analytics.linkId === linkId
+    );
+  }
+
+  async getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
+    return Array.from(this.linkAnalyticsStore.values()).filter(
+      analytics => analytics.linkId === schoolId
+    );
+  }
+
+  // Payment methods implementation
+  async getAllPayments(): Promise<Payment[]> {
+    return Array.from(this.paymentsStore.values());
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const id = this.paymentIdCounter++;
+    const now = new Date();
+    const newPayment: Payment = {
+      id,
+      createdAt: now,
+      updatedAt: now,
+      ...payment
+    };
+    this.paymentsStore.set(id, newPayment);
+    return newPayment;
+  }
+
+  async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
+    return Array.from(this.paymentsStore.values()).filter(
+      payment => payment.parentEmail === parentEmail
+    );
+  }
+
+  async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
+    return Array.from(this.paymentsStore.values()).find(
+      payment => payment.stripePaymentIntentId === stripePaymentIntentId
+    );
+  }
+
+  async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
+    const payment = this.paymentsStore.get(id);
+    if (!payment) return undefined;
+
+    const updatedPayment: Payment = {
+      ...payment,
+      status,
+      updatedAt: new Date()
+    };
+    this.paymentsStore.set(id, updatedPayment);
+    return updatedPayment;
   }
 }
 

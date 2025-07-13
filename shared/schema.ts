@@ -706,3 +706,29 @@ export const marketingLinksRelations = relations(marketingLinks, ({ one, many })
 export const linkAnalyticsRelations = relations(linkAnalytics, ({ one }) => ({
   link: one(marketingLinks, { fields: [linkAnalytics.linkId], references: [marketingLinks.id] }),
 }));
+
+// Payments table for tracking payment history
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  parentEmail: text("parent_email").notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id").notNull().unique(),
+  amount: integer("amount").notNull(), // in cents
+  currency: text("currency").default("usd").notNull(),
+  status: text("status", { enum: ["pending", "succeeded", "failed", "canceled"] }).notNull(),
+  paymentMethod: text("payment_method"), // e.g., "card", "ach", etc.
+  description: text("description"),
+  enrollmentIds: jsonb("enrollment_ids").notNull(), // Array of enrollment IDs this payment covers
+  paymentPlan: text("payment_plan"), // e.g., "deposit", "full_payment", "monthly_installment"
+  isRecurring: boolean("is_recurring").default(false).notNull(),
+  nextPaymentDate: timestamp("next_payment_date"), // For payment plans
+  remainingBalance: integer("remaining_balance"), // Remaining balance after this payment
+  receiptUrl: text("receipt_url"), // URL to receipt/invoice
+  metadata: jsonb("metadata").default({}).notNull(), // Additional payment metadata
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPaymentSchema = createInsertSchema(payments)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;
