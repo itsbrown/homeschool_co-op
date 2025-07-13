@@ -32,7 +32,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const { addItem, hasItem } = useCart();
-  const navigate = useNavigate();
+  // Use wouter's location hook for navigation
+  const [, setLocation] = useLocation();
 
   // Get childId from URL query parameters if present
   const urlParams = new URLSearchParams(window.location.search);
