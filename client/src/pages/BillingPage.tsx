@@ -726,10 +726,10 @@ export default function BillingPage() {
                         </div>
                         <div className="text-right">
                           <div className="text-lg font-semibold text-red-600">
-                            Outstanding: ${(detail.balance / 100).toFixed(2)}
+                            Outstanding: ${detail.balance.toFixed(2)}
                           </div>
                           <div className="text-sm text-blue-600">
-                            Deposit Required: ${(detail.depositRequired / 100).toFixed(2)}
+                            Deposit Required: ${detail.depositRequired.toFixed(2)}
                           </div>
                         </div>
                       </div>
