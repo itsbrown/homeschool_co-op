@@ -55,13 +55,21 @@ export async function apiRequest(
     return response;
   }
 
-  // Add detailed logging for other error statuses
+  // For other error statuses, check if response is ok before trying to read body
   if (!response.ok) {
-    const text = await response.text();
-    console.log(`❌ API ${response.status}: ${text}`);
+    // Clone the response so we can read it without consuming the original stream
+    const responseClone = response.clone();
+    try {
+      const text = await responseClone.text();
+      console.log(`❌ API ${response.status}: ${text}`);
+    } catch (error) {
+      console.log(`❌ API ${response.status}: Could not read response body`);
+    }
+    
+    // Now call throwIfResNotOk with the original response
+    await throwIfResNotOk(response);
   }
 
-  await throwIfResNotOk(response);
   return response;
 }
 

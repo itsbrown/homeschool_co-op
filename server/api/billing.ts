@@ -164,10 +164,9 @@ router.get('/summary', async (req, res) => {
     const token = authHeader.split(' ')[1];
     
     // Verify the Supabase token
-    const { createClient } = require('@supabase/supabase-js');
     const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -262,8 +261,8 @@ router.post('/pay-balance', async (req, res) => {
     
     // Verify the Supabase token
     const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
