@@ -12,10 +12,16 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 console.log('🔑 Stripe server-side validation:');
-console.log('✅ Secret key starts with:', process.env.STRIPE_SECRET_KEY.substring(0, 15) + '...');
-console.log('🔍 Full secret key prefix:', process.env.STRIPE_SECRET_KEY.substring(0, 30));
-console.log('🧪 Is test mode:', process.env.STRIPE_SECRET_KEY.startsWith('sk_test_'));
-console.log('🚀 Is live mode:', process.env.STRIPE_SECRET_KEY.startsWith('sk_live_'));
+console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
+console.log('🔍 Current working directory:', process.cwd());
+console.log('🔍 Environment variables loaded:');
+console.log('  - STRIPE_SECRET_KEY exists:', !!process.env.STRIPE_SECRET_KEY);
+console.log('  - STRIPE_PUBLISHABLE_KEY exists:', !!process.env.STRIPE_PUBLISHABLE_KEY);
+console.log('  - VITE_STRIPE_PUBLIC_KEY exists:', !!process.env.VITE_STRIPE_PUBLIC_KEY);
+console.log('✅ Secret key starts with:', process.env.STRIPE_SECRET_KEY?.substring(0, 15) + '...');
+console.log('🔍 Full secret key prefix:', process.env.STRIPE_SECRET_KEY?.substring(0, 30));
+console.log('🧪 Is test mode:', process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_'));
+console.log('🚀 Is live mode:', process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_'));
 console.log('ℹ️  Publishable key validation is handled client-side');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
