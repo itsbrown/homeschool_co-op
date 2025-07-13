@@ -13,6 +13,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
 
 console.log('🔑 Stripe server-side validation:');
 console.log('✅ Secret key starts with:', process.env.STRIPE_SECRET_KEY.substring(0, 15) + '...');
+console.log('🔍 Full secret key prefix:', process.env.STRIPE_SECRET_KEY.substring(0, 30));
+console.log('🧪 Is test mode:', process.env.STRIPE_SECRET_KEY.startsWith('sk_test_'));
+console.log('🚀 Is live mode:', process.env.STRIPE_SECRET_KEY.startsWith('sk_live_'));
 console.log('ℹ️  Publishable key validation is handled client-side');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
