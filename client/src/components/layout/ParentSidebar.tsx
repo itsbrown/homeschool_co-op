@@ -166,18 +166,18 @@ export default function ParentSidebar() {
       isSectionHeader: true,
       subItems: [
         {
-          title: 'Payments',
-          href: '/payments',
+          title: 'Payment Plans',
+          href: '/payment-plans',
           icon: <CreditCard className="h-5 w-5" />,
         },
         {
-          title: "Billing",
+          title: "Billing & Payments",
           href: "/billing",
           icon: <CreditCard className="h-5 w-5" />,
         },
         {
-          title: "Payment Plans",
-          href: "/payment-plans",
+          title: "Payment History",
+          href: "/payments",
           icon: <CreditCard className="h-5 w-5" />,
         },
         {

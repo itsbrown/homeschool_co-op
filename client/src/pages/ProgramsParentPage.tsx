@@ -76,7 +76,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
         // Store enrollment data and navigate to payment plans
         sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
-        navigate('/payment-plan');
+        navigate('/payment-plans');
       }
 
       setEnrollmentDialog({ open: false });

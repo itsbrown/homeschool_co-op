@@ -1,243 +1,264 @@
 
-import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Check, CreditCard, Calendar, DollarSign, Star, AlertCircle } from 'lucide-react';
-import { useLocation } from 'wouter';
-import ParentAppShell from '@/components/layout/ParentAppShell';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Check, CreditCard, Clock, Star } from "lucide-react";
+import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface PaymentPlan {
   id: string;
   name: string;
   description: string;
-  features: string[];
+  amount: number;
   popular?: boolean;
-  discount?: string;
-  icon: React.ReactNode;
-  color: string;
+  features: string[];
+  billingCycle: string;
+  setupFee?: number;
 }
 
 export default function PaymentPlansPage() {
   const [, navigate] = useLocation();
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
+  // Get billing summary to check for outstanding balances
+  const { data: billingSummary } = useQuery({
+    queryKey: ['billing-summary'],
+    queryFn: () => apiRequest('GET', '/api/billing/summary'),
+  });
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount / 100);
+  };
+
+  // Standard payment plans for class enrollments
   const paymentPlans: PaymentPlan[] = [
     {
-      id: 'deposit',
-      name: 'Deposit Payment',
-      description: 'Secure your spot with just 10% down',
-      features: [
-        'Pay only 10% to enroll',
-        'Immediate class confirmation',
-        'Remaining balance due before class starts',
-        'Payment reminders via email',
-        'Full refund if cancelled 30 days before'
-      ],
+      id: "deposit_only",
+      name: "Deposit Payment",
+      description: "Pay 10% deposit to secure enrollment",
+      amount: 0, // Will be calculated based on class
       popular: true,
-      icon: <DollarSign className="h-6 w-6" />,
-      color: 'bg-blue-50 border-blue-200'
+      billingCycle: "One-time",
+      features: [
+        "Immediate enrollment confirmation",
+        "Secure your child's spot",
+        "Remaining balance due before class starts",
+        "Full refund if cancelled 30 days before",
+        "Payment reminder emails"
+      ]
     },
     {
-      id: 'full',
-      name: 'Pay in Full',
-      description: 'Complete payment now and save',
+      id: "full_payment",
+      name: "Pay in Full",
+      description: "Complete payment for entire class cost",
+      amount: 0, // Will be calculated based on class
+      billingCycle: "One-time",
       features: [
-        '$5 discount on orders over $500',
-        'No future payment worries',
-        'Priority class placement',
-        'Full refund if cancelled 30 days before',
-        'Guaranteed enrollment'
-      ],
-      discount: '$5 off orders over $500',
-      icon: <Check className="h-6 w-6" />,
-      color: 'bg-green-50 border-green-200'
+        "No future payment worries",
+        "Priority class placement",
+        "Small discount on total cost",
+        "Full refund if cancelled 30 days before",
+        "No payment reminders needed"
+      ]
     },
     {
-      id: 'split',
-      name: 'Split Payment',
-      description: 'Pay 50% now, 50% later',
+      id: "split_payment",
+      name: "Split Payment Plan",
+      description: "Pay 50% now, 50% in 30 days",
+      amount: 0, // Will be calculated based on class
+      billingCycle: "2 payments",
       features: [
-        'Pay half now, half in 30 days',
-        'Automatic payment reminders',
-        'No additional fees',
-        'Flexible payment dates',
-        'Easy to manage'
-      ],
-      icon: <Calendar className="h-6 w-6" />,
-      color: 'bg-purple-50 border-purple-200'
+        "Spread cost over 2 months",
+        "Automatic payment reminders",
+        "No additional fees",
+        "Flexible payment scheduling"
+      ]
     },
     {
-      id: 'monthly',
-      name: 'Monthly Installments',
-      description: 'Spread payments over 3 months',
+      id: "monthly_plan",
+      name: "Monthly Installments",
+      description: "Pay in 3 monthly installments",
+      amount: 0, // Will be calculated based on class
+      billingCycle: "3 payments",
       features: [
-        'Pay in 3 equal monthly installments',
-        'Automatic billing on the same date',
-        'Low monthly amounts',
-        'Payment failure protection',
-        'Easy cancellation policy'
-      ],
-      icon: <CreditCard className="h-6 w-6" />,
-      color: 'bg-orange-50 border-orange-200'
+        "Lowest monthly payment",
+        "Automatic billing setup",
+        "Payment flexibility",
+        "Budget-friendly option"
+      ]
     }
   ];
 
-  const benefits = [
-    'Secure payment processing with Stripe',
-    'Multiple payment methods accepted',
-    'Email confirmations for all payments',
-    'Transparent pricing with no hidden fees',
-    'Flexible cancellation policies',
-    'Customer support for payment issues'
-  ];
+  const handleSelectPlan = (planId: string) => {
+    setSelectedPlan(planId);
+  };
+
+  const handleProceedToPayment = () => {
+    if (!selectedPlan) return;
+
+    // Check if user has outstanding balances
+    if (billingSummary?.enrollmentDetails?.length > 0) {
+      // Redirect to billing page to pay outstanding balances
+      navigate('/billing');
+    } else {
+      // Redirect to programs page to select classes first
+      navigate('/programs');
+    }
+  };
+
+  const handlePayOutstandingBalance = () => {
+    navigate('/billing');
+  };
 
   return (
-    <ParentAppShell>
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold tracking-tight mb-4">
-            Flexible Payment Plans
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Choose the payment option that works best for your family. All plans include the same great benefits.
-          </p>
-        </div>
+    <div className="container mx-auto p-6 max-w-6xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-4">Payment Plans</h1>
+        <p className="text-gray-600 mb-6">
+          Choose the payment option that works best for your family's budget
+        </p>
 
-        {/* Payment Plans Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {paymentPlans.map((plan) => (
-            <Card 
-              key={plan.id} 
-              className={`relative ${plan.color} ${plan.popular ? 'ring-2 ring-blue-500' : ''}`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-blue-500 text-white flex items-center gap-1 px-3 py-1">
-                    <Star className="h-3 w-3" />
-                    Most Popular
-                  </Badge>
-                </div>
-              )}
-              
-              <CardHeader className="text-center pb-4">
-                <div className="flex justify-center mb-2">
-                  {plan.icon}
-                </div>
-                <CardTitle className="text-xl mb-2">{plan.name}</CardTitle>
-                <CardDescription className="text-sm">
-                  {plan.description}
-                </CardDescription>
-                {plan.discount && (
-                  <Badge variant="secondary" className="mt-2 bg-green-100 text-green-700">
-                    {plan.discount}
-                  </Badge>
-                )}
-              </CardHeader>
-              
-              <CardContent>
-                <ul className="space-y-2">
-                  {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm">
-                      <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Outstanding Balance Alert */}
+        {billingSummary?.totalBalance > 0 && (
+          <Card className="bg-yellow-50 border-yellow-200 mb-6">
+            <CardHeader>
+              <CardTitle className="text-yellow-900 flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Outstanding Balance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-yellow-800 mb-4">
+                You have an outstanding balance of {billingSummary.totalBalanceFormatted} for {billingSummary.enrollmentCount} enrollment(s).
+              </p>
+              <Button 
+                onClick={handlePayOutstandingBalance}
+                className="bg-yellow-600 hover:bg-yellow-700"
+              >
+                Pay Outstanding Balance
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
-        {/* How It Works */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">How Payment Plans Work</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-blue-600 font-bold">1</span>
-                </div>
-                <h3 className="font-semibold mb-2">Choose Your Plan</h3>
-                <p className="text-sm text-muted-foreground">
-                  Select the payment option that fits your budget during enrollment
-                </p>
+      {/* Payment Plans Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {paymentPlans.map((plan) => (
+          <Card 
+            key={plan.id} 
+            className={`relative cursor-pointer transition-all duration-200 ${
+              selectedPlan === plan.id 
+                ? 'ring-2 ring-blue-500 shadow-lg' 
+                : 'hover:shadow-md'
+            } ${plan.popular ? 'border-blue-200' : ''}`}
+            onClick={() => handleSelectPlan(plan.id)}
+          >
+            {plan.popular && (
+              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                <Badge className="bg-blue-600 text-white">
+                  <Star className="h-3 w-3 mr-1" />
+                  Most Popular
+                </Badge>
               </div>
-              <div className="text-center">
-                <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-blue-600 font-bold">2</span>
-                </div>
-                <h3 className="font-semibold mb-2">Make Payment</h3>
-                <p className="text-sm text-muted-foreground">
-                  Pay securely online with credit card, debit card, or bank transfer
-                </p>
+            )}
+            
+            <CardHeader className="text-center pt-6">
+              <CardTitle className="text-xl">{plan.name}</CardTitle>
+              <CardDescription>{plan.description}</CardDescription>
+              <div className="mt-4">
+                <div className="text-sm text-gray-500">{plan.billingCycle}</div>
               </div>
-              <div className="text-center">
-                <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-blue-600 font-bold">3</span>
-                </div>
-                <h3 className="font-semibold mb-2">Get Confirmed</h3>
-                <p className="text-sm text-muted-foreground">
-                  Receive instant confirmation and manage future payments in your dashboard
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            
+            <CardContent>
+              <ul className="space-y-2">
+                {plan.features.map((feature, index) => (
+                  <li key={index} className="flex items-start gap-2 text-sm">
+                    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+            
+            <CardFooter className="pt-4">
+              <Button 
+                variant={selectedPlan === plan.id ? "default" : "outline"}
+                className="w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelectPlan(plan.id);
+                }}
+              >
+                {selectedPlan === plan.id ? "Selected" : "Select Plan"}
+              </Button>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
 
-        {/* Benefits */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">Payment Benefits</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {benefits.map((benefit, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <Check className="h-5 w-5 text-green-500" />
-                  <span>{benefit}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Action Buttons */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <Button
+          size="lg"
+          onClick={handleProceedToPayment}
+          disabled={!selectedPlan}
+          className="min-w-[200px]"
+        >
+          <CreditCard className="h-5 w-5 mr-2" />
+          {billingSummary?.totalBalance > 0 
+            ? "Pay Outstanding Balance"
+            : "Browse Classes"
+          }
+        </Button>
+        
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => navigate('/programs')}
+          className="min-w-[200px]"
+        >
+          View Available Classes
+        </Button>
+      </div>
 
-        {/* Important Information */}
-        <Alert className="mb-8">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            <strong>Important:</strong> Payment plans are selected during enrollment. 
-            You can view and manage your payment schedules in the billing section of your dashboard. 
-            All payments are processed securely through Stripe.
-          </AlertDescription>
-        </Alert>
-
-        {/* Action Buttons */}
-        <div className="text-center space-y-4">
-          <div className="space-x-4">
-            <Button 
-              onClick={() => navigate('/programs')} 
-              size="lg"
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              Browse Classes
-            </Button>
-            <Button 
-              onClick={() => navigate('/billing')} 
-              variant="outline" 
-              size="lg"
-            >
-              View My Billing
-            </Button>
+      {/* Info Section */}
+      <div className="mt-12 bg-gray-50 rounded-lg p-6">
+        <h3 className="text-lg font-semibold mb-4">How Payment Plans Work</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="font-medium mb-2">Deposit Payment</h4>
+            <p className="text-sm text-gray-600">
+              Pay just 10% upfront to secure your child's enrollment. The remaining balance is due 2 weeks before the class starts.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Need help? Contact our support team for assistance with payment plans.
-          </p>
+          <div>
+            <h4 className="font-medium mb-2">Full Payment</h4>
+            <p className="text-sm text-gray-600">
+              Pay the complete amount upfront and enjoy peace of mind with no future payments to worry about.
+            </p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-2">Split Payment</h4>
+            <p className="text-sm text-gray-600">
+              Divide the cost into two equal payments - 50% now and 50% in 30 days with automatic reminders.
+            </p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-2">Monthly Installments</h4>
+            <p className="text-sm text-gray-600">
+              Spread the cost over 3 months for the most budget-friendly option with automatic billing.
+            </p>
+          </div>
         </div>
       </div>
-    </ParentAppShell>
+    </div>
   );
 }
