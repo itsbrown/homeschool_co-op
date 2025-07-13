@@ -4,14 +4,23 @@ import Stripe from 'stripe';
 
 const router = Router();
 
-// Initialize Stripe (you already have this in your main routes)
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-});
+// Initialize Stripe with proper error handling
+let stripe: Stripe | null = null;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2023-10-16',
+  });
+} else {
+  console.warn('⚠️ STRIPE_SECRET_KEY not found, payment history will not be available');
+}
 
 // Get payment history for authenticated user
 router.get('/history', async (req, res) => {
   try {
+    if (!stripe) {
+      return res.status(503).json({ message: 'Payment service not available' });
+    }
+    
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ message: 'Authentication required' });
@@ -65,6 +74,10 @@ router.get('/history', async (req, res) => {
 // Get specific payment details
 router.get('/history/:paymentId', async (req, res) => {
   try {
+    if (!stripe) {
+      return res.status(503).json({ message: 'Payment service not available' });
+    }
+    
     const { paymentId } = req.params;
     
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentId, {
@@ -96,6 +109,10 @@ router.get('/history/:paymentId', async (req, res) => {
 // Get subscription history
 router.get('/subscriptions', async (req, res) => {
   try {
+    if (!stripe) {
+      return res.status(503).json({ message: 'Payment service not available' });
+    }
+    
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ message: 'Authentication required' });
