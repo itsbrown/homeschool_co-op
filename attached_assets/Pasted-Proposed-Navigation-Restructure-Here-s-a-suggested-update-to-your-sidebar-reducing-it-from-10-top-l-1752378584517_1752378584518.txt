@@ -1,0 +1,19 @@
+Proposed Navigation Restructure
+Here's a suggested update to your sidebar, reducing it from 10 top-level items to 7 for better hierarchy. I've grouped the four payments-related items under a new "Finances" category, which could expand into a sub-menu (e.g., via accordion or dropdown) on hover/click for a compact feel.github.com This draws from designs on platforms like those showcased in Dribbble education dashboards, where financial sections are often consolidated to prioritize learning-focused navigation.dribbble.comdribbble.com
+
+Dashboard (keep as is, home base)
+My Children (core parent feature)
+Programs & Classes (educational focus)
+Family Schedule (daily utility)
+Finances (new consolidated group)
+Payments
+Billing
+Payment Plans
+Platform Subscription
+AI Enrollment Assistant (unique tool, keep prominent)
+Settings (could include account details; if needed, move some finances here instead)
+Why This Follows Best Practices
+Simplicity and Scalability: Vertical sidebars work best for apps with growing features, but they should avoid flat lists longer than 7-8 items. Grouping prevents "navigation fatigue" and allows for future additions without crowding.reddit.com+2 more
+User-Centric Grouping: Finances are administrative, not core to the "education journey" you highlight in the dashboard welcome message. Nesting them echoes fintech UX, where billing is often under one tab for quick, non-disruptive access.gocardless.com+2 more
+Consistency with Education Platforms: In examples like online learning dashboards (e.g., from Dribbble inspirations), parent views prioritize children, enrollments, and schedules upfront, with payments tucked away to maintain focus on learning outcomes.multipurposethemes.com+2 more
+Visual and Accessibility Tips: Keep the sidebar width around 250px for readability, use icons consistently (as you already do), and ensure keyword-fronted labels (e.g., "Finances" over vague terms). Test for mobile responsiveness, where this could collapse into a hamburger menu.
