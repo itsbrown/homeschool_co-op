@@ -322,22 +322,20 @@ export default function BillingPage() {
 
   const getSelectedTotal = () => {
     if (!billingSummary) return 0;
+    // If specific enrollments are selected, use their balance
+    if (selectedEnrollments.length > 0) {
+      return billingSummary.enrollmentDetails
+        .filter(detail => selectedEnrollments.includes(detail.enrollmentId))
+        .reduce((total, detail) => total + detail.balance, 0);
+    }
+    // Otherwise use the actual total of all enrollment balances
     return billingSummary.enrollmentDetails
-      .filter(detail => selectedEnrollments.includes(detail.enrollmentId))
-      .reduce((total, detail) => {
-        if (detail.paymentOptions) {
-          const selectedOptionIndex = selectedPaymentOptions[detail.enrollmentId] || 0;
-          const selectedOption = detail.paymentOptions[selectedOptionIndex];
-          return total + (selectedOption.amount - (selectedOption.discount || 0));
-        }
-        return total + detail.nextPaymentAmount;
-      }, 0);
+      .reduce((total, detail) => total + detail.balance, 0);
   };
 
   const getPaymentPlanAmount = () => {
-    const totalBalance = billingSummary?.totalBalance || 0;
-    const selectedTotal = getSelectedTotal();
-    const baseAmount = selectedEnrollments.length > 0 ? selectedTotal : totalBalance;
+    const actualTotal = getSelectedTotal();
+    const baseAmount = actualTotal;
 
     switch (selectedPaymentPlan) {
       case 'deposit_all':
@@ -359,9 +357,8 @@ export default function BillingPage() {
   };
 
   const getPaymentPlanDescription = () => {
-    const totalBalance = billingSummary?.totalBalance || 0;
-    const selectedTotal = getSelectedTotal();
-    const baseAmount = selectedEnrollments.length > 0 ? selectedTotal : totalBalance;
+    const actualTotal = getSelectedTotal();
+    const baseAmount = actualTotal;
 
     switch (selectedPaymentPlan) {
       case 'deposit_all':
@@ -552,7 +549,7 @@ export default function BillingPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="text-center p-4 border rounded-lg">
                     <div className="text-2xl font-bold text-red-600">
-                      {formatCurrency(billingSummary.totalBalance)}
+                      {formatCurrency(getSelectedTotal())}
                     </div>
                     <div className="text-sm text-muted-foreground">Total Outstanding</div>
                   </div>
@@ -564,115 +561,9 @@ export default function BillingPage() {
                   </div>
                   <div className="text-center p-4 border rounded-lg">
                     <div className="text-2xl font-bold text-green-600">
-                      {formatCurrency(getSelectedTotal())}
+                      {formatCurrency(getPaymentPlanAmount())}
                     </div>
-                    <div className="text-sm text-muted-foreground">Next Payment Due</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Payment Plan Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Plan Options</CardTitle>
-                <CardDescription>
-                  Choose how you'd like to pay your outstanding balance
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid gap-4">
-                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="paymentPlan"
-                        value="deposit_all"
-                        checked={selectedPaymentPlan === 'deposit_all'}
-                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">Pay Deposits Only</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          Pay 10% deposit for all enrollments - {formatCurrency(Math.round((billingSummary?.totalBalance || 0) * 0.1))}
-                        </div>
-                        <div className="text-xs text-blue-600 mt-1">
-                          Secures all spots, remaining balance due before classes start
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="paymentPlan"
-                        value="half_now"
-                        checked={selectedPaymentPlan === 'half_now'}
-                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">Split Payment (50/50)</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          Pay half now, half in 30 days - {formatCurrency(Math.round((billingSummary?.totalBalance || 0) * 0.5))}
-                        </div>
-                        <div className="text-xs text-green-600 mt-1">
-                          No additional fees, automatic payment reminders
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="paymentPlan"
-                        value="full_payment"
-                        checked={selectedPaymentPlan === 'full_payment'}
-                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">Pay in Full</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          Complete payment now - {formatCurrency((billingSummary?.totalBalance || 0) - ((billingSummary?.totalBalance || 0) > 50000 ? Math.round((billingSummary?.totalBalance || 0) * 0.05) : 0))}
-                          {(billingSummary?.totalBalance || 0) > 50000 && (
-                            <span className="text-green-600 font-medium"> (Save {formatCurrency(Math.round((billingSummary?.totalBalance || 0) * 0.05))})</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-green-600 mt-1">
-                          {(billingSummary?.totalBalance || 0) > 50000 ? '5% discount applied, ' : ''}No future payments needed
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="paymentPlan"
-                        value="three_payments"
-                        checked={selectedPaymentPlan === 'three_payments'}
-                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">Monthly Installments (3 payments)</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          Three monthly payments of {formatCurrency(Math.round((billingSummary?.totalBalance || 0) / 3))} each
-                        </div>
-                        <div className="text-xs text-blue-600 mt-1">
-                          First payment today, then monthly auto-payments
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <div className="font-medium text-blue-900">Selected Plan Summary</div>
-                    <div className="text-sm text-blue-700 mt-1">{getPaymentPlanDescription()}</div>
-                    <div className="text-lg font-bold text-blue-900 mt-2">
-                      Next Payment: {formatCurrency(getPaymentPlanAmount())}
-                    </div>
+                    <div className="text-sm text-muted-foreground">Next Payment Amount</div>
                   </div>
                 </div>
               </CardContent>
@@ -722,94 +613,131 @@ export default function BillingPage() {
                         Select individual enrollments or leave unselected to include all in payment plan
                       </div>
                       
-                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                        {/* Payment Options */}
-                        {detail.paymentOptions && detail.paymentOptions.length > 1 && (
-                          <div className="flex-1">
-                            <div className="text-sm font-medium mb-2">Payment Option:</div>
-                            <div className="space-y-2">
-                              {detail.paymentOptions.map((option: any, index: number) => (
-                                <label key={index} className="flex items-center space-x-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name={`payment-option-${detail.enrollmentId}`}
-                                    checked={(selectedPaymentOptions[detail.enrollmentId] || 0) === index}
-                                    onChange={() => setSelectedPaymentOptions(prev => ({
-                                      ...prev,
-                                      [detail.enrollmentId]: index
-                                    }))}
-                                    className="rounded"
-                                  />
-                                  <span className="text-sm">
-                                    {option.description} - ${((option.amount - (option.discount || 0)) / 100).toFixed(2)}
-                                    {option.discount > 0 && (
-                                      <span className="text-green-600 text-xs ml-1">
-                                        (Save ${(option.discount / 100).toFixed(2)})
-                                      </span>
-                                    )}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Cost Breakdown */}
+                      {/* Cost Breakdown */}
+                      <div className="flex justify-between items-start">
+                        <div className="text-sm text-gray-600">
+                          <div>Total Cost: ${(detail.classPrice / 100).toFixed(2)}</div>
+                          <div className="text-green-600">Amount Paid: ${(detail.amountPaid / 100).toFixed(2)}</div>
+                        </div>
                         <div className="text-right">
-                          <div className="flex justify-between text-sm">
-                            <span>Total Cost:</span>
-                            <span>${(detail.classPrice / 100).toFixed(2)}</span>
+                          <div className="text-lg font-semibold text-red-600">
+                            Outstanding: ${(detail.balance / 100).toFixed(2)}
                           </div>
-                          <div className="flex justify-between text-sm text-blue-600">
-                            <span>Deposit Required (10%):</span>
-                            <span>${(detail.depositRequired / 100).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between text-sm text-green-600">
-                            <span>Amount Paid:</span>
-                            <span>${(detail.amountPaid / 100).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between text-lg font-semibold text-red-600">
-                            <span>Remaining Balance:</span>
-                            <span>${(detail.balance / 100).toFixed(2)}</span>
-                          </div>
-                          {/* Payment Options */}
-                          <div className="mt-4 space-y-2">
-                            <div className="text-sm font-medium text-gray-700">Payment Options:</div>
-                            {detail.paymentOptions ? detail.paymentOptions.map((option: any, index: number) => (
-                              <div key={index} className="p-2 border rounded text-sm">
-                                <div className="flex justify-between items-center">
-                                  <span className="font-medium">{option.description}</span>
-                                  <span className="font-semibold">
-                                    ${((option.amount - (option.discount || 0)) / 100).toFixed(2)}
-                                    {option.discount > 0 && (
-                                      <span className="text-green-600 text-xs ml-1">
-                                        (Save ${(option.discount / 100).toFixed(2)})
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-                                {option.type === 'deposit' && (
-                                  <div className="text-xs text-blue-600 mt-1">
-                                    Secures your spot, remaining balance due before class starts
-                                  </div>
-                                )}
-                                {option.type === 'full_payment' && (
-                                  <div className="text-xs text-green-600 mt-1">
-                                    Complete payment now, no future payments needed
-                                  </div>
-                                )}
-                              </div>
-                            )) : (
-                              <div className="p-2 bg-blue-50 rounded text-sm">
-                                <strong>Next Payment ({detail.paymentType === 'deposit' ? 'Deposit' : 'Remaining Balance'}):</strong> 
-                                <span className="font-semibold text-blue-700"> ${(detail.nextPaymentAmount / 100).toFixed(2)}</span>
-                              </div>
-                            )}
+                          <div className="text-sm text-blue-600">
+                            Deposit Required: ${(detail.depositRequired / 100).toFixed(2)}
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
+                </div>
+
+                <Separator className="my-6" />
+              </CardContent>
+            </Card>
+
+            {/* Payment Plan Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Plan Options</CardTitle>
+                <CardDescription>
+                  Choose how you'd like to pay your outstanding balance
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid gap-4">
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="deposit_all"
+                        checked={selectedPaymentPlan === 'deposit_all'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Pay Deposits Only</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Pay 10% deposit for all enrollments - {formatCurrency(Math.round(getSelectedTotal() * 0.1))}
+                        </div>
+                        <div className="text-xs text-blue-600 mt-1">
+                          Secures all spots, remaining balance due before classes start
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="half_now"
+                        checked={selectedPaymentPlan === 'half_now'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Split Payment (50/50)</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Pay half now, half in 30 days - {formatCurrency(Math.round(getSelectedTotal() * 0.5))}
+                        </div>
+                        <div className="text-xs text-green-600 mt-1">
+                          No additional fees, automatic payment reminders
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="full_payment"
+                        checked={selectedPaymentPlan === 'full_payment'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Pay in Full</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Complete payment now - {formatCurrency(getSelectedTotal() - (getSelectedTotal() > 50000 ? Math.round(getSelectedTotal() * 0.05) : 0))}
+                          {getSelectedTotal() > 50000 && (
+                            <span className="text-green-600 font-medium"> (Save {formatCurrency(Math.round(getSelectedTotal() * 0.05))})</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-green-600 mt-1">
+                          {getSelectedTotal() > 50000 ? '5% discount applied, ' : ''}No future payments needed
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="three_payments"
+                        checked={selectedPaymentPlan === 'three_payments'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Monthly Installments (3 payments)</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Three monthly payments of {formatCurrency(Math.round(getSelectedTotal() / 3))} each
+                        </div>
+                        <div className="text-xs text-blue-600 mt-1">
+                          First payment today, then monthly auto-payments
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="font-medium text-blue-900">Selected Plan Summary</div>
+                    <div className="text-sm text-blue-700 mt-1">{getPaymentPlanDescription()}</div>
+                    <div className="text-lg font-bold text-blue-900 mt-2">
+                      Next Payment: {formatCurrency(getPaymentPlanAmount())}
+                    </div>
+                  </div>
                 </div>
 
                 <Separator className="my-6" />
