@@ -191,14 +191,7 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
           }}
           options={{
             layout: 'tabs',
-            paymentMethodOrder: ['card'],
-            fields: {
-              billingDetails: {
-                address: {
-                  country: 'never'
-                }
-              }
-            }
+            paymentMethodOrder: ['card']
           }}
         />
       </div>
