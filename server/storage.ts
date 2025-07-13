@@ -1910,17 +1910,17 @@ export class MemStorage implements IStorage {
 }
 
 import { DatabaseStorage } from "./dbStorage";
-import { supabaseStorage } from './supabase-storage';
+import { supabaseStorage, SupabaseStorage } from './supabase-storage';
 
 class CombinedStorage {
   private dbStorage: DatabaseStorage;
   private memStorage: MemStorage;
-  private supabaseStorage: supabaseStorage
+  private supabaseStorage: SupabaseStorage
 
   constructor() {
     this.dbStorage = new DatabaseStorage();
     this.memStorage = new MemStorage();
-    this.supabaseStorage = new supabaseStorage()
+    this.supabaseStorage = supabaseStorage
   }
 
   async getAllUsers(): Promise<User[]> {
