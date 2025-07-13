@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
 import { RoleProvider, useRole } from "@/contexts/RoleContext";
 import { NotificationProvider } from "@/hooks/useNotifications";
+import { CartProvider } from "@/contexts/CartContext";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -306,8 +307,25 @@ function Router() {
       <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/checkout/success" component={CheckoutSuccess} />
-      <Route path="/cart/checkout" component={CartCheckout} />
-      <Route path="/cart/success" component={CartSuccess} />
+      {/* Cart routes - wrapped with CartProvider */}
+          <Route path="/cart/checkout">
+            {isAuthenticated ? (
+              <CartProvider>
+                <CartCheckout />
+              </CartProvider>
+            ) : (
+              <Redirect to="/login" />
+            )}
+          </Route>
+          <Route path="/cart/success">
+            {isAuthenticated ? (
+              <CartProvider>
+                <CartSuccess />
+              </CartProvider>
+            ) : (
+              <Redirect to="/login" />
+            )}
+          </Route>
       <Route path="/billing" component={BillingPage} />
       <Route path="/payment-plans" component={() => {
             const PaymentPlansPage = React.lazy(() => import('./pages/PaymentPlansPage'));
@@ -317,7 +335,7 @@ function Router() {
               </React.Suspense>
             );
           }} />
-          
+
           <Route path="/class-payment-plans/:classId" component={ClassPaymentPlans} />
 
       {/* Registration system routes */}
