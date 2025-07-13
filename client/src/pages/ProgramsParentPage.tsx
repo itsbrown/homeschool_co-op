@@ -32,6 +32,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const { addItem, hasItem } = useCart();
+  const navigate = useNavigate();
 
   // Get childId from URL query parameters if present
   const urlParams = new URLSearchParams(window.location.search);
@@ -58,7 +59,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     },
     onSuccess: (data, variables) => {
       // Navigate to payment plan selection instead of showing success message
-      const selectedClass = classes?.find(c => c.id === variables.classId);
+      const selectedClass = classesData.classes?.find(c => c.id === variables.classId);
       const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
 
       if (selectedClass && selectedChild) {
@@ -74,7 +75,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
         // Store enrollment data and navigate to payment plans
         sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
-        navigate('/payment-plans');
+        // Use wouter's location setter to navigate
+        window.location.href = '/payment-plans';
       }
 
       setEnrollmentDialog({ open: false });
