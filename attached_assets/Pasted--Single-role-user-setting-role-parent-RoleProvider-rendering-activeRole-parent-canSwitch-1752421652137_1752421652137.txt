@@ -1,0 +1,40 @@
+🎯 Single role user - setting role: parent
+🔄 RoleProvider rendering - activeRole: parent, canSwitchRoles: false, showRoleSelection: false, user: parent@gmail.com
+🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: parent@gmail.com location: /billing
+🔄 BillingPage state updated: 
+Object {isAuthenticated: true, userEmail: "parent@gmail.com", selectedEnrollments: Array(0), showPayment: false, isPending: false, …}
+📊 Fetching billing summary...
+🔒 API 401: Authentication required - clearing token
+📊 Billing summary response: 401 Unauthorized
+❌ Billing summary failed: 
+Object {error: "User email not found"}
+
+at t.value (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+❌ Billing summary error: 
+Error {}
+
+📊 Fetching billing summary...
+🔒 API 401: Authentication required - clearing token
+📊 Billing summary response: 401 Unauthorized
+❌ Billing summary failed: 
+Object {error: "User email not found"}
+
+❌ Billing summary error: 
+Error {}
+
+📊 Fetching billing summary...
+🔒 API 401: Authentication required - clearing token
+📊 Billing summary response: 401 Unauthorized
+❌ Billing summary failed: 
+Object {error: "User email not found"}
+
+❌ Billing summary error: 
+Error {}
+message: "Billing summary failed: Unauthorized"
+stack: "Error: Billing summary failed: Unauthorized↵ at queryFn (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/BillingPage.tsx:621:17)"
+get stack: ƒ ()
+set stack: ƒ ()
+[[Prototype]]: Object
