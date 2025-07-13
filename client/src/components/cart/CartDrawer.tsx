@@ -8,10 +8,12 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, ShoppingCart, CreditCard, Percent, Gift, X } from 'lucide-react';
 import { useLocation } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
 
 export default function CartDrawer() {
   const { cart, isOpen, closeCart, removeItem, clearCart, getItemCount } = useCart();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {

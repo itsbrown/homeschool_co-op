@@ -197,7 +197,64 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const { toast } = useToast();
 
-  // Load cart from localStorage on mount
+  const loadUnpaidEnrollments = async () => {
+    try {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        console.log('No authentication token found for cart loading');
+        return;
+      }
+
+      const response = await fetch('/api/enrollments', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const enrollments = await response.json();
+        
+        // Filter unpaid enrollments (pending_payment status)
+        const unpaidEnrollments = enrollments.filter((enrollment: any) => 
+          enrollment.status === 'pending_payment'
+        );
+        
+        // Convert enrollments to cart items
+        const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => ({
+          id: `enrollment-${enrollment.id}`,
+          enrollmentId: enrollment.id,
+          classId: enrollment.classId,
+          className: enrollment.className,
+          childId: enrollment.childId,
+          childName: enrollment.childName,
+          price: enrollment.remainingBalance || enrollment.totalCost || 0,
+          status: enrollment.status,
+          depositRequired: enrollment.depositRequired,
+          amountPaid: enrollment.amountPaid || 0,
+          remainingBalance: enrollment.remainingBalance,
+        }));
+        
+        const totals = calculateCartTotals(cartItems);
+        
+        dispatch({
+          type: 'LOAD_CART',
+          payload: {
+            items: cartItems,
+            ...totals,
+          },
+        });
+        
+        console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
+      } else {
+        console.error('Failed to load enrollments:', response.status);
+      }
+    } catch (error) {
+      console.error('Error loading unpaid enrollments:', error);
+    }
+  };
+
+  // Load cart from localStorage on mount and fetch unpaid enrollments
   useEffect(() => {
     const savedCart = localStorage.getItem('asa_cart');
     if (savedCart) {
@@ -209,6 +266,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('asa_cart');
       }
     }
+    
+    // Load unpaid enrollments after a brief delay to ensure auth is ready
+    const timer = setTimeout(() => {
+      loadUnpaidEnrollments();
+    }, 1000);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   // Save cart to localStorage whenever it changes
@@ -273,63 +337,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return state.cart.items.some(
       item => item.classId === classId && item.childId === childId
     );
-  };
-
-  const loadUnpaidEnrollments = async () => {
-    try {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        console.log('No authentication token found for cart loading');
-        return;
-      }
-
-      const response = await fetch('/api/enrollments', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const enrollments = await response.json();
-        
-        // Filter unpaid enrollments (pending_payment status)
-        const unpaidEnrollments = enrollments.filter((enrollment: any) => 
-          enrollment.status === 'pending_payment'
-        );
-        
-        // Convert enrollments to cart items
-        const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => ({
-          id: `enrollment-${enrollment.id}`,
-          enrollmentId: enrollment.id,
-          classId: enrollment.classId,
-          className: enrollment.className,
-          childId: enrollment.childId,
-          childName: enrollment.childName,
-          price: enrollment.remainingBalance || enrollment.totalCost || 0,
-          status: enrollment.status,
-          depositRequired: enrollment.depositRequired,
-          amountPaid: enrollment.amountPaid || 0,
-          remainingBalance: enrollment.remainingBalance,
-        }));
-        
-        const totals = calculateCartTotals(cartItems);
-        
-        dispatch({
-          type: 'LOAD_CART',
-          payload: {
-            items: cartItems,
-            ...totals,
-          },
-        });
-        
-        console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
-      } else {
-        console.error('Failed to load enrollments:', response.status);
-      }
-    } catch (error) {
-      console.error('Error loading unpaid enrollments:', error);
-    }
   };
 
   const contextValue: CartContextType = {
