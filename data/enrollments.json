@@ -47,5 +47,18 @@
     "depositRequired": 90,
     "totalCost": 900,
     "remainingBalance": 900
+  },
+  {
+    "id": 1752409065152,
+    "classId": 4,
+    "childId": 8,
+    "childName": "Child Parent",
+    "className": "Macaroni",
+    "enrollmentDate": "2025-07-13T12:17:45.152Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]
