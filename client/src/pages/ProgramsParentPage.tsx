@@ -63,7 +63,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       const selectedClass = classesData.classes?.find(c => c.id === variables.classId);
       const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
 
-      if (selectedClass && selectedChild) {
+      if (selectedClass && selectedChild && data.enrollment) {
         const enrollmentData = {
           enrollmentId: data.enrollment.id,
           className: selectedClass.title,
