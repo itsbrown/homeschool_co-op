@@ -721,8 +721,8 @@ export default function BillingPage() {
                       {/* Cost Breakdown */}
                       <div className="flex justify-between items-start">
                         <div className="text-sm text-gray-600">
-                          <div>Total Cost: ${(detail.classPrice / 100).toFixed(2)}</div>
-                          <div className="text-green-600">Amount Paid: ${(detail.amountPaid / 100).toFixed(2)}</div>
+                          <div>Total Cost: ${detail.classPrice.toFixed(2)}</div>
+                          <div className="text-green-600">Amount Paid: ${detail.amountPaid.toFixed(2)}</div>
                         </div>
                         <div className="text-right">
                           <div className="text-lg font-semibold text-red-600">
