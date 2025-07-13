@@ -1,13 +1,26 @@
 import { useState } from "react";
 import { useRoute } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Plus, Calendar, Clock, MapPin } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Clock, MapPin, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Enrollment {
   id: number;
@@ -19,7 +32,7 @@ interface Enrollment {
   endDate: string;
   schedule: string;
   location: string;
-  status: 'enrolled' | 'waitlisted' | 'completed';
+  status: 'enrolled' | 'waitlisted' | 'completed' | 'pending_payment';
   enrollmentDate: string;
 }
 
@@ -34,6 +47,8 @@ interface Child {
 export default function ChildEnrollmentsPage() {
   const [match, params] = useRoute("/children/:id/enrollments");
   const childId = params?.id;
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch child data
   const { data: child, isLoading: childLoading } = useQuery<Child>({
@@ -45,6 +60,28 @@ export default function ChildEnrollmentsPage() {
   const { data: enrollments = [], isLoading: enrollmentsLoading } = useQuery<Enrollment[]>({
     queryKey: [`/api/children/${childId}/enrollments`],
     enabled: !!childId,
+  });
+
+  const unenrollMutation = useMutation({
+    mutationFn: async (enrollmentId: number) => {
+      return apiRequest(`/api/enrollments/${enrollmentId}/unenroll`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}/enrollments`] });
+      toast({
+        title: "Success",
+        description: "Successfully unenrolled from the class",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unenroll from class",
+        variant: "destructive",
+      });
+    },
   });
 
   if (!match || !childId) {
@@ -67,6 +104,8 @@ export default function ChildEnrollmentsPage() {
         return 'bg-yellow-100 text-yellow-800';
       case 'completed':
         return 'bg-gray-100 text-gray-800';
+      case 'pending_payment':
+        return 'bg-orange-100 text-orange-800';
       default:
         return 'bg-blue-100 text-blue-800';
     }
@@ -200,6 +239,33 @@ export default function ChildEnrollmentsPage() {
                             <Button variant="outline" size="sm">
                               Manage Enrollment
                             </Button>
+                          )}
+                          {enrollment.status === 'pending_payment' && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Unenroll
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Confirm Unenrollment</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to unenroll from "{enrollment.className}"? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => unenrollMutation.mutate(enrollment.id)}
+                                    disabled={unenrollMutation.isPending}
+                                  >
+                                    {unenrollMutation.isPending ? "Unenrolling..." : "Unenroll"}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           )}
                         </div>
                       </div>

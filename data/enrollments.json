@@ -112,5 +112,18 @@
     "depositRequired": 90,
     "totalCost": 900,
     "remainingBalance": 900
+  },
+  {
+    "id": 1752446991327,
+    "classId": 3,
+    "childId": 8,
+    "childName": "Child Parent",
+    "className": "Yankee Doodle 9AM - 12PM",
+    "enrollmentDate": "2025-07-13T22:49:51.327Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

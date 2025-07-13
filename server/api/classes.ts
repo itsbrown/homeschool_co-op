@@ -213,4 +213,45 @@ router.post('/:id/enroll', async (req, res) => {
   }
 });
 
+// Unenroll a child from a class
+router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const enrollmentId = parseInt(req.params.enrollmentId);
+
+    console.log(`📝 UNENROLLMENT REQUEST: Class ${classId}, Enrollment ${enrollmentId}`);
+
+    if (isNaN(classId) || isNaN(enrollmentId)) {
+      return res.status(400).json({ message: 'Invalid class ID or enrollment ID' });
+    }
+
+    // Get the enrollment to verify it exists and check status
+    const enrollment = await storage.getEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    // Only allow unenrollment if payment is pending (not yet paid)
+    if (enrollment.status !== 'pending_payment') {
+      return res.status(400).json({ 
+        message: 'Cannot unenroll from a class that has already been paid for' 
+      });
+    }
+
+    // Delete the enrollment
+    await storage.deleteEnrollment(enrollmentId);
+
+    console.log(`✅ Successfully unenrolled child from class: ${enrollment.className}`);
+    
+    res.json({ 
+      message: 'Unenrollment successful',
+      enrollmentId: enrollmentId
+    });
+
+  } catch (error) {
+    console.error('Error unenrolling child from class:', error);
+    res.status(500).json({ message: 'Failed to unenroll child from class' });
+  }
+});
+
 export default router;

@@ -121,6 +121,8 @@ export interface IStorage {
   // Class Enrollment methods
   createEnrollment(enrollment: any): Promise<any>;
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
+  getEnrollmentById(id: number): Promise<any>;
+  deleteEnrollment(id: number): Promise<void>;
 
   // Class methods
   getClassById(id: number): Promise<Class | undefined>;
@@ -863,6 +865,44 @@ export class MemStorage implements IStorage {
     console.log(`📝 ENROLLMENT QUERY: Child ${childId} has ${enrollments.length} enrollments`);
     console.log(`📝 Enrollments found:`, enrollments);
     return enrollments;
+  }
+
+  async getEnrollmentById(id: number): Promise<any> {
+    if (!this.classEnrollments) {
+      console.log(`📝 No classEnrollments array exists for enrollment ${id}`);
+      return undefined;
+    }
+    const enrollment = this.classEnrollments.find(enrollment => enrollment.id === id);
+    console.log(`📝 ENROLLMENT QUERY: Enrollment ${id} ${enrollment ? 'found' : 'not found'}`);
+    return enrollment;
+  }
+
+  async deleteEnrollment(id: number): Promise<void> {
+    if (!this.classEnrollments) {
+      console.log(`❌ No classEnrollments array exists for enrollment ${id}`);
+      return;
+    }
+
+    const initialLength = this.classEnrollments.length;
+    this.classEnrollments = this.classEnrollments.filter(enrollment => enrollment.id !== id);
+    const finalLength = this.classEnrollments.length;
+
+    if (initialLength === finalLength) {
+      console.log(`❌ Enrollment ${id} not found`);
+      return;
+    }
+
+    console.log(`❌ ENROLLMENT DELETED: ID ${id}`);
+    console.log(`📝 Total enrollments remaining: ${this.classEnrollments.length}`);
+
+    // Save to file for persistence
+    try {
+      console.log(`💾 About to save enrollments to file after deletion...`);
+      await this.saveEnrollmentsToFile();
+      console.log(`💾 Save operation completed after deletion`);
+    } catch (error) {
+      console.error(`❌ Error in deleteEnrollment save operation:`, error);
+    }
   }
 
   async removeEnrollment(enrollmentId: number): Promise<boolean> {
@@ -2233,6 +2273,14 @@ class CombinedStorage {
 
   async getEnrollmentsByChildId(childId: number): Promise<any[]> {
     return this.memStorage.getEnrollmentsByChildId(childId);
+  }
+
+  async getEnrollmentById(id: number): Promise<any> {
+    return this.memStorage.getEnrollmentById(id);
+  }
+
+  async deleteEnrollment(id: number): Promise<void> {
+    return this.memStorage.deleteEnrollment(id);
   }
 
   async getClassesBySchoolId(schoolId: string): Promise<Class[]> {

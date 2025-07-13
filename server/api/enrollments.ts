@@ -32,7 +32,46 @@ router.get('/child/:childId', async (req, res) => {
   }
 });
 
-// Unenroll a child from a class
+// Unenroll endpoint - specifically for pending_payment enrollments
+router.delete('/:enrollmentId/unenroll', async (req, res) => {
+  try {
+    const enrollmentId = parseInt(req.params.enrollmentId);
+    
+    if (isNaN(enrollmentId)) {
+      return res.status(400).json({ message: 'Invalid enrollment ID' });
+    }
+
+    console.log(`📝 UNENROLLMENT REQUEST: Enrollment ${enrollmentId}`);
+
+    // Get the enrollment to verify it exists and check status
+    const enrollment = await storage.getEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    // Only allow unenrollment if payment is pending (not yet paid)
+    if (enrollment.status !== 'pending_payment') {
+      return res.status(400).json({ 
+        message: 'Cannot unenroll from a class that has already been paid for' 
+      });
+    }
+
+    // Delete the enrollment
+    await storage.deleteEnrollment(enrollmentId);
+
+    console.log(`✅ Successfully unenrolled from class: ${enrollment.className}`);
+    
+    res.json({ 
+      message: 'Unenrollment successful',
+      enrollmentId: enrollmentId
+    });
+  } catch (error) {
+    console.error('Error unenrolling from class:', error);
+    res.status(500).json({ message: 'Failed to unenroll from class' });
+  }
+});
+
+// Unenroll a child from a class (legacy endpoint)
 router.delete('/:enrollmentId', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.enrollmentId);
