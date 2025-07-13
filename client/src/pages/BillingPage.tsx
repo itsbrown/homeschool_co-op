@@ -70,7 +70,15 @@ interface BillingSummary {
   parentEmail: string;
 }
 
-function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], totalAmount: number }) {
+function PaymentForm({ 
+  enrollmentIds, 
+  totalAmount, 
+  onPaymentSuccess 
+}: { 
+  enrollmentIds: number[], 
+  totalAmount: number,
+  onPaymentSuccess: (details: { paymentIntentId: string; amount: number; paymentDate: string }) => void
+}) {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
@@ -148,17 +156,14 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         console.log('✅ Payment successful:', paymentIntent.id);
         
-        // Store success details
-        setSuccessDetails({
+        // Call the success callback with payment details
+        onPaymentSuccess({
           paymentIntentId: paymentIntent.id,
           amount: totalAmount,
           paymentDate: new Date().toISOString(),
         });
         
-        // Show success state
-        setPaymentSuccess(true);
-        
-        // Also show a toast
+        // Show success toast
         toast({
           title: "Payment Successful!",
           description: "Your balance has been paid successfully.",
@@ -926,6 +931,10 @@ export default function BillingPage() {
                       <PaymentForm 
                         enrollmentIds={selectedEnrollments} 
                         totalAmount={getPaymentPlanAmount()} 
+                        onPaymentSuccess={(details) => {
+                          setPaymentSuccess(true);
+                          setSuccessDetails(details);
+                        }}
                       />
                     </Elements>
                   </React.Suspense>
