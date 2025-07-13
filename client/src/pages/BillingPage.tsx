@@ -1,7 +1,7 @@
 import React, { useState, useTransition } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/components/SupabaseProvider';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -127,13 +127,27 @@ function PaymentForm({ enrollmentIds, totalAmount }: { enrollmentIds: number[], 
         });
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         console.log('✅ Payment successful:', paymentIntent.id);
+        
+        // Store success details
+        setSuccessDetails({
+          paymentIntentId: paymentIntent.id,
+          amount: totalAmount,
+          paymentDate: new Date().toISOString(),
+        });
+        
+        // Show success state
+        setPaymentSuccess(true);
+        
+        // Also show a toast
         toast({
           title: "Payment Successful!",
           description: "Your balance has been paid successfully.",
         });
 
-        // Refresh the page to show updated balances
-        window.location.reload();
+        // Refresh data in the background
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
       } else {
         console.warn('⚠️ Unexpected payment result:', paymentIntent);
         toast({
@@ -239,6 +253,12 @@ export default function BillingPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [isPending, startTransition] = useTransition();
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [successDetails, setSuccessDetails] = useState<{
+    paymentIntentId?: string;
+    amount?: number;
+    paymentDate?: string;
+  }>({});
 
   // Debug logging for state changes
   React.useEffect(() => {
@@ -515,6 +535,66 @@ export default function BillingPage() {
               <p className="text-center">Unable to load billing information. Please try again later.</p>
             </CardContent>
           </Card>
+        </div>
+      </ParentAppShell>
+    );
+  }
+
+  // Show payment success confirmation
+  if (paymentSuccess) {
+    return (
+      <ParentAppShell>
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="flex flex-col items-center justify-center min-h-[50vh]">
+            <Card className="w-full max-w-md border-green-200 bg-green-50/30">
+              <CardHeader className="text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="rounded-full bg-green-100 p-3">
+                    <CheckCircle className="h-8 w-8 text-green-600" />
+                  </div>
+                </div>
+                <CardTitle className="text-green-700">Payment Successful!</CardTitle>
+                <CardDescription className="text-green-600">
+                  Your payment has been processed successfully
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="text-center space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Payment Amount</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {formatCurrency(successDetails.amount || 0)}
+                  </p>
+                </div>
+                {successDetails.paymentIntentId && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Transaction ID</p>
+                    <p className="text-sm font-mono bg-gray-100 p-2 rounded">
+                      {successDetails.paymentIntentId}
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Payment Date</p>
+                  <p className="text-sm">
+                    {formatDate(successDetails.paymentDate || new Date().toISOString())}
+                  </p>
+                </div>
+                <div className="pt-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Your account will be automatically updated. Thank you for your payment!
+                  </p>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-center">
+                <Button 
+                  onClick={() => window.location.reload()}
+                  className="w-full"
+                >
+                  Continue to Account
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
         </div>
       </ParentAppShell>
     );
