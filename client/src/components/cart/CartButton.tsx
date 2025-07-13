@@ -12,6 +12,8 @@ export default function CartButton() {
     openCart();
   };
 
+  const itemCount = getItemCount();
+
   return (
     <Button
       variant="outline"
