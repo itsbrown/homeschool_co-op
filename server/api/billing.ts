@@ -151,4 +151,79 @@ router.get('/payment-status/:paymentIntentId', async (req, res) => {
   }
 });
 
+// Get billing summary for a parent
+router.get('/summary', async (req, res) => {
+  try {
+    const userEmail = req.auth?.payload?.email;
+    if (!userEmail) {
+      return res.status(401).json({ error: 'User email not found' });
+    }
+
+    console.log('🔍 Getting billing summary for:', userEmail);
+
+    // Get all enrollments for this parent
+    const allEnrollments = await storage.getAllProgramEnrollments();
+    const userEnrollments = allEnrollments.filter(enrollment => 
+      enrollment.parentEmail === userEmail
+    );
+
+    console.log('📋 Found enrollments:', userEnrollments.length);
+
+    // Calculate enrollment details with balances
+    const enrollmentDetails = [];
+    let totalBalance = 0;
+
+    for (const enrollment of userEnrollments) {
+      // Get program details
+      const program = await storage.getProgramById(enrollment.programId);
+      if (!program) continue;
+
+      // Get child details
+      const child = await storage.getChildById(enrollment.childId);
+      if (!child) continue;
+
+      const balance = (enrollment.totalAmount || 0) - (enrollment.totalPaid || 0);
+      if (balance > 0) {
+        enrollmentDetails.push({
+          enrollmentId: enrollment.id,
+          childName: `${child.firstName} ${child.lastName}`,
+          className: program.title,
+          programId: program.id,
+          totalAmount: enrollment.totalAmount || 0,
+          totalPaid: enrollment.totalPaid || 0,
+          balance: balance,
+          status: enrollment.status,
+          enrollmentDate: enrollment.createdAt
+        });
+        totalBalance += balance;
+      }
+    }
+
+    const summary = {
+      totalBalance: totalBalance,
+      totalBalanceFormatted: new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(totalBalance / 100),
+      enrollmentCount: enrollmentDetails.length,
+      enrollmentDetails: enrollmentDetails,
+      parentEmail: userEmail
+    };
+
+    console.log('✅ Billing summary generated:', {
+      totalBalance,
+      enrollmentCount: enrollmentDetails.length,
+      parentEmail: userEmail
+    });
+
+    res.json(summary);
+  } catch (error) {
+    console.error('❌ Error getting billing summary:', error);
+    res.status(500).json({ 
+      error: 'Failed to get billing summary',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
