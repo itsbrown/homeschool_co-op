@@ -242,6 +242,7 @@ export default function BillingPage() {
   const { toast } = useToast();
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<{[enrollmentId: number]: number}>({});
+  const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('deposit_all');
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [isPending, startTransition] = useTransition();
@@ -333,6 +334,50 @@ export default function BillingPage() {
       }, 0);
   };
 
+  const getPaymentPlanAmount = () => {
+    const totalBalance = billingSummary?.totalBalance || 0;
+    const selectedTotal = getSelectedTotal();
+    const baseAmount = selectedEnrollments.length > 0 ? selectedTotal : totalBalance;
+
+    switch (selectedPaymentPlan) {
+      case 'deposit_all':
+        // Pay 10% deposit for all enrollments
+        return Math.round(baseAmount * 0.1);
+      case 'half_now':
+        // Pay 50% now, 50% later
+        return Math.round(baseAmount * 0.5);
+      case 'full_payment':
+        // Pay everything with 5% discount if over $500
+        const discount = baseAmount > 50000 ? Math.round(baseAmount * 0.05) : 0;
+        return baseAmount - discount;
+      case 'three_payments':
+        // Split into 3 monthly payments
+        return Math.round(baseAmount / 3);
+      default:
+        return baseAmount;
+    }
+  };
+
+  const getPaymentPlanDescription = () => {
+    const totalBalance = billingSummary?.totalBalance || 0;
+    const selectedTotal = getSelectedTotal();
+    const baseAmount = selectedEnrollments.length > 0 ? selectedTotal : totalBalance;
+
+    switch (selectedPaymentPlan) {
+      case 'deposit_all':
+        return `Pay 10% deposit (${formatCurrency(Math.round(baseAmount * 0.1))}) to secure all enrollments. Remaining balance due before classes start.`;
+      case 'half_now':
+        return `Pay 50% now (${formatCurrency(Math.round(baseAmount * 0.5))}), remaining 50% in 30 days.`;
+      case 'full_payment':
+        const discount = baseAmount > 50000 ? Math.round(baseAmount * 0.05) : 0;
+        return `Pay full amount now${discount > 0 ? ` with 5% discount (save ${formatCurrency(discount)})` : ''}. No future payments needed.`;
+      case 'three_payments':
+        return `Split into 3 equal monthly payments of ${formatCurrency(Math.round(baseAmount / 3))} each.`;
+      default:
+        return '';
+    }
+  };
+
   const handlePaySelected = async () => {
     console.log('🔄 Pay Selected button clicked');
 
@@ -355,34 +400,35 @@ export default function BillingPage() {
 
     startTransition(async () => {
       try {
-        const totalAmount = getSelectedTotal();
+        const totalAmount = getPaymentPlanAmount();
         console.log('💰 Total amount to pay:', totalAmount);
+        console.log('💳 Selected payment plan:', selectedPaymentPlan);
 
         console.log('📤 Sending payment request...');
-        // Build payment details with selected options
-        const paymentDetails = selectedEnrollments.map(enrollmentId => {
+        
+        // Determine which enrollments to process
+        const enrollmentsToProcess = selectedEnrollments.length > 0 
+          ? selectedEnrollments 
+          : billingSummary.enrollmentDetails.map(d => d.enrollmentId);
+
+        // Build payment details with selected plan
+        const paymentDetails = enrollmentsToProcess.map(enrollmentId => {
           const enrollment = billingSummary.enrollmentDetails.find(d => d.enrollmentId === enrollmentId);
           if (!enrollment) return null;
           
-          const selectedOptionIndex = selectedPaymentOptions[enrollmentId] || 0;
-          const selectedOption = enrollment.paymentOptions?.[selectedOptionIndex] || {
-            type: enrollment.paymentType,
-            amount: enrollment.nextPaymentAmount,
-            description: 'Payment'
-          };
-          
           return {
             enrollmentId,
-            paymentType: selectedOption.type,
-            amount: selectedOption.amount - (selectedOption.discount || 0),
-            description: selectedOption.description
+            paymentType: selectedPaymentPlan,
+            amount: Math.round(totalAmount / enrollmentsToProcess.length), // Distribute amount across enrollments
+            description: getPaymentPlanDescription()
           };
         }).filter(Boolean);
 
         const response = await apiRequest('POST', '/api/billing/pay-balance', {
-          enrollmentIds: selectedEnrollments,
+          enrollmentIds: enrollmentsToProcess,
           totalAmount: totalAmount,
           paymentDetails: paymentDetails,
+          paymentPlan: selectedPaymentPlan,
         });
 
         console.log('📥 Payment response received:', response.status, response.statusText);
@@ -526,16 +572,129 @@ export default function BillingPage() {
               </CardContent>
             </Card>
 
+            {/* Payment Plan Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Plan Options</CardTitle>
+                <CardDescription>
+                  Choose how you'd like to pay your outstanding balance
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid gap-4">
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="deposit_all"
+                        checked={selectedPaymentPlan === 'deposit_all'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Pay Deposits Only</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Pay 10% deposit for all enrollments - {formatCurrency(Math.round((billingSummary?.totalBalance || 0) * 0.1))}
+                        </div>
+                        <div className="text-xs text-blue-600 mt-1">
+                          Secures all spots, remaining balance due before classes start
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="half_now"
+                        checked={selectedPaymentPlan === 'half_now'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Split Payment (50/50)</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Pay half now, half in 30 days - {formatCurrency(Math.round((billingSummary?.totalBalance || 0) * 0.5))}
+                        </div>
+                        <div className="text-xs text-green-600 mt-1">
+                          No additional fees, automatic payment reminders
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="full_payment"
+                        checked={selectedPaymentPlan === 'full_payment'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Pay in Full</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Complete payment now - {formatCurrency((billingSummary?.totalBalance || 0) - ((billingSummary?.totalBalance || 0) > 50000 ? Math.round((billingSummary?.totalBalance || 0) * 0.05) : 0))}
+                          {(billingSummary?.totalBalance || 0) > 50000 && (
+                            <span className="text-green-600 font-medium"> (Save {formatCurrency(Math.round((billingSummary?.totalBalance || 0) * 0.05))})</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-green-600 mt-1">
+                          {(billingSummary?.totalBalance || 0) > 50000 ? '5% discount applied, ' : ''}No future payments needed
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="three_payments"
+                        checked={selectedPaymentPlan === 'three_payments'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Monthly Installments (3 payments)</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Three monthly payments of {formatCurrency(Math.round((billingSummary?.totalBalance || 0) / 3))} each
+                        </div>
+                        <div className="text-xs text-blue-600 mt-1">
+                          First payment today, then monthly auto-payments
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="font-medium text-blue-900">Selected Plan Summary</div>
+                    <div className="text-sm text-blue-700 mt-1">{getPaymentPlanDescription()}</div>
+                    <div className="text-lg font-bold text-blue-900 mt-2">
+                      Next Payment: {formatCurrency(getPaymentPlanAmount())}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Outstanding Enrollments */}
             <Card>
               <CardHeader>
                 <CardTitle>Outstanding Enrollments</CardTitle>
                 <CardDescription>
-                  Select enrollments to pay and manage your balances
+                  Review your enrollments (all will be included in the selected payment plan)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  <div className="p-3 bg-gray-50 rounded-lg mb-4">
+                    <div className="text-sm text-gray-600">
+                      <strong>Note:</strong> Your selected payment plan will apply to all outstanding enrollments below. 
+                      You can optionally select specific enrollments to pay individually, or leave all unselected to apply the plan to your entire balance.
+                    </div>
+                  </div>
+                  
                   {billingSummary.enrollmentDetails.map((detail) => (
                     <div key={detail.enrollmentId} className="p-4 border rounded-lg">
                       <div className="flex items-start space-x-3 mb-4">
@@ -544,7 +703,10 @@ export default function BillingPage() {
                           checked={selectedEnrollments.includes(detail.enrollmentId)}
                           onChange={(e) => handleSelectEnrollment(detail.enrollmentId, e.target.checked)}
                           className="rounded mt-1"
-                        />
+                        /></div>
+                        <div className="text-xs text-gray-500 ml-6">
+                          Select individual enrollments or leave unselected to include all in payment plan
+                        </div>
                         <div className="flex-1">
                           <div className="font-medium">{detail.className}</div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -655,7 +817,15 @@ export default function BillingPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-sm text-muted-foreground">
-                      {selectedEnrollments.length} enrollment(s) selected
+                      {selectedEnrollments.length > 0 
+                        ? `${selectedEnrollments.length} enrollment(s) selected` 
+                        : `All ${billingSummary.enrollmentDetails.length} enrollments will be included`}
+                    </p>
+                    <p className="text-sm font-medium text-blue-600">
+                      Payment Plan: {selectedPaymentPlan === 'deposit_all' ? 'Deposits Only' :
+                                   selectedPaymentPlan === 'half_now' ? 'Split Payment' :
+                                   selectedPaymentPlan === 'full_payment' ? 'Pay in Full' :
+                                   selectedPaymentPlan === 'three_payments' ? 'Monthly Installments' : 'Custom'}
                     </p>
                     {showPayment && (
                       <p className="text-sm text-green-600 font-medium">
@@ -666,7 +836,7 @@ export default function BillingPage() {
                   {!showPayment && (
                     <Button 
                       onClick={handlePaySelected}
-                      disabled={selectedEnrollments.length === 0 || isPending}
+                      disabled={isPending}
                       size="lg"
                     >
                       {isPending ? (
@@ -677,7 +847,7 @@ export default function BillingPage() {
                       ) : (
                         <>
                           <CreditCard className="mr-2 h-4 w-4" />
-                          Pay Selected ({formatCurrency(getSelectedTotal())})
+                          Proceed with Payment ({formatCurrency(getPaymentPlanAmount())})
                         </>
                       )}
                     </Button>
@@ -695,7 +865,10 @@ export default function BillingPage() {
                     Secure Payment
                   </CardTitle>
                   <CardDescription>
-                    Complete your payment of {formatCurrency(getSelectedTotal())} for {selectedEnrollments.length} enrollment(s)
+                    Complete your {selectedPaymentPlan === 'deposit_all' ? 'deposit payment' :
+                                  selectedPaymentPlan === 'half_now' ? 'first payment (50%)' :
+                                  selectedPaymentPlan === 'full_payment' ? 'full payment' :
+                                  selectedPaymentPlan === 'three_payments' ? 'first monthly payment' : 'payment'} of {formatCurrency(getPaymentPlanAmount())}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
