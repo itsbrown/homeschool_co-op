@@ -28,8 +28,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; classId?: number; classTitle?: string }>({ open: false });
   const [viewDetailsDialog, setViewDetailsDialog] = useState<{ open: boolean; classData?: any }>({ open: false });
   const [selectedChildId, setSelectedChildId] = useState<string>("");
-  const [addToCartDialog, setAddToCartDialog] = useState<{ open: boolean; classData?: any }>({ open: false });
-
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
@@ -166,32 +164,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     }).format(amount / 100);
   };
 
-  // Add to cart function
-  const handleAddToCart = (classData: any, childId: number) => {
-    const child = children.find(c => c.id === childId);
-    if (!child) {
-      toast({
-        title: "Error",
-        description: "Child not found",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    addItem({
-      classId: classData.id,
-      className: classData.title,
-      childId: childId,
-      childName: `${child.firstName} ${child.lastName}`,
-      price: classData.price,
-      description: classData.description,
-      startDate: classData.startDate,
-      endDate: classData.endDate,
-      schedule: classData.schedule,
-    });
-
-    setAddToCartDialog({ open: false });
-  };
 
   // Check if there are any summer camp classes
   const summerCamps = classesData.classes.filter(c => c.category === "summer-camp");
@@ -314,47 +286,13 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                         )}
                       </div>
                     </CardContent>
-                    <CardFooter className="gap-2">
-                      <Button 
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() => {
-                          setViewDetailsDialog({ 
-                            open: true, 
-                            classData: classItem 
-                          });
-                        }}
-                      >
+                    <CardFooter className="pt-0 flex gap-2">
+                      <Button variant="outline" onClick={() => setViewDetailsDialog({ open: true, classData: classItem })}>
                         View Details
                       </Button>
                       <Button 
-                        variant="outline"
+                        onClick={() => setEnrollmentDialog({ open: true, classId: classItem.id, classTitle: classItem.title })}
                         className="flex-1"
-                        onClick={() => {
-                          setAddToCartDialog({ 
-                            open: true, 
-                            classData: classItem 
-                          });
-                        }}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add to Cart
-                      </Button>
-                      <Button 
-                        className="flex-1"
-                        onClick={() => {
-                          console.log("🔄 Enroll button clicked for class:", classItem.title, "ID:", classItem.id);
-                          console.log("🔄 Current children data:", children);
-                          console.log("🔄 Children loading state:", childrenLoading);
-                          console.log("🔄 Children error state:", childrenError);
-                          setEnrollmentDialog({ 
-                            open: true, 
-                            classId: classItem.id, 
-                            classTitle: classItem.title 
-                          });
-                          setSelectedChildId(""); // Reset child selection
-                          console.log("🔄 Enrollment dialog state set");
-                        }}
                       >
                         Enroll Now
                       </Button>
@@ -506,82 +444,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         </DialogContent>
       </Dialog>
 
-      {/* Add to Cart Dialog */}
-      <Dialog open={addToCartDialog.open} onOpenChange={(open) => setAddToCartDialog({ open })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add to Cart</DialogTitle>
-            <DialogDescription>
-              Select which child you would like to add to cart for "{addToCartDialog.classData?.title}".
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="cart-child-select">Select Child</Label>
-              {!isAuthenticated ? (
-                <div className="text-sm text-destructive">
-                  Please log in to select a child.
-                </div>
-              ) : childrenLoading ? (
-                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                  <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
-                  Loading children...
-                </div>
-              ) : !children || children.length === 0 ? (
-                <div className="text-sm text-muted-foreground p-4 border border-dashed rounded-lg text-center">
-                  <p className="mb-2">No children registered yet.</p>
-                  <p className="text-xs">You need to register a child before adding classes to cart.</p>
-                </div>
-              ) : (
-                <div className="space-y-2 mt-2">
-                  {children.map((child: any) => {
-                    const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
-                    const isAlreadyInCart = addToCartDialog.classData && hasItem(addToCartDialog.classData.id, child.id);
-
-                    return (
-                      <div key={child.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <div className="font-medium">{childName}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {child.gradeLevel} • Age {new Date().getFullYear() - new Date(child.birthdate).getFullYear()}
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          disabled={isAlreadyInCart}
-                          onClick={() => handleAddToCart(addToCartDialog.classData, child.id)}
-                        >
-                          {isAlreadyInCart ? (
-                            <>
-                              <ShoppingCart className="h-4 w-4 mr-1" />
-                              In Cart
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-4 w-4 mr-1" />
-                              Add
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setAddToCartDialog({ open: false })}
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* View Details Dialog */}
       <Dialog open={viewDetailsDialog.open} onOpenChange={(open) => setViewDetailsDialog({ open })}>

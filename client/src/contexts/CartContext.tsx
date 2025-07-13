@@ -3,6 +3,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface CartItem {
   id: string;
+  enrollmentId?: number;
   classId: number;
   className: string;
   childId: number;
@@ -12,6 +13,10 @@ export interface CartItem {
   startDate?: string;
   endDate?: string;
   schedule?: string;
+  status?: string;
+  depositRequired?: number;
+  amountPaid?: number;
+  remainingBalance?: number;
 }
 
 export interface Cart {
@@ -175,6 +180,7 @@ interface CartContextType {
   closeCart: () => void;
   getItemCount: () => number;
   hasItem: (classId: number, childId: number) => boolean;
+  loadUnpaidEnrollments: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -269,6 +275,52 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  const loadUnpaidEnrollments = async () => {
+    try {
+      const response = await fetch('/api/enrollments', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      if (response.ok) {
+        const enrollments = await response.json();
+        
+        // Filter unpaid enrollments (pending_payment status)
+        const unpaidEnrollments = enrollments.filter((enrollment: any) => 
+          enrollment.status === 'pending_payment'
+        );
+        
+        // Convert enrollments to cart items
+        const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => ({
+          id: `enrollment-${enrollment.id}`,
+          enrollmentId: enrollment.id,
+          classId: enrollment.classId,
+          className: enrollment.className,
+          childId: enrollment.childId,
+          childName: enrollment.childName,
+          price: enrollment.remainingBalance || enrollment.totalCost || 0,
+          status: enrollment.status,
+          depositRequired: enrollment.depositRequired,
+          amountPaid: enrollment.amountPaid || 0,
+          remainingBalance: enrollment.remainingBalance,
+        }));
+        
+        const totals = calculateCartTotals(cartItems);
+        
+        dispatch({
+          type: 'LOAD_CART',
+          payload: {
+            items: cartItems,
+            ...totals,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error loading unpaid enrollments:', error);
+    }
+  };
+
   const contextValue: CartContextType = {
     cart: state.cart,
     isOpen: state.isOpen,
@@ -280,6 +332,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     closeCart,
     getItemCount,
     hasItem,
+    loadUnpaidEnrollments,
   };
 
   return (

@@ -1,20 +1,23 @@
-
 import React from 'react';
-import { useCart } from '@/contexts/CartContext';
+import { useCart } from "@/contexts/CartContext";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingCart } from 'lucide-react';
 
 export default function CartButton() {
-  const { openCart, getItemCount } = useCart();
-  const itemCount = getItemCount();
+  const { getItemCount, openCart, loadUnpaidEnrollments } = useCart();
+
+  const handleOpenCart = async () => {
+    await loadUnpaidEnrollments();
+    openCart();
+  };
 
   return (
     <Button
       variant="outline"
       size="icon"
       className="relative"
-      onClick={openCart}
+      onClick={handleOpenCart}
     >
       <ShoppingCart className="h-4 w-4" />
       {itemCount > 0 && (

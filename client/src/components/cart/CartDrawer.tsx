@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/components/ui/button';
@@ -22,7 +21,15 @@ export default function CartDrawer() {
   };
 
   const handleCheckout = () => {
-    if (cart.items.length === 0) return;
+    if (cart.items.length === 0) {
+      toast({
+        title: "No unpaid enrollments",
+        description: "All your enrollments are paid or you haven't enrolled in any classes yet",
+        variant: "destructive",
+      });
+      return;
+    }
+
     closeCart();
     setLocation('/cart/checkout');
   };
@@ -48,11 +55,19 @@ export default function CartDrawer() {
         </SheetHeader>
 
         {cart.items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <ShoppingCart className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium">Your cart is empty</h3>
-            <p className="text-muted-foreground">Add some classes to get started</p>
-          </div>
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+          <ShoppingCart className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">No unpaid enrollments</h3>
+          <p className="text-muted-foreground mb-4">
+            All your enrollments are paid or you haven't enrolled in any classes yet
+          </p>
+          <Button onClick={() => {
+            closeCart();
+            setLocation('/programs');
+          }}>
+            Browse Classes
+          </Button>
+        </div>
         ) : (
           <div className="flex flex-col h-full">
             <ScrollArea className="flex-1 mt-6">
@@ -60,22 +75,28 @@ export default function CartDrawer() {
                 {cart.items.map((item) => (
                   <Card key={item.id} className="relative">
                     <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-sm">{item.className}</CardTitle>
-                          <p className="text-xs text-muted-foreground">
-                            for {item.childName}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => removeItem(item.id)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-medium">{item.className}</h4>
+                    <p className="text-sm text-muted-foreground">{item.childName}</p>
+                    {item.status && (
+                      <p className="text-xs text-orange-600 font-medium">
+                        {item.status === 'pending_payment' ? 'Payment Required' : item.status}
+                      </p>
+                    )}
+                    {item.amountPaid > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Paid: {formatCurrency((item.amountPaid || 0) / 100)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium">{formatCurrency(item.price / 100)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.remainingBalance ? 'Balance Due' : 'Total Due'}
+                    </p>
+                  </div>
+                </div>
                     </CardHeader>
                     <CardContent className="pt-0">
                       {item.schedule && (

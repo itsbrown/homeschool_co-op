@@ -91,15 +91,53 @@ function CheckoutForm() {
   };
 
   const processBulkEnrollments = async (paymentIntentId: string) => {
-    const enrollmentPromises = cart.items.map(item => 
-      apiRequest('POST', `/api/classes/${item.classId}/enroll`, {
-        childId: item.childId,
-        paymentIntentId,
-        amount: item.price,
-      })
-    );
+    const paymentPromises = cart.items.map(async (item) => {
+      if (!item.enrollmentId) {
+        throw new Error(`No enrollment ID found for ${item.className}`);
+      }
 
-    await Promise.all(enrollmentPromises);
+      const response = await apiRequest(`/api/billing/enrollments/${item.enrollmentId}/payment`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amount: item.price,
+          paymentType: 'remaining_balance'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to process payment for ${item.className}`);
+      }
+
+      return response.json();
+    });
+
+    try {
+      setIsProcessing(true);
+
+      // Process all payments
+      const results = await Promise.all(paymentPromises);
+
+      // Clear cart
+      clearCart();
+
+      toast({
+        title: "Payment Successful!",
+        description: `Successfully processed payment for ${cart.items.length} enrollment${cart.items.length > 1 ? 's' : ''}`,
+      });
+
+      // Redirect to success page
+      setLocation('/cart/success');
+
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast({
+        title: "Payment Failed",
+        description: error instanceof Error ? error.message : "There was an error processing your payment",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -134,6 +172,7 @@ export default function CartCheckout() {
   const [clientSecret, setClientSecret] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
