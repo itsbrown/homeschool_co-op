@@ -284,6 +284,7 @@ export default function BillingPage() {
     amount?: number;
     paymentDate?: string;
   }>({});
+  const [redirectCountdown, setRedirectCountdown] = useState(10);
 
   // Debug logging for state changes
   React.useEffect(() => {
@@ -296,6 +297,20 @@ export default function BillingPage() {
       hasClientSecret: !!clientSecret
     });
   }, [isAuthenticated, user, selectedEnrollments, showPayment, isPending, clientSecret]);
+
+  // Handle automatic redirect after payment success
+  React.useEffect(() => {
+    if (paymentSuccess && redirectCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRedirectCountdown(prev => prev - 1);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    } else if (paymentSuccess && redirectCountdown === 0) {
+      // Auto-redirect to dashboard after countdown
+      window.location.href = '/dashboard';
+    }
+  }, [paymentSuccess, redirectCountdown]);
 
   // Fetch billing summary
   const { data: billingSummary, isLoading, error } = useQuery<BillingSummary>({
@@ -608,14 +623,19 @@ export default function BillingPage() {
                   <p className="text-sm text-muted-foreground">
                     Your account will be automatically updated. Thank you for your payment!
                   </p>
+                  <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-700 text-center">
+                      Redirecting to dashboard in {redirectCountdown} seconds...
+                    </p>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-center">
                 <Button 
-                  onClick={() => window.location.reload()}
+                  onClick={() => window.location.href = '/dashboard'}
                   className="w-full"
                 >
-                  Continue to Account
+                  Continue to Dashboard
                 </Button>
               </CardFooter>
             </Card>
