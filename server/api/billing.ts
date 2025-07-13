@@ -172,7 +172,7 @@ router.post('/pay-balance', async (req, res) => {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    const { enrollmentIds, totalAmount } = req.body;
+    const { enrollmentIds, totalAmount, paymentPlan } = req.body;
 
     if (!enrollmentIds || !Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
       return res.status(400).json({ message: 'Enrollment IDs are required' });
@@ -212,6 +212,7 @@ router.post('/pay-balance', async (req, res) => {
         enrollmentIds: JSON.stringify(enrollmentIds),
         parentEmail: userEmail,
         enrollmentCount: enrollmentIds.length.toString(),
+        paymentPlan: paymentPlan || 'full_payment',
       },
       automatic_payment_methods: {
         enabled: true,

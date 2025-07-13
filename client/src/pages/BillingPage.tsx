@@ -317,13 +317,17 @@ export default function BillingPage() {
     if (!billingSummary) return 0;
     // If specific enrollments are selected, use their balance
     if (selectedEnrollments.length > 0) {
-      return billingSummary.enrollmentDetails
+      const selectedTotal = billingSummary.enrollmentDetails
         .filter(detail => selectedEnrollments.includes(detail.enrollmentId))
         .reduce((total, detail) => total + detail.balance, 0);
+      console.log('🧮 Selected enrollments total:', selectedTotal, 'for enrollments:', selectedEnrollments);
+      return selectedTotal;
     }
     // Otherwise use the actual total of all enrollment balances
-    return billingSummary.enrollmentDetails
+    const allTotal = billingSummary.enrollmentDetails
       .reduce((total, detail) => total + detail.balance, 0);
+    console.log('🧮 All enrollments total:', allTotal);
+    return allTotal;
   };
 
   const getPaymentPlanAmount = () => {
@@ -342,7 +346,7 @@ export default function BillingPage() {
         const discount = baseAmount > 50000 ? Math.round(baseAmount * 0.05) : 0;
         return baseAmount - discount;
       case 'three_payments':
-        // Split into 3 monthly payments
+        // Split into 3 monthly payments - first payment amount
         return Math.round(baseAmount / 3);
       default:
         return baseAmount;
