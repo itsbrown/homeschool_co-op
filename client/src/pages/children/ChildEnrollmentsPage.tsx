@@ -64,9 +64,7 @@ export default function ChildEnrollmentsPage() {
 
   const unenrollMutation = useMutation({
     mutationFn: async (enrollmentId: number) => {
-      return apiRequest(`/api/enrollments/${enrollmentId}/unenroll`, {
-        method: "DELETE",
-      });
+      return apiRequest("DELETE", `/api/enrollments/${enrollmentId}/unenroll`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}/enrollments`] });
