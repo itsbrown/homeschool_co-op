@@ -68,6 +68,7 @@ export default function ChildEnrollmentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}/enrollments`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
       toast({
         title: "Success",
         description: "Successfully unenrolled from the class",

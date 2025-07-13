@@ -277,9 +277,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUnpaidEnrollments = async () => {
     try {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        console.log('No authentication token found for cart loading');
+        return;
+      }
+
       const response = await fetch('/api/enrollments', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
       
@@ -315,6 +322,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...totals,
           },
         });
+        
+        console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
+      } else {
+        console.error('Failed to load enrollments:', response.status);
       }
     } catch (error) {
       console.error('Error loading unpaid enrollments:', error);

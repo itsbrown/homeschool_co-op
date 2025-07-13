@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,6 +10,7 @@ import { useAuth } from "@/components/SupabaseProvider";
 import EnrollmentAssistant from "@/components/enrollment/EnrollmentAssistant";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useCart } from "@/contexts/CartContext";
 
 
 export default function ParentDashboard() {
@@ -18,6 +19,14 @@ export default function ParentDashboard() {
   const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
+  const { loadUnpaidEnrollments } = useCart();
+
+  // Load unpaid enrollments when component mounts or user changes
+  useEffect(() => {
+    if (user && session) {
+      loadUnpaidEnrollments();
+    }
+  }, [user, session, loadUnpaidEnrollments]);
 
   // Fetch children data from authenticated parent endpoint
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
@@ -54,6 +63,10 @@ export default function ParentDashboard() {
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/enrollments"],
     enabled: !!user && !!session,
+    onSuccess: () => {
+      // Refresh cart when enrollments change
+      loadUnpaidEnrollments();
+    },
   });
 
   // Fetch upcoming events
