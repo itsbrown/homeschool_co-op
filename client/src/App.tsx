@@ -332,7 +332,13 @@ function Router() {
               <Redirect to="/login" />
             )}
           </Route>
-      <Route path="/billing" component={BillingPage} />
+      <Route path="/billing">
+        {isAuthenticated ? (
+          <BillingPage />
+        ) : (
+          <Redirect to="/login" />
+        )}
+      </Route>
       <Route path="/payment-plans" component={() => {
             const PaymentPlansPage = React.lazy(() => import('./pages/PaymentPlansPage'));
             return (
