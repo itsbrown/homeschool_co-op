@@ -1,5 +1,5 @@
 import React from "react";
-import { useLocation, Link } from "wouter";
+import { Link, useLocation } from 'wouter';
 import { cn } from "@/lib/utils";
 import {
   Home,
@@ -125,6 +125,7 @@ export default function ParentSidebar() {
   const { user, signOut } = useAuth();
   const { activeRole } = useRole();
   const [isOpen, setIsOpen] = React.useState(false);
+  const [location, setLocation] = useLocation();
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>({});
 
   const toggleExpanded = (section: string) => {

@@ -86,6 +86,16 @@ const CallbackPage = () => {
     </div>
   );
 };
+
+const Redirect = ({ to }: { to: string }) => {
+  const [, setLocation] = useLocation();
+  
+  React.useEffect(() => {
+    setLocation(to);
+  }, [to, setLocation]);
+  
+  return null;
+};
 import NotFound from "@/pages/not-found";
 import AuthLogin from "@/pages/AuthLogin";
 
@@ -307,21 +317,17 @@ function Router() {
       <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/checkout/success" component={CheckoutSuccess} />
-      {/* Cart routes - wrapped with CartProvider */}
+      {/* Cart routes */}
           <Route path="/cart/checkout">
             {isAuthenticated ? (
-              <CartProvider>
-                <CartCheckout />
-              </CartProvider>
+              <CartCheckout />
             ) : (
               <Redirect to="/login" />
             )}
           </Route>
           <Route path="/cart/success">
             {isAuthenticated ? (
-              <CartProvider>
-                <CartSuccess />
-              </CartProvider>
+              <CartSuccess />
             ) : (
               <Redirect to="/login" />
             )}
@@ -424,10 +430,12 @@ function App() {
         <RoleProvider>
           <NotificationProvider>
             <AIStatusProvider>
-              <TooltipProvider>
-                <Toaster />
-                <Router />
-              </TooltipProvider>
+              <CartProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Router />
+                </TooltipProvider>
+              </CartProvider>
             </AIStatusProvider>
           </NotificationProvider>
         </RoleProvider>
