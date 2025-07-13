@@ -2100,11 +2100,13 @@ class CombinedStorage {
   }
 
   async getChildById(id: number): Promise<Child | undefined> {
-    return this.dbStorage.getChildById(id);
+    // Use memStorage for child retrieval since it has the implementation
+    return this.memStorage.getChildById(id);
   }
 
   async getChildrenByParentId(parentId: number): Promise<Child[]> {
-    return this.dbStorage.getChildrenByParentId(parentId);
+    // Use memStorage for children retrieval since it has the implementation
+    return this.memStorage.getChildrenByParentId(parentId);
   }
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
@@ -2113,19 +2115,23 @@ class CombinedStorage {
   }
 
   async getAllChildren(): Promise<Child[]> {
-    return this.dbStorage.getAllChildren();
+    // Use memStorage for children retrieval since it has the implementation
+    return this.memStorage.getAllChildren();
   }
 
   async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
-    return this.dbStorage.createChild(child);
+    // Use memStorage for child creation since it has the implementation
+    return this.memStorage.createChild(child);
   }
 
   async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
-    return this.dbStorage.updateChild(id, child);
+    // Use memStorage for child updates since it has the implementation
+    return this.memStorage.updateChild(id, child);
   }
 
   async deleteChild(id: number): Promise<void> {
-    return this.dbStorage.deleteChild(id);
+    // Use memStorage for child deletion since it has the implementation
+    return this.memStorage.deleteChild(id);
   }
 
   async createRoleInvitation(invitation: any): Promise<any> {

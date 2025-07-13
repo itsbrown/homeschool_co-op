@@ -199,9 +199,16 @@ router.get('/summary', async (req, res) => {
     const childIds = children.map(child => child.id);
     console.log('👶 Found children:', childIds);
 
-    // Get all enrollments for these children
-    const allEnrollments = await storage.getEnrollmentsByChildIds(childIds);
-    console.log('📋 Found enrollments:', allEnrollments.length);
+    // Get all class enrollments for these children
+    const allEnrollments = [];
+    for (const childId of childIds) {
+      console.log(`🔍 Fetching enrollments for child ID: ${childId}`);
+      const childEnrollments = await storage.getEnrollmentsByChildId(childId);
+      console.log(`📋 Child ${childId} has ${childEnrollments.length} enrollments:`, childEnrollments);
+      allEnrollments.push(...childEnrollments);
+    }
+    console.log('📋 Total enrollments found:', allEnrollments.length);
+    console.log('📋 All enrollments:', allEnrollments);
 
     // Calculate enrollment details with balances
     const enrollmentDetails = [];

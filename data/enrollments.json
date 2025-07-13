@@ -60,5 +60,18 @@
     "depositRequired": 90,
     "totalCost": 900,
     "remainingBalance": 900
+  },
+  {
+    "id": 1752425424099,
+    "classId": 2,
+    "childId": 9,
+    "childName": "Hermione Brown",
+    "className": "Seekers Full Day 9AM - 2PM",
+    "enrollmentDate": "2025-07-13T16:50:24.099Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 150,
+    "totalCost": 1500,
+    "remainingBalance": 1500
   }
 ]

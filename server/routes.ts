@@ -1938,6 +1938,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/parent", parentRouter);
 
+  // Register billing routes
+  const billingRouter = (await import("./api/billing")).default;
+  app.use("/api/billing", billingRouter);
+
   // General enrollments endpoint for dashboard
   app.get("/api/enrollments", isAuthenticated, async (req: any, res) => {
     try {
