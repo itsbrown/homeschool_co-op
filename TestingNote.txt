@@ -1,0 +1,8 @@
+Test the actual user interface functionality by:
+
+Taking a screenshot of the current state
+Verifying visual elements (cart badge, button states, etc.)
+Simulating user interactions (clicking buttons, opening drawers)
+Checking browser console logs for any client-side errors
+Confirming the complete user flow works end-to-end
+Don't just test API endpoints - test what the user actually sees and clicks
