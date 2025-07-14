@@ -426,7 +426,12 @@ export class SupabaseStorage implements IStorage {
   async getEnrollmentsByChildId(childId: number): Promise<any[]> { return []; }
   async getEnrollmentsByProgramId(programId: number): Promise<any[]> { return []; }
   async createEnrollment(enrollment: any): Promise<any> { throw new Error('Not implemented'); }
-  async updateEnrollment(id: number, enrollment: any): Promise<any> { throw new Error('Not implemented'); }
+  async updateEnrollment(enrollment: any): Promise<any> {
+    // Since we're using file-based storage fallback, this should not be called
+    // But provide a proper implementation for consistency
+    console.log('SupabaseStorage updateEnrollment called - falling back to file storage');
+    throw new Error('updateEnrollment not implemented in SupabaseStorage - using file storage fallback');
+  }
   async deleteEnrollment(id: number): Promise<void> { throw new Error('Not implemented'); }
   async getClasses(): Promise<any[]> { return []; }
   async getClassById(id: number): Promise<any | undefined> { return undefined; }

@@ -122,6 +122,7 @@ export interface IStorage {
   createEnrollment(enrollment: any): Promise<any>;
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
   getEnrollmentById(id: number): Promise<any>;
+  updateEnrollment(enrollment: any): Promise<any>;
   deleteEnrollment(id: number): Promise<void>;
 
   // Class methods
@@ -874,6 +875,36 @@ export class MemStorage implements IStorage {
     }
     const enrollment = this.classEnrollments.find(enrollment => enrollment.id === id);
     console.log(`📝 ENROLLMENT QUERY: Enrollment ${id} ${enrollment ? 'found' : 'not found'}`);
+    return enrollment;
+  }
+
+  async updateEnrollment(enrollment: any): Promise<any> {
+    if (!this.classEnrollments) {
+      console.log(`❌ No classEnrollments array exists for enrollment ${enrollment.id}`);
+      return null;
+    }
+
+    const index = this.classEnrollments.findIndex(e => e.id === enrollment.id);
+    if (index === -1) {
+      console.log(`❌ Enrollment ${enrollment.id} not found for update`);
+      return null;
+    }
+
+    // Update the enrollment
+    this.classEnrollments[index] = enrollment;
+    
+    console.log(`✅ ENROLLMENT UPDATED: ID ${enrollment.id}, Status: ${enrollment.status}`);
+    console.log(`📝 Updated enrollment:`, enrollment);
+
+    // Save to file for persistence
+    try {
+      console.log(`💾 About to save enrollments to file after update...`);
+      await this.saveEnrollmentsToFile();
+      console.log(`💾 Save operation completed after update`);
+    } catch (error) {
+      console.error(`❌ Error in updateEnrollment save operation:`, error);
+    }
+
     return enrollment;
   }
 
