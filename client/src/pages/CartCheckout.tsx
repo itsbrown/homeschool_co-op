@@ -112,8 +112,6 @@ function CheckoutForm() {
     });
 
     try {
-      setIsProcessing(true);
-
       // Process all payments
       const results = await Promise.all(paymentPromises);
 
@@ -135,8 +133,6 @@ function CheckoutForm() {
         description: error instanceof Error ? error.message : "There was an error processing your payment",
         variant: "destructive",
       });
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -191,12 +187,15 @@ export default function CartCheckout() {
   const createPaymentIntent = async () => {
     try {
       setLoading(true);
-      const response = await apiRequest('POST', '/api/stripe/create-payment-intent', {
-        items: cart.items,
-        subtotal: cart.subtotal,
-        discounts: cart.discounts,
-        total: cart.total,
-        parentEmail: user?.email,
+      const response = await apiRequest('/api/stripe/create-payment-intent', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: cart.items,
+          subtotal: cart.subtotal,
+          discounts: cart.discounts,
+          total: cart.total,
+          parentEmail: user?.email,
+        })
       });
 
       if (response.clientSecret) {
