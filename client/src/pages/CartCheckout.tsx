@@ -113,6 +113,9 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
   };
 
   const processBulkEnrollments = async (paymentIntentId: string) => {
+    const selectedPlanAmount = getSelectedPlanAmount();
+    const amountPerItem = Math.round(selectedPlanAmount / cart.items.length);
+
     const paymentPromises = cart.items.map(async (item) => {
       if (!item.enrollmentId) {
         throw new Error(`No enrollment ID found for ${item.className}`);
@@ -122,8 +125,8 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
         'POST',
         `/api/billing/enrollments/${item.enrollmentId}/payment`,
         {
-          amount: item.price,
-          paymentType: 'remaining_balance'
+          amount: amountPerItem,
+          paymentType: selectedPaymentPlan
         }
       );
 
