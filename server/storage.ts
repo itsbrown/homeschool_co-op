@@ -2310,6 +2310,10 @@ class CombinedStorage {
     return this.memStorage.getEnrollmentById(id);
   }
 
+  async updateEnrollment(enrollment: any): Promise<any> {
+    return this.memStorage.updateEnrollment(enrollment);
+  }
+
   async deleteEnrollment(id: number): Promise<void> {
     return this.memStorage.deleteEnrollment(id);
   }
