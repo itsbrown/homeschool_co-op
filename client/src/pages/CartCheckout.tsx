@@ -96,13 +96,14 @@ function CheckoutForm() {
         throw new Error(`No enrollment ID found for ${item.className}`);
       }
 
-      const response = await apiRequest(`/api/billing/enrollments/${item.enrollmentId}/payment`, {
-        method: 'POST',
-        body: JSON.stringify({
+      const response = await apiRequest(
+        'POST',
+        `/api/billing/enrollments/${item.enrollmentId}/payment`,
+        {
           amount: item.price,
           paymentType: 'remaining_balance'
-        })
-      });
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to process payment for ${item.className}`);
@@ -187,19 +188,22 @@ export default function CartCheckout() {
   const createPaymentIntent = async () => {
     try {
       setLoading(true);
-      const response = await apiRequest('/api/stripe/create-payment-intent', {
-        method: 'POST',
-        body: JSON.stringify({
+      const response = await apiRequest(
+        'POST',
+        '/api/stripe/create-payment-intent',
+        {
           items: cart.items,
           subtotal: cart.subtotal,
           discounts: cart.discounts,
           total: cart.total,
           parentEmail: user?.email,
-        })
-      });
+        }
+      );
 
-      if (response.clientSecret) {
-        setClientSecret(response.clientSecret);
+      const data = await response.json();
+      
+      if (data.clientSecret) {
+        setClientSecret(data.clientSecret);
       } else {
         throw new Error('Failed to create payment intent');
       }
