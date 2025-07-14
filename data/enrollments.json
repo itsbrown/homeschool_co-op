@@ -120,10 +120,11 @@
     "childName": "Hermione Brown",
     "className": "Seekers Full Day 9AM - 2PM",
     "enrollmentDate": "2025-07-13T23:18:59.297Z",
-    "status": "pending_payment",
-    "amount": 0,
+    "status": "enrolled",
+    "amount": 1475,
     "depositRequired": 150,
     "totalCost": 1500,
-    "remainingBalance": 1500
+    "remainingBalance": 25,
+    "paymentDate": "2025-07-14T11:26:23.182Z"
   }
 ]
