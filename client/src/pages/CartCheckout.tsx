@@ -48,6 +48,7 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
     const depositAmount = Math.round(cart.total * 0.1);
     const fullAmount = cart.total;
     const splitAmount = Math.round(cart.total / 2);
+    const monthlyAmount = Math.round(cart.total / 3);
     
     switch (selectedPaymentPlan) {
       case 'deposit':
@@ -56,6 +57,8 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
         return fullAmount > 500 ? fullAmount - 25 : fullAmount; // $25 discount for full payment over $500
       case 'split':
         return splitAmount;
+      case 'monthly':
+        return monthlyAmount;
       default:
         return cart.total;
     }
@@ -253,6 +256,7 @@ export default function CartCheckout() {
     const depositAmount = Math.round(cart.total * 0.1); // 10% deposit
     const fullAmount = cart.total;
     const splitAmount = Math.round(cart.total / 2); // 50% split payments
+    const monthlyAmount = Math.round(cart.total / 3); // 3-month installments
     
     return [
       {
@@ -297,6 +301,23 @@ export default function CartCheckout() {
           count: 2,
           frequency: 'monthly',
           amounts: [splitAmount, splitAmount]
+        }
+      },
+      {
+        id: 'monthly',
+        name: '3-Month Payment Plan',
+        description: 'Pay in 3 monthly installments',
+        amount: monthlyAmount,
+        features: [
+          'First payment today, then monthly',
+          'Automatic monthly billing',
+          'No additional fees',
+          'Cancel anytime with 30-day notice'
+        ],
+        installments: {
+          count: 3,
+          frequency: 'monthly',
+          amounts: [monthlyAmount, monthlyAmount, monthlyAmount]
         }
       }
     ];
