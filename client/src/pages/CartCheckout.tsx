@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest } from '@/lib/queryClient';
-import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2 } from 'lucide-react';
+import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
@@ -26,7 +28,7 @@ const stripePromise = stripePublishableKey && stripePublishableKey.trim() !== ''
   ? loadStripe(stripePublishableKey) 
   : null;
 
-function CheckoutForm() {
+function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) {
   const stripe = useStripe();
   const elements = useElements();
   const { cart, clearCart } = useCart();
@@ -40,6 +42,23 @@ function CheckoutForm() {
       style: 'currency',
       currency: 'USD',
     }).format(amount);
+  };
+
+  const getSelectedPlanAmount = () => {
+    const depositAmount = Math.round(cart.total * 0.1);
+    const fullAmount = cart.total;
+    const splitAmount = Math.round(cart.total / 2);
+    
+    switch (selectedPaymentPlan) {
+      case 'deposit':
+        return depositAmount;
+      case 'full':
+        return fullAmount > 500 ? fullAmount - 25 : fullAmount; // $25 discount for full payment over $500
+      case 'split':
+        return splitAmount;
+      default:
+        return cart.total;
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -154,7 +173,7 @@ function CheckoutForm() {
         ) : (
           <>
             <CreditCard className="mr-2 h-4 w-4" />
-            Pay {formatCurrency(cart.total)}
+            Pay {formatCurrency(getSelectedPlanAmount())}
           </>
         )}
       </Button>
@@ -170,6 +189,7 @@ export default function CartCheckout() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -228,6 +248,65 @@ export default function CartCheckout() {
   };
 
   const hasDiscounts = cart.discounts.siblingDiscount > 0 || cart.discounts.freeAfterThree > 0;
+
+  const getPaymentPlanOptions = () => {
+    const depositAmount = Math.round(cart.total * 0.1); // 10% deposit
+    const fullAmount = cart.total;
+    const splitAmount = Math.round(cart.total / 2); // 50% split payments
+    
+    return [
+      {
+        id: 'deposit',
+        name: 'Pay Deposit Only',
+        description: 'Secure your spot with a 10% deposit',
+        amount: depositAmount,
+        popular: true,
+        features: [
+          'Immediate enrollment confirmation',
+          'Remaining balance due before class starts',
+          'Full refund if cancelled 30 days before',
+          'Payment reminder emails'
+        ],
+        dueDate: 'Remaining balance due 2 weeks before class start'
+      },
+      {
+        id: 'full',
+        name: 'Pay in Full',
+        description: 'Complete payment now',
+        amount: fullAmount,
+        discount: fullAmount > 500 ? 25 : 0, // $25 discount for full payment over $500
+        features: [
+          fullAmount > 500 ? '$25 discount on total cost' : 'No additional fees',
+          'No future payment worries',
+          'Priority class placement',
+          'Full refund if cancelled 30 days before'
+        ]
+      },
+      {
+        id: 'split',
+        name: 'Split Payment Plan',
+        description: 'Pay 50% now, 50% later',
+        amount: splitAmount,
+        features: [
+          'Pay half now, half in 30 days',
+          'Automatic payment reminders',
+          'No additional fees',
+          'Flexible payment dates'
+        ],
+        installments: {
+          count: 2,
+          frequency: 'monthly',
+          amounts: [splitAmount, splitAmount]
+        }
+      }
+    ];
+  };
+
+  const getSelectedPlanAmount = () => {
+    const plans = getPaymentPlanOptions();
+    const selectedPlan = plans.find(plan => plan.id === selectedPaymentPlan);
+    return selectedPlan ? selectedPlan.amount - (selectedPlan.discount || 0) : cart.total;
+  };
 
   if (loading) {
     return (
@@ -374,7 +453,89 @@ export default function CartCheckout() {
           </div>
 
           {/* Payment Form */}
-          <div>
+          <div className="space-y-6">
+            {/* Payment Plan Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Payment Plan Options
+                </CardTitle>
+                <CardDescription>
+                  Choose how you'd like to pay for your enrollment
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={selectedPaymentPlan} onValueChange={setSelectedPaymentPlan}>
+                  <div className="space-y-3">
+                    {getPaymentPlanOptions().map((plan) => (
+                      <div key={plan.id} className="flex items-start space-x-3">
+                        <RadioGroupItem value={plan.id} id={plan.id} className="mt-1" />
+                        <Label htmlFor={plan.id} className="flex-1 cursor-pointer">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-medium">{plan.name}</h3>
+                                {plan.popular && (
+                                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-xs">
+                                    Popular
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+                              <ul className="text-xs text-muted-foreground mt-2 space-y-1">
+                                {plan.features.slice(0, 2).map((feature, index) => (
+                                  <li key={index} className="flex items-center gap-1">
+                                    <Check className="h-3 w-3 text-green-500" />
+                                    {feature}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-lg font-bold">
+                                {formatCurrency(plan.amount - (plan.discount || 0))}
+                              </div>
+                              {plan.discount && (
+                                <div className="text-xs text-green-600">
+                                  Save {formatCurrency(plan.discount)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </RadioGroup>
+
+                {/* Selected Plan Summary */}
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-blue-900">
+                        {getPaymentPlanOptions().find(p => p.id === selectedPaymentPlan)?.name}
+                      </div>
+                      <div className="text-sm text-blue-700">
+                        {getPaymentPlanOptions().find(p => p.id === selectedPaymentPlan)?.description}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-blue-900">
+                        {formatCurrency(getSelectedPlanAmount())}
+                      </div>
+                      {selectedPaymentPlan === 'deposit' && (
+                        <div className="text-xs text-blue-600">
+                          Remaining: {formatCurrency(cart.total - getSelectedPlanAmount())}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Payment Information */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -388,7 +549,7 @@ export default function CartCheckout() {
               <CardContent>
                 {stripePromise ? (
                   <Elements stripe={stripePromise} options={{ clientSecret }}>
-                    <CheckoutForm />
+                    <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} />
                   </Elements>
                 ) : (
                   <Alert variant="destructive">
