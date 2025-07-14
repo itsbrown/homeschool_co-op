@@ -13,11 +13,13 @@ import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
+import { useRole } from '@/contexts/RoleContext';
 
 export default function ChildProfilePage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { activeRole } = useRole();
   const [confirmDialog, setConfirmDialog] = useState({ open: false, enrollmentId: null, className: "" });
 
   // Fetch detailed child data using proper authentication
@@ -403,19 +405,22 @@ export default function ChildProfilePage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge variant="default">{enrollment.status}</Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setConfirmDialog({ 
-                                open: true, 
-                                enrollmentId: enrollment.id, 
-                                className: enrollment.className 
-                              })}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Remove
-                            </Button>
+                            {/* Only show Remove button for school admins and only for pending_payment enrollments */}
+                            {activeRole === 'school_admin' && enrollment.status === 'pending_payment' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setConfirmDialog({ 
+                                  open: true, 
+                                  enrollmentId: enrollment.id, 
+                                  className: enrollment.className 
+                                })}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <X className="h-4 w-4 mr-1" />
+                                Remove
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>
