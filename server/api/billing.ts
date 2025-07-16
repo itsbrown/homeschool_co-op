@@ -199,16 +199,9 @@ router.get('/summary', async (req, res) => {
     const childIds = children.map(child => child.id);
     console.log('👶 Found children:', childIds);
 
-    // Get all class enrollments for these children
-    const allEnrollments = [];
-    for (const childId of childIds) {
-      console.log(`🔍 Fetching enrollments for child ID: ${childId}`);
-      const childEnrollments = await storage.getEnrollmentsByChildId(childId);
-      console.log(`📋 Child ${childId} has ${childEnrollments.length} enrollments:`, childEnrollments);
-      allEnrollments.push(...childEnrollments);
-    }
-    console.log('📋 Total enrollments found:', allEnrollments.length);
-    console.log('📋 All enrollments:', allEnrollments);
+    // Get all enrollments for these children
+    const allEnrollments = await storage.getEnrollmentsByChildIds(childIds);
+    console.log('📋 Found enrollments:', allEnrollments.length);
 
     // Calculate enrollment details with balances
     const enrollmentDetails = [];
@@ -224,9 +217,7 @@ router.get('/summary', async (req, res) => {
       if (!child) continue;
 
       // Calculate balance based on enrollment data
-      // Convert class price from cents to dollars if needed
-      const classPrice = classDetails.price || 0;
-      const totalAmount = enrollment.totalCost || (classPrice > 10000 ? classPrice / 100 : classPrice);
+      const totalAmount = enrollment.totalCost || classDetails.price || 0;
       const totalPaid = enrollment.amount || 0;
       const balance = totalAmount - totalPaid;
 
@@ -251,7 +242,7 @@ router.get('/summary', async (req, res) => {
       totalBalanceFormatted: new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD'
-      }).format(totalBalance),
+      }).format(totalBalance / 100),
       enrollmentCount: enrollmentDetails.length,
       enrollmentDetails: enrollmentDetails,
       parentEmail: userEmail
@@ -308,7 +299,7 @@ router.post('/pay-balance', async (req, res) => {
 
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount * 100), // Convert to cents for Stripe
+      amount: Math.round(totalAmount), // Amount should already be in cents
       currency: 'usd',
       metadata: {
         parentEmail: userEmail,
@@ -330,53 +321,6 @@ router.post('/pay-balance', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to create payment intent'
-    });
-  }
-});
-
-// Handle individual enrollment payment
-router.post('/enrollments/:id/payment', async (req, res) => {
-  try {
-    const enrollmentId = parseInt(req.params.id);
-    const { amount, paymentType } = req.body;
-
-    console.log(`💳 Processing payment for enrollment ${enrollmentId}, amount: ${amount}, type: ${paymentType}`);
-
-    // Get the enrollment
-    const enrollment = await storage.getEnrollmentById(enrollmentId);
-    if (!enrollment) {
-      return res.status(404).json({ error: 'Enrollment not found' });
-    }
-
-    console.log('📋 Found enrollment:', enrollment);
-
-    // Update enrollment with payment
-    const updatedEnrollment = {
-      ...enrollment,
-      amount: (enrollment.amount || 0) + amount,
-      status: 'enrolled' as const, // Change status to enrolled after payment
-      paymentDate: new Date().toISOString(),
-      remainingBalance: Math.max(0, (enrollment.remainingBalance || enrollment.totalCost || 0) - amount)
-    };
-
-    console.log('📝 Updating enrollment to:', updatedEnrollment);
-
-    // Save the updated enrollment
-    await storage.updateEnrollment(updatedEnrollment);
-
-    console.log('✅ Enrollment payment processed successfully');
-
-    res.json({
-      success: true,
-      enrollment: updatedEnrollment,
-      message: 'Payment processed successfully'
-    });
-
-  } catch (error) {
-    console.error('❌ Error processing enrollment payment:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to process payment'
     });
   }
 });
