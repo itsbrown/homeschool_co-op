@@ -1,39 +1,43 @@
 import { Router } from "express";
 import { z } from "zod";
-import sgMail from "@sendgrid/mail";
+import * as brevo from '@getbrevo/brevo';
 import { supabaseStorage } from "../supabase-storage";
 
 const router = Router();
 
-// Initialize SendGrid
-if (!process.env.SENDGRID_API_KEY) {
-  throw new Error("SENDGRID_API_KEY environment variable is required");
+// Initialize Brevo
+if (!process.env.BREVO_API_KEY) {
+  throw new Error("BREVO_API_KEY environment variable is required");
 }
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+const brevoApiInstance = new brevo.TransactionalEmailsApi();
+brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
 // Generate a random token for invitations
 function generateInvitationToken(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
-// Send role invitation email via SendGrid
+// Send role invitation email via Brevo
 async function sendRoleInvitationEmail(email: string, role: string, token: string): Promise<boolean> {
   try {
     const invitationUrl = `https://${process.env.REPL_ID}.replit.app/accept-invitation?token=${token}`;
     
-    const msg = {
-      to: email,
-      from: 'contact@americanseekersacademy.com', // Use verified sender email
-      subject: `You've been invited to join ASA Platform as ${role}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Role Invitation</h1>
+          <p style="color: #E0E7FF; margin: 8px 0 0 0;">ASA Platform</p>
+        </div>
+        
+        <div style="padding: 24px;">
           <h2 style="color: #333;">You're Invited to Join ASA Platform</h2>
           <p>Hello,</p>
           <p>You've been invited to join ASA Platform with the role of <strong>${role}</strong>.</p>
           <p>Click the button below to accept your invitation and set up your account:</p>
           <div style="text-align: center; margin: 30px 0;">
             <a href="${invitationUrl}" 
-               style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
               Accept Invitation
             </a>
           </div>
@@ -43,8 +47,30 @@ async function sendRoleInvitationEmail(email: string, role: string, token: strin
             This invitation will expire in 7 days. If you have any questions, please contact our support team.
           </p>
         </div>
-      `,
-    };
+      </div>
+    `;
+
+    const textContent = `
+You're Invited to Join ASA Platform
+
+Hello,
+
+You've been invited to join ASA Platform with the role of ${role}.
+
+Please visit the following link to accept your invitation:
+${invitationUrl}
+
+This invitation will expire in 7 days. If you have any questions, please contact our support team.
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: email }];
+    sendSmtpEmail.sender = { email: 'contact@americanseekersacademy.com', name: 'ASA Platform' };
+    sendSmtpEmail.subject = `You've been invited to join ASA Platform as ${role}`;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
 
     await sgMail.send(msg);
     console.log(`✅ Role invitation email sent successfully to ${email} for role ${role}`);

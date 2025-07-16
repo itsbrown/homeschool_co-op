@@ -2,24 +2,92 @@ import { Router } from "express";
 import { storage } from "../storage";
 import fs from 'fs';
 import path from 'path';
-import sgMail from "@sendgrid/mail";
+import * as brevo from '@getbrevo/brevo';
 
 const router = Router();
 
-// Initialize SendGrid
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  console.log('✅ SendGrid initialized for staff invitations');
+// Initialize Brevo
+let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
+if (process.env.BREVO_API_KEY) {
+  brevoApiInstance = new brevo.TransactionalEmailsApi();
+  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
+  console.log('✅ Brevo initialized for staff invitations');
 } else {
-  console.warn('⚠️ SENDGRID_API_KEY not found - staff invitation emails will not be sent');
+  console.warn('⚠️ BREVO_API_KEY not found - staff invitation emails will not be sent');
 }
 
 // Send staff invitation email
 async function sendStaffInvitationEmail(email: string, firstName: string, lastName: string, role: string, department: string, message?: string): Promise<boolean> {
   try {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.log('📧 SendGrid not configured, skipping email send');
+    if (!brevoApiInstance) {
+      console.log('📧 Brevo not configured, skipping email send');
       return false;
+    }
+
+    const invitationUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/accept-invitation`;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Staff Invitation</h1>
+          <p style="color: #E0E7FF; margin: 8px 0 0 0;">American Seekers Academy</p>
+        </div>
+        
+        <div style="padding: 24px;">
+          <h2 style="color: #1F2937;">Welcome to Our Team!</h2>
+          
+          <p>Dear ${firstName} ${lastName},</p>
+          
+          <p>You've been invited to join American Seekers Academy as a <strong>${role}</strong> in the <strong>${department}</strong> department.</p>
+          
+          ${message ? `<div style="background-color: #F3F4F6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+            <h3 style="margin: 0 0 12px 0;">Personal Message:</h3>
+            <p style="margin: 0; font-style: italic;">${message}</p>
+          </div>` : ''}
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${invitationUrl}" 
+               style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Accept Invitation
+            </a>
+          </div>
+          
+          <p>Please click the button above to accept your invitation and complete your registration.</p>
+          
+          <p style="color: #666; font-size: 14px; margin-top: 30px;">
+            If you have any questions, please contact us at support@americanseekersacademy.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    const textContent = `
+Welcome to American Seekers Academy!
+
+Dear ${firstName} ${lastName},
+
+You've been invited to join American Seekers Academy as a ${role} in the ${department} department.
+
+${message ? `Personal Message: ${message}` : ''}
+
+Please visit the following link to accept your invitation:
+${invitationUrl}
+
+If you have any questions, please contact us at support@americanseekersacademy.com
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: email, name: `${firstName} ${lastName}` }];
+    sendSmtpEmail.sender = { email: 'support@americanseekersacademy.com', name: 'American Seekers Academy' };
+    sendSmtpEmail.subject = `Staff Invitation - ${role} Position at American Seekers Academy`;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Staff invitation email sent successfully via Brevo to:', email);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;se;
     }
 
     // Use Replit-specific environment variables to determine the correct domain

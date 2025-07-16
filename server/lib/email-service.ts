@@ -1,12 +1,14 @@
-import { MailService } from '@sendgrid/mail';
+
+import * as brevo from '@getbrevo/brevo';
 import type { Payment } from '@shared/schema';
 
-if (!process.env.SENDGRID_API_KEY) {
-  throw new Error("SENDGRID_API_KEY environment variable must be set");
+if (!process.env.BREVO_API_KEY) {
+  throw new Error("BREVO_API_KEY environment variable must be set");
 }
 
-const mailService = new MailService();
-mailService.setApiKey(process.env.SENDGRID_API_KEY);
+// Initialize Brevo API instance
+const apiInstance = new brevo.TransactionalEmailsApi();
+apiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
 interface PaymentConfirmationData {
   parentEmail: string;
@@ -163,18 +165,51 @@ Thank you for choosing American Seekers Academy!
 If you have any questions about this payment, please contact us at support@americanseekersacademy.com
     `;
 
-    await mailService.send({
-      to: parentEmail,
-      from: 'support@americanseekersacademy.com',
-      subject: 'Payment Confirmation - American Seekers Academy',
-      text: textContent,
-      html: htmlContent,
-    });
+    // Create Brevo email object
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: parentEmail, name: parentName || 'Parent' }];
+    sendSmtpEmail.sender = { email: 'support@americanseekersacademy.com', name: 'American Seekers Academy' };
+    sendSmtpEmail.subject = 'Payment Confirmation - American Seekers Academy';
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
 
-    console.log('✅ Payment confirmation email sent successfully to:', parentEmail);
+    // Send email via Brevo
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Payment confirmation email sent successfully via Brevo to:', parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
     return true;
   } catch (error) {
-    console.error('❌ Failed to send payment confirmation email:', error);
+    console.error('❌ Failed to send payment confirmation email via Brevo:', error);
+    return false;
+  }
+}
+
+// Generic email sending function for other use cases
+export async function sendEmail(
+  to: string,
+  toName: string,
+  subject: string,
+  htmlContent: string,
+  textContent?: string
+): Promise<boolean> {
+  try {
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: to, name: toName }];
+    sendSmtpEmail.sender = { email: 'support@americanseekersacademy.com', name: 'American Seekers Academy' };
+    sendSmtpEmail.subject = subject;
+    sendSmtpEmail.htmlContent = htmlContent;
+    if (textContent) {
+      sendSmtpEmail.textContent = textContent;
+    }
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Email sent successfully via Brevo to:', to);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send email via Brevo:', error);
     return false;
   }
 }
