@@ -6,12 +6,14 @@ import { supabaseStorage } from "../supabase-storage";
 const router = Router();
 
 // Initialize Brevo
-if (!process.env.BREVO_API_KEY) {
-  throw new Error("BREVO_API_KEY environment variable is required");
+let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
+if (process.env.BREVO_API_KEY) {
+  brevoApiInstance = new brevo.TransactionalEmailsApi();
+  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
+  console.log('✅ Brevo initialized for role invitations');
+} else {
+  console.warn('⚠️ BREVO_API_KEY not found - role invitation emails will not be sent');
 }
-
-const brevoApiInstance = new brevo.TransactionalEmailsApi();
-brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
 // Generate a random token for invitations
 function generateInvitationToken(): string {
@@ -21,6 +23,11 @@ function generateInvitationToken(): string {
 // Send role invitation email via Brevo
 async function sendRoleInvitationEmail(email: string, role: string, token: string): Promise<boolean> {
   try {
+    if (!brevoApiInstance) {
+      console.log('📧 Brevo not configured, skipping role invitation email send');
+      return false;
+    }
+
     const invitationUrl = `https://${process.env.REPL_ID}.replit.app/accept-invitation?token=${token}`;
     
     const htmlContent = `
@@ -72,8 +79,8 @@ This invitation will expire in 7 days. If you have any questions, please contact
 
     const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
 
-    await sgMail.send(msg);
     console.log(`✅ Role invitation email sent successfully to ${email} for role ${role}`);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
     return true;
   } catch (error) {
     console.error('❌ Error sending role invitation email:', error);

@@ -2,13 +2,15 @@
 import * as brevo from '@getbrevo/brevo';
 import type { Payment } from '@shared/schema';
 
-if (!process.env.BREVO_API_KEY) {
-  throw new Error("BREVO_API_KEY environment variable must be set");
-}
-
 // Initialize Brevo API instance
-const apiInstance = new brevo.TransactionalEmailsApi();
-apiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
+let apiInstance: brevo.TransactionalEmailsApi | null = null;
+if (process.env.BREVO_API_KEY) {
+  apiInstance = new brevo.TransactionalEmailsApi();
+  apiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
+  console.log('✅ Brevo initialized for email service');
+} else {
+  console.warn('⚠️ BREVO_API_KEY not found - email service will not be available');
+}
 
 interface PaymentConfirmationData {
   parentEmail: string;
@@ -27,6 +29,11 @@ interface PaymentConfirmationData {
 
 export async function sendPaymentConfirmationEmail(data: PaymentConfirmationData): Promise<boolean> {
   try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping payment confirmation email send');
+      return false;
+    }
+
     const { parentEmail, parentName, payment, enrollmentDetails, nextPaymentDate, remainingBalance, paymentPlan } = data;
 
     // Format currency

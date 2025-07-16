@@ -87,58 +87,14 @@ If you have any questions, please contact us at support@americanseekersacademy.c
     
     console.log('✅ Staff invitation email sent successfully via Brevo to:', email);
     console.log('📧 Brevo Message ID:', result.body.messageId);
-    return true;se;
-    }
-
-    // Use Replit-specific environment variables to determine the correct domain
-    let baseUrl;
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      // Use the development domain when available
-      baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}`;
-    } else if (process.env.REPLIT_DOMAINS) {
-      // Use the primary domain from REPLIT_DOMAINS
-      const domains = process.env.REPLIT_DOMAINS.split(',');
-      baseUrl = `https://${domains[0]}`;
-    } else {
-      // Fallback to the Replit app domain
-      baseUrl = `https://${process.env.REPL_ID}.replit.app`;
-    }
-    const invitationUrl = `${baseUrl}/auth/login`;
-    
-    const msg = {
-      to: email,
-      from: 'contact@americanseekersacademy.com',
-      subject: `You've been invited to join American Seekers Academy as ${role}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">You're Invited to Join American Seekers Academy</h2>
-          <p>Hello ${firstName} ${lastName},</p>
-          <p>You've been invited to join American Seekers Academy as a <strong>${role}</strong> in the <strong>${department}</strong> department.</p>
-          ${message ? `<p><em>"${message}"</em></p>` : ''}
-          <p>Click the button below to access the platform and get started:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${invitationUrl}" 
-               style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-              Access Platform
-            </a>
-          </div>
-          <p>Or copy and paste this link into your browser:</p>
-          <p style="word-break: break-all; color: #666;">${invitationUrl}</p>
-          <p style="color: #666; font-size: 14px; margin-top: 30px;">
-            Welcome to the team! If you have any questions, please contact our support team.
-          </p>
-        </div>
-      `,
-    };
-
-    await sgMail.send(msg);
-    console.log(`✅ Staff invitation email sent to ${email}`);
     return true;
   } catch (error) {
     console.error('❌ Failed to send staff invitation email:', error);
     return false;
   }
 }
+
+
 
 // Test route to verify router is working
 router.get("/test", (req, res) => {
