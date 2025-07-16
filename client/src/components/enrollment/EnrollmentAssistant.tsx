@@ -176,28 +176,75 @@ export default function EnrollmentAssistant() {
   const handleAssistantAction = async (action: EnrollmentAction) => {
     switch (action.type) {
       case "register_child":
-        // The child was already registered on the server side
-        if (action.success) {
-          const successMessage: Message = {
-            id: Date.now().toString(),
-            role: "system",
-            content: `✅ Successfully registered ${action.firstName} ${action.lastName} in the system with ID: ${action.childId}!`,
-            timestamp: new Date()
-          };
-          
-          setMessages(prev => [...prev, successMessage]);
-          
-          // Refresh the children list
-          queryClient.invalidateQueries({ queryKey: ["/api/children"] });
-        } else {
-          const errorMessage: Message = {
-            id: Date.now().toString(),
-            role: "system",
-            content: `❌ There was an error registering the child: ${action.error || 'Unknown error'}`,
-            timestamp: new Date()
-          };
-          
-          setMessages(prev => [...prev, errorMessage]);
+        // Actually register the child on the server
+        if (action.registrationData) {
+          try {
+            console.log("🔄 Registering child:", action.registrationData);
+            
+            // Parse the name into first and last name
+            const nameParts = action.registrationData.name.split(' ');
+            const firstName = nameParts[0] || 'Child';
+            const lastName = nameParts.slice(1).join(' ') || 'Student';
+            
+            // Calculate birthdate from age
+            const currentYear = new Date().getFullYear();
+            const birthYear = currentYear - action.registrationData.age;
+            const birthdate = `${birthYear}-06-15`; // Use June 15th as default
+            
+            const childData = {
+              firstName: firstName,
+              lastName: lastName,
+              birthdate: birthdate,
+              gradeLevel: action.registrationData.grade || "Kindergarten",
+              specialNeeds: action.registrationData.medical || "",
+              interests: [],
+              learningStyle: "Visual",
+              parentId: user?.sub || user?.id
+            };
+            
+            console.log("📝 Sending child registration data:", childData);
+            
+            const response = await apiRequest("POST", "/api/children", childData);
+            const result = await response.json();
+            
+            if (response.ok && result.id) {
+              const successMessage: Message = {
+                id: Date.now().toString(),
+                role: "system",
+                content: `✅ Successfully registered ${firstName} ${lastName} in the system! They can now be enrolled in classes.`,
+                timestamp: new Date()
+              };
+              
+              setMessages(prev => [...prev, successMessage]);
+              
+              // Refresh the children list
+              queryClient.invalidateQueries({ queryKey: ["/api/children"] });
+              
+              toast({
+                title: "Child Registered",
+                description: `${firstName} ${lastName} has been successfully registered!`,
+              });
+            } else {
+              throw new Error(result.message || 'Registration failed');
+            }
+          } catch (error) {
+            console.error("❌ Child registration error:", error);
+            
+            const errorMessage: Message = {
+              id: Date.now().toString(),
+              role: "system",
+              content: `❌ There was an error registering the child: ${error.message || 'Unknown error'}. Please try again or register manually.`,
+              timestamp: new Date()
+            };
+            
+            setMessages(prev => [...prev, errorMessage]);
+            
+            toast({
+              title: "Registration Failed",
+              description: error.message || "Failed to register child. Please try again.",
+              variant: "destructive"
+            });
+          }
         }
         break;
         

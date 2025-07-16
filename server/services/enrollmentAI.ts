@@ -192,7 +192,7 @@ export async function processEnrollmentMessage(
           console.log("✅ Extracted registration data:", { firstName, lastName, age, grade, birthdate });
           
           return {
-            message: `Perfect! I'm registering ${firstName} ${lastName} right now with the information you provided.`,
+            message: `Perfect! I'll register ${firstName} ${lastName} with the information you provided. One moment please...`,
             action: {
               type: "register_child",
               registrationData: {
