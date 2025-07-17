@@ -85,6 +85,10 @@ export default function EnrollmentAssistant() {
   useEffect(() => {
     const scrollToBottom = () => {
       if (messagesEndRef.current) {
+        const messagesContainer = document.getElementById('messages-container');
+        if (messagesContainer) {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
         messagesEndRef.current.scrollIntoView({ 
           behavior: "smooth",
           block: "end",
@@ -93,17 +97,22 @@ export default function EnrollmentAssistant() {
       }
     };
     
-    // Multiple attempts to ensure scrolling works
+    // Immediate scroll for instant feedback
+    scrollToBottom();
+    
+    // Multiple attempts to ensure scrolling works with different delays
     const timeoutId1 = setTimeout(scrollToBottom, 50);
     const timeoutId2 = setTimeout(scrollToBottom, 200);
     const timeoutId3 = setTimeout(scrollToBottom, 500);
+    const timeoutId4 = setTimeout(scrollToBottom, 1000);
     
     return () => {
       clearTimeout(timeoutId1);
       clearTimeout(timeoutId2);
       clearTimeout(timeoutId3);
+      clearTimeout(timeoutId4);
     };
-  }, [messages]);
+  }, [messages, isLoading]);
   
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
