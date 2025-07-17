@@ -71,6 +71,8 @@ CONFIRMATION RESPONSES:
 - Always use previously collected information when user confirms
 - Process registration immediately when sufficient data is available
 
+IMPORTANT: When you have enough information to register a child, ALWAYS include the registration action in your response. The system will automatically process the registration when it sees the action format.
+
 CONVERSATION GUIDELINES:
 - Be helpful, friendly, and conversational
 - Ask clarifying questions if needed
@@ -234,7 +236,40 @@ export async function processEnrollmentMessage(
     }
     
     // Parse the response to extract potential actions
-    const action = parseActionFromResponse(aiResponse);
+    let action = parseActionFromResponse(aiResponse);
+    
+    // Additional logic to detect when to create registration actions
+    if (!action && aiResponse.includes("register") && !isConfirmation) {
+      // Look for child information in the user's message
+      const nameMatch = message.match(/([A-Za-z]+(?:\s+[A-Za-z]+)*),?\s*(\d+)\s*years?\s*old/i);
+      const gradeMatch = message.match(/(\d+(?:st|nd|rd|th)?\s*grade)/i);
+      
+      if (nameMatch) {
+        const fullName = nameMatch[1];
+        const nameParts = fullName.split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ') || 'Student';
+        const age = parseInt(nameMatch[2]);
+        const grade = gradeMatch ? gradeMatch[1] : `${Math.max(1, age - 5)}th Grade`;
+        
+        console.log("🎯 Auto-detected registration opportunity:", { firstName, lastName, age, grade });
+        
+        action = {
+          type: "register_child",
+          registrationData: {
+            name: fullName,
+            age: age,
+            grade: grade,
+            phone: "",
+            address: "",
+            emergency1: "",
+            emergency2: "",
+            medical: "",
+            caregiver: ""
+          }
+        };
+      }
+    }
     
     return {
       message: aiResponse,

@@ -104,6 +104,14 @@ The ASA Learning Platform is a comprehensive adaptive learning application desig
 
 ## Recent Changes
 
+### July 17, 2025 - AI Enrollment Assistant Auto-Scroll and Action Processing Enhanced
+- **✅ Improved Auto-Scroll**: Simplified scroll mechanism to reliably keep input field visible during AI conversations
+- **✅ Enhanced Action Detection**: Added pattern matching to automatically detect child registration opportunities in user messages
+- **✅ Action Processing Logging**: Added comprehensive logging to track AI action generation and processing
+- **✅ Registration Workflow**: AI assistant now properly processes child registration actions when user provides name, age, and grade information
+- **✅ Enrollment Support**: System supports both child registration and program enrollment through AI conversation
+- **✅ Debugging Tools**: Added console logging to help identify when AI actions are triggered vs. when they're not
+
 ### July 14, 2025 - Cart Clearing Bug Successfully Fixed and Payment Flow Fully Operational
 - **✅ Critical Bug Fixed**: Resolved cart clearing issue where enrollments remained in cart after successful payment
 - **✅ Missing Storage Method**: Added `updateEnrollment` method to storage interface, MemStorage implementation, and CombinedStorage routing
