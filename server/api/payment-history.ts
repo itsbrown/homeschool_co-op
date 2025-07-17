@@ -1,21 +1,42 @@
 import { Router } from 'express';
 import { storage } from '../storage';
+import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
 
 // Get payment history for a specific user
 router.get('/history', async (req, res) => {
   try {
-    const { email } = req.query;
-    
-    if (!email || typeof email !== 'string') {
-      return res.status(400).json({
+    // Extract user email from Supabase token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
         success: false,
-        error: 'Email parameter is required'
+        error: 'Authorization header missing'
       });
     }
 
-    const payments = await storage.getPaymentsByParentEmail(email);
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the Supabase token
+    const supabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.log('❌ Supabase auth error:', error);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid authentication token'
+      });
+    }
+
+    console.log('✅ Payment history request for user:', user.email);
+
+    const payments = await storage.getPaymentsByParentEmail(user.email!);
     
     // Transform payments to include formatted data
     const formattedPayments = payments.map(payment => ({

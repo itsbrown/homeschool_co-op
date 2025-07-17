@@ -69,18 +69,14 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   
   // Get payment data for the parent (and optionally filtered by child)
   const { data: payments, isLoading, refetch } = useQuery({
-    queryKey: ["/api/payments/history", childId],
+    queryKey: ["/api/payment-history", childId],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
       if (!token) {
         throw new Error('No authentication token');
       }
 
-      const url = childId 
-        ? `/api/payments/history?childId=${childId}` 
-        : '/api/payments/history';
-      
-      const response = await fetch(url, {
+      const response = await fetch('/api/payment-history/history', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -88,12 +84,11 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       });
 
       if (!response.ok) {
-        // Fallback to mock data for development
-        console.warn('Payment history API failed, using mock data');
-        return mockPayments;
+        throw new Error(`Failed to fetch payment history: ${response.status}`);
       }
 
-      return response.json();
+      const data = await response.json();
+      return data.success ? data.payments : [];
     },
   });
   
@@ -624,82 +619,3 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   );
 }
 
-// Mock data for UI development purposes
-const mockPayments: Payment[] = [
-  {
-    id: "1",
-    date: "2025-04-15",
-    amount: 225.00,
-    description: "Summer Science Camp Registration",
-    status: 'paid',
-    method: 'credit_card',
-    programName: "Summer Science Camp",
-    childName: "Emma Johnson",
-    receiptUrl: "#",
-  },
-  {
-    id: "2",
-    date: "2025-05-01",
-    amount: 150.00,
-    description: "Art Workshop Series",
-    status: 'pending',
-    method: '',
-    programName: "Creative Arts Workshop",
-    childName: "Emma Johnson",
-    dueDate: "2025-05-20",
-  },
-  {
-    id: "3",
-    date: "2025-04-10",
-    amount: 180.00,
-    description: "Math Enrichment Program",
-    status: 'paid',
-    method: 'paypal',
-    programName: "Advanced Mathematics",
-    childName: "Noah Williams",
-    receiptUrl: "#",
-  },
-  {
-    id: "4",
-    date: "2025-03-25",
-    amount: 200.00,
-    description: "Robotics Club Monthly Fee",
-    status: 'failed',
-    method: 'credit_card',
-    programName: "Robotics Club",
-    childName: "Noah Williams",
-  },
-  {
-    id: "5",
-    date: "2025-04-28",
-    amount: 120.00,
-    description: "History Field Trip",
-    status: 'refunded',
-    method: 'credit_card',
-    programName: "Historical Adventures",
-    childName: "Emma Johnson",
-    receiptUrl: "#",
-  },
-  {
-    id: "6",
-    date: "2025-05-05",
-    amount: 250.00,
-    description: "Summer Music Program",
-    status: 'pending',
-    method: '',
-    programName: "Young Musicians",
-    childName: "Noah Williams",
-    dueDate: "2025-05-15",
-  },
-  {
-    id: "7",
-    date: "2025-05-10",
-    amount: 175.00,
-    description: "Environmental Science Field Trip",
-    status: 'pending',
-    method: '',
-    programName: "Nature Explorers",
-    childName: "Emma Johnson",
-    dueDate: "2025-05-25",
-  },
-];

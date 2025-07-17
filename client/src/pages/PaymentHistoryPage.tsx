@@ -29,6 +29,26 @@ export default function PaymentHistoryPage() {
   const { data: paymentHistory, isLoading: isLoadingHistory } = useQuery<PaymentHistoryItem[]>({
     queryKey: ['/api/payment-history'],
     enabled: !!user?.email,
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/payment-history/history', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch payment history: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.success ? data.payments : [];
+    },
   });
 
   const formatCurrency = (amount: number) => {

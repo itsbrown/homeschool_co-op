@@ -1942,6 +1942,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const billingRouter = (await import("./api/billing")).default;
   app.use("/api/billing", billingRouter);
 
+  // Register payment history routes
+  const paymentHistoryRouter = (await import("./api/payment-history")).default;
+  app.use("/api/payment-history", paymentHistoryRouter);
+
   // General enrollments endpoint for dashboard
   app.get("/api/enrollments", isAuthenticated, async (req: any, res) => {
     try {

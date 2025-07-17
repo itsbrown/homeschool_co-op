@@ -64,6 +64,7 @@ import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
 import BillingPage from "@/pages/BillingPage";
+import PaymentHistoryPage from "@/pages/PaymentHistoryPage";
 import PlatformSubscriptionPlans from "@/pages/PaymentPlans";
 import ClassPaymentPlans from "@/pages/ClassPaymentPlans";
 
@@ -366,6 +367,13 @@ function Router() {
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/schedule" component={SchedulePage} />
       <Route path="/payments" component={PaymentsPage} />
+      <Route path="/payment-history">
+        {isAuthenticated ? (
+          <PaymentHistoryPage />
+        ) : (
+          <Redirect to="/login" />
+        )}
+      </Route>
       <Route path="/settings" component={SettingsPage} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
 

@@ -159,15 +159,10 @@ export async function getTutorResources(
   return data.resources;
 }
 
-// Mock API for dashboard stats (would connect to a real API in production)
+// Dashboard stats API - returns computed statistics
 export async function fetchDashboardStats(): Promise<Stats> {
-  // This would be a real API call in production
-  return {
-    totalStudents: 124,
-    activeCourses: 8,
-    completionRate: 87,
-    marketplaceSales: 2450
-  };
+  // TODO: Implement real API call to get computed dashboard statistics
+  throw new Error('Dashboard stats API not implemented');
 }
 
 }

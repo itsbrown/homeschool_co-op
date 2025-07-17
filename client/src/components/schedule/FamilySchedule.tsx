@@ -76,10 +76,15 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
       
       const url = `/api/schedule?${params.toString()}`;
       return fetch(url)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`Failed to fetch schedule: ${res.status}`);
+          }
+          return res.json();
+        })
         .catch(() => {
-          // For now, return mock data
-          return mockEvents;
+          // Return empty array when API fails
+          return [];
         });
     },
   });
@@ -492,146 +497,3 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
     </div>
   );
 }
-
-// Mock data for UI development
-const mockEvents: ScheduleEvent[] = [
-  {
-    id: "1",
-    title: "Math Enrichment",
-    date: "2025-05-22",
-    startTime: "09:00",
-    endTime: "10:30",
-    location: "Classroom 105",
-    type: "class",
-    childId: "1",
-    childName: "Emma Johnson",
-    color: "blue",
-    instructorName: "Dr. Sarah Miller",
-    programName: "Advanced Mathematics"
-  },
-  {
-    id: "2",
-    title: "Science Explorers",
-    date: "2025-05-22",
-    startTime: "13:00",
-    endTime: "14:30",
-    location: "Science Lab",
-    type: "program",
-    childId: "1",
-    childName: "Emma Johnson",
-    color: "green",
-    instructorName: "Prof. James Wilson",
-    programName: "Science Discovery Program"
-  },
-  {
-    id: "3",
-    title: "Art Workshop",
-    date: "2025-05-23",
-    startTime: "10:00",
-    endTime: "12:00",
-    location: "Art Studio",
-    type: "class",
-    childId: "1",
-    childName: "Emma Johnson",
-    color: "purple",
-    instructorName: "Ms. Elena Rodriguez",
-    programName: "Creative Arts"
-  },
-  {
-    id: "4",
-    title: "Robotics Club",
-    date: "2025-05-24",
-    startTime: "14:00",
-    endTime: "16:00",
-    location: "Tech Lab",
-    type: "program",
-    childId: "2",
-    childName: "Noah Williams",
-    color: "amber",
-    instructorName: "Mr. Robert Chen",
-    programName: "Young Engineers"
-  },
-  {
-    id: "5",
-    title: "History Museum Field Trip",
-    date: "2025-05-25",
-    startTime: "09:00",
-    endTime: "15:00",
-    location: "City History Museum",
-    type: "field-trip",
-    childId: "2",
-    childName: "Noah Williams",
-    color: "indigo",
-    description: "Exploring ancient civilizations exhibit. Bring lunch and water bottle.",
-    programName: "Historical Adventures"
-  },
-  {
-    id: "6",
-    title: "Music Lesson",
-    date: "2025-05-25",
-    startTime: "16:30",
-    endTime: "17:30",
-    location: "Music Room 3",
-    type: "class",
-    childId: "1",
-    childName: "Emma Johnson",
-    color: "rose",
-    instructorName: "Ms. Jennifer Lee",
-    programName: "Young Musicians"
-  },
-  {
-    id: "7",
-    title: "Coding Class",
-    date: "2025-05-26",
-    startTime: "15:00",
-    endTime: "16:30",
-    location: "Computer Lab",
-    type: "class",
-    childId: "2",
-    childName: "Noah Williams",
-    color: "cyan",
-    instructorName: "Mr. David Park",
-    programName: "Future Coders"
-  },
-  {
-    id: "8",
-    title: "End of Year Celebration",
-    date: "2025-05-28",
-    startTime: "17:00",
-    endTime: "19:00",
-    location: "Main Hall",
-    type: "event",
-    childId: "1",
-    childName: "Emma Johnson",
-    color: "emerald",
-    description: "Year-end celebration with performances and awards. Family members welcome!"
-  },
-  {
-    id: "9",
-    title: "Swimming Lesson",
-    date: "2025-05-29",
-    startTime: "10:00",
-    endTime: "11:00",
-    location: "Community Pool",
-    type: "class",
-    childId: "2",
-    childName: "Noah Williams",
-    color: "blue",
-    instructorName: "Coach Thomas",
-    programName: "Aquatic Skills"
-  },
-  {
-    id: "10",
-    title: "Nature Walk",
-    date: "2025-05-30",
-    startTime: "13:00",
-    endTime: "15:00",
-    location: "Riverside Park",
-    type: "field-trip",
-    childId: "1",
-    childName: "Emma Johnson",
-    color: "green",
-    description: "Exploring local flora and fauna. Wear comfortable shoes and bring a hat.",
-    programName: "Nature Explorers"
-  }
-];

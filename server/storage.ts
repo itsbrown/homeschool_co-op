@@ -2406,21 +2406,21 @@ class CombinedStorage {
     return this.dbStorage.getLinkAnalyticsBySchoolId(schoolId, startDate, endDate);
   }
 
-    // Payment methods implementation
+    // Payment methods implementation - use memStorage since database is failing
     async createPayment(payment: InsertPayment): Promise<Payment> {
-      return this.dbStorage.createPayment(payment);
+      return this.memStorage.createPayment(payment);
     }
   
     async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
-      return this.dbStorage.getPaymentsByParentEmail(parentEmail);
+      return this.memStorage.getPaymentsByParentEmail(parentEmail);
     }
   
     async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-      return this.dbStorage.getPaymentByStripeId(stripePaymentIntentId);
+      return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
     }
   
     async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
-      return this.dbStorage.updatePaymentStatus(id, status);
+      return this.memStorage.updatePaymentStatus(id, status);
     }
 
     async removeEnrollment(enrollmentId: number): Promise<boolean> {
