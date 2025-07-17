@@ -81,14 +81,28 @@ export default function EnrollmentAssistant() {
     }
   }, [messages, profileData, user]);
   
-  // Auto scroll to bottom of messages
+  // Auto scroll to bottom of messages and ensure input field is visible
   useEffect(() => {
     const scrollToBottom = () => {
+      const messagesContainer = document.getElementById('messages-container');
+      const inputArea = document.querySelector('[data-input-area]');
+      
+      if (messagesContainer) {
+        // First scroll the messages container to bottom
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+      
+      // Ensure the input area is visible in the viewport
+      if (inputArea) {
+        inputArea.scrollIntoView({ 
+          behavior: "smooth",
+          block: "end",
+          inline: "nearest"
+        });
+      }
+      
+      // Also try to scroll to the messages end reference
       if (messagesEndRef.current) {
-        const messagesContainer = document.getElementById('messages-container');
-        if (messagesContainer) {
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
         messagesEndRef.current.scrollIntoView({ 
           behavior: "smooth",
           block: "end",
@@ -100,17 +114,19 @@ export default function EnrollmentAssistant() {
     // Immediate scroll for instant feedback
     scrollToBottom();
     
-    // Multiple attempts to ensure scrolling works with different delays
+    // More aggressive scrolling with longer delays to handle different render times
     const timeoutId1 = setTimeout(scrollToBottom, 50);
     const timeoutId2 = setTimeout(scrollToBottom, 200);
     const timeoutId3 = setTimeout(scrollToBottom, 500);
     const timeoutId4 = setTimeout(scrollToBottom, 1000);
+    const timeoutId5 = setTimeout(scrollToBottom, 1500);
     
     return () => {
       clearTimeout(timeoutId1);
       clearTimeout(timeoutId2);
       clearTimeout(timeoutId3);
       clearTimeout(timeoutId4);
+      clearTimeout(timeoutId5);
     };
   }, [messages, isLoading]);
   
@@ -127,6 +143,18 @@ export default function EnrollmentAssistant() {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage("");
     setIsLoading(true);
+    
+    // Immediate scroll after sending message to ensure input stays visible
+    setTimeout(() => {
+      const inputArea = document.querySelector('[data-input-area]');
+      if (inputArea) {
+        inputArea.scrollIntoView({ 
+          behavior: "smooth",
+          block: "end",
+          inline: "nearest"
+        });
+      }
+    }, 100);
     
     try {
       // In development, allow requests without session for testing
@@ -459,7 +487,7 @@ export default function EnrollmentAssistant() {
         </div>
         
         {/* Input Area */}
-        <div className="border-t bg-white p-4 flex-shrink-0">
+        <div className="border-t bg-white p-4 flex-shrink-0" data-input-area>
           <div className="relative">
             <Input
               value={inputMessage}
