@@ -160,9 +160,12 @@ export default function EnrollmentAssistant() {
       // If the AI suggested an action, handle it
       if (data.action) {
         console.log("🎯 AI Action received:", data.action);
+        console.log("🎯 Action type:", data.action.type);
+        console.log("🎯 Action data:", data.action.registrationData || data.action);
         handleAssistantAction(data.action);
       } else {
         console.log("🔍 No action in AI response:", data);
+        console.log("🔍 Response message:", data.message);
       }
       
     } catch (error) {

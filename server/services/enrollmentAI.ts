@@ -309,33 +309,58 @@ function parseActionFromResponse(response: string): EnrollmentAction | undefined
   const recommendPattern = /\[\s*RECOMMEND\s*:\s*(.*?)\s*\]/i;
   const viewChildrenPattern = /\[\s*VIEW_CHILDREN\s*\]/i;
   const viewProgramsPattern = /\[\s*VIEW_PROGRAMS\s*(?::\s*(.*?))?\s*\]/i;
-  const registerPattern = /\[\s*REGISTER_CHILD\s*:\s*\{(.*?)\}\s*\]/i;
+  const registerPattern = /\[\s*REGISTER_CHILD\s*:\s*(.*?)\s*\]/i;
   
   // Check for child registration action
   const registerMatch = response.match(registerPattern);
   if (registerMatch) {
     try {
+      console.log("🎯 Found registration pattern:", registerMatch[1]);
+      
       // Parse the registration data from the match
       const dataString = registerMatch[1];
       const registrationData: any = {};
       
+      // Handle both formats: with and without curly braces
+      const cleanDataString = dataString.replace(/^\{|\}$/g, '');
+      
       // Extract key-value pairs from the string
-      const pairs = dataString.split(',');
+      const pairs = cleanDataString.split(',');
       for (const pair of pairs) {
         const [key, value] = pair.split(':').map(s => s.trim());
         if (key && value) {
           const cleanKey = key.replace(/"/g, '');
-          const cleanValue = value.replace(/"/g, '');
+          const cleanValue = value.replace(/"/g, '').replace(/\[|\]/g, '');
           registrationData[cleanKey] = cleanValue;
         }
       }
       
+      console.log("🎯 Parsed registration data:", registrationData);
+      
+      // Create the name from firstName and lastName if available
+      const name = registrationData.firstName && registrationData.lastName 
+        ? `${registrationData.firstName} ${registrationData.lastName}`
+        : registrationData.name || '';
+      
+      // Convert birthdate text to actual age
+      let age = 0;
+      if (registrationData.birthdate && registrationData.birthdate.includes('years old')) {
+        const ageMatch = registrationData.birthdate.match(/(\d+)\s*years?\s*old/);
+        if (ageMatch) {
+          age = parseInt(ageMatch[1]);
+        }
+      } else if (registrationData.age) {
+        age = parseInt(registrationData.age);
+      }
+      
+      const grade = registrationData.gradeLevel || registrationData.grade || '';
+      
       return {
         type: "register_child",
         registrationData: {
-          name: registrationData.name || '',
-          age: parseInt(registrationData.age) || 0,
-          grade: registrationData.grade || '',
+          name: name,
+          age: age,
+          grade: grade,
           phone: registrationData.phone || '',
           address: registrationData.address || '',
           emergency1: registrationData.emergency1 || '',
