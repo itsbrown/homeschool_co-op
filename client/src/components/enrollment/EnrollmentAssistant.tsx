@@ -227,9 +227,13 @@ export default function EnrollmentAssistant() {
             }
             
             const response = await apiRequest("POST", "/api/parent/children", childData);
-            const result = await response.json();
+            console.log("📊 Registration response status:", response.status);
+            console.log("📊 Registration response ok:", response.ok);
             
-            if (response.ok && result.id) {
+            const result = await response.json();
+            console.log("📊 Registration result:", result);
+            
+            if (response.ok && (result.id || result.success)) {
               const successMessage: Message = {
                 id: Date.now().toString(),
                 role: "system",
