@@ -221,6 +221,11 @@ export default function EnrollmentAssistant() {
             
             console.log("📝 Sending child registration data:", childData);
             
+            // Ensure we have a valid token before making the request
+            if (session?.access_token) {
+              localStorage.setItem('supabase_token', session.access_token);
+            }
+            
             const response = await apiRequest("POST", "/api/children", childData);
             const result = await response.json();
             
@@ -268,6 +273,11 @@ export default function EnrollmentAssistant() {
       case "enroll":
         if (action.programId && action.childId) {
           try {
+            // Ensure we have a valid token before making the request
+            if (session?.access_token) {
+              localStorage.setItem('supabase_token', session.access_token);
+            }
+            
             await apiRequest("POST", "/api/enrollments", {
               programId: action.programId,
               childId: action.childId,
