@@ -226,7 +226,7 @@ export default function EnrollmentAssistant() {
               localStorage.setItem('supabase_token', session.access_token);
             }
             
-            const response = await apiRequest("POST", "/api/children", childData);
+            const response = await apiRequest("POST", "/api/parent/children", childData);
             const result = await response.json();
             
             if (response.ok && result.id) {
@@ -240,7 +240,7 @@ export default function EnrollmentAssistant() {
               setMessages(prev => [...prev, successMessage]);
               
               // Refresh the children list
-              queryClient.invalidateQueries({ queryKey: ["/api/children"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
               
               toast({
                 title: "Child Registered",
