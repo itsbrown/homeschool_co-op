@@ -222,27 +222,5 @@
     "updatedAt": "2025-07-13T23:09:11.197Z",
     "id": 10,
     "birthDate": "2025-07-18T02:21:51.070Z"
-  },
-  {
-    "firstName": "Mary",
-    "lastName": "Brown",
-    "birthdate": "2025-06-15",
-    "gradeLevel": "1",
-    "gender": null,
-    "parentEmail": "parent_test@gmail.com",
-    "parent_email": "parent_test@gmail.com",
-    "parentPhone": null,
-    "interests": [],
-    "learningStyle": "Visual",
-    "specialNeeds": "None",
-    "allergies": null,
-    "medicalInfo": null,
-    "school": null,
-    "profileImage": null,
-    "emergencyContact": null,
-    "emergencyPhone": null,
-    "createdAt": "2025-07-18T02:40:34.491Z",
-    "updatedAt": "2025-07-18T02:40:34.491Z",
-    "id": 11
   }
 ]
