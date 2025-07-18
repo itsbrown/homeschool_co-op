@@ -2,6 +2,7 @@ import { storage } from "../storage";
 import { anthropicService } from "./anthropicService";
 import { openAIService } from "./openaiService";
 import { Program } from "@shared/schema";
+import { conversationHistory } from "./conversationHistory";
 
 // Type definitions
 interface ChatMessage {
@@ -37,9 +38,16 @@ interface AIResponse {
 const SYSTEM_PROMPT = `You are an AI enrollment assistant for American Seekers Academy. 
 Your goal is to help parents register their children and find suitable programs.
 
+MEMORY AND CONTEXT:
+- You have access to the parent's previously registered children
+- You can see conversation history from previous interactions
+- When a parent mentions a child by name, check if they're already registered
+- If a child is already registered, use their existing information for recommendations
+
 AVAILABLE INFORMATION:
-1. The parent's children and their details
+1. The parent's children and their details (both registered and those mentioned in conversation)
 2. Available educational programs
+3. Previous conversation history
 
 TASKS YOU CAN PERFORM:
 1. Help register new children by collecting required information
@@ -47,6 +55,7 @@ TASKS YOU CAN PERFORM:
 3. Answer questions about programs (schedule, curriculum, cost, etc.)
 4. Guide the enrollment process and create enrollment requests
 5. Provide information about existing enrollments
+6. Remember previously discussed children and their details
 
 CHILD REGISTRATION PROCESS:
 When helping register a new child, collect these details in order:
@@ -92,15 +101,29 @@ If you need to perform a specific action like registration or enrollment, includ
 export async function processEnrollmentMessage(
   message: string,
   childrenIds: number[],
-  chatHistory: ChatMessage[]
+  chatHistory: ChatMessage[],
+  parentId?: string
 ): Promise<AIResponse> {
   try {
-    // Fetch relevant data
-    const children = [];
-    for (const childId of childrenIds) {
-      const child = await storage.getChildById(childId);
-      if (child) {
-        children.push(child);
+    // Fetch relevant data - if no specific children IDs, get all parent's children
+    let children = [];
+    
+    if (childrenIds.length > 0) {
+      for (const childId of childrenIds) {
+        const child = await storage.getChildById(childId);
+        if (child) {
+          children.push(child);
+        }
+      }
+    } else if (parentId) {
+      // Get all children for this parent to provide context
+      try {
+        const allChildren = await storage.getChildrenByParent(parentId);
+        children = allChildren || [];
+        console.log(`🔍 Found ${children.length} children for parent ${parentId}`);
+      } catch (error) {
+        console.error('Error fetching parent children:', error);
+        children = [];
       }
     }
     
@@ -110,16 +133,17 @@ export async function processEnrollmentMessage(
     
     // Format context about available data
     const childrenContext = children.length > 0
-      ? `CHILDREN INFORMATION:\n${children.map(child => 
+      ? `CHILDREN INFORMATION (Already Registered):\n${children.map(child => 
           `Child ID: ${child.id}
            Name: ${child.firstName} ${child.lastName}
            Age: ${calculateAge(child.birthdate)}
            Grade: ${child.gradeLevel}
            Learning Style: ${child.learningStyle || 'Not specified'}
            Interests: ${child.interests?.join(', ') || 'Not specified'}
-           Special Needs: ${child.specialNeeds || 'None'}`
+           Special Needs: ${child.specialNeeds || 'None'}
+           Status: Already registered and available for enrollment`
         ).join('\n\n')}`
-      : 'No children are registered for this parent.';
+      : 'No children are currently registered for this parent.';
       
     const programsContext = programs.length > 0
       ? `AVAILABLE PROGRAMS:\n${programs.map(program => 
@@ -217,8 +241,25 @@ export async function processEnrollmentMessage(
       }
     }
 
+    // Get conversation history for context
+    const previousMessages = parentId ? conversationHistory.getHistory(parentId) : [];
+    const mentionedChildren = parentId ? conversationHistory.getMentionedChildren(parentId) : [];
+    
+    // Build conversation context
+    const conversationContext = previousMessages.length > 0
+      ? `PREVIOUS CONVERSATION CONTEXT:\n${previousMessages.slice(-6).map(msg => 
+          `${msg.role.toUpperCase()}: ${msg.content}`
+        ).join('\n')}\n\n`
+      : '';
+    
+    const mentionedChildrenContext = mentionedChildren.length > 0
+      ? `CHILDREN MENTIONED IN CONVERSATION:\n${mentionedChildren.map(child =>
+          `Name: ${child.name}${child.childId ? ` (ID: ${child.childId})` : ''}${child.details ? ` - ${JSON.stringify(child.details)}` : ''}`
+        ).join('\n')}\n\n`
+      : '';
+
     // Build the complete context
-    const fullContext = `${childrenContext}\n\n${programsContext}`;
+    const fullContext = `${conversationContext}${mentionedChildrenContext}${childrenContext}\n\n${programsContext}`;
     
     // Prepare messages for the AI
     const messages: ChatMessage[] = [
@@ -227,6 +268,11 @@ export async function processEnrollmentMessage(
       { role: "user", content: message }
     ];
     
+    // Store user message in conversation history
+    if (parentId) {
+      conversationHistory.addMessage(parentId, "user", message);
+    }
+
     // Try using Anthropic first, fall back to OpenAI if needed
     let aiResponse;
     try {
@@ -234,6 +280,11 @@ export async function processEnrollmentMessage(
     } catch (error) {
       console.error("Error with Anthropic service, falling back to OpenAI:", error);
       aiResponse = await openAIService.generateChatCompletion(messages);
+    }
+
+    // Store AI response in conversation history
+    if (parentId) {
+      conversationHistory.addMessage(parentId, "assistant", aiResponse);
     }
     
     // Parse the response to extract potential actions

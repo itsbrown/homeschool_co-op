@@ -892,7 +892,7 @@ export class MemStorage implements IStorage {
 
     // Update the enrollment
     this.classEnrollments[index] = enrollment;
-    
+
     console.log(`✅ ENROLLMENT UPDATED: ID ${enrollment.id}, Status: ${enrollment.status}`);
     console.log(`📝 Updated enrollment:`, enrollment);
 
@@ -1710,723 +1710,723 @@ export class MemStorage implements IStorage {
         console.log('⚠️ classes.json not found, using fallback sample classes');
         this.createFallbackClasses();
       }
-    } catch (error) {
-      console.error('❌ Error loading classes from JSON:', error);
-      this.createFallbackClasses();
-    }
-  }
-
-  private createFallbackClasses() {
-    // Fallback sample classes only if JSON loading fails
-    const sampleClasses = [
-      {
-        title: "Introduction to Mathematics",
-        category: "mathematics",
-        categoryName: "Mathematics",
-        description: "A comprehensive introduction to basic mathematical concepts for beginners.",
-        price: 49.99,
-        startDate: new Date("2025-07-01"),
-        endDate: new Date("2025-08-15"),
-        instructorId: 1,
-        isPublished: true,
-        status: "published"
+      } catch (error) {
+        console.error('❌ Error loading classes from JSON:', error);
+        this.createFallbackClasses();
       }
-    ];
+    }
 
-    sampleClasses.forEach(classData => {
-      this.createClass({
-        ...classData,
-        instructorId: classData.instructorId
+    private createFallbackClasses() {
+      // Fallback sample classes only if JSON loading fails
+      const sampleClasses = [
+        {
+          title: "Introduction to Mathematics",
+          category: "mathematics",
+          categoryName: "Mathematics",
+          description: "A comprehensive introduction to basic mathematical concepts for beginners.",
+          price: 49.99,
+          startDate: new Date("2025-07-01"),
+          endDate: new Date("2025-08-15"),
+          instructorId: 1,
+          isPublished: true,
+          status: "published"
+        }
+      ];
+
+      sampleClasses.forEach(classData => {
+        this.createClass({
+          ...classData,
+          instructorId: classData.instructorId
+        });
       });
-    });
-  }
+    }
 
-  private async initializeEnrollments() {
-    // Load enrollments from the actual JSON file
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
+    private async initializeEnrollments() {
+      // Load enrollments from the actual JSON file
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
 
-      if (fs.existsSync(enrollmentsFilePath)) {
-        const enrollmentsData = JSON.parse(fs.readFileSync(enrollmentsFilePath, 'utf-8'));
-        console.log(`📚 Loading ${enrollmentsData.length} enrollments from enrollments.json`);
+        if (fs.existsSync(enrollmentsFilePath)) {
+          const enrollmentsData = JSON.parse(fs.readFileSync(enrollmentsFilePath, 'utf-8'));
+          console.log(`📚 Loading ${enrollmentsData.length} enrollments from enrollments.json`);
 
-        this.classEnrollments = enrollmentsData.map((enrollment: any) => ({
-          ...enrollment,
-          enrollmentDate: enrollment.enrollmentDate ? new Date(enrollment.enrollmentDate) : new Date()
-        }));
+          this.classEnrollments = enrollmentsData.map((enrollment: any) => ({
+            ...enrollment,
+            enrollmentDate: enrollment.enrollmentDate ? new Date(enrollment.enrollmentDate) : new Date()
+          }));
 
-        console.log(`✅ Successfully loaded ${this.classEnrollments.length} enrollments into storage`);
-      } else {
-        console.log('📚 No enrollments.json found, starting with empty enrollments');
+          console.log(`✅ Successfully loaded ${this.classEnrollments.length} enrollments into storage`);
+        } else {
+          console.log('📚 No enrollments.json found, starting with empty enrollments');
+          this.classEnrollments = [];
+        }
+      } catch (error) {
+        console.error('❌ Error loading enrollments from JSON:', error);
         this.classEnrollments = [];
       }
-    } catch (error) {
-      console.error('❌ Error loading enrollments from JSON:', error);
-      this.classEnrollments = [];
     }
-  }
 
-  private async saveEnrollmentsToFile() {
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
+    private async saveEnrollmentsToFile() {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
 
-      console.log(`💾 Attempting to save ${this.classEnrollments.length} enrollments to file: ${enrollmentsFilePath}`);
-      console.log(`💾 Enrollment data to save:`, JSON.stringify(this.classEnrollments, null, 2));
+        console.log(`💾 Attempting to save ${this.classEnrollments.length} enrollments to file: ${enrollmentsFilePath}`);
+        console.log(`💾 Enrollment data to save:`, JSON.stringify(this.classEnrollments, null, 2));
 
-      // Ensure data directory exists
-      const dataDir = path.dirname(enrollmentsFilePath);
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-        console.log(`📁 Created data directory: ${dataDir}`);
-      }
+        // Ensure data directory exists
+        const dataDir = path.dirname(enrollmentsFilePath);
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
+          console.log(`📁 Created data directory: ${dataDir}`);
+        }
 
-      const enrollmentData = JSON.stringify(this.classEnrollments, null, 2);
-      fs.writeFileSync(enrollmentsFilePath, enrollmentData);
-      console.log(`✅ Successfully saved ${this.classEnrollments.length} enrollments to enrollments.json`);
+        const enrollmentData = JSON.stringify(this.classEnrollments, null, 2);
+        fs.writeFileSync(enrollmentsFilePath, enrollmentData);
+        console.log(`✅ Successfully saved ${this.classEnrollments.length} enrollments to enrollments.json`);
 
-      // Verify the file was written
-      const savedData = fs.readFileSync(enrollmentsFilePath, 'utf-8');
-      console.log(`🔍 Verification - File contents: ${savedData.substring(0, 100)}...`);
-    } catch (error) {
-      console.error('❌ Error saving enrollments to file:', error);
-      console.error('❌ Error details:', error.message);
-    }
-  }
-
-  private async initializeChildren() {
-    // Load children from the actual JSON file
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
-
-      if (fs.existsSync(childrenFilePath)) {
-        const childrenData = JSON.parse(fs.readFileSync(childrenFilePath, 'utf-8'));
-        console.log(`👶 Loading ${childrenData.length} children from children.json`);
-
-        childrenData.forEach((childData: any) => {
-          // Ensure the child has required fields and set defaults for missing ones
-          const normalizedChild = {
-            ...childData,
-            // Handle dates properly
-            birthDate: childData.birthDate ? new Date(childData.birthDate) : new Date(),
-            createdAt: childData.createdAt ? new Date(childData.createdAt) : new Date(),
-            updatedAt: childData.updatedAt ? new Date(childData.updatedAt) : new Date()
-          };
-
-          // Add to store with existing ID
-          this.childrenStore.set(childData.id, normalizedChild as Child);
-
-          // Update counter to be higher than max ID
-          if (childData.id >= this.childIdCounter) {
-            this.childIdCounter = childData.id + 1;
-          }
-        });
-
-        console.log(`✅ Successfully loaded ${this.childrenStore.size} children into storage`);
-        console.log(`👶 Available child IDs: [${Array.from(this.childrenStore.keys()).join(', ')}]`);
-      } else {
-        console.log('⚠️ children.json not found, no children loaded into storage');
-      }
-    } catch (error) {
-      console.error('❌ Error loading children from JSON:', error);
-    }
-  }
-
-  // Marketing Links Methods
-  async createMarketingLink(data: InsertMarketingLink): Promise<MarketingLink> {
-    const id = this.marketingLinkIdCounter++;
-    const now = new Date();
-    const marketingLink: MarketingLink = {
-      id,
-      createdAt: now,
-      updatedAt: now,
-      ...data
-    };
-    this.marketingLinksStore.set(id, marketingLink);
-    return marketingLink;
-  }
-
-  async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
-    return this.marketingLinksStore.get(id);
-  }
-
-  async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
-    for (const link of this.marketingLinksStore.values()) {
-      if (link.campaignId === campaignId) {
-        return link;
+        // Verify the file was written
+        const savedData = fs.readFileSync(enrollmentsFilePath, 'utf-8');
+        console.log(`🔍 Verification - File contents: ${savedData.substring(0, 100)}...`);
+      } catch (error) {
+        console.error('❌ Error saving enrollments to file:', error);
+        console.error('❌ Error details:', error.message);
       }
     }
-    return undefined;
-  }
 
-  async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
-    return Array.from(this.marketingLinksStore.values()).filter(
-      link => link.schoolId === schoolId
-    );
-  }
+    private async initializeChildren() {
+      // Load children from the actual JSON file
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
+
+        if (fs.existsSync(childrenFilePath)) {
+          const childrenData = JSON.parse(fs.readFileSync(childrenFilePath, 'utf-8'));
+          console.log(`👶 Loading ${childrenData.length} children from children.json`);
+
+          childrenData.forEach((childData: any) => {
+            // Ensure the child has required fields and set defaults for missing ones
+            const normalizedChild = {
+              ...childData,
+              // Handle dates properly
+              birthDate: childData.birthDate ? new Date(childData.birthDate) : new Date(),
+              createdAt: childData.createdAt ? new Date(childData.createdAt) : new Date(),
+              updatedAt: childData.updatedAt ? new Date(childData.updatedAt) : new Date()
+            };
+
+            // Add to store with existing ID
+            this.childrenStore.set(childData.id, normalizedChild as Child);
+
+            // Update counter to be higher than max ID
+            if (childData.id >= this.childIdCounter) {
+              this.childIdCounter = childData.id + 1;
+            }
+          });
+
+          console.log(`✅ Successfully loaded ${this.childrenStore.size} children into storage`);
+          console.log(`👶 Available child IDs: [${Array.from(this.childrenStore.keys()).join(', ')}]`);
+        } else {
+          console.log('⚠️ children.json not found, no children loaded into storage');
+        }
+      } catch (error) {
+        console.error('❌ Error loading children from JSON:', error);
+      }
+    }
+
+    // Marketing Links Methods
+    async createMarketingLink(data: InsertMarketingLink): Promise<MarketingLink> {
+      const id = this.marketingLinkIdCounter++;
+      const now = new Date();
+      const marketingLink: MarketingLink = {
+        id,
+        createdAt: now,
+        updatedAt: now,
+        ...data
+      };
+      this.marketingLinksStore.set(id, marketingLink);
+      return marketingLink;
+    }
+
+    async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
+      return this.marketingLinksStore.get(id);
+    }
+
+    async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
+      for (const link of this.marketingLinksStore.values()) {
+        if (link.campaignId === campaignId) {
+          return link;
+        }
+      }
+      return undefined;
+    }
+
+    async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
+      return Array.from(this.marketingLinksStore.values()).filter(
+        link => link.schoolId === schoolId
+      );
+    }
+
+    async updateMarketingLink(id: number, data: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
+      const existing = this.marketingLinksStore.get(id);
+      if (!existing) return undefined;
+
+      const updated: MarketingLink = {
+        ...existing,
+        ...data,
+        updatedAt: new Date()
+      };
+      this.marketingLinksStore.set(id, updated);
+      return updated;
+    }
+
+    async deleteMarketingLink(id: number): Promise<boolean> {
+      return this.marketingLinksStore.delete(id);
+    }
+
+    async createLinkAnalytics(data: InsertLinkAnalytics): Promise<LinkAnalytics> {
+      const id = this.linkAnalyticsIdCounter++;
+      const analytics: LinkAnalytics = {
+        id,
+        timestamp: new Date(),
+        ...data
+      };
+      this.linkAnalyticsStore.set(id, analytics);
+      return analytics;
+    }
+
+    async incrementLinkClick(linkId: number): Promise<void> {
+      await this.createLinkAnalytics({
+        linkId,
+        event: 'click',
+        ipAddress: null,
+        userAgent: null,
+        referrer: null
+      });
+    }
+
+    async incrementLinkConversion(linkId: number): Promise<void> {
+      await this.createLinkAnalytics({
+        linkId,
+        event: 'conversion',
+        ipAddress: null,
+        userAgent: null,
+        referrer: null
+      });
+    }
+
+    async getLinkAnalytics(linkId: number): Promise<LinkAnalytics[]> {
+      return Array.from(this.linkAnalyticsStore.values()).filter(
+        analytics => analytics.linkId === linkId
+      );
+    }
+
+    async getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
+      return Array.from(this.linkAnalyticsStore.values()).filter(
+        analytics => analytics.linkId === linkId
+      );
+    }
+
+    async getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
+      return Array.from(this.linkAnalyticsStore.values()).filter(
+        analytics => analytics.linkId === schoolId
+      );
+    }
+
+    // Payment methods implementation
+    async getAllPayments(): Promise<Payment[]> {
+      return Array.from(this.paymentsStore.values());
+    }
 
-  async updateMarketingLink(id: number, data: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
-    const existing = this.marketingLinksStore.get(id);
-    if (!existing) return undefined;
-
-    const updated: MarketingLink = {
-      ...existing,
-      ...data,
-      updatedAt: new Date()
-    };
-    this.marketingLinksStore.set(id, updated);
-    return updated;
-  }
-
-  async deleteMarketingLink(id: number): Promise<boolean> {
-    return this.marketingLinksStore.delete(id);
-  }
-
-  async createLinkAnalytics(data: InsertLinkAnalytics): Promise<LinkAnalytics> {
-    const id = this.linkAnalyticsIdCounter++;
-    const analytics: LinkAnalytics = {
-      id,
-      timestamp: new Date(),
-      ...data
-    };
-    this.linkAnalyticsStore.set(id, analytics);
-    return analytics;
-  }
-
-  async incrementLinkClick(linkId: number): Promise<void> {
-    await this.createLinkAnalytics({
-      linkId,
-      event: 'click',
-      ipAddress: null,
-      userAgent: null,
-      referrer: null
-    });
-  }
-
-  async incrementLinkConversion(linkId: number): Promise<void> {
-    await this.createLinkAnalytics({
-      linkId,
-      event: 'conversion',
-      ipAddress: null,
-      userAgent: null,
-      referrer: null
-    });
-  }
-
-  async getLinkAnalytics(linkId: number): Promise<LinkAnalytics[]> {
-    return Array.from(this.linkAnalyticsStore.values()).filter(
-      analytics => analytics.linkId === linkId
-    );
-  }
-
-  async getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
-    return Array.from(this.linkAnalyticsStore.values()).filter(
-      analytics => analytics.linkId === linkId
-    );
-  }
-
-  async getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
-    return Array.from(this.linkAnalyticsStore.values()).filter(
-      analytics => analytics.linkId === schoolId
-    );
-  }
-
-  // Payment methods implementation
-  async getAllPayments(): Promise<Payment[]> {
-    return Array.from(this.paymentsStore.values());
-  }
-
-  async createPayment(payment: InsertPayment): Promise<Payment> {
-    const id = this.paymentIdCounter++;
-    const now = new Date();
-    const newPayment: Payment = {
-      id,
-      createdAt: now,
-      updatedAt: now,
-      ...payment
-    };
-    this.paymentsStore.set(id, newPayment);
-    return newPayment;
-  }
-
-  async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
-    return Array.from(this.paymentsStore.values()).filter(
-      payment => payment.parentEmail === parentEmail
-    );
-  }
-
-  async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-    return Array.from(this.paymentsStore.values()).find(
-      payment => payment.stripePaymentIntentId === stripePaymentIntentId
-    );
-  }
-
-  async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
-    const payment = this.paymentsStore.get(id);
-    if (!payment) return undefined;
-
-    const updatedPayment: Payment = {
-      ...payment,
-      status,
-      updatedAt: new Date()
-    };
-    this.paymentsStore.set(id, updatedPayment);
-    return updatedPayment;
-  }
-}
-
-import { DatabaseStorage } from "./dbStorage";
-import { supabaseStorage, SupabaseStorage } from './supabase-storage';
-
-class CombinedStorage {
-  private dbStorage: DatabaseStorage;
-  private memStorage: MemStorage;
-  private supabaseStorage: SupabaseStorage
-
-  constructor() {
-    this.dbStorage = new DatabaseStorage();
-    this.memStorage = new MemStorage();
-    this.supabaseStorage = supabaseStorage
-  }
-
-  async getAllUsers(): Promise<User[]> {
-    return this.dbStorage.getAllUsers();
-  }
-
-  async getAllCurricula(): Promise<Curriculum[]> {
-    return this.dbStorage.getAllCurricula();
-  }
-
-  async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
-    return this.dbStorage.getAllKnowledgeBases();
-  }
-
-  async getAllActivities(): Promise<Activity[]> {
-    return this.dbStorage.getAllActivities();
-  }
-
-  async getAllPayments(): Promise<Payment[]> {
-    return this.dbStorage.getAllPayments();
-  }
-
-  async getAllEnrollments(): Promise<ProgramEnrollment[]> {
-    return this.dbStorage.getAllEnrollments();
-  }
-
-  async getUser(id: number): Promise<User | undefined> {
-    return this.dbStorage.getUser(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return this.dbStorage.getUserByUsername(username);
-  }
-
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    return this.dbStorage.getUserByEmail(email);
-  }
-
-  async createUser(user: InsertUser): Promise<User> {
-    return this.dbStorage.createUser(user);
-  }
-
-  async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
-    return this.dbStorage.updateUser(id, user);
-  }
-
-  async getCurriculum(id: number): Promise<Curriculum | undefined> {
-    return this.dbStorage.getCurriculum(id);
-  }
-
-  async getCurriculaByAuthor(authorId: number): Promise<Curriculum[]> {
-    return this.dbStorage.getCurriculaByAuthor(authorId);
-  }
-
-  async createCurriculum(curriculum: InsertCurriculum): Promise<Curriculum> {
-    return this.dbStorage.createCurriculum(curriculum);
-  }
-
-  async updateCurriculum(id: number, curriculum: Partial<InsertCurriculum>): Promise<Curriculum | undefined> {
-    return this.dbStorage.updateCurriculum(id, curriculum);
-  }
-
-  async getLesson(id: number): Promise<Lesson | undefined> {
-    return this.dbStorage.getLesson(id);
-  }
-
-  async getLessonsByCurriculum(curriculumId: number): Promise<Lesson[]> {
-    return this.dbStorage.getLessonsByCurriculum(curriculumId);
-  }
-
-  async getLessonsByAuthor(authorId: number): Promise<Lesson[]> {
-    return this.dbStorage.getLessonsByAuthor(authorId);
-  }
-
-  async createLesson(lesson: InsertLesson): Promise<Lesson> {
-    return this.dbStorage.createLesson(lesson);
-  }
-
-  async updateLesson(id: number, lesson: Partial<InsertLesson>): Promise<Lesson | undefined> {
-    return this.dbStorage.updateLesson(id, lesson);
-  }
-
-  async getEvent(id: number): Promise<Event | undefined> {
-    return this.dbStorage.getEvent(id);
-  }
-
-  async getEventsByOrganizer(organizerId: number): Promise<Event[]> {
-    return this.dbStorage.getEventsByOrganizer(organizerId);
-  }
-
-  async getUpcomingEvents(userId: number): Promise<Event[]> {
-    return this.dbStorage.getUpcomingEvents(userId);
-  }
-
-  async getAllEvents(userId: number): Promise<Event[]> {
-    return this.dbStorage.getAllEvents(userId);
-  }
-
-  async createEvent(event: InsertEvent): Promise<Event> {
-    return this.dbStorage.createEvent(event);
-  }
-
-  async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
-    return this.dbStorage.getMarketplaceItem(id);
-  }
-
-  async getMarketplaceItemsBySeller(sellerId: number): Promise<MarketplaceItem[]> {
-    return this.dbStorage.getMarketplaceItemsBySeller(sellerId);
-  }
-
-  async getTopSellingItems(limit: number): Promise<MarketplaceItem[]> {
-    return this.dbStorage.getTopSellingItems(limit);
-  }
-
-  async createMarketplaceItem(item: InsertMarketplaceItem): Promise<MarketplaceItem> {
-    return this.dbStorage.createMarketplaceItem(item);
-  }
-
-  async updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<MarketplaceItem | undefined> {
-    return this.dbStorage.updateMarketplaceItemStats(id, sales, revenue);
-  }
-
-  async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
-    return this.dbStorage.getKnowledgeBase(id);
-  }
-
-  async getKnowledgeBaseById(id: number, userId: number): Promise<KnowledgeBase | undefined> {
-    return this.dbStorage.getKnowledgeBaseById(id, userId);
-  }
-
-  async getActivityById(id: number, userId: number): Promise<Activity | undefined> {
-    return this.dbStorage.getActivityById(id, userId);
-  }
-
-  async getActivitiesByAuthor(authorId: number): Promise<Activity[]> {
-    return this.dbStorage.getActivitiesByAuthor(authorId);
-  }
-
-  async createActivity(activity: InsertActivity): Promise<Activity> {
-    return this.dbStorage.createActivity(activity);
-  }
-
-  async updateActivityDownloadCount(id: number): Promise<Activity | undefined> {
-    return this.dbStorage.updateActivityDownloadCount(id);
-  }
-
-  async updateActivityPdfUrl(id: number, pdfUrl: string): Promise<Activity | undefined> {
-    return this.dbStorage.updateActivityPdfUrl(id, pdfUrl);
-  }
-
-  async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
-    return this.dbStorage.getKnowledgeBasesByAuthor(authorId);
-  }
-
-  async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
-    return this.dbStorage.getKnowledgeBasesBySubject(subject);
-  }
-
-  async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
-    return this.dbStorage.getPublicKnowledgeBases(limit);
-  }
-
-  async createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
-    return this.dbStorage.createKnowledgeBase(knowledgeBase);
-  }
-
-  async updateKnowledgeBase(id: number, knowledgeBase: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined> {
-    return this.dbStorage.updateKnowledgeBase(id, knowledgeBase);
-  }
-
-  async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
-    return this.dbStorage.incrementDownloadCount(id);
-  }
-
-  async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
-    return this.dbStorage.addPurchaser(id, userId);
-  }
-
-  async getChildById(id: number): Promise<Child | undefined> {
-    // Use memStorage for child retrieval since it has the implementation
-    return this.memStorage.getChildById(id);
-  }
-
-  async getChildrenByParentId(parentId: number): Promise<Child[]> {
-    // Use memStorage for children retrieval since it has the implementation
-    return this.memStorage.getChildrenByParentId(parentId);
-  }
-
-  async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
-    // In file-based storage, we use the MemStorage method
-    return this.memStorage.getChildrenByParentEmail(parentEmail);
-  }
-
-  async getAllChildren(): Promise<Child[]> {
-    // Use memStorage for children retrieval since it has the implementation
-    return this.memStorage.getAllChildren();
-  }
-
-  async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
-    // Use memStorage for child creation since it has the implementation
-    return this.memStorage.createChild(child);
-  }
-
-  async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
-    // Use memStorage for child updates since it has the implementation
-    return this.memStorage.updateChild(id, child);
-  }
-
-  async deleteChild(id: number): Promise<void> {
-    // Use memStorage for child deletion since it has the implementation
-    return this.memStorage.deleteChild(id);
-  }
-
-  async createRoleInvitation(invitation: any): Promise<any> {
-    return this.dbStorage.createRoleInvitation(invitation);
-  }
-
-  async getRoleInvitations(): Promise<any[]> {
-    return this.dbStorage.getRoleInvitations();
-  }
-
-  async getActiveRoleInvitation(token: string): Promise<any> {
-    return this.dbStorage.getActiveRoleInvitation(token);
-  }
-
-  async acceptRoleInvitation(token: string): Promise<void> {
-    return this.dbStorage.acceptRoleInvitation(token);
-  }
-
-  async revokeRoleInvitation(id: number): Promise<void> {
-    return this.dbStorage.revokeRoleInvitation(id);
-  }
-
-  async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
-    return this.dbStorage.getEmergencyContactById(id);
-  }
-
-  async getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]> {
-    return this.dbStorage.getEmergencyContactsByUserId(userId);
-  }
-
-  async createEmergencyContact(contact: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact> {
-    return this.dbStorage.createEmergencyContact(contact);
-  }
-
-  async updateEmergencyContact(id: number, contact: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
-    return this.dbStorage.updateEmergencyContact(id, contact);
-  }
-
-  async deleteEmergencyContact(id: number): Promise<void> {
-    return this.dbStorage.deleteEmergencyContact(id);
-  }
-
-  async getProgramById(id: number): Promise<Program | undefined> {
-    return this.dbStorage.getProgramById(id);
-  }
-
-  async getPublishedPrograms(category?: string, gradeLevel?: string): Promise<Program[]> {
-    return this.dbStorage.getPublishedPrograms(category, gradeLevel);
-  }
-
-  async getProgramsByInstructorId(instructorId: number): Promise<Program[]> {
-    return this.dbStorage.getProgramsByInstructorId(instructorId);
-  }
-
-  async createProgram(program: InsertProgram & { instructorId: number }): Promise<Program> {
-    return this.dbStorage.createProgram(program);
-  }
-
-  async updateProgram(id: number, program: Partial<InsertProgram>): Promise<Program | undefined> {
-    return this.dbStorage.updateProgram(id, program);
-  }
-
-  async deleteProgram(id: number): Promise<void> {
-    return this.dbStorage.deleteProgram(id);
-  }
-
-  async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
-    return this.dbStorage.getProgramEnrollmentById(id);
-  }
-
-  async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
-    // Use MemStorage as the primary method since it has the implementation
-    return this.memStorage.getEnrollmentsByChildIds(childIds);
-  }
-
-  async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {
-    return this.dbStorage.getEnrollmentsByProgramId(programId);
-  }
-
-  async getEnrollmentCountForProgram(programId: number): Promise<number> {
-    return this.dbStorage.getEnrollmentCountForProgram(programId);
-  }
-
-  async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
-    return this.dbStorage.createProgramEnrollment(enrollment);
-  }
-
-  async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
-    return this.dbStorage.updateProgramEnrollment(id, enrollment);
-  }
-
-  async deleteProgramEnrollment(id: number): Promise<void> {
-    return this.dbStorage.deleteProgramEnrollment(id);
-  }
-
-  async createEnrollment(enrollment: any): Promise<any> {
-    return this.memStorage.createEnrollment(enrollment);
-  }
-
-  async getEnrollmentsByChildId(childId: number): Promise<any[]> {
-    return this.memStorage.getEnrollmentsByChildId(childId);
-  }
-
-  async getEnrollmentById(id: number): Promise<any> {
-    return this.memStorage.getEnrollmentById(id);
-  }
-
-  async updateEnrollment(enrollment: any): Promise<any> {
-    return this.memStorage.updateEnrollment(enrollment);
-  }
-
-  async deleteEnrollment(id: number): Promise<void> {
-    return this.memStorage.deleteEnrollment(id);
-  }
-
-  async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
-    return this.memStorage.getClassesBySchoolId(schoolId);
-  }
-
-  async getClassById(classId: number): Promise<Class | null> {
-    return this.memStorage.getClassById(classId);
-  }
-
-  async getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]> {
-    return this.memStorage.getClasses(options);
-  }
-
-  async getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number> {
-    return this.memStorage.getClassesCount(options);
-  }
-
-  async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
-    return this.memStorage.createClass(classData);
-  }
-
-  async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
-    return this.memStorage.updateClass(id, classData);
-  }
-
-  async deleteClass(id: number): Promise<void> {
-    return this.memStorage.deleteClass(id);
-  }
-
-  async getActiveRoleInvitation(email: string): Promise<RoleInvitation | undefined> {
-    return this.dbStorage.getActiveRoleInvitation(email);
-  }
-
-  async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation> {
-    return this.dbStorage.createRoleInvitation(invitation);
-  }
-
-  async acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined> {
-    return this.dbStorage.acceptRoleInvitation(token, userEmail);
-  }
-
-  async getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]> {
-    return this.dbStorage.getRoleInvitationsByInviter(inviterId);
-  }
-
-  async createMarketingLink(link: InsertMarketingLink): Promise<MarketingLink> {
-    return this.dbStorage.createMarketingLink(link);
-  }
-
-  async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
-    return this.dbStorage.getMarketingLinkById(id);
-  }
-
-  async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
-    return this.dbStorage.getMarketingLinkByCampaignId(campaignId);
-  }
-
-  async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
-    return this.dbStorage.getMarketingLinksBySchoolId(schoolId);
-  }
-
-  async updateMarketingLink(id: number, link: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
-    return this.dbStorage.updateMarketingLink(id, link);
-  }
-
-  async deleteMarketingLink(id: number): Promise<void> {
-    return this.dbStorage.deleteMarketingLink(id);
-  }
-
-  async incrementLinkClick(campaignId: string): Promise<void> {
-    return this.dbStorage.incrementLinkClick(campaignId);
-  }
-
-  async incrementLinkConversion(campaignId: string): Promise<void> {
-    return this.dbStorage.incrementLinkConversion(campaignId);
-  }
-
-  async createLinkAnalytics(analytics: InsertLinkAnalytics): Promise<LinkAnalytics> {
-    return this.dbStorage.createLinkAnalytics(analytics);
-  }
-
-  async getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
-    return this.dbStorage.getLinkAnalyticsByLinkId(linkId, startDate, endDate);
-  }
-
-  async getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
-    return this.dbStorage.getLinkAnalyticsBySchoolId(schoolId, startDate, endDate);
-  }
-
-    // Payment methods implementation - use memStorage since database is failing
     async createPayment(payment: InsertPayment): Promise<Payment> {
-      return this.memStorage.createPayment(payment);
+      const id = this.paymentIdCounter++;
+      const now = new Date();
+      const newPayment: Payment = {
+        id,
+        createdAt: now,
+        updatedAt: now,
+        ...payment
+      };
+      this.paymentsStore.set(id, newPayment);
+      return newPayment;
     }
-  
+
     async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
-      return this.memStorage.getPaymentsByParentEmail(parentEmail);
+      return Array.from(this.paymentsStore.values()).filter(
+        payment => payment.parentEmail === parentEmail
+      );
     }
-  
+
     async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-      return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
+      return Array.from(this.paymentsStore.values()).find(
+        payment => payment.stripePaymentIntentId === stripePaymentIntentId
+      );
     }
-  
+
     async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
-      return this.memStorage.updatePaymentStatus(id, status);
+      const payment = this.paymentsStore.get(id);
+      if (!payment) return undefined;
+
+      const updatedPayment: Payment = {
+        ...payment,
+        status,
+        updatedAt: new Date()
+      };
+      this.paymentsStore.set(id, updatedPayment);
+      return updatedPayment;
+    }
+  }
+
+  import { DatabaseStorage } from "./dbStorage";
+  import { supabaseStorage, SupabaseStorage } from './supabase-storage';
+
+  class CombinedStorage {
+    private dbStorage: DatabaseStorage;
+    private memStorage: MemStorage;
+    private supabaseStorage: SupabaseStorage
+
+    constructor() {
+      this.dbStorage = new DatabaseStorage();
+      this.memStorage = new MemStorage();
+      this.supabaseStorage = supabaseStorage
     }
 
-    async removeEnrollment(enrollmentId: number): Promise<boolean> {
-      return this.memStorage.removeEnrollment(enrollmentId);
+    async getAllUsers(): Promise<User[]> {
+      return this.dbStorage.getAllUsers();
     }
-}
 
-// Use the MemStorage implementation for classes functionality
-export const storage = new CombinedStorage();
+    async getAllCurricula(): Promise<Curriculum[]> {
+      return this.dbStorage.getAllCurricula();
+    }
+
+    async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
+      return this.dbStorage.getAllKnowledgeBases();
+    }
+
+    async getAllActivities(): Promise<Activity[]> {
+      return this.dbStorage.getAllActivities();
+    }
+
+    async getAllPayments(): Promise<Payment[]> {
+      return this.dbStorage.getAllPayments();
+    }
+
+    async getAllEnrollments(): Promise<ProgramEnrollment[]> {
+      return this.dbStorage.getAllEnrollments();
+    }
+
+    async getUser(id: number): Promise<User | undefined> {
+      return this.dbStorage.getUser(id);
+    }
+
+    async getUserByUsername(username: string): Promise<User | undefined> {
+      return this.dbStorage.getUserByUsername(username);
+    }
+
+    async getUserByEmail(email: string): Promise<User | undefined> {
+      return this.dbStorage.getUserByEmail(email);
+    }
+
+    async createUser(user: InsertUser): Promise<User> {
+      return this.dbStorage.createUser(user);
+    }
+
+    async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
+      return this.dbStorage.updateUser(id, user);
+    }
+
+    async getCurriculum(id: number): Promise<Curriculum | undefined> {
+      return this.dbStorage.getCurriculum(id);
+    }
+
+    async getCurriculaByAuthor(authorId: number): Promise<Curriculum[]> {
+      return this.dbStorage.getCurriculaByAuthor(authorId);
+    }
+
+    async createCurriculum(curriculum: InsertCurriculum): Promise<Curriculum> {
+      return this.dbStorage.createCurriculum(curriculum);
+    }
+
+    async updateCurriculum(id: number, curriculum: Partial<InsertCurriculum>): Promise<Curriculum | undefined> {
+      return this.dbStorage.updateCurriculum(id, curriculum);
+    }
+
+    async getLesson(id: number): Promise<Lesson | undefined> {
+      return this.dbStorage.getLesson(id);
+    }
+
+    async getLessonsByCurriculum(curriculumId: number): Promise<Lesson[]> {
+      return this.dbStorage.getLessonsByCurriculum(curriculumId);
+    }
+
+    async getLessonsByAuthor(authorId: number): Promise<Lesson[]> {
+      return this.dbStorage.getLessonsByAuthor(authorId);
+    }
+
+    async createLesson(lesson: InsertLesson): Promise<Lesson> {
+      return this.dbStorage.createLesson(lesson);
+    }
+
+    async updateLesson(id: number, lesson: Partial<InsertLesson>): Promise<Lesson | undefined> {
+      return this.dbStorage.updateLesson(id, lesson);
+    }
+
+    async getEvent(id: number): Promise<Event | undefined> {
+      return this.dbStorage.getEvent(id);
+    }
+
+    async getEventsByOrganizer(organizerId: number): Promise<Event[]> {
+      return this.dbStorage.getEventsByOrganizer(organizerId);
+    }
+
+    async getUpcomingEvents(userId: number): Promise<Event[]> {
+      return this.dbStorage.getUpcomingEvents(userId);
+    }
+
+    async getAllEvents(userId: number): Promise<Event[]> {
+      return this.dbStorage.getAllEvents(userId);
+    }
+
+    async createEvent(event: InsertEvent): Promise<Event> {
+      return this.dbStorage.createEvent(event);
+    }
+
+    async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
+      return this.dbStorage.getMarketplaceItem(id);
+    }
+
+    async getMarketplaceItemsBySeller(sellerId: number): Promise<MarketplaceItem[]> {
+      return this.dbStorage.getMarketplaceItemsBySeller(sellerId);
+    }
+
+    async getTopSellingItems(limit: number): Promise<MarketplaceItem[]> {
+      return this.dbStorage.getTopSellingItems(limit);
+    }
+
+    async createMarketplaceItem(item: InsertMarketplaceItem): Promise<MarketplaceItem> {
+      return this.dbStorage.createMarketplaceItem(item);
+    }
+
+    async updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<MarketplaceItem | undefined> {
+      return this.dbStorage.updateMarketplaceItemStats(id, sales, revenue);
+    }
+
+    async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
+      return this.dbStorage.getKnowledgeBase(id);
+    }
+
+    async getKnowledgeBaseById(id: number, userId: number): Promise<KnowledgeBase | undefined> {
+      return this.dbStorage.getKnowledgeBaseById(id, userId);
+    }
+
+    async getActivityById(id: number, userId: number): Promise<Activity | undefined> {
+      return this.dbStorage.getActivityById(id, userId);
+    }
+
+    async getActivitiesByAuthor(authorId: number): Promise<Activity[]> {
+      return this.dbStorage.getActivitiesByAuthor(authorId);
+    }
+
+    async createActivity(activity: InsertActivity): Promise<Activity> {
+      return this.dbStorage.createActivity(activity);
+    }
+
+    async updateActivityDownloadCount(id: number): Promise<Activity | undefined> {
+      return this.dbStorage.updateActivityDownloadCount(id);
+    }
+
+    async updateActivityPdfUrl(id: number, pdfUrl: string): Promise<Activity | undefined> {
+      return this.dbStorage.updateActivityPdfUrl(id, pdfUrl);
+    }
+
+    async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
+      return this.dbStorage.getKnowledgeBasesByAuthor(authorId);
+    }
+
+    async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
+      return this.dbStorage.getKnowledgeBasesBySubject(subject);
+    }
+
+    async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
+      return this.dbStorage.getPublicKnowledgeBases(limit);
+    }
+
+    async createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
+      return this.dbStorage.createKnowledgeBase(knowledgeBase);
+    }
+
+    async updateKnowledgeBase(id: number, knowledgeBase: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined> {
+      return this.dbStorage.updateKnowledgeBase(id, knowledgeBase);
+    }
+
+    async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
+      return this.dbStorage.incrementDownloadCount(id);
+    }
+
+    async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
+      return this.dbStorage.addPurchaser(id, userId);
+    }
+
+    async getChildById(id: number): Promise<Child | undefined> {
+      // Use memStorage for child retrieval since it has the implementation
+      return this.memStorage.getChildById(id);
+    }
+
+    async getChildrenByParentId(parentId: number): Promise<Child[]> {
+      // Use memStorage for children retrieval since it has the implementation
+      return this.memStorage.getChildrenByParentId(parentId);
+    }
+
+    async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
+      // In file-based storage, we use the MemStorage method
+      return this.memStorage.getChildrenByParentEmail(parentEmail);
+    }
+
+    async getAllChildren(): Promise<Child[]> {
+      // Use memStorage for children retrieval since it has the implementation
+      return this.memStorage.getAllChildren();
+    }
+
+    async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
+      // Use memStorage for child creation since it has the implementation
+      return this.memStorage.createChild(child);
+    }
+
+    async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
+      // Use memStorage for child updates since it has the implementation
+      return this.memStorage.updateChild(id, child);
+    }
+
+    async deleteChild(id: number): Promise<void> {
+      // Use memStorage for child deletion since it has the implementation
+      return this.memStorage.deleteChild(id);
+    }
+
+    async createRoleInvitation(invitation: any): Promise<any> {
+      return this.dbStorage.createRoleInvitation(invitation);
+    }
+
+    async getRoleInvitations(): Promise<any[]> {
+      return this.dbStorage.getRoleInvitations();
+    }
+
+    async getActiveRoleInvitation(token: string): Promise<any> {
+      return this.dbStorage.getActiveRoleInvitation(token);
+    }
+
+    async acceptRoleInvitation(token: string): Promise<void> {
+      return this.dbStorage.acceptRoleInvitation(token);
+    }
+
+    async revokeRoleInvitation(id: number): Promise<void> {
+      return this.dbStorage.revokeRoleInvitation(id);
+    }
+
+    async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
+      return this.dbStorage.getEmergencyContactById(id);
+    }
+
+    async getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]> {
+      return this.dbStorage.getEmergencyContactsByUserId(userId);
+    }
+
+    async createEmergencyContact(contact: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact> {
+      return this.dbStorage.createEmergencyContact(contact);
+    }
+
+    async updateEmergencyContact(id: number, contact: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
+      return this.dbStorage.updateEmergencyContact(id, contact);
+    }
+
+    async deleteEmergencyContact(id: number): Promise<void> {
+      return this.dbStorage.deleteEmergencyContact(id);
+    }
+
+    async getProgramById(id: number): Promise<Program | undefined> {
+      return this.dbStorage.getProgramById(id);
+    }
+
+    async getPublishedPrograms(category?: string, gradeLevel?: string): Promise<Program[]> {
+      return this.dbStorage.getPublishedPrograms(category, gradeLevel);
+    }
+
+    async getProgramsByInstructorId(instructorId: number): Promise<Program[]> {
+      return this.dbStorage.getProgramsByInstructorId(instructorId);
+    }
+
+    async createProgram(program: InsertProgram & { instructorId: number }): Promise<Program> {
+      return this.dbStorage.createProgram(program);
+    }
+
+    async updateProgram(id: number, program: Partial<InsertProgram>): Promise<Program | undefined> {
+      return this.dbStorage.updateProgram(id, program);
+    }
+
+    async deleteProgram(id: number): Promise<void> {
+      return this.dbStorage.deleteProgram(id);
+    }
+
+    async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
+      return this.dbStorage.getProgramEnrollmentById(id);
+    }
+
+    async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
+      // Use MemStorage as the primary method since it has the implementation
+      return this.memStorage.getEnrollmentsByChildIds(childIds);
+    }
+
+    async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {
+      return this.dbStorage.getEnrollmentsByProgramId(programId);
+    }
+
+    async getEnrollmentCountForProgram(programId: number): Promise<number> {
+      return this.dbStorage.getEnrollmentCountForProgram(programId);
+    }
+
+    async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
+      return this.dbStorage.createProgramEnrollment(enrollment);
+    }
+
+    async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
+      return this.dbStorage.updateProgramEnrollment(id, enrollment);
+    }
+
+    async deleteProgramEnrollment(id: number): Promise<void> {
+      return this.dbStorage.deleteProgramEnrollment(id);
+    }
+
+    async createEnrollment(enrollment: any): Promise<any> {
+      return this.memStorage.createEnrollment(enrollment);
+    }
+
+    async getEnrollmentsByChildId(childId: number): Promise<any[]> {
+      return this.memStorage.getEnrollmentsByChildId(childId);
+    }
+
+    async getEnrollmentById(id: number): Promise<any> {
+      return this.memStorage.getEnrollmentById(id);
+    }
+
+    async updateEnrollment(enrollment: any): Promise<any> {
+      return this.memStorage.updateEnrollment(enrollment);
+    }
+
+    async deleteEnrollment(id: number): Promise<void> {
+      return this.memStorage.deleteEnrollment(id);
+    }
+
+    async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
+      return this.memStorage.getClassesBySchoolId(schoolId);
+    }
+
+    async getClassById(classId: number): Promise<Class | null> {
+      return this.memStorage.getClassById(classId);
+    }
+
+    async getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]> {
+      return this.memStorage.getClasses(options);
+    }
+
+    async getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number> {
+      return this.memStorage.getClassesCount(options);
+    }
+
+    async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
+      return this.memStorage.createClass(classData);
+    }
+
+    async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
+      return this.memStorage.updateClass(id, classData);
+    }
+
+    async deleteClass(id: number): Promise<void> {
+      return this.memStorage.deleteClass(id);
+    }
+
+    async getActiveRoleInvitation(email: string): Promise<RoleInvitation | undefined> {
+      return this.dbStorage.getActiveRoleInvitation(email);
+    }
+
+    async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation> {
+      return this.dbStorage.createRoleInvitation(invitation);
+    }
+
+    async acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined> {
+      return this.dbStorage.acceptRoleInvitation(token, userEmail);
+    }
+
+    async getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]> {
+      return this.dbStorage.getRoleInvitationsByInviter(inviterId);
+    }
+
+    async createMarketingLink(link: InsertMarketingLink): Promise<MarketingLink> {
+      return this.dbStorage.createMarketingLink(link);
+    }
+
+    async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
+      return this.dbStorage.getMarketingLinkById(id);
+    }
+
+    async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
+      return this.dbStorage.getMarketingLinkByCampaignId(campaignId);
+    }
+
+    async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
+      return this.dbStorage.getMarketingLinksBySchoolId(schoolId);
+    }
+
+    async updateMarketingLink(id: number, link: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
+      return this.dbStorage.updateMarketingLink(id, link);
+    }
+
+    async deleteMarketingLink(id: number): Promise<void> {
+      return this.dbStorage.deleteMarketingLink(id);
+    }
+
+    async incrementLinkClick(campaignId: string): Promise<void> {
+      return this.dbStorage.incrementLinkClick(campaignId);
+    }
+
+    async incrementLinkConversion(campaignId: string): Promise<void> {
+      return this.dbStorage.incrementLinkConversion(campaignId);
+    }
+
+    async createLinkAnalytics(analytics: InsertLinkAnalytics): Promise<LinkAnalytics> {
+      return this.dbStorage.createLinkAnalytics(analytics);
+    }
+
+    async getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
+      return this.dbStorage.getLinkAnalyticsByLinkId(linkId, startDate, endDate);
+    }
+
+    async getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
+      return this.dbStorage.getLinkAnalyticsBySchoolId(schoolId, startDate, endDate);
+    }
+
+      // Payment methods implementation - use memStorage since database is failing
+      async createPayment(payment: InsertPayment): Promise<Payment> {
+        return this.memStorage.createPayment(payment);
+      }
+
+      async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
+        return this.memStorage.getPaymentsByParentEmail(parentEmail);
+      }
+
+      async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
+        return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
+      }
+
+      async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
+        return this.memStorage.updatePaymentStatus(id, status);
+      }
+
+      async removeEnrollment(enrollmentId: number): Promise<boolean> {
+        return this.memStorage.removeEnrollment(enrollmentId);
+      }
+  }
+
+  // Use the MemStorage implementation for classes functionality
+  export const storage = new CombinedStorage();
