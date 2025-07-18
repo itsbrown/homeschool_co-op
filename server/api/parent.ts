@@ -2,51 +2,28 @@ import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { storage } from '../storage';
+import { jwtCheck } from '../middleware/auth0-auth';
 
 const router = Router();
 
 // Get children for the authenticated parent
-router.get('/children', async (req, res) => {
+router.get('/children', jwtCheck, async (req: any, res) => {
   try {
     console.log('👨‍👩‍👧‍👦 Children API called - Headers:', Object.keys(req.headers));
 
-    // Get the authenticated user's email from the token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('❌ No valid authorization header found');
+    // Get the authenticated user's email from the auth middleware
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      console.log('❌ No authenticated user found');
       return res.status(401).json({ 
         message: 'Authentication required',
-        error: 'NO_AUTH_HEADER',
+        error: 'NO_USER_EMAIL',
         debug: 'Please log in to access children data'
       });
     }
 
-    const token = authHeader.split(' ')[1];
-    console.log('🔑 Token received, length:', token.length);
-
-    // Decode the Supabase JWT to get user email
-    let userEmail;
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-      userEmail = payload.email;
-      console.log('👨‍👩‍👧‍👦 Parent requesting children for email:', userEmail);
-    } catch (error) {
-      console.error('❌ Error decoding token:', error);
-      return res.status(401).json({ 
-        message: 'Invalid token',
-        error: 'TOKEN_DECODE_ERROR',
-        debug: 'Token could not be decoded'
-      });
-    }
-
-    if (!userEmail) {
-      console.log('❌ No email found in token payload');
-      return res.status(401).json({ 
-        message: 'Email not found in token',
-        error: 'NO_EMAIL_IN_TOKEN',
-        debug: 'Token does not contain email information'
-      });
-    }
+    console.log('👨‍👩‍👧‍👦 Parent requesting children for email:', userEmail);
 
     // Get children by parent email from storage
     console.log('🔍 Attempting to fetch children from storage...');
@@ -101,43 +78,22 @@ router.get('/children', async (req, res) => {
 });
 
 // Register a new child
-router.post('/children', async (req, res) => {
+router.post('/children', jwtCheck, async (req: any, res) => {
   try {
     console.log('👶 Child registration API called');
 
-    // Get the authenticated user's email from the token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('❌ No valid authorization header found for child registration');
+    // Get the authenticated user's email from the auth middleware
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      console.log('❌ No authenticated user found');
       return res.status(401).json({ 
         message: 'Authentication required',
-        error: 'NO_AUTH_HEADER'
+        error: 'NO_USER_EMAIL'
       });
     }
 
-    const token = authHeader.split(' ')[1];
-
-    // Decode the Supabase JWT to get user email
-    let userEmail;
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-      userEmail = payload.email;
-      console.log('👶 Parent registering child for email:', userEmail);
-    } catch (error) {
-      console.error('❌ Error decoding token for child registration:', error);
-      return res.status(401).json({ 
-        message: 'Invalid token',
-        error: 'TOKEN_DECODE_ERROR'
-      });
-    }
-
-    if (!userEmail) {
-      console.log('❌ No email found in token for child registration');
-      return res.status(401).json({ 
-        message: 'Email not found in token',
-        error: 'NO_EMAIL_IN_TOKEN'
-      });
-    }
+    console.log('👶 Parent registering child for email:', userEmail);
 
     const { 
       firstName, 
