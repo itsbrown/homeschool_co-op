@@ -62,14 +62,15 @@ When helping register a new child, collect these details in order:
 Once you have collected all required information, summarize it and ask for confirmation before proceeding with registration.
 
 REGISTRATION PROCESSING:
-1. When a parent provides child information (name, age/grade, interests), immediately process the registration
-2. For confirmations like "yes", "confirm", "register" - DO NOT restart conversation, use collected information
-3. Use this format: [REGISTER_CHILD: firstName: [first], lastName: [last], birthdate: [date], gradeLevel: [grade], interests: [array], learningStyle: [style]]
+1. NEVER automatically register a child based on initial information - always collect full details first
+2. Only register after explicitly asking for confirmation and receiving a clear "yes" response
+3. Collect ALL required information before offering to register: name, age/grade, phone, address, emergency contacts, medical info
+4. Use this format only after confirmation: [REGISTER_CHILD: firstName: [first], lastName: [last], birthdate: [date], gradeLevel: [grade], interests: [array], learningStyle: [style]]
 
 CONFIRMATION RESPONSES:
 - Never respond to "yes" by asking "What's your child's name?" 
 - Always use previously collected information when user confirms
-- Process registration immediately when sufficient data is available
+- Only process registration after collecting complete information AND receiving explicit confirmation
 
 IMPORTANT: When you have enough information to register a child, ALWAYS include the registration action in your response. The system will automatically process the registration when it sees the action format.
 
@@ -238,38 +239,8 @@ export async function processEnrollmentMessage(
     // Parse the response to extract potential actions
     let action = parseActionFromResponse(aiResponse);
     
-    // Additional logic to detect when to create registration actions
-    if (!action && aiResponse.includes("register") && !isConfirmation) {
-      // Look for child information in the user's message
-      const nameMatch = message.match(/([A-Za-z]+(?:\s+[A-Za-z]+)*),?\s*(\d+)\s*years?\s*old/i);
-      const gradeMatch = message.match(/(\d+(?:st|nd|rd|th)?\s*grade)/i);
-      
-      if (nameMatch) {
-        const fullName = nameMatch[1];
-        const nameParts = fullName.split(' ');
-        const firstName = nameParts[0];
-        const lastName = nameParts.slice(1).join(' ') || 'Student';
-        const age = parseInt(nameMatch[2]);
-        const grade = gradeMatch ? gradeMatch[1] : `${Math.max(1, age - 5)}th Grade`;
-        
-        console.log("🎯 Auto-detected registration opportunity:", { firstName, lastName, age, grade });
-        
-        action = {
-          type: "register_child",
-          registrationData: {
-            name: fullName,
-            age: age,
-            grade: grade,
-            phone: "",
-            address: "",
-            emergency1: "",
-            emergency2: "",
-            medical: "",
-            caregiver: ""
-          }
-        };
-      }
-    }
+    // Only auto-register if the AI explicitly provides a registration pattern
+    // Do not auto-register based on message detection to avoid premature registration
     
     return {
       message: aiResponse,
@@ -311,11 +282,11 @@ function parseActionFromResponse(response: string): EnrollmentAction | undefined
   const viewProgramsPattern = /\[\s*VIEW_PROGRAMS\s*(?::\s*(.*?))?\s*\]/i;
   const registerPattern = /\[\s*REGISTER_CHILD\s*:\s*(.*?)\s*\]/i;
   
-  // Check for child registration action
+  // Check for child registration action - only process if explicitly formatted
   const registerMatch = response.match(registerPattern);
   if (registerMatch) {
     try {
-      console.log("🎯 Found registration pattern:", registerMatch[1]);
+      console.log("🎯 Found explicit registration pattern:", registerMatch[1]);
       
       // Parse the registration data from the match
       const dataString = registerMatch[1];
@@ -337,10 +308,14 @@ function parseActionFromResponse(response: string): EnrollmentAction | undefined
       
       console.log("🎯 Parsed registration data:", registrationData);
       
+      // Only proceed if we have minimum required data
+      if (!registrationData.firstName || !registrationData.lastName) {
+        console.log("❌ Insufficient registration data, skipping action");
+        return undefined;
+      }
+      
       // Create the name from firstName and lastName if available
-      const name = registrationData.firstName && registrationData.lastName 
-        ? `${registrationData.firstName} ${registrationData.lastName}`
-        : registrationData.name || '';
+      const name = `${registrationData.firstName} ${registrationData.lastName}`;
       
       // Convert birthdate text to actual age
       let age = 0;
