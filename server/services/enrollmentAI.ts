@@ -242,8 +242,8 @@ export async function processEnrollmentMessage(
     }
 
     // Get conversation history for context
-    const previousMessages = parentId ? conversationHistory.getHistory(parentId) : [];
-    const mentionedChildren = parentId ? conversationHistory.getMentionedChildren(parentId) : [];
+    const previousMessages = parentEmail ? conversationHistory.getHistory(parentEmail) : [];
+    const mentionedChildren = parentEmail ? conversationHistory.getMentionedChildren(parentEmail) : [];
     
     // Build conversation context
     const conversationContext = previousMessages.length > 0
@@ -269,8 +269,8 @@ export async function processEnrollmentMessage(
     ];
     
     // Store user message in conversation history
-    if (parentId) {
-      conversationHistory.addMessage(parentId, "user", message);
+    if (parentEmail) {
+      conversationHistory.addMessage(parentEmail, "user", message);
     }
 
     // Try using Anthropic first, fall back to OpenAI if needed
@@ -283,8 +283,8 @@ export async function processEnrollmentMessage(
     }
 
     // Store AI response in conversation history
-    if (parentId) {
-      conversationHistory.addMessage(parentId, "assistant", aiResponse);
+    if (parentEmail) {
+      conversationHistory.addMessage(parentEmail, "assistant", aiResponse);
     }
     
     // Parse the response to extract potential actions
