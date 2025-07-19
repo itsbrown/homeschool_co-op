@@ -67,12 +67,16 @@ export const handleEnrollmentMessage = async (req: Request, res: Response) => {
     // Execute any actions that were generated
     if (response.action) {
       try {
+        console.log('🎯 About to execute enrollment action:', response.action);
         await executeEnrollmentAction(response.action, req);
         console.log('✅ Enrollment action executed successfully:', response.action);
       } catch (error) {
         console.error('❌ Failed to execute enrollment action:', error);
+        console.error('❌ Error details:', error.message);
         // Still return the response but log the execution failure
       }
+    } else {
+      console.log('🔍 No action found in AI response');
     }
     
     return res.json(response);

@@ -288,7 +288,9 @@ export async function processEnrollmentMessage(
     }
     
     // Parse the response to extract potential actions
+    console.log('🔍 AI Response for parsing:', aiResponse);
     let action = parseActionFromResponse(aiResponse);
+    console.log('🔍 Parsed action:', action);
     
     // Only auto-register if the AI explicitly provides a registration pattern
     // Do not auto-register based on message detection to avoid premature registration
@@ -327,7 +329,7 @@ function calculateAge(birthdate: string): number {
  */
 function parseActionFromResponse(response: string): EnrollmentAction | undefined {
   // Look for action markers in the response
-  const enrollPattern = /\[\s*ENROLL\s*:\s*Child\s*ID\s*:\s*(\d+)\s*,\s*Program\s*ID\s*:\s*(\d+)\s*\]/i;
+  const enrollPattern = /\[\s*ENROLL(?:_CHILD)?\s*:\s*(?:Child\s*ID|childId)\s*:\s*(\d+)\s*,\s*(?:Program\s*ID|programId)\s*:\s*(\d+).*?\]/i;
   const recommendPattern = /\[\s*RECOMMEND\s*:\s*(.*?)\s*\]/i;
   const viewChildrenPattern = /\[\s*VIEW_CHILDREN\s*\]/i;
   const viewProgramsPattern = /\[\s*VIEW_PROGRAMS\s*(?::\s*(.*?))?\s*\]/i;
