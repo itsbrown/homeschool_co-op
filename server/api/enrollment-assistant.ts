@@ -53,15 +53,15 @@ export const handleEnrollmentMessage = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "You need to be logged in to use the enrollment assistant" });
     }
 
-    // Get parent ID for context
-    const parentId = req.auth?.userId || req.auth?.supabaseId;
+    // Get parent email for context (since children are linked by parent email)
+    const parentEmail = req.auth?.email;
     
     // Use the service function that contains confirmation handling logic
     const response = await processEnrollmentMessage(
       message,
       childrenIds,
       history,
-      parentId
+      parentEmail
     );
     
     // Execute any actions that were generated

@@ -102,7 +102,7 @@ export async function processEnrollmentMessage(
   message: string,
   childrenIds: number[],
   chatHistory: ChatMessage[],
-  parentId?: string
+  parentEmail?: string
 ): Promise<AIResponse> {
   try {
     // Fetch relevant data - if no specific children IDs, get all parent's children
@@ -115,12 +115,12 @@ export async function processEnrollmentMessage(
           children.push(child);
         }
       }
-    } else if (parentId) {
+    } else if (parentEmail) {
       // Get all children for this parent to provide context
       try {
-        const allChildren = await storage.getChildrenByParent(parentId);
+        const allChildren = await storage.getChildrenByParentEmail(parentEmail);
         children = allChildren || [];
-        console.log(`🔍 Found ${children.length} children for parent ${parentId}`);
+        console.log(`🔍 Found ${children.length} children for parent ${parentEmail}`);
       } catch (error) {
         console.error('Error fetching parent children:', error);
         children = [];
