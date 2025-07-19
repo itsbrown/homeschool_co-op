@@ -329,7 +329,7 @@ function calculateAge(birthdate: string): number {
  */
 function parseActionFromResponse(response: string): EnrollmentAction | undefined {
   // Look for action markers in the response
-  const enrollPattern = /\[\s*ENROLL(?:_CHILD)?\s*:\s*(?:Child\s*ID|childId)\s*:\s*(\d+)\s*,\s*(?:Program\s*ID|programId)\s*:\s*(\d+).*?\]/i;
+  const enrollPattern = /\[\s*ENROLL(?:_CHILD|_STUDENT)?\s*:\s*(?:Child\s*ID|childId|Student\s*ID|studentId)\s*:\s*(\d+)\s*,\s*(?:Program\s*ID|programId)\s*:\s*(\d+).*?\]/i;
   const recommendPattern = /\[\s*RECOMMEND\s*:\s*(.*?)\s*\]/i;
   const viewChildrenPattern = /\[\s*VIEW_CHILDREN\s*\]/i;
   const viewProgramsPattern = /\[\s*VIEW_PROGRAMS\s*(?::\s*(.*?))?\s*\]/i;
