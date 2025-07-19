@@ -72,8 +72,8 @@ export default function CartDrawer() {
         </div>
         ) : (
           <div className="flex flex-col h-full">
-            <ScrollArea className="flex-1 mt-6">
-              <div className="space-y-4">
+            <ScrollArea className="flex-1 mt-6 max-h-[calc(100vh-400px)]">
+              <div className="space-y-4 pb-4">
                 {cart.items.map((item) => (
                   <Card key={item.id} className="relative">
                     <CardHeader className="pb-2">
@@ -123,7 +123,7 @@ export default function CartDrawer() {
             </ScrollArea>
 
             {/* Cart Summary */}
-            <div className="border-t pt-4 mt-4 space-y-4">
+            <div className="border-t pt-4 mt-4 space-y-4 flex-shrink-0 bg-white">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal:</span>

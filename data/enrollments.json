@@ -126,5 +126,17 @@
     "totalCost": 1500,
     "remainingBalance": 25,
     "paymentDate": "2025-07-14T11:26:23.182Z"
+  },
+  {
+    "classId": 6,
+    "childId": 11,
+    "childName": "Mary Brown",
+    "className": "Tycoons",
+    "status": "pending_payment",
+    "enrollmentDate": "2025-07-19T09:59:40.743Z",
+    "amount": 0,
+    "depositRequired": 130,
+    "totalCost": 1300,
+    "remainingBalance": 1300
   }
 ]

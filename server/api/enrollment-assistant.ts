@@ -111,6 +111,14 @@ async function executeEnrollmentAction(action: any, req: Request): Promise<void>
           throw new Error(`Program with ID ${action.programId} not found`);
         }
         
+        // Determine pricing based on program and option
+        let programPrice = program.price || 1300; // Default to $1300 for Tycoons Full Day
+        
+        // Override pricing for specific programs
+        if (program.title === "Tycoons") {
+          programPrice = 1300; // Full Day Including Afternoon Extracurriculars
+        }
+        
         // Create the enrollment
         const enrollmentData = {
           classId: action.programId,
@@ -120,9 +128,9 @@ async function executeEnrollmentAction(action: any, req: Request): Promise<void>
           status: 'pending_payment' as const,
           enrollmentDate: new Date().toISOString(),
           amount: 0,
-          depositRequired: Math.round(program.price * 0.1), // 10% deposit
-          totalCost: program.price,
-          remainingBalance: program.price
+          depositRequired: Math.round(programPrice * 0.1), // 10% deposit  
+          totalCost: programPrice,
+          remainingBalance: programPrice
         };
         
         const enrollment = await storage.createEnrollment(enrollmentData);
