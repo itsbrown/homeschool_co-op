@@ -74,6 +74,35 @@ export function FileUploadModal({
   const [isUploading, setIsUploading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    const maxFileSize = 50 * 1024 * 1024; // 50MB
+    const maxTotalSize = 200 * 1024 * 1024; // 200MB total
+    
+    // Validate individual file sizes
+    const invalidFiles = acceptedFiles.filter(file => file.size > maxFileSize);
+    if (invalidFiles.length > 0) {
+      toast({
+        title: "Files too large",
+        description: `${invalidFiles.length} file(s) exceed the 50MB limit and were skipped.`,
+        variant: "destructive",
+      });
+      acceptedFiles = acceptedFiles.filter(file => file.size <= maxFileSize);
+    }
+
+    // Check total size
+    const currentSize = uploadItems.reduce((sum, item) => sum + item.file.size, 0);
+    const newSize = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
+    
+    if (currentSize + newSize > maxTotalSize) {
+      toast({
+        title: "Total size limit exceeded",
+        description: "Combined file size cannot exceed 200MB. Please remove some files.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (acceptedFiles.length === 0) return;
+
     const newItems: FileUploadItem[] = acceptedFiles.map(file => ({
       file,
       id: Math.random().toString(36).substr(2, 9),
@@ -82,7 +111,7 @@ export function FileUploadModal({
     }));
 
     setUploadItems(prev => [...prev, ...newItems].slice(0, maxFiles));
-  }, [maxFiles]);
+  }, [maxFiles, uploadItems, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -220,7 +249,8 @@ export function FileUploadModal({
                 or drag and drop files here
               </p>
               <p className="text-xs text-muted-foreground">
-                PDF, Word, Images, and other document formats accepted
+                PDF, Word, Images, and other document formats accepted<br/>
+                Max file size: 50MB | Max total: 200MB
               </p>
             </div>
           ) : (

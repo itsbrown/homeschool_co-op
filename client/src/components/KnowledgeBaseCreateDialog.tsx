@@ -165,10 +165,10 @@ export function KnowledgeBaseCreateDialog({
         const file = fileList[i];
         
         // Skip extremely large files that might cause issues
-        if (file.size > 40 * 1024 * 1024) { // 40MB limit
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit
           toast({
             title: "File too large",
-            description: `${file.name} exceeds the 40MB limit and was skipped.`,
+            description: `${file.name} exceeds the 50MB limit and was skipped.`,
             variant: "destructive",
           });
           continue;
@@ -540,7 +540,8 @@ export function KnowledgeBaseCreateDialog({
                     />
                   </FormControl>
                   <FormDescription>
-                    Upload PDFs, documents, slides, or other educational resources
+                    Upload PDFs, documents, slides, or other educational resources<br/>
+                    <span className="text-xs text-amber-600">Max file size: 50MB | Max total: 200MB</span>
                   </FormDescription>
                   <FormMessage />
                   {selectedFiles.length > 0 && (

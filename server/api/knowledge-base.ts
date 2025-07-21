@@ -38,10 +38,10 @@ export const getKnowledgeBasesBySubject = async (req: Request, res: Response) =>
 export const getKnowledgeBasesByAuthor = async (req: Request, res: Response) => {
   try {
     const { authorId } = req.params;
-    
+
     // If requesting own knowledge bases, use session user ID
     const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
-    
+
     try {
       const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
       res.status(200).json(knowledgeBases);
@@ -51,15 +51,15 @@ export const getKnowledgeBasesByAuthor = async (req: Request, res: Response) => 
       try {
         const fs = await import('fs');
         const path = await import('path');
-        
+
         const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
         let knowledgeBases = [];
-        
+
         if (fs.existsSync(kbFilePath)) {
           const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
           knowledgeBases = JSON.parse(fileContent);
         }
-        
+
         // Filter by author
         const authorKnowledgeBases = knowledgeBases.filter(kb => kb.authorId === targetAuthorId);
         res.status(200).json(authorKnowledgeBases);
@@ -81,17 +81,17 @@ export const getKnowledgeBaseById = async (req: Request, res: Response) => {
   try {
     const knowledgeBaseId = parseInt(req.params.id);
     const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
-    
+
     if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
-    
+
     // Check if knowledge base is public or user is authenticated and is the author
     const isAuthor = req.session.userId && knowledgeBase.authorId === req.session.userId;
     if (!knowledgeBase.isPublic && !isAuthor) {
       return res.status(403).json({ message: "You don't have permission to access this knowledge base" });
     }
-    
+
     res.status(200).json(knowledgeBase);
   } catch (error) {
     console.error("Error fetching knowledge base:", error);
@@ -105,13 +105,13 @@ export const getKnowledgeBaseById = async (req: Request, res: Response) => {
 export const createKnowledgeBase = async (req: Request, res: Response) => {
   try {
     const validatedData = insertKnowledgeBaseSchema.parse(req.body);
-    
+
     try {
       const knowledgeBase = await storage.createKnowledgeBase({
         ...validatedData,
         authorId: req.session.userId
       });
-      
+
       res.status(201).json(knowledgeBase);
     } catch (dbError) {
       // Fallback to file storage when database is unavailable
@@ -119,17 +119,17 @@ export const createKnowledgeBase = async (req: Request, res: Response) => {
       try {
         const fs = await import('fs');
         const path = await import('path');
-        
+
         // Ensure data directory exists
         const dataDir = path.join(process.cwd(), 'data');
         if (!fs.existsSync(dataDir)) {
           fs.mkdirSync(dataDir, { recursive: true });
         }
-        
+
         // Load existing knowledge bases from file
         const kbFilePath = path.join(dataDir, 'knowledge-bases.json');
         let knowledgeBases = [];
-        
+
         if (fs.existsSync(kbFilePath)) {
           try {
             const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
@@ -139,7 +139,7 @@ export const createKnowledgeBase = async (req: Request, res: Response) => {
             knowledgeBases = [];
           }
         }
-        
+
         // Create new knowledge base with file storage
         const newId = Math.max(0, ...knowledgeBases.map(kb => kb.id || 0)) + 1;
         const knowledgeBase = {
@@ -151,9 +151,9 @@ export const createKnowledgeBase = async (req: Request, res: Response) => {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        
+
         knowledgeBases.push(knowledgeBase);
-        
+
         // Save to file with error handling
         try {
           fs.writeFileSync(kbFilePath, JSON.stringify(knowledgeBases, null, 2));
@@ -190,19 +190,19 @@ export const updateKnowledgeBase = async (req: Request, res: Response) => {
   try {
     const knowledgeBaseId = parseInt(req.params.id);
     const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
-    
+
     if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
-    
+
     // Check if user is the author
     if (knowledgeBase.authorId !== req.session.userId) {
       return res.status(403).json({ message: "You don't have permission to update this knowledge base" });
     }
-    
+
     const validatedData = insertKnowledgeBaseSchema.partial().parse(req.body);
     const updatedKnowledgeBase = await storage.updateKnowledgeBase(knowledgeBaseId, validatedData);
-    
+
     res.status(200).json(updatedKnowledgeBase);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -223,14 +223,14 @@ export const incrementDownloadCount = async (req: Request, res: Response) => {
   try {
     const knowledgeBaseId = parseInt(req.params.id);
     const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
-    
+
     if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
-    
+
     // Increment the download count
     const updatedKnowledgeBase = await storage.incrementDownloadCount(knowledgeBaseId);
-    
+
     res.status(200).json({ 
       success: true, 
       downloadCount: updatedKnowledgeBase?.downloadCount || knowledgeBase.downloadCount + 1 
@@ -248,14 +248,14 @@ export const recordPurchase = async (req: Request, res: Response) => {
   try {
     const knowledgeBaseId = parseInt(req.params.id);
     const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
-    
+
     if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
-    
+
     // Record the purchase
     await storage.addPurchaser(knowledgeBaseId, req.session.userId);
-    
+
     res.status(200).json({ success: true });
   } catch (error) {
     console.error("Error recording purchase:", error);
@@ -272,7 +272,7 @@ export const getCombinedKnowledgeBases = async (req: Request, res: Response) => 
   try {
     let publicKnowledgeBases = [];
     let userKnowledgeBases = [];
-    
+
     try {
       // Get public knowledge bases
       publicKnowledgeBases = await storage.getPublicKnowledgeBases();
@@ -282,7 +282,7 @@ export const getCombinedKnowledgeBases = async (req: Request, res: Response) => 
       try {
         const fs = await import('fs');
         const path = await import('path');
-        
+
         const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
         if (fs.existsSync(kbFilePath)) {
           const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
@@ -293,7 +293,7 @@ export const getCombinedKnowledgeBases = async (req: Request, res: Response) => 
         console.error("File storage fallback failed for public knowledge bases:", fileError);
       }
     }
-    
+
     // Get user's own knowledge bases if authenticated
     if (req.session?.userId) {
       try {
@@ -304,7 +304,7 @@ export const getCombinedKnowledgeBases = async (req: Request, res: Response) => 
         try {
           const fs = await import('fs');
           const path = await import('path');
-          
+
           const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
           if (fs.existsSync(kbFilePath)) {
             const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
@@ -316,17 +316,17 @@ export const getCombinedKnowledgeBases = async (req: Request, res: Response) => 
         }
       }
     }
-    
+
     // Combine both sets, removing duplicates
     const combinedKnowledgeBases = [...publicKnowledgeBases];
-    
+
     // Add user's own knowledge bases that aren't already in the array
     for (const kb of userKnowledgeBases) {
       if (!publicKnowledgeBases.some(p => p.id === kb.id)) {
         combinedKnowledgeBases.push(kb);
       }
     }
-    
+
     res.status(200).json(combinedKnowledgeBases);
   } catch (error) {
     console.error("Error fetching combined knowledge bases:", error);
