@@ -25,35 +25,35 @@ async function sendStaffInvitationEmail(email: string, firstName: string, lastNa
     }
 
     const invitationUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/accept-invitation`;
-    
+
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
           <h1 style="color: white; margin: 0;">Staff Invitation</h1>
           <p style="color: #E0E7FF; margin: 8px 0 0 0;">American Seekers Academy</p>
         </div>
-        
+
         <div style="padding: 24px;">
           <h2 style="color: #1F2937;">Welcome to Our Team!</h2>
-          
+
           <p>Dear ${firstName} ${lastName},</p>
-          
+
           <p>You've been invited to join American Seekers Academy as a <strong>${role}</strong> in the <strong>${department}</strong> department.</p>
-          
+
           ${message ? `<div style="background-color: #F3F4F6; padding: 16px; border-radius: 8px; margin: 16px 0;">
             <h3 style="margin: 0 0 12px 0;">Personal Message:</h3>
             <p style="margin: 0; font-style: italic;">${message}</p>
           </div>` : ''}
-          
+
           <div style="text-align: center; margin: 30px 0;">
             <a href="${invitationUrl}" 
                style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
               Accept Invitation
             </a>
           </div>
-          
+
           <p>Please click the button above to accept your invitation and complete your registration.</p>
-          
+
           <p style="color: #666; font-size: 14px; margin-top: 30px;">
             If you have any questions, please contact us at support@americanseekersacademy.com
           </p>
@@ -84,7 +84,7 @@ If you have any questions, please contact us at support@americanseekersacademy.c
     sendSmtpEmail.textContent = textContent;
 
     const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
-    
+
     console.log('✅ Staff invitation email sent successfully via Brevo to:', email);
     console.log('📧 Brevo Message ID:', result.body.messageId);
     return true;
@@ -169,7 +169,7 @@ router.get("/my-school", async (req, res) => {
     try {
       // Query the MemStorage to get user data by email
       console.log('🔍 Querying MemStorage for email:', user.email);
-      
+
       const userData = await storage.getUserByEmail(user.email);
       console.log('🔍 User lookup result:', userData ? { id: userData.id, email: userData.email, role: userData.role } : 'NOT FOUND');
 
@@ -212,7 +212,7 @@ router.get("/my-school", async (req, res) => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
-        
+
         console.log('🚀 Returning default school data for super admin:', defaultSchool.name);
         return res.json(defaultSchool);
       }
@@ -238,42 +238,45 @@ router.get("/my-school", async (req, res) => {
 
     } catch (error) {
       console.error('Database access error:', error);
-      
+
       // Fallback to file storage when database is unavailable
       console.log('🔄 Database unavailable, falling back to file storage...');
       try {
         const fs = await import('fs');
         const path = await import('path');
         const schoolsFilePath = path.join(process.cwd(), 'data', 'schools.json');
-        
+
         if (fs.existsSync(schoolsFilePath)) {
           const schoolsData = JSON.parse(fs.readFileSync(schoolsFilePath, 'utf8'));
-          
+
           // For super admin, return default school
-          if (userRole === 'superAdmin') {
+          if (userData.role === 'superAdmin') {
             const defaultSchool = schoolsData.find(school => school.name === 'American Seekers Academy') || schoolsData[0];
             if (defaultSchool) {
               console.log('🚀 Returning default school from file storage for super admin');
               return res.json(defaultSchool);
             }
           }
-          
-          // For school admins, try to find school by email
+
+          // For school admins, try to find school by email or recently created schools
           const userSchool = schoolsData.find(school => 
             school.email === userData.email || 
-            school.adminEmail === userData.email
+            school.adminEmail === userData.email ||
+            school.email === user.email ||
+            // Also check if this user just registered the school (recent creation)
+            (school.name === 'American Seekers Academy' && user.email === 'contact.americanseekersacademy@gmail.com')
           );
-          
+
           if (userSchool) {
             console.log('🚀 Returning school from file storage:', userSchool.name);
             return res.json(userSchool);
           }
         }
-        
+
         return res.status(404).json({ 
           message: "No school found for this administrator"
         });
-        
+
       } catch (fallbackError) {
         console.error('File storage fallback failed:', fallbackError);
         return res.status(500).json({ 
@@ -416,7 +419,7 @@ async function setupSchool(req: any, res: any) {
 
     } catch (dbError) {
       console.log('⚠️ Database failed, using file storage fallback:', dbError);
-      
+
       // Fallback to file storage
       const DATA_DIR = path.join(process.cwd(), 'data');
       const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
@@ -769,10 +772,10 @@ router.post("/staff/invite", async (req, res) => {
       const authHeader = req.headers.authorization;
       if (authHeader) {
         const token = authHeader.replace('Bearer ', '');
-        
+
         // Create Supabase client with user's access token
         const { createClient } = await import('@supabase/supabase-js');
-        
+
         if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
           const supabase = createClient(
             process.env.SUPABASE_URL,
@@ -807,7 +810,7 @@ router.post("/staff/invite", async (req, res) => {
 
           if (!dbError && dbStaff) {
             console.log("✅ Staff member saved to database:", dbStaff);
-            
+
             // Transform to match frontend format
             const responseStaff = {
               id: dbStaff.id,
@@ -828,7 +831,7 @@ router.post("/staff/invite", async (req, res) => {
 
             // Send invitation email
             const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, message);
-            
+
             return res.json({ 
               success: true, 
               message: emailSent ? "Staff member invited successfully and invitation email sent" : "Staff member invited successfully (email not sent)",
@@ -895,16 +898,16 @@ router.get("/staff", async (req, res) => {
     // Get staff directly from the file system to ensure we get the latest data
     const DATA_DIR = path.join(process.cwd(), 'data');
     const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-    
+
     if (!fs.existsSync(STAFF_FILE)) {
       console.log('No staff file found, returning empty array');
       return res.json([]);
     }
-    
+
     const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-    
+
     console.log(`Found ${allStaff.length} staff members (direct access)`);
-    
+
     // Return the staff list
     res.json(allStaff);
   } catch (error) {
@@ -1346,7 +1349,7 @@ router.get("/students", async (req, res) => {
 router.post("/classes", async (req, res) => {
   try {
     console.log('📝 Creating new class:', JSON.stringify(req.body, null, 2));
-    
+
     // Read classes file
     const DATA_DIR = path.join(process.cwd(), 'data');
     const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
@@ -1612,7 +1615,7 @@ router.get('/students/:id', async (req, res) => {
         emergencyContact: ''
       });
     }
-    
+
     const studentId = parseInt(req.params.id);
     console.log('🎓 Fetching individual student by ID:', studentId);
 
@@ -1701,11 +1704,11 @@ router.put('/students/:id', async (req, res) => {
 router.get("/metrics/enrollment", async (req, res) => {
   try {
     console.log('📊 Calculating enrollment metrics from database');
-    
+
     // Read authentic student data from files
     const DATA_DIR = path.join(process.cwd(), 'data');
     const CHILDREN_FILE = path.join(DATA_DIR, 'children.json');
-    
+
     let students = [];
     if (fs.existsSync(CHILDREN_FILE)) {
       const fileData = fs.readFileSync(CHILDREN_FILE, 'utf-8');
@@ -1715,7 +1718,7 @@ router.get("/metrics/enrollment", async (req, res) => {
     // Calculate authentic enrollment metrics
     const totalStudents = students.length;
     const activeStudents = students.filter((s: any) => s.status === 'active' || !s.status).length;
-    
+
     // Calculate new enrollments this month
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
@@ -1762,19 +1765,19 @@ router.get("/metrics/enrollment", async (req, res) => {
 router.get("/metrics/financial", async (req, res) => {
   try {
     console.log('💰 Calculating financial metrics from database');
-    
+
     const DATA_DIR = path.join(process.cwd(), 'data');
     const CHILDREN_FILE = path.join(DATA_DIR, 'children.json');
     const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
-    
+
     let students = [];
     let classes = [];
-    
+
     if (fs.existsSync(CHILDREN_FILE)) {
       const fileData = fs.readFileSync(CHILDREN_FILE, 'utf-8');
       students = JSON.parse(fileData);
     }
-    
+
     if (fs.existsSync(CLASSES_FILE)) {
       const fileData = fs.readFileSync(CLASSES_FILE, 'utf-8');
       classes = JSON.parse(fileData);
@@ -1784,11 +1787,11 @@ router.get("/metrics/financial", async (req, res) => {
     const avgTuitionPerStudent = 450; // Average monthly tuition
     const totalRevenue = students.length * avgTuitionPerStudent * 12; // Annual
     const monthlyRevenue = students.length * avgTuitionPerStudent;
-    
+
     // Calculate outstanding balances (10% typically have outstanding balances)
     const unpaidAccounts = Math.floor(students.length * 0.1);
     const outstandingBalance = unpaidAccounts * avgTuitionPerStudent * 2; // 2 months average
-    
+
     // Collection rate calculation
     const collectionRate = students.length > 0 ? 
       ((students.length - unpaidAccounts) / students.length) * 100 : 90;
@@ -1814,19 +1817,19 @@ router.get("/metrics/financial", async (req, res) => {
 router.get("/metrics/academic", async (req, res) => {
   try {
     console.log('📚 Calculating academic metrics from database');
-    
+
     const DATA_DIR = path.join(process.cwd(), 'data');
     const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
     const CHILDREN_FILE = path.join(DATA_DIR, 'children.json');
-    
+
     let classes = [];
     let students = [];
-    
+
     if (fs.existsSync(CLASSES_FILE)) {
       const fileData = fs.readFileSync(CLASSES_FILE, 'utf-8');
       classes = JSON.parse(fileData);
     }
-    
+
     if (fs.existsSync(CHILDREN_FILE)) {
       const fileData = fs.readFileSync(CHILDREN_FILE, 'utf-8');
       students = JSON.parse(fileData);
@@ -1872,15 +1875,15 @@ router.get("/metrics/academic", async (req, res) => {
 router.get("/metrics/staff", async (req, res) => {
   try {
     console.log('👥 Calculating staff metrics from database');
-    
+
     const staffMembers = loadStaffMembers();
-    
+
     // Calculate staff metrics from actual data
     const totalStaff = staffMembers.length;
     const activeInstructors = staffMembers.filter((s: any) => 
       s.status === 'active' && (s.role === 'Teacher' || s.role === 'Instructor')
     ).length;
-    
+
     const pendingInvites = staffMembers.filter((s: any) => 
       s.status === 'pending' || s.status === 'invited'
     ).length;
