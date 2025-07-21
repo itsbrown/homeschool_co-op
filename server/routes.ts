@@ -971,6 +971,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET individual knowledge base by ID
+  app.get("/api/knowledge-bases/:id", async (req, res) => {
+    try {
+      const knowledgeBaseId = parseInt(req.params.id);
+      
+      if (isNaN(knowledgeBaseId)) {
+        return res.status(400).json({ message: "Invalid knowledge base ID" });
+      }
+
+      let knowledgeBase;
+      
+      try {
+        knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
+      } catch (dbError) {
+        console.error("Database error fetching knowledge base, falling back to file storage:", dbError);
+        
+        // Fallback to file storage
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
+          
+          if (fs.existsSync(kbFilePath)) {
+            const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
+            const allKnowledgeBases = JSON.parse(fileContent);
+            knowledgeBase = allKnowledgeBases.find((kb: any) => kb.id === knowledgeBaseId);
+          }
+        } catch (fileError) {
+          console.error("File storage also failed:", fileError);
+          return res.status(500).json({ message: "Error accessing knowledge base data" });
+        }
+      }
+
+      if (!knowledgeBase) {
+        return res.status(404).json({ message: "Knowledge base not found" });
+      }
+
+      res.status(200).json(knowledgeBase);
+    } catch (error) {
+      console.error("Error fetching knowledge base:", error);
+      res.status(500).json({ message: "Error fetching knowledge base" });
+    }
+  });
+
   app.patch("/api/knowledge-bases/:id", isAuthenticated, async (req, res) => {
     try {
       const knowledgeBaseId = parseInt(req.params.id);
