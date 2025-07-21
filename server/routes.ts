@@ -102,7 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user;
       console.log('Sync children - Auth0 user payload:', JSON.stringify(user, null, 2));
-      
+
       if (!user) {
         return res.status(400).json({ message: "Authentication required" });
       }
@@ -117,11 +117,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allChildren = await storage.getAllChildren();
       console.log(`🔍 Searching for children with parent email: "${userEmail}"`);
       console.log(`📋 Total children in database: ${allChildren.length}`);
-      
+
       // Log all parent emails for debugging
       const parentEmails = allChildren.map(child => child.parentEmail).filter(Boolean);
       console.log('📧 All parent emails in database:', parentEmails);
-      
+
       const matchingChildren = allChildren.filter(child => 
         child.parentEmail && child.parentEmail.toLowerCase() === userEmail.toLowerCase()
       );
@@ -165,7 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/sync", jwtCheck, async (req, res) => {
     try {
       const user = req.user;
-      
+
       // Return user information from Auth0 token
       const userData = {
         id: user.sub,
@@ -628,10 +628,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Get email from Supabase auth structure
       const userEmail = req.auth?.email;
-      
+
       console.log('🎪 Events API - Supabase auth object:', JSON.stringify(req.auth, null, 2));
       console.log('🎪 Events API - Extracted email:', userEmail);
-      
+
       if (!userEmail) {
         console.log('❌ Events API - No email found in token');
         return res.status(401).json({ message: "Not authenticated" });
@@ -1552,7 +1552,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/activities", activitiesRouter);
   app.use("/api/migration", migrationRouter);
   app.use("/api/school-admin/marketing-links", marketingLinksRouter);
-  
+
   // Import and register enrollments API router
   const enrollmentsRouter = await import("./api/enrollments");
   app.use("/api/enrollments", enrollmentsRouter.default);
@@ -1561,18 +1561,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/children/:id/enrollments", async (req, res) => {
     try {
       const childId = parseInt(req.params.id);
-      
+
       if (isNaN(childId)) {
         return res.status(400).json({ message: 'Invalid child ID' });
       }
 
       console.log(`📚 Fetching enrollments for child ID: ${childId}`);
-      
+
       // Get enrollments for this child
       const enrollments = await storage.getEnrollmentsByChildId(childId);
-      
+
       console.log(`📚 Found ${enrollments.length} enrollments for child ${childId}:`, enrollments);
-      
+
       res.json(enrollments);
     } catch (error) {
       console.error('Error fetching child enrollments:', error);
@@ -1584,16 +1584,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/children/:id", async (req, res) => {
     try {
       const childId = parseInt(req.params.id);
-      
+
       if (isNaN(childId)) {
         return res.status(400).json({ message: 'Invalid child ID' });
       }
 
       console.log(`👶 Fetching child data for ID: ${childId}`);
-      
+
       // Get child data
       const child = await storage.getChildById(childId);
-      
+
       if (!child) {
         console.log(`❌ Child not found with ID: ${childId}`);
         return res.status(404).json({ message: 'Child not found' });
@@ -1606,7 +1606,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: 'Failed to fetch child data' });
     }
   });
-  
+
   // Import and register users API router
   const usersRouter = await import("./api/users");
   app.use("/api/users", usersRouter.default);
@@ -1677,8 +1677,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emergencyPhone: req.body.emergencyPhone || students[studentIndex].emergencyPhone,
         medicalNotes: req.body.medicalNotes || students[studentIndex].medicalNotes,
         specialNeeds: req.body.specialNeeds || students[studentIndex].specialNeeds,
-        updatedAt: new Date().toISOString()
-      };
+        updatedAt: new Date().toISOString()      };
 
       students[studentIndex] = updatedStudent;
 
@@ -1964,19 +1963,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/schools/knowledge-bases", async (req, res) => {
     try {
       let allKnowledgeBases = [];
-      
+
       try {
         // Try to get knowledge bases from storage
         allKnowledgeBases = await storage.getAllKnowledgeBases();
       } catch (dbError) {
         console.error("Database error fetching knowledge bases, falling back to file storage:", dbError);
-        
+
         // Fallback to file storage directly
         try {
           const fs = await import('fs');
           const path = await import('path');
           const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
-          
+
           if (fs.existsSync(kbFilePath)) {
             const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
             allKnowledgeBases = JSON.parse(fileContent);
@@ -1990,7 +1989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           allKnowledgeBases = [];
         }
       }
-      
+
       // Transform the data to match the expected format for the UI
       const transformedKnowledgeBases = allKnowledgeBases.map(kb => ({
         id: kb.id,
@@ -2039,11 +2038,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('📚 Fetching all enrollments for parent:', user.email);
-      
+
       // Get all children for this parent
       const children = await storage.getChildrenByParentEmail(user.email);
       console.log(`👶 Found ${children.length} children for parent ${user.email}`);
-      
+
       if (children.length === 0) {
         return res.json([]);
       }
@@ -2206,7 +2205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Extract access token from Authorization header
       const accessToken = req.headers.authorization?.substring(7); // Remove 'Bearer ' prefix
-      
+
       if (!accessToken) {
         return res.status(401).json({ error: "No token provided" });
       }
@@ -2226,9 +2225,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userInfo = await userInfoResponse.json();
       const userEmail = userInfo.email;
-      
+
       console.log('📧 User email from Auth0 userinfo:', userEmail);
-      
+
       if (!userEmail) {
         console.log('❌ No email found in Auth0 userinfo');
         return res.status(401).json({ error: "Email not found in user profile" });
@@ -2237,7 +2236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user profile data to find the user ID
       const userProfilePath = path.join(process.cwd(), 'data', 'user-profiles.json');
       let userProfile = null;
-      
+
       try {
         const userProfileData = fs.readFileSync(userProfilePath, 'utf8');
         const userProfiles = JSON.parse(userProfileData);
@@ -2276,7 +2275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`👨‍👩‍👧‍👦 Found ${parentChildren.length} children for parent: ${userEmail}`);
       console.log('Children found:', parentChildren.map(c => ({ id: c.id, firstName: c.firstName, lastName: c.lastName })));
-      
+
       res.json(parentChildren);
 
     } catch (error) {
@@ -2333,7 +2332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create the child using storage
       const newChild = await storage.createChild(childData);
-      
+
       console.log('✅ Child created successfully:', {
         id: newChild.id,
         firstName: newChild.firstName,
@@ -2420,4 +2419,156 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/knowledge-bases/processing-stats", isAuthenticated, getProcessingStats);
 
   return httpServer;
+}
+// Knowledge base routes
+async function getPublicKnowledgeBases(req: any, res: any) {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+    const knowledgeBases = await storage.getPublicKnowledgeBases(limit);
+    res.status(200).json(knowledgeBases);
+  } catch (error) {
+    console.error("Error fetching public knowledge bases:", error);
+    res.status(500).json({ message: "Error fetching public knowledge bases" });
+  }
+}
+
+async function getKnowledgeBasesBySubject(req: any, res: any) {
+  try {
+    const { subject } = req.params;
+    const knowledgeBases = await storage.getKnowledgeBasesBySubject(subject);
+    res.status(200).json(knowledgeBases);
+  } catch (error) {
+    console.error("Error fetching knowledge bases by subject:", error);
+    res.status(500).json({ message: "Error fetching knowledge bases" });
+  }
+}
+
+async function getKnowledgeBasesByAuthor(req: any, res: any) {
+  try {
+    const { authorId } = req.params;
+
+    // If requesting own knowledge bases, use session user ID
+    const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
+
+    const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
+    res.status(200).json(knowledgeBases);
+  } catch (error) {
+    console.error("Error fetching knowledge bases by author:", error);
+    res.status(500).json({ message: "Error fetching knowledge bases" });
+  }
+}
+
+async function getKnowledgeBaseById(req: any, res: any) {
+  try {
+    const knowledgeBaseId = parseInt(req.params.id);
+    const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
+
+    if (!knowledgeBase) {
+      return res.status(404).json({ message: "Knowledge base not found" });
+    }
+
+    res.status(200).json(knowledgeBase);
+  } catch (error) {
+    console.error("Error fetching knowledge base:", error);
+    res.status(500).json({ message: "Error fetching knowledge base" });
+  }
+}
+
+async function createKnowledgeBase(req: any, res: any) {
+  try {
+    const validatedData = insertKnowledgeBaseSchema.parse(req.body);
+
+    const knowledgeBase = await storage.createKnowledgeBase({
+      ...validatedData,
+      authorId: req.session.userId
+    });
+
+    res.status(201).json(knowledgeBase);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Validation error", errors: error.errors });
+    }
+    res.status(500).json({ message: "Error creating knowledge base" });
+  }
+}
+
+async function updateKnowledgeBase(req: any, res: any) {
+  try {
+    const knowledgeBaseId = parseInt(req.params.id);
+    const validatedData = insertKnowledgeBaseSchema.partial().parse(req.body);
+    const updatedKnowledgeBase = await storage.updateKnowledgeBase(knowledgeBaseId, validatedData);
+
+    res.status(200).json(updatedKnowledgeBase);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Validation error", errors: error.errors });
+    }
+    console.error("Error updating knowledge base:", error);
+    res.status(500).json({ message: "Error updating knowledge base" });
+  }
+}
+
+async function incrementDownloadCount(req: any, res: any) {
+  try {
+    const knowledgeBaseId = parseInt(req.params.id);
+    const updatedKnowledgeBase = await storage.incrementDownloadCount(knowledgeBaseId);
+    res.status(200).json(updatedKnowledgeBase);
+  } catch (error) {
+    console.error("Error incrementing download count:", error);
+    res.status(500).json({ message: "Error incrementing download count" });
+  }
+}
+
+async function recordPurchase(req: any, res: any) {
+  try {
+    const knowledgeBaseId = parseInt(req.params.id);
+    await storage.addPurchaser(knowledgeBaseId, req.session.userId);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error recording purchase:", error);
+    res.status(500).json({ message: "Error recording purchase" });
+  }
+}
+
+async function getCombinedKnowledgeBases(req: any, res: any) {
+    try {
+        let publicKnowledgeBases = [];
+        let userKnowledgeBases = [];
+
+        try {
+            // Get public knowledge bases
+            publicKnowledgeBases = await storage.getPublicKnowledgeBases();
+        } catch (publicError) {
+            console.error("Error fetching public knowledge bases:", publicError);
+            // Continue with empty array if failed
+        }
+
+        try {
+            // Get user's knowledge bases if user is authenticated
+            const authData = (req as any).auth;
+            if (authData?.userId) {
+                userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.userId);
+            }
+        } catch (userError) {
+            console.error("Error fetching user knowledge bases:", userError);
+            // Continue with empty array if failed
+        }
+
+        //// Combine and deduplicate knowledge bases
+        const combinedKnowledgeBases = [...publicKnowledgeBases];
+
+        // Add user's knowledge bases that aren't already in the list
+        userKnowledgeBases.forEach(userKb => {
+            if (!combinedKnowledgeBases.some(kb => kb.id === userKb.id)) {
+                combinedKnowledgeBases.push(userKb);
+            }
+        });
+
+        // Return empty array if none found
+        res.status(200).json(combinedKnowledgeBases);
+    } catch (error) {
+        console.error("Error fetching combined knowledge bases:", error);
+        // Return empty array instead of error status to avoid breaking the UI
+        res.status(200).json([]);
+    }
 }

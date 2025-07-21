@@ -3,6 +3,7 @@ import { anthropicService } from "./anthropicService";
 import { openAIService } from "./openaiService";
 import { Program } from "@shared/schema";
 import { conversationHistory } from "./conversationHistory";
+import { knowledgeBaseProcessor } from "./knowledgeBaseProcessor";
 
 // Type definitions
 interface ChatMessage {
@@ -36,18 +37,20 @@ interface AIResponse {
 
 // System prompt for the AI assistant
 const SYSTEM_PROMPT = `You are an AI enrollment assistant for American Seekers Academy. 
-Your goal is to help parents register their children and find suitable programs.
+Your goal is to help parents register their children, find suitable programs, and answer questions about the school.
 
 MEMORY AND CONTEXT:
 - You have access to the parent's previously registered children
 - You can see conversation history from previous interactions
 - When a parent mentions a child by name, check if they're already registered
 - If a child is already registered, use their existing information for recommendations
+- You have access to school knowledge bases with detailed information about policies, procedures, and curriculum
 
 AVAILABLE INFORMATION:
 1. The parent's children and their details (both registered and those mentioned in conversation)
 2. Available educational programs
 3. Previous conversation history
+4. School knowledge bases with comprehensive information about the academy
 
 TASKS YOU CAN PERFORM:
 1. Help register new children by collecting required information
@@ -56,6 +59,8 @@ TASKS YOU CAN PERFORM:
 4. Guide the enrollment process and create enrollment requests
 5. Provide information about existing enrollments
 6. Remember previously discussed children and their details
+7. Answer questions about school policies, procedures, curriculum, and general information using the knowledge base
+8. Provide detailed information about the academy's philosophy, teaching methods, and educational approach
 
 CHILD REGISTRATION PROCESS:
 When helping register a new child, collect these details in order:
@@ -130,6 +135,27 @@ export async function processEnrollmentMessage(
     // Fetch available classes/programs - get all classes and filter for published ones
     const allClasses = await storage.getClasses({ page: 1, limit: 100, status: "" });
     const programs = allClasses.filter(c => c.isPublished === true || c.status === "published");
+    
+    // Get school knowledge bases for enhanced context
+    let schoolKnowledgeBases = [];
+    let knowledgeBaseContext = "";
+    
+    try {
+      // Get all public knowledge bases (school-assigned ones)
+      const publicKBs = await storage.getPublicKnowledgeBases();
+      schoolKnowledgeBases = publicKBs || [];
+      
+      if (schoolKnowledgeBases.length > 0) {
+        console.log(`📚 Found ${schoolKnowledgeBases.length} school knowledge bases for context`);
+        
+        // Process knowledge bases to extract relevant information
+        const kbContent = await knowledgeBaseProcessor.extractContextFromKnowledgeBases(schoolKnowledgeBases);
+        knowledgeBaseContext = `\n\nSCHOOL INFORMATION AND KNOWLEDGE BASE:\n${kbContent}\n\nUse this school information to answer questions about policies, procedures, curriculum, and general school information.`;
+      }
+    } catch (error) {
+      console.error('Error fetching school knowledge bases:', error);
+      // Continue without knowledge base context
+    }
     
     // Format context about available data
     const childrenContext = children.length > 0
@@ -259,7 +285,7 @@ export async function processEnrollmentMessage(
       : '';
 
     // Build the complete context
-    const fullContext = `${conversationContext}${mentionedChildrenContext}${childrenContext}\n\n${programsContext}`;
+    const fullContext = `${conversationContext}${mentionedChildrenContext}${childrenContext}\n\n${programsContext}${knowledgeBaseContext}`;
     
     // Prepare messages for the AI
     const messages: ChatMessage[] = [

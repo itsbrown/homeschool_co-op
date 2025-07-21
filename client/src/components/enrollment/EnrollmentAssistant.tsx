@@ -387,9 +387,12 @@ export default function EnrollmentAssistant() {
   // Sample prompts
   const samplePrompts = [
     "Register my child for summer camp",
-    "Find program recommendations for my 8-year-old who loves science",
+    "Find program recommendations for my 8-year-old who loves science", 
+    "What are the school's policies on attendance?",
+    "Tell me about your curriculum and teaching philosophy",
     "What enrichment classes do you have for a 10-year-old?",
     "Help me find affordable art classes",
+    "What are your payment policies and tuition rates?",
     "Register my child Sophia for music lessons"
   ];
 
@@ -515,7 +518,7 @@ export default function EnrollmentAssistant() {
       {/* Header */}
       <div className="text-center border-b pb-4 px-4 pt-4 bg-gray-50">
         <h2 className="text-xl font-semibold">AI Enrollment Assistant</h2>
-        <p className="text-muted-foreground text-sm">Get personalized help with finding and enrolling in programs</p>
+        <p className="text-muted-foreground text-sm">Get personalized help with enrollment, programs, and school information</p>
       </div>
       
       {/* Welcome Content */}

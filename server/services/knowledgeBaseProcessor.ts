@@ -244,3 +244,125 @@ export const knowledgeBaseProcessor = new KnowledgeBaseProcessor();
 setInterval(() => {
   knowledgeBaseProcessor.cleanupOldJobs();
 }, 60 * 60 * 1000);
+import { KnowledgeBase } from "@shared/schema";
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * Knowledge Base Processor for Enrollment Assistant
+ * Extracts and formats knowledge base content for AI context
+ */
+
+export class KnowledgeBaseProcessor {
+  
+  /**
+   * Extract relevant context from knowledge bases for enrollment assistant
+   */
+  async extractContextFromKnowledgeBases(knowledgeBases: KnowledgeBase[]): Promise<string> {
+    let contextContent = "";
+    
+    for (const kb of knowledgeBases) {
+      try {
+        // Add knowledge base title and description
+        contextContent += `\n--- ${kb.title} ---\n`;
+        if (kb.description) {
+          contextContent += `Description: ${kb.description}\n`;
+        }
+        
+        // Extract content from knowledge base files
+        if (kb.fileUrl) {
+          const fileContent = await this.extractContentFromFile(kb.fileUrl);
+          if (fileContent) {
+            contextContent += `Content: ${fileContent.substring(0, 2000)}...\n`; // Limit content size
+          }
+        }
+        
+        // Add tags if available
+        if (kb.tags && kb.tags.length > 0) {
+          contextContent += `Topics: ${kb.tags.join(', ')}\n`;
+        }
+        
+        contextContent += "\n";
+        
+      } catch (error) {
+        console.error(`Error processing knowledge base ${kb.id}:`, error);
+        continue;
+      }
+    }
+    
+    return contextContent;
+  }
+  
+  /**
+   * Extract content from a knowledge base file
+   */
+  private async extractContentFromFile(fileUrl: string): Promise<string | null> {
+    try {
+      // Handle local file paths
+      if (fileUrl.startsWith('/uploads/') || fileUrl.startsWith('uploads/')) {
+        const filePath = path.join(process.cwd(), fileUrl.replace(/^\//, ''));
+        
+        if (fs.existsSync(filePath)) {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          return this.cleanAndFormatContent(content);
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error reading file:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Clean and format content for AI consumption
+   */
+  private cleanAndFormatContent(content: string): string {
+    // Remove excessive whitespace and clean up formatting
+    return content
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  
+  /**
+   * Extract key information from knowledge base content
+   */
+  extractKeyInformation(content: string): {
+    policies: string[];
+    procedures: string[];
+    curriculum: string[];
+    generalInfo: string[];
+  } {
+    const policies = [];
+    const procedures = [];
+    const curriculum = [];
+    const generalInfo = [];
+    
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const lowercaseLine = line.toLowerCase();
+      
+      if (lowercaseLine.includes('policy') || lowercaseLine.includes('rule')) {
+        policies.push(line.trim());
+      } else if (lowercaseLine.includes('procedure') || lowercaseLine.includes('process')) {
+        procedures.push(line.trim());
+      } else if (lowercaseLine.includes('curriculum') || lowercaseLine.includes('course') || lowercaseLine.includes('subject')) {
+        curriculum.push(line.trim());
+      } else if (line.trim().length > 20) {
+        generalInfo.push(line.trim());
+      }
+    }
+    
+    return {
+      policies: policies.slice(0, 10),
+      procedures: procedures.slice(0, 10),
+      curriculum: curriculum.slice(0, 10),
+      generalInfo: generalInfo.slice(0, 15)
+    };
+  }
+}
+
+export const knowledgeBaseProcessor = new KnowledgeBaseProcessor();
