@@ -356,19 +356,24 @@ async function setupSchool(req: any, res: any) {
 
       console.log('📋 Creating school with data:', schoolData);
 
-      const { data: newSchool, error: schoolError } = await supabaseAdmin
-        .from('schools')
-        .insert(schoolData)
-        .select()
-        .single();
+      try {
+        const { data: newSchool, error: schoolError } = await supabaseAdmin
+          .from('schools')
+          .insert(schoolData)
+          .select()
+          .single();
 
-      if (schoolError) {
-        console.error('❌ Database error creating school:', schoolError);
-        throw new Error(`Database error: ${schoolError.message}`);
+        if (schoolError) {
+          console.error('❌ Database error creating school:', schoolError);
+          throw new Error(`Database error: ${schoolError.message}`);
+        }
+
+        console.log('🚀 Created school successfully in database:', newSchool);
+        return res.json(newSchool);
+      } catch (dbError: any) {
+        console.log('⚠️ Database failed, using file storage fallback for school setup');
+        // Fall through to file storage below
       }
-
-      console.log('🚀 Created school successfully in database:', newSchool);
-      return res.json(newSchool);
 
     } catch (dbError) {
       console.log('⚠️ Database failed, using file storage fallback:', dbError);

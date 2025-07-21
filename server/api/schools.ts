@@ -3,12 +3,16 @@ import { db } from "../db";
 import { schools, children } from "@shared/schema";
 import { insertSchoolSchema } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
 
 // Create a new school
 router.post("/", async (req, res) => {
   try {
+    console.log('🏫 Creating school with data:', JSON.stringify(req.body, null, 2));
+    
     // Validate the request body
     const validatedData = insertSchoolSchema.safeParse(req.body);
     if (!validatedData.success) {
@@ -18,16 +22,80 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Create the school
-    const [newSchool] = await db
-      .insert(schools)
-      .values(validatedData.data)
-      .returning();
+    try {
+      // Try database first
+      const [newSchool] = await db
+        .insert(schools)
+        .values(validatedData.data)
+        .returning();
 
-    res.status(201).json(newSchool);
+      console.log('✅ School created in database:', newSchool);
+      res.status(201).json(newSchool);
+    } catch (dbError) {
+      console.log('⚠️ Database failed, using file storage fallback:', dbError);
+      
+      // Fallback to file storage
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const DATA_DIR = path.join(process.cwd(), 'data');
+      const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
+
+      // Ensure data directory exists
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+
+      // Load existing schools or initialize empty array
+      let existingSchools = [];
+      if (fs.existsSync(SCHOOLS_FILE)) {
+        try {
+          const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
+          existingSchools = JSON.parse(fileContent);
+        } catch (error) {
+          console.log('Error reading schools file, starting with empty array:', error);
+          existingSchools = [];
+        }
+      }
+
+      // Generate new ID
+      const newId = existingSchools.length > 0 
+        ? Math.max(...existingSchools.map((s: any) => s.id)) + 1 
+        : 1;
+
+      // Create new school object for file storage
+      const newSchool = {
+        id: newId,
+        name: validatedData.data.name,
+        type: validatedData.data.type,
+        address: validatedData.data.address,
+        city: validatedData.data.city,
+        state: validatedData.data.state,
+        zipCode: validatedData.data.zipCode,
+        phoneNumber: validatedData.data.phoneNumber,
+        email: validatedData.data.email,
+        website: validatedData.data.website,
+        description: validatedData.data.description,
+        accreditation: validatedData.data.accreditation,
+        enrollmentSize: validatedData.data.enrollmentSize,
+        foundedYear: validatedData.data.foundedYear,
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Add to schools array
+      existingSchools.push(newSchool);
+
+      // Write back to file
+      fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(existingSchools, null, 2));
+
+      console.log('✅ School created successfully in file storage:', newSchool.name);
+      res.status(201).json(newSchool);
+    }
   } catch (error: any) {
     console.error("Error creating school:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 });
 

@@ -77,26 +77,35 @@ export default function SchoolRegistrationPage() {
   const onSubmit = async (data: SchoolFormValues) => {
     setIsSubmitting(true);
     try {
+      console.log('📝 Submitting school registration:', data);
+      
       // Submit school registration to API
       const response = await apiRequest("POST", "/api/schools", data);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+      
       const result = await response.json();
+      console.log('✅ School registration successful:', result);
       
       // Show success message
       toast({
-        title: "Registration Submitted",
-        description: "Your school registration has been submitted for review.",
+        title: "Registration Successful!",
+        description: "Your school has been registered successfully.",
       });
       
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["/api/schools"] });
       
-      // Redirect to confirmation page
-      setLocation("/schools/register/confirm");
-    } catch (error) {
+      // Redirect to dashboard or confirmation page
+      setLocation("/dashboard");
+    } catch (error: any) {
       console.error("Error registering school:", error);
       toast({
         title: "Registration Failed",
-        description: "There was a problem submitting your school registration. Please try again.",
+        description: error.message || "There was a problem submitting your school registration. Please try again.",
         variant: "destructive",
       });
     } finally {
