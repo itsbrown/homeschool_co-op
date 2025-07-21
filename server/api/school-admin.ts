@@ -252,7 +252,6 @@ router.get("/my-school", async (req, res) => {
 // Create initial school setup for a new admin
 
 async function setupSchool(req: any, res: any) {
-  let client;
   try {
     console.log('🏫 Setting up school for new admin');
 
@@ -265,7 +264,26 @@ async function setupSchool(req: any, res: any) {
     const token = authHeader.replace('Bearer ', '');
     console.log('🔒 Token:', token.substring(0, 20) + '...');
 
-    const { supabase } = await import('../db/supabase');
+    // Create a new Supabase client instance with the user's access token
+    const { createClient } = await import('@supabase/supabase-js');
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      return res.status(500).json({ message: "Supabase configuration missing" });
+    }
+
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    );
+
+    // Verify the token and get user
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
@@ -275,69 +293,64 @@ async function setupSchool(req: any, res: any) {
 
     console.log('✅ Setting up school for user:', user.email);
 
-    client = await pool.connect();
-    console.log('🔌 Connected to PostgreSQL database');
+    // Use admin client to create the school
+    const { supabaseAdmin } = await import('../db/supabase');
 
-    console.log('🔍 Checking if user exists in database:', user.email);
-    const userResult = await client.query(
-      'SELECT * FROM users.accounts WHERE email = $1',
-      [user.email]
-    );
-    let dbUser = userResult.rows[0];
+    try {
+      // Get user from MemStorage
+      const userData = await storage.getUserByEmail(user.email);
+      if (!userData) {
+        console.error('User not found in storage');
+        return res.status(404).json({ message: "User not found in storage" });
+      }
 
-    if (!dbUser) {
-      console.log('❌ User not found, creating new user...');
-      const newUserResult = await client.query(
-        'INSERT INTO users.accounts (email, firebase_uid, username, role, name) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [
-          user.email,
-          user.id,
-          user.email.split('@')[0],
-          'schoolAdmin',
-          user.user_metadata?.full_name || user.email
-        ]
-      );
-      dbUser = newUserResult.rows[0];
-      console.log('✅ Created user:', dbUser);
-    } else {
-      console.log('✅ User found:', dbUser);
+      console.log('✅ Found user in storage:', userData.email);
+
+      // Create school using Supabase admin client
+      const schoolData = {
+        name: "My School",
+        type: "academy",
+        city: "City",
+        state: "State",
+        zip_code: "12345",
+        phone_number: "555-0123",
+        email: user.email,
+        admin_id: userData.id,
+        status: "active",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('📋 Creating school with data:', schoolData);
+
+      const { data: newSchool, error: schoolError } = await supabaseAdmin
+        .from('schools')
+        .insert(schoolData)
+        .select()
+        .single();
+
+      if (schoolError) {
+        console.error('❌ Database error creating school:', schoolError);
+        return res.status(500).json({ 
+          message: "Failed to create school in database",
+          error: schoolError.message
+        });
+      }
+
+      console.log('🚀 Created school successfully:', newSchool);
+      res.json(newSchool);
+
+    } catch (dbError) {
+      console.error('❌ Database access error:', dbError);
+      return res.status(500).json({ 
+        message: "Unable to connect to database",
+        error: dbError instanceof Error ? dbError.message : 'Unknown error'
+      });
     }
 
-    const schoolData = {
-      name: "My School",
-      type: "academy",
-      city: "City",
-      state: "State",
-      zipCode: "12345",
-      created_by: dbUser.id,
-      status: "active"
-    };
-    console.log('📋 School data to create:', schoolData);
-
-    const schoolResult = await client.query(
-      'INSERT INTO schools.schools (name, type, city, state, zip_code, created_by, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [
-        schoolData.name,
-        schoolData.type,
-        schoolData.city,
-        schoolData.state,
-        schoolData.zipCode,
-        schoolData.created_by,
-        schoolData.status
-      ]
-    );
-    const newSchool = schoolResult.rows[0];
-    console.log('🚀 Created school:', newSchool);
-
-    res.json(newSchool);
   } catch (error: any) {
     console.error("❌ Error setting up school:", error.message, error.stack);
     res.status(500).json({ message: "Error setting up school", error: error.message });
-  } finally {
-    if (client) {
-      client.release();
-      console.log('🔌 Disconnected from PostgreSQL database');
-    }
   }
 }
 
