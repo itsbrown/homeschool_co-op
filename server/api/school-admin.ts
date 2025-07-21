@@ -242,6 +242,13 @@ router.get("/my-school", async (req, res) => {
       // Fallback to file storage when database is unavailable
       console.log('🔄 Database unavailable, falling back to file storage...');
       try {
+        // First, get user data from storage
+        const userData = await storage.getUserByEmail(user.email);
+        if (!userData) {
+          console.error('User not found in storage during fallback');
+          return res.status(404).json({ message: "User not found in storage" });
+        }
+
         const fs = await import('fs');
         const path = await import('path');
         const schoolsFilePath = path.join(process.cwd(), 'data', 'schools.json');
