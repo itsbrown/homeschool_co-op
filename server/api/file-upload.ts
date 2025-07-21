@@ -11,12 +11,14 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+console.log(`📁 Upload directory ready: ${uploadsDir}`);
+
 // Upload files for knowledge bases
 router.post('/knowledge-base', async (req, res) => {
   try {
     console.log('📁 File upload request received');
     console.log('📄 Request files:', req.files);
-    
+
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ 
         success: false, 
@@ -25,10 +27,10 @@ router.post('/knowledge-base', async (req, res) => {
     }
 
     const uploadedFiles: any[] = [];
-    
+
     // Handle both single and multiple files
     let fileList: UploadedFile[] = [];
-    
+
     if (req.files.files) {
       if (Array.isArray(req.files.files)) {
         fileList = req.files.files as UploadedFile[];
@@ -48,7 +50,7 @@ router.post('/knowledge-base', async (req, res) => {
 
     for (const uploadedFile of fileList) {
       if (!uploadedFile) continue;
-      
+
       // Generate unique filename
       const timestamp = Date.now();
       const sanitizedName = uploadedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');

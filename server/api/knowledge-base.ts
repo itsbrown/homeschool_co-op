@@ -120,13 +120,24 @@ export const createKnowledgeBase = async (req: Request, res: Response) => {
         const fs = await import('fs');
         const path = await import('path');
         
+        // Ensure data directory exists
+        const dataDir = path.join(process.cwd(), 'data');
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
+        }
+        
         // Load existing knowledge bases from file
-        const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
+        const kbFilePath = path.join(dataDir, 'knowledge-bases.json');
         let knowledgeBases = [];
         
         if (fs.existsSync(kbFilePath)) {
-          const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
-          knowledgeBases = JSON.parse(fileContent);
+          try {
+            const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
+            knowledgeBases = JSON.parse(fileContent);
+          } catch (parseError) {
+            console.warn('Failed to parse existing knowledge bases file, starting fresh:', parseError);
+            knowledgeBases = [];
+          }
         }
         
         // Create new knowledge base with file storage
@@ -143,14 +154,21 @@ export const createKnowledgeBase = async (req: Request, res: Response) => {
         
         knowledgeBases.push(knowledgeBase);
         
-        // Save to file
-        fs.writeFileSync(kbFilePath, JSON.stringify(knowledgeBases, null, 2));
-        
-        console.log(`✅ Knowledge base created in file storage with ID ${newId}`);
-        res.status(201).json(knowledgeBase);
+        // Save to file with error handling
+        try {
+          fs.writeFileSync(kbFilePath, JSON.stringify(knowledgeBases, null, 2));
+          console.log(`✅ Knowledge base created in file storage with ID ${newId}`);
+          res.status(201).json(knowledgeBase);
+        } catch (writeError) {
+          console.error('Failed to write knowledge base to file:', writeError);
+          throw new Error('Failed to save knowledge base to file storage');
+        }
       } catch (fileError) {
         console.error('File storage fallback failed:', fileError);
-        throw dbError; // Re-throw original database error
+        res.status(500).json({ 
+          message: "Failed to create knowledge base", 
+          error: "Both database and file storage are unavailable" 
+        });
       }
     }
   } catch (error) {
