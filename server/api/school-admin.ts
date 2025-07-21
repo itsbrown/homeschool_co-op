@@ -242,42 +242,50 @@ router.get("/my-school", async (req, res) => {
       // Fallback to file storage when database is unavailable
       console.log('🔄 Database unavailable, falling back to file storage...');
       try {
-        // First, get user data from storage
-        const userData = await storage.getUserByEmail(user.email);
-        if (!userData) {
-          console.error('User not found in storage during fallback');
-          return res.status(404).json({ message: "User not found in storage" });
-        }
-
         const fs = await import('fs');
         const path = await import('path');
         const schoolsFilePath = path.join(process.cwd(), 'data', 'schools.json');
 
         if (fs.existsSync(schoolsFilePath)) {
           const schoolsData = JSON.parse(fs.readFileSync(schoolsFilePath, 'utf8'));
+          console.log('📋 Found schools in file storage:', schoolsData.length);
 
-          // For super admin, return default school
-          if (userData.role === 'superAdmin') {
-            const defaultSchool = schoolsData.find(school => school.name === 'American Seekers Academy') || schoolsData[0];
-            if (defaultSchool) {
-              console.log('🚀 Returning default school from file storage for super admin');
-              return res.json(defaultSchool);
+          // For contact.americanseekersacademy@gmail.com, find any American Seekers Academy school
+          if (user.email === 'contact.americanseekersacademy@gmail.com') {
+            const userSchool = schoolsData.find(school => 
+              school.name === 'American Seekers Academy' ||
+              school.email === 'contact@americanseekersacademy.com' ||
+              school.email === user.email
+            );
+
+            if (userSchool) {
+              console.log('🚀 Returning school from file storage:', userSchool.name);
+              return res.json(userSchool);
             }
           }
 
-          // For school admins, try to find school by email or recently created schools
+          // For other users, try to find school by email match
           const userSchool = schoolsData.find(school => 
-            school.email === userData.email || 
-            school.adminEmail === userData.email ||
             school.email === user.email ||
-            // Also check if this user just registered the school (recent creation)
-            (school.name === 'American Seekers Academy' && user.email === 'contact.americanseekersacademy@gmail.com')
+            school.adminEmail === user.email
           );
 
           if (userSchool) {
             console.log('🚀 Returning school from file storage:', userSchool.name);
             return res.json(userSchool);
           }
+
+          // If no specific match, return the most recently created school for this user
+          const recentSchool = schoolsData
+            .filter(school => school.createdAt)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+          if (recentSchool) {
+            console.log('🚀 Returning most recent school from file storage:', recentSchool.name);
+            return res.json(recentSchool);
+          }
+        } else {
+          console.error('Schools file not found at:', schoolsFilePath);
         }
 
         return res.status(404).json({ 
@@ -287,8 +295,8 @@ router.get("/my-school", async (req, res) => {
       } catch (fallbackError) {
         console.error('File storage fallback failed:', fallbackError);
         return res.status(500).json({ 
-          message: "Unable to connect to database and file storage fallback failed.",
-          error: error instanceof Error ? error.message : 'Unknown error'
+          message: "File storage access failed",
+          error: fallbackError instanceof Error ? fallbackError.message : 'Unknown error'
         });
       }
     }
