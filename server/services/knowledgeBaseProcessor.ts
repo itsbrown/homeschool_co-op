@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { processFiles, ExtractedContent } from './fileProcessor';
 import { processExtractedContent, ContentAnalysis, ContentEmbedding } from './aiContentAnalyzer';
 import { storage } from '../storage';
+import { KnowledgeBase } from '@shared/schema';
 
 export interface ProcessingJob {
   id: string;
@@ -235,26 +236,7 @@ class KnowledgeBaseProcessor {
       failedJobs: jobs.filter(j => j.status === 'failed').length
     };
   }
-}
 
-// Create singleton instance
-export const knowledgeBaseProcessor = new KnowledgeBaseProcessor();
-
-// Schedule cleanup every hour
-setInterval(() => {
-  knowledgeBaseProcessor.cleanupOldJobs();
-}, 60 * 60 * 1000);
-import { KnowledgeBase } from "@shared/schema";
-import * as fs from 'fs';
-import * as path from 'path';
-
-/**
- * Knowledge Base Processor for Enrollment Assistant
- * Extracts and formats knowledge base content for AI context
- */
-
-export class KnowledgeBaseProcessor {
-  
   /**
    * Extract relevant context from knowledge bases for enrollment assistant
    */
@@ -270,16 +252,23 @@ export class KnowledgeBaseProcessor {
         }
         
         // Extract content from knowledge base files
-        if (kb.fileUrl) {
-          const fileContent = await this.extractContentFromFile(kb.fileUrl);
-          if (fileContent) {
-            contextContent += `Content: ${fileContent.substring(0, 2000)}...\n`; // Limit content size
+        if (kb.files && Array.isArray(kb.files)) {
+          for (const file of kb.files as any[]) {
+            if (file.url) {
+              const fileContent = await this.extractContentFromFile(file.url);
+              if (fileContent) {
+                contextContent += `Content: ${fileContent.substring(0, 2000)}...\n`; // Limit content size
+              }
+            }
           }
         }
         
-        // Add tags if available
-        if (kb.tags && kb.tags.length > 0) {
-          contextContent += `Topics: ${kb.tags.join(', ')}\n`;
+        // Add metadata tags if available
+        if (kb.metadata && typeof kb.metadata === 'object') {
+          const metadata = kb.metadata as any;
+          if (metadata.tags && Array.isArray(metadata.tags)) {
+            contextContent += `Topics: ${metadata.tags.join(', ')}\n`;
+          }
         }
         
         contextContent += "\n";
@@ -365,4 +354,10 @@ export class KnowledgeBaseProcessor {
   }
 }
 
+// Create singleton instance
 export const knowledgeBaseProcessor = new KnowledgeBaseProcessor();
+
+// Schedule cleanup every hour
+setInterval(() => {
+  knowledgeBaseProcessor.cleanupOldJobs();
+}, 60 * 60 * 1000);
