@@ -84,7 +84,7 @@ export class DatabaseStorage implements IStorage {
     sortOrder?: 'asc' | 'desc';
   }): Promise<Class[]> {
     let query = db.select().from(classes);
-    
+
     // Apply search filter
     if (options.search) {
       query = query.where(
@@ -94,12 +94,12 @@ export class DatabaseStorage implements IStorage {
         )
       );
     }
-    
+
     // Apply category filter
     if (options.category) {
       query = query.where(eq(classes.category, options.category));
     }
-    
+
     // Apply sorting
     if (options.sortBy) {
       const sortColumn = classes[options.sortBy as keyof typeof classes] || classes.createdAt;
@@ -112,7 +112,7 @@ export class DatabaseStorage implements IStorage {
       // Default sort by createdAt desc
       query = query.orderBy(desc(classes.createdAt));
     }
-    
+
     // Apply pagination
     if (options.limit) {
       query = query.limit(options.limit);
@@ -120,7 +120,7 @@ export class DatabaseStorage implements IStorage {
         query = query.offset(options.offset);
       }
     }
-    
+
     return await query;
   }
 
@@ -129,7 +129,7 @@ export class DatabaseStorage implements IStorage {
     category?: string;
   }): Promise<number> {
     let query = db.select({ count: sql`count(*)` }).from(classes);
-    
+
     // Apply search filter
     if (options.search) {
       query = query.where(
@@ -139,12 +139,12 @@ export class DatabaseStorage implements IStorage {
         )
       );
     }
-    
+
     // Apply category filter
     if (options.category) {
       query = query.where(eq(classes.category, options.category));
     }
-    
+
     const result = await query;
     return Number(result[0]?.count || 0);
   }
@@ -207,11 +207,11 @@ export class DatabaseStorage implements IStorage {
 
   async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
     let query = db.select().from(knowledgeBases).where(eq(knowledgeBases.isPublic, true));
-    
+
     if (limit) {
       query = query.limit(limit);
     }
-    
+
     return await query;
   }
 
@@ -250,6 +250,36 @@ export class DatabaseStorage implements IStorage {
       .where(eq(knowledgeBases.id, id))
       .returning();
     return updatedKnowledgeBase;
+  }
+
+  async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
+    try {
+      const result = await this.db.select().from(knowledgeBases);
+      return result;
+    } catch (error) {
+      console.error("Error fetching all knowledge bases from database:", error);
+      throw error;
+    }
+  }
+
+  async getAllActivities(): Promise<Activity[]> {
+    try {
+      const result = await this.db.select().from(activities);
+      return result;
+    } catch (error) {
+      console.error("Error fetching all activities from database:", error);
+      throw error;
+    }
+  }
+
+  async getAllEnrollments(): Promise<ProgramEnrollment[]> {
+    try {
+      const result = await this.db.select().from(programEnrollments);
+      return result;
+    } catch (error) {
+      console.error("Error fetching all enrollments from database:", error);
+      throw error;
+    }
   }
 
   // Program methods
