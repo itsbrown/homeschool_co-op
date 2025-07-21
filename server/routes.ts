@@ -885,13 +885,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const validatedData = insertKnowledgeBaseSchema.parse(req.body);
         console.log("Validation passed, creating knowledge base with data:", JSON.stringify(validatedData, null, 2));
 
-        const knowledgeBase = await storage.createKnowledgeBase({
-          ...validatedData,
-          authorId: authData.userId
-        });
+        try {
+          const knowledgeBase = await storage.createKnowledgeBase({
+            ...validatedData,
+            authorId: authData.userId
+          });
 
-        console.log("Knowledge base created with ID:", knowledgeBase.id);
-        res.status(201).json(knowledgeBase);
+          console.log("Knowledge base created with ID:", knowledgeBase.id);
+          res.status(201).json(knowledgeBase);
+        } catch (dbError) {
+          // Fallback to file storage when database is unavailable
+          console.log('🔄 Database unavailable for knowledge base creation, falling back to file storage...');
+          try {
+            const fs = await import('fs');
+            const path = await import('path');
+
+            // Ensure data directory exists
+            const dataDir = path.join(process.cwd(), 'data');
+            if (!fs.existsSync(dataDir)) {
+              fs.mkdirSync(dataDir, { recursive: true });
+            }
+
+            // Load existing knowledge bases from file
+            const kbFilePath = path.join(dataDir, 'knowledge-bases.json');
+            let knowledgeBases = [];
+
+            if (fs.existsSync(kbFilePath)) {
+              try {
+                const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
+                knowledgeBases = JSON.parse(fileContent);
+              } catch (parseError) {
+                console.warn('Failed to parse existing knowledge bases file, starting fresh:', parseError);
+                knowledgeBases = [];
+              }
+            }
+
+            // Create new knowledge base with file storage
+            const newId = Math.max(0, ...knowledgeBases.map(kb => kb.id || 0)) + 1;
+            const knowledgeBase = {
+              id: newId,
+              ...validatedData,
+              authorId: authData.userId,
+              downloadCount: 0,
+              purchasedBy: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+
+            knowledgeBases.push(knowledgeBase);
+
+            // Save to file with error handling
+            try {
+              fs.writeFileSync(kbFilePath, JSON.stringify(knowledgeBases, null, 2));
+              console.log(`✅ Knowledge base created in file storage with ID ${newId}`);
+              res.status(201).json(knowledgeBase);
+            } catch (writeError) {
+              console.error('Failed to write knowledge base to file:', writeError);
+              throw new Error('Failed to save knowledge base to file storage');
+            }
+          } catch (fileError) {
+            console.error('File storage fallback failed:', fileError);
+            res.status(500).json({ 
+              message: "Failed to create knowledge base", 
+              error: "Both database and file storage are unavailable" 
+            });
+          }
+        }
       } catch (zodError) {
         if (zodError instanceof z.ZodError) {
           console.error("Validation error:", JSON.stringify(zodError.errors, null, 2));
