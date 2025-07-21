@@ -199,44 +199,5 @@
     "updatedAt": "2025-06-09T23:54:08.216Z",
     "downloadCount": 0,
     "purchasedBy": []
-  },
-  {
-    "id": 6,
-    "title": "American Seekers Academy Base Information",
-    "description": "American Seekers Academy base information including class descriptions, member agreements, mentor agreements, pedagogy;",
-    "subject": "Other",
-    "difficulty": "All Levels",
-    "price": 0,
-    "files": [
-      {
-        "url": "/uploads/1753117835108_ASA_COPY___TAGLINES.pdf",
-        "type": "pdf",
-        "name": "ASA COPY + TAGLINES.pdf",
-        "size": 197653,
-        "uploadedAt": "2025-07-21T17:10:35.115Z"
-      },
-      {
-        "url": "/uploads/1753117835115_ASA_OVERVIEW.pdf",
-        "type": "pdf",
-        "name": "ASA OVERVIEW.pdf",
-        "size": 48912,
-        "uploadedAt": "2025-07-21T17:10:35.116Z"
-      }
-    ],
-    "metadata": {
-      "tags": [
-        "ASA",
-        "FAQ"
-      ],
-      "objectives": [
-        "Educational content"
-      ]
-    },
-    "isPublic": false,
-    "authorId": "c6a64363-c341-4236-9a2a-9bfcef79c127",
-    "downloadCount": 0,
-    "purchasedBy": [],
-    "createdAt": "2025-07-21T17:10:35.413Z",
-    "updatedAt": "2025-07-21T17:10:35.413Z"
   }
 ]
