@@ -1969,30 +1969,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Try to get knowledge bases from storage
         allKnowledgeBases = await storage.getAllKnowledgeBases();
       } catch (dbError) {
-        console.error("Database error fetching knowledge bases, falling back to memory storage:", dbError);
+        console.error("Database error fetching knowledge bases, falling back to file storage:", dbError);
         
-        // Fallback to memory storage
+        // Fallback to file storage directly
         try {
-          const memStorage = new (await import('./storage')).MemStorage();
-          allKnowledgeBases = await memStorage.getAllKnowledgeBases();
-        } catch (memError) {
-          console.error("Memory storage also failed:", memError);
-          // Return sample data as last resort
-          allKnowledgeBases = [
-            {
-              id: 1,
-              title: "Sample Knowledge Base",
-              description: "A sample knowledge base for demonstration",
-              subject: "General",
-              difficulty: "All Levels",
-              isPublic: true,
-              files: [],
-              metadata: { tags: ["sample"] },
-              downloadCount: 0,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }
-          ];
+          const fs = await import('fs');
+          const path = await import('path');
+          const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
+          
+          if (fs.existsSync(kbFilePath)) {
+            const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
+            allKnowledgeBases = JSON.parse(fileContent);
+            console.log(`✅ Loaded ${allKnowledgeBases.length} knowledge bases from file storage`);
+          } else {
+            console.log('⚠️ No knowledge-bases.json file found');
+            allKnowledgeBases = [];
+          }
+        } catch (fileError) {
+          console.error("File storage also failed:", fileError);
+          allKnowledgeBases = [];
         }
       }
       

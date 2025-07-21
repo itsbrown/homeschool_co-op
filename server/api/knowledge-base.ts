@@ -288,6 +288,7 @@ export const getCombinedKnowledgeBases = async (req: Request, res: Response) => 
           const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
           const allKnowledgeBases = JSON.parse(fileContent);
           publicKnowledgeBases = allKnowledgeBases.filter(kb => kb.isPublic);
+          console.log(`✅ File fallback: Found ${publicKnowledgeBases.length} public knowledge bases`);
         }
       } catch (fileError) {
         console.error("File storage fallback failed for public knowledge bases:", fileError);
@@ -310,6 +311,7 @@ export const getCombinedKnowledgeBases = async (req: Request, res: Response) => 
             const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
             const allKnowledgeBases = JSON.parse(fileContent);
             userKnowledgeBases = allKnowledgeBases.filter(kb => kb.authorId === req.session.userId);
+            console.log(`✅ File fallback: Found ${userKnowledgeBases.length} user knowledge bases for user ${req.session.userId}`);
           }
         } catch (fileError) {
           console.error("File storage fallback failed for user knowledge bases:", fileError);
