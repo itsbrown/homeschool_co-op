@@ -238,10 +238,49 @@ router.get("/my-school", async (req, res) => {
 
     } catch (error) {
       console.error('Database access error:', error);
-      return res.status(500).json({ 
-        message: "Unable to connect to database. Please verify your Supabase credentials.",
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      
+      // Fallback to file storage when database is unavailable
+      console.log('🔄 Database unavailable, falling back to file storage...');
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const schoolsFilePath = path.join(process.cwd(), 'data', 'schools.json');
+        
+        if (fs.existsSync(schoolsFilePath)) {
+          const schoolsData = JSON.parse(fs.readFileSync(schoolsFilePath, 'utf8'));
+          
+          // For super admin, return default school
+          if (userRole === 'superAdmin') {
+            const defaultSchool = schoolsData.find(school => school.name === 'American Seekers Academy') || schoolsData[0];
+            if (defaultSchool) {
+              console.log('🚀 Returning default school from file storage for super admin');
+              return res.json(defaultSchool);
+            }
+          }
+          
+          // For school admins, try to find school by email
+          const userSchool = schoolsData.find(school => 
+            school.email === userData.email || 
+            school.adminEmail === userData.email
+          );
+          
+          if (userSchool) {
+            console.log('🚀 Returning school from file storage:', userSchool.name);
+            return res.json(userSchool);
+          }
+        }
+        
+        return res.status(404).json({ 
+          message: "No school found for this administrator"
+        });
+        
+      } catch (fallbackError) {
+        console.error('File storage fallback failed:', fallbackError);
+        return res.status(500).json({ 
+          message: "Unable to connect to database and file storage fallback failed.",
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     }
   } catch (error) {
     console.error("Error fetching school information:", error);
