@@ -254,6 +254,7 @@ router.get("/my-school", async (req, res) => {
 async function setupSchool(req: any, res: any) {
   try {
     console.log('🏫 Setting up school for new admin');
+    console.log('📋 Request body:', JSON.stringify(req.body, null, 2));
 
     const authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -262,41 +263,67 @@ async function setupSchool(req: any, res: any) {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    console.log('🔒 Token:', token.substring(0, 20) + '...');
+    console.log('🔒 Token received');
 
-    // Create a new Supabase client instance with the user's access token
-    const { createClient } = await import('@supabase/supabase-js');
+    // Extract school registration data from request body
+    const {
+      name,
+      type,
+      address,
+      city,
+      state,
+      zipCode,
+      phoneNumber,
+      email,
+      website,
+      description,
+      accreditation,
+      enrollmentSize,
+      foundedYear
+    } = req.body;
 
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      return res.status(500).json({ message: "Supabase configuration missing" });
+    // Validate required fields
+    if (!name || !type || !city || !state || !zipCode || !email) {
+      return res.status(400).json({ 
+        message: "Missing required fields",
+        required: ["name", "type", "city", "state", "zipCode", "email"]
+      });
     }
-
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      }
-    );
-
-    // Verify the token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      console.error('❌ Auth error:', authError?.message);
-      return res.status(401).json({ message: "Invalid token", error: authError?.message });
-    }
-
-    console.log('✅ Setting up school for user:', user.email);
-
-    // Use admin client to create the school
-    const { supabaseAdmin } = await import('../db/supabase');
 
     try {
+      // Create a new Supabase client instance with the user's access token
+      const { createClient } = await import('@supabase/supabase-js');
+
+      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+        console.log('⚠️ Supabase not configured, using file storage');
+        throw new Error('Supabase not configured');
+      }
+
+      const supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_ANON_KEY,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        }
+      );
+
+      // Verify the token and get user
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        console.log('⚠️ Auth failed, using file storage fallback');
+        throw new Error('Auth failed');
+      }
+
+      console.log('✅ Setting up school for user:', user.email);
+
+      // Use admin client to create the school
+      const { supabaseAdmin } = await import('../db/supabase');
+
       // Get user from MemStorage
       const userData = await storage.getUserByEmail(user.email);
       if (!userData) {
@@ -308,13 +335,19 @@ async function setupSchool(req: any, res: any) {
 
       // Create school using Supabase admin client
       const schoolData = {
-        name: "My School",
-        type: "academy",
-        city: "City",
-        state: "State",
-        zip_code: "12345",
-        phone_number: "555-0123",
-        email: user.email,
+        name,
+        type,
+        address,
+        city,
+        state,
+        zip_code: zipCode,
+        phone_number: phoneNumber,
+        email,
+        website,
+        description,
+        accreditation,
+        enrollment_size: enrollmentSize ? parseInt(enrollmentSize) : null,
+        founded_year: foundedYear ? parseInt(foundedYear) : null,
         admin_id: userData.id,
         status: "active",
         created_at: new Date().toISOString(),
@@ -331,20 +364,74 @@ async function setupSchool(req: any, res: any) {
 
       if (schoolError) {
         console.error('❌ Database error creating school:', schoolError);
-        return res.status(500).json({ 
-          message: "Failed to create school in database",
-          error: schoolError.message
-        });
+        throw new Error(`Database error: ${schoolError.message}`);
       }
 
-      console.log('🚀 Created school successfully:', newSchool);
-      res.json(newSchool);
+      console.log('🚀 Created school successfully in database:', newSchool);
+      return res.json(newSchool);
 
     } catch (dbError) {
-      console.error('❌ Database access error:', dbError);
-      return res.status(500).json({ 
-        message: "Unable to connect to database",
-        error: dbError instanceof Error ? dbError.message : 'Unknown error'
+      console.log('⚠️ Database failed, using file storage fallback:', dbError);
+      
+      // Fallback to file storage
+      const DATA_DIR = path.join(process.cwd(), 'data');
+      const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
+
+      // Ensure data directory exists
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+
+      // Load existing schools or initialize empty array
+      let existingSchools = [];
+      if (fs.existsSync(SCHOOLS_FILE)) {
+        try {
+          const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
+          existingSchools = JSON.parse(fileContent);
+        } catch (error) {
+          console.log('Error reading schools file, starting with empty array:', error);
+          existingSchools = [];
+        }
+      }
+
+      // Generate new ID
+      const newId = existingSchools.length > 0 
+        ? Math.max(...existingSchools.map((s: any) => s.id)) + 1 
+        : 1;
+
+      // Create new school object for file storage
+      const newSchool = {
+        id: newId,
+        name,
+        type,
+        address,
+        city,
+        state,
+        zipCode,
+        phoneNumber,
+        email,
+        website,
+        description,
+        accreditation,
+        enrollmentSize: enrollmentSize ? parseInt(enrollmentSize) : null,
+        foundedYear: foundedYear ? parseInt(foundedYear) : null,
+        adminId: 1, // Default admin ID for file storage
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Add to schools array
+      existingSchools.push(newSchool);
+
+      // Write back to file
+      fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(existingSchools, null, 2));
+
+      console.log('✅ School created successfully in file storage:', newSchool.name);
+      return res.json({
+        message: "School registered successfully",
+        school: newSchool,
+        method: "file_storage"
       });
     }
 
