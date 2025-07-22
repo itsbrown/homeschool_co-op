@@ -15,7 +15,7 @@ export const users = pgTable("users", {
   avatar: text("avatar"),
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),
   permissions: jsonb("permissions").default({}).notNull(), // Custom permissions
-  schoolId: integer("school_id").references(() => schools.id), // Link user to school
+  schoolId: integer("school_id"), // Link user to school
   isActive: boolean("is_active").default(true).notNull(),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -32,7 +32,7 @@ export const schools = pgTable("schools", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   type: text("type", { enum: ["school", "co-op", "homeschool_group", "other"] }).notNull(),
-  adminId: integer("admin_id").notNull().references(() => users.id),
+  adminId: integer("admin_id").notNull(),
   address: text("address"),
   city: text("city").notNull(),
   state: text("state").notNull(),
@@ -649,3 +649,37 @@ export const marketingLinks = pgTable("marketing_links", {
 export const insertMarketingLinkSchema = createInsertSchema(marketingLinks);
 export type InsertMarketingLink = z.infer<typeof insertMarketingLinkSchema>;
 export type MarketingLink = typeof marketingLinks.$inferSelect;
+
+// Link Analytics table for tracking marketing link performance
+export const linkAnalytics = pgTable("link_analytics", {
+  id: serial("id").primaryKey(),
+  linkId: integer("link_id").notNull().references(() => marketingLinks.id),
+  event: text("event", { enum: ["click", "conversion"] }).notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  referrer: text("referrer")
+});
+
+export const insertLinkAnalyticsSchema = createInsertSchema(linkAnalytics);
+export type InsertLinkAnalytics = z.infer<typeof insertLinkAnalyticsSchema>;
+export type LinkAnalytics = typeof linkAnalytics.$inferSelect;
+
+// Payments table for tracking payment transactions
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
+  parentEmail: text("parent_email").notNull(),
+  childName: text("child_name").notNull(),
+  className: text("class_name").notNull(),
+  amount: integer("amount").notNull(), // in cents
+  currency: text("currency").default("usd").notNull(),
+  status: text("status", { enum: ["pending", "completed", "failed", "refunded"] }).default("pending").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const insertPaymentSchema = createInsertSchema(payments);
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;

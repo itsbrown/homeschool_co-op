@@ -352,7 +352,27 @@ function Router() {
             );
           }} />
 
-          <Route path="/class-payment-plans/:classId" component={ClassPaymentPlans} />
+          <Route path="/class-payment-plans/:classId">
+            {(params) => {
+              // Mock data for now - in production this would be fetched based on params.classId
+              const mockClassData = {
+                id: params?.classId || '1',
+                title: 'Sample Class',
+                price: 50000, // $500 in cents
+                depositRequired: 5000, // $50 in cents
+                school: 'LearnSphere Academy',
+                schedule: 'Mon, Wed, Fri 10:00-11:00 AM'
+              };
+              
+              return (
+                <ClassPaymentPlans 
+                  classData={mockClassData}
+                  childName="Student"
+                  onSelectPlan={(plan) => console.log('Selected plan:', plan)}
+                />
+              );
+            }}
+          </Route>
 
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
