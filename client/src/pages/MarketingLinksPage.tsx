@@ -64,18 +64,18 @@ export default function MarketingLinksPage() {
 
   // Fetch marketing links
   const { data: links = [], isLoading } = useQuery<MarketingLink[]>({
-    queryKey: ["/marketing-links"],
+    queryKey: ["/api/school-admin/marketing-links"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/marketing-links");
+      const response = await apiRequest("GET", "/api/school-admin/marketing-links");
       return response.json();
     }
   });
 
   // Fetch analytics for selected link
   const { data: analytics } = useQuery<LinkAnalytics>({
-    queryKey: ["/marketing-links", selectedLink?.id, "analytics"],
+    queryKey: ["/api/school-admin/marketing-links", selectedLink?.id, "analytics"],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/marketing-links/${selectedLink?.id}/analytics`);
+      const response = await apiRequest("GET", `/api/school-admin/marketing-links/${selectedLink?.id}/analytics`);
       return response.json();
     },
     enabled: !!selectedLink
@@ -84,11 +84,11 @@ export default function MarketingLinksPage() {
   // Create marketing link mutation
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const response = await apiRequest("POST", "/marketing-links", data);
+      const response = await apiRequest("POST", "/api/school-admin/marketing-links", data);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/marketing-links"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/marketing-links"] });
       setShowCreateForm(false);
       setFormData({
         name: "",
@@ -116,11 +116,11 @@ export default function MarketingLinksPage() {
   // Delete marketing link mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await apiRequest("DELETE", `/marketing-links/${id}`);
+      const response = await apiRequest("DELETE", `/api/school-admin/marketing-links/${id}`);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/marketing-links"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/marketing-links"] });
       toast({
         title: "Marketing link deleted",
         description: "The marketing link has been deleted successfully."
