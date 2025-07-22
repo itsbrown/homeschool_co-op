@@ -8,6 +8,16 @@ import path from 'path';
 
 const router = express.Router();
 
+// Generate a unique registration code
+function generateRegistrationCode(): string {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+}
+
 // Create a new school
 router.post("/", async (req, res) => {
   try {
@@ -22,11 +32,18 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // Generate unique registration code if not provided
+    const registrationCode = validatedData.data.registrationCode || generateRegistrationCode();
+    const schoolDataWithCode = {
+      ...validatedData.data,
+      registrationCode
+    };
+
     try {
       // Try database first
       const [newSchool] = await db
         .insert(schools)
-        .values(validatedData.data)
+        .values(schoolDataWithCode)
         .returning();
 
       console.log('✅ School created in database:', newSchool);
@@ -66,19 +83,20 @@ router.post("/", async (req, res) => {
       // Create new school object for file storage
       const newSchool = {
         id: newId,
-        name: validatedData.data.name,
-        type: validatedData.data.type,
-        address: validatedData.data.address,
-        city: validatedData.data.city,
-        state: validatedData.data.state,
-        zipCode: validatedData.data.zipCode,
-        phoneNumber: validatedData.data.phoneNumber,
-        email: validatedData.data.email,
-        website: validatedData.data.website,
-        description: validatedData.data.description,
-        accreditation: validatedData.data.accreditation,
-        enrollmentSize: validatedData.data.enrollmentSize,
-        foundedYear: validatedData.data.foundedYear,
+        name: schoolDataWithCode.name,
+        type: schoolDataWithCode.type,
+        address: schoolDataWithCode.address,
+        city: schoolDataWithCode.city,
+        state: schoolDataWithCode.state,
+        zipCode: schoolDataWithCode.zipCode,
+        phoneNumber: schoolDataWithCode.phoneNumber,
+        email: schoolDataWithCode.email,
+        website: schoolDataWithCode.website,
+        description: schoolDataWithCode.description,
+        accreditation: schoolDataWithCode.accreditation,
+        enrollmentSize: schoolDataWithCode.enrollmentSize,
+        foundedYear: schoolDataWithCode.foundedYear,
+        registrationCode: schoolDataWithCode.registrationCode,
         status: "active",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -179,6 +197,58 @@ router.get("/knowledge-bases", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
+// Get school by registration code
+router.get("/by-code/:code", async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    if (!code) {
+      return res.status(400).json({ message: "Registration code is required" });
+    }
+
+    try {
+      // Try database first
+      const school = await db.query.schools.findFirst({
+        where: eq(schools.registrationCode, code.toUpperCase())
+      });
+
+      if (school) {
+        return res.json(school);
+      }
+    } catch (dbError) {
+      console.log('⚠️ Database failed, using file storage fallback:', dbError);
+    }
+
+    // Fallback to file storage
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const DATA_DIR = path.join(process.cwd(), 'data');
+      const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
+
+      if (fs.existsSync(SCHOOLS_FILE)) {
+        const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
+        const schools = JSON.parse(fileContent);
+        const school = schools.find((s: any) => s.registrationCode === code.toUpperCase());
+        
+        if (school) {
+          return res.json(school);
+        }
+      }
+    } catch (fileError) {
+      console.error('File storage also failed:', fileError);
+    }
+
+    return res.status(404).json({ message: "School not found with this registration code" });
+  } catch (error: any) {
+    console.error("Error fetching school by registration code:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
     const schoolId = parseInt(id);
     
     if (isNaN(schoolId)) {

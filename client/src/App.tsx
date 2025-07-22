@@ -59,6 +59,9 @@ import ProgramsBrowseRedirect from "@/pages/ProgramsBrowseRedirect";
 import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
 import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
+import SchoolLandingPage from "@/pages/SchoolLandingPage";
+import SchoolRegistrationFormPage from "@/pages/SchoolRegistrationFormPage";
+import RegistrationSuccessPage from "@/pages/RegistrationSuccessPage";
 import SettingsPage from "@/pages/SettingsPage";
 import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
@@ -383,6 +386,11 @@ function Router() {
       {/* School/Co-op registration routes */}
       <Route path="/schools/register" component={SchoolRegistrationPage} />
       <Route path="/schools/register/confirm" component={SchoolRegistrationConfirmationPage} />
+      
+      {/* School-specific landing and registration pages */}
+      <Route path="/school/:code" component={SchoolLandingPage} />
+      <Route path="/register/:code" component={SchoolRegistrationFormPage} />
+      <Route path="/registration-success/:code" component={RegistrationSuccessPage} />
 
       {/* School Admin routes */}
       <Route path="/schools" component={MySchoolPage} />

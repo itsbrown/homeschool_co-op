@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth0";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users, TrendingUp, DollarSign, BookOpen, GraduationCap, AlertTriangle, CheckCircle, Clock, Target } from "lucide-react";
+import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users, TrendingUp, DollarSign, BookOpen, GraduationCap, AlertTriangle, CheckCircle, Clock, Target, Link as LucideLink, Copy, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,6 +12,8 @@ import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import AppShell from '@/components/layout/AppShell';
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 // School data interface
 interface SchoolData {
@@ -31,6 +33,7 @@ interface SchoolData {
   accreditation?: string | null;
   enrollmentSize?: number;
   status?: string;
+  registrationCode?: string; // Added registrationCode property
 }
 
 // Dashboard KPI interfaces
@@ -215,7 +218,7 @@ export default function MySchoolPage() {
                 </div>
               </div>
             </CardHeader>
-            
+
             <CardContent>
               <Tabs defaultValue="overview" className="w-full">
                 <TabsList>
@@ -223,7 +226,7 @@ export default function MySchoolPage() {
                   <TabsTrigger value="details">Details</TabsTrigger>
                   <TabsTrigger value="stats">Statistics</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="overview" className="space-y-6">
                   {/* Key Performance Indicators */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -502,14 +505,14 @@ export default function MySchoolPage() {
                     </CardContent>
                   </Card>
                 </TabsContent>
-                
+
                 <TabsContent value="details">
                   <div className="prose max-w-none">
                     <h3>About {school.name}</h3>
                     <p>{school.description || "No detailed description available."}</p>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="stats">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Card>
@@ -521,7 +524,7 @@ export default function MySchoolPage() {
                         <p className="text-sm text-muted-foreground">Active classes</p>
                       </CardContent>
                     </Card>
-                    
+
                     <Card>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-lg">Staff</CardTitle>
@@ -531,7 +534,7 @@ export default function MySchoolPage() {
                         <p className="text-sm text-muted-foreground">Teaching staff</p>
                       </CardContent>
                     </Card>
-                    
+
                     <Card>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-lg">Students</CardTitle>
