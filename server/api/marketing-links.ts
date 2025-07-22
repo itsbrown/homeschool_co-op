@@ -41,7 +41,7 @@ router.post("/", async (req, res) => {
 
     // Generate full tracking URL
     const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
-    const trackingUrl = `https://${baseUrl}/school/${marketingLink.schoolId}/enroll/${marketingLink.campaignId}?utm_source=${marketingLink.utmSource}&utm_medium=${marketingLink.utmMedium}&utm_campaign=${marketingLink.utmCampaign}`;
+    const trackingUrl = `https://${baseUrl}/school/${marketingLink.schoolId}/enroll/${marketingLink.campaignId}?utm_source=school&utm_medium=marketing_link&utm_campaign=${marketingLink.campaignName.toLowerCase().replace(/\s+/g, '_')}`;
 
     res.json({
       ...updatedLink,
@@ -65,7 +65,7 @@ router.get("/", async (req, res) => {
     const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
     const enrichedLinks = links.map(link => ({
       ...link,
-      trackingUrl: `https://${baseUrl}/school/${link.schoolId}/enroll/${link.campaignId}?utm_source=${link.utmSource}&utm_medium=${link.utmMedium}&utm_campaign=${link.utmCampaign}`,
+      trackingUrl: `https://${baseUrl}/school/${link.schoolId}/enroll/${link.campaignId}?utm_source=school&utm_medium=marketing_link&utm_campaign=${link.campaignName.toLowerCase().replace(/\s+/g, '_')}`,
       shortUrl: `https://${baseUrl}/l/${link.campaignId}`
     }));
 
@@ -88,7 +88,7 @@ router.get("/:id", async (req, res) => {
 
     // Add tracking URL
     const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
-    const trackingUrl = `https://${baseUrl}/school/${link.schoolId}/enroll/${link.campaignId}?utm_source=${link.utmSource}&utm_medium=${link.utmMedium}&utm_campaign=${link.utmCampaign}`;
+    const trackingUrl = `https://${baseUrl}/school/${link.schoolId}/enroll/${link.campaignId}?utm_source=school&utm_medium=marketing_link&utm_campaign=${link.campaignName.toLowerCase().replace(/\s+/g, '_')}`;
 
     res.json({
       ...link,
@@ -115,7 +115,7 @@ router.put("/:id", async (req, res) => {
 
     // Add tracking URL
     const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
-    const trackingUrl = `https://${baseUrl}/school/${updatedLink.schoolId}/enroll/${updatedLink.campaignId}?utm_source=${updatedLink.utmSource}&utm_medium=${updatedLink.utmMedium}&utm_campaign=${updatedLink.utmCampaign}`;
+    const trackingUrl = `https://${baseUrl}/school/${updatedLink.schoolId}/enroll/${updatedLink.campaignId}?utm_source=school&utm_medium=marketing_link&utm_campaign=${updatedLink.campaignName.toLowerCase().replace(/\s+/g, '_')}`;
 
     res.json({
       ...updatedLink,

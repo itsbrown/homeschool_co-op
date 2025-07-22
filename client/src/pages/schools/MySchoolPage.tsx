@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth0";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users, TrendingUp, DollarSign, BookOpen, GraduationCap, AlertTriangle, CheckCircle, Clock, Target, Link as LucideLink, Copy, ExternalLink } from "lucide-react";
+import { Loader2, MapPin, Phone, Mail, Globe, Calendar, Users, TrendingUp, DollarSign, BookOpen, GraduationCap, AlertTriangle, CheckCircle, Clock, Target, Link as LucideLink, Copy, ExternalLink, Plus, QrCode, BarChart3, Trash2, Edit } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,6 +14,9 @@ import { Progress } from "@/components/ui/progress";
 import AppShell from '@/components/layout/AppShell';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // School data interface
 interface SchoolData {
@@ -71,9 +74,37 @@ interface StaffMetrics {
   staffUtilization: number;
 }
 
+// Marketing Links interfaces - matches shared/schema.ts
+interface MarketingLink {
+  id: number;
+  schoolId: number;
+  campaignId: string;
+  campaignName: string;
+  linkUrl: string;
+  isActive: boolean;
+  clickCount: number;
+  createdAt: string;
+  updatedAt: string;
+  trackingUrl?: string;
+  shortUrl?: string;
+}
+
+interface CreateMarketingLinkData {
+  campaignName: string;
+  linkUrl: string;
+}
+
 export default function MySchoolPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Marketing Links state
+  const [showCreateLinkDialog, setShowCreateLinkDialog] = useState(false);
+  const [newLinkData, setNewLinkData] = useState<CreateMarketingLinkData>({
+    campaignName: '',
+    linkUrl: '',
+  });
 
   // Fetch school data
   const { data: school, isLoading, error, refetch } = useQuery<SchoolData>({
@@ -101,6 +132,74 @@ export default function MySchoolPage() {
     queryKey: ["/api/school-admin/metrics/staff"],
     enabled: isAuthenticated && !!school,
   });
+
+  // Fetch marketing links
+  const { data: marketingLinks = [], isLoading: isLoadingLinks } = useQuery<MarketingLink[]>({
+    queryKey: ["/api/school-admin/marketing-links"],
+    enabled: isAuthenticated && !!school,
+  });
+
+  // Create marketing link mutation
+  const createLinkMutation = useMutation({
+    mutationFn: async (data: CreateMarketingLinkData) => {
+      const response = await apiRequest("POST", "/api/school-admin/marketing-links", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/marketing-links"] });
+      setShowCreateLinkDialog(false);
+      setNewLinkData({ campaignName: '', linkUrl: '' });
+      toast({
+        title: "Marketing link created",
+        description: "Your new marketing link has been created successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error creating link",
+        description: "Failed to create marketing link. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete marketing link mutation
+  const deleteLinkMutation = useMutation({
+    mutationFn: async (linkId: number) => {
+      await apiRequest("DELETE", `/api/school-admin/marketing-links/${linkId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/marketing-links"] });
+      toast({
+        title: "Marketing link deleted",
+        description: "The marketing link has been deleted successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error deleting link",
+        description: "Failed to delete marketing link. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Copy to clipboard helper
+  const copyToClipboard = async (text: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Copied to clipboard",
+        description: successMessage,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Please copy the link manually.",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Setup school mutation
   const setupSchoolMutation = useMutation({
@@ -506,11 +605,197 @@ export default function MySchoolPage() {
                   </Card>
                 </TabsContent>
 
-                <TabsContent value="details">
-                  <div className="prose max-w-none">
-                    <h3>About {school.name}</h3>
-                    <p>{school.description || "No detailed description available."}</p>
-                  </div>
+                <TabsContent value="details" className="space-y-6">
+                  {/* School Description */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>About {school.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-muted-foreground">
+                        {school.description || "No detailed description available."}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Marketing Links Section */}
+                  <Card>
+                    <CardHeader>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <LucideLink className="h-5 w-5" />
+                            Marketing Links
+                          </CardTitle>
+                          <CardDescription>
+                            Create and manage marketing links to track enrollment campaigns
+                          </CardDescription>
+                        </div>
+                        <Dialog open={showCreateLinkDialog} onOpenChange={setShowCreateLinkDialog}>
+                          <DialogTrigger asChild>
+                            <Button className="flex items-center gap-2">
+                              <Plus className="h-4 w-4" />
+                              Create Link
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Create Marketing Link</DialogTitle>
+                              <DialogDescription>
+                                Create a trackable marketing link for your enrollment campaigns
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                              <div className="grid gap-2">
+                                <Label htmlFor="campaignName">Campaign Name</Label>
+                                <Input
+                                  id="campaignName"
+                                  placeholder="e.g., Spring 2025 Open House"
+                                  value={newLinkData.campaignName}
+                                  onChange={(e) => setNewLinkData(prev => ({ ...prev, campaignName: e.target.value }))}
+                                />
+                              </div>
+                              <div className="grid gap-2">
+                                <Label htmlFor="linkUrl">Destination URL</Label>
+                                <Input
+                                  id="linkUrl"
+                                  placeholder="e.g., https://your-website.com/enroll"
+                                  value={newLinkData.linkUrl}
+                                  onChange={(e) => setNewLinkData(prev => ({ ...prev, linkUrl: e.target.value }))}
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setShowCreateLinkDialog(false)}>
+                                Cancel
+                              </Button>
+                              <Button 
+                                onClick={() => createLinkMutation.mutate(newLinkData)}
+                                disabled={!newLinkData.campaignName || !newLinkData.linkUrl || createLinkMutation.isPending}
+                              >
+                                {createLinkMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Create Link
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingLinks ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                          <span className="ml-2">Loading marketing links...</span>
+                        </div>
+                      ) : marketingLinks.length === 0 ? (
+                        <div className="text-center py-8">
+                          <LucideLink className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-lg font-medium mb-2">No marketing links yet</h3>
+                          <p className="text-muted-foreground mb-4">
+                            Create your first marketing link to start tracking enrollment campaigns
+                          </p>
+                          <Button onClick={() => setShowCreateLinkDialog(true)} className="flex items-center gap-2">
+                            <Plus className="h-4 w-4" />
+                            Create Your First Link
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {marketingLinks.map((link) => (
+                            <Card key={link.id} className="border-l-4 border-l-primary/20">
+                              <CardHeader className="pb-3">
+                                <div className="flex justify-between items-start">
+                                  <div className="space-y-1">
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                      {link.campaignName}
+                                      <Badge variant={link.isActive ? "default" : "secondary"}>
+                                        {link.isActive ? "Active" : "Inactive"}
+                                      </Badge>
+                                    </CardTitle>
+                                    <CardDescription>
+                                      Campaign ID: {link.campaignId}
+                                    </CardDescription>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="flex items-center gap-1">
+                                      <BarChart3 className="h-3 w-3" />
+                                      {link.clickCount} clicks
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => deleteLinkMutation.mutate(link.id)}
+                                      disabled={deleteLinkMutation.isPending}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-sm font-medium">Tracking URL:</Label>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => copyToClipboard(link.trackingUrl || link.linkUrl, "Tracking URL copied to clipboard")}
+                                      >
+                                        <Copy className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => window.open(link.trackingUrl || link.linkUrl, '_blank')}
+                                      >
+                                        <ExternalLink className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div className="p-2 bg-muted rounded text-sm font-mono break-all">
+                                    {link.trackingUrl || link.linkUrl}
+                                  </div>
+                                </div>
+
+                                {link.shortUrl && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <Label className="text-sm font-medium">Short URL:</Label>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => copyToClipboard(link.shortUrl!, "Short URL copied to clipboard")}
+                                      >
+                                        <Copy className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                    <div className="p-2 bg-muted rounded text-sm font-mono break-all">
+                                      {link.shortUrl}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                  <div className="text-sm text-muted-foreground">
+                                    Created: {new Date(link.createdAt).toLocaleDateString()}
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link.trackingUrl || link.linkUrl)}`, '_blank')}
+                                  >
+                                    <QrCode className="h-4 w-4 mr-2" />
+                                    Generate QR Code
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </TabsContent>
 
                 <TabsContent value="stats">
