@@ -637,4 +637,15 @@ export const marketingLinks = pgTable("marketing_links", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id),
   campaignId: text("campaign_id").notNull().unique(), // Unique identifier for the campaign
-  campaignName: text("campaign_name").notNull(), // User-friendly campaign
+  campaignName: text("campaign_name").notNull(), // User-friendly campaign name
+  linkUrl: text("link_url").notNull(), // The actual marketing link URL
+  isActive: boolean("is_active").default(true).notNull(),
+  clickCount: integer("click_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+// Marketing Links schema and types
+export const insertMarketingLinkSchema = createInsertSchema(marketingLinks);
+export type InsertMarketingLink = z.infer<typeof insertMarketingLinkSchema>;
+export type MarketingLink = typeof marketingLinks.$inferSelect;
