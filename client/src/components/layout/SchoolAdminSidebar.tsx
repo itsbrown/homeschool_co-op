@@ -10,6 +10,7 @@ import {
   Home,
   LogOut,
   User,
+  Link as LucideLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,11 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
       title: "Students",
       href: "/schools/students",
       icon: <Users className="h-5 w-5" />,
+    },
+    {
+      title: "Marketing Links",
+      href: "/marketing-links",
+      icon: <LucideLink className="h-5 w-5" />,
     },
     {
       title: "Knowledge Base",
