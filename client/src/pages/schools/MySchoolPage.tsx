@@ -607,16 +607,47 @@ export default function MySchoolPage() {
 
                 <TabsContent value="details" className="space-y-6">
                   {/* School Description */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>About {school.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-muted-foreground">
-                        {school.description || "No detailed description available."}
-                      </p>
-                    </CardContent>
-                  </Card>
+                  
+<div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium mb-4">About {school.name}</h3>
+                <p className="text-muted-foreground">
+                  {school.description || "No detailed description available."}
+                </p>
+              </div>
+
+              <div className="border rounded-lg p-4 bg-primary/5">
+                <h4 className="font-medium mb-2 text-primary">Registration Code</h4>
+                <div className="flex items-center gap-2">
+                  <code className="font-mono text-lg font-bold bg-background px-2 py-1 rounded">
+                    {school.registrationCode}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(school.registrationCode);
+                      toast({
+                        title: "Copied!",
+                        description: "Registration code copied to clipboard",
+                      });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Share this code with families to allow them to register for your school.
+                </p>
+                <div className="mt-3 space-y-1">
+                  <p className="text-sm font-medium">Registration Links:</p>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div>Landing Page: <code className="bg-background px-1 rounded">{window.location.origin}/school/{school.registrationCode}</code></div>
+                    <div>Direct Registration: <code className="bg-background px-1 rounded">{window.location.origin}/register/{school.registrationCode}</code></div>
+                  </div>
+                </div>
+              </div></div>
+                  
 
                   {/* Marketing Links Section */}
                   <Card>
