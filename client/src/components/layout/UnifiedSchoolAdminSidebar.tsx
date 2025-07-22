@@ -15,7 +15,8 @@ import {
   Home,
   LogOut,
   User,
-  LucideIcon
+  LucideIcon,
+  Link
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -56,6 +57,11 @@ const schoolNavItems: NavItem[] = [
     title: 'Knowledge Base',
     href: '/schools/knowledge-base',
     icon: Database,
+  },
+  {
+    title: 'Marketing Links',
+    href: '/marketing-links',
+    icon: Link,
   },
 ];
 

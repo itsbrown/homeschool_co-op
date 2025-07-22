@@ -93,11 +93,11 @@ const CallbackPage = () => {
 
 const Redirect = ({ to }: { to: string }) => {
   const [, setLocation] = useLocation();
-  
+
   React.useEffect(() => {
     setLocation(to);
   }, [to, setLocation]);
-  
+
   return null;
 };
 import NotFound from "@/pages/not-found";
@@ -117,7 +117,7 @@ import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
 import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
 import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
-import MarketingLinksPage from "@/pages/MarketingLinksPage";
+import MarketingLinksPage from '@/pages/MarketingLinksPage';
 import ParentDashboard from "./components/dashboards/ParentDashboard";
 import ParentAppShell from "./components/layout/ParentAppShell";
 import AIStatusProvider from "@/contexts/AIStatusContext";
@@ -386,7 +386,7 @@ function Router() {
       {/* School/Co-op registration routes */}
       <Route path="/schools/register" component={SchoolRegistrationPage} />
       <Route path="/schools/register/confirm" component={SchoolRegistrationConfirmationPage} />
-      
+
       {/* School-specific landing and registration pages */}
       <Route path="/school/:code" component={SchoolLandingPage} />
       <Route path="/register/:code" component={SchoolRegistrationFormPage} />
@@ -410,10 +410,8 @@ function Router() {
       <Route path="/schools/students/:id" component={StudentDetailPage} />
       <Route path="/schools/students/:id/edit" component={StudentRegistrationPage} />
       <Route path="/schools/students/register" component={StudentRegistrationPage} />
-      <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
-      <Route path="/schools/knowledge-base/create" component={KnowledgeBaseCreationPage} />
-      <Route path="/schools/knowledge-base/new" component={KnowledgeBaseCreationPage} />
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
+      <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
       <Route path="/schools/settings" component={SchoolSettingsPage} />
 
