@@ -626,10 +626,19 @@ export default function MySchoolPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      navigator.clipboard.writeText(school.registrationCode);
-                      toast({
-                        title: "Copied!",
-                        description: "Registration code copied to clipboard",
+                      const codeToClipboard = school.registrationCode || school.id?.toString() || 'No code available';
+                      navigator.clipboard.writeText(codeToClipboard).then(() => {
+                        toast({
+                          title: "Copied!",
+                          description: "Registration code copied to clipboard",
+                        });
+                      }).catch((err) => {
+                        console.error('Failed to copy:', err);
+                        toast({
+                          title: "Copy failed",
+                          description: "Unable to copy to clipboard",
+                          variant: "destructive"
+                        });
                       });
                     }}
                   >
