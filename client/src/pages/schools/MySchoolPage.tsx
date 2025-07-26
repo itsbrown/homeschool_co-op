@@ -620,26 +620,28 @@ export default function MySchoolPage() {
                 <h4 className="font-medium mb-2 text-primary">Registration Code</h4>
                 <div className="flex items-center gap-2">
                   <code className="font-mono text-lg font-bold bg-background px-2 py-1 rounded">
-                    {school.registrationCode || 'Loading...'}
+                    {school.registrationCode || (isLoading ? 'Loading...' : 'Generating...')}
                   </code>
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={!school.registrationCode}
                     onClick={() => {
-                      const codeToClipboard = school.registrationCode || 'No code available';
-                      navigator.clipboard.writeText(codeToClipboard).then(() => {
-                        toast({
-                          title: "Copied!",
-                          description: "Registration code copied to clipboard",
+                      if (school.registrationCode) {
+                        navigator.clipboard.writeText(school.registrationCode).then(() => {
+                          toast({
+                            title: "Copied!",
+                            description: "Registration code copied to clipboard",
+                          });
+                        }).catch((err) => {
+                          console.error('Failed to copy:', err);
+                          toast({
+                            title: "Copy failed",
+                            description: "Unable to copy to clipboard",
+                            variant: "destructive"
+                          });
                         });
-                      }).catch((err) => {
-                        console.error('Failed to copy:', err);
-                        toast({
-                          title: "Copy failed",
-                          description: "Unable to copy to clipboard",
-                          variant: "destructive"
-                        });
-                      });
+                      }
                     }}
                   >
                     <Copy className="h-4 w-4" />
@@ -654,26 +656,34 @@ export default function MySchoolPage() {
                     <div className="flex items-center justify-between bg-background p-2 rounded">
                       <div className="flex-1">
                         <p className="text-xs font-medium text-muted-foreground">Landing Page:</p>
-                        <code className="text-xs">{window.location.origin}/school/{school.registrationCode}</code>
+                        <code className="text-xs">
+                          {school.registrationCode 
+                            ? `${window.location.origin}/school/${school.registrationCode}`
+                            : 'Registration code generating...'
+                          }
+                        </code>
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={!school.registrationCode}
                         onClick={() => {
-                          const landingUrl = `${window.location.origin}/school/${school.registrationCode}`;
-                          navigator.clipboard.writeText(landingUrl).then(() => {
-                            toast({
-                              title: "Copied!",
-                              description: "Landing page link copied to clipboard",
+                          if (school.registrationCode) {
+                            const landingUrl = `${window.location.origin}/school/${school.registrationCode}`;
+                            navigator.clipboard.writeText(landingUrl).then(() => {
+                              toast({
+                                title: "Copied!",
+                                description: "Landing page link copied to clipboard",
+                              });
+                            }).catch((err) => {
+                              console.error('Failed to copy:', err);
+                              toast({
+                                title: "Copy failed",
+                                description: "Unable to copy to clipboard",
+                                variant: "destructive"
+                              });
                             });
-                          }).catch((err) => {
-                            console.error('Failed to copy:', err);
-                            toast({
-                              title: "Copy failed",
-                              description: "Unable to copy to clipboard",
-                              variant: "destructive"
-                            });
-                          });
+                          }
                         }}
                       >
                         <Copy className="h-3 w-3" />
@@ -682,26 +692,34 @@ export default function MySchoolPage() {
                     <div className="flex items-center justify-between bg-background p-2 rounded">
                       <div className="flex-1">
                         <p className="text-xs font-medium text-muted-foreground">Direct Registration:</p>
-                        <code className="text-xs">{window.location.origin}/register/{school.registrationCode}</code>
+                        <code className="text-xs">
+                          {school.registrationCode 
+                            ? `${window.location.origin}/register/${school.registrationCode}`
+                            : 'Registration code generating...'
+                          }
+                        </code>
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={!school.registrationCode}
                         onClick={() => {
-                          const registerUrl = `${window.location.origin}/register/${school.registrationCode}`;
-                          navigator.clipboard.writeText(registerUrl).then(() => {
-                            toast({
-                              title: "Copied!",
-                              description: "Registration link copied to clipboard",
+                          if (school.registrationCode) {
+                            const registerUrl = `${window.location.origin}/register/${school.registrationCode}`;
+                            navigator.clipboard.writeText(registerUrl).then(() => {
+                              toast({
+                                title: "Copied!",
+                                description: "Registration link copied to clipboard",
+                              });
+                            }).catch((err) => {
+                              console.error('Failed to copy:', err);
+                              toast({
+                                title: "Copy failed",
+                                description: "Unable to copy to clipboard",
+                                variant: "destructive"
+                              });
                             });
-                          }).catch((err) => {
-                            console.error('Failed to copy:', err);
-                            toast({
-                              title: "Copy failed",
-                              description: "Unable to copy to clipboard",
-                              variant: "destructive"
-                            });
-                          });
+                          }
                         }}
                       >
                         <Copy className="h-3 w-3" />

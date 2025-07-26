@@ -197,11 +197,6 @@ router.get("/knowledge-bases", async (req, res) => {
   }
 });
 
-// Get school by ID
-router.get("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
 // Get school by registration code
 router.get("/by-code/:code", async (req, res) => {
   try {
@@ -252,59 +247,81 @@ router.get("/by-code/:code", async (req, res) => {
   }
 });
 
-
+// Get school by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
     const schoolId = parseInt(id);
     
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
     }
 
-    let school = await db.query.schools.findFirst({
-      where: eq(schools.id, schoolId)
-    });
+    let school;
 
-    if (!school) {
-      return res.status(404).json({ message: "School not found" });
-    }
+    try {
+      // Try database first
+      school = await db.query.schools.findFirst({
+        where: eq(schools.id, schoolId)
+      });
 
-    // Ensure school has a registration code
-    if (!school.registrationCode) {
-      const registrationCode = generateRegistrationCode();
-      console.log('🔑 Generating registration code for existing school:', registrationCode);
-      try {
-        // Try to update in database
-        const [updatedSchool] = await db
-          .update(schools)
-          .set({ registrationCode })
-          .where(eq(schools.id, schoolId))
-          .returning();
-        school = updatedSchool;
-        console.log('✅ Updated school with registration code in database');
-      } catch (dbError) {
-        console.log('Database update failed, using file storage fallback');
-        // Update in file storage
-        const fs = await import('fs');
-        const path = await import('path');
-        
-        const DATA_DIR = path.join(process.cwd(), 'data');
-        const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
-
-        if (fs.existsSync(SCHOOLS_FILE)) {
-          const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
-          const schoolsData = JSON.parse(fileContent);
-          
-          const schoolIndex = schoolsData.findIndex((s: any) => s.id === schoolId);
-          if (schoolIndex !== -1) {
-            schoolsData[schoolIndex].registrationCode = registrationCode;
-            fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schoolsData, null, 2));
+      if (school) {
+        // Ensure school has a registration code
+        if (!school.registrationCode) {
+          const registrationCode = generateRegistrationCode();
+          console.log('🔑 Generating registration code for existing school:', registrationCode);
+          try {
+            const [updatedSchool] = await db
+              .update(schools)
+              .set({ registrationCode })
+              .where(eq(schools.id, schoolId))
+              .returning();
+            school = updatedSchool;
+            console.log('✅ Updated school with registration code in database');
+          } catch (updateError) {
+            console.log('Database update failed, returning school with generated code');
             school = { ...school, registrationCode };
-            console.log('✅ Updated school with registration code in file storage');
           }
         }
+        return res.json(school);
       }
+    } catch (dbError) {
+      console.log('⚠️ Database failed, using file storage fallback:', dbError);
     }
 
-    res.json(school);
+    // Fallback to file storage
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const DATA_DIR = path.join(process.cwd(), 'data');
+      const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
+
+      if (fs.existsSync(SCHOOLS_FILE)) {
+        const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
+        const schoolsData = JSON.parse(fileContent);
+        
+        const foundSchool = schoolsData.find((s: any) => s.id === schoolId);
+        if (foundSchool) {
+          // Ensure school has a registration code
+          if (!foundSchool.registrationCode) {
+            const registrationCode = generateRegistrationCode();
+            console.log('🔑 Generating registration code for existing school in file storage:', registrationCode);
+            
+            const schoolIndex = schoolsData.findIndex((s: any) => s.id === schoolId);
+            schoolsData[schoolIndex].registrationCode = registrationCode;
+            fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schoolsData, null, 2));
+            foundSchool.registrationCode = registrationCode;
+            console.log('✅ Updated school with registration code in file storage');
+          }
+          return res.json(foundSchool);
+        }
+      }
+    } catch (fileError) {
+      console.error('File storage also failed:', fileError);
+    }
+
+    return res.status(404).json({ message: "School not found" });
   } catch (error: any) {
     console.error("Error fetching school:", error);
     res.status(500).json({ message: "Internal server error" });
