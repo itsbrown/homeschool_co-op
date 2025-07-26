@@ -12,7 +12,7 @@ const router = express.Router();
 function generateRegistrationCode(): string {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
     result += characters.charAt(Math.floor(Math.random() * characters.length));
   }
   return result;
@@ -33,7 +33,11 @@ router.post("/", async (req, res) => {
     }
 
     // Generate unique registration code if not provided
-    const registrationCode = validatedData.data.registrationCode || generateRegistrationCode();
+    let registrationCode = validatedData.data.registrationCode;
+    if (!registrationCode) {
+      registrationCode = generateRegistrationCode();
+      console.log('🔑 Generated registration code:', registrationCode);
+    }
     const schoolDataWithCode = {
       ...validatedData.data,
       registrationCode
@@ -266,6 +270,7 @@ router.get("/by-code/:code", async (req, res) => {
     // Ensure school has a registration code
     if (!school.registrationCode) {
       const registrationCode = generateRegistrationCode();
+      console.log('🔑 Generating registration code for existing school:', registrationCode);
       try {
         // Try to update in database
         const [updatedSchool] = await db
@@ -274,6 +279,7 @@ router.get("/by-code/:code", async (req, res) => {
           .where(eq(schools.id, schoolId))
           .returning();
         school = updatedSchool;
+        console.log('✅ Updated school with registration code in database');
       } catch (dbError) {
         console.log('Database update failed, using file storage fallback');
         // Update in file storage
@@ -292,6 +298,7 @@ router.get("/by-code/:code", async (req, res) => {
             schoolsData[schoolIndex].registrationCode = registrationCode;
             fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schoolsData, null, 2));
             school = { ...school, registrationCode };
+            console.log('✅ Updated school with registration code in file storage');
           }
         }
       }
