@@ -8,21 +8,66 @@ import path from 'path';
 
 const router = express.Router();
 
-// Generate a unique registration code
-function generateRegistrationCode(): string {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 6; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
+// Generate a unique registration code with collision checking
+async function generateRegistrationCode(): Promise<string> {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let attempts = 0;
+  const maxAttempts = 10;
+
+  while (attempts < maxAttempts) {
+    // Generate 8-character code
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // Check if this code already exists
+    try {
+      const [existingSchool] = await db
+        .select()
+        .from(schools)
+        .where(eq(schools.registrationCode, result))
+        .limit(1);
+
+      if (!existingSchool) {
+        // Also check file storage for uniqueness
+        const fs = await import('fs');
+        const path = await import('path');
+        const SCHOOLS_FILE = path.join(process.cwd(), 'data', 'schools.json');
+
+        if (fs.existsSync(SCHOOLS_FILE)) {
+          const schoolsData = JSON.parse(fs.readFileSync(SCHOOLS_FILE, 'utf8'));
+          const duplicate = schoolsData.find((s: any) => s.registrationCode === result);
+          if (!duplicate) {
+            console.log('✅ Generated unique registration code:', result);
+            return result;
+          }
+        } else {
+          console.log('✅ Generated unique registration code:', result);
+          return result;
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Error checking registration code uniqueness, proceeding:', error);
+      return result;
+    }
+
+    attempts++;
+    console.log(`🔄 Registration code collision, retrying... (attempt ${attempts}/${maxAttempts})`);
   }
-  return result;
+
+  // Fallback: use timestamp-based code if we can't find a unique one
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const fallbackCode = timestamp.substring(timestamp.length - 8);
+  console.log('⚠️ Using fallback registration code:', fallbackCode);
+  return fallbackCode;
 }
 
 // Create a new school
 router.post("/", async (req, res) => {
   try {
     console.log('🏫 Creating school with data:', JSON.stringify(req.body, null, 2));
-    
+
     // Validate the request body
     const validatedData = insertSchoolSchema.safeParse(req.body);
     if (!validatedData.success) {
@@ -35,7 +80,7 @@ router.post("/", async (req, res) => {
     // Generate unique registration code if not provided
     let registrationCode = validatedData.data.registrationCode;
     if (!registrationCode) {
-      registrationCode = generateRegistrationCode();
+      registrationCode = await generateRegistrationCode();
       console.log('🔑 Generated registration code:', registrationCode);
     }
     const schoolDataWithCode = {
@@ -54,11 +99,11 @@ router.post("/", async (req, res) => {
       res.status(201).json(newSchool);
     } catch (dbError) {
       console.log('⚠️ Database failed, using file storage fallback:', dbError);
-      
+
       // Fallback to file storage
       const fs = await import('fs');
       const path = await import('path');
-      
+
       const DATA_DIR = path.join(process.cwd(), 'data');
       const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
 
@@ -201,7 +246,7 @@ router.get("/knowledge-bases", async (req, res) => {
 router.get("/by-code/:code", async (req, res) => {
   try {
     const { code } = req.params;
-    
+
     if (!code) {
       return res.status(400).json({ message: "Registration code is required" });
     }
@@ -223,7 +268,7 @@ router.get("/by-code/:code", async (req, res) => {
     try {
       const fs = await import('fs');
       const path = await import('path');
-      
+
       const DATA_DIR = path.join(process.cwd(), 'data');
       const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
 
@@ -231,7 +276,7 @@ router.get("/by-code/:code", async (req, res) => {
         const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
         const schools = JSON.parse(fileContent);
         const school = schools.find((s: any) => s.registrationCode === code.toUpperCase());
-        
+
         if (school) {
           return res.json(school);
         }
@@ -252,7 +297,7 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const schoolId = parseInt(id);
-    
+
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
     }
@@ -268,7 +313,7 @@ router.get("/:id", async (req, res) => {
       if (school) {
         // Ensure school has a registration code
         if (!school.registrationCode) {
-          const registrationCode = generateRegistrationCode();
+          const registrationCode = await generateRegistrationCode();
           console.log('🔑 Generating registration code for existing school:', registrationCode);
           try {
             const [updatedSchool] = await db
@@ -293,21 +338,21 @@ router.get("/:id", async (req, res) => {
     try {
       const fs = await import('fs');
       const path = await import('path');
-      
+
       const DATA_DIR = path.join(process.cwd(), 'data');
       const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
 
       if (fs.existsSync(SCHOOLS_FILE)) {
         const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
         const schoolsData = JSON.parse(fileContent);
-        
+
         const foundSchool = schoolsData.find((s: any) => s.id === schoolId);
         if (foundSchool) {
           // Ensure school has a registration code
           if (!foundSchool.registrationCode) {
-            const registrationCode = generateRegistrationCode();
+            const registrationCode = await generateRegistrationCode();
             console.log('🔑 Generating registration code for existing school in file storage:', registrationCode);
-            
+
             const schoolIndex = schoolsData.findIndex((s: any) => s.id === schoolId);
             schoolsData[schoolIndex].registrationCode = registrationCode;
             fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schoolsData, null, 2));
@@ -343,7 +388,7 @@ router.get("/:id/students", async (req, res) => {
   try {
     const { id } = req.params;
     const schoolId = parseInt(id);
-    
+
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
     }
