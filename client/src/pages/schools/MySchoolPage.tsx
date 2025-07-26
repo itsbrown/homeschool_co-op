@@ -620,15 +620,16 @@ export default function MySchoolPage() {
                 <h4 className="font-medium mb-2 text-primary">Registration Code</h4>
                 <div className="flex items-center gap-2">
                   <code className="font-mono text-lg font-bold bg-background px-2 py-1 rounded">
-                    {school.registrationCode || (isLoading ? 'Loading...' : 'Generating...')}
+                    {school.registrationCode || 'No code available'}
                   </code>
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={!school.registrationCode}
                     onClick={() => {
-                      if (school.registrationCode) {
-                        navigator.clipboard.writeText(school.registrationCode).then(() => {
+                      const codeToClipboard = school.registrationCode;
+                      if (codeToClipboard) {
+                        navigator.clipboard.writeText(codeToClipboard).then(() => {
                           toast({
                             title: "Copied!",
                             description: "Registration code copied to clipboard",
@@ -640,6 +641,12 @@ export default function MySchoolPage() {
                             description: "Unable to copy to clipboard",
                             variant: "destructive"
                           });
+                        });
+                      } else {
+                        toast({
+                          title: "No code available",
+                          description: "Registration code is not yet generated",
+                          variant: "destructive"
                         });
                       }
                     }}
@@ -659,7 +666,7 @@ export default function MySchoolPage() {
                         <code className="text-xs">
                           {school.registrationCode 
                             ? `${window.location.origin}/school/${school.registrationCode}`
-                            : 'Registration code generating...'
+                            : 'Registration code not available'
                           }
                         </code>
                       </div>
@@ -695,7 +702,7 @@ export default function MySchoolPage() {
                         <code className="text-xs">
                           {school.registrationCode 
                             ? `${window.location.origin}/register/${school.registrationCode}`
-                            : 'Registration code generating...'
+                            : 'Registration code not available'
                           }
                         </code>
                       </div>
