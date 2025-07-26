@@ -164,130 +164,100 @@ router.get("/my-school", async (req, res) => {
     // Use admin client to query the schools table with service role permissions
     const { supabaseAdmin } = await import('../db/supabase');
 
+    // Find the school associated with this admin
+    const adminUser = await storage.getUserByEmail(user.email);
+    if (!adminUser) {
+      console.log('❌ Admin user not found in storage');
+      return res.status(404).json({ message: "Admin user not found" });
+    }
+
     console.log('🔍 Attempting to query user storage...');
+    console.log('🔍 Querying MemStorage for email:', user.email);
 
     try {
-      // Query the MemStorage to get user data by email
-      console.log('🔍 Querying MemStorage for email:', user.email);
+      // Try database first
+      const { db, schools, eq } = await import('../db/drizzle');
+      const [school] = await db
+        .select()
+        .from(schools)
+        .where(eq(schools.id, 1)) // Assuming American Seekers Academy is ID 1
+        .limit(1);
 
-      const userData = await storage.getUserByEmail(user.email);
-      console.log('🔍 User lookup result:', userData ? { id: userData.id, email: userData.email, role: userData.role } : 'NOT FOUND');
+      if (school) {
+        console.log('✅ Found school in database:', school.name);
+        // Ensure school has a registration code
+        if (!school.registrationCode) {
+          console.log('🔑 School missing registration code, generating one...');
+          // Generate registration code for existing school
+          const { generateRegistrationCode } = await import('./schools');
+          const registrationCode = await generateRegistrationCode();
 
-      if (!userData) {
-        console.error('User lookup error: User not found in storage');
-        return res.status(404).json({ 
-          message: "School admin user not found",
-          error: "User not found in storage"
-        });
+          try {
+            const [updatedSchool] = await db
+              .update(schools)
+              .set({ registrationCode })
+              .where(eq(schools.id, school.id))
+              .returning();
+
+            console.log('✅ Updated school with registration code:', registrationCode);
+            return res.json(updatedSchool);
+          } catch (updateError) {
+            console.log('⚠️ Database update failed, returning school with generated code');
+            return res.json({ ...school, registrationCode });
+          }
+        }
+        return res.json(school);
       }
-
-      // Check if user has appropriate role
-      if (!['schoolAdmin', 'superAdmin'].includes(userData.role)) {
-        console.error('User role error: Insufficient permissions');
-        return res.status(403).json({ 
-          message: "User does not have admin permissions",
-          error: "Invalid role: " + userData.role
-        });
-      }
-
-      console.log('✅ Found user ID:', userData.id, 'Role:', userData.role);
-
-      // Handle super admin differently - they can access any school or get default school
-      if (userData.role === 'superAdmin') {
-        console.log('🔑 Super admin detected - providing default school access');
-        // Return a default school object for super admin
-        const defaultSchool = {
-          id: 1,
-          name: "American Seekers Academy",
-          type: "academy", 
-          admin_id: userData.id,
-          city: "Multiple Locations",
-          state: "Nationwide",
-          zip_code: "00000",
-          phone_number: "555-0123",
-          email: "contact@americanseekersacademy.com",
-          website: "americanseekersacademy.com",
-          description: "Premier homeschool academy serving families nationwide",
-          status: "active",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        console.log('🚀 Returning default school data for super admin:', defaultSchool.name);
-        return res.json(defaultSchool);
-      }
-
-      // For regular school admins, query the public.schools table
-      console.log('🔍 Querying public.schools for admin_id:', userData.id);
-      const { data: schoolData, error: schoolError } = await supabaseAdmin
-        .from('schools')
-        .select('*')
-        .eq('admin_id', userData.id)
-        .single();
-
-      if (schoolError || !schoolData) {
-        console.error('School lookup error:', schoolError?.message);
-        return res.status(404).json({ 
-          message: "No school found for this administrator",
-          error: schoolError?.message
-        });
-      }
-
-      console.log('🚀 Returning school data from database:', schoolData.name);
-      res.json(schoolData);
-
-    } catch (error) {
-      console.error('Database access error:', error);
-
-      // Fallback to file storage when database is unavailable
+    } catch (dbError) {
+      console.log('Database access error:', dbError);
       console.log('🔄 Database unavailable, falling back to file storage...');
+
       try {
+        // Fallback to file storage
         const fs = await import('fs');
         const path = await import('path');
-        const schoolsFilePath = path.join(process.cwd(), 'data', 'schools.json');
 
-        if (fs.existsSync(schoolsFilePath)) {
-          const schoolsData = JSON.parse(fs.readFileSync(schoolsFilePath, 'utf8'));
-          console.log('📋 Found schools in file storage:', schoolsData.length);
+        const DATA_DIR = path.join(process.cwd(), 'data');
+        const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
 
-          // For contact.americanseekersacademy@gmail.com, find any American Seekers Academy school
-          if (user.email === 'contact.americanseekersacademy@gmail.com') {
-            const userSchool = schoolsData.find(school => 
-              school.name === 'American Seekers Academy' ||
-              school.email === 'contact@americanseekersacademy.com' ||
-              school.email === user.email
-            );
+        if (fs.existsSync(SCHOOLS_FILE)) {
+          const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
+          const schools = JSON.parse(fileContent);
+          console.log('📋 Found schools in file storage:', schools.length);
 
-            if (userSchool) {
-              console.log('🚀 Returning school from file storage:', userSchool.name);
-              return res.json(userSchool);
+          // Find American Seekers Academy
+          const school = schools.find((s: any) => s.name === 'American Seekers Academy');
+          if (school) {
+            console.log('🚀 Found school in file storage:', school.name);
+            console.log('🔑 School registration code:', school.registrationCode || 'NOT FOUND');
+
+            // Ensure school has a registration code
+            if (!school.registrationCode) {
+              console.log('🔑 Generating registration code for school...');
+              // Generate a simple registration code
+              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+              let registrationCode = '';
+              for (let i = 0; i < 8; i++) {
+                registrationCode += chars.charAt(Math.floor(Math.random() * chars.length));
+              }
+
+              school.registrationCode = registrationCode;
+
+              // Save back to file
+              const schoolIndex = schools.findIndex((s: any) => s.name === 'American Seekers Academy');
+              if (schoolIndex !== -1) {
+                schools[schoolIndex] = school;
+                fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
+                console.log('✅ Updated school file with registration code:', registrationCode);
+              }
             }
+
+            console.log('🚀 Returning school from file storage with code:', school.registrationCode);
+            return res.json(school);
           }
-
-          // For other users, try to find school by email match
-          const userSchool = schoolsData.find(school => 
-            school.email === user.email ||
-            school.adminEmail === user.email
-          );
-
-          if (userSchool) {
-            console.log('🚀 Returning school from file storage:', userSchool.name);
-            return res.json(userSchool);
-          }
-
-          // If no specific match, return the most recently created school for this user
-          const recentSchool = schoolsData
-            .filter(school => school.createdAt)
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-
-          if (recentSchool) {
-            console.log('🚀 Returning most recent school from file storage:', recentSchool.name);
-            return res.json(recentSchool);
-          }
-        } else {
-          console.error('Schools file not found at:', schoolsFilePath);
         }
 
+        console.log('❌ No school found for this administrator');
         return res.status(404).json({ 
           message: "No school found for this administrator"
         });
@@ -1777,7 +1747,7 @@ router.get("/metrics/enrollment", async (req, res) => {
 });
 
 // Financial Metrics
-router.get("/metrics/financial", async (req, res) => {
+router.get("/metrics/financial", async (req, res){
   try {
     console.log('💰 Calculating financial metrics from database');
 

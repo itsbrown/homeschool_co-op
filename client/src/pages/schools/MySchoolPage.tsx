@@ -109,6 +109,16 @@ export default function MySchoolPage() {
   // Fetch school data
   const { data: school, isLoading, error, refetch } = useQuery<SchoolData>({
     queryKey: ["/api/school-admin/my-school"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/school-admin/my-school");
+      if (!response.ok) {
+        throw new Error("Failed to fetch school");
+      }
+      const schoolData = await response.json();
+      console.log("🏫 Received school data:", schoolData);
+      console.log("🔑 Registration code in data:", schoolData.registrationCode);
+      return schoolData;
+    },
     enabled: isAuthenticated,
   });
 
@@ -607,7 +617,7 @@ export default function MySchoolPage() {
 
                 <TabsContent value="details" className="space-y-6">
                   {/* School Description */}
-                  
+
 <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-medium mb-4">About {school.name}</h3>
@@ -735,7 +745,7 @@ export default function MySchoolPage() {
                   </div>
                 </div>
               </div></div>
-                  
+
 
                   {/* Marketing Links Section */}
                   <Card>
