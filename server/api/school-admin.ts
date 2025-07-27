@@ -239,87 +239,10 @@ router.get("/my-school", async (req, res) => {
       } catch (fileError) {
         console.error('❌ File storage error:', fileError);
         return res.status(500).json({ message: "Error accessing school data" });
-      }er.id || s.created_by === adminUser.id)
-          );
-
-          // If no school is associated with this admin, find the first American Seekers Academy
-          // and associate it with this admin (but don't create a new one)
-          if (!school) {
-            school = schools.find((s: any) => s.name === 'American Seekers Academy');
-            if (school) {
-              console.log('🔗 Associating existing school with admin user:', adminUser.email);
-              console.log('🔍 Admin user details:', { id: adminUser.id, email: adminUser.email });
-              
-              // Associate the school with this admin user
-              school.adminId = adminUser.id;
-              school.created_by = adminUser.id;
-              
-              // Save the association back to file
-              const schoolIndex = schools.findIndex((s: any) => s.id === school.id);
-              if (schoolIndex !== -1) {
-                schools[schoolIndex] = school;
-                fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
-                console.log('✅ Associated school with admin user');
-                console.log('✅ Updated school:', { id: school.id, name: school.name, adminId: school.adminId });
-              }
-            } else {
-              console.log('❌ No American Seekers Academy found in schools data');
-              console.log('🔍 Available schools:', schools.map(s => s.name));
-            }
-          } else {
-            console.log('✅ School already associated with admin user');
-          }
-
-          if (school) {
-            console.log('🚀 Found school in file storage:', school.name);
-            console.log('🔑 School registration code:', school.registrationCode || 'NOT FOUND');
-            console.log('👤 School admin association:', { adminId: school.adminId, created_by: school.created_by });
-
-            // Ensure school has a registration code (but don't overwrite existing one)
-            if (!school.registrationCode) {
-              console.log('🔑 Generating registration code for school...');
-              // Generate a simple registration code
-              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-              let registrationCode = '';
-              for (let i = 0; i < 8; i++) {
-                registrationCode += chars.charAt(Math.floor(Math.random() * chars.length));
-              }
-
-              school.registrationCode = registrationCode;
-
-              // Save back to file
-              const schoolIndex = schools.findIndex((s: any) => s.id === school.id);
-              if (schoolIndex !== -1) {
-                schools[schoolIndex] = school;
-                fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
-                console.log('✅ Updated school file with registration code:', registrationCode);
-              }
-            }
-
-            console.log('🚀 Returning school from file storage with code:', school.registrationCode);
-            return res.json(school);
-          }
-        }
-
-        console.log('❌ No school found for this administrator');
-        return res.status(404).json({ 
-          message: "No school found for this administrator"
-        });
-
-      } catch (fallbackError) {
-        console.error('File storage fallback failed:', fallbackError);
-        return res.status(500).json({ 
-          message: "File storage access failed",
-          error: fallbackError instanceof Error ? fallbackError.message : 'Unknown error'
-        });
       }
-    } catch (error) {
-      console.error("Error fetching school information:", error);
-      res.status(500).json({ message: "Error fetching school information" });
-    }
   } catch (error) {
     console.error("Error fetching school information:", error);
-    res.status(500).json({ message: "Error fetching school information" });
+    return res.status(500).json({ message: "Error fetching school information" });
   }
 });
 
