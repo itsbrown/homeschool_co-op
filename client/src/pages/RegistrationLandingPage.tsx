@@ -41,7 +41,8 @@ interface School {
 }
 
 export default function RegistrationLandingPage() {
-  const { code } = useParams<{ code?: string }>();
+  const params = useParams<{ code?: string }>();
+  const code = params?.code;
   const [, setLocation] = useLocation();
   const [selectedClass, setSelectedClass] = useState<any>(null);
   const [depositAmount, setDepositAmount] = useState(0);

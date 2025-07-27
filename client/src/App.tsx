@@ -1,3 +1,7 @@
+The code modifies the routing configuration in `App.tsx` to correctly handle school registration using the `/register/:code` pattern, ensuring the `RegistrationLandingPage` component is rendered for this route.
+```
+
+```replit_final_file
 import React from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -102,6 +106,8 @@ const Redirect = ({ to }: { to: string }) => {
 };
 import NotFound from "@/pages/not-found";
 import AuthLogin from "@/pages/AuthLogin";
+import { RegistrationLandingPage } from "@/pages/RegistrationLandingPage";
+import { RegistrationPaymentPage } from "@/pages/RegistrationPaymentPage";
 
 // School Admin pages
 import MySchoolPage from "./pages/schools/MySchoolPage";
