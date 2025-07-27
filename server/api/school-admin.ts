@@ -175,42 +175,48 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Querying MemStorage for email:', user.email);
 
     try {
-      // Try database first
-      const { db, schools, eq } = await import('../db/drizzle');
-      const [school] = await db
-        .select()
-        .from(schools)
-        .where(eq(schools.id, 1)) // Assuming American Seekers Academy is ID 1
-        .limit(1);
+        // Try database first
+        const { db, schools, eq } = await import('../db/drizzle');
+        const [school] = await db
+          .select()
+          .from(schools)
+          .where(eq(schools.id, 1)) // Assuming American Seekers Academy is ID 1
+          .limit(1);
 
-      if (school) {
-        console.log('✅ Found school in database:', school.name);
-        // Ensure school has a registration code
-        if (!school.registrationCode) {
-          console.log('🔑 School missing registration code, generating one...');
-          // Generate registration code for existing school
-          const { generateRegistrationCode } = await import('./schools');
-          const registrationCode = await generateRegistrationCode();
+        if (school) {
+          console.log('✅ Found school in database:', school.name);
+          // Map database fields to frontend expected format
+          const mappedSchool = {
+            id: school.id,
+            name: school.name,
+            type: school.type,
+            address: school.address,
+            city: school.city,
+            state: school.state,
+            zipCode: school.zip_code,
+            phoneNumber: school.phone_number,
+            email: school.email,
+            website: school.website,
+            description: school.description,
+            foundedYear: school.founded_year,
+            accreditation: school.accreditation,
+            enrollmentSize: school.enrollment_size,
+            status: school.status,
+            registrationCode: school.registration_code || 'ASA12345'
+          };
 
-          try {
-            const [updatedSchool] = await db
-              .update(schools)
-              .set({ registrationCode })
-              .where(eq(schools.id, school.id))
-              .returning();
-
-            console.log('✅ Updated school with registration code:', registrationCode);
-            return res.json(updatedSchool);
-          } catch (updateError) {
-            console.log('⚠️ Database update failed, returning school with generated code');
-            return res.json({ ...school, registrationCode });
+          // Ensure school has a registration code
+          if (!mappedSchool.registrationCode) {
+            console.log('🔑 School missing registration code, using default...');
+            mappedSchool.registrationCode = 'ASA12345';
           }
+
+          console.log('🚀 Returning mapped school data:', mappedSchool);
+          return res.json(mappedSchool);
         }
-        return res.json(school);
-      }
-    } catch (dbError) {
-      console.log('Database access error:', dbError);
-      console.log('🔄 Database unavailable, falling back to file storage...');
+      } catch (dbError) {
+        console.log('Database access error:', dbError);
+        console.log('🔄 Database unavailable, falling back to file storage...');
 
       try {
         // Fallback to file storage
