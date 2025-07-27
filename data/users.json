@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "id": 1,
+    "email": "coreycreates@gmail.com",
+    "role": "school_admin",
+    "supabaseId": "05052776-9b5e-4330-867d-d489273eaf70",
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-01-13T06:08:43.000Z",
+    "updatedAt": "2025-01-13T06:08:43.000Z"
+  }
+]
