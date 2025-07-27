@@ -228,13 +228,24 @@ router.get("/my-school", async (req, res) => {
 
     // Find the school associated with this admin
     console.log('🔍 Looking up admin user by email:', user.email);
-    const adminUser = await storage.getUserByEmail(user.email || '');
+    let adminUser;
+    try {
+      adminUser = await storage.getUserByEmail(user.email || '');
+    } catch (storageError) {
+      console.log('❌ Error looking up admin user:', storageError);
+      return res.status(500).json({ message: "Error looking up admin user" });
+    }
+
     if (!adminUser) {
       console.log('❌ Admin user not found in storage for email:', user.email);
       
       // Debug: List all users in storage
-      const allUsers = await storage.getAllUsers();
-      console.log('🔍 All users in storage:', allUsers.map(u => ({ id: u.id, email: u.email, role: u.role })));
+      try {
+        const allUsers = await storage.getAllUsers();
+        console.log('🔍 All users in storage:', allUsers.map(u => ({ id: u.id, email: u.email, role: u.role })));
+      } catch (debugError) {
+        console.log('❌ Error getting all users for debug:', debugError);
+      }
       
       return res.status(404).json({ message: "Admin user not found" });
     }
@@ -257,14 +268,13 @@ router.get("/my-school", async (req, res) => {
       
       console.log('⚠️ Supabase query failed or no results, falling back to file storage');
     } catch (supabaseError) {
-      console.log('⚠️ Supabase connection failed, using file storage fallback');
+      console.log('⚠️ Supabase connection failed, using file storage fallback:', supabaseError.message);
     }
 
     // Fallback to file storage
     try {
         console.log('🔄 Using file storage for school data...');
 
-        // Fallback to file storage
         const fs = await import('fs');
         const path = await import('path');
 
@@ -275,7 +285,7 @@ router.get("/my-school", async (req, res) => {
           const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
           const schools = JSON.parse(fileContent);
           console.log('📋 Found schools in file storage:', schools.length);
-          console.log('🔍 All schools:', schools.map(s => ({ id: s.id, name: s.name, adminId: s.adminId, created_by: s.created_by })));
+          console.log('🔍 All schools:', schools.map((s: any) => ({ id: s.id, name: s.name, adminId: s.adminId, created_by: s.created_by })));
 
           // First, try to find a school already associated with this admin user
           let school = schools.find((s: any) => 
