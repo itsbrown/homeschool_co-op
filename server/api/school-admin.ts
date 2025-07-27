@@ -165,12 +165,19 @@ router.get("/my-school", async (req, res) => {
     const { supabaseAdmin } = await import('../db/supabase');
 
     // Find the school associated with this admin
+    console.log('🔍 Looking up admin user by email:', user.email);
     const adminUser = await storage.getUserByEmail(user.email || '');
     if (!adminUser) {
-      console.log('❌ Admin user not found in storage');
+      console.log('❌ Admin user not found in storage for email:', user.email);
+      
+      // Debug: List all users in storage
+      const allUsers = await storage.getAllUsers();
+      console.log('🔍 All users in storage:', allUsers.map(u => ({ id: u.id, email: u.email, role: u.role })));
+      
       return res.status(404).json({ message: "Admin user not found" });
     }
 
+    console.log('✅ Found admin user:', { id: adminUser.id, email: adminUser.email, role: adminUser.role });
     console.log('🔍 Attempting to query user storage...');
     console.log('🔍 Querying MemStorage for email:', user.email);
 
@@ -203,6 +210,8 @@ router.get("/my-school", async (req, res) => {
             school = schools.find((s: any) => s.name === 'American Seekers Academy');
             if (school) {
               console.log('🔗 Associating existing school with admin user:', adminUser.email);
+              console.log('🔍 Admin user details:', { id: adminUser.id, email: adminUser.email });
+              
               // Associate the school with this admin user
               school.adminId = adminUser.id;
               school.created_by = adminUser.id;
@@ -213,8 +222,14 @@ router.get("/my-school", async (req, res) => {
                 schools[schoolIndex] = school;
                 fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
                 console.log('✅ Associated school with admin user');
+                console.log('✅ Updated school:', { id: school.id, name: school.name, adminId: school.adminId });
               }
+            } else {
+              console.log('❌ No American Seekers Academy found in schools data');
+              console.log('🔍 Available schools:', schools.map(s => s.name));
             }
+          } else {
+            console.log('✅ School already associated with admin user');
           }
 
           if (school) {
