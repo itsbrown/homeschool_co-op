@@ -184,7 +184,6 @@ router.get("/my-school", async (req, res) => {
     try {
         console.log('🔄 Using file storage for school data...');
 
-      try {
         // Fallback to file storage
         const fs = await import('fs');
         const path = await import('path');
@@ -202,6 +201,45 @@ router.get("/my-school", async (req, res) => {
           let school = schools.find((s: any) => 
             s.name === 'American Seekers Academy' && 
             (s.adminId === adminUser.id || s.created_by === adminUser.id)
+          );
+
+          if (school) {
+            console.log('✅ Found existing school for admin:', school.name);
+            return res.json(school);
+          }
+
+          // If no associated school found, associate the first "American Seekers Academy" school
+          const unassociatedSchool = schools.find((s: any) => 
+            s.name === 'American Seekers Academy' && 
+            (!s.adminId || s.adminId === null)
+          );
+
+          if (unassociatedSchool) {
+            console.log('🔗 Associating school with admin user:', unassociatedSchool.name);
+            
+            // Update the school to associate it with this admin
+            const schoolIndex = schools.findIndex((s: any) => s.id === unassociatedSchool.id);
+            schools[schoolIndex].adminId = adminUser.id;
+            schools[schoolIndex].created_by = adminUser.id;
+            schools[schoolIndex].updatedAt = new Date().toISOString();
+
+            // Write back to file
+            fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
+            
+            console.log('✅ School associated successfully');
+            return res.json(schools[schoolIndex]);
+          }
+
+          console.log('❌ No American Seekers Academy school found to associate');
+        } else {
+          console.log('❌ Schools file not found');
+        }
+
+        return res.status(404).json({ message: "No school found for this admin" });
+      } catch (fileError) {
+        console.error('❌ File storage error:', fileError);
+        return res.status(500).json({ message: "Error accessing school data" });
+      }er.id || s.created_by === adminUser.id)
           );
 
           // If no school is associated with this admin, find the first American Seekers Academy
