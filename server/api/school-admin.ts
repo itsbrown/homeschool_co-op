@@ -229,22 +229,49 @@ router.get("/my-school", async (req, res) => {
     // Find the school associated with this admin
     console.log('🔍 Looking up admin user by email:', user.email);
     let adminUser;
+    
+    // Try to get user from storage, with file storage fallback
     try {
       adminUser = await storage.getUserByEmail(user.email || '');
     } catch (storageError) {
-      console.log('❌ Error looking up admin user:', storageError);
-      return res.status(500).json({ message: "Error looking up admin user" });
+      console.log('❌ Storage error, trying file storage fallback:', storageError.message);
+      
+      // Fallback to direct file access
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const DATA_DIR = path.join(process.cwd(), 'data');
+        const USERS_FILE = path.join(DATA_DIR, 'users.json');
+        
+        if (fs.existsSync(USERS_FILE)) {
+          const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+          const users = JSON.parse(fileContent);
+          adminUser = users.find((u: any) => u.email === user.email);
+          console.log('🔄 Found admin user via file storage fallback:', adminUser ? 'Yes' : 'No');
+        }
+      } catch (fileError) {
+        console.log('❌ File storage fallback also failed:', fileError);
+        return res.status(500).json({ message: "Error looking up admin user" });
+      }
     }
 
     if (!adminUser) {
-      console.log('❌ Admin user not found in storage for email:', user.email);
+      console.log('❌ Admin user not found for email:', user.email);
       
-      // Debug: List all users in storage
+      // Debug: List all users in file storage
       try {
-        const allUsers = await storage.getAllUsers();
-        console.log('🔍 All users in storage:', allUsers.map(u => ({ id: u.id, email: u.email, role: u.role })));
+        const fs = await import('fs');
+        const path = await import('path');
+        const DATA_DIR = path.join(process.cwd(), 'data');
+        const USERS_FILE = path.join(DATA_DIR, 'users.json');
+        
+        if (fs.existsSync(USERS_FILE)) {
+          const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+          const users = JSON.parse(fileContent);
+          console.log('🔍 All users in file storage:', users.map((u: any) => ({ id: u.id, email: u.email, role: u.role })));
+        }
       } catch (debugError) {
-        console.log('❌ Error getting all users for debug:', debugError);
+        console.log('❌ Error getting users for debug:', debugError);
       }
       
       return res.status(404).json({ message: "Admin user not found" });
