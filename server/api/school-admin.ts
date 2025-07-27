@@ -1747,7 +1747,7 @@ router.get("/metrics/enrollment", async (req, res) => {
 });
 
 // Financial Metrics
-router.get("/metrics/financial", async (req, res){
+router.get("/metrics/financial", async (req, res) => {
   try {
     console.log('💰 Calculating financial metrics from database');
 
