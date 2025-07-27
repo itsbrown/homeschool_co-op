@@ -67,6 +67,29 @@ export default function SchoolRegistrationFormPage() {
   const form = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
     defaultValues: {
+      // Parent Information
+      parentFirstName: "",
+      parentLastName: "",
+      parentEmail: "",
+      parentPhone: "",
+      
+      // Child Information
+      childFirstName: "",
+      childLastName: "",
+      childBirthdate: "",
+      childGradeLevel: "",
+      
+      // Emergency Contact
+      emergencyContactName: "",
+      emergencyContactPhone: "",
+      emergencyContactRelation: "",
+      
+      // Medical Information
+      medicalNotes: "",
+      specialNeeds: "",
+      allergies: "",
+      
+      // Agreement
       agreesToTerms: false,
       agreesToEmails: false
     }
