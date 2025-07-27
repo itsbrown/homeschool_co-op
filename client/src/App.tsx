@@ -378,6 +378,8 @@ function Router() {
 
       {/* Registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
+      <Route path="/register/:code" component={RegistrationLandingPage} />
+      <Route path="/registration/landing" component={RegistrationLandingPage} />
       <Route path="/programs" component={ProgramsParentPage} />
       <Route path="/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/classes" component={ProgramsBrowseRedirect} />
