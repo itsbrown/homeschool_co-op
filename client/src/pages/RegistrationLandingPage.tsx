@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useLocation } from "wouter";
+import React, { useState, useEffect } from "react";
+import { useLocation, useParams } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, MapPin, Clock, Users, DollarSign } from "lucide-react";
+import { CalendarIcon, MapPin, Clock, Users, DollarSign, Building, ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 // Schema for parent registration
 const parentRegistrationSchema = z.object({
@@ -30,10 +31,22 @@ const parentRegistrationSchema = z.object({
 
 type ParentRegistrationForm = z.infer<typeof parentRegistrationSchema>;
 
+interface School {
+  id: number;
+  name: string;
+  type: string;
+  registrationCode: string;
+  description?: string;
+  location?: string;
+}
+
 export default function RegistrationLandingPage() {
+  const { code } = useParams<{ code?: string }>();
   const [, setLocation] = useLocation();
   const [selectedClass, setSelectedClass] = useState<any>(null);
   const [depositAmount, setDepositAmount] = useState(0);
+  const [school, setSchool] = useState<School | null>(null);
+  const [loading, setLoading] = useState(!!code);
   const { toast } = useToast();
 
   const form = useForm<ParentRegistrationForm>({
@@ -44,10 +57,54 @@ export default function RegistrationLandingPage() {
     }
   });
 
+  // Fetch school data if accessed with a registration code
+  useEffect(() => {
+    if (code) {
+      const fetchSchool = async () => {
+        try {
+          const response = await apiRequest("GET", `/api/schools/by-code/${code}`);
+          
+          if (response.ok) {
+            const schoolData = await response.json();
+            setSchool(schoolData);
+            // Update default location if school has one
+            if (schoolData.location) {
+              form.setValue("location", schoolData.location);
+            }
+          } else {
+            toast({
+              title: "School Not Found",
+              description: "Invalid registration code",
+              variant: "destructive"
+            });
+            setLocation("/");
+          }
+        } catch (err) {
+          console.error("Error fetching school:", err);
+          toast({
+            title: "Error",
+            description: "Failed to load school information",
+            variant: "destructive"
+          });
+          setLocation("/");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchSchool();
+    }
+  }, [code, toast, setLocation, form]);
+
   // Fetch available classes
   const { data: classes = [] } = useQuery<any[]>({
     queryKey: ["/api/classes/published"],
   });
+
+  // Filter classes based on school location if available
+  const filteredClasses = school && school.location 
+    ? classes.filter(c => c.location === school.location)
+    : classes.filter(c => c.location === "Brighton");
 
   const handleClassSelection = (classId: string) => {
     const selectedClassData = classes.find(c => c.id.toString() === classId);
@@ -59,30 +116,84 @@ export default function RegistrationLandingPage() {
   };
 
   const onSubmit = (data: ParentRegistrationForm) => {
-    // Store registration data and proceed to payment
-    sessionStorage.setItem('registrationData', JSON.stringify({
+    // Store registration data and proceed to payment or specific school flow
+    const registrationData = {
       ...data,
       selectedClass,
       depositAmount,
-      totalAmount: selectedClass?.price || 0
-    }));
+      totalAmount: selectedClass?.price || 0,
+      school: school || null,
+      registrationCode: school?.registrationCode || null
+    };
     
-    setLocation('/registration/payment');
+    sessionStorage.setItem('registrationData', JSON.stringify(registrationData));
+    
+    // If this is school-specific registration, route to school payment flow
+    if (school) {
+      setLocation(`/registration/payment?school=${school.registrationCode}`);
+    } else {
+      setLocation('/registration/payment');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading registration form...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12">
       <div className="container mx-auto px-4 max-w-4xl">
+        {/* Back button for school-specific registration */}
+        {school && (
+          <div className="mb-6">
+            <Button 
+              variant="ghost" 
+              onClick={() => setLocation(`/school/${code}`)}
+              className="mb-4"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to School Info
+            </Button>
+          </div>
+        )}
+
+        {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Fall 2025 Registration
-          </h1>
-          <p className="text-xl text-gray-600 mb-2">
-            American Seekers Academy - Brighton Location
-          </p>
-          <p className="text-lg text-gray-500">
-            Register your child for our classical education program
-          </p>
+          {school ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-3">
+                <Building className="h-8 w-8 text-primary" />
+                <h1 className="text-4xl font-bold text-gray-900">
+                  Register for {school.name}
+                </h1>
+              </div>
+              <p className="text-xl text-gray-600">
+                Complete your registration for Fall 2025
+              </p>
+              <Badge variant="secondary" className="text-lg px-4 py-1">
+                Registration Code: {school.registrationCode}
+              </Badge>
+            </div>
+          ) : (
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                Fall 2025 Registration
+              </h1>
+              <p className="text-xl text-gray-600 mb-2">
+                American Seekers Academy - Brighton Location
+              </p>
+              <p className="text-lg text-gray-500">
+                Register your child for our classical education program
+              </p>
+            </div>
+          )}
         </div>
 
         <Card className="mb-8">
@@ -94,7 +205,7 @@ export default function RegistrationLandingPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2">
-              {classes.filter(c => c.location === "Brighton").map((classItem) => (
+              {filteredClasses.map((classItem) => (
                 <Card key={classItem.id} className="border-2 hover:border-primary transition-colors">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
@@ -288,7 +399,7 @@ export default function RegistrationLandingPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {classes.filter(c => c.location === "Brighton").map((classItem) => (
+                              {filteredClasses.map((classItem) => (
                                 <SelectItem key={classItem.id} value={classItem.id.toString()}>
                                   {classItem.title} - {classItem.ageRange}
                                 </SelectItem>

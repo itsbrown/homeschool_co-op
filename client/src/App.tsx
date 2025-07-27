@@ -363,7 +363,7 @@ function Router() {
                 school: 'LearnSphere Academy',
                 schedule: 'Mon, Wed, Fri 10:00-11:00 AM'
               };
-              
+
               return (
                 <ClassPaymentPlans 
                   classData={mockClassData}
@@ -409,7 +409,6 @@ function Router() {
 
       {/* School-specific landing and registration pages */}
       <Route path="/school/:code" component={SchoolLandingPage} />
-      <Route path="/register/:code" component={SchoolRegistrationFormPage} />
       <Route path="/registration-success/:code" component={RegistrationSuccessPage} />
 
       {/* School Admin routes */}
