@@ -2358,47 +2358,54 @@ export class MemStorage implements IStorage {
     }
 
     async createMarketingLink(link: InsertMarketingLink): Promise<MarketingLink> {
-      return this.dbStorage.createMarketingLink(link);
+      return this.memStorage.createMarketingLink(link);
     }
 
     async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
-      return this.dbStorage.getMarketingLinkById(id);
+      return this.memStorage.getMarketingLinkById(id);
     }
 
     async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
-      return this.dbStorage.getMarketingLinkByCampaignId(campaignId);
+      return this.memStorage.getMarketingLinkByCampaignId(campaignId);
     }
 
     async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
-      return this.dbStorage.getMarketingLinksBySchoolId(schoolId);
+      return this.memStorage.getMarketingLinksBySchoolId(schoolId);
     }
 
     async updateMarketingLink(id: number, link: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
-      return this.dbStorage.updateMarketingLink(id, link);
+      return this.memStorage.updateMarketingLink(id, link);
     }
 
     async deleteMarketingLink(id: number): Promise<void> {
-      return this.dbStorage.deleteMarketingLink(id);
+      const result = await this.memStorage.deleteMarketingLink(id);
+      return;
     }
 
     async incrementLinkClick(campaignId: string): Promise<void> {
-      return this.dbStorage.incrementLinkClick(campaignId);
+      const link = await this.memStorage.getMarketingLinkByCampaignId(campaignId);
+      if (link) {
+        await this.memStorage.incrementLinkClick(link.id);
+      }
     }
 
     async incrementLinkConversion(campaignId: string): Promise<void> {
-      return this.dbStorage.incrementLinkConversion(campaignId);
+      const link = await this.memStorage.getMarketingLinkByCampaignId(campaignId);
+      if (link) {
+        await this.memStorage.incrementLinkConversion(link.id);
+      }
     }
 
     async createLinkAnalytics(analytics: InsertLinkAnalytics): Promise<LinkAnalytics> {
-      return this.dbStorage.createLinkAnalytics(analytics);
+      return this.memStorage.createLinkAnalytics(analytics);
     }
 
     async getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
-      return this.dbStorage.getLinkAnalyticsByLinkId(linkId, startDate, endDate);
+      return this.memStorage.getLinkAnalytics(linkId);
     }
 
     async getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
-      return this.dbStorage.getLinkAnalyticsBySchoolId(schoolId, startDate, endDate);
+      return this.memStorage.getLinkAnalyticsBySchoolId(schoolId, startDate, endDate);
     }
 
       // Payment methods implementation - use memStorage since database is failing
