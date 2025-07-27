@@ -189,14 +189,40 @@ router.get("/my-school", async (req, res) => {
           const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
           const schools = JSON.parse(fileContent);
           console.log('📋 Found schools in file storage:', schools.length);
+          console.log('🔍 All schools:', schools.map(s => ({ id: s.id, name: s.name, adminId: s.adminId, created_by: s.created_by })));
 
-          // Find American Seekers Academy
-          const school = schools.find((s: any) => s.name === 'American Seekers Academy');
+          // First, try to find a school already associated with this admin user
+          let school = schools.find((s: any) => 
+            s.name === 'American Seekers Academy' && 
+            (s.adminId === adminUser.id || s.created_by === adminUser.id)
+          );
+
+          // If no school is associated with this admin, find the first American Seekers Academy
+          // and associate it with this admin (but don't create a new one)
+          if (!school) {
+            school = schools.find((s: any) => s.name === 'American Seekers Academy');
+            if (school) {
+              console.log('🔗 Associating existing school with admin user:', adminUser.email);
+              // Associate the school with this admin user
+              school.adminId = adminUser.id;
+              school.created_by = adminUser.id;
+              
+              // Save the association back to file
+              const schoolIndex = schools.findIndex((s: any) => s.id === school.id);
+              if (schoolIndex !== -1) {
+                schools[schoolIndex] = school;
+                fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
+                console.log('✅ Associated school with admin user');
+              }
+            }
+          }
+
           if (school) {
             console.log('🚀 Found school in file storage:', school.name);
             console.log('🔑 School registration code:', school.registrationCode || 'NOT FOUND');
+            console.log('👤 School admin association:', { adminId: school.adminId, created_by: school.created_by });
 
-            // Ensure school has a registration code
+            // Ensure school has a registration code (but don't overwrite existing one)
             if (!school.registrationCode) {
               console.log('🔑 Generating registration code for school...');
               // Generate a simple registration code
@@ -209,7 +235,7 @@ router.get("/my-school", async (req, res) => {
               school.registrationCode = registrationCode;
 
               // Save back to file
-              const schoolIndex = schools.findIndex((s: any) => s.name === 'American Seekers Academy');
+              const schoolIndex = schools.findIndex((s: any) => s.id === school.id);
               if (schoolIndex !== -1) {
                 schools[schoolIndex] = school;
                 fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
