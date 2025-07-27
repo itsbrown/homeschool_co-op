@@ -1310,12 +1310,7 @@ export class MemStorage implements IStorage {
       }
 
       // Create some representative knowledge bases based on previously created content
-      if (loadedCount === 0) {
-        this.createRepresentativeKnowledgeBases();
-      } else {
-        // Save current uploaded knowledge bases to persistent storage
-        await this.saveKnowledgeBasesToDisk();
-      }
+      this.createRepresentativeKnowledgeBases();
     } catch (error) {
       console.error('Error loading knowledge bases:', error);
       this.initializeSampleKnowledgeBases();
