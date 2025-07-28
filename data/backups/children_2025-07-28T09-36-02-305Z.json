@@ -243,31 +243,6 @@
     "emergencyPhone": null,
     "createdAt": "2025-07-18T02:40:34.491Z",
     "updatedAt": "2025-07-18T02:40:34.491Z",
-    "id": 11,
-    "birthDate": "2025-07-28T09:36:01.085Z"
-  },
-  {
-    "firstName": "Angela",
-    "lastName": "Chupitez",
-    "birthdate": "1980-12-04",
-    "gradeLevel": "3rd Grade",
-    "gender": null,
-    "parentEmail": "parent123@gmail.com",
-    "parent_email": "parent123@gmail.com",
-    "parentPhone": null,
-    "interests": [
-      "reading"
-    ],
-    "learningStyle": "unknown",
-    "specialNeeds": null,
-    "allergies": "Allergic to peanuts and gluten",
-    "medicalInfo": null,
-    "school": null,
-    "profileImage": null,
-    "emergencyContact": null,
-    "emergencyPhone": null,
-    "createdAt": "2025-07-28T09:44:35.164Z",
-    "updatedAt": "2025-07-28T09:44:35.164Z",
-    "id": 12
+    "id": 11
   }
 ]
