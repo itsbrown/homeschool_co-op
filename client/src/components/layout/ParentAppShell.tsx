@@ -25,10 +25,6 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
     await signOut();
   };
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
   // Fetch user's associated school
   useEffect(() => {
     if (user?.email) {
@@ -48,6 +44,11 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
       fetchUserSchool();
     }
   }, [user?.email]);
+
+  // Return early if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <CartProvider>

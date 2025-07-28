@@ -23,85 +23,99 @@ export const hasRole = (roles: string[]) => {
   };
 };
 
-// Register a new user (simplified approach)
-router.post("/register", async (req, res) => {
+// Register endpoint
+router.post('/register', async (req, res) => {
   try {
-    console.log("Registration attempt with data:", req.body);
+    const { 
+      email, 
+      password, 
+      parentFirstName, 
+      parentLastName, 
+      firstName, 
+      lastName, 
+      phone,
+      location,
+      role,
+      schoolId,
+      registrationCode
+    } = req.body;
 
-    // Validate required fields
-    if (!req.body.email || !req.body.password || !req.body.name) {
-      return res.status(400).json({ message: "Email, password, and name are required" });
+    // Handle both old format (firstName/lastName) and new format (parentFirstName/parentLastName)
+    const userFirstName = parentFirstName || firstName;
+    const userLastName = parentLastName || lastName;
+
+    if (!email || !userFirstName || !userLastName) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Email, first name, and last name are required' 
+      });
     }
 
-    // Use email as username for convenience
+    // Check if user already exists
+    const existingUser = await storage.getUserByEmail?.(email);
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User already exists' 
+      });
+    }
+
+    // For parent registration, generate a temporary password or use a default
+    const userPassword = password || 'tempPassword123';
+    const hashedPassword = await bcrypt.hash(userPassword, 10);
+
+    // Create user
     const userData = {
-      username: req.body.email,
-      email: req.body.email,
-      password: req.body.password,
-      name: req.body.name,
-      role: req.body.role || "parent",
-      subscription: req.body.subscription || "free",
-      avatar: null
+      email,
+      password: hashedPassword,
+      firstName: userFirstName,
+      lastName: userLastName,
+      phone: phone || '',
+      role: role || 'parent',
+      schoolId: schoolId || null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
-    console.log("Preparing user data with email:", userData.email);
+    const user = await storage.createUser(userData);
 
-    // Hash the password
-    console.log("Hashing password...");
-    try {
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
-      userData.password = hashedPassword;
-      console.log("Password hashed successfully");
-    } catch (hashError) {
-      console.error("Failed to hash password:", hashError);
-      return res.status(500).json({ message: "Error during registration process" });
-    }
-
-    // Use our direct file storage approach
-    try {
-      console.log("Calling direct user storage");
-      const user = directUserStorage.createNewUser(userData);
-      console.log("User successfully created with ID:", user.id);
-
-      // Create a sanitized version for the response
-      const userWithoutPassword = { ...user };
-      delete userWithoutPassword.password;
-
-      // Set up session
-      req.session.userId = user.id;
-      req.session.userRole = user.role;
-
-      // Save session explicitly
-      req.session.save((err) => {
-        if (err) {
-          console.error("Error saving session:", err);
-        } else {
-          console.log("Session saved successfully");
-        }
-      });
-
-      // Send welcome email
+    // If this is a school-specific registration, associate with school
+    if (schoolId && registrationCode) {
       try {
-        sendWelcomeEmail(user.email, user.name);
-      } catch (emailError) {
-        console.log("Email sending failed, but continuing:", emailError);
+        // Create school-parent association
+        await fetch(`${req.protocol}://${req.get('host')}/api/school-parents/associate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            parentEmail: email,
+            schoolId,
+            registrationCode
+          })
+        });
+      } catch (associationError) {
+        console.warn('Could not create school association:', associationError);
       }
-
-      return res.status(201).json({
-        message: "User registered successfully",
-        user: userWithoutPassword
-      });
-    } catch (storageError) {
-      console.error("Storage error during registration:", storageError);
-      return res.status(500).json({ 
-        message: "Registration failed", 
-        error: storageError.message || "Unknown error" 
-      });
     }
+
+    res.json({ 
+      success: true, 
+      message: 'Parent account created successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        phone: user.phone,
+        schoolId: user.schoolId
+      }
+    });
   } catch (error) {
-    console.error("Unexpected registration error:", error);
-    return res.status(500).json({ 
-      message: "Error creating user"
+    console.error('Registration error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
     });
   }
 });
@@ -418,7 +432,7 @@ router.post("/check-invitation", async (req, res) => {
 
     // Check for active role invitations
     const invitation = await storage.getActiveRoleInvitation(email);
-    
+
     if (invitation) {
       return res.status(200).json({ 
         invitation: {
@@ -446,7 +460,7 @@ router.post("/accept-invitation", async (req, res) => {
     }
 
     const invitation = await storage.acceptRoleInvitation(token, userEmail);
-    
+
     if (!invitation) {
       return res.status(404).json({ message: "Invalid or expired invitation" });
     }

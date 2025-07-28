@@ -15,18 +15,13 @@ import { CalendarIcon, MapPin, Clock, Users, DollarSign, Building, ArrowLeft } f
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
-// Schema for parent registration
+// Schema for parent registration - simplified to only parent info
 const parentRegistrationSchema = z.object({
   parentFirstName: z.string().min(1, "First name is required"),
   parentLastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
   phone: z.string().min(10, "Phone number is required"),
   location: z.string().min(1, "Location selection is required"),
-  childFirstName: z.string().min(1, "Child's first name is required"),
-  childLastName: z.string().min(1, "Child's last name is required"),
-  childAge: z.string().min(1, "Child's age is required"),
-  preferredClass: z.string().min(1, "Class selection is required"),
-  sessionTime: z.string().min(1, "Session time is required"),
 });
 
 type ParentRegistrationForm = z.infer<typeof parentRegistrationSchema>;
@@ -44,8 +39,6 @@ export default function RegistrationLandingPage() {
   const params = useParams<{ code?: string }>();
   const code = params?.code;
   const [, setLocation] = useLocation();
-  const [selectedClass, setSelectedClass] = useState<any>(null);
-  const [depositAmount, setDepositAmount] = useState(0);
   const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(!!code);
   const { toast } = useToast();
@@ -53,8 +46,7 @@ export default function RegistrationLandingPage() {
   const form = useForm<ParentRegistrationForm>({
     resolver: zodResolver(parentRegistrationSchema),
     defaultValues: {
-      location: "Brighton",
-      sessionTime: "9am-12pm"
+      location: "Brighton"
     }
   });
 
@@ -97,52 +89,49 @@ export default function RegistrationLandingPage() {
     }
   }, [code, toast, setLocation, form]);
 
-  // Fetch available classes
-  const { data: classes = [] } = useQuery<any[]>({
-    queryKey: ["/api/classes/published", school?.id],
-    queryFn: async () => {
-      const url = school?.id 
-        ? `/api/classes/published?schoolId=${school.id}`
-        : '/api/classes/published';
-      const response = await apiRequest("GET", url);
-      if (!response.ok) throw new Error('Failed to fetch classes');
-      return response.json();
-    }
-  });
+  const onSubmit = async (data: ParentRegistrationForm) => {
+    try {
+      // Create parent account
+      const response = await apiRequest("POST", "/api/auth/register", {
+        ...data,
+        role: 'parent',
+        schoolId: school?.id || null,
+        registrationCode: school?.registrationCode || null
+      });
 
-  // Filter classes based on school location if available
-  const filteredClasses = school && school.location 
-    ? classes.filter(c => c.location === school.location)
-    : classes.filter(c => c.location === "Brighton");
+      if (response.ok) {
+        const result = await response.json();
+        
+        toast({
+          title: "Registration Successful!",
+          description: "Welcome to American Seekers Academy. You can now add your children and enroll them in classes.",
+        });
 
-  const handleClassSelection = (classId: string) => {
-    const selectedClassData = classes.find(c => c.id.toString() === classId);
-    if (selectedClassData) {
-      setSelectedClass(selectedClassData);
-      setDepositAmount(Math.round(selectedClassData.price * 0.1)); // 10% deposit
-      form.setValue("preferredClass", classId);
-    }
-  };
+        // Store parent info for potential use
+        sessionStorage.setItem('parentRegistrationData', JSON.stringify({
+          ...data,
+          school: school || null,
+          registrationCode: school?.registrationCode || null,
+          schoolId: school?.id || null
+        }));
 
-  const onSubmit = (data: ParentRegistrationForm) => {
-    // Store registration data and proceed to payment or specific school flow
-    const registrationData = {
-      ...data,
-      selectedClass,
-      depositAmount,
-      totalAmount: selectedClass?.price || 0,
-      school: school || null,
-      registrationCode: school?.registrationCode || null,
-      schoolId: school?.id || null
-    };
-    
-    sessionStorage.setItem('registrationData', JSON.stringify(registrationData));
-    
-    // If this is school-specific registration, route to school payment flow
-    if (school) {
-      setLocation(`/registration/payment?school=${school.registrationCode}`);
-    } else {
-      setLocation('/registration/payment');
+        // Redirect to dashboard where they can add children
+        setLocation('/dashboard');
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Registration Failed",
+          description: error.message || "Please try again",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      toast({
+        title: "Registration Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -206,56 +195,13 @@ export default function RegistrationLandingPage() {
           )}
         </div>
 
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Available Classes - Fall 2025</CardTitle>
-            <CardDescription>
-              Choose from our age-appropriate classical education programs
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
-              {filteredClasses.map((classItem) => (
-                <Card key={classItem.id} className="border-2 hover:border-primary transition-colors">
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">{classItem.title}</CardTitle>
-                        <p className="text-sm text-muted-foreground">{classItem.ageRange}</p>
-                      </div>
-                      <Badge variant="secondary">${classItem.price}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span>{classItem.schedule}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span>{classItem.location}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span>{classItem.capacity - classItem.enrollmentCount} spots available</span>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-3 line-clamp-3">
-                      {classItem.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        
 
         <Card>
           <CardHeader>
-            <CardTitle>Registration Form</CardTitle>
+            <CardTitle>Parent Registration</CardTitle>
             <CardDescription>
-              Enter your information to register your child
+              Enter your information to create your account. You'll be able to add your children and enroll them in classes from your dashboard.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -267,7 +213,7 @@ export default function RegistrationLandingPage() {
                     name="parentFirstName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Parent First Name</FormLabel>
+                        <FormLabel>First Name</FormLabel>
                         <FormControl>
                           <Input placeholder="Jane" {...field} />
                         </FormControl>
@@ -280,7 +226,7 @@ export default function RegistrationLandingPage() {
                     name="parentLastName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Parent Last Name</FormLabel>
+                        <FormLabel>Last Name</FormLabel>
                         <FormControl>
                           <Input placeholder="Doe" {...field} />
                         </FormControl>
@@ -324,7 +270,7 @@ export default function RegistrationLandingPage() {
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location</FormLabel>
+                      <FormLabel>Preferred Location</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -340,122 +286,25 @@ export default function RegistrationLandingPage() {
                   )}
                 />
 
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold mb-4">Child Information</h3>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="childFirstName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Child's First Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Emma" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="childLastName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Child's Last Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Doe" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4 mt-4">
-                    <FormField
-                      control={form.control}
-                      name="childAge"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Child's Age</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select age" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {[...Array(10)].map((_, i) => (
-                                <SelectItem key={i + 1} value={(i + 1).toString()}>
-                                  {i + 1} years old
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="preferredClass"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Preferred Class</FormLabel>
-                          <Select onValueChange={handleClassSelection} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select class" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {filteredClasses.map((classItem) => (
-                                <SelectItem key={classItem.id} value={classItem.id.toString()}>
-                                  {classItem.title} - {classItem.ageRange}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-blue-900 mb-2">Next Steps</h3>
+                  <p className="text-blue-700 text-sm">
+                    After creating your account, you'll be taken to your dashboard where you can:
+                  </p>
+                  <ul className="text-blue-700 text-sm mt-2 space-y-1">
+                    <li>• Add your children's information</li>
+                    <li>• Browse available classes</li>
+                    <li>• Enroll your children in programs</li>
+                    <li>• Manage payments and schedules</li>
+                  </ul>
                 </div>
-
-                {selectedClass && (
-                  <Card className="bg-green-50 border-green-200">
-                    <CardHeader>
-                      <CardTitle className="text-green-900">Selected Class</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <p className="font-semibold">{selectedClass.title}</p>
-                        <p className="text-sm text-green-700">{selectedClass.schedule}</p>
-                        <div className="flex justify-between items-center pt-2 border-t border-green-200">
-                          <span>Total Cost:</span>
-                          <span className="font-semibold">${selectedClass.price}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span>Deposit (10%):</span>
-                          <span className="font-semibold text-green-700">${depositAmount}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span>Remaining Balance:</span>
-                          <span className="text-sm text-green-600">${selectedClass.price - depositAmount}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
 
                 <Button 
                   type="submit" 
                   className="w-full" 
                   size="lg"
-                  disabled={!selectedClass}
                 >
-                  {selectedClass ? `Pay Deposit - $${depositAmount}` : "Select a Class to Continue"}
+                  Create Account & Continue to Dashboard
                 </Button>
               </form>
             </Form>
