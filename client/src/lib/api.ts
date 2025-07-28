@@ -40,6 +40,7 @@ class ApiClient {
       // Don't redirect on 403 - show error message instead
     }
   }
+}
 
 // Auth API
 export async function registerUser(userData: {
@@ -163,6 +164,4 @@ export async function getTutorResources(
 export async function fetchDashboardStats(): Promise<Stats> {
   // TODO: Implement real API call to get computed dashboard statistics
   throw new Error('Dashboard stats API not implemented');
-}
-
 }

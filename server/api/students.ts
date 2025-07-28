@@ -1,4 +1,6 @@
-const express = require('express');
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
 const router = express.Router();
 
 // Mock storage object (replace with your actual storage implementation)
@@ -193,4 +195,4 @@ router.post('/register', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

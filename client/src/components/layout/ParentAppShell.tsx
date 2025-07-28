@@ -8,7 +8,7 @@ import CartButton from "@/components/cart/CartButton";
 import { Button } from "@/components/ui/button";
 import { LogOut, Menu, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/api";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ParentAppShellProps {
   children: React.ReactNode;
