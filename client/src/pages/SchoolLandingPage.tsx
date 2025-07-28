@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -56,7 +55,7 @@ export default function SchoolLandingPage() {
     const fetchSchool = async () => {
       try {
         const response = await apiRequest("GET", `/api/schools/by-code/${code}`);
-        
+
         if (response.ok) {
           const schoolData = await response.json();
           setSchool(schoolData);
@@ -76,9 +75,9 @@ export default function SchoolLandingPage() {
   }, [code]);
 
   const handleRegister = () => {
-    if (school) {
-      setLocation(`/register/${school.registrationCode}`);
-    }
+    // Store school context in sessionStorage for the registration flow
+    sessionStorage.setItem('schoolRegistrationContext', JSON.stringify(school));
+    setLocation(`/register/${code}`);
   };
 
   if (loading) {

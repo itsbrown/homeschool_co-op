@@ -52,6 +52,7 @@ router.post('/complete', async (req, res) => {
         lastName: data.parent.lastName,
         phone: data.parent.phone,
         role: 'parent' as const,
+        schoolId: data.schoolId || null,
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -59,6 +60,15 @@ router.post('/complete', async (req, res) => {
       
       parentUser = await storage.createUser(parentData);
       console.log('👤 Created new parent user:', parentUser.id);
+    } else if (data.schoolId && !parentUser.schoolId) {
+      // Associate existing user with school
+      try {
+        await storage.updateUser?.(parentUser.id, { schoolId: data.schoolId });
+        parentUser.schoolId = data.schoolId;
+        console.log('🔗 Associated existing parent with school:', data.schoolId);
+      } catch (error) {
+        console.warn('⚠️ Could not update parent school association:', error);
+      }
     }
     
     // Create child record

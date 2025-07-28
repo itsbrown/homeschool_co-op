@@ -12,13 +12,13 @@ router.get('/', async (req, res) => {
     const category = req.query.category as string || '';
     const categoryName = req.query.categoryName as string || '';
     const statusParam = req.query.status as string || '';
-    
+
     // Validate status before using it
     let status: "published" | "draft" | "" = "";
     if (statusParam === "published" || statusParam === "draft") {
       status = statusParam;
     }
-    
+
     const options = {
       page,
       limit,
@@ -26,18 +26,18 @@ router.get('/', async (req, res) => {
       category,
       status
     };
-    
+
     // Get classes count for pagination
     const total = await storage.getClassesCount(options);
-    
+
     // Get classes with pagination
     let classes = await storage.getClasses(options);
-    
+
     // Additional filtering by categoryName if provided
     if (categoryName && classes.length > 0) {
       classes = classes.filter(c => c.categoryName === categoryName);
     }
-    
+
     // Return classes with pagination metadata
     res.json({
       classes,
@@ -61,12 +61,12 @@ router.get('/:id', async (req, res) => {
     if (isNaN(id)) {
       return res.status(400).json({ message: 'Invalid class ID' });
     }
-    
+
     const classItem = await storage.getClassById(id);
     if (!classItem) {
       return res.status(404).json({ message: 'Class not found' });
     }
-    
+
     res.json(classItem);
   } catch (error) {
     console.error('Error fetching class:', error);
@@ -80,7 +80,7 @@ router.get('/category/:categoryName', async (req, res) => {
     const categoryName = req.params.categoryName;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
-    
+
     // Get all classes first
     const allClasses = await storage.getClasses({
       page: 1,
@@ -89,15 +89,15 @@ router.get('/category/:categoryName', async (req, res) => {
       category: '',
       status: 'published'
     });
-    
+
     // Filter by category name
     const filteredClasses = allClasses.filter(c => c.categoryName === categoryName);
-    
+
     // Apply pagination manually
     const startIndex = (page - 1) * limit;
     const endIndex = page * limit;
     const paginatedClasses = filteredClasses.slice(startIndex, endIndex);
-    
+
     res.json({
       classes: paginatedClasses,
       pagination: {
@@ -124,19 +124,19 @@ router.get('/categories/names', async (req, res) => {
       category: '',
       status: 'published'
     });
-    
+
     // Extract unique category names using an object as a map
     const categoryNamesMap: {[key: string]: boolean} = {};
-    
+
     allClasses.forEach(c => {
       if (c.categoryName) {
         categoryNamesMap[c.categoryName] = true;
       }
     });
-    
+
     // Convert object keys to array
     const categoryNames = Object.keys(categoryNamesMap);
-    
+
     res.json(categoryNames);
   } catch (error) {
     console.error('Error fetching category names:', error);
@@ -148,7 +148,7 @@ router.get('/categories/names', async (req, res) => {
 router.post('/:id/enroll', async (req, res) => {
   try {
     console.log(`📝 ENROLLMENT REQUEST: Class ${req.params.id}, Body:`, req.body);
-    
+
     const classId = parseInt(req.params.id);
     const { childId } = req.body;
 
@@ -201,7 +201,7 @@ router.post('/:id/enroll', async (req, res) => {
     // For now, just create the enrollment record
 
     console.log(`✅ Successfully enrolled ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
-    
+
     res.json({ 
       message: 'Enrollment successful',
       enrollment: enrollment
@@ -242,7 +242,7 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
     await storage.deleteEnrollment(enrollmentId);
 
     console.log(`✅ Successfully unenrolled child from class: ${enrollment.className}`);
-    
+
     res.json({ 
       message: 'Unenrollment successful',
       enrollmentId: enrollmentId
@@ -251,6 +251,24 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
   } catch (error) {
     console.error('Error unenrolling child from class:', error);
     res.status(500).json({ message: 'Failed to unenroll child from class' });
+  }
+});
+
+// Get published classes
+router.get("/published", async (req, res) => {
+  try {
+    const { schoolId } = req.query;
+    let classes = await storage.getPublishedClasses?.() || [];
+
+    // Filter by school if schoolId is provided
+    if (schoolId) {
+      classes = classes.filter(cls => cls.schoolId === parseInt(schoolId as string));
+    }
+
+    res.json(classes);
+  } catch (error: any) {
+    console.error("Error fetching published classes:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 

@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
@@ -15,6 +15,8 @@ import { useCart } from "@/contexts/CartContext";
 
 export default function ParentDashboard() {
   const { user, session } = useAuth();
+  const [, setLocation] = useLocation();
+  const [userSchool, setUserSchool] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -116,13 +118,36 @@ export default function ParentDashboard() {
     }
   };
 
+    // Fetch user's associated school
+    useEffect(() => {
+      if (user?.email) {
+        const fetchUserSchool = async () => {
+          try {
+            const response = await apiRequest("GET", `/api/school-parents/school/${user.email}`);
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success && result.school) {
+                setUserSchool(result.school);
+              }
+            }
+          } catch (error) {
+            console.log('No school association found for user');
+          }
+        };
+        fetchUserSchool();
+      }
+    }, [user?.email]);
+
   return (
       <div className="p-6 space-y-6">
         <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold">Parent Dashboard</h1>
+          <h1 className="text-3xl font-bold">{userSchool ? `${userSchool.name} - Parent Dashboard` : 'Parent Dashboard'}</h1>
           <p className="text-muted-foreground mt-1">
-            Welcome back, {user?.displayName || "Parent"}! Manage your children's education journey.
+            {userSchool
+              ? `Welcome back, ${user?.displayName || "Parent"}! Manage your children's education at ${userSchool.name}.`
+              : `Welcome back, ${user?.displayName || "Parent"}! Manage your children's education journey.`
+            }
           </p>
         </div>
         <div className="flex space-x-2">

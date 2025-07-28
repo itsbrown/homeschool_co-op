@@ -13,6 +13,9 @@ import stripeRoutes from './api/stripe';
 import marketingLinksRouter from './api/marketing-links';
 import parentRouter from './api/parent';
 import billingRouter from './api/billing';
+import schoolsRouter from "./api/schools";
+import studentsRouter from "./api/students";
+import schoolParentsRouter from "./api/school-parents";
 
 const app = express();
 // Increase the size limit to 50MB for file uploads
@@ -66,6 +69,9 @@ app.use('/api/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/billing', billingRouter);
+app.use("/api/schools", schoolsRouter);
+app.use("/api/students", studentsRouter);
+app.use("/api/school-parents", schoolParentsRouter);
 
 (async () => {
   const server = await registerRoutes(app);

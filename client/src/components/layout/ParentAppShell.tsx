@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { CartProvider } from "@/contexts/CartContext";
@@ -7,8 +7,8 @@ import CartDrawer from "@/components/cart/CartDrawer";
 import CartButton from "@/components/cart/CartButton";
 import { Button } from "@/components/ui/button";
 import { LogOut, Menu, User } from "lucide-react";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/api";
 
 interface ParentAppShellProps {
   children: React.ReactNode;
@@ -18,6 +18,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
   const { user, signOut, isAuthenticated } = useAuth();
   const { activeRole } = useRole();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userSchool, setUserSchool] = useState<any>(null);
 
   const handleLogout = async () => {
     console.log('🚪 ParentAppShell logout clicked');
@@ -27,6 +28,26 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
   if (!isAuthenticated) {
     return null;
   }
+
+  // Fetch user's associated school
+  useEffect(() => {
+    if (user?.email) {
+      const fetchUserSchool = async () => {
+        try {
+          const response = await apiRequest("GET", `/api/school-parents/school/${user.email}`);
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.school) {
+              setUserSchool(result.school);
+            }
+          }
+        } catch (error) {
+          console.log('No school association found for user');
+        }
+      };
+      fetchUserSchool();
+    }
+  }, [user?.email]);
 
   return (
     <CartProvider>
@@ -60,7 +81,11 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                 <Menu className="h-6 w-6" />
               </Button>
 
-              <span className="font-semibold text-lg">ASA Platform</span>
+              <div className="flex items-center">
+                <h1 className="text-xl font-semibold">
+                  {userSchool ? userSchool.name : 'LearnSphere'}
+                </h1>
+              </div>
 
               <div className="flex items-center gap-2">
                 <CartButton />

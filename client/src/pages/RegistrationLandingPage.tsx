@@ -99,7 +99,15 @@ export default function RegistrationLandingPage() {
 
   // Fetch available classes
   const { data: classes = [] } = useQuery<any[]>({
-    queryKey: ["/api/classes/published"],
+    queryKey: ["/api/classes/published", school?.id],
+    queryFn: async () => {
+      const url = school?.id 
+        ? `/api/classes/published?schoolId=${school.id}`
+        : '/api/classes/published';
+      const response = await apiRequest("GET", url);
+      if (!response.ok) throw new Error('Failed to fetch classes');
+      return response.json();
+    }
   });
 
   // Filter classes based on school location if available
@@ -124,7 +132,8 @@ export default function RegistrationLandingPage() {
       depositAmount,
       totalAmount: selectedClass?.price || 0,
       school: school || null,
-      registrationCode: school?.registrationCode || null
+      registrationCode: school?.registrationCode || null,
+      schoolId: school?.id || null
     };
     
     sessionStorage.setItem('registrationData', JSON.stringify(registrationData));
