@@ -78,18 +78,46 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
   
   const [educators, setEducators] = useState<Educator[]>([]);
   
-  // Hardcode educators since the API call is unreliable
+  // Load staff members as potential instructors
   useEffect(() => {
-    // Use default educators directly to avoid API issues
-    const defaultEducators = [
-      { id: 1, name: "Admin User", username: "admin", role: "admin" },
-      { id: 2, name: "Educator User", username: "educator", role: "educator" },
-      { id: 3, name: "Jane Smith", username: "jsmith", role: "educator" },
-      { id: 4, name: "Michael Davis", username: "mdavis", role: "educator" }
-    ];
-    
-    setEducators(defaultEducators);
-    console.log("Using default educators:", defaultEducators);
+    // Fetch staff members from the school admin API
+    fetch('/api/school-admin/staff', {
+      credentials: 'include',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+      }
+    })
+    .then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      throw new Error('Failed to fetch staff');
+    })
+    .then(staffData => {
+      // Convert staff to educator format
+      const staffEducators = staffData.map((staff: any) => ({
+        id: staff.id,
+        name: staff.name || `${staff.firstName} ${staff.lastName}`,
+        username: staff.email,
+        role: staff.role,
+        email: staff.email
+      }));
+      
+      setEducators(staffEducators);
+      console.log("Loaded staff as educators:", staffEducators);
+    })
+    .catch(error => {
+      console.log("Failed to load staff, using fallback educators:", error);
+      // Fallback to default educators
+      const defaultEducators = [
+        { id: 1, name: "Admin User", username: "admin", role: "admin" },
+        { id: 2, name: "Educator User", username: "educator", role: "educator" },
+        { id: 3, name: "Jane Smith", username: "jsmith", role: "educator" },
+        { id: 4, name: "Michael Davis", username: "mdavis", role: "educator" }
+      ];
+      
+      setEducators(defaultEducators);
+    });
   }, []);
 
   // Process initialData to ensure all fields are properly formatted for the form

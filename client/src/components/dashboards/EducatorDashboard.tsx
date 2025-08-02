@@ -1,189 +1,220 @@
+
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { PlusCircle, BookOpen, Users, Calendar, GraduationCap, FileText } from "lucide-react";
-import AIGenerationCard from "@/components/dashboard/AIGenerationCard";
+import { PlusCircle, BookOpen, Users, Calendar, GraduationCap, FileText, Eye, Clock, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth0";
+import { formatDate, formatTime } from "@/lib/utils";
 
 export default function EducatorDashboard() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("classes");
 
-  const { data: curriculaData, isLoading: curriculaLoading } = useQuery({
-    queryKey: ["/api/curricula/author", user?.id],
-    queryFn: () => fetch(`/api/curricula/author/${user?.id}`).then(res => res.json()).catch(() => []),
+  // Get educator's assigned classes
+  const { data: assignedClasses, isLoading: classesLoading } = useQuery({
+    queryKey: ["/api/educator/classes", user?.email],
+    queryFn: async () => {
+      const response = await fetch(`/api/educator/classes?email=${user?.email}`, {
+        credentials: "include"
+      });
+      if (!response.ok) throw new Error("Failed to fetch classes");
+      return response.json();
+    },
+    enabled: !!user?.email,
   });
 
-  const { data: lessonsData, isLoading: lessonsLoading } = useQuery({
-    queryKey: ["/api/lessons/author", user?.id],
-    queryFn: () => fetch(`/api/lessons/author/${user?.id}`).then(res => res.json()).catch(() => []),
-  });
-
-  const { data: classesData, isLoading: classesLoading } = useQuery({
-    queryKey: ["/api/classes/instructor", user?.id],
-    queryFn: () => fetch(`/api/classes/instructor/${user?.id}`).then(res => res.json()).catch(() => []),
-  });
-
-  const { data: programsData, isLoading: programsLoading } = useQuery({
-    queryKey: ["/api/programs/instructor", user?.id],
-    queryFn: () => fetch(`/api/programs/instructor/${user?.id}`).then(res => res.json()).catch(() => []),
+  // Get students for educator's classes
+  const { data: studentsData, isLoading: studentsLoading } = useQuery({
+    queryKey: ["/api/educator/students", user?.email],
+    queryFn: async () => {
+      const response = await fetch(`/api/educator/students?email=${user?.email}`, {
+        credentials: "include"
+      });
+      if (!response.ok) throw new Error("Failed to fetch students");
+      return response.json();
+    },
+    enabled: !!user?.email,
   });
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Educator Dashboard</h1>
-        <div className="flex gap-2">
-          <Button asChild>
-            <Link href="/lessons/create">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Lesson
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/programs/create">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Program
-            </Link>
-          </Button>
+    <div className="flex flex-col space-y-6 p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Educator Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back, {user?.name || user?.email}
+          </p>
         </div>
       </div>
 
-      <Tabs defaultValue="overview" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="content">My Content</TabsTrigger>
+      {/* Quick Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">My Classes</CardTitle>
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {classesLoading ? "..." : assignedClasses?.length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Active classes assigned
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {studentsLoading ? "..." : studentsData?.totalStudents || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Across all classes
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">This Week</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {classesLoading ? "..." : assignedClasses?.filter(c => c.status === 'active')?.length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Classes this week
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Upcoming</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {classesLoading ? "..." : assignedClasses?.filter(c => c.status === 'upcoming')?.length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Starting soon
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="classes">My Classes</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">My Curricula</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{curriculaLoading ? "Loading..." : curriculaData?.length || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Created curricula
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">My Lessons</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{lessonsLoading ? "Loading..." : lessonsData?.length || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Created lessons
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">My Classes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{classesLoading ? "Loading..." : classesData?.length || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Active classes
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">My Programs</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{programsLoading ? "Loading..." : programsData?.length || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Active programs
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <AIGenerationCard />
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>Common educator tasks</CardDescription>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
-                <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
-                  <Link href="/lessons/ai-generator">
-                    <BookOpen className="h-5 w-5 mb-1" />
-                    <span>Generate Lesson</span>
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
-                  <Link href="/students">
-                    <Users className="h-5 w-5 mb-1" />
-                    <span>View Students</span>
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
-                  <Link href="/schedule">
-                    <Calendar className="h-5 w-5 mb-1" />
-                    <span>My Schedule</span>
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild className="h-24 flex flex-col gap-2 w-full">
-                  <Link href="/assessments">
-                    <FileText className="h-5 w-5 mb-1" />
-                    <span>Assessments</span>
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="content" className="space-y-4">
+        <TabsContent value="classes" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>My Teaching Content</CardTitle>
-              <CardDescription>Manage your educational content</CardDescription>
+              <CardTitle>My Assigned Classes</CardTitle>
+              <CardDescription>
+                Classes you are currently teaching or scheduled to teach
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <Button asChild variant="outline" className="h-32 flex flex-col justify-center items-center">
-                  <Link href="/curriculum">
-                    <BookOpen className="h-8 w-8 mb-2" />
-                    <span>My Curricula</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-32 flex flex-col justify-center items-center">
-                  <Link href="/lessons">
-                    <FileText className="h-8 w-8 mb-2" />
-                    <span>My Lessons</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-32 flex flex-col justify-center items-center">
-                  <Link href="/knowledge-base">
-                    <GraduationCap className="h-8 w-8 mb-2" />
-                    <span>Knowledge Base</span>
-                  </Link>
-                </Button>
-              </div>
-              <div className="flex justify-between">
-                <Button variant="outline" asChild>
-                  <Link href="/marketplace">Browse Marketplace</Link>
-                </Button>
-                <Button asChild>
-                  <Link href="/lessons/ai-generator">Generate New Lesson</Link>
-                </Button>
-              </div>
+              {classesLoading ? (
+                <div className="space-y-2">
+                  {Array(3).fill(0).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : assignedClasses && assignedClasses.length > 0 ? (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Class Name</TableHead>
+                        <TableHead>Schedule</TableHead>
+                        <TableHead>Students</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {assignedClasses.map((classItem) => (
+                        <TableRow key={classItem.id}>
+                          <TableCell className="font-medium">
+                            <div>
+                              <div className="font-semibold">{classItem.title}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {classItem.category}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-sm">
+                              <Calendar className="h-3 w-3" />
+                              <div>
+                                {classItem.startDate ? formatDate(classItem.startDate) : 'TBD'} - {classItem.endDate ? formatDate(classItem.endDate) : 'TBD'}
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {classItem.schedule || 'Schedule TBD'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {classItem.enrollmentCount || 0}/{classItem.maxStudents || classItem.capacity || 20}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-sm">
+                              <MapPin className="h-3 w-3" />
+                              {classItem.location || 'TBD'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              classItem.status === 'active' ? 'default' :
+                              classItem.status === 'upcoming' ? 'secondary' : 'outline'
+                            }>
+                              {classItem.status || 'draft'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="outline">
+                              <Eye className="h-3 w-3 mr-1" />
+                              View Details
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="flex h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-8">
+                  <BookOpen className="h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-semibold">No Classes Assigned</h3>
+                  <p className="mb-4 mt-2 text-center text-sm text-muted-foreground">
+                    You haven't been assigned to any classes yet. Contact your school administrator.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -192,21 +223,59 @@ export default function EducatorDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>My Students</CardTitle>
-              <CardDescription>View and manage your students</CardDescription>
+              <CardDescription>
+                Students enrolled in your classes
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-72 flex items-center justify-center border rounded-md">
-                <div className="text-center">
-                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-medium">Student Management</h3>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    View student profiles, progress, and assessments
-                  </p>
-                  <Button className="mt-4" asChild>
-                    <Link href="/students">View All Students</Link>
-                  </Button>
+              {studentsLoading ? (
+                <div className="space-y-2">
+                  {Array(5).fill(0).map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
                 </div>
-              </div>
+              ) : studentsData && studentsData.students && studentsData.students.length > 0 ? (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student Name</TableHead>
+                        <TableHead>Grade Level</TableHead>
+                        <TableHead>Class</TableHead>
+                        <TableHead>Parent Contact</TableHead>
+                        <TableHead>Enrollment Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {studentsData.students.map((student) => (
+                        <TableRow key={student.id}>
+                          <TableCell className="font-medium">
+                            {student.firstName} {student.lastName}
+                          </TableCell>
+                          <TableCell>{student.gradeLevel}</TableCell>
+                          <TableCell>{student.className}</TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {student.parentEmail}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {student.enrollmentDate ? formatDate(student.enrollmentDate) : 'N/A'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="flex h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-8">
+                  <Users className="h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-semibold">No Students Yet</h3>
+                  <p className="mb-4 mt-2 text-center text-sm text-muted-foreground">
+                    No students are enrolled in your classes yet.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -214,21 +283,18 @@ export default function EducatorDashboard() {
         <TabsContent value="schedule" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>My Schedule</CardTitle>
-              <CardDescription>View and manage your teaching schedule</CardDescription>
+              <CardTitle>Weekly Schedule</CardTitle>
+              <CardDescription>
+                Your class schedule for this week
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-72 flex items-center justify-center border rounded-md">
-                <div className="text-center">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-medium">Calendar View</h3>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Manage your classes, programs, and events
-                  </p>
-                  <Button className="mt-4" asChild>
-                    <Link href="/schedule">View Full Schedule</Link>
-                  </Button>
-                </div>
+              <div className="flex h-[300px] flex-col items-center justify-center rounded-md border border-dashed p-8">
+                <Calendar className="h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-4 text-lg font-semibold">Schedule Coming Soon</h3>
+                <p className="mb-4 mt-2 text-center text-sm text-muted-foreground">
+                  Weekly schedule view will be available soon.
+                </p>
               </div>
             </CardContent>
           </Card>

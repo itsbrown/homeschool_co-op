@@ -16,6 +16,7 @@ import billingRouter from './api/billing';
 import schoolsRouter from "./api/schools";
 import studentsRouter from "./api/students";
 import schoolParentsRouter from "./api/school-parents";
+import educatorRouter from "./api/educator";
 
 const app = express();
 // Increase the size limit to 50MB for file uploads
@@ -72,6 +73,7 @@ app.use('/api/billing', billingRouter);
 app.use("/api/schools", schoolsRouter);
 app.use("/api/students", studentsRouter);
 app.use("/api/school-parents", schoolParentsRouter);
+app.use("/api/educator", educatorRouter);
 
 (async () => {
   const server = await registerRoutes(app);

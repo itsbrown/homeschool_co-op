@@ -8,11 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function RoleDashboard() {
   const { user, isLoading, isAuthenticated } = useAuth();
-  
+
   if (isLoading) {
     return <DashboardSkeleton />;
   }
-  
+
   if (!isAuthenticated || !user) {
     // This should not happen as the dashboard should only be shown to authenticated users
     // but we handle it gracefully just in case
@@ -23,7 +23,7 @@ export default function RoleDashboard() {
       </div>
     );
   }
-  
+
   // Determine user role from auth hook which includes email-based role override
   const userEmail = user.email;
   const userRole = user.role;
@@ -70,15 +70,15 @@ function DashboardSkeleton() {
           <Skeleton className="h-10 w-36" />
         </div>
       </div>
-      
+
       <Skeleton className="h-12 w-full" />
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[...Array(4)].map((_, i) => (
           <Skeleton key={i} className="h-28 w-full" />
         ))}
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Skeleton className="h-80 w-full" />
         <Skeleton className="h-80 w-full" />
