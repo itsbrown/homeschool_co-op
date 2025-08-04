@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "name": "American Seekers Academy",
+    "type": "Private Academy",
+    "address": "123 Education Lane",
+    "city": "Rochester",
+    "state": "NY",
+    "zipCode": "14620",
+    "phoneNumber": "",
+    "email": "coreycreates@gmail.com",
+    "website": "",
+    "description": "American Seekers Academy - Fostering excellence in education",
+    "accreditation": "",
+    "enrollmentSize": null,
+    "foundedYear": null,
+    "adminId": 1,
+    "created_by": 1,
+    "registrationCode": "ASA12345",
+    "status": "active",
+    "createdAt": "2025-01-13T06:08:43.000Z",
+    "updatedAt": "2025-01-13T06:08:43.000Z"
+  }
+]
