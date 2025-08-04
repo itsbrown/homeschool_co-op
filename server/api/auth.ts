@@ -131,42 +131,97 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Email/username and password are required" });
     }
 
-    // Special case for educator email login
-    if (loginIdentifier === 'educator.test@americanseekersacademy.com' && password === 'password') {
-      console.log('Educator email login attempt successful');
+    // Special case for educator email login - check both hardcoded and database
+    if (loginIdentifier === 'educator.test@americanseekersacademy.com') {
+      console.log('Educator email login attempt');
 
-      const educatorUser = {
-        id: 2,
-        name: 'Sarah Johnson',
-        username: 'educator_test',
-        email: 'educator.test@americanseekersacademy.com',
-        role: 'educator',
-        avatar: null,
-        subscription: 'educator',
-        firstName: 'Sarah',
-        lastName: 'Johnson',
-        createdAt: new Date()
-      };
+      // Try hardcoded password first
+      if (password === 'password') {
+        console.log('Educator email login with hardcoded password successful');
 
-      req.session.userId = educatorUser.id;
-      req.session.userRole = educatorUser.role;
+        const educatorUser = {
+          id: 2,
+          name: 'Sarah Johnson',
+          username: 'educator_test',
+          email: 'educator.test@americanseekersacademy.com',
+          role: 'educator',
+          avatar: null,
+          subscription: 'educator',
+          firstName: 'Sarah',
+          lastName: 'Johnson',
+          createdAt: new Date()
+        };
 
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error('Error saving session for educator:', err);
-            reject(err);
-          } else {
-            console.log('Educator session saved successfully');
-            resolve();
-          }
+        req.session.userId = educatorUser.id;
+        req.session.userRole = educatorUser.role;
+
+        await new Promise<void>((resolve, reject) => {
+          req.session.save((err) => {
+            if (err) {
+              console.error('Error saving session for educator:', err);
+              reject(err);
+            } else {
+              console.log('Educator session saved successfully');
+              resolve();
+            }
+          });
         });
-      });
 
-      return res.status(200).json({
-        message: "Educator login successful",
-        user: educatorUser
-      });
+        return res.status(200).json({
+          message: "Educator login successful",
+          user: educatorUser
+        });
+      }
+
+      // Try database password if hardcoded fails
+      try {
+        const dbUser = await storage.getUserByEmail(loginIdentifier);
+        if (dbUser && dbUser.password) {
+          const passwordValid = await bcrypt.compare(password, dbUser.password);
+          if (passwordValid) {
+            console.log('Educator login with database password successful');
+
+            const educatorUser = {
+              id: dbUser.id,
+              name: dbUser.name || `${dbUser.firstName} ${dbUser.lastName}`,
+              username: dbUser.username,
+              email: dbUser.email,
+              role: dbUser.role,
+              avatar: null,
+              subscription: dbUser.subscription || 'educator',
+              firstName: dbUser.firstName,
+              lastName: dbUser.lastName,
+              createdAt: dbUser.createdAt
+            };
+
+            req.session.userId = educatorUser.id;
+            req.session.userRole = educatorUser.role;
+
+            await new Promise<void>((resolve, reject) => {
+              req.session.save((err) => {
+                if (err) {
+                  console.error('Error saving session for educator:', err);
+                  reject(err);
+                } else {
+                  console.log('Educator session saved successfully');
+                  resolve();
+                }
+              });
+            });
+
+            return res.status(200).json({
+              message: "Educator login successful",
+              user: educatorUser
+            });
+          }
+        }
+      } catch (dbError) {
+        console.log('Database check failed, continuing with other auth methods');
+      }
+
+      // If we reach here, the educator email was used but password was incorrect
+      console.log('Educator email login failed - invalid password');
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
     // Special case for schooladmin login - the case is important! We need exact match
