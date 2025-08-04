@@ -348,12 +348,14 @@ router.get("/me", async (req, res) => {
     else if (req.session.userId === 2) {
       const educatorUser = {
         id: 2,
-        name: 'Test Educator',
-        username: 'educator',
-        email: 'educator@example.com',
+        name: 'Sarah Johnson',
+        username: 'educator_test',
+        email: 'educator.test@americanseekersacademy.com',
         role: 'educator',
         avatar: null,
         subscription: 'educator',
+        firstName: 'Sarah',
+        lastName: 'Johnson',
         createdAt: new Date()
       };
       console.log('Returning educator user profile');
