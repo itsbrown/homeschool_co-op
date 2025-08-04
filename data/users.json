@@ -11,16 +11,15 @@
   },
   {
     "id": 2,
-    "username": "educator_test",
     "email": "educator.test@americanseekersacademy.com",
-    "password": "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.",
-    "role": "educator",
+    "name": "Sarah Johnson",
+    "username": "educator_test",
     "firstName": "Sarah",
     "lastName": "Johnson",
-    "name": "Sarah Johnson",
+    "role": "educator",
     "subscription": "educator",
+    "createdAt": "2025-08-04T12:00:00.000Z",
     "avatar": null,
-    "createdAt": "2025-01-13T15:05:00.000Z",
-    "updatedAt": "2025-01-13T15:05:00.000Z"
+    "password": "$2a$10$EixZxQVkjyOptZj8GHGEc.3HEcUi8h7eAFcmNyMSZGEpj2pjHAAIC"
   }
 ]

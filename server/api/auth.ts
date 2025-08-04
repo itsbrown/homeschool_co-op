@@ -51,13 +51,36 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Check if user already exists
-    const existingUser = await storage.getUserByEmail?.(email);
-    if (existingUser) {
+    // List of reserved test account emails that cannot be registered
+    const reservedEmails = [
+      'educator.test@americanseekersacademy.com',
+      'admin@example.com',
+      'educator@example.com',
+      'parent@example.com',
+      'learner@example.com',
+      'school@example.com'
+    ];
+
+    // Check if trying to register a reserved test account email
+    if (reservedEmails.includes(email)) {
       return res.status(400).json({ 
         success: false, 
-        message: 'User already exists' 
+        message: 'This email is reserved for testing. Please use a different email address.' 
       });
+    }
+
+    // Check if user already exists in database
+    try {
+      const existingUser = await storage.getUserByEmail?.(email);
+      if (existingUser) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'User already exists' 
+        });
+      }
+    } catch (error) {
+      // If database lookup fails, continue with registration
+      console.log('Database lookup failed during registration check, continuing...');
     }
 
     // For parent registration, generate a temporary password or use a default
@@ -131,97 +154,98 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Email/username and password are required" });
     }
 
-    // Special case for educator email login - check both hardcoded and database
-    if (loginIdentifier === 'educator.test@americanseekersacademy.com') {
-      console.log('Educator email login attempt');
-
-      // Try hardcoded password first
-      if (password === 'password') {
-        console.log('Educator email login with hardcoded password successful');
-
-        const educatorUser = {
-          id: 2,
-          name: 'Sarah Johnson',
-          username: 'educator_test',
-          email: 'educator.test@americanseekersacademy.com',
-          role: 'educator',
-          avatar: null,
-          subscription: 'educator',
-          firstName: 'Sarah',
-          lastName: 'Johnson',
-          createdAt: new Date()
-        };
-
-        req.session.userId = educatorUser.id;
-        req.session.userRole = educatorUser.role;
-
-        await new Promise<void>((resolve, reject) => {
-          req.session.save((err) => {
-            if (err) {
-              console.error('Error saving session for educator:', err);
-              reject(err);
-            } else {
-              console.log('Educator session saved successfully');
-              resolve();
-            }
-          });
-        });
-
-        return res.status(200).json({
-          message: "Educator login successful",
-          user: educatorUser
-        });
+    // Handle test account credentials (including educator email)
+    const testAccounts = {
+      'educator.test@americanseekersacademy.com': {
+        id: 2,
+        name: 'Sarah Johnson',
+        username: 'educator_test',
+        email: 'educator.test@americanseekersacademy.com',
+        role: 'educator',
+        avatar: null,
+        subscription: 'educator',
+        firstName: 'Sarah',
+        lastName: 'Johnson',
+        createdAt: new Date()
+      },
+      'admin': {
+        id: 1,
+        name: 'Admin User',
+        username: 'admin',
+        email: 'admin@example.com', 
+        role: 'admin',
+        avatar: null,
+        subscription: 'premium',
+        createdAt: new Date()
+      },
+      'educator': {
+        id: 2,
+        name: 'Test Educator',
+        username: 'educator',
+        email: 'educator@example.com',
+        role: 'educator',
+        avatar: null,
+        subscription: 'educator',
+        createdAt: new Date()
+      },
+      'parent': {
+        id: 3,
+        name: 'Test Parent',
+        username: 'parent',
+        email: 'parent@example.com',
+        role: 'parent',
+        avatar: null,
+        subscription: 'family',
+        createdAt: new Date()
+      },
+      'learner': {
+        id: 4,
+        name: 'Test Learner',
+        username: 'learner',
+        email: 'learner@example.com',
+        role: 'learner',
+        avatar: null,
+        subscription: 'free',
+        createdAt: new Date()
+      },
+      'schooladmin': {
+        id: 5,
+        name: 'School Administrator',
+        username: 'schooladmin',
+        email: 'school@example.com',
+        role: 'schoolAdmin',
+        avatar: null,
+        subscription: 'premium',
+        createdAt: new Date()
       }
+    };
 
-      // Try database password if hardcoded fails
-      try {
-        const dbUser = await storage.getUserByEmail(loginIdentifier);
-        if (dbUser && dbUser.password) {
-          const passwordValid = await bcrypt.compare(password, dbUser.password);
-          if (passwordValid) {
-            console.log('Educator login with database password successful');
+    // Check if this is a test account login
+    const testAccount = testAccounts[loginIdentifier];
+    if (testAccount && password === 'password') {
+      console.log(`Test account login successful: ${loginIdentifier}`);
 
-            const educatorUser = {
-              id: dbUser.id,
-              name: dbUser.name || `${dbUser.firstName} ${dbUser.lastName}`,
-              username: dbUser.username,
-              email: dbUser.email,
-              role: dbUser.role,
-              avatar: null,
-              subscription: dbUser.subscription || 'educator',
-              firstName: dbUser.firstName,
-              lastName: dbUser.lastName,
-              createdAt: dbUser.createdAt
-            };
+      // Set session data
+      req.session.userId = testAccount.id;
+      req.session.userRole = testAccount.role;
 
-            req.session.userId = educatorUser.id;
-            req.session.userRole = educatorUser.role;
-
-            await new Promise<void>((resolve, reject) => {
-              req.session.save((err) => {
-                if (err) {
-                  console.error('Error saving session for educator:', err);
-                  reject(err);
-                } else {
-                  console.log('Educator session saved successfully');
-                  resolve();
-                }
-              });
-            });
-
-            return res.status(200).json({
-              message: "Educator login successful",
-              user: educatorUser
-            });
+      // Save session
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Error saving session:', err);
+            reject(err);
+          } else {
+            console.log('Session saved successfully');
+            resolve();
           }
-        }
-      } catch (dbError) {
-        console.log('Database check failed, continuing with other auth methods');
-      }
+        });
+      });
 
-      // If we reach here, the educator email was used but password was incorrect
-      console.log('Educator email login failed - invalid password');
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(200).json({
+        message: `Login successful (${testAccount.role})`,
+        user: testAccount
+      });
     }
 
     // Special case for schooladmin login - the case is important! We need exact match
@@ -278,91 +302,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Handle other test accounts
-    if (password === 'password' && 
-       (loginIdentifier === 'admin' || 
-        loginIdentifier === 'educator' || 
-        loginIdentifier === 'parent' || 
-        loginIdentifier === 'learner')) {
-
-      console.log(`Login attempt with test account: ${loginIdentifier}`);
-
-      let userData;
-      if (loginIdentifier === 'admin') {
-        userData = {
-          id: 1,
-          name: 'Admin User',
-          username: 'admin',
-          email: 'admin@example.com', 
-          role: 'admin',
-          avatar: null,
-          subscription: 'premium',
-          createdAt: new Date()
-        };
-      } else if (loginIdentifier === 'educator') {
-        userData = {
-          id: 2,
-          name: 'Test Educator',
-          username: 'educator',
-          email: 'educator@example.com',
-          role: 'educator',
-          avatar: null,
-          subscription: 'educator',
-          createdAt: new Date()
-        };
-      } else if (loginIdentifier === 'parent') {
-        userData = {
-          id: 3,
-          name: 'Test Parent',
-          username: 'parent',
-          email: 'parent@example.com',
-          role: 'parent',
-          avatar: null,
-          subscription: 'family',
-          createdAt: new Date()
-        };
-      } else if (loginIdentifier === 'learner') {
-        userData = {
-          id: 4,
-          name: 'Test Learner',
-          username: 'learner',
-          email: 'learner@example.com',
-          role: 'learner',
-          avatar: null,
-          subscription: 'free',
-          createdAt: new Date()
-        };
-      }
-
-      // Set session data
-      console.log('Setting session data for user:', userData);
-      req.session.userId = userData.id;
-      req.session.userRole = userData.role;
-
-      // Save session data immediately
-      try {
-        await new Promise<void>((resolve, reject) => {
-          req.session.save((err) => {
-            if (err) {
-              console.error('Session save error:', err);
-              reject(err);
-            } else {
-              console.log('Session saved successfully');
-              resolve();
-            }
-          });
-        });
-      } catch (sessionError) {
-        console.error('Error saving session:', sessionError);
-      }
-
-      console.log('Session after save:', req.session);
-
-      return res.status(200).json({
-        message: `Login successful (test ${userData.role})`,
-        user: userData
-      });
-    }
+    
 
     // If we reach this point, it means the user either:
     // 1. Provided incorrect credentials for a test account
