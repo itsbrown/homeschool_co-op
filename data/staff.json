@@ -62,5 +62,21 @@
     "subjects": [],
     "invitedAt": "2025-06-02T01:08:24.597Z",
     "message": "Hello"
+  },
+  {
+    "id": 1,
+    "email": "educator.test@americanseekersacademy.com",
+    "firstName": "Sarah",
+    "lastName": "Johnson",
+    "name": "Sarah Johnson",
+    "role": "Teacher",
+    "department": "Elementary Education",
+    "position": "Lead Teacher",
+    "schoolId": 1,
+    "status": "active",
+    "invitedAt": "2025-01-13T15:05:00.000Z",
+    "acceptedAt": "2025-01-13T15:05:00.000Z",
+    "createdAt": "2025-01-13T15:05:00.000Z",
+    "updatedAt": "2025-01-13T15:05:00.000Z"
   }
 ]

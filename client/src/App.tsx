@@ -62,7 +62,6 @@ import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfir
 import SchoolLandingPage from "@/pages/SchoolLandingPage";
 import SchoolRegistrationFormPage from "@/pages/SchoolRegistrationFormPage";
 import RegistrationSuccessPage from "@/pages/RegistrationSuccessPage";
-import SettingsPage from "@/pages/SettingsPage";
 import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
@@ -124,6 +123,7 @@ import ParentDashboard from "./components/dashboards/ParentDashboard";
 import ParentAppShell from "./components/layout/ParentAppShell";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 import RoleSelectionComponent from "@/components/RoleSelection";
+import EducatorDashboard from "./components/dashboards/EducatorDashboard";
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -376,13 +376,13 @@ function Router() {
             }}
           </Route>
 
-      {/* Registration system routes */}
+      {/* Authenticated registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
-      <Route path="/register/:code" component={RegistrationLandingPage} />
-      <Route path="/registration/landing" component={RegistrationLandingPage} />
       <Route path="/programs" component={ProgramsParentPage} />
       <Route path="/programs/browse" component={ProgramsBrowseRedirect} />
-      <Route path="/classes" component={ProgramsBrowseRedirect} />
+
+      {/* Educator routes */}
+      <Route path="/educator" component={() => <DashboardLayout><EducatorDashboard /></DashboardLayout>} />
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/view" component={ChildrenViewPage} />
       <Route path="/children/register" component={ChildRegistrationPage} />

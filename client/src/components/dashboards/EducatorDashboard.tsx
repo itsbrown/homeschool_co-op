@@ -10,10 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth0";
+import { useSupabaseAuth } from "@/components/SupabaseProvider";
 import { formatDate, formatTime } from "@/lib/utils";
 
 export default function EducatorDashboard() {
-  const { user } = useAuth();
+  const { user: auth0User } = useAuth();
+  const { user: supabaseUser } = useSupabaseAuth();
+  const user = auth0User || supabaseUser;
   const [activeTab, setActiveTab] = useState("classes");
 
   // Get educator's assigned classes
