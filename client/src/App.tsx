@@ -69,6 +69,7 @@ import BillingPage from "@/pages/BillingPage";
 import PaymentHistoryPage from "@/pages/PaymentHistoryPage";
 import PlatformSubscriptionPlans from "@/pages/PaymentPlans";
 import ClassPaymentPlans from "@/pages/ClassPaymentPlans";
+import SettingsPage from "@/pages/SettingsPage";
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
