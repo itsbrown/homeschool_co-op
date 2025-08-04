@@ -214,4 +214,7 @@ export const useSupabase = () => {
   return context;
 };
 
+// Alias for compatibility
+export const useSupabaseAuth = useAuth;
+
 export { supabase };
