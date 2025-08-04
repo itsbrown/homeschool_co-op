@@ -123,15 +123,54 @@ router.post('/register', async (req, res) => {
 // Login
 router.post("/login", async (req, res) => {
   try {
-    console.log('Login attempt for user:', req.body.username);
-    const { username, password } = req.body;
+    console.log('Login attempt for user:', req.body.email || req.body.username);
+    const { username, email, password } = req.body;
+    const loginIdentifier = email || username;
 
-    if (!username || !password) {
-      return res.status(400).json({ message: "Username and password are required" });
+    if (!loginIdentifier || !password) {
+      return res.status(400).json({ message: "Email/username and password are required" });
+    }
+
+    // Special case for educator email login
+    if (loginIdentifier === 'educator.test@americanseekersacademy.com' && password === 'password') {
+      console.log('Educator email login attempt successful');
+
+      const educatorUser = {
+        id: 2,
+        name: 'Sarah Johnson',
+        username: 'educator_test',
+        email: 'educator.test@americanseekersacademy.com',
+        role: 'educator',
+        avatar: null,
+        subscription: 'educator',
+        firstName: 'Sarah',
+        lastName: 'Johnson',
+        createdAt: new Date()
+      };
+
+      req.session.userId = educatorUser.id;
+      req.session.userRole = educatorUser.role;
+
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Error saving session for educator:', err);
+            reject(err);
+          } else {
+            console.log('Educator session saved successfully');
+            resolve();
+          }
+        });
+      });
+
+      return res.status(200).json({
+        message: "Educator login successful",
+        user: educatorUser
+      });
     }
 
     // Special case for schooladmin login - the case is important! We need exact match
-    if (username === 'schooladmin' && password === 'password') {
+    if (loginIdentifier === 'schooladmin' && password === 'password') {
       console.log('School Admin login attempt successful');
 
       // Create hardcoded School Admin user
@@ -186,15 +225,15 @@ router.post("/login", async (req, res) => {
 
     // Handle other test accounts
     if (password === 'password' && 
-       (username === 'admin' || 
-        username === 'educator' || 
-        username === 'parent' || 
-        username === 'learner')) {
+       (loginIdentifier === 'admin' || 
+        loginIdentifier === 'educator' || 
+        loginIdentifier === 'parent' || 
+        loginIdentifier === 'learner')) {
 
-      console.log(`Login attempt with test account: ${username}`);
+      console.log(`Login attempt with test account: ${loginIdentifier}`);
 
       let userData;
-      if (username === 'admin') {
+      if (loginIdentifier === 'admin') {
         userData = {
           id: 1,
           name: 'Admin User',
@@ -205,7 +244,7 @@ router.post("/login", async (req, res) => {
           subscription: 'premium',
           createdAt: new Date()
         };
-      } else if (username === 'educator') {
+      } else if (loginIdentifier === 'educator') {
         userData = {
           id: 2,
           name: 'Test Educator',
@@ -216,7 +255,7 @@ router.post("/login", async (req, res) => {
           subscription: 'educator',
           createdAt: new Date()
         };
-      } else if (username === 'parent') {
+      } else if (loginIdentifier === 'parent') {
         userData = {
           id: 3,
           name: 'Test Parent',
@@ -227,7 +266,7 @@ router.post("/login", async (req, res) => {
           subscription: 'family',
           createdAt: new Date()
         };
-      } else if (username === 'learner') {
+      } else if (loginIdentifier === 'learner') {
         userData = {
           id: 4,
           name: 'Test Learner',
@@ -274,12 +313,12 @@ router.post("/login", async (req, res) => {
     // 1. Provided incorrect credentials for a test account
     // 2. Is trying to use a database account
 
-    console.log(`Test account login failed, trying database lookup for: ${username}`);
+    console.log(`Test account login failed, trying database lookup for: ${loginIdentifier}`);
 
     // Only try database if test accounts don't match
-    const user = await storage.getUserByUsername(username);
+    const user = await storage.getUserByUsername(loginIdentifier) || await storage.getUserByEmail?.(loginIdentifier);
     if (!user) {
-      console.log('User not found in database:', username);
+      console.log('User not found in database:', loginIdentifier);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
