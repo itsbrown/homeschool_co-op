@@ -1,16 +1,20 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
+// Define the enum for user roles
+const roleEnum = pgEnum('role', ["student", "parent", "teacher", "schoolAdmin", "admin", "superAdmin"]);
+
 // Users table
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
+  auth0Id: varchar('auth0_id', { length: 255 }).unique(), // Link to Auth0 user ID
   supabaseId: text("supabase_id").unique(), // Link to Supabase auth.users
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role", { enum: ["student", "parent", "teacher", "schoolAdmin", "admin", "superAdmin"] }).default("student").notNull(),
+  role: roleEnum("role").default("student").notNull(),
   name: text("name").notNull(),
   avatar: text("avatar"),
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),

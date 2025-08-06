@@ -755,24 +755,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/knowledge-bases/:id", async (req, res) => {
     try {
       const knowledgeBaseId = parseInt(req.params.id);
-      
+
       if (isNaN(knowledgeBaseId)) {
         return res.status(400).json({ message: "Invalid knowledge base ID" });
       }
 
       let knowledgeBase;
-      
+
       try {
         knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
       } catch (dbError) {
         console.error("Database error fetching knowledge base, falling back to file storage:", dbError);
-        
+
         // Fallback to file storage
         try {
           const fs = require('fs');
           const path = require('path');
           const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
-          
+
           if (fs.existsSync(kbFilePath)) {
             const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
             const allKnowledgeBases = JSON.parse(fileContent);
@@ -2464,6 +2464,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/knowledge-bases/:id/upload", isAuthenticated, uploadKnowledgeBaseFiles);
   app.get("/api/knowledge-bases/processing/:jobId", isAuthenticated, getProcessingStatus);
   app.get("/api/knowledge-bases/processing-stats", isAuthenticated, getProcessingStats);
+
+  // Auth routes
+  // app.use("/api/auth", authRoutes); // This line is commented out in the original code, but it should be included here for consistency.
+
+  // User management routes
+  const userManagementRoutes = require("./api/user-management").default;
+  app.use("/api/user-management", userManagementRoutes);
 
   return httpServer;
 }

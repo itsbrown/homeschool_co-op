@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { supabase } from '../lib/supabase';
+import { UserSyncService } from '../services/userSyncService';
 
 // Supabase JWT verification middleware with fallback for development
 export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
@@ -26,20 +27,26 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     console.log('🔍 User object fields:', Object.keys(user));
     console.log('🔍 User ID field:', user.id, 'Sub field:', user.sub);
 
+    // Sync user with database
+    let dbUser;
+    try {
+      dbUser = await UserSyncService.syncAuth0User(user);
+      console.log('✅ User synced with database:', dbUser.email, 'Role:', dbUser.role);
+    } catch (syncError) {
+      console.error('❌ Failed to sync user with database:', syncError);
+      // Continue with Auth0 data if database sync fails
+    }
+
     // Check for role override from role switcher
     const activeRoleHeader = req.headers['x-active-role'];
     const multiRoleUsers = ['coreycreates@gmail.com'];
     
-    // Set default roles for specific users
-    let effectiveRole = user.user_metadata?.role || 'parent';
-    if (user.email === 'contact.americanseekersacademy@gmail.com') {
-      effectiveRole = 'schoolAdmin';
-      console.log('🏫 Setting schoolAdmin role for contact.americanseekersacademy@gmail.com');
-    }
-
+    // Use role from database if available, otherwise use default logic
+    let effectiveRole = dbUser?.role || user.user_metadata?.role || 'parent';
+    
     // Allow role switching for multi-role users
     if (user.email && multiRoleUsers.includes(user.email) && activeRoleHeader) {
-      const allowedRoles = ['parent', 'school_admin'];
+      const allowedRoles = ['parent', 'school_admin', 'schoolAdmin'];
       if (allowedRoles.includes(activeRoleHeader as string)) {
         effectiveRole = activeRoleHeader as string;
         console.log(`🔄 Role switched to: ${effectiveRole} for user: ${user.email}`);
@@ -49,12 +56,13 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     // Use the correct user ID field (sub is the standard field for Supabase)
     const userIdentifier = user.id || user.sub || user.email;
     
-    // Use the role from the token metadata - no database lookup needed
+    // Include database user info if available
     req.user = {
       ...user,
       role: effectiveRole,
       id: userIdentifier,
-      email: user.email
+      email: user.email,
+      dbUser: dbUser // Include database user data
     };
 
     // Also set req.auth for compatibility with existing code
@@ -63,7 +71,9 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
       supabaseId: userIdentifier,
       email: user.email,
       role: effectiveRole,
-      isActive: true,
+      isActive: dbUser?.isActive ?? true,
+      schoolId: dbUser?.schoolId,
+      dbUserId: dbUser?.id,
       payload: {
         email: user.email,
         role: effectiveRole
