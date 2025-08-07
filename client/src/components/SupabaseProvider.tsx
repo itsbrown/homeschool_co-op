@@ -8,7 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Missing Supabase environment variables");
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseClient = createClient(supabaseUrl, supabaseAnonKey); // Renamed to supabaseClient to avoid conflict
 
 interface AuthContextType {
   user: User | null;
@@ -49,14 +49,14 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
     const initializeAuth = async () => {
       try {
         console.log("🔍 Initializing authentication...");
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
         console.log("Supabase session check:", { session, error });
-        
+
         if (error) {
           console.error("Supabase session error:", error);
           setError(error);
         }
-        
+
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
@@ -66,7 +66,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
           localStorage.setItem("supabase_token", session.access_token);
           console.log("✅ Stored initial Supabase access token");
         }
-        
+
         // Debug session state
         console.log("🔍 Initial auth state:", {
           hasSession: !!session,
@@ -79,20 +79,20 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
         setIsLoading(false);
       }
     };
-    
+
     initializeAuth();
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabaseClient.auth.onAuthStateChange((event, session) => {
       console.log("Auth state change:", { event, session });
 
       // Update state
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
-      
+
       // Debug user state
       console.log("🔍 SupabaseProvider user state updated:", {
         email: session?.user?.email,
@@ -135,7 +135,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
       email,
       password,
     });
@@ -143,7 +143,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
   };
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await supabaseClient.auth.signUp({
       email,
       password,
     });
@@ -151,29 +151,49 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
   };
 
   const signOut = async () => {
-    console.log("🚪 Starting logout process...");
-    console.log("updated code");
-
-    // Immediately clear all auth state
-    setSession(null);
-    setUser(null);
-    setIsLoading(false);
-
-    // Clear all local storage items
-    localStorage.removeItem("supabase_token");
-    localStorage.removeItem("supabase_access_token");
-    localStorage.removeItem("logout_in_progress");
-
     try {
-      // Sign out from Supabase (fire and forget)
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error("Supabase logout error:", error);
-    }
+      console.log('🚪 Starting logout process...');
 
-    // Immediate redirect without delay
-    console.log("🔄 Redirecting to login...");
-    window.location.replace("/login");
+      // Clear local storage first
+      localStorage.removeItem('supabase_token');
+      localStorage.removeItem('selectedRole');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('auth_redirect');
+
+      // Clear all session-related items
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('supabase') || key.startsWith('auth') || key.includes('token'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      // Force state update immediately
+      setUser(null);
+      setSession(null);
+      setIsLoading(false);
+
+      // Sign out from Supabase (do this after clearing state)
+      const { error } = await supabaseClient.auth.signOut({ scope: 'global' });
+      if (error) {
+        console.error('❌ Supabase logout error:', error);
+      } else {
+        console.log('✅ Successfully logged out from Supabase');
+      }
+
+      // Final cleanup
+      console.log('✅ Logout process completed');
+
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+      // Even if there's an error, clear the local state
+      setUser(null);
+      setSession(null);
+      setIsLoading(false);
+      localStorage.clear(); // Full clear as fallback
+    }
   };
 
   const signInWithGoogle = async () => {
@@ -182,7 +202,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       ? `https://${import.meta.env.VITE_REPLIT_DOMAIN || "e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev"}`
       : `${window.location.origin}`;
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabaseClient.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: redirectUrl,
@@ -217,4 +237,4 @@ export const useSupabase = () => {
 // Alias for compatibility
 export const useSupabaseAuth = useAuth;
 
-export { supabase };
+export { supabaseClient as supabase }; // Exporting supabaseClient as supabase for backward compatibility

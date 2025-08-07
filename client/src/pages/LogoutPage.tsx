@@ -10,10 +10,27 @@ export default function LogoutPage() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      signOut();
-    }
-  }, [signOut, isAuthenticated]);
+    const performLogout = async () => {
+      console.log('🚪 LogoutPage: Forcing logout');
+      
+      // Clear all local storage
+      localStorage.clear();
+      
+      // Force logout regardless of authentication state
+      try {
+        await signOut();
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+      
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        setLocation("/login");
+      }, 2000);
+    };
+    
+    performLogout();
+  }, [signOut, setLocation]);
 
   const handleGoHome = () => {
     setLocation("/");

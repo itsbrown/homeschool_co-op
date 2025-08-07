@@ -31,16 +31,16 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     const savedRole = localStorage.getItem('activeRole');
     return savedRole || '';
   });
-  
+
   const [showRoleSelection, setShowRoleSelection] = useState<boolean>(false);
+  const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
 
   // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
   const multiRoleUsers = ['coreycreates@gmail.com'];
   // For coreycreates@gmail.com, always enable role switching regardless of user object state
-  const canSwitchRoles = user?.email === 'coreycreates@gmail.com';
 
-  const availableRoles = canSwitchRoles 
-    ? ['parent', 'school_admin'] 
+  const availableRoles = canSwitchRoles
+    ? ['parent', 'school_admin']
     : [user?.user_metadata?.role || 'parent'];
 
   // Check if user has multiple roles and handle role selection
@@ -51,17 +51,21 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   // Handle role selection logic immediately after login
   useEffect(() => {
-    console.log(`🔄 RoleContext useEffect triggered - user:`, user?.email || 'null');
-    
+    console.log('🔄 RoleContext useEffect triggered - user:', user?.email || 'null');
+
     if (!user) {
-      // User logged out - reset state
-      console.log(`🔄 No user - resetting state`);
+      console.log('🔄 No user - resetting state and clearing storage');
       setActiveRole('');
+      setCanSwitchRoles(false);
       setShowRoleSelection(false);
+
+      // Clear role-related localStorage on logout
+      localStorage.removeItem('selectedRole');
+      localStorage.removeItem('userRole');
       return;
     }
 
-    console.log(`🔄 Role check for user:`, user.email);
+    console.log('🔄 Role check for user:', user.email);
     const hasMultipleRoles = checkUserRoles(user);
     const savedRole = localStorage.getItem('activeRole');
     console.log(`🔄 hasMultipleRoles:`, hasMultipleRoles, 'savedRole:', savedRole);
@@ -77,6 +81,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         setActiveRole(savedRole);
         setShowRoleSelection(false);
       }
+      setCanSwitchRoles(true); // Enable role switching for multi-role users
     } else {
       // Single role user - set default role immediately
       const defaultRole = user.user_metadata?.role || 'parent';
@@ -84,6 +89,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       setActiveRole(defaultRole);
       localStorage.setItem('activeRole', defaultRole);
       setShowRoleSelection(false);
+      setCanSwitchRoles(false); // Disable role switching for single-role users
     }
   }, [user]);
 
@@ -94,7 +100,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       localStorage.setItem('activeRole', role);
       setShowRoleSelection(false);
       console.log(`🔄 Role change complete - new activeRole:`, role);
-      
+
       // Force page refresh to ensure clean state
       window.location.reload();
     }

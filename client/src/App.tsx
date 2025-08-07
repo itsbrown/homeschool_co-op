@@ -296,7 +296,7 @@ function Router() {
   }
 
   // Redirect to login if not authenticated (except for public routes)
-  if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation')) {
+  if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation')) {
     console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
     setLocation('/login');
     return null;
@@ -314,6 +314,7 @@ function Router() {
     <Switch>
       <Route path="/auth/login" component={AuthLogin} />
       <Route path="/logout" component={LogoutPage} />
+      <Route path="/auth/logout" component={LogoutPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
       <Route path="/login" component={SupabaseLogin} />
