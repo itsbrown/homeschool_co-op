@@ -48,6 +48,14 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     const multiRoleUsers = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
     return multiRoleUsers.includes(user?.email);
   };
+  
+  // Special handling for superAdmin users
+  const getSuperAdminRole = (user: any) => {
+    if (user?.email === 'corey@americanseekersacademy.com') {
+      return 'superAdmin';
+    }
+    return user?.user_metadata?.role || 'parent';
+  };
 
   // Handle role selection logic immediately after login
   useEffect(() => {
@@ -84,8 +92,8 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       setCanSwitchRoles(true); // Enable role switching for multi-role users
     } else {
       // Single role user - set default role immediately
-      const defaultRole = user.user_metadata?.role || 'parent';
-      console.log(`🎯 Single role user - setting role: ${defaultRole}`);
+      const defaultRole = getSuperAdminRole(user);
+      console.log(`🎯 Single role user - setting role: ${defaultRole} for ${user.email}`);
       setActiveRole(defaultRole);
       localStorage.setItem('activeRole', defaultRole);
       setShowRoleSelection(false);

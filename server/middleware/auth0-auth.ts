@@ -41,8 +41,14 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     const activeRoleHeader = req.headers['x-active-role'];
     const multiRoleUsers = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
 
-    // Use role from database if available, otherwise use default logic
+    // Use role from database if available, otherwise use user metadata, otherwise default
     let effectiveRole = dbUser?.role || user.user_metadata?.role || 'parent';
+    
+    // Special handling for known superAdmin users
+    if (user.email === 'corey@americanseekersacademy.com') {
+      effectiveRole = 'superAdmin';
+      console.log('🔑 Forcing superAdmin role for:', user.email);
+    }
 
     // Allow role switching for multi-role users
     if (user.email && multiRoleUsers.includes(user.email) && activeRoleHeader) {
