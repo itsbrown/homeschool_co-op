@@ -184,7 +184,7 @@ function DashboardRouter() {
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
   const { activeRole, showRoleSelection, setActiveRole } = useRole();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
 
   console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
 
@@ -293,6 +293,20 @@ function Router() {
         />
       </div>
     );
+  }
+
+  // Redirect to login if not authenticated (except for public routes)
+  if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation')) {
+    console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
+    setLocation('/login');
+    return null;
+  }
+
+  // Redirect authenticated users away from login page
+  if (isAuthenticated && location === '/login' && activeRole) {
+    console.log(`🔄 Redirecting authenticated user away from login page`);
+    setLocation('/dashboard');
+    return null;
   }
 
 
