@@ -137,7 +137,7 @@ function DashboardRouter() {
   const currentSavedRole = localStorage.getItem('activeRole');
   console.log(`🔍 DashboardRouter LocalStorage check - savedRole:`, currentSavedRole);
 
-  // Special handling for corey@americanseekersacademy.com - force superAdmin role
+  // Special handling for corey@americanseekersacademy.com - force superAdmin role and dashboard
   if (user?.email === 'corey@americanseekersacademy.com') {
     console.log(`🎯 SuperAdmin user detected - forcing superAdmin dashboard`);
     if (activeRole !== 'superAdmin') {
@@ -145,8 +145,15 @@ function DashboardRouter() {
       setActiveRole('superAdmin');
       return null; // Let the role change take effect
     }
-    console.log(`🏠 Routing superAdmin to Dashboard component`);
-    return <Dashboard key={`dashboard-superAdmin`} />;
+    console.log(`🏠 Routing superAdmin to EducatorDashboard with AppShell`);
+    return (
+      <AppShell key={`dashboard-superAdmin`}>
+        <div className="mb-6">
+          <AIStatusPanel />
+        </div>
+        <EducatorDashboard />
+      </AppShell>
+    );
   }
 
   // Show role selection screen if user needs to pick a role
@@ -176,10 +183,17 @@ function DashboardRouter() {
     );
   }
 
-  // For super admin, admin, educator - route to Dashboard component with AI tools
+  // For super admin, admin, educator - route to EducatorDashboard with AppShell and AI tools
   if (['superAdmin', 'admin', 'educator'].includes(activeRole)) {
-    console.log(`🎯 Routing superAdmin/admin/educator to Dashboard component with AI tools`);
-    return <Dashboard key={`dashboard-${activeRole}`} />;
+    console.log(`🎯 Routing ${activeRole} to EducatorDashboard with AI tools`);
+    return (
+      <AppShell key={`dashboard-${activeRole}`}>
+        <div className="mb-6">
+          <AIStatusPanel />
+        </div>
+        <EducatorDashboard />
+      </AppShell>
+    );
   }
 
   // For school admin - route to school admin interface
