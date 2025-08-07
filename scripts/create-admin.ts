@@ -1,37 +1,38 @@
+
 import { db } from '../server/db';
 import { users } from '../shared/schema';
 import bcrypt from 'bcryptjs';
 
 async function createAdminUser() {
   try {
-    console.log('Checking if admin user already exists...');
+    console.log('Checking if super admin user already exists...');
     const existingAdmin = await db.query.users.findFirst({
-      where: (users, { eq }) => eq(users.username, 'admin')
+      where: (users, { eq }) => eq(users.email, 'corey@americanseekersacademy.com')
     });
 
     if (existingAdmin) {
-      console.log('Admin user already exists.');
+      console.log('Super admin user already exists.');
       process.exit(0);
     }
 
     // Hash the password
-    const hashedPassword = await bcrypt.hash('password', 10);
+    const hashedPassword = await bcrypt.hash('I4mlnrC30!', 10);
 
-    console.log('Creating admin user...');
+    console.log('Creating super admin user...');
     await db.insert(users).values({
-      username: 'admin',
-      name: 'Admin User',
-      email: 'admin@example.com',
+      username: 'superadmin',
+      name: 'Super Administrator',
+      email: 'corey@americanseekersacademy.com',
       password: hashedPassword,
-      role: 'admin',
+      role: 'superAdmin',
       avatar: null,
       subscription: 'educator',
       createdAt: new Date()
     });
 
-    console.log('Admin user created successfully.');
+    console.log('Super admin user created successfully.');
   } catch (error) {
-    console.error('Error creating admin user:', error);
+    console.error('Error creating super admin user:', error);
   } finally {
     process.exit(0);
   }

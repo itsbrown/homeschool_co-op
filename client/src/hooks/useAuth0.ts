@@ -32,7 +32,7 @@ export function useAuth() {
       const token = session.access_token;
       console.log('✅ Token received from Supabase');
       inspectJWT(token);
-      
+
       // Store token in localStorage for API calls
       localStorage.setItem('supabase_token', token);
       return token;
@@ -46,25 +46,30 @@ export function useAuth() {
     // For Supabase, check user metadata for roles first
     const metadata = user?.user_metadata || user?.app_metadata || {};
     let role = metadata.role || metadata.roles?.[0];
-    
+
     console.log('🔍 getUserRole - user:', user?.email);
     console.log('🔍 getUserRole - metadata:', metadata);
     console.log('🔍 getUserRole - extracted role:', role);
-    
-    // Super admin role assignment for the super admin email
-    if (user?.email === 'superadmin@americanseekersacademy.com') {
+
+    // Super admin role assignment for super admin emails
+    if (user?.email === 'superadmin@americanseekersacademy.com' || user?.email === 'corey@americanseekersacademy.com') {
       role = 'superAdmin';
       console.log('🚀 Applied superAdmin role for super admin email');
     }
-    
+
+    // Super admin role assignment for main admin
+    if (user?.email === 'coreycreates@gmail.com') {
+      role = 'superAdmin';
+      console.log('🔑 Applied superAdmin role for main admin');
+    }
     // School admin role assignment for known admin emails
-    if (user?.email === 'contact.americanseekersacademy@gmail.com' || user?.email === 'coreycreates@gmail.com') {
+    else if (user?.email === 'contact.americanseekersacademy@gmail.com') {
       role = 'school_admin';
       console.log('🏫 Applied school_admin role for known admin email');
     }
-    
+
     console.log('🔍 getUserRole - final role:', role);
-    
+
     // Default to parent role for all users unless they have an invitation
     return role || 'parent';
   };
