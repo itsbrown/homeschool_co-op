@@ -137,6 +137,18 @@ function DashboardRouter() {
   const currentSavedRole = localStorage.getItem('activeRole');
   console.log(`🔍 DashboardRouter LocalStorage check - savedRole:`, currentSavedRole);
 
+  // Special handling for corey@americanseekersacademy.com - force superAdmin role
+  if (user?.email === 'corey@americanseekersacademy.com') {
+    console.log(`🎯 SuperAdmin user detected - forcing superAdmin dashboard`);
+    if (activeRole !== 'superAdmin') {
+      console.log(`🔄 Setting activeRole to superAdmin for ${user.email}`);
+      setActiveRole('superAdmin');
+      return null; // Let the role change take effect
+    }
+    console.log(`🏠 Routing superAdmin to Dashboard component`);
+    return <Dashboard key={`dashboard-superAdmin`} />;
+  }
+
   // Show role selection screen if user needs to pick a role
   if (user?.email === 'coreycreates@gmail.com') {
     console.log(`🔍 Multi-role user check - currentSavedRole: ${currentSavedRole}, activeRole: ${activeRole}, showRoleSelection: ${showRoleSelection}`);

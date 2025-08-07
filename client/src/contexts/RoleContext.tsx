@@ -94,10 +94,19 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       // Single role user - set default role immediately
       const defaultRole = getSuperAdminRole(user);
       console.log(`🎯 Single role user - setting role: ${defaultRole} for ${user.email}`);
-      setActiveRole(defaultRole);
-      localStorage.setItem('activeRole', defaultRole);
+      
+      // Special handling for superAdmin users - ensure they get superAdmin role
+      if (user.email === 'corey@americanseekersacademy.com') {
+        console.log(`🔑 Forcing superAdmin role for: ${user.email}`);
+        setActiveRole('superAdmin');
+        localStorage.setItem('activeRole', 'superAdmin');
+        setCanSwitchRoles(true); // Allow role switching for superAdmin
+      } else {
+        setActiveRole(defaultRole);
+        localStorage.setItem('activeRole', defaultRole);
+        setCanSwitchRoles(false); // Disable role switching for single-role users
+      }
       setShowRoleSelection(false);
-      setCanSwitchRoles(false); // Disable role switching for single-role users
     }
   }, [user]);
 
