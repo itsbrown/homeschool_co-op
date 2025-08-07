@@ -279,7 +279,8 @@ function Router() {
   }
 
   // Force role selection for multi-role users only on dashboard-related paths
-  if (isAuthenticated && user?.email === 'coreycreates@gmail.com' && showRoleSelection && 
+  const multiRoleEmails = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
+  if (isAuthenticated && user?.email && multiRoleEmails.includes(user.email) && showRoleSelection && 
       (location === '/' || location === '/dashboard' || location.startsWith('/admin') || location.startsWith('/programs'))) {
     console.log(`🎯 Forcing role selection for multi-role user at location: ${location}`);
     return (

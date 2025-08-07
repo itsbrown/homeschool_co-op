@@ -36,16 +36,16 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
 
   // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
-  const multiRoleUsers = ['coreycreates@gmail.com'];
+  const multiRoleUsers = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
   // For coreycreates@gmail.com, always enable role switching regardless of user object state
 
   const availableRoles = canSwitchRoles
-    ? ['parent', 'school_admin']
+    ? ['parent', 'school_admin', 'superAdmin']
     : [user?.user_metadata?.role || 'parent'];
 
   // Check if user has multiple roles and handle role selection
   const checkUserRoles = (user: any) => {
-    const multiRoleUsers = ['coreycreates@gmail.com'];
+    const multiRoleUsers = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
     return multiRoleUsers.includes(user?.email);
   };
 
