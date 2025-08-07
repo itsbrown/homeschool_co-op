@@ -2469,8 +2469,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // app.use("/api/auth", authRoutes); // This line is commented out in the original code, but it should be included here for consistency.
 
   // User management routes
-  const userManagementRoutes = require("./api/user-management").default;
-  app.use("/api/user-management", userManagementRoutes);
+  const userManagementModule = await import("./api/user-management");
+  app.use("/api/user-management", userManagementModule.default);
 
   return httpServer;
 }
