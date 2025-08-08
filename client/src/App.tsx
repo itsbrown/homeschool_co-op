@@ -125,6 +125,8 @@ import ParentAppShell from "./components/layout/ParentAppShell";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 import RoleSelectionComponent from "@/components/RoleSelection";
 import EducatorDashboard from "./components/dashboards/EducatorDashboard";
+import AppShell from "./components/layout/AppShell";
+import AIStatusPanel from "./components/AIStatusPanel";
 
 function DashboardRouter() {
   const { user } = useAuth();
