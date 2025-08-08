@@ -139,14 +139,25 @@ function DashboardRouter() {
   const currentSavedRole = localStorage.getItem('activeRole');
   console.log(`🔍 DashboardRouter LocalStorage check - savedRole:`, currentSavedRole);
 
-  // Special handling for corey@americanseekersacademy.com - force superAdmin role and dashboard
-  if (user?.email === 'corey@americanseekersacademy.com') {
-    console.log(`🎯 SuperAdmin user detected - forcing superAdmin dashboard`);
-    if (activeRole !== 'superAdmin') {
+  // Special handling for corey@americanseekersacademy.com - force superAdmin role using useEffect
+  React.useEffect(() => {
+    if (user?.email === 'corey@americanseekersacademy.com' && activeRole !== 'superAdmin') {
       console.log(`🔄 Setting activeRole to superAdmin for ${user.email}`);
       setActiveRole('superAdmin');
-      return null; // Let the role change take effect
     }
+  }, [user?.email, activeRole, setActiveRole]);
+
+  // Return loading state while role is being set
+  if (user?.email === 'corey@americanseekersacademy.com' && activeRole !== 'superAdmin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Special handling for corey@americanseekersacademy.com - show dashboard once role is set
+  if (user?.email === 'corey@americanseekersacademy.com' && activeRole === 'superAdmin') {
     console.log(`🏠 Routing superAdmin to EducatorDashboard with AppShell`);
     return (
       <AppShell key={`dashboard-superAdmin`}>
