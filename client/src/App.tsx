@@ -135,29 +135,8 @@ function DashboardRouter() {
   console.log(`🚀 DashboardRouter called!`);
   console.log(`🔍 DashboardRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
 
-  // Check localStorage directly
-  const currentSavedRole = localStorage.getItem('activeRole');
-  console.log(`🔍 DashboardRouter LocalStorage check - savedRole:`, currentSavedRole);
-
-  // Special handling for corey@americanseekersacademy.com - force superAdmin role using useEffect
-  React.useEffect(() => {
-    if (user?.email === 'corey@americanseekersacademy.com' && activeRole !== 'superAdmin') {
-      console.log(`🔄 Setting activeRole to superAdmin for ${user.email}`);
-      setActiveRole('superAdmin');
-    }
-  }, [user?.email, activeRole, setActiveRole]);
-
-  // Return loading state while role is being set
-  if (user?.email === 'corey@americanseekersacademy.com' && activeRole !== 'superAdmin') {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  // Special handling for corey@americanseekersacademy.com - show dashboard once role is set
-  if (user?.email === 'corey@americanseekersacademy.com' && activeRole === 'superAdmin') {
+  // Special handling for corey@americanseekersacademy.com - directly route to superAdmin dashboard
+  if (user?.email === 'corey@americanseekersacademy.com') {
     console.log(`🏠 Routing superAdmin to EducatorDashboard with AppShell`);
     return (
       <AppShell key={`dashboard-superAdmin`}>
@@ -170,19 +149,14 @@ function DashboardRouter() {
   }
 
   // Show role selection screen if user needs to pick a role
-  if (user?.email === 'coreycreates@gmail.com') {
-    console.log(`🔍 Multi-role user check - currentSavedRole: ${currentSavedRole}, activeRole: ${activeRole}, showRoleSelection: ${showRoleSelection}`);
-    if (!currentSavedRole || !activeRole || showRoleSelection) {
-      console.log(`✅ Showing role selection for ${user.email}`);
-      return (
-        <RoleSelectionComponent 
-          onRoleSelect={setActiveRole} 
-          userEmail={user.email} 
-        />
-      );
-    } else {
-      console.log(`❌ Not showing role selection - conditions not met`);
-    }
+  if (user?.email === 'coreycreates@gmail.com' && (!activeRole || showRoleSelection)) {
+    console.log(`✅ Showing role selection for ${user.email}`);
+    return (
+      <RoleSelectionComponent 
+        onRoleSelect={setActiveRole} 
+        userEmail={user.email} 
+      />
+    );
   }
 
   // Show dashboard based on selected role
@@ -215,7 +189,16 @@ function DashboardRouter() {
     return <MySchoolPage key={`dashboard-${activeRole}`} />;
   }
 
-  // Default fallback to school admin page
+  // Default fallback - show loading while role is being determined
+  if (!activeRole) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Final fallback to school admin page
   console.log(`🔄 Default routing to MySchoolPage for role:`, activeRole);
   return <MySchoolPage key={`dashboard-${activeRole}`} />;
 }
