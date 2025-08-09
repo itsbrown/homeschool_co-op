@@ -10,7 +10,7 @@ interface RoleContextType {
   setShowRoleSelection: (show: boolean) => void;
 }
 
-const RoleContext = createContext<RoleContextType | undefined>(undefined);
+export const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export const useRole = () => {
   const context = useContext(RoleContext);
