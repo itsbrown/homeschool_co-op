@@ -19,7 +19,8 @@ import {
   LucideIcon,
   Wand2,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Building
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -36,6 +37,71 @@ const schoolNavItems: {
     title: 'Dashboard',
     href: '/schools/dashboard',
     icon: Home,
+  },
+  {
+    title: 'My School',
+    href: '/schools/my-school',
+    icon: School,
+  },
+  {
+    title: 'Classes',
+    href: '/schools/classes',
+    icon: BookOpen,
+  },
+  {
+    title: 'Staff',
+    href: '/schools/staff',
+    icon: Users,
+  },
+  {
+    title: 'Students',
+    href: '/schools/students',
+    icon: GraduationCap,
+  },
+  {
+    title: 'Knowledge Base',
+    href: '/schools/knowledge-base',
+    icon: Database,
+  },
+  {
+    title: 'AI Tools',
+    href: '/ai-generator',
+    icon: Wand2,
+    subitems: [
+      { title: 'Lesson Generator', href: '/lessons/ai-generator' },
+      { title: 'Worksheet Generator', href: '/ai-generator/worksheet' },
+      { title: 'Activity Generator', href: '/ai-generator/activity' },
+      { title: 'OCR Tools', href: '/ai-generator/ocr' }
+    ]
+  },
+  {
+    title: 'Calendar',
+    href: '/schools/calendar',
+    icon: Calendar,
+  },
+  {
+    title: 'Settings',
+    href: '/schools/settings',
+    icon: Settings,
+  },
+];
+
+// Sidebar navigation items for super admin
+const superAdminNavItems: {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+  subitems?: { title: string; href: string }[];
+}[] = [
+  {
+    title: 'Dashboard',
+    href: '/dashboard',
+    icon: Home,
+  },
+  {
+    title: 'All Schools',
+    href: '/superadmin/schools',
+    icon: Building,
   },
   {
     title: 'My School',
@@ -111,6 +177,9 @@ export default function Sidebar() {
     await signOut();
   };
 
+  // Choose navigation items based on role
+  const navItems = activeRole === 'superAdmin' ? superAdminNavItems : schoolNavItems;
+
   return (
     <>
       <div 
@@ -137,7 +206,7 @@ export default function Sidebar() {
 
         <div className="flex-1 overflow-auto py-2">
           <nav className="grid gap-1 px-2">
-            {schoolNavItems.map((item) => {
+            {navItems.map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`) ||
                 (item.subitems && item.subitems.some(sub => location === sub.href || location.startsWith(`${sub.href}/`)));
               const isExpanded = expandedItems.has(item.title);

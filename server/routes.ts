@@ -1458,6 +1458,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Enrollment Assistant with Anthropic AI
   app.post('/api/ai/enrollment-assistant', jwtCheck, handleEnrollmentMessage);
 
+  // SuperAdmin routes
+  const { getSuperAdminSchools, getSuperAdminSchoolDetails } = await import('./api/superadmin-schools');
+  app.get('/api/superadmin/schools', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchools);
+  app.get('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchoolDetails);
+
   // Enhanced response generation functions with real data integration
   async function generateRegistrationResponse(extractedInfo: any, analysis: any, userId: string): Promise<string> {
     const sentiment = analysis.sentiment;

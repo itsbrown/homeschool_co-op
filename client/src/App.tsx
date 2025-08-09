@@ -477,6 +477,16 @@ function Router() {
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
       <Route path="/schools/settings" component={SchoolSettingsPage} />
 
+      {/* SuperAdmin routes */}
+      <Route path="/superadmin/schools" component={() => {
+        const AllSchoolsPage = React.lazy(() => import('./pages/superadmin/AllSchoolsPage'));
+        return (
+          <React.Suspense fallback={<div>Loading...</div>}>
+            <AllSchoolsPage />
+          </React.Suspense>
+        );
+      }} />
+
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />
       <Route path="/admin/classes/new" component={ClassCreationPage} />
