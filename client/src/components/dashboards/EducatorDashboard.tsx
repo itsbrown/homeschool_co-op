@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,12 +11,43 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth0";
 import { useSupabaseAuth } from "@/components/SupabaseProvider";
 import { formatDate, formatTime } from "@/lib/utils";
+import { useRole } from "@/hooks/useRole"; // Assuming useRole hook is available
 
 export default function EducatorDashboard() {
   const { user: auth0User } = useAuth();
   const { user: supabaseUser } = useSupabaseAuth();
   const user = auth0User || supabaseUser;
+  const { activeRole } = useRole(); // Assuming this hook provides the active role
   const [activeTab, setActiveTab] = useState("classes");
+
+  console.log('🎓 EducatorDashboard rendering for role:', activeRole, 'user:', user?.email);
+
+  // Determine the dashboard title and greeting based on role
+  const getDashboardTitle = () => {
+    switch (activeRole) {
+      case 'superAdmin':
+        return 'Super Admin Dashboard';
+      case 'admin':
+        return 'Admin Dashboard';
+      case 'educator':
+        return 'Educator Dashboard';
+      default:
+        return 'Dashboard';
+    }
+  };
+
+  const getWelcomeMessage = () => {
+    switch (activeRole) {
+      case 'superAdmin':
+        return 'Welcome back, Super Admin';
+      case 'admin':
+        return 'Welcome back, Admin';
+      case 'educator':
+        return 'Welcome back, Educator';
+      default:
+        return 'Welcome back';
+    }
+  };
 
   // Get educator's assigned classes
   const { data: assignedClasses, isLoading: classesLoading } = useQuery({
@@ -48,12 +78,11 @@ export default function EducatorDashboard() {
   return (
     <div className="flex flex-col space-y-6 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Educator Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {user?.name || user?.email}
-          </p>
+          <h1 className="text-4xl font-bold text-gray-900">{getDashboardTitle()}</h1>
+          <p className="text-lg text-gray-600 mt-2">{getWelcomeMessage()}</p>
+          <p className="text-sm text-gray-500">Role: {activeRole} | {user?.user_metadata?.name || user?.email}</p>
         </div>
       </div>
 
@@ -73,7 +102,7 @@ export default function EducatorDashboard() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Students</CardTitle>
