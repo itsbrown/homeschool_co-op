@@ -1,27 +1,27 @@
 import { Request, Response } from 'express';
 import { storage } from '../storage.ts';
+import { schoolStorage } from '../school-storage.ts';
 
 export const getSuperAdminSchools = async (req: Request, res: Response) => {
   try {
     
-    // Get all schools from storage
-    const schools = await storage.getSchools();
+    // Get all schools from school storage
+    const schools = schoolStorage.getSchools();
     
     // Get additional statistics for each school
     const schoolsWithStats = await Promise.all(
       schools.map(async (school: any) => {
         try {
           // Get student count for this school
-          const children = await storage.getChildren();
+          const children = await storage.getAllChildren();
           const studentCount = children.filter((child: any) => child.school === school.id).length;
           
           // Get class count for this school
-          const classes = await storage.getClasses();
+          const classes = await storage.getClasses({ page: 1, limit: 1000 });
           const classCount = classes.filter((cls: any) => cls.schoolId === school.id).length;
           
-          // Get staff count for this school
-          const staff = await storage.getStaff?.() || [];
-          const staffCount = Array.isArray(staff) ? staff.filter((member: any) => member.schoolId === school.id).length : 0;
+          // Get staff count for this school (placeholder for now)
+          const staffCount = 0; // TODO: Implement staff counting when staff storage is available
           
           return {
             ...school,
@@ -59,17 +59,16 @@ export const getSuperAdminSchoolDetails = async (req: Request, res: Response) =>
     const { schoolId } = req.params;
     
     // Get school details
-    const schools = await storage.getSchools();
-    const school = schools.find((s: any) => s.id === parseInt(schoolId));
+    const school = schoolStorage.getSchoolById(parseInt(schoolId));
     
     if (!school) {
       return res.status(404).json({ error: 'School not found' });
     }
     
     // Get detailed statistics
-    const children = await storage.getChildren();
-    const classes = await storage.getClasses();
-    const enrollments = await storage.getEnrollments();
+    const children = await storage.getAllChildren();
+    const classes = await storage.getClasses({ page: 1, limit: 1000 });
+    const enrollments = await storage.getAllEnrollments();
     
     const schoolStudents = children.filter((child: any) => child.school === school.id);
     const schoolClasses = classes.filter((cls: any) => cls.schoolId === school.id);
