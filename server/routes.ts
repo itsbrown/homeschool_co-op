@@ -1459,9 +1459,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ai/enrollment-assistant', jwtCheck, handleEnrollmentMessage);
 
   // SuperAdmin routes
-  const { getSuperAdminSchools, getSuperAdminSchoolDetails } = await import('./api/superadmin-schools');
+  const { getSuperAdminSchools, getSuperAdminSchoolDetails, updateSuperAdminSchool } = await import('./api/superadmin-schools');
   app.get('/api/superadmin/schools', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchools);
   app.get('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchoolDetails);
+  app.patch('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), updateSuperAdminSchool);
 
   // Enhanced response generation functions with real data integration
   async function generateRegistrationResponse(extractedInfo: any, analysis: any, userId: string): Promise<string> {

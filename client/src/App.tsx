@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
@@ -152,9 +152,9 @@ function DashboardRouter() {
   if (user?.email === 'coreycreates@gmail.com' && (!activeRole || showRoleSelection)) {
     console.log(`✅ Showing role selection for ${user.email}`);
     return (
-      <RoleSelectionComponent 
-        onRoleSelect={setActiveRole} 
-        userEmail={user.email} 
+      <RoleSelectionComponent
+        onRoleSelect={setActiveRole}
+        userEmail={user.email}
       />
     );
   }
@@ -263,7 +263,7 @@ function Router() {
             <p className="text-gray-600 text-sm mb-4">
               {error.message || 'An error occurred during authentication'}
             </p>
-            <button 
+            <button
               onClick={() => window.location.reload()}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
             >
@@ -302,7 +302,7 @@ function Router() {
 
   // Force role selection for multi-role users only on dashboard-related paths
   const multiRoleEmails = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
-  if (isAuthenticated && user?.email && multiRoleEmails.includes(user.email) && showRoleSelection && 
+  if (isAuthenticated && user?.email && multiRoleEmails.includes(user.email) && showRoleSelection &&
       (location === '/' || location === '/dashboard' || location.startsWith('/admin') || location.startsWith('/programs'))) {
     console.log(`🎯 Forcing role selection for multi-role user at location: ${location}`);
     return (
@@ -310,9 +310,9 @@ function Router() {
         <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
           <a href="/emergency-logout" style={{ color: 'red', textDecoration: 'underline' }}>Emergency Logout</a>
         </div>
-        <RoleSelectionComponent 
-          onRoleSelect={setActiveRole} 
-          userEmail={user.email} 
+        <RoleSelectionComponent
+          onRoleSelect={setActiveRole}
+          userEmail={user.email}
         />
       </div>
     );
@@ -406,7 +406,7 @@ function Router() {
               };
 
               return (
-                <ClassPaymentPlans 
+                <ClassPaymentPlans
                   classData={mockClassData}
                   childName="Student"
                   onSelectPlan={(plan) => console.log('Selected plan:', plan)}
@@ -478,14 +478,9 @@ function Router() {
       <Route path="/schools/settings" component={SchoolSettingsPage} />
 
       {/* SuperAdmin routes */}
-      <Route path="/superadmin/schools" component={() => {
-        const AllSchoolsPage = React.lazy(() => import('./pages/superadmin/AllSchoolsPage'));
-        return (
-          <React.Suspense fallback={<div>Loading...</div>}>
-            <AllSchoolsPage />
-          </React.Suspense>
-        );
-      }} />
+      <Route path="/superadmin/schools" component={lazy(() => import("./pages/superadmin/AllSchoolsPage"))} />
+      <Route path="/superadmin/schools/:schoolId" component={lazy(() => import("./pages/superadmin/SchoolDetailsPage"))} />
+      <Route path="/superadmin/schools/:schoolId/edit" component={lazy(() => import("./pages/superadmin/SchoolEditPage"))} />
 
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />

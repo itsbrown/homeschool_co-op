@@ -1,18 +1,18 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  School, 
-  Users, 
-  BookOpen, 
-  Mail, 
-  Phone, 
-  MapPin, 
+import { Input } from "@/components/ui/input";
+import {
+  School,
+  Users,
+  BookOpen,
+  Mail,
+  Phone,
+  MapPin,
   Calendar,
   Search,
   Eye,
@@ -40,7 +40,7 @@ interface School {
 
 export default function AllSchoolsPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
+  const [, setLocation] = useLocation();
 
   // Fetch all schools
   const { data: schools = [], isLoading, error } = useQuery<School[]>({
@@ -62,7 +62,7 @@ export default function AllSchoolsPage() {
   const inactiveSchools = filteredSchools.filter(school => school.isActive === false);
 
   const handleViewSchool = (school: School) => {
-    setSelectedSchool(school);
+    setLocation(`/superadmin/schools/${school.id}`);
   };
 
   if (isLoading) {
@@ -125,7 +125,7 @@ export default function AllSchoolsPage() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Students</CardTitle>
@@ -140,7 +140,7 @@ export default function AllSchoolsPage() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Classes</CardTitle>
@@ -155,7 +155,7 @@ export default function AllSchoolsPage() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
@@ -221,6 +221,8 @@ interface SchoolsListProps {
 }
 
 function SchoolsList({ schools, onViewSchool }: SchoolsListProps) {
+  const [, setLocation] = useLocation();
+
   if (schools.length === 0) {
     return (
       <Card>
@@ -251,24 +253,28 @@ function SchoolsList({ schools, onViewSchool }: SchoolsListProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onViewSchool(school)}
+                  onClick={() => setLocation(`/superadmin/schools/${school.id}`)}
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLocation(`/superadmin/schools/${school.id}/edit`)}
+                >
                   <Edit className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           </CardHeader>
-          
+
           <CardContent className="space-y-3">
             {school.description && (
               <p className="text-sm text-muted-foreground line-clamp-2">
                 {school.description}
               </p>
             )}
-            
+
             <div className="space-y-2 text-sm">
               {school.location && (
                 <div className="flex items-center text-muted-foreground">
@@ -276,14 +282,14 @@ function SchoolsList({ schools, onViewSchool }: SchoolsListProps) {
                   {school.location}
                 </div>
               )}
-              
+
               {school.contactEmail && (
                 <div className="flex items-center text-muted-foreground">
                   <Mail className="h-3 w-3 mr-2" />
                   {school.contactEmail}
                 </div>
               )}
-              
+
               {school.registrationCode && (
                 <div className="flex items-center text-muted-foreground">
                   <Badge variant="outline" className="text-xs">
@@ -292,7 +298,7 @@ function SchoolsList({ schools, onViewSchool }: SchoolsListProps) {
                 </div>
               )}
             </div>
-            
+
             <div className="flex justify-between text-xs text-muted-foreground pt-2 border-t">
               <span>{school.studentCount || 0} students</span>
               <span>{school.classCount || 0} classes</span>

@@ -54,12 +54,12 @@ function getSchoolsByAdminId(adminId: number): School[] {
 // Create a new school
 function createSchool(schoolData: InsertSchool & { adminId: number }): School {
   const schools = loadSchools();
-  
+
   // Generate a new ID
   const newId = schools.length > 0 
     ? Math.max(...schools.map((school) => school.id)) + 1 
     : 1;
-  
+
   const newSchool: School = {
     id: newId,
     ...schoolData,
@@ -68,10 +68,10 @@ function createSchool(schoolData: InsertSchool & { adminId: number }): School {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  
+
   schools.push(newSchool);
   saveSchools(schools);
-  
+
   return newSchool;
 }
 
@@ -79,26 +79,45 @@ function createSchool(schoolData: InsertSchool & { adminId: number }): School {
 function updateSchool(id: number, schoolData: Partial<School>): School | undefined {
   const schools = loadSchools();
   const schoolIndex = schools.findIndex((school) => school.id === id);
-  
+
   if (schoolIndex === -1) {
     return undefined;
   }
-  
+
   // Update the school
   const updatedSchool = {
     ...schools[schoolIndex],
     ...schoolData,
     updatedAt: new Date(),
   };
-  
+
   schools[schoolIndex] = updatedSchool;
   saveSchools(schools);
-  
+
   return updatedSchool;
 }
 
 export const schoolStorage = {
   getSchools,
+  getAllSchools() {
+    try {
+      const filePath = path.join(process.cwd(), 'data', 'schools.json');
+
+      if (fs.existsSync(filePath)) {
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const schools = JSON.parse(fileContent);
+        console.log(`📚 Loaded ${schools.length} schools from file storage`);
+        return schools;
+      } else {
+        console.log('⚠️ Schools file not found, returning empty array');
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error loading schools:', error);
+      return [];
+    }
+  },
+
   getSchoolById,
   getSchoolsByAdminId,
   createSchool,

@@ -6,7 +6,7 @@ export const getSuperAdminSchools = async (req: Request, res: Response) => {
   try {
     
     // Get all schools from school storage
-    const schools = schoolStorage.getSchools();
+    const schools = schoolStorage.getAllSchools();
     
     // Get additional statistics for each school
     const schoolsWithStats = await Promise.all(
@@ -92,6 +92,31 @@ export const getSuperAdminSchoolDetails = async (req: Request, res: Response) =>
     console.error('❌ Error fetching school details for superadmin:', error);
     res.status(500).json({ 
       error: 'Failed to fetch school details',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+export const updateSuperAdminSchool = async (req: Request, res: Response) => {
+  try {
+    const { schoolId } = req.params;
+    const updateData = req.body;
+    
+    console.log(`🔄 SuperAdmin: Updating school ${schoolId} with data:`, updateData);
+    
+    // Update school using school storage
+    const updatedSchool = schoolStorage.updateSchool(parseInt(schoolId), updateData);
+    
+    if (!updatedSchool) {
+      return res.status(404).json({ error: 'School not found' });
+    }
+    
+    console.log(`✅ SuperAdmin: Updated school ${schoolId} successfully`);
+    res.json(updatedSchool);
+  } catch (error) {
+    console.error('❌ Error updating school for superadmin:', error);
+    res.status(500).json({ 
+      error: 'Failed to update school',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
