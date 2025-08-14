@@ -295,16 +295,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hashedPassword = await bcrypt.hash(validatedData.password, 10);
       console.log('🔒 Password hashed successfully');
 
-      // Create user
+      // Create user in local storage first
       console.log('👤 Creating user with data:', { ...validatedData, password: '[REDACTED]' });
       const user = await storage.createUser({
         ...validatedData,
         password: hashedPassword
       });
-      console.log('✅ User created successfully:', user.id);
+      console.log('✅ User created successfully in local storage:', user.id);
 
-      // Remove password from response
+      // Remove password from response first
       const { password, ...userWithoutPassword } = user;
+
+      // Also create user in Supabase for authentication
+      console.log('🔄 Attempting to create user in Supabase...');
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabaseUrl = process.env.VITE_SUPABASE_URL;
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        
+        console.log('🔑 Supabase URL available:', !!supabaseUrl);
+        console.log('🔑 Service key available:', !!supabaseServiceKey);
+        
+        if (supabaseUrl && supabaseServiceKey) {
+          console.log('🔧 Creating Supabase admin client...');
+          const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+          
+          console.log('👤 Creating user in Supabase auth system...');
+          const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email: validatedData.email,
+            password: validatedData.password,
+            email_confirm: true,
+            user_metadata: {
+              role: validatedData.role,
+              name: validatedData.name,
+              schoolId: validatedData.schoolId
+            }
+          });
+
+          if (authError) {
+            console.log('⚠️ Supabase user creation failed, but local user created:', authError.message);
+          } else {
+            console.log('✅ User also created in Supabase:', authUser?.user?.id);
+          }
+        } else {
+          console.log('⚠️ Supabase credentials not available, user only created locally');
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Error creating user in Supabase:', supabaseError instanceof Error ? supabaseError.message : 'Unknown error');
+      }
 
       res.status(201).json({ message: "User created successfully", user: userWithoutPassword });
     } catch (error) {

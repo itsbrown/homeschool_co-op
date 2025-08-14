@@ -120,26 +120,54 @@ export default function RegistrationLandingPage() {
           description: "Signing you in and redirecting to your dashboard...",
         });
 
-        // Automatically sign in the user with their new credentials
+        // Try to create user directly in Supabase first, then sign them in
         try {
-          const signInResult = await signIn(data.email, 'tempPassword123');
-          if (signInResult.data?.user && !signInResult.error) {
-            // Store registration context for the dashboard
-            sessionStorage.setItem('newParentRegistration', JSON.stringify({
-              schoolCode: code,
-              schoolName: school?.name,
-              registrationCompleted: true
-            }));
+          // Import Supabase client
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          
+          if (supabaseUrl && supabaseAnonKey) {
+            const supabase = createClient(supabaseUrl, supabaseAnonKey);
             
-            // Redirect to dashboard where they can register children
-            setTimeout(() => {
-              setLocation('/dashboard');
-            }, 1500);
+            // Create user in Supabase
+            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+              email: data.email,
+              password: 'tempPassword123',
+              options: {
+                data: {
+                  role: 'parent',
+                  name: `${data.parentFirstName} ${data.parentLastName}`,
+                  schoolId: school?.id
+                }
+              }
+            });
+            
+            if (signUpData?.user && !signUpError) {
+              // Store registration context for the dashboard
+              sessionStorage.setItem('newParentRegistration', JSON.stringify({
+                schoolCode: code,
+                schoolName: school?.name,
+                registrationCompleted: true
+              }));
+              
+              toast({
+                title: "Account Created Successfully!",
+                description: "Welcome! Redirecting to your dashboard...",
+              });
+              
+              // Redirect to dashboard where they can register children
+              setTimeout(() => {
+                setLocation('/dashboard');
+              }, 1500);
+            } else {
+              throw new Error(signUpError?.message || 'Account creation failed');
+            }
           } else {
-            throw new Error(signInResult.error?.message || 'Auto-login failed');
+            throw new Error('Supabase configuration not available');
           }
-        } catch (loginError) {
-          console.error('Auto-login failed:', loginError);
+        } catch (authError) {
+          console.error('Supabase auth failed:', authError);
           // Fallback to manual login
           toast({
             title: "Account Created!",
