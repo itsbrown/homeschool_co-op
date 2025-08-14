@@ -101,7 +101,16 @@ router.post('/register', async (req, res) => {
       updatedAt: new Date()
     };
 
-    const user = await storage.createUser(userData);
+    let user;
+    try {
+      user = await storage.createUser(userData);
+    } catch (createError) {
+      console.error('User creation failed:', createError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to create user account. Please try again.' 
+      });
+    }
 
     // If this is a school-specific registration, associate with school
     if (schoolId && registrationCode) {

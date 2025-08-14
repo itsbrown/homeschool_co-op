@@ -326,10 +326,10 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createUser(userData: InsertUser): Promise<User> {
     const id = this.userIdCounter++;
     const now = new Date();
-    const user: User = { ...insertUser, id, createdAt: now };
+    const user: User = { ...userData, id, createdAt: now };
     this.usersStore.set(id, user);
     return user;
   }
@@ -1558,7 +1558,7 @@ export class MemStorage implements IStorage {
       id: this.eventIdCounter++,
       title: "Summer Science Camp",
       startDate: new Date(currentYear, currentMonth, currentDay + 14, 9, 0),
-      endDate: new Date(currentYear, currentMonth, currentDay + 18, 15, 0),
+      endDate: new Date(currentYear, currentMonth, currentDay + 14, 15, 0),
       eventType: "camp",
       location: "Science Center",
       description: "Five-day science exploration camp for elementary students",
