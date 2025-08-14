@@ -89,10 +89,10 @@ router.post('/register', async (req, res) => {
 
     // Create user
     const userData = {
+      username: email, // Use email as username
       email,
       password: hashedPassword,
-      firstName: userFirstName,
-      lastName: userLastName,
+      name: `${userFirstName} ${userLastName}`,
       phone: phone || '',
       role: role || 'parent',
       schoolId: schoolId || null,

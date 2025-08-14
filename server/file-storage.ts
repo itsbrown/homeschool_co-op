@@ -728,7 +728,7 @@ export class FileStorage implements IStorage {
 
   // Override the createUser method with the file-based implementation
   async createUser(user: InsertUser): Promise<User> {
-    validateString(user.username, 'Username');
+    validateString(user.username || user.email, 'Username');
     validateEmail(user.email);
     validateString(user.password, 'Password', 72);
     validateString(user.name, 'Name');
