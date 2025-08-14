@@ -20,7 +20,8 @@ import {
   Wand2,
   ChevronDown,
   ChevronRight,
-  Building
+  Building,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -102,6 +103,11 @@ const superAdminNavItems: {
     title: 'All Schools',
     href: '/superadmin/schools',
     icon: Building,
+  },
+  {
+    title: 'Applications',
+    href: '/superadmin/applications',
+    icon: FileText,
   },
   {
     title: 'My School',

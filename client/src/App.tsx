@@ -131,6 +131,10 @@ import { AllSchoolsPage } from "./pages/superadmin/AllSchoolsPage";
 import { SchoolDetailsPage } from "./pages/superadmin/SchoolDetailsPage";
 import { SchoolEditPage } from "./pages/superadmin/SchoolEditPage";
 import { InvitationsPage } from "./pages/superadmin/InvitationsPage";
+import SchoolApplicationsPage from './pages/superadmin/SchoolApplicationsPage';
+import SchoolApplicationPage from './pages/SchoolApplicationPage';
+import SchoolApplicationSuccessPage from './pages/SchoolApplicationSuccessPage';
+import SchoolApplicationStatusPage from './pages/SchoolApplicationStatusPage';
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -482,10 +486,15 @@ function Router() {
       <Route path="/schools/settings" component={SchoolSettingsPage} />
 
       {/* SuperAdmin routes */}
-      <Route path="/superadmin/schools" element={<AllSchoolsPage />} />
-      <Route path="/superadmin/schools/:schoolId" element={<SchoolDetailsPage />} />
-      <Route path="/superadmin/schools/:schoolId/edit" element={<SchoolEditPage />} />
-      <Route path="/superadmin/invitations" element={<InvitationsPage />} />
+      <Route path="/superadmin/schools" component={AllSchoolsPage} />
+      <Route path="/superadmin/schools/:id" component={SchoolDetailsPage} />
+      <Route path="/superadmin/schools/:id/edit" component={SchoolEditPage} />
+      <Route path="/superadmin/applications" component={SchoolApplicationsPage} />
+
+      {/* School Application routes */}
+      <Route path="/school-application" component={SchoolApplicationPage} />
+      <Route path="/school-application-success" component={SchoolApplicationSuccessPage} />
+      <Route path="/school-application-status" component={SchoolApplicationStatusPage} />
 
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />
