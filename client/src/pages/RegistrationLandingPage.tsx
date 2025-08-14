@@ -91,34 +91,39 @@ export default function RegistrationLandingPage() {
 
   const onSubmit = async (data: ParentRegistrationForm) => {
     try {
-      // Store registration data for the multi-step process
-      const registrationData = {
+      // Create the user account directly via API
+      const response = await apiRequest('POST', '/api/auth/register', {
+        email: data.email,
         parentFirstName: data.parentFirstName,
         parentLastName: data.parentLastName,
-        email: data.email,
         phone: data.phone,
         location: data.location,
-        school: school || null,
-        registrationCode: school?.registrationCode || null,
-        schoolId: school?.id || null
-      };
-
-      // Store in sessionStorage for next steps
-      sessionStorage.setItem('parentRegistrationData', JSON.stringify(registrationData));
-
-      toast({
-        title: "Information Saved!",
-        description: "Please complete your registration by signing in with your preferred method.",
+        role: 'parent',
+        schoolId: school?.id || null,
+        registrationCode: school?.registrationCode || null
       });
 
-      // Redirect to login/auth page where they can create their account
-      setLocation('/login');
+      if (response.ok) {
+        const result = await response.json();
+        
+        toast({
+          title: "Account Created Successfully!",
+          description: "Welcome to the platform. Please sign in with your new account.",
+        });
+
+        // Clear any existing session and redirect to login
+        sessionStorage.removeItem('parentRegistrationData');
+        setLocation('/login');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Registration failed');
+      }
       
     } catch (error) {
       console.error("Registration error:", error);
       toast({
         title: "Registration Error",
-        description: "Something went wrong. Please try again.",
+        description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
         variant: "destructive"
       });
     }
