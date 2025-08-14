@@ -478,9 +478,30 @@ function Router() {
       <Route path="/schools/settings" component={SchoolSettingsPage} />
 
       {/* SuperAdmin routes */}
-      <Route path="/superadmin/schools" component={lazy(() => import("./pages/superadmin/AllSchoolsPage"))} />
-      <Route path="/superadmin/schools/:schoolId" component={lazy(() => import("./pages/superadmin/SchoolDetailsPage"))} />
-      <Route path="/superadmin/schools/:schoolId/edit" component={lazy(() => import("./pages/superadmin/SchoolEditPage"))} />
+      <Route path="/superadmin/schools" component={() => {
+        const AllSchoolsPage = React.lazy(() => import("./pages/superadmin/AllSchoolsPage"));
+        return (
+          <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+            <AllSchoolsPage />
+          </React.Suspense>
+        );
+      }} />
+      <Route path="/superadmin/schools/:schoolId" component={() => {
+        const SchoolDetailsPage = React.lazy(() => import("./pages/superadmin/SchoolDetailsPage"));
+        return (
+          <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+            <SchoolDetailsPage />
+          </React.Suspense>
+        );
+      }} />
+      <Route path="/superadmin/schools/:schoolId/edit" component={() => {
+        const SchoolEditPage = React.lazy(() => import("./pages/superadmin/SchoolEditPage"));
+        return (
+          <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+            <SchoolEditPage />
+          </React.Suspense>
+        );
+      }} />
 
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />
