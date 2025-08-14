@@ -254,31 +254,43 @@ export class DatabaseStorage implements IStorage {
 
   async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
     try {
+      if (!this.db) {
+        console.log("Database connection not available, returning empty knowledge bases array");
+        return [];
+      }
       const result = await this.db.select().from(knowledgeBases);
       return result;
     } catch (error) {
       console.error("Error fetching all knowledge bases from database:", error);
-      throw error;
+      return [];
     }
   }
 
   async getAllActivities(): Promise<Activity[]> {
     try {
+      if (!this.db) {
+        console.log("Database connection not available, returning empty activities array");
+        return [];
+      }
       const result = await this.db.select().from(activities);
       return result;
     } catch (error) {
       console.error("Error fetching all activities from database:", error);
-      throw error;
+      return [];
     }
   }
 
   async getAllEnrollments(): Promise<ProgramEnrollment[]> {
     try {
+      if (!this.db) {
+        console.log("Database connection not available, returning empty enrollments array");
+        return [];
+      }
       const result = await this.db.select().from(programEnrollments);
       return result;
     } catch (error) {
       console.error("Error fetching all enrollments from database:", error);
-      throw error;
+      return [];
     }
   }
 
