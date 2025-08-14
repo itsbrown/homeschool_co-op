@@ -91,40 +91,29 @@ export default function RegistrationLandingPage() {
 
   const onSubmit = async (data: ParentRegistrationForm) => {
     try {
-      // Create parent account
-      const response = await apiRequest("POST", "/api/auth/register", {
-        ...data,
-        role: 'parent',
-        schoolId: school?.id || null,
-        registrationCode: school?.registrationCode || null
+      // Store registration data for the multi-step process
+      const registrationData = {
+        parentFirstName: data.parentFirstName,
+        parentLastName: data.parentLastName,
+        email: data.email,
+        phone: data.phone,
+        location: data.location,
+        school: school || null,
+        registrationCode: school?.registrationCode || null,
+        schoolId: school?.id || null
+      };
+
+      // Store in sessionStorage for next steps
+      sessionStorage.setItem('parentRegistrationData', JSON.stringify(registrationData));
+
+      toast({
+        title: "Information Saved!",
+        description: "Please complete your registration by signing in with your preferred method.",
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        
-        toast({
-          title: "Registration Successful!",
-          description: "Welcome to American Seekers Academy. You can now add your children and enroll them in classes.",
-        });
-
-        // Store parent info for potential use
-        sessionStorage.setItem('parentRegistrationData', JSON.stringify({
-          ...data,
-          school: school || null,
-          registrationCode: school?.registrationCode || null,
-          schoolId: school?.id || null
-        }));
-
-        // Redirect to dashboard where they can add children
-        setLocation('/dashboard');
-      } else {
-        const error = await response.json();
-        toast({
-          title: "Registration Failed",
-          description: error.message || "Please try again",
-          variant: "destructive"
-        });
-      }
+      // Redirect to login/auth page where they can create their account
+      setLocation('/login');
+      
     } catch (error) {
       console.error("Registration error:", error);
       toast({
