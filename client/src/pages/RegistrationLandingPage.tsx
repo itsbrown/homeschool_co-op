@@ -91,9 +91,12 @@ export default function RegistrationLandingPage() {
 
   const onSubmit = async (data: ParentRegistrationForm) => {
     try {
-      // Create the user account directly via API
+      // Create the user account directly via API with required fields
       const response = await apiRequest('POST', '/api/auth/register', {
         email: data.email,
+        password: 'tempPassword123', // Temporary password for parent accounts
+        username: data.email, // Use email as username
+        name: `${data.parentFirstName} ${data.parentLastName}`, // Combined name
         parentFirstName: data.parentFirstName,
         parentLastName: data.parentLastName,
         phone: data.phone,
