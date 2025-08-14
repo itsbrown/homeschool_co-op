@@ -460,6 +460,7 @@ function Router() {
 
       {/* School-specific landing and registration pages */}
       <Route path="/school/:code" component={SchoolLandingPage} />
+      <Route path="/register/:code" component={RegistrationLandingPage} />
       <Route path="/registration-success/:code" component={RegistrationSuccessPage} />
 
       {/* School Admin routes */}
