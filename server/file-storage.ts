@@ -692,17 +692,21 @@ export class FileStorage implements IStorage {
     try {
       const filePath = path.join(process.cwd(), 'data/users.json');
       if (!fs.existsSync(filePath)) {
-        console.log('⚠️ Users file not found at:', filePath);
+        console.log('⚠️ Users file not found at:', filePath, '- returning empty array');
         return [];
       }
       const data = fs.readFileSync(filePath, 'utf-8');
+      if (!data.trim()) {
+        console.log('⚠️ Users file is empty - returning empty array');
+        return [];
+      }
       const users = JSON.parse(data);
       console.log(`📚 FileStorage loaded ${users.length} users`);
       return users;
     } catch (error) {
       console.error('Error loading users:', error);
-      // If file reading fails, it's better to throw to be caught by the caller's try-catch
-      throw error;
+      // Return empty array instead of throwing to allow user creation
+      return [];
     }
   }
 
@@ -730,39 +734,37 @@ export class FileStorage implements IStorage {
     validateString(user.name, 'Name');
     if (user.avatar) validateString(user.avatar, 'Avatar URL');
     
-    // Check if the user already exists before creating
-    const existingUser = await userStorage.getUserByEmail(user.email);
-    if (existingUser) {
-      throw new Error('User with this email already exists');
-    }
-
-    // Attempt to create user using Supabase first
+    // For file storage, we'll create the user directly in files
     try {
-      const createdUser = await userStorage.createUser(user);
-      console.log(`✅ User created successfully via Supabase: ${createdUser.email}`);
-      return createdUser;
-    } catch (supabaseError) {
-      console.warn('⚠️ Supabase createUser failed, falling back to file storage:', supabaseError);
+      const users = await this.getUsers();
       
-      // Fallback to file storage if Supabase fails
-      try {
-        const users = await this.getUsers();
-        const newUser: User = {
-          id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
-          ...user,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-
-        console.log('📝 Creating user in file storage:', newUser.email);
-        users.push(newUser);
-        await this.saveUsers(users);
-        console.log('✅ User created successfully in file storage');
-        return newUser;
-      } catch (fileError) {
-        console.error('❌ File storage createUser error:', fileError);
-        throw new Error(`Error creating user: ${fileError.message}`);
+      // Check if user already exists
+      const existingUser = users.find(u => u.email === user.email);
+      if (existingUser) {
+        throw new Error('User with this email already exists');
       }
+
+      const newUser: User = {
+        id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
+        username: user.username || user.email,
+        email: user.email,
+        password: user.password,
+        role: user.role || 'parent',
+        name: user.name,
+        avatar: user.avatar || null,
+        subscription: 'free',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      console.log('📝 Creating user in file storage:', newUser.email);
+      users.push(newUser);
+      await this.saveUsers(users);
+      console.log('✅ User created successfully in file storage');
+      return newUser;
+    } catch (fileError) {
+      console.error('❌ File storage createUser error:', fileError);
+      throw new Error(`Error creating user: ${fileError.message}`);
     }
   }
 
