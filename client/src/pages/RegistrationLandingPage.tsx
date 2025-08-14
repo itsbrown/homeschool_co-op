@@ -46,6 +46,10 @@ export default function RegistrationLandingPage() {
   const form = useForm<ParentRegistrationForm>({
     resolver: zodResolver(parentRegistrationSchema),
     defaultValues: {
+      parentFirstName: "",
+      parentLastName: "",
+      email: "",
+      phone: "",
       location: "Brighton"
     }
   });
