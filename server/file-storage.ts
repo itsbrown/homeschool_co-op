@@ -724,51 +724,45 @@ export class FileStorage implements IStorage {
 
   // Override the createUser method with the file-based implementation
   async createUser(user: InsertUser): Promise<User> {
-    // Keep original validations
     validateString(user.username, 'Username');
     validateEmail(user.email);
     validateString(user.password, 'Password', 72);
     validateString(user.name, 'Name');
     if (user.avatar) validateString(user.avatar, 'Avatar URL');
-
-    // Check if user already exists (important for idempotency)
-    // Use the existing getUserByEmail which delegates to userStorage, assuming it works for checks
-    // Or use internal getUsers if userStorage is completely replaced for user operations.
-    // Given the error is in *creation*, checking existence should ideally use the same storage mechanism.
-    // If FileStorage is now the primary user store, it should check its own store.
-    try {
-      const existingUsers = await this.getUsers(); // Check within file storage
-      const userExists = existingUsers.some(u => u.email === user.email);
-      if (userExists) {
-        throw new Error('User with this email already exists in file storage.');
-      }
-    } catch (checkError) {
-      // If there's an error checking, still proceed to create, but log the check error.
-      console.warn('Warning: Error checking for existing user in file storage during creation:', checkError);
+    
+    // Check if the user already exists before creating
+    const existingUser = await userStorage.getUserByEmail(user.email);
+    if (existingUser) {
+      throw new Error('User with this email already exists');
     }
 
-
-    // Implement the logic from the snippet
+    // Attempt to create user using Supabase first
     try {
-      const users = await this.getUsers(); // Use added helper
-      const newUser: User = { // Ensure newUser conforms to User type
-        id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
-        ...user, // Spread the InsertUser properties
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      const createdUser = await userStorage.createUser(user);
+      console.log(`✅ User created successfully via Supabase: ${createdUser.email}`);
+      return createdUser;
+    } catch (supabaseError) {
+      console.warn('⚠️ Supabase createUser failed, falling back to file storage:', supabaseError);
+      
+      // Fallback to file storage if Supabase fails
+      try {
+        const users = await this.getUsers();
+        const newUser: User = {
+          id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
+          ...user,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
 
-      console.log('📝 Creating user in file storage:', newUser.email);
-      users.push(newUser);
-      await this.saveUsers(users); // Use added helper
-      console.log('✅ User created successfully in file storage');
-      return newUser;
-    } catch (error) {
-      console.error('❌ File storage createUser error:', error);
-      // The original error from the prompt was "Error creating user" from the API.
-      // This new error is specific to file storage.
-      // We should re-throw to be caught by the API layer.
-      throw new Error(`Error creating user in file storage: ${error.message}`);
+        console.log('📝 Creating user in file storage:', newUser.email);
+        users.push(newUser);
+        await this.saveUsers(users);
+        console.log('✅ User created successfully in file storage');
+        return newUser;
+      } catch (fileError) {
+        console.error('❌ File storage createUser error:', fileError);
+        throw new Error(`Error creating user: ${fileError.message}`);
+      }
     }
   }
 
