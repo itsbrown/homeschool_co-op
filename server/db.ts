@@ -2,39 +2,72 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../shared/schema';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
+// Lazy database connection variables
+let dbInstance: any = null;
+let client: any = null;
+let connectionTested = false;
+let connectionWorking = false;
+
+// Function to initialize database connection
+function initializeDatabase() {
+  if (!process.env.DATABASE_URL) {
+    console.log("DATABASE_URL not set, database will not be available");
+    return null;
+  }
+
+  const connectionString = process.env.DATABASE_URL;
+
+  try {
+    client = postgres(connectionString, { 
+      prepare: false,
+      max: 10,
+      ssl: { rejectUnauthorized: false }
+    });
+    
+    console.log("Database connection to Supabase created successfully");
+    dbInstance = drizzle(client, { schema });
+    return dbInstance;
+  } catch (error) {
+    console.log("Failed to create database connection:", error instanceof Error ? error.message : 'Unknown error');
+    return null;
+  }
 }
 
-// Create a PostgreSQL connection for Supabase
-const connectionString = process.env.DATABASE_URL;
+// Function to get database instance with connection testing
+export async function getDb() {
+  if (!connectionTested) {
+    connectionTested = true;
+    
+    try {
+      const db = initializeDatabase();
+      if (db) {
+        // Test the connection with a simple query
+        await db.execute('SELECT 1');
+        connectionWorking = true;
+        console.log("✅ Database connection test successful");
+        return db;
+      }
+    } catch (error) {
+      console.log("❌ Database connection test failed:", error instanceof Error ? error.message : 'Unknown error');
+      connectionWorking = false;
+      dbInstance = null;
+      client = null;
+    }
+  }
 
-// Parse and fix URL encoding issues
-let client;
-try {
-  client = postgres(connectionString, { 
-    prepare: false,
-    max: 10,
-    ssl: { rejectUnauthorized: false }
-  });
-} catch (error) {
-  // If URL parsing fails, try with manual configuration
-  client = postgres({
-    host: 'db.moivwjuglwwfrhqeewju.supabase.co',
-    port: 5432,
-    database: 'postgres',
-    username: 'postgres',
-    password: 'SZ+)R5R4?wjEWB8',
-    ssl: { rejectUnauthorized: false },
-    prepare: false,
-    max: 10
-  });
+  if (connectionWorking && dbInstance) {
+    return dbInstance;
+  } else {
+    throw new Error("Database connection not available");
+  }
 }
 
-console.log("Database connection to Supabase created successfully");
-
-// Create a Drizzle ORM instance with the connection
-export const db = drizzle(client, { schema });
+// Export a proxy that throws error when database is not available
+export const db = new Proxy({}, {
+  get() {
+    throw new Error("Database connection not available - use getDb() for lazy loading");
+  }
+});
 
 // Export the client for direct queries if needed
-export { client as pool };
+export const pool = client;

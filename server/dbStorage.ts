@@ -1,5 +1,5 @@
 import { eq, and, desc, asc, like, or, sql } from 'drizzle-orm';
-import { db } from './db';
+import { getDb } from './db';
 import { IStorage } from './storage';
 import {
   User, InsertUser, users,
@@ -22,21 +22,25 @@ import {
 export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
+    const db = await getDb();
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
+    const db = await getDb();
     const [user] = await db.select().from(users).where(eq(users.username, username));
     return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
+    const db = await getDb();
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
   async createUser(user: InsertUser): Promise<User> {
+    const db = await getDb();
     const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
   }

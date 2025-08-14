@@ -273,37 +273,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
+      console.log('📝 Registration request body:', JSON.stringify(req.body, null, 2));
+      
       const validatedData = insertUserSchema.parse(req.body);
+      console.log('✅ Data validation passed:', validatedData);
 
       // Check if user already exists
       const existingUser = await storage.getUserByUsername(validatedData.username);
       if (existingUser) {
+        console.log('❌ Username already exists:', validatedData.username);
         return res.status(400).json({ message: "Username already exists" });
       }
 
       const existingEmail = await storage.getUserByEmail(validatedData.email);
       if (existingEmail) {
+        console.log('❌ Email already exists:', validatedData.email);
         return res.status(400).json({ message: "Email already exists" });
       }
 
       // Hash password
       const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+      console.log('🔒 Password hashed successfully');
 
       // Create user
+      console.log('👤 Creating user with data:', { ...validatedData, password: '[REDACTED]' });
       const user = await storage.createUser({
         ...validatedData,
         password: hashedPassword
       });
+      console.log('✅ User created successfully:', user.id);
 
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
 
       res.status(201).json({ message: "User created successfully", user: userWithoutPassword });
     } catch (error) {
+      console.error('❌ Registration error:', error);
       if (error instanceof z.ZodError) {
+        console.error('📋 Validation errors:', error.errors);
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
-      res.status(500).json({ message: "Error creating user" });
+      console.error('💥 Unknown error during registration:', error);
+      res.status(500).json({ 
+        message: "Error creating user",
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

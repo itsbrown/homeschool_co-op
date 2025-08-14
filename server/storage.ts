@@ -2018,15 +2018,36 @@ export class MemStorage implements IStorage {
     }
 
     async getUserByUsername(username: string): Promise<User | undefined> {
-      return this.dbStorage.getUserByUsername(username);
+      try {
+        // Try database storage first
+        return await this.dbStorage.getUserByUsername(username);
+      } catch (error) {
+        console.log('💾 Database unavailable, using memory storage for username lookup');
+        // Fall back to memory storage if database is unavailable
+        return await this.memStorage.getUserByUsername(username);
+      }
     }
 
     async getUserByEmail(email: string): Promise<User | undefined> {
-      return this.dbStorage.getUserByEmail(email);
+      try {
+        // Try database storage first
+        return await this.dbStorage.getUserByEmail(email);
+      } catch (error) {
+        console.log('💾 Database unavailable, using memory storage for email lookup');
+        // Fall back to memory storage if database is unavailable
+        return await this.memStorage.getUserByEmail(email);
+      }
     }
 
     async createUser(user: InsertUser): Promise<User> {
-      return this.dbStorage.createUser(user);
+      try {
+        // Try database storage first
+        return await this.dbStorage.createUser(user);
+      } catch (error) {
+        console.log('💾 Database unavailable, using memory storage for user creation');
+        // Fall back to memory storage if database is unavailable
+        return await this.memStorage.createUser(user);
+      }
     }
 
     async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
