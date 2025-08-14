@@ -21,6 +21,8 @@ import {
   Trash2,
   Plus
 } from "lucide-react";
+import AppShell from '@/components/layout/AppShell';
+
 
 interface School {
   id: number;
@@ -68,151 +70,157 @@ export default function AllSchoolsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading schools...</p>
+      <AppShell>
+        <div className="p-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading schools...</p>
+            </div>
           </div>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <Card className="max-w-md mx-auto">
-          <CardHeader>
-            <CardTitle className="text-red-600">Error Loading Schools</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Failed to load school data. Please try again later.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <AppShell>
+        <div className="p-6">
+          <Card className="max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle className="text-red-600">Error Loading Schools</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Failed to load school data. Please try again later.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">All Schools</h1>
-          <p className="text-muted-foreground">
-            Manage and oversee all schools in the platform
-          </p>
+    <AppShell>
+      <div className="container mx-auto p-6 max-w-7xl">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">All Schools</h1>
+            <p className="text-muted-foreground">
+              Manage and oversee all schools in the platform
+            </p>
+          </div>
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Add School
+          </Button>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add School
-        </Button>
-      </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Schools</CardTitle>
-            <School className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{schools.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {activeSchools.length} active, {inactiveSchools.length} inactive
-            </p>
-          </CardContent>
-        </Card>
+        {/* Stats Cards */}
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Schools</CardTitle>
+              <School className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{schools.length}</div>
+              <p className="text-xs text-muted-foreground">
+                {activeSchools.length} active, {inactiveSchools.length} inactive
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {schools.reduce((sum, school) => sum + (school.studentCount || 0), 0)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Across all schools
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {schools.reduce((sum, school) => sum + (school.studentCount || 0), 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Across all schools
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Classes</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {schools.reduce((sum, school) => sum + (school.classCount || 0), 0)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Available courses
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Classes</CardTitle>
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {schools.reduce((sum, school) => sum + (school.classCount || 0), 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Available courses
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {schools.reduce((sum, school) => sum + (school.staffCount || 0), 0)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Educators & administrators
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search schools..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {schools.reduce((sum, school) => sum + (school.staffCount || 0), 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Educators & administrators
+              </p>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Search */}
+        <div className="flex items-center space-x-2">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search schools..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+        </div>
+
+        {/* Schools List */}
+        <Tabs defaultValue="active" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="active">
+              Active Schools ({activeSchools.length})
+            </TabsTrigger>
+            <TabsTrigger value="inactive">
+              Inactive Schools ({inactiveSchools.length})
+            </TabsTrigger>
+            <TabsTrigger value="all">
+              All Schools ({filteredSchools.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="active" className="space-y-4">
+            <SchoolsList schools={activeSchools} onViewSchool={handleViewSchool} />
+          </TabsContent>
+
+          <TabsContent value="inactive" className="space-y-4">
+            <SchoolsList schools={inactiveSchools} onViewSchool={handleViewSchool} />
+          </TabsContent>
+
+          <TabsContent value="all" className="space-y-4">
+            <SchoolsList schools={filteredSchools} onViewSchool={handleViewSchool} />
+          </TabsContent>
+        </Tabs>
       </div>
-
-      {/* Schools List */}
-      <Tabs defaultValue="active" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="active">
-            Active Schools ({activeSchools.length})
-          </TabsTrigger>
-          <TabsTrigger value="inactive">
-            Inactive Schools ({inactiveSchools.length})
-          </TabsTrigger>
-          <TabsTrigger value="all">
-            All Schools ({filteredSchools.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="active" className="space-y-4">
-          <SchoolsList schools={activeSchools} onViewSchool={handleViewSchool} />
-        </TabsContent>
-
-        <TabsContent value="inactive" className="space-y-4">
-          <SchoolsList schools={inactiveSchools} onViewSchool={handleViewSchool} />
-        </TabsContent>
-
-        <TabsContent value="all" className="space-y-4">
-          <SchoolsList schools={filteredSchools} onViewSchool={handleViewSchool} />
-        </TabsContent>
-      </Tabs>
-    </div>
+    </AppShell>
   );
 }
 
