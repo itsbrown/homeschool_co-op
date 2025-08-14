@@ -1,0 +1,25 @@
+[
+  {
+    "id": 1,
+    "email": "coreycreates@gmail.com",
+    "role": "school_admin",
+    "supabaseId": "05052776-9b5e-4330-867d-d489273eaf70",
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-01-13T06:08:43.000Z",
+    "updatedAt": "2025-01-13T06:08:43.000Z"
+  },
+  {
+    "id": 2,
+    "email": "educator.test@americanseekersacademy.com",
+    "name": "Sarah Johnson",
+    "username": "educator_test",
+    "firstName": "Sarah",
+    "lastName": "Johnson",
+    "role": "educator",
+    "subscription": "educator",
+    "createdAt": "2025-08-04T12:00:00.000Z",
+    "avatar": null,
+    "password": "$2a$10$EixZxQVkjyOptZj8GHGEc.3HEcUi8h7eAFcmNyMSZGEpj2pjHAAIC"
+  }
+]
