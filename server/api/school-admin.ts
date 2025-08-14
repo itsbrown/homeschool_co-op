@@ -223,8 +223,14 @@ router.get("/my-school", async (req, res) => {
       return res.status(401).json({ message: "Authentication failed" });
     }
 
-    // Use admin client to query the schools table with service role permissions
-    const { supabaseAdmin } = await import('../db/supabase');
+    // Use admin client to query the schools table with service role permissions - skip if unavailable
+    let supabaseAdmin = null;
+    try {
+      const supabaseModule = await import('../db/supabase');
+      supabaseAdmin = supabaseModule.supabaseAdmin;
+    } catch (importError) {
+      console.log('⚠️ Could not import supabaseAdmin, will use file storage only');
+    }
 
     // Find the school associated with this admin
     console.log('🔍 Looking up admin user by email:', user.email);
@@ -281,21 +287,25 @@ router.get("/my-school", async (req, res) => {
     console.log('🔍 Attempting to query school storage...');
     
     // Try Supabase first, then fallback to file storage
-    try {
-      // Attempt to use Supabase if available
-      const { data: schools, error } = await supabaseAdmin
-        .from('schools')
-        .select('*')
-        .eq('adminId', adminUser.id);
+    if (supabaseAdmin) {
+      try {
+        // Attempt to use Supabase if available
+        const { data: schools, error } = await supabaseAdmin
+          .from('schools')
+          .select('*')
+          .eq('adminId', adminUser.id);
 
-      if (!error && schools && schools.length > 0) {
-        console.log('✅ Found school in Supabase:', schools[0].name);
-        return res.json(schools[0]);
+        if (!error && schools && schools.length > 0) {
+          console.log('✅ Found school in Supabase:', schools[0].name);
+          return res.json(schools[0]);
+        }
+        
+        console.log('⚠️ Supabase query failed or no results, falling back to file storage');
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase connection failed, using file storage fallback:', supabaseError.message);
       }
-      
-      console.log('⚠️ Supabase query failed or no results, falling back to file storage');
-    } catch (supabaseError) {
-      console.log('⚠️ Supabase connection failed, using file storage fallback:', supabaseError.message);
+    } else {
+      console.log('⚠️ Supabase not available, using file storage only');
     }
 
     // Fallback to file storage
@@ -359,6 +369,7 @@ router.get("/my-school", async (req, res) => {
       }
   } catch (error) {
     console.error("Error fetching school information:", error);
+    console.error("Error stack:", error.stack);
     return res.status(500).json({ message: "Error fetching school information" });
   }
 });

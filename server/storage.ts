@@ -1990,7 +1990,29 @@ export class MemStorage implements IStorage {
     }
 
     async getAllUsers(): Promise<User[]> {
-      return this.dbStorage.getAllUsers();
+      try {
+        return await this.dbStorage.getAllUsers();
+      } catch (error) {
+        console.log('💾 Database unavailable, using file storage fallback for getAllUsers');
+        // Fall back to file storage if database is unavailable
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const DATA_DIR = path.join(process.cwd(), 'data');
+          const USERS_FILE = path.join(DATA_DIR, 'users.json');
+          
+          if (fs.existsSync(USERS_FILE)) {
+            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+            const users = JSON.parse(fileContent);
+            console.log('🔍 File storage getAllUsers returned', users.length, 'users');
+            return users;
+          }
+          return [];
+        } catch (fileError) {
+          console.log('❌ File storage fallback failed:', fileError);
+          return [];
+        }
+      }
     }
 
     async getAllCurricula(): Promise<Curriculum[]> {
@@ -2022,9 +2044,26 @@ export class MemStorage implements IStorage {
         // Try database storage first
         return await this.dbStorage.getUserByUsername(username);
       } catch (error) {
-        console.log('💾 Database unavailable, using memory storage for username lookup');
-        // Fall back to memory storage if database is unavailable
-        return await this.memStorage.getUserByUsername(username);
+        console.log('💾 Database unavailable, using file storage fallback for username lookup');
+        // Fall back to file storage if database is unavailable
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const DATA_DIR = path.join(process.cwd(), 'data');
+          const USERS_FILE = path.join(DATA_DIR, 'users.json');
+          
+          if (fs.existsSync(USERS_FILE)) {
+            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+            const users = JSON.parse(fileContent);
+            const user = users.find((u: any) => u.username === username);
+            console.log('🔍 File storage lookup result for username', username, ':', user ? 'Found' : 'Not found');
+            return user;
+          }
+          return undefined;
+        } catch (fileError) {
+          console.log('❌ File storage fallback failed:', fileError);
+          return undefined;
+        }
       }
     }
 
@@ -2033,9 +2072,27 @@ export class MemStorage implements IStorage {
         // Try database storage first
         return await this.dbStorage.getUserByEmail(email);
       } catch (error) {
-        console.log('💾 Database unavailable, using memory storage for email lookup');
-        // Fall back to memory storage if database is unavailable
-        return await this.memStorage.getUserByEmail(email);
+        console.log('💾 Database unavailable, using file storage fallback for email lookup');
+        // Fall back to file storage if database is unavailable
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const DATA_DIR = path.join(process.cwd(), 'data');
+          const USERS_FILE = path.join(DATA_DIR, 'users.json');
+          
+          if (fs.existsSync(USERS_FILE)) {
+            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+            const users = JSON.parse(fileContent);
+            const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+            console.log('🔍 File storage lookup result for', email, ':', user ? 'Found' : 'Not found');
+            return user;
+          }
+          console.log('❌ Users file not found at:', USERS_FILE);
+          return undefined;
+        } catch (fileError) {
+          console.log('❌ File storage fallback failed:', fileError);
+          return undefined;
+        }
       }
     }
 
