@@ -129,7 +129,7 @@ import AppShell from "./components/layout/AppShell";
 import AIStatusPanel from "./components/AIStatusPanel";
 import { AllSchoolsPage } from "./pages/superadmin/AllSchoolsPage";
 import { SchoolDetailsPage } from "./pages/superadmin/SchoolDetailsPage";
-import { SchoolEditPage } from "./pages/superadmin/SchoolEditPage";
+import { SchoolEditPage as SuperAdminSchoolEditPage } from "./pages/superadmin/SchoolEditPage";
 import { InvitationsPage } from "./pages/superadmin/InvitationsPage";
 import SchoolApplicationsPage from './pages/superadmin/SchoolApplicationsPage';
 import SchoolApplicationPage from './pages/SchoolApplicationPage';
@@ -488,7 +488,7 @@ function Router() {
       {/* SuperAdmin routes */}
       <Route path="/superadmin/schools" component={AllSchoolsPage} />
       <Route path="/superadmin/schools/:id" component={SchoolDetailsPage} />
-      <Route path="/superadmin/schools/:id/edit" component={SchoolEditPage} />
+      <Route path="/superadmin/schools/:id/edit" component={SuperAdminSchoolEditPage} />
       <Route path="/superadmin/applications" component={SchoolApplicationsPage} />
 
       {/* School Application routes */}
