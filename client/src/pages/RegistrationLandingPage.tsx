@@ -120,7 +120,7 @@ export default function RegistrationLandingPage() {
           description: "Signing you in and redirecting to your dashboard...",
         });
 
-        // Try to create user directly in Supabase first, then sign them in
+        // Since backend already created user in both systems, just sign them in
         try {
           // Import Supabase client
           const { createClient } = await import('@supabase/supabase-js');
@@ -130,20 +130,13 @@ export default function RegistrationLandingPage() {
           if (supabaseUrl && supabaseAnonKey) {
             const supabase = createClient(supabaseUrl, supabaseAnonKey);
             
-            // Create user in Supabase
-            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            // Sign in the user that was just created by the backend
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
               email: data.email,
-              password: 'tempPassword123',
-              options: {
-                data: {
-                  role: 'parent',
-                  name: `${data.parentFirstName} ${data.parentLastName}`,
-                  schoolId: school?.id
-                }
-              }
+              password: 'tempPassword123'
             });
             
-            if (signUpData?.user && !signUpError) {
+            if (signInData?.user && !signInError) {
               // Store registration context for the dashboard
               sessionStorage.setItem('newParentRegistration', JSON.stringify({
                 schoolCode: code,
@@ -152,8 +145,8 @@ export default function RegistrationLandingPage() {
               }));
               
               toast({
-                title: "Account Created Successfully!",
-                description: "Welcome! Redirecting to your dashboard...",
+                title: "Welcome to ASA Learning Platform!",
+                description: "Registration successful! Redirecting to your dashboard...",
               });
               
               // Redirect to dashboard where they can register children
@@ -161,16 +154,16 @@ export default function RegistrationLandingPage() {
                 setLocation('/dashboard');
               }, 1500);
             } else {
-              throw new Error(signUpError?.message || 'Account creation failed');
+              throw new Error(signInError?.message || 'Sign in failed');
             }
           } else {
-            throw new Error('Supabase configuration not available');
+            throw new Error('Authentication system not available');
           }
         } catch (authError) {
-          console.error('Supabase auth failed:', authError);
+          console.error('Auto sign-in failed:', authError);
           // Fallback to manual login
           toast({
-            title: "Account Created!",
+            title: "Account Created Successfully!",
             description: "Please sign in with your new account to continue.",
           });
           setLocation('/login');
