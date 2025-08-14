@@ -127,6 +127,10 @@ import RoleSelectionComponent from "@/components/RoleSelection";
 import EducatorDashboard from "./components/dashboards/EducatorDashboard";
 import AppShell from "./components/layout/AppShell";
 import AIStatusPanel from "./components/AIStatusPanel";
+import { AllSchoolsPage } from "./pages/superadmin/AllSchoolsPage";
+import { SchoolDetailsPage } from "./pages/superadmin/SchoolDetailsPage";
+import { SchoolEditPage } from "./pages/superadmin/SchoolEditPage";
+import { InvitationsPage } from "./pages/superadmin/InvitationsPage";
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -478,30 +482,10 @@ function Router() {
       <Route path="/schools/settings" component={SchoolSettingsPage} />
 
       {/* SuperAdmin routes */}
-      <Route path="/superadmin/schools" component={() => {
-        const AllSchoolsPage = React.lazy(() => import("./pages/superadmin/AllSchoolsPage"));
-        return (
-          <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
-            <AllSchoolsPage />
-          </React.Suspense>
-        );
-      }} />
-      <Route path="/superadmin/schools/:schoolId" component={() => {
-        const SchoolDetailsPage = React.lazy(() => import("./pages/superadmin/SchoolDetailsPage"));
-        return (
-          <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
-            <SchoolDetailsPage />
-          </React.Suspense>
-        );
-      }} />
-      <Route path="/superadmin/schools/:schoolId/edit" component={() => {
-        const SchoolEditPage = React.lazy(() => import("./pages/superadmin/SchoolEditPage"));
-        return (
-          <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
-            <SchoolEditPage />
-          </React.Suspense>
-        );
-      }} />
+      <Route path="/superadmin/schools" element={<AllSchoolsPage />} />
+      <Route path="/superadmin/schools/:schoolId" element={<SchoolDetailsPage />} />
+      <Route path="/superadmin/schools/:schoolId/edit" element={<SchoolEditPage />} />
+      <Route path="/superadmin/invitations" element={<InvitationsPage />} />
 
       {/* Admin routes */}
       <Route path="/admin/classes" component={SimpleClassesPage} />

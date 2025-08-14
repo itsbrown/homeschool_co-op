@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "../../lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   School,
   Users,
@@ -19,9 +21,11 @@ import {
   Eye,
   Edit,
   Trash2,
-  Plus
+  Plus,
+  UserPlus
 } from "lucide-react";
 import AppShell from '@/components/layout/AppShell';
+import { useToast } from "@/hooks/use-toast";
 
 
 interface School {
@@ -43,6 +47,10 @@ interface School {
 
 export default function AllSchoolsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
   // Fetch all schools
@@ -54,6 +62,42 @@ export default function AllSchoolsPage() {
       return response.json();
     }
   });
+
+  // Mutation for inviting school admin
+  const inviteSchoolAdminMutation = useMutation({
+    mutationFn: async (email: string) => {
+      return apiRequest('/api/role-invitations', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          role: 'schoolAdmin'
+        })
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Invitation Sent",
+        description: "School admin invitation has been sent successfully.",
+      });
+      setInviteDialogOpen(false);
+      setInviteEmail("");
+      queryClient.invalidateQueries({ queryKey: ['role-invitations'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send invitation",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleInviteSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inviteEmail.trim()) {
+      inviteSchoolAdminMutation.mutate(inviteEmail.trim());
+    }
+  };
 
   const filteredSchools = schools.filter(school =>
     school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -113,9 +157,60 @@ export default function AllSchoolsPage() {
               Manage and oversee all schools in the platform
             </p>
           </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add School
+          {/* Invite School Admin Dialog */}
+          <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Invite School Admin
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invite School Administrator</DialogTitle>
+                <DialogDescription>
+                  Send an invitation to a new school administrator. They will receive an email with instructions to set up their account.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleInviteSubmit}>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="admin@schooldomain.com"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setInviteDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={inviteSchoolAdminMutation.isPending}
+                  >
+                    {inviteSchoolAdminMutation.isPending ? "Sending..." : "Send Invitation"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add School Button */}
+          <Button asChild>
+            <Link to="/superadmin/schools/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Add School
+            </Link>
           </Button>
         </div>
 
