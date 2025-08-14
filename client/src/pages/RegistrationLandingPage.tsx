@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { CalendarIcon, MapPin, Clock, Users, DollarSign, Building, ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/components/SupabaseProvider";
 
 // Schema for parent registration - simplified to only parent info
 const parentRegistrationSchema = z.object({
@@ -42,6 +43,7 @@ export default function RegistrationLandingPage() {
   const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(!!code);
   const { toast } = useToast();
+  const { signIn } = useAuth();
 
   const form = useForm<ParentRegistrationForm>({
     resolver: zodResolver(parentRegistrationSchema),
@@ -115,12 +117,36 @@ export default function RegistrationLandingPage() {
         
         toast({
           title: "Account Created Successfully!",
-          description: "Welcome to the platform. Please sign in with your new account.",
+          description: "Signing you in and redirecting to your dashboard...",
         });
 
-        // Clear any existing session and redirect to login
-        sessionStorage.removeItem('parentRegistrationData');
-        setLocation('/login');
+        // Automatically sign in the user with their new credentials
+        try {
+          const signInResult = await signIn(data.email, 'tempPassword123');
+          if (signInResult.data?.user && !signInResult.error) {
+            // Store registration context for the dashboard
+            sessionStorage.setItem('newParentRegistration', JSON.stringify({
+              schoolCode: code,
+              schoolName: school?.name,
+              registrationCompleted: true
+            }));
+            
+            // Redirect to dashboard where they can register children
+            setTimeout(() => {
+              setLocation('/dashboard');
+            }, 1500);
+          } else {
+            throw new Error(signInResult.error?.message || 'Auto-login failed');
+          }
+        } catch (loginError) {
+          console.error('Auto-login failed:', loginError);
+          // Fallback to manual login
+          toast({
+            title: "Account Created!",
+            description: "Please sign in with your new account to continue.",
+          });
+          setLocation('/login');
+        }
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Registration failed');

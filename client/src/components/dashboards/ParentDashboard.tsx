@@ -30,6 +30,33 @@ export default function ParentDashboard() {
     }
   }, [user, session, loadUnpaidEnrollments]);
 
+  // Check for new parent registration and show welcome guidance
+  useEffect(() => {
+    const newRegistrationData = sessionStorage.getItem('newParentRegistration');
+    if (newRegistrationData) {
+      try {
+        const registrationInfo = JSON.parse(newRegistrationData);
+        if (registrationInfo.registrationCompleted) {
+          toast({
+            title: "Welcome to the ASA Learning Platform!",
+            description: `Registration successful for ${registrationInfo.schoolName || 'your school'}. Next step: Register your children to start enrolling in classes.`,
+          });
+          
+          // Clear the registration flag
+          sessionStorage.removeItem('newParentRegistration');
+          
+          // Optionally show the children tab after a delay
+          setTimeout(() => {
+            setActiveTab("children");
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('Error parsing registration data:', error);
+        sessionStorage.removeItem('newParentRegistration');
+      }
+    }
+  }, [toast]);
+
   // Fetch children data from authenticated parent endpoint
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
     queryKey: ["/api/parent/children"],
