@@ -127,7 +127,7 @@ import RoleSelectionComponent from "@/components/RoleSelection";
 import EducatorDashboard from "./components/dashboards/EducatorDashboard";
 import AppShell from "./components/layout/AppShell";
 import AIStatusPanel from "./components/AIStatusPanel";
-import { AllSchoolsPage } from "./pages/superadmin/AllSchoolsPage";
+import AllSchoolsPage from "./pages/superadmin/AllSchoolsPage";
 import { SchoolDetailsPage } from "./pages/superadmin/SchoolDetailsPage";
 import { SchoolEditPage as SuperAdminSchoolEditPage } from "./pages/superadmin/SchoolEditPage";
 import { InvitationsPage } from "./pages/superadmin/InvitationsPage";
