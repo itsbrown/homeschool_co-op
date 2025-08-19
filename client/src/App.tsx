@@ -429,7 +429,7 @@ function Router() {
       <Route path="/programs/browse" component={ProgramsBrowseRedirect} />
 
       {/* Educator routes */}
-      <Route path="/educator" component={() => <DashboardLayout><EducatorDashboard /></DashboardLayout>} />
+      <Route path="/educator" component={() => <AppShell><EducatorDashboard /></AppShell>} />
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/view" component={ChildrenViewPage} />
       <Route path="/children/register" component={ChildRegistrationPage} />

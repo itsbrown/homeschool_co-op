@@ -10,8 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus, Mail, Trash2, RefreshCw } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
-import { apiRequest } from "@/lib/api";
+import AppShell from "@/components/layout/AppShell";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export function InvitationsPage() {
@@ -240,3 +240,5 @@ export function InvitationsPage() {
     </AppShell>
   );
 }
+
+export default InvitationsPage;
