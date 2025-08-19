@@ -293,32 +293,6 @@
     "emergencyPhone": null,
     "createdAt": "2025-08-14T03:07:19.803Z",
     "updatedAt": "2025-08-14T03:07:19.803Z",
-    "id": 13,
-    "birthDate": "2025-08-17T19:47:52.041Z"
-  },
-  {
-    "firstName": "Testng",
-    "lastName": "child",
-    "birthdate": "2016-04-23",
-    "gradeLevel": "4th Grade",
-    "gender": null,
-    "parentEmail": "tester@testing123.com",
-    "parent_email": "tester@testing123.com",
-    "parentPhone": null,
-    "interests": [
-      "art",
-      "music"
-    ],
-    "learningStyle": "kinesthetic",
-    "specialNeeds": null,
-    "allergies": "peanuts",
-    "medicalInfo": null,
-    "school": null,
-    "profileImage": null,
-    "emergencyContact": null,
-    "emergencyPhone": null,
-    "createdAt": "2025-08-17T20:00:30.692Z",
-    "updatedAt": "2025-08-17T20:00:30.692Z",
-    "id": 14
+    "id": 13
   }
 ]
