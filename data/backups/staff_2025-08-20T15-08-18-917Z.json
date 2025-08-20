@@ -94,21 +94,5 @@
     "subjects": [],
     "invitedAt": "2025-08-20T15:07:26.054Z",
     "message": "Welcome to our team!"
-  },
-  {
-    "id": 6,
-    "email": "test-invite@example.com",
-    "firstName": "Test",
-    "lastName": "User",
-    "name": "Test User",
-    "role": "Teacher",
-    "department": "Elementary Education",
-    "status": "Pending",
-    "joinDate": "2025-08-20",
-    "avatar": "",
-    "phone": "",
-    "subjects": [],
-    "invitedAt": "2025-08-20T15:08:25.649Z",
-    "message": "Welcome to our team!"
   }
 ]

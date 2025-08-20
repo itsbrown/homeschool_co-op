@@ -78,37 +78,5 @@
     "acceptedAt": "2025-01-13T15:05:00.000Z",
     "createdAt": "2025-01-13T15:05:00.000Z",
     "updatedAt": "2025-01-13T15:05:00.000Z"
-  },
-  {
-    "id": 5,
-    "email": "test-staff@example.com",
-    "firstName": "Test",
-    "lastName": "Staff",
-    "name": "Test Staff",
-    "role": "Teacher",
-    "department": "Elementary Education",
-    "status": "Pending",
-    "joinDate": "2025-08-20",
-    "avatar": "",
-    "phone": "",
-    "subjects": [],
-    "invitedAt": "2025-08-20T15:07:26.054Z",
-    "message": "Welcome to our team!"
-  },
-  {
-    "id": 6,
-    "email": "test-invite@example.com",
-    "firstName": "Test",
-    "lastName": "User",
-    "name": "Test User",
-    "role": "Teacher",
-    "department": "Elementary Education",
-    "status": "Pending",
-    "joinDate": "2025-08-20",
-    "avatar": "",
-    "phone": "",
-    "subjects": [],
-    "invitedAt": "2025-08-20T15:08:25.649Z",
-    "message": "Welcome to our team!"
   }
 ]
