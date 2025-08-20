@@ -16,15 +16,20 @@ if (process.env.BREVO_API_KEY) {
   console.warn('⚠️ BREVO_API_KEY not found - staff invitation emails will not be sent');
 }
 
+// Generate a random token for invitations
+function generateInvitationToken(): string {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
 // Send staff invitation email
-async function sendStaffInvitationEmail(email: string, firstName: string, lastName: string, role: string, department: string, message?: string): Promise<boolean> {
+async function sendStaffInvitationEmail(email: string, firstName: string, lastName: string, role: string, department: string, token: string, message?: string): Promise<boolean> {
   try {
     if (!brevoApiInstance) {
       console.log('📧 Brevo not configured, skipping email send');
       return false;
     }
 
-    const invitationUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/accept-invitation`;
+    const invitationUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/accept-invitation?token=${token}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -774,6 +779,7 @@ router.put("/classes/:id", async (req, res) => {
 
 // Staff file management functions
 const STAFF_FILE = path.join(process.cwd(), 'data', 'staff.json');
+const STAFF_INVITATIONS_FILE = path.join(process.cwd(), 'data', 'staff-invitations.json');
 
 function loadStaffMembers() {
   try {
@@ -785,6 +791,31 @@ function loadStaffMembers() {
     console.log('Error loading staff members:', error);
   }
   return [];
+}
+
+function loadStaffInvitations() {
+  try {
+    if (fs.existsSync(STAFF_INVITATIONS_FILE)) {
+      const data = fs.readFileSync(STAFF_INVITATIONS_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.log('Error loading staff invitations:', error);
+  }
+  return [];
+}
+
+function saveStaffInvitations(invitations: any[]) {
+  try {
+    const dataDir = path.dirname(STAFF_INVITATIONS_FILE);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(STAFF_INVITATIONS_FILE, JSON.stringify(invitations, null, 2));
+    console.log('Staff invitations saved successfully');
+  } catch (error) {
+    console.error('Error saving staff invitations:', error);
+  }
 }
 
 function saveStaffMembers(staff: any[]) {
@@ -909,6 +940,29 @@ router.post("/staff/invite", async (req, res) => {
       console.log("Database operation failed, using file storage fallback:", dbError);
     }
 
+    // Generate invitation token
+    const invitationToken = generateInvitationToken();
+    
+    // Store invitation for validation
+    const invitations = loadStaffInvitations();
+    const newInvitation = {
+      id: Math.max(0, ...invitations.map(i => i.id || 0)) + 1,
+      token: invitationToken,
+      email,
+      firstName,
+      lastName,
+      role,
+      department,
+      message: message || "",
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+      acceptedAt: null
+    };
+    
+    invitations.push(newInvitation);
+    saveStaffInvitations(invitations);
+
     // Fallback to file storage
     const newStaffMember = {
       id: Math.max(0, ...staffMembers.map(s => s.id || 0)) + 1,
@@ -924,7 +978,8 @@ router.post("/staff/invite", async (req, res) => {
       phone: "",
       subjects: [],
       invitedAt: new Date().toISOString(),
-      message: message || ""
+      message: message || "",
+      invitationToken: invitationToken
     };
 
     staffMembers.push(newStaffMember);
@@ -933,8 +988,8 @@ router.post("/staff/invite", async (req, res) => {
     console.log("✅ New staff member invited successfully (file storage):", newStaffMember);
     console.log("📋 Updated staff members count:", staffMembers.length);
 
-    // Send invitation email
-    const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, message);
+    // Send invitation email with token
+    const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message);
 
     res.json({ 
       success: true, 
@@ -1966,6 +2021,101 @@ router.get("/metrics/staff", async (req, res) => {
   } catch (error) {
     console.error('❌ Error calculating staff metrics:', error);
     res.status(500).json({ message: "Error calculating staff metrics" });
+  }
+});
+
+// Validate staff invitation token
+router.get("/staff-invitations/validate", async (req, res) => {
+  try {
+    const { token } = req.query;
+    
+    if (!token) {
+      return res.status(400).json({ 
+        valid: false, 
+        message: "Token is required" 
+      });
+    }
+
+    const invitations = loadStaffInvitations();
+    const invitation = invitations.find(inv => 
+      inv.token === token && 
+      inv.isActive && 
+      !inv.acceptedAt &&
+      new Date(inv.expiresAt) > new Date()
+    );
+
+    if (!invitation) {
+      return res.status(404).json({ 
+        valid: false, 
+        message: "Invalid or expired invitation token" 
+      });
+    }
+
+    res.json({
+      valid: true,
+      invitation: {
+        email: invitation.email,
+        firstName: invitation.firstName,
+        lastName: invitation.lastName,
+        role: invitation.role,
+        department: invitation.department,
+        message: invitation.message,
+        createdAt: invitation.createdAt
+      }
+    });
+  } catch (error) {
+    console.error("Error validating staff invitation:", error);
+    res.status(500).json({ 
+      valid: false, 
+      message: "Error validating invitation" 
+    });
+  }
+});
+
+// Accept staff invitation
+router.post("/staff-invitations/accept", async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({ message: "Token is required" });
+    }
+
+    const invitations = loadStaffInvitations();
+    const invitationIndex = invitations.findIndex(inv => 
+      inv.token === token && 
+      inv.isActive && 
+      !inv.acceptedAt &&
+      new Date(inv.expiresAt) > new Date()
+    );
+
+    if (invitationIndex === -1) {
+      return res.status(404).json({ message: "Invalid or expired invitation token" });
+    }
+
+    const invitation = invitations[invitationIndex];
+    
+    // Mark invitation as accepted
+    invitations[invitationIndex].acceptedAt = new Date().toISOString();
+    invitations[invitationIndex].isActive = false;
+    saveStaffInvitations(invitations);
+
+    // Update staff member status
+    const staffMembers = loadStaffMembers();
+    const staffIndex = staffMembers.findIndex(s => s.email === invitation.email);
+    if (staffIndex !== -1) {
+      staffMembers[staffIndex].status = "Active";
+      saveStaffMembers(staffMembers);
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Invitation accepted successfully",
+      redirect: "/login" 
+    });
+  } catch (error) {
+    console.error("Error accepting staff invitation:", error);
+    res.status(500).json({ message: "Error accepting invitation" });
   }
 });
 

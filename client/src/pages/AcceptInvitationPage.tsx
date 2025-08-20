@@ -33,21 +33,47 @@ export default function AcceptInvitationPage() {
       return;
     }
 
-    // Validate invitation token
-    fetch(`/api/admin/role-invitations/validate?token=${token}`)
-      .then(res => res.json())
-      .then(data => {
+    // Try to validate as staff invitation first, then fallback to role invitation
+    const tryValidateStaffInvitation = async () => {
+      try {
+        const response = await fetch(`/api/school-admin/staff-invitations/validate?token=${token}`);
+        const data = await response.json();
         if (data.valid) {
           setInvitation(data.invitation);
-        } else {
-          setError(data.message || "Invalid or expired invitation");
+          return true;
         }
-      })
-      .catch(err => {
-        console.error("Error validating invitation:", err);
-        setError("Failed to validate invitation");
-      })
-      .finally(() => setLoading(false));
+      } catch (err) {
+        console.log("Staff invitation validation failed, trying role invitation");
+      }
+      return false;
+    };
+
+    const tryValidateRoleInvitation = async () => {
+      try {
+        const response = await fetch(`/api/admin/role-invitations/validate?token=${token}`);
+        const data = await response.json();
+        if (data.valid) {
+          setInvitation(data.invitation);
+          return true;
+        }
+      } catch (err) {
+        console.log("Role invitation validation failed");
+      }
+      return false;
+    };
+
+    const validateInvitation = async () => {
+      const isStaffInvitation = await tryValidateStaffInvitation();
+      if (!isStaffInvitation) {
+        const isRoleInvitation = await tryValidateRoleInvitation();
+        if (!isRoleInvitation) {
+          setError("Invalid or expired invitation token");
+        }
+      }
+      setLoading(false);
+    };
+
+    validateInvitation();
   }, [token]);
 
   const handleAcceptInvitation = async () => {
@@ -55,13 +81,25 @@ export default function AcceptInvitationPage() {
     
     setAccepting(true);
     try {
-      const response = await fetch(`/api/admin/role-invitations/accept`, {
+      // Try staff invitation first
+      let response = await fetch(`/api/school-admin/staff-invitations/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ token }),
       });
+
+      // If staff invitation fails, try role invitation
+      if (!response.ok) {
+        response = await fetch(`/api/admin/role-invitations/accept`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token }),
+        });
+      }
 
       const data = await response.json();
       
