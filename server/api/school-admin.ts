@@ -922,8 +922,31 @@ router.post("/staff/invite", async (req, res) => {
               message: message || ""
             };
 
-            // Send invitation email
-            const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, message);
+            // Generate invitation token
+            const dbInvitationToken = generateInvitationToken();
+            
+            // Store invitation for validation
+            const dbInvitations = loadStaffInvitations();
+            const dbNewInvitation = {
+              id: Math.max(0, ...dbInvitations.map(i => i.id || 0)) + 1,
+              token: dbInvitationToken,
+              email,
+              firstName,
+              lastName,
+              role,
+              department,
+              message: message || "",
+              isActive: true,
+              createdAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+              acceptedAt: null
+            };
+            
+            dbInvitations.push(dbNewInvitation);
+            saveStaffInvitations(dbInvitations);
+
+            // Send invitation email with token
+            const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, dbInvitationToken, message);
 
             return res.json({ 
               success: true, 

@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "token": "jlh2vn84i9oz3nbfyyry6q",
+    "email": "token-fix-test@example.com",
+    "firstName": "TokenFix",
+    "lastName": "Test",
+    "role": "Teacher",
+    "department": "Mathematics",
+    "message": "Testing the fixed token system",
+    "isActive": false,
+    "createdAt": "2025-08-20T15:22:39.920Z",
+    "expiresAt": "2025-08-27T15:22:39.920Z",
+    "acceptedAt": "2025-08-20T15:23:03.291Z"
+  }
+]
