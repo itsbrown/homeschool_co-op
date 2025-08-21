@@ -13,6 +13,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useCart } from '@/contexts/CartContext';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
@@ -48,6 +49,102 @@ interface PaymentHistoryItem {
     price: number;
     amountPaid: number;
   }>;
+}
+
+function PaymentHistoryTab() {
+  const { data: paymentHistory = [], isLoading: historyLoading } = useQuery<PaymentHistoryItem[]>({
+    queryKey: ['payment-history'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/payment-history/history');
+      const data = await response.json();
+      return data.success ? data.payments : [];
+    },
+    enabled: true,
+  });
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount / 100);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  if (historyLoading) {
+    return (
+      <div className="flex items-center justify-center h-[200px]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading payment history...</span>
+      </div>
+    );
+  }
+
+  if (paymentHistory.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No payment records found</h3>
+        <p className="text-gray-500">Payment history will appear here once you make your first payment.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold">Payment History</h2>
+        <p className="text-muted-foreground">View and manage all your payments</p>
+      </div>
+
+      <div className="space-y-4">
+        {paymentHistory.map((payment) => (
+          <Card key={payment.id} className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <h3 className="font-medium">{payment.description || 'Payment'}</h3>
+                  <Badge 
+                    variant={payment.status === 'succeeded' ? 'default' : 
+                            payment.status === 'pending' ? 'secondary' : 'destructive'}
+                  >
+                    {payment.status}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {formatDate(payment.createdAt)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Transaction ID: {payment.stripePaymentIntentId}
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-semibold">
+                  {formatCurrency(payment.amount)}
+                </div>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UpcomingPaymentsTab() {
+  return (
+    <div className="text-center py-12">
+      <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+      <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming payments</h3>
+      <p className="text-gray-500">Scheduled payment reminders will appear here.</p>
+    </div>
+  );
 }
 
 
@@ -684,11 +781,20 @@ export default function BillingPage() {
     <ParentAppShell>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Billing & Payments</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Payments</h1>
           <p className="text-muted-foreground">
-            View and pay your outstanding balances
+            View and manage payments for your children's programs and classes
           </p>
         </div>
+
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="history">All Payments</TabsTrigger>
+            <TabsTrigger value="upcoming">Upcoming Payments</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview" className="space-y-6">
 
         {!billingSummary || billingSummary.totalBalance === 0 ? (
           <Alert className="border-green-200 bg-green-50">
@@ -1009,6 +1115,16 @@ export default function BillingPage() {
             )}
           </div>
         )}
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            <PaymentHistoryTab />
+          </TabsContent>
+
+          <TabsContent value="upcoming" className="space-y-6">
+            <UpcomingPaymentsTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </ParentAppShell>
   );

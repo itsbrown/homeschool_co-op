@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 
 export interface CartItem {
   id: string;
@@ -323,24 +325,48 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('asa_cart', JSON.stringify(state.cart));
   }, [state.cart]);
 
-  const addItem = (item: Omit<CartItem, 'id'>) => {
+  const addItem = async (item: Omit<CartItem, 'id'>) => {
     const newItem: CartItem = {
       ...item,
       id: `${item.classId}-${item.childId}-${Date.now()}`,
     };
 
-    // Check if item already exists
-    const exists = state.cart.items.some(
+    // Check if item already exists in cart
+    const existsInCart = state.cart.items.some(
       cartItem => cartItem.classId === item.classId && cartItem.childId === item.childId
     );
 
-    if (exists) {
+    if (existsInCart) {
       toast({
         title: "Already in Cart",
-        description: `${item.childName} is already enrolled in ${item.className}`,
+        description: `${item.className} for ${item.childName} is already in your cart`,
         variant: "destructive",
       });
       return;
+    }
+
+    // Check if user is already enrolled in this class
+    try {
+      const response = await apiRequest('GET', '/api/enrollments');
+      if (response.ok) {
+        const enrollments = await response.json();
+        const isEnrolled = enrollments.some((enrollment: any) => 
+          enrollment.classId === item.classId && 
+          enrollment.childId === item.childId &&
+          enrollment.status === 'enrolled'
+        );
+
+        if (isEnrolled) {
+          toast({
+            title: "Already Enrolled",
+            description: `${item.childName} is already enrolled in ${item.className}`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      console.log('Could not check enrollment status, proceeding with cart add');
     }
 
     dispatch({ type: 'ADD_ITEM', payload: newItem });

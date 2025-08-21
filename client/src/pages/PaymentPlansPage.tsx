@@ -1,32 +1,62 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, CreditCard, Clock, Star } from "lucide-react";
+import { Check, CreditCard, Clock, Star, Calendar, User, DollarSign, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import ParentAppShell from "@/components/layout/ParentAppShell";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-interface PaymentPlan {
-  id: string;
-  name: string;
-  description: string;
+interface BillingSummary {
+  totalBalance: number;
+  totalBalanceFormatted: string;
+  enrollmentCount: number;
+  enrollmentDetails: Array<{
+    enrollmentId: number;
+    childName: string;
+    className: string;
+    classPrice: number;
+    amountPaid: number;
+    balance: number;
+    enrollmentDate: string;
+    status: string;
+    depositRequired: number;
+  }>;
+  parentEmail: string;
+}
+
+interface PaymentHistory {
+  id: number;
   amount: number;
-  popular?: boolean;
-  features: string[];
-  billingCycle: string;
-  setupFee?: number;
+  status: string;
+  createdAt: string;
+  paymentPlan: string | null;
+  nextPaymentDate: string | null;
+  description: string;
 }
 
 export default function PaymentPlansPage() {
   const [, navigate] = useLocation();
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
-  // Get billing summary to check for outstanding balances
-  const { data: billingSummary } = useQuery({
+  // Get billing summary and payment history
+  const { data: billingSummary, isLoading: billingSummaryLoading } = useQuery<BillingSummary>({
     queryKey: ['billing-summary'],
-    queryFn: () => apiRequest('GET', '/api/billing/summary'),
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/billing/summary');
+      const data = await response.json();
+      return data;
+    },
+  });
+
+  const { data: paymentHistory = [], isLoading: historyLoading } = useQuery<PaymentHistory[]>({
+    queryKey: ['payment-history'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/payment-history/history');
+      const data = await response.json();
+      return data.success ? data.payments : [];
+    },
   });
 
   const formatCurrency = (amount: number) => {
@@ -36,229 +66,283 @@ export default function PaymentPlansPage() {
     }).format(amount / 100);
   };
 
-  // Standard payment plans for class enrollments
-  const paymentPlans: PaymentPlan[] = [
-    {
-      id: "deposit_only",
-      name: "Deposit Payment",
-      description: "Pay 10% deposit to secure enrollment",
-      amount: 0, // Will be calculated based on class
-      popular: true,
-      billingCycle: "One-time",
-      features: [
-        "Immediate enrollment confirmation",
-        "Secure your child's spot",
-        "Remaining balance due before class starts",
-        "Full refund if cancelled 30 days before",
-        "Payment reminder emails"
-      ]
-    },
-    {
-      id: "full_payment",
-      name: "Pay in Full",
-      description: "Complete payment for entire class cost",
-      amount: 0, // Will be calculated based on class
-      billingCycle: "One-time",
-      features: [
-        "No future payment worries",
-        "Priority class placement",
-        "Small discount on total cost",
-        "Full refund if cancelled 30 days before",
-        "No payment reminders needed"
-      ]
-    },
-    {
-      id: "split_payment",
-      name: "Split Payment Plan",
-      description: "Pay 50% now, 50% in 30 days",
-      amount: 0, // Will be calculated based on class
-      billingCycle: "2 payments",
-      features: [
-        "Spread cost over 2 months",
-        "Automatic payment reminders",
-        "No additional fees",
-        "Flexible payment scheduling"
-      ]
-    },
-    {
-      id: "monthly_plan",
-      name: "Monthly Installments",
-      description: "Pay in 3 monthly installments",
-      amount: 0, // Will be calculated based on class
-      billingCycle: "3 payments",
-      features: [
-        "Lowest monthly payment",
-        "Automatic billing setup",
-        "Payment flexibility",
-        "Budget-friendly option"
-      ]
-    }
-  ];
-
-  const handleSelectPlan = (planId: string) => {
-    setSelectedPlan(planId);
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
   };
 
-  const handleProceedToPayment = () => {
-    if (!selectedPlan) return;
-
-    // Check if user has outstanding balances
-    if (billingSummary?.enrollmentDetails?.length > 0) {
-      // Redirect to billing page to pay outstanding balances
-      navigate('/billing');
-    } else {
-      // Redirect to programs page to select classes first
-      navigate('/programs');
-    }
-  };
-
-  const handlePayOutstandingBalance = () => {
-    navigate('/billing');
-  };
+  // Get active payment plans (enrollments with remaining balances)
+  const activePaymentPlans = billingSummary?.enrollmentDetails?.filter(detail => detail.balance > 0) || [];
+  
+  // Check if user has any active payment plans
+  const hasActivePaymentPlans = activePaymentPlans.length > 0;
+  
+  // Get recent payments with payment plans
+  const recentPaymentPlans = paymentHistory?.filter(payment => 
+    payment.paymentPlan && payment.nextPaymentDate
+  ) || [];
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4">Payment Plans</h1>
-        <p className="text-gray-600 mb-6">
-          Choose the payment option that works best for your family's budget
-        </p>
+    <ParentAppShell>
+      <div className="container mx-auto p-6 max-w-6xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-4">Payment Plans</h1>
+          <p className="text-gray-600 mb-6">
+            Manage your active payment plans and view payment schedules
+          </p>
+        </div>
 
-        {/* Outstanding Balance Alert */}
-        {billingSummary?.totalBalance > 0 && (
-          <Card className="bg-yellow-50 border-yellow-200 mb-6">
-            <CardHeader>
-              <CardTitle className="text-yellow-900 flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Outstanding Balance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-yellow-800 mb-4">
-                You have an outstanding balance of {billingSummary.totalBalanceFormatted} for {billingSummary.enrollmentCount} enrollment(s).
-              </p>
-              <Button 
-                onClick={handlePayOutstandingBalance}
-                className="bg-yellow-600 hover:bg-yellow-700"
-              >
-                Pay Outstanding Balance
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+        <Tabs defaultValue="active" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="active">Active Plans</TabsTrigger>
+            <TabsTrigger value="history">Payment History</TabsTrigger>
+            <TabsTrigger value="options">Plan Options</TabsTrigger>
+          </TabsList>
 
-      {/* Payment Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {paymentPlans.map((plan) => (
-          <Card 
-            key={plan.id} 
-            className={`relative cursor-pointer transition-all duration-200 ${
-              selectedPlan === plan.id 
-                ? 'ring-2 ring-blue-500 shadow-lg' 
-                : 'hover:shadow-md'
-            } ${plan.popular ? 'border-blue-200' : ''}`}
-            onClick={() => handleSelectPlan(plan.id)}
-          >
-            {plan.popular && (
-              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                <Badge className="bg-blue-600 text-white">
-                  <Star className="h-3 w-3 mr-1" />
-                  Most Popular
-                </Badge>
+          <TabsContent value="active" className="space-y-6">
+            {hasActivePaymentPlans ? (
+              <div className="space-y-6">
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold mb-2">Active Payment Plans</h2>
+                  <p className="text-gray-600">Your current enrollments with outstanding balances</p>
+                </div>
+
+                <div className="grid gap-4">
+                  {activePaymentPlans.map((plan) => (
+                    <Card key={plan.enrollmentId} className="border-l-4 border-l-orange-500">
+                      <CardContent className="pt-6">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-2">
+                            <h3 className="font-medium text-lg">{plan.className}</h3>
+                            <div className="flex items-center gap-4 text-sm text-gray-600">
+                              <span className="flex items-center gap-1">
+                                <User className="h-4 w-4" />
+                                {plan.childName}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                Enrolled {formatDate(plan.enrollmentDate)}
+                              </span>
+                            </div>
+                            
+                            <div className="pt-2 space-y-1">
+                              <div className="text-sm">
+                                <span className="text-gray-600">Total Cost:</span> 
+                                <span className="ml-2 font-medium">{formatCurrency(plan.classPrice)}</span>
+                              </div>
+                              <div className="text-sm">
+                                <span className="text-gray-600">Amount Paid:</span> 
+                                <span className="ml-2 font-medium text-green-600">{formatCurrency(plan.amountPaid)}</span>
+                              </div>
+                              <div className="text-sm">
+                                <span className="text-gray-600">Outstanding Balance:</span> 
+                                <span className="ml-2 font-bold text-orange-600">{formatCurrency(plan.balance)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <Button onClick={() => navigate('/billing')}>
+                            Make Payment
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-3">
+                      <DollarSign className="h-6 w-6 text-blue-600 mt-0.5" />
+                      <div>
+                        <h3 className="font-medium text-blue-900">Total Outstanding</h3>
+                        <p className="text-2xl font-bold text-blue-900 mt-1">
+                          {formatCurrency(activePaymentPlans.reduce((sum, plan) => sum + plan.balance, 0))}
+                        </p>
+                        <p className="text-sm text-blue-700 mt-2">
+                          Across {activePaymentPlans.length} enrollment{activePaymentPlans.length !== 1 ? 's' : ''}
+                        </p>
+                        <Button 
+                          className="mt-3" 
+                          onClick={() => navigate('/billing')}
+                        >
+                          Pay All Outstanding Balances
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Check className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">All Paid Up!</h3>
+                <p className="text-gray-500 mb-4">You have no active payment plans or outstanding balances.</p>
+                <Button onClick={() => navigate('/programs')}>
+                  Browse Programs
+                </Button>
               </div>
             )}
-            
-            <CardHeader className="text-center pt-6">
-              <CardTitle className="text-xl">{plan.name}</CardTitle>
-              <CardDescription>{plan.description}</CardDescription>
-              <div className="mt-4">
-                <div className="text-sm text-gray-500">{plan.billingCycle}</div>
-              </div>
-            </CardHeader>
-            
-            <CardContent>
-              <ul className="space-y-2">
-                {plan.features.map((feature, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>{feature}</span>
-                  </li>
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">Payment History</h2>
+              <p className="text-gray-600">View all your past payments and transactions</p>
+            </div>
+
+            {paymentHistory.length > 0 ? (
+              <div className="space-y-4">
+                {paymentHistory.map((payment) => (
+                  <Card key={payment.id}>
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium">{payment.description || 'Payment'}</h3>
+                            <Badge 
+                              variant={payment.status === 'succeeded' ? 'default' : 
+                                      payment.status === 'pending' ? 'secondary' : 'destructive'}
+                            >
+                              {payment.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            {formatDate(payment.createdAt)}
+                          </p>
+                          {payment.paymentPlan && (
+                            <p className="text-sm text-blue-600">
+                              Payment Plan: {payment.paymentPlan}
+                            </p>
+                          )}
+                          {payment.nextPaymentDate && (
+                            <p className="text-sm text-orange-600">
+                              Next Payment: {formatDate(payment.nextPaymentDate)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-semibold">
+                            {formatCurrency(payment.amount)}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
-              </ul>
-            </CardContent>
-            
-            <CardFooter className="pt-4">
-              <Button 
-                variant={selectedPlan === plan.id ? "default" : "outline"}
-                className="w-full"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSelectPlan(plan.id);
-                }}
-              >
-                {selectedPlan === plan.id ? "Selected" : "Select Plan"}
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
-      </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No payment history</h3>
+                <p className="text-gray-500">Payment records will appear here once you make your first payment.</p>
+              </div>
+            )}
+          </TabsContent>
 
-      {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-center">
-        <Button
-          size="lg"
-          onClick={handleProceedToPayment}
-          disabled={!selectedPlan}
-          className="min-w-[200px]"
-        >
-          <CreditCard className="h-5 w-5 mr-2" />
-          {billingSummary?.totalBalance > 0 
-            ? "Pay Outstanding Balance"
-            : "Browse Classes"
-          }
-        </Button>
-        
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => navigate('/programs')}
-          className="min-w-[200px]"
-        >
-          View Available Classes
-        </Button>
-      </div>
+          <TabsContent value="options" className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">Payment Plan Options</h2>
+              <p className="text-gray-600">Available payment plans for new enrollments</p>
+            </div>
 
-      {/* Info Section */}
-      <div className="mt-12 bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold mb-4">How Payment Plans Work</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h4 className="font-medium mb-2">Deposit Payment</h4>
-            <p className="text-sm text-gray-600">
-              Pay just 10% upfront to secure your child's enrollment. The remaining balance is due 2 weeks before the class starts.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-2">Full Payment</h4>
-            <p className="text-sm text-gray-600">
-              Pay the complete amount upfront and enjoy peace of mind with no future payments to worry about.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-2">Split Payment</h4>
-            <p className="text-sm text-gray-600">
-              Divide the cost into two equal payments - 50% now and 50% in 30 days with automatic reminders.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-2">Monthly Installments</h4>
-            <p className="text-sm text-gray-600">
-              Spread the cost over 3 months for the most budget-friendly option with automatic billing.
-            </p>
-          </div>
-        </div>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <Card className="border-blue-200 bg-blue-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-blue-600" />
+                    Deposit Payment
+                  </CardTitle>
+                  <CardDescription>Pay 10% deposit to secure enrollment</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Immediate enrollment confirmation
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Secure your child's spot
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Payment reminders for balance
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Split Payment
+                  </CardTitle>
+                  <CardDescription>Pay 50% now, 50% later</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Spread cost over 2 payments
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Automatic reminders
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      No additional fees
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Monthly Installments
+                  </CardTitle>
+                  <CardDescription>Pay in 3 monthly payments</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Lowest monthly payment
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Budget-friendly option
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Flexible scheduling
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <h3 className="font-medium text-green-900 mb-2">Ready to Enroll?</h3>
+                  <p className="text-green-700 mb-4">Browse our programs and classes to get started with a payment plan</p>
+                  <Button onClick={() => navigate('/programs')}>
+                    Browse Programs & Classes
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
-    </div>
+    </ParentAppShell>
   );
 }
