@@ -172,6 +172,16 @@ export const SupabaseLogin: React.FC = () => {
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign In'}
                 </Button>
+                
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setLocation('/forgot-password')}
+                    className="text-sm text-blue-600 hover:text-blue-500 underline"
+                  >
+                    Forgot your password?
+                  </button>
+                </div>
               </form>
             </TabsContent>
             
