@@ -82,7 +82,17 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                 <Menu className="h-6 w-6" />
               </Button>
 
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
+                {userSchool?.logo && (
+                  <img 
+                    src={userSchool.logo} 
+                    alt={`${userSchool.name} Logo`}
+                    className="h-6 w-6 object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                )}
                 <h1 className="text-xl font-semibold">
                   {userSchool ? userSchool.name : 'LearnSphere'}
                 </h1>

@@ -14,7 +14,8 @@ import {
   roleInvitations, type RoleInvitation, type InsertRoleInvitation,
   marketingLinks, type MarketingLink, type InsertMarketingLink,
   linkAnalytics, type LinkAnalytics, type InsertLinkAnalytics,
-  payments, type Payment, type InsertPayment
+  payments, type Payment, type InsertPayment,
+  schools, type School, type InsertSchool
 } from "@shared/schema";
 
 export interface IStorage {
@@ -32,6 +33,12 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
+
+  // School methods
+  getSchool(id: number): Promise<School | undefined>;
+  getSchoolByCode(registrationCode: string): Promise<School | undefined>;
+  createSchool(school: InsertSchool): Promise<School>;
+  updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined>;
 
   // Curriculum methods
   getCurriculum(id: number): Promise<Curriculum | undefined>;
@@ -178,6 +185,7 @@ export class MemStorage implements IStorage {
   private marketingLinksStore: Map<number, MarketingLink>;
   private linkAnalyticsStore: Map<number, LinkAnalytics>;
   private paymentsStore: Map<number, Payment>;
+  private schoolsStore: Map<number, School>;
 
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -194,6 +202,7 @@ export class MemStorage implements IStorage {
   private marketingLinkIdCounter: number;
   private linkAnalyticsIdCounter: number;
   private paymentIdCounter: number;
+  private schoolIdCounter: number;
   private classEnrollments: any[];
 
   constructor() {
@@ -212,6 +221,7 @@ export class MemStorage implements IStorage {
     this.marketingLinksStore = new Map();
     this.linkAnalyticsStore = new Map();
     this.paymentsStore = new Map();
+    this.schoolsStore = new Map();
     this.classEnrollments = [];
 
     this.userIdCounter = 1;
@@ -229,6 +239,7 @@ export class MemStorage implements IStorage {
     this.marketingLinkIdCounter = 1;
     this.linkAnalyticsIdCounter = 1;
     this.paymentIdCounter = 1;
+    this.schoolIdCounter = 1;
 
     // Initialize with a default admin user
 
@@ -344,6 +355,40 @@ export class MemStorage implements IStorage {
     const updatedUser: User = { ...existingUser, ...updateData };
     this.usersStore.set(id, updatedUser);
     return updatedUser;
+  }
+
+  // School methods
+  async getSchool(id: number): Promise<School | undefined> {
+    return this.schoolsStore.get(id);
+  }
+
+  async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
+    return Array.from(this.schoolsStore.values()).find(
+      school => school.registrationCode === registrationCode
+    );
+  }
+
+  async createSchool(schoolData: InsertSchool): Promise<School> {
+    const id = this.schoolIdCounter++;
+    const now = new Date();
+    const school: School = { ...schoolData, id, createdAt: now, updatedAt: now };
+    this.schoolsStore.set(id, school);
+    return school;
+  }
+
+  async updateSchool(id: number, updateData: Partial<InsertSchool>): Promise<School | undefined> {
+    const existingSchool = this.schoolsStore.get(id);
+    if (!existingSchool) {
+      return undefined;
+    }
+
+    const updatedSchool: School = { 
+      ...existingSchool, 
+      ...updateData,
+      updatedAt: new Date()
+    };
+    this.schoolsStore.set(id, updatedSchool);
+    return updatedSchool;
   }
 
   // Curriculum methods

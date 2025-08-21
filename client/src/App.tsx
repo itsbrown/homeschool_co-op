@@ -73,6 +73,7 @@ import ClassPaymentPlans from "@/pages/ClassPaymentPlans";
 import SettingsPage from "@/pages/SettingsPage";
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import SchoolSettings from './pages/SchoolSettings';
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -463,6 +464,7 @@ function Router() {
         )}
       </Route>
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/school-settings" component={SchoolSettings} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
 
       {/* Dashboard route */}

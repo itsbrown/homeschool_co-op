@@ -20,6 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
+import { useQuery } from "@tanstack/react-query";
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   items: {
@@ -128,6 +129,13 @@ export default function ParentSidebar() {
   const [location, setLocation] = useLocation();
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>({});
 
+  // Fetch user's associated school for branding
+  const { data: schoolData } = useQuery({
+    queryKey: ['/api/school-parents/school', user?.email],
+    enabled: !!user?.email,
+    staleTime: 300000, // Cache for 5 minutes
+  });
+
   const toggleExpanded = (section: string) => {
     setExpandedSections(prevState => ({
       ...prevState,
@@ -196,7 +204,23 @@ export default function ParentSidebar() {
                   href="/dashboard"
                   className="flex items-center gap-2 font-semibold"
                 >
-                  <span className="text-xl">LearnSphere</span>
+                  {schoolData?.success && schoolData?.school?.logo ? (
+                    <div className="flex items-center gap-2">
+                      <img 
+                        src={schoolData.school.logo} 
+                        alt={`${schoolData.school.name} Logo`}
+                        className="h-6 w-6 object-contain"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="text-lg">{schoolData.school.name}</span>
+                    </div>
+                  ) : schoolData?.success && schoolData?.school?.name ? (
+                    <span className="text-xl">{schoolData.school.name}</span>
+                  ) : (
+                    <span className="text-xl">LearnSphere</span>
+                  )}
                 </a>
                 <Button
                   variant="ghost"
@@ -250,7 +274,23 @@ export default function ParentSidebar() {
               href="/dashboard"
               className="flex items-center gap-2 font-semibold"
             >
-              <span className="text-xl">LearnSphere</span>
+              {schoolData?.success && schoolData?.school?.logo ? (
+                <div className="flex items-center gap-2">
+                  <img 
+                    src={schoolData.school.logo} 
+                    alt={`${schoolData.school.name} Logo`}
+                    className="h-8 w-8 object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xl">{schoolData.school.name}</span>
+                </div>
+              ) : schoolData?.success && schoolData?.school?.name ? (
+                <span className="text-xl">{schoolData.school.name}</span>
+              ) : (
+                <span className="text-xl">LearnSphere</span>
+              )}
             </a>
           </div>
 

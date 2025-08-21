@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,6 +23,13 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth0();
   const [location] = useLocation();
+
+  // Fetch user's associated school for branding
+  const { data: schoolData } = useQuery({
+    queryKey: ['/api/school-parents/school', user?.email],
+    enabled: !!user?.email,
+    staleTime: 300000, // Cache for 5 minutes
+  });
 
   const navigationItems = [
     { href: "/", label: "Dashboard", icon: Home },
@@ -42,7 +51,28 @@ export default function Layout({ children }: LayoutProps) {
       <div className="w-64 bg-white shadow-lg flex flex-col">
         {/* Logo */}
         <div className="p-6 border-b">
-          <h1 className="text-2xl font-bold text-gray-900">LearnSphere</h1>
+          {schoolData?.success && schoolData?.school?.logo ? (
+            <div className="flex items-center gap-3">
+              <img 
+                src={schoolData.school.logo} 
+                alt={`${schoolData.school.name} Logo`}
+                className="h-8 w-8 object-contain"
+                onError={(e) => {
+                  // Fallback to school name if logo fails to load
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling.style.display = 'block';
+                }}
+              />
+              <div style={{ display: 'none' }}>
+                <h1 className="text-xl font-bold text-gray-900">{schoolData.school.name}</h1>
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">{schoolData.school.name}</h1>
+            </div>
+          ) : schoolData?.success && schoolData?.school?.name ? (
+            <h1 className="text-2xl font-bold text-gray-900">{schoolData.school.name}</h1>
+          ) : (
+            <h1 className="text-2xl font-bold text-gray-900">LearnSphere</h1>
+          )}
         </div>
 
         {/* Navigation */}

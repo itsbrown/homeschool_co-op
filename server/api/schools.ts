@@ -5,6 +5,7 @@ import { insertSchoolSchema } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import fs from 'fs';
 import path from 'path';
+import uploadLogoRouter from './schools/upload-logo';
 
 const router = express.Router();
 
@@ -403,5 +404,8 @@ router.get("/:id/students", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
+// Mount the logo upload route
+router.use('/upload-logo', uploadLogoRouter);
 
 export default router;
