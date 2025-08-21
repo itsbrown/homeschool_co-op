@@ -5,6 +5,7 @@ import { storage } from "../storage";
 import { insertUserSchema } from "@shared/schema";
 import { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService";
 import { userStorage } from "../users-storage";
+import { supabaseAdmin } from "../db/supabase";
 
 const router = Router();
 
@@ -529,7 +530,35 @@ router.post("/forgot-password", async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const user = await storage.getUserByEmail(email);
+    // Check if user exists in Supabase first, fallback to file storage
+    let user = null;
+    
+    try {
+      // Try to get user from Supabase
+      const { data: supabaseUsers, error } = await supabaseAdmin.auth.admin.listUsers();
+      if (!error && supabaseUsers?.users) {
+        const supabaseUser = supabaseUsers.users.find((u: any) => u.email === email);
+        if (supabaseUser) {
+          user = {
+            id: supabaseUser.id,
+            email: supabaseUser.email,
+            name: `${supabaseUser.user_metadata?.firstName || ''} ${supabaseUser.user_metadata?.lastName || ''}`.trim()
+          };
+        }
+      }
+    } catch (supabaseError) {
+      console.log('Supabase user lookup failed, trying file storage...');
+    }
+    
+    // Fallback to file storage if not found in Supabase
+    if (!user) {
+      try {
+        user = await storage.getUserByEmail(email);
+      } catch (storageError) {
+        console.log('File storage lookup also failed');
+      }
+    }
+    
     if (!user) {
       // Don't reveal if the email exists or not for security
       return res.status(200).json({ 
@@ -557,15 +586,17 @@ router.post("/forgot-password", async (req, res) => {
 
     const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
 
-    // Send password reset email - mock for now
-    console.log(`[PASSWORD RESET] Email would be sent to: ${email}`);
-    console.log(`[PASSWORD RESET] Reset URL: ${resetUrl}`);
+    // Send password reset email via Brevo
+    const emailSent = await sendPasswordResetEmail(email, resetUrl);
+    
+    if (emailSent) {
+      console.log(`✅ Password reset email sent to: ${email}`);
+    } else {
+      console.log(`⚠️ Failed to send password reset email to: ${email}`);
+    }
 
     res.status(200).json({ 
-      message: "If your email is registered, you will receive a password reset link",
-      // For testing purposes, include the token in response (remove in production)
-      resetToken: resetToken,
-      resetUrl: resetUrl
+      message: "If your email is registered, you will receive a password reset link"
     });
   } catch (error) {
     console.error("Forgot password error:", error);
