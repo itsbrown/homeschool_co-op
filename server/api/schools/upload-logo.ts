@@ -1,52 +1,17 @@
 import express from 'express';
-import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { storage } from '../../storage';
+import { UploadedFile } from 'express-fileupload';
 
 const router = express.Router();
 
-// Configure multer for file uploads
-const logoStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'uploads', 'logos');
-    
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename with timestamp - schoolId will be available in main handler
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    cb(null, `school-logo-${timestamp}${ext}`);
-  }
-});
-
-const upload = multer({
-  storage: logoStorage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Check if file is an image
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'));
-    }
-  }
-});
-
 // Logo upload endpoint
-router.post('/', upload.single('logo'), async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     console.log('📋 Raw request body:', req.body);
     console.log('📋 All body keys:', Object.keys(req.body || {}));
-    console.log('📋 Multer file info:', req.file ? { filename: req.file.filename, size: req.file.size } : 'No file');
+    console.log('📋 Files object:', req.files);
     
     const { schoolId } = req.body;
     
@@ -55,38 +20,73 @@ router.post('/', upload.single('logo'), async (req, res) => {
     
     if (!schoolId || schoolId === '' || schoolId === 'undefined') {
       console.log('❌ Invalid school ID:', schoolId);
-      // Clean up uploaded file since we can't process it
-      if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-        console.log('🗑️ Cleaned up uploaded file due to missing schoolId');
-      }
       return res.status(400).json({ 
         success: false, 
         message: `School ID is required (received: "${schoolId}")` 
       });
     }
     
-    if (!req.file) {
+    // Check for uploaded file using express-fileupload
+    if (!req.files || !req.files.logo) {
       return res.status(400).json({ 
         success: false, 
         message: 'No file uploaded' 
       });
     }
     
+    const logoFile = req.files.logo as UploadedFile;
+    
+    console.log('📁 File info:', { 
+      name: logoFile.name, 
+      size: logoFile.size, 
+      mimetype: logoFile.mimetype 
+    });
+    
+    // Validate file type
+    if (!logoFile.mimetype.startsWith('image/')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only image files are allowed'
+      });
+    }
+    
+    // Validate file size (5MB limit)
+    if (logoFile.size > 5 * 1024 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: 'File too large. Maximum size is 5MB.'
+      });
+    }
+    
+    // Create uploads directory if it doesn't exist
+    const uploadDir = path.join(process.cwd(), 'uploads', 'logos');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    // Generate unique filename
+    const timestamp = Date.now();
+    const ext = path.extname(logoFile.name);
+    const filename = `school-logo-${timestamp}${ext}`;
+    const filepath = path.join(uploadDir, filename);
+    
+    // Save the file
+    await logoFile.mv(filepath);
+    
     // Generate the URL for the uploaded file
-    const logoUrl = `/uploads/logos/${req.file.filename}`;
+    const logoUrl = `/uploads/logos/${filename}`;
     
     const schoolIdNum = parseInt(schoolId);
     console.log('🖼️ Uploading logo for school:', schoolId, '(parsed as:', schoolIdNum, ')');
-    console.log('📁 File saved as:', req.file.filename);
+    console.log('📁 File saved as:', filename);
     console.log('🌐 Logo URL:', logoUrl);
     
     // Check if school exists first
     const existingSchool = await storage.getSchool(schoolIdNum);
     if (!existingSchool) {
       // Clean up uploaded file
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
+      if (fs.existsSync(filepath)) {
+        fs.unlinkSync(filepath);
       }
       console.log('❌ School not found with ID:', schoolIdNum);
       return res.status(404).json({
@@ -111,7 +111,7 @@ router.post('/', upload.single('logo'), async (req, res) => {
         });
       } else {
         // If storage update fails, clean up the uploaded file
-        fs.unlinkSync(req.file.path);
+        fs.unlinkSync(filepath);
         return res.status(500).json({
           success: false,
           message: 'Failed to update school in storage'
@@ -121,8 +121,8 @@ router.post('/', upload.single('logo'), async (req, res) => {
       console.error('Storage update failed:', storageError);
       
       // Clean up the uploaded file on error
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
+      if (fs.existsSync(filepath)) {
+        fs.unlinkSync(filepath);
       }
       
       return res.status(500).json({
@@ -133,18 +133,6 @@ router.post('/', upload.single('logo'), async (req, res) => {
     
   } catch (error: any) {
     console.error('Logo upload error:', error);
-    
-    // Clean up uploaded file if it exists
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        message: 'File too large. Maximum size is 5MB.'
-      });
-    }
     
     return res.status(500).json({
       success: false,
