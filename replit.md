@@ -31,6 +31,7 @@ Preferred communication style: Simple, everyday language.
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation.
 - **Staff Invitation System**: Complete automated staff onboarding with secure token-based invitations (7-day expiration), automatic Supabase account creation, temporary password generation, professional email notifications, and seamless resend functionality for individual and bulk operations.
+- **Staff Management**: Dynamic staff position management with school-specific roles, comprehensive staff editing with data persistence, and role synchronization between invitation and edit forms.
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, AI-powered content analysis and generation (e.g., coloring pages, worksheets).
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis and curriculum generation, Stability AI for image generation, and Hugging Face for text processing.
 - **Educational Tools**: Generators for professional coloring pages and various educational activities, curriculum/lesson plan creation, and student work analysis.

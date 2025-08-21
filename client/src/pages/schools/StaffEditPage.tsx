@@ -70,6 +70,22 @@ export default function StaffEditPage() {
     enabled: !!id,
   });
 
+  // Fetch staff positions
+  const { data: staffPositions } = useQuery({
+    queryKey: ['/api/school-admin/staff-positions'],
+    queryFn: async () => {
+      const response = await fetch('/api/school-admin/staff-positions', {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch staff positions');
+      }
+      
+      return await response.json();
+    },
+  });
+
   // Update form when data is loaded
   useEffect(() => {
     if (staffMember) {
@@ -233,11 +249,11 @@ export default function StaffEditPage() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="Teacher">Teacher</SelectItem>
-                                <SelectItem value="Administrator">Administrator</SelectItem>
-                                <SelectItem value="Principal">Principal</SelectItem>
-                                <SelectItem value="Counselor">Counselor</SelectItem>
-                                <SelectItem value="Support Staff">Support Staff</SelectItem>
+                                {staffPositions?.map((position: any) => (
+                                  <SelectItem key={position.id} value={position.title}>
+                                    {position.title}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             <FormMessage />
