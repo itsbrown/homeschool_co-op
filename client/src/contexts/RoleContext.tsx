@@ -35,9 +35,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [showRoleSelection, setShowRoleSelection] = useState<boolean>(false);
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
 
-  // Define which users can switch roles - hardcode for now since we know this user should have multi-role access
-  const multiRoleUsers = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
-  // For coreycreates@gmail.com, always enable role switching regardless of user object state
+  // For coreycreates@gmail.com, direct routing to school_admin without role switching
 
   const availableRoles = canSwitchRoles
     ? ['parent', 'school_admin', 'superAdmin']
@@ -45,14 +43,19 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   // Check if user has multiple roles and handle role selection
   const checkUserRoles = (user: any) => {
-    const multiRoleUsers = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
+    // Only corey@americanseekersacademy.com has multiple roles
+    // coreycreates@gmail.com should go directly to school_admin role
+    const multiRoleUsers = ['corey@americanseekersacademy.com'];
     return multiRoleUsers.includes(user?.email);
   };
   
-  // Special handling for superAdmin users
+  // Special handling for superAdmin users and school admins
   const getSuperAdminRole = (user: any) => {
     if (user?.email === 'corey@americanseekersacademy.com') {
       return 'superAdmin';
+    }
+    if (user?.email === 'coreycreates@gmail.com') {
+      return 'school_admin';
     }
     return user?.user_metadata?.role || 'parent';
   };
@@ -95,12 +98,17 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       const defaultRole = getSuperAdminRole(user);
       console.log(`🎯 Single role user - setting role: ${defaultRole} for ${user.email}`);
       
-      // Special handling for superAdmin users - ensure they get superAdmin role
+      // Special handling for specific users
       if (user.email === 'corey@americanseekersacademy.com') {
         console.log(`🔑 Forcing superAdmin role for: ${user.email}`);
         setActiveRole('superAdmin');
         localStorage.setItem('activeRole', 'superAdmin');
         setCanSwitchRoles(true); // Allow role switching for superAdmin
+      } else if (user.email === 'coreycreates@gmail.com') {
+        console.log(`🔑 Forcing school_admin role for: ${user.email}`);
+        setActiveRole('school_admin');
+        localStorage.setItem('activeRole', 'school_admin');
+        setCanSwitchRoles(false); // Direct to school admin, no role switching
       } else {
         setActiveRole(defaultRole);
         localStorage.setItem('activeRole', defaultRole);

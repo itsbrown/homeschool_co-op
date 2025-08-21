@@ -70,7 +70,7 @@ export default function StaffInvitePage() {
       email: "",
       firstName: "",
       lastName: "",
-      role: "",
+      role: "Mentor",
       department: "",
       message: "",
     },
