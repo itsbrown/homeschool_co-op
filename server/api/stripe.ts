@@ -143,8 +143,9 @@ router.post('/webhook', async (req, res) => {
   console.log('🔍 Webhook received:', {
     hasSignature: !!sig,
     hasEndpointSecret: !!endpointSecret,
+    bodyType: typeof req.body,
     bodyLength: req.body?.length || 0,
-    eventType: req.body ? 'body_present' : 'no_body',
+    isBuffer: Buffer.isBuffer(req.body),
     signaturePrefix: sig ? (typeof sig === 'string' ? sig.substring(0, 20) + '...' : 'array') : 'none',
     secretPrefix: endpointSecret ? endpointSecret.substring(0, 10) + '...' : 'none'
   });
@@ -154,12 +155,25 @@ router.post('/webhook', async (req, res) => {
     return res.status(400).json({ error: 'Missing signature or webhook secret' });
   }
 
+  // Ensure we have the raw body as string or buffer
+  let payload = req.body;
+  if (Buffer.isBuffer(payload)) {
+    payload = payload.toString('utf8');
+  }
+
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    event = stripe.webhooks.constructEvent(payload, sig, endpointSecret);
+    console.log('✅ Webhook signature verified successfully');
   } catch (err: any) {
     console.error('❌ Webhook signature verification failed:', err.message);
+    console.error('Debug info:', {
+      payloadType: typeof payload,
+      payloadLength: payload?.length,
+      signatureType: typeof sig,
+      secretExists: !!endpointSecret
+    });
     return res.status(400).json({ error: 'Invalid signature' });
   }
 
@@ -346,6 +360,74 @@ router.post('/webhook', async (req, res) => {
   }
 
   res.json({ received: true });
+});
+
+// Test endpoint to verify email service (temporary)
+router.post('/test-email', async (req, res) => {
+  try {
+    console.log('🧪 Starting email service test...');
+    console.log('🔧 Environment check:', {
+      hasBrevoSender: !!process.env.BREVO_SENDER_EMAIL,
+      senderEmail: process.env.BREVO_SENDER_EMAIL
+    });
+    
+    const { sendPaymentConfirmationEmail } = await import('../lib/email-service');
+    console.log('📧 Email service imported successfully');
+    
+    const testPayment = {
+      id: Date.now(),
+      stripePaymentIntentId: 'pi_test_' + Date.now(),
+      parentEmail: 'jocimarie@gmail.com',
+      childName: 'Test Child',
+      className: 'Test Class',
+      amount: 1400, // $14.00 in cents
+      currency: 'usd',
+      status: 'completed' as const,
+      metadata: {},
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const enrollmentDetails = [{
+      childName: 'Test Child',
+      className: 'Elementary Math Fundamentals',
+      price: 140,
+      amountPaid: 14,
+    }];
+
+    console.log('📤 Attempting to send test email to: jocimarie@gmail.com');
+    const emailSent = await sendPaymentConfirmationEmail({
+      parentEmail: 'jocimarie@gmail.com',
+      parentName: 'Test Parent',
+      payment: testPayment,
+      enrollmentDetails: enrollmentDetails,
+      paymentPlan: 'deposit',
+    });
+
+    console.log('✅ Test email function completed. Result:', emailSent);
+    
+    if (emailSent) {
+      console.log('🎉 EMAIL SERVICE WORKING! Check your email at jocimarie@gmail.com');
+    } else {
+      console.log('❌ Email service returned false - check Brevo configuration');
+    }
+    
+    res.json({ 
+      success: true, 
+      message: emailSent ? 'Test email sent successfully!' : 'Email service failed',
+      result: emailSent,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error: any) {
+    console.error('❌ Test email failed with error:', error);
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 export default router;

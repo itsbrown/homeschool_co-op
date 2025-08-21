@@ -22,7 +22,7 @@ import authRouter from "./api/auth";
 const app = express();
 
 // For Stripe webhooks, we need raw body data BEFORE other parsers
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }));
 
 // Increase the size limit to 50MB for file uploads
 app.use(express.json({ limit: '50mb' }));
