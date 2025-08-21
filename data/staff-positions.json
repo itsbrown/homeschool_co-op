@@ -46,11 +46,5 @@
     "title": "Librarian",
     "description": "Library management",
     "isDefault": false
-  },
-  {
-    "id": 9,
-    "title": "Mentor",
-    "description": "Student mentoring and guidance",
-    "isDefault": false
   }
 ]
