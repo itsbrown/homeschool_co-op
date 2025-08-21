@@ -14,9 +14,11 @@ export interface CartItem {
   endDate?: string;
   schedule?: string;
   status?: string;
+  statusText?: string; // Display-friendly payment status
   depositRequired?: number;
   amountPaid?: number;
   remainingBalance?: number;
+  totalCost?: number;
 }
 
 export interface Cart {
@@ -228,25 +230,50 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (response.ok) {
         const enrollments = await response.json();
         
-        // Filter unpaid enrollments (pending_payment status)
-        const unpaidEnrollments = enrollments.filter((enrollment: any) => 
-          enrollment.status === 'pending_payment'
-        );
+        // Filter enrollments that need payment or are in payment plans
+        const unpaidEnrollments = enrollments.filter((enrollment: any) => {
+          const status = enrollment.status;
+          return status === 'pending_payment' || 
+                 status === 'partially_paid' || 
+                 status === 'payment_plan_active' ||
+                 (status === 'enrolled' && enrollment.remainingBalance > 0);
+        });
         
-        // Convert enrollments to cart items
-        const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => ({
-          id: `enrollment-${enrollment.id}`,
-          enrollmentId: enrollment.id,
-          classId: enrollment.classId,
-          className: enrollment.className,
-          childId: enrollment.childId,
-          childName: enrollment.childName,
-          price: enrollment.remainingBalance || enrollment.totalCost || 0,
-          status: enrollment.status,
-          depositRequired: enrollment.depositRequired,
-          amountPaid: enrollment.amountPaid || 0,
-          remainingBalance: enrollment.remainingBalance,
-        }));
+        // Convert enrollments to cart items with enhanced status display
+        const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
+          const remainingBalance = enrollment.remainingBalance || enrollment.totalCost || 0;
+          const amountPaid = enrollment.amountPaid || 0;
+          
+          let displayStatus = enrollment.status;
+          let statusText = 'Payment Required';
+          
+          // Determine appropriate status text based on payment state
+          if (enrollment.status === 'partially_paid') {
+            statusText = 'Partially Paid';
+          } else if (enrollment.status === 'payment_plan_active') {
+            statusText = 'Payment Plan Active';
+          } else if (enrollment.status === 'enrolled' && remainingBalance > 0) {
+            statusText = 'Balance Due';
+          } else if (enrollment.status === 'pending_payment') {
+            statusText = 'Payment Required';
+          }
+          
+          return {
+            id: `enrollment-${enrollment.id}`,
+            enrollmentId: enrollment.id,
+            classId: enrollment.classId,
+            className: enrollment.className,
+            childId: enrollment.childId,
+            childName: enrollment.childName,
+            price: remainingBalance,
+            status: displayStatus,
+            statusText: statusText,
+            depositRequired: enrollment.depositRequired,
+            amountPaid: amountPaid,
+            remainingBalance: remainingBalance,
+            totalCost: enrollment.totalCost || 0,
+          };
+        });
         
         const totals = calculateCartTotals(cartItems);
         

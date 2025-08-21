@@ -81,9 +81,9 @@ export default function CartDrawer() {
                   <div className="flex-1">
                     <h4 className="font-medium">{item.className}</h4>
                     <p className="text-sm text-muted-foreground">{item.childName}</p>
-                    {item.status && (
+                    {(item.statusText || item.status) && (
                       <p className="text-xs text-orange-600 font-medium">
-                        {item.status === 'pending_payment' ? 'Payment Required' : item.status}
+                        {item.statusText || (item.status === 'pending_payment' ? 'Payment Required' : item.status)}
                       </p>
                     )}
                     {item.amountPaid > 0 && (
