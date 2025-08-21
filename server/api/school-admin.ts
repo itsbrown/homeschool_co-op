@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import fs from 'fs';
 import path from 'path';
 import * as brevo from '@getbrevo/brevo';
+import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
 
@@ -14,6 +15,150 @@ if (process.env.BREVO_API_KEY) {
   console.log('✅ Brevo initialized for staff invitations');
 } else {
   console.warn('⚠️ BREVO_API_KEY not found - staff invitation emails will not be sent');
+}
+
+// Initialize Supabase Admin Client
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
+
+// Generate a temporary password for new accounts
+function generateTemporaryPassword(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%';
+  let result = '';
+  for (let i = 0; i < 12; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Create Supabase account for staff member
+async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string }> {
+  try {
+    console.log(`👤 Creating Supabase account for: ${email}`);
+    
+    // Generate temporary password
+    const temporaryPassword = generateTemporaryPassword();
+    
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: temporaryPassword,
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        firstName,
+        lastName,
+        role,
+        department,
+        accountType: 'staff',
+        mustChangePassword: true,
+        createdViaInvitation: true
+      }
+    });
+
+    if (authError) {
+      console.error('❌ Error creating Supabase user:', authError);
+      return { success: false, error: authError.message };
+    }
+
+    console.log(`✅ Successfully created Supabase account for: ${email}`);
+    return { success: true, temporaryPassword };
+    
+  } catch (error) {
+    console.error('❌ Error creating staff account:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+// Send account credentials email
+async function sendAccountCredentialsEmail(email: string, firstName: string, lastName: string, temporaryPassword: string, role: string): Promise<boolean> {
+  try {
+    if (!brevoApiInstance) {
+      console.log('📧 Brevo not configured, skipping credentials email');
+      return false;
+    }
+
+    const loginUrl = `${process.env.CLIENT_URL || 'https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev'}/login`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #059669; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Account Created Successfully!</h1>
+          <p style="color: #A7F3D0; margin: 8px 0 0 0;">American Seekers Academy</p>
+        </div>
+
+        <div style="padding: 24px;">
+          <h2 style="color: #1F2937;">Welcome to the Team, ${firstName}!</h2>
+
+          <p>Your staff invitation has been accepted and your account is ready to use.</p>
+
+          <div style="background-color: #FEF3C7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F59E0B;">
+            <h3 style="margin: 0 0 12px 0; color: #92400E;">Your Login Credentials</h3>
+            <p style="margin: 8px 0;"><strong>Email:</strong> ${email}</p>
+            <p style="margin: 8px 0;"><strong>Temporary Password:</strong> <code style="background: #FFF; padding: 4px 8px; font-size: 14px; border-radius: 4px;">${temporaryPassword}</code></p>
+            <p style="margin: 8px 0;"><strong>Role:</strong> ${role}</p>
+          </div>
+
+          <div style="background-color: #FEE2E2; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; color: #DC2626;"><strong>Important:</strong> You will be required to change this password when you first log in for security reasons.</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${loginUrl}" 
+               style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               Login to Your Account
+            </a>
+          </div>
+
+          <p style="font-size: 14px; color: #6B7280;">
+            If you have any questions or need assistance, please contact us at support@americanseekersacademy.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    const textContent = `
+Welcome to American Seekers Academy!
+
+Dear ${firstName} ${lastName},
+
+Your staff invitation has been accepted and your account is ready to use.
+
+Login Credentials:
+Email: ${email}
+Temporary Password: ${temporaryPassword}
+Role: ${role}
+
+IMPORTANT: You will be required to change this password when you first log in for security reasons.
+
+Please visit: ${loginUrl}
+
+If you have any questions, please contact us at support@americanseekersacademy.com
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.subject = "Your Account is Ready - ASA Platform Access";
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+    sendSmtpEmail.sender = { name: "American Seekers Academy", email: "noreply@americanseekersacademy.com" };
+    sendSmtpEmail.to = [{ email, name: `${firstName} ${lastName}` }];
+
+    const response = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`✅ Account credentials email sent successfully via Brevo to: ${email}`);
+    console.log(`📧 Brevo Message ID: ${response.body.messageId}`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ Error sending credentials email:', error);
+    return false;
+  }
 }
 
 // Generate a random token for invitations
@@ -2181,7 +2326,7 @@ router.get("/staff-invitations/validate", async (req, res) => {
 // Accept staff invitation
 router.post("/staff-invitations/accept", async (req, res) => {
   try {
-    const { token, password } = req.body;
+    const { token } = req.body;
     
     if (!token) {
       return res.status(400).json({ message: "Token is required" });
@@ -2200,6 +2345,29 @@ router.post("/staff-invitations/accept", async (req, res) => {
     }
 
     const invitation = invitations[invitationIndex];
+    console.log(`📝 Processing invitation acceptance for: ${invitation.email}`);
+    
+    // Create Supabase account for the staff member
+    const accountResult = await createStaffAccount(
+      invitation.email, 
+      invitation.firstName, 
+      invitation.lastName, 
+      invitation.role, 
+      invitation.department
+    );
+
+    if (!accountResult.success) {
+      // Check if user already exists
+      if (accountResult.error?.includes('already registered')) {
+        console.log(`⚠️ User ${invitation.email} already has an account, proceeding with invitation acceptance`);
+      } else {
+        console.error(`❌ Failed to create account for ${invitation.email}:`, accountResult.error);
+        return res.status(500).json({ 
+          message: "Failed to create account. Please contact support.",
+          error: accountResult.error 
+        });
+      }
+    }
     
     // Mark invitation as accepted
     invitations[invitationIndex].acceptedAt = new Date().toISOString();
@@ -2214,9 +2382,29 @@ router.post("/staff-invitations/accept", async (req, res) => {
       saveStaffMembers(staffMembers);
     }
 
+    // Send account credentials email if account was created successfully
+    if (accountResult.success && accountResult.temporaryPassword) {
+      const credentialsEmailSent = await sendAccountCredentialsEmail(
+        invitation.email,
+        invitation.firstName,
+        invitation.lastName,
+        accountResult.temporaryPassword,
+        invitation.role
+      );
+      
+      if (credentialsEmailSent) {
+        console.log(`✅ Account created and credentials sent to: ${invitation.email}`);
+      } else {
+        console.log(`⚠️ Account created but credentials email failed for: ${invitation.email}`);
+      }
+    }
+
     res.json({ 
       success: true, 
-      message: "Invitation accepted successfully",
+      message: accountResult.success 
+        ? "Invitation accepted! Your account has been created and login credentials have been sent to your email."
+        : "Invitation accepted successfully. Please use your existing account to log in.",
+      accountCreated: accountResult.success,
       redirect: "/login" 
     });
   } catch (error) {

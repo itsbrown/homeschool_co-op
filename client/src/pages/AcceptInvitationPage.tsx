@@ -104,8 +104,17 @@ export default function AcceptInvitationPage() {
       const data = await response.json();
       
       if (response.ok) {
-        // Redirect to login/signup page with role information
-        setLocation('/login?invitation=accepted&role=' + invitation?.role);
+        // Show success message and redirect after delay
+        if (data.accountCreated) {
+          alert('Success! Your account has been created and login credentials have been sent to your email. Please check your inbox.');
+        } else {
+          alert('Invitation accepted! You can now log in with your existing account.');
+        }
+        
+        // Redirect to login page
+        setTimeout(() => {
+          setLocation('/login?invitation=accepted&role=' + invitation?.role);
+        }, 2000);
       } else {
         setError(data.message || "Failed to accept invitation");
       }

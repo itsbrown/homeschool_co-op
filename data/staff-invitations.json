@@ -92,10 +92,10 @@
     "role": "Teacher",
     "department": "Elementary Education",
     "message": "Welcome to our team!",
-    "isActive": true,
+    "isActive": false,
     "createdAt": "2025-08-21T13:07:07.446Z",
     "expiresAt": "2025-08-28T13:07:07.446Z",
-    "acceptedAt": null
+    "acceptedAt": "2025-08-21T13:12:36.364Z"
   },
   {
     "id": 8,
@@ -138,5 +138,19 @@
     "createdAt": "2025-08-21T13:07:08.197Z",
     "expiresAt": "2025-08-28T13:07:08.197Z",
     "acceptedAt": null
+  },
+  {
+    "id": 11,
+    "token": "vn567xwnqd4rdmghyvq7a",
+    "email": "test-auto-account@example.com",
+    "firstName": "Auto",
+    "lastName": "Test",
+    "role": "Teacher",
+    "department": "Technology",
+    "message": "Testing automatic account creation",
+    "isActive": false,
+    "createdAt": "2025-08-21T13:12:05.278Z",
+    "expiresAt": "2025-08-28T13:12:05.278Z",
+    "acceptedAt": "2025-08-21T13:12:10.222Z"
   }
 ]
