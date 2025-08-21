@@ -21,10 +21,14 @@ export async function apiRequest(
   const token = localStorage.getItem('supabase_token');
   const activeRole = localStorage.getItem('activeRole');
 
+  // Check if body is FormData to handle file uploads properly
+  const isFormData = body instanceof FormData;
+  
   const config: RequestInit = {
     method,
     headers: {
-      "Content-Type": "application/json",
+      // Don't set Content-Type for FormData - let browser set it with boundary
+      ...(!isFormData && { "Content-Type": "application/json" }),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...(activeRole && { 'X-Active-Role': activeRole }),
       ...options?.headers,
@@ -34,7 +38,8 @@ export async function apiRequest(
   };
 
   if (body) {
-    config.body = JSON.stringify(body);
+    // For FormData, use as-is; for other data, stringify as JSON
+    config.body = isFormData ? body : JSON.stringify(body);
   }
 
   // Use relative URL since frontend and backend run on same port

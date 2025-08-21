@@ -61,9 +61,21 @@ export default function SchoolSettings() {
       console.log('📋 FormData contents:');
       for (let [key, value] of formData.entries()) {
         console.log(`  ${key}:`, value);
+        if (key === 'schoolId') {
+          console.log(`  schoolId type: ${typeof value}, length: ${value.toString().length}`);
+        }
       }
       
+      // Verify FormData was built correctly
+      console.log('📋 FormData verification:');
+      console.log('  - Has logo file:', formData.has('logo'));
+      console.log('  - Has schoolId:', formData.has('schoolId'));
+      console.log('  - SchoolId value:', formData.get('schoolId'));
+      
+      console.log('🚀 Sending upload request with FormData...');
       const response = await apiRequest('POST', '/api/schools/upload-logo', formData);
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to upload logo');

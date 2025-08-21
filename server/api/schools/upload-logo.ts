@@ -19,11 +19,10 @@ const logoStorage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Generate unique filename with timestamp
+    // Generate unique filename with timestamp - schoolId will be available in main handler
     const timestamp = Date.now();
     const ext = path.extname(file.originalname);
-    const schoolId = req.body.schoolId || 'unknown';
-    cb(null, `school-${schoolId}-${timestamp}${ext}`);
+    cb(null, `school-logo-${timestamp}${ext}`);
   }
 });
 
@@ -45,15 +44,22 @@ const upload = multer({
 // Logo upload endpoint
 router.post('/', upload.single('logo'), async (req, res) => {
   try {
+    console.log('📋 Raw request body:', req.body);
+    console.log('📋 All body keys:', Object.keys(req.body || {}));
+    console.log('📋 Multer file info:', req.file ? { filename: req.file.filename, size: req.file.size } : 'No file');
+    
     const { schoolId } = req.body;
     
-    console.log('📋 Request body:', req.body);
-    console.log('📋 All body keys:', Object.keys(req.body));
     console.log('📋 School ID from body:', schoolId);
     console.log('📋 School ID type:', typeof schoolId);
     
     if (!schoolId || schoolId === '' || schoolId === 'undefined') {
       console.log('❌ Invalid school ID:', schoolId);
+      // Clean up uploaded file since we can't process it
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+        console.log('🗑️ Cleaned up uploaded file due to missing schoolId');
+      }
       return res.status(400).json({ 
         success: false, 
         message: `School ID is required (received: "${schoolId}")` 
