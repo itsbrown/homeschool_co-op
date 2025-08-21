@@ -81,14 +81,28 @@ router.post('/', async (req, res) => {
     console.log('📁 File saved as:', filename);
     console.log('🌐 Logo URL:', logoUrl);
     
-    // Check if school exists first
+    // Check if school exists first - with debugging
+    console.log('🔍 Looking up school with ID:', schoolIdNum);
+    console.log('🔍 Storage type:', storage.constructor.name);
+    
     const existingSchool = await storage.getSchool(schoolIdNum);
+    console.log('🔍 School lookup result:', existingSchool);
+    
     if (!existingSchool) {
       // Clean up uploaded file
       if (fs.existsSync(filepath)) {
         fs.unlinkSync(filepath);
       }
       console.log('❌ School not found with ID:', schoolIdNum);
+      
+      // Try to list all schools for debugging
+      try {
+        const allSchools = await storage.getAllSchools?.();
+        console.log('🔍 All available schools:', allSchools);
+      } catch (e) {
+        console.log('🔍 Could not list all schools:', e.message);
+      }
+      
       return res.status(404).json({
         success: false,
         message: `School not found with ID: ${schoolIdNum}`
