@@ -12,6 +12,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { apiRequest } from '@/lib/queryClient';
 import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
+import { useCart } from '@/contexts/CartContext';
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
@@ -272,6 +273,7 @@ function PaymentForm({
 export default function BillingPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const { clearCart } = useCart();
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<{[enrollmentId: number]: number}>({});
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('deposit_all');
@@ -951,9 +953,39 @@ export default function BillingPage() {
                       <PaymentForm 
                         enrollmentIds={selectedEnrollments} 
                         totalAmount={getPaymentPlanAmount()} 
-                        onPaymentSuccess={(details) => {
+                        onPaymentSuccess={async (details) => {
                           setPaymentSuccess(true);
                           setSuccessDetails(details);
+                          
+                          // Clear cart after successful billing payment
+                          clearCart();
+                          
+                          // Send confirmation email
+                          try {
+                            const token = localStorage.getItem('supabase_token');
+                            await fetch('/api/billing/confirm-payment', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                              },
+                              body: JSON.stringify({
+                                paymentIntentId: details.paymentIntentId,
+                                parentEmail: billingSummary?.parentEmail,
+                                enrollmentDetails: selectedEnrollments.map(id => {
+                                  const enrollment = billingSummary?.enrollmentDetails.find(e => e.enrollmentId === id);
+                                  return {
+                                    childName: enrollment?.childName || '',
+                                    className: enrollment?.className || '',
+                                    price: enrollment?.classPrice || 0,
+                                    amountPaid: details.amount
+                                  };
+                                })
+                              })
+                            });
+                          } catch (error) {
+                            console.error('Failed to send confirmation email:', error);
+                          }
                         }}
                       />
                     </Elements>
