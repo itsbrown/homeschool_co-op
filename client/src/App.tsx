@@ -65,11 +65,14 @@ import RegistrationSuccessPage from "@/pages/RegistrationSuccessPage";
 import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
+import AcceptEducatorInvitationPage from "./pages/AcceptEducatorInvitationPage";
 import BillingPage from "@/pages/BillingPage";
 import PaymentHistoryPage from "@/pages/PaymentHistoryPage";
 import PlatformSubscriptionPlans from "@/pages/PaymentPlans";
 import ClassPaymentPlans from "@/pages/ClassPaymentPlans";
 import SettingsPage from "@/pages/SettingsPage";
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -327,7 +330,7 @@ function Router() {
   }
 
   // Redirect to login if not authenticated (except for public routes)
-  if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/')) {
+  if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/')) {
     console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
     setLocation('/login');
     return null;
@@ -348,6 +351,9 @@ function Router() {
       <Route path="/auth/logout" component={LogoutPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
+      <Route path="/accept-educator-invitation" component={AcceptEducatorInvitationPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/login" component={SupabaseLogin} />
       <Route path="/auth0-login" component={DirectAuth0Login} />
       <Route path="/embedded-login" component={EmbeddedLogin} />

@@ -40,6 +40,7 @@ export default function Login() {
   const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const setLocation = navigate; // Alias for clarity in the change
 
   // If user is already logged in, redirect to dashboard
   useEffect(() => {
@@ -196,11 +197,9 @@ export default function Login() {
                 </Link>
               </p>
               <p className="text-sm text-gray-600">
-                <Link href="/forgot-password">
-                  <Button variant="link" className="p-0 h-auto">
-                    Forgot your password?
-                  </Button>
-                </Link>
+                <Button variant="link" className="p-0 h-auto" onClick={() => setLocation('/forgot-password')}>
+                  Forgot your password?
+                </Button>
               </p>
             </div>
           </CardFooter>

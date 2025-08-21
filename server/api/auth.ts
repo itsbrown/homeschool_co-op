@@ -521,6 +521,9 @@ router.post("/accept-invitation", async (req, res) => {
   }
 });
 
+// Store password reset tokens temporarily (in production, use Redis or database)
+const passwordResetTokens = new Map();
+
 // Password reset request
 router.post("/forgot-password", async (req, res) => {
   try {
@@ -538,19 +541,116 @@ router.post("/forgot-password", async (req, res) => {
       });
     }
 
-    // In a real app, generate a token and store it with an expiration
-    const resetToken = Math.random().toString(36).substring(2, 15);
+    // Generate a secure reset token
+    const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Send password reset email - using our mock service
-    console.log(`[MOCK EMAIL] Password reset email would be sent to: ${email}`);
-    console.log(`[MOCK EMAIL] Reset token: ${resetToken}`);
+    // Store the reset token
+    passwordResetTokens.set(resetToken, {
+      email: user.email,
+      userId: user.id,
+      expiresAt
+    });
+
+    // Clean up expired tokens
+    for (const [token, data] of passwordResetTokens.entries()) {
+      if (new Date() > data.expiresAt) {
+        passwordResetTokens.delete(token);
+      }
+    }
+
+    const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
+
+    // Send password reset email - mock for now
+    console.log(`[PASSWORD RESET] Email would be sent to: ${email}`);
+    console.log(`[PASSWORD RESET] Reset URL: ${resetUrl}`);
 
     res.status(200).json({ 
-      message: "If your email is registered, you will receive a password reset link" 
+      message: "If your email is registered, you will receive a password reset link",
+      // For testing purposes, include the token in response (remove in production)
+      resetToken: resetToken,
+      resetUrl: resetUrl
     });
   } catch (error) {
     console.error("Forgot password error:", error);
     res.status(500).json({ message: "Error processing your request" });
+  }
+});
+
+// Reset password with token
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: "Token and new password are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters long" });
+    }
+
+    // Check if token exists and is valid
+    const tokenData = passwordResetTokens.get(token);
+    if (!tokenData) {
+      return res.status(400).json({ message: "Invalid or expired reset token" });
+    }
+
+    if (new Date() > tokenData.expiresAt) {
+      passwordResetTokens.delete(token);
+      return res.status(400).json({ message: "Reset token has expired" });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password
+    try {
+      await storage.updateUserPassword(tokenData.userId, hashedPassword);
+      
+      // Remove the used token
+      passwordResetTokens.delete(token);
+
+      res.status(200).json({ 
+        message: "Password reset successfully. You can now log in with your new password." 
+      });
+    } catch (updateError) {
+      console.error("Error updating password:", updateError);
+      res.status(500).json({ message: "Error updating password" });
+    }
+
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ message: "Error resetting password" });
+  }
+});
+
+// Validate reset token
+router.get("/validate-reset-token", async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ valid: false, message: "Token is required" });
+    }
+
+    const tokenData = passwordResetTokens.get(token);
+    if (!tokenData) {
+      return res.status(400).json({ valid: false, message: "Invalid token" });
+    }
+
+    if (new Date() > tokenData.expiresAt) {
+      passwordResetTokens.delete(token);
+      return res.status(400).json({ valid: false, message: "Token has expired" });
+    }
+
+    res.status(200).json({ 
+      valid: true, 
+      email: tokenData.email 
+    });
+  } catch (error) {
+    console.error("Validate token error:", error);
+    res.status(500).json({ valid: false, message: "Error validating token" });
   }
 });
 

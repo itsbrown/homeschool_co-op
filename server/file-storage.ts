@@ -726,6 +726,27 @@ export class FileStorage implements IStorage {
     }
   }
 
+  // Update user password method
+  async updateUserPassword(userId: number, hashedPassword: string): Promise<void> {
+    try {
+      const users = await this.getUsers();
+      const userIndex = users.findIndex(u => u.id === userId);
+      
+      if (userIndex === -1) {
+        throw new Error('User not found');
+      }
+
+      users[userIndex].password = hashedPassword;
+      users[userIndex].updatedAt = new Date();
+      
+      await this.saveUsers(users);
+      console.log(`✅ Password updated for user ID: ${userId}`);
+    } catch (error) {
+      console.error('❌ Error updating user password:', error);
+      throw error;
+    }
+  }
+
   // Override the createUser method with the file-based implementation
   async createUser(user: InsertUser): Promise<User> {
     validateString(user.username || user.email, 'Username');
