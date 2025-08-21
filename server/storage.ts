@@ -2170,6 +2170,23 @@ export class MemStorage implements IStorage {
       return this.dbStorage.updateUser(id, user);
     }
 
+    // School methods
+    async getSchool(id: number): Promise<School | undefined> {
+      return this.memStorage.getSchool(id);
+    }
+
+    async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
+      return this.memStorage.getSchoolByCode(registrationCode);
+    }
+
+    async createSchool(school: InsertSchool): Promise<School> {
+      return this.memStorage.createSchool(school);
+    }
+
+    async updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined> {
+      return this.memStorage.updateSchool(id, school);
+    }
+
     async getCurriculum(id: number): Promise<Curriculum | undefined> {
       return this.dbStorage.getCurriculum(id);
     }
