@@ -231,15 +231,51 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (response.ok) {
         const enrollments = await response.json();
+        console.log('🔍 Fetched enrollments for cart validation:', enrollments);
         
-        // Filter enrollments that need payment or are in payment plans
-        const unpaidEnrollments = enrollments.filter((enrollment: any) => {
-          const status = enrollment.status;
-          return status === 'pending_payment' || 
-                 status === 'partially_paid' || 
-                 status === 'payment_plan_active' ||
-                 (status === 'enrolled' && enrollment.remainingBalance > 0);
-        });
+        // Group enrollments by class+child combination to find the latest status
+        const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
+          const key = `${enrollment.classId}-${enrollment.childId}`;
+          if (!acc[key]) {
+            acc[key] = [];
+          }
+          acc[key].push(enrollment);
+          return acc;
+        }, {});
+
+        // Filter for enrollments with remaining balance that aren't superseded by successful enrollments
+        const unpaidEnrollments = [];
+        
+        for (const [key, groupEnrollments] of Object.entries(enrollmentGroups)) {
+          const enrollmentList = groupEnrollments as any[];
+          
+          // Sort by enrollment date (newest first)
+          const sortedEnrollments = enrollmentList.sort((a, b) => 
+            new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
+          );
+          
+          // Check if there's any successful enrollment for this class+child combination
+          const hasSuccessfulEnrollment = sortedEnrollments.some(e => 
+            e.status === 'enrolled' && e.remainingBalance === 0
+          );
+          
+          console.log(`🔍 Group ${key}: hasSuccessfulEnrollment=${hasSuccessfulEnrollment}`);
+          
+          // Only add to cart if there's no successful enrollment and there's a balance due
+          if (!hasSuccessfulEnrollment) {
+            const latestEnrollment = sortedEnrollments[0];
+            const hasBalance = latestEnrollment.remainingBalance > 0 || 
+                              (latestEnrollment.status === 'pending_payment' && latestEnrollment.amount === 0);
+            
+            console.log(`🔍 Latest enrollment ${latestEnrollment.id}: status=${latestEnrollment.status}, remainingBalance=${latestEnrollment.remainingBalance}, hasBalance=${hasBalance}`);
+            
+            if (hasBalance) {
+              unpaidEnrollments.push(latestEnrollment);
+            }
+          } else {
+            console.log(`🔍 Skipping group ${key} - already has successful enrollment`);
+          }
+        }
         
         // Convert enrollments to cart items with enhanced status display
         const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
@@ -345,18 +381,21 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Check if user is already enrolled in this class
+    // Check if user is already enrolled in this class with a completed payment
     try {
       const response = await apiRequest('GET', '/api/enrollments');
       if (response.ok) {
         const enrollments = await response.json();
-        const isEnrolled = enrollments.some((enrollment: any) => 
+        
+        // Check for any successful enrollment (enrolled status with no remaining balance)
+        const hasSuccessfulEnrollment = enrollments.some((enrollment: any) => 
           enrollment.classId === item.classId && 
           enrollment.childId === item.childId &&
-          enrollment.status === 'enrolled'
+          enrollment.status === 'enrolled' &&
+          enrollment.remainingBalance === 0
         );
 
-        if (isEnrolled) {
+        if (hasSuccessfulEnrollment) {
           toast({
             title: "Already Enrolled",
             description: `${item.childName} is already enrolled in ${item.className}`,
