@@ -63,6 +63,11 @@ const schoolNavItems: NavItem[] = [
     href: '/marketing-links',
     icon: Link2,
   },
+  {
+    title: 'Settings',
+    href: '/schools/settings',
+    icon: Settings,
+  },
 ];
 
 interface SidebarProps {

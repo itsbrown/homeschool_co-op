@@ -501,7 +501,7 @@ function Router() {
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
-      <Route path="/schools/settings" component={SchoolSettingsPage} />
+      <Route path="/schools/settings" component={SchoolSettings} />
 
       {/* SuperAdmin routes */}
       <Route path="/superadmin/schools" component={AllSchoolsPage} />

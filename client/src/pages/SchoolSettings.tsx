@@ -8,6 +8,17 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload, Save, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+
+interface SchoolData {
+  id: number;
+  name: string;
+  type: string;
+  city: string;
+  state: string;
+  registrationCode?: string;
+  logo?: string;
+}
 
 export default function SchoolSettings() {
   const { user } = useAuth();
@@ -17,8 +28,8 @@ export default function SchoolSettings() {
   const [isUploading, setIsUploading] = useState(false);
 
   // Fetch user's school data
-  const { data: schoolData, isLoading } = useQuery({
-    queryKey: ['/api/school-parents/school', user?.email],
+  const { data: schoolData, isLoading } = useQuery<SchoolData>({
+    queryKey: ['/api/school-admin/my-school'],
     enabled: !!user?.email,
   });
 
@@ -27,7 +38,7 @@ export default function SchoolSettings() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('logo', file);
-      formData.append('schoolId', schoolData?.school?.id?.toString() || '');
+      formData.append('schoolId', schoolData?.id?.toString() || '');
       
       const response = await apiRequest('POST', '/api/schools/upload-logo', formData);
       if (!response.ok) {
@@ -40,7 +51,7 @@ export default function SchoolSettings() {
         title: "Success",
         description: "School logo uploaded successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/school-parents/school'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
       setSelectedFile(null);
     },
     onError: () => {
@@ -93,7 +104,7 @@ export default function SchoolSettings() {
     );
   }
 
-  if (!schoolData?.success || !schoolData?.school) {
+  if (!schoolData) {
     return (
       <div className="container mx-auto py-6">
         <div className="text-center text-red-600">
@@ -103,18 +114,11 @@ export default function SchoolSettings() {
     );
   }
 
-  const school = schoolData.school;
+  const school = schoolData;
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">School Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your school's branding and information
-        </p>
-      </div>
-
-      <div className="grid gap-6">
+    <SchoolAdminLayout pageTitle="School Settings">
+      <div className="space-y-6">
         {/* School Information */}
         <Card>
           <CardHeader>
@@ -250,6 +254,6 @@ export default function SchoolSettings() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </SchoolAdminLayout>
   );
 }
