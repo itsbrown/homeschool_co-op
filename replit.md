@@ -30,6 +30,8 @@ Preferred communication style: Simple, everyday language.
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation.
+- **Enhanced Payment System**: Comprehensive payment status management supporting multiple states (pending_payment, partially_paid, payment_plan_active, enrolled with balance_due). Cart system intelligently handles enrolled items with remaining balances for payment plan scenarios.
+- **AI Enrollment Assistant**: Personalized AI assistant that greets users by their actual account name (extracted from authentication metadata) and provides enrollment guidance.
 - **Staff Invitation System**: Complete automated staff onboarding with secure token-based invitations (7-day expiration), automatic Supabase account creation, temporary password generation, professional email notifications, and seamless resend functionality for individual and bulk operations.
 - **Staff Management**: Dynamic staff position management with school-specific roles, comprehensive staff editing with data persistence, and role synchronization between invitation and edit forms.
 - **Password Reset System**: Fully functional password reset via email with persistent token storage, Brevo email integration, Supabase password updates, and secure token cleanup. Supports both existing users and new account creation scenarios.
@@ -37,7 +39,7 @@ Preferred communication style: Simple, everyday language.
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis and curriculum generation, Stability AI for image generation, and Hugging Face for text processing.
 - **Educational Tools**: Generators for professional coloring pages and various educational activities, curriculum/lesson plan creation, and student work analysis.
 - **Data Flow**: Secure user authentication via Auth0, AI-driven content processing post-upload, activity generation, role-based content access, and persistence in Supabase.
-- **UI/UX Decisions**: Focus on a professional and intuitive user experience with clear navigation, dynamic updates, and consistent design. Examples include consolidated navigation, simplified page structures, and clear payment plan selections.
+- **UI/UX Decisions**: Focus on a professional and intuitive user experience with clear navigation, dynamic updates, and consistent design. Examples include consolidated navigation, simplified page structures, robust data handling for mixed formats (interests as strings/arrays), and clear payment plan selections.
 
 ## External Dependencies
 - **Auth0**: Primary authentication provider.
