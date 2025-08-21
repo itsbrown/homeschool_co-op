@@ -40,17 +40,26 @@ export default function SchoolSettings() {
   // Logo upload mutation
   const logoUploadMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!schoolData?.id) {
+        throw new Error('No school ID available');
+      }
+      
+      console.log('🔍 School data for upload:', schoolData);
+      console.log('📤 Uploading for school ID:', schoolData.id);
+      
       const formData = new FormData();
       formData.append('logo', file);
-      formData.append('schoolId', schoolData?.id?.toString() || '');
+      formData.append('schoolId', schoolData.id.toString());
       
       const response = await apiRequest('POST', '/api/schools/upload-logo', formData);
       if (!response.ok) {
-        throw new Error('Failed to upload logo');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to upload logo');
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('✅ Upload successful:', data);
       toast({
         title: "Success",
         description: "School logo uploaded successfully",
@@ -58,10 +67,11 @@ export default function SchoolSettings() {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
       setSelectedFile(null);
     },
-    onError: () => {
+    onError: (error: Error) => {
+      console.error('❌ Upload failed:', error);
       toast({
-        title: "Error",
-        description: "Failed to upload logo. Please try again.",
+        title: "Error", 
+        description: error.message || "Failed to upload logo. Please try again.",
         variant: "destructive",
       });
     },
@@ -95,9 +105,26 @@ export default function SchoolSettings() {
   };
 
   const handleUpload = () => {
-    if (selectedFile) {
-      logoUploadMutation.mutate(selectedFile);
+    if (!selectedFile) {
+      toast({
+        title: "No file selected",
+        description: "Please select a file to upload",
+        variant: "destructive",
+      });
+      return;
     }
+    
+    if (!schoolData?.id) {
+      toast({
+        title: "School data not available",
+        description: "Unable to identify school. Please refresh the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('🚀 Starting upload for school:', schoolData.id, 'file:', selectedFile.name);
+    logoUploadMutation.mutate(selectedFile);
   };
 
   if (isLoading) {

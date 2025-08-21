@@ -64,15 +64,29 @@ router.post('/', upload.single('logo'), async (req, res) => {
     // Generate the URL for the uploaded file
     const logoUrl = `/uploads/logos/${req.file.filename}`;
     
-    console.log('🖼️ Uploading logo for school:', schoolId);
+    const schoolIdNum = parseInt(schoolId);
+    console.log('🖼️ Uploading logo for school:', schoolId, '(parsed as:', schoolIdNum, ')');
     console.log('📁 File saved as:', req.file.filename);
     console.log('🌐 Logo URL:', logoUrl);
     
+    // Check if school exists first
+    const existingSchool = await storage.getSchool(schoolIdNum);
+    if (!existingSchool) {
+      // Clean up uploaded file
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      console.log('❌ School not found with ID:', schoolIdNum);
+      return res.status(404).json({
+        success: false,
+        message: `School not found with ID: ${schoolIdNum}`
+      });
+    }
+    
     try {
       // Update school logo in storage
-      const updatedSchool = await storage.updateSchool(parseInt(schoolId), {
-        logo: logoUrl,
-        updatedAt: new Date()
+      const updatedSchool = await storage.updateSchool(schoolIdNum, {
+        logo: logoUrl
       });
       
       if (updatedSchool) {
@@ -86,9 +100,9 @@ router.post('/', upload.single('logo'), async (req, res) => {
       } else {
         // If storage update fails, clean up the uploaded file
         fs.unlinkSync(req.file.path);
-        return res.status(404).json({
+        return res.status(500).json({
           success: false,
-          message: 'School not found'
+          message: 'Failed to update school in storage'
         });
       }
     } catch (storageError) {
