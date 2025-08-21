@@ -139,10 +139,19 @@ export default function ChildrenPage() {
                       </div>
                       <Separator className="my-4" />
                       <div className="flex flex-wrap gap-2">
-                        {child.interests && child.interests.map((interest: string, i: number) => (
-                          <Badge key={i} variant="secondary">{interest}</Badge>
-                        ))}
-                        {(!child.interests || child.interests.length === 0) && (
+                        {child.interests && (() => {
+                          // Handle both string and array formats for interests
+                          const interestsArray = Array.isArray(child.interests) 
+                            ? child.interests 
+                            : typeof child.interests === 'string' 
+                              ? child.interests.split(',').map((i: string) => i.trim())
+                              : [];
+                          
+                          return interestsArray.map((interest: string, i: number) => (
+                            <Badge key={i} variant="secondary">{interest}</Badge>
+                          ));
+                        })()}
+                        {(!child.interests || (Array.isArray(child.interests) ? child.interests.length === 0 : !child.interests.trim())) && (
                           <span className="text-sm text-muted-foreground">No interests specified</span>
                         )}
                       </div>
