@@ -209,11 +209,16 @@ export default function CartCheckout() {
     }
 
     createPaymentIntent();
-  }, [isAuthenticated, cart.items.length]);
+  }, [isAuthenticated, cart.items.length, selectedPaymentPlan]); // Re-create payment intent when payment plan changes
 
   const createPaymentIntent = async () => {
     try {
       setLoading(true);
+      
+      // Get the amount to charge based on selected payment plan
+      const selectedPlanAmount = getSelectedPlanAmount();
+      const amountToCharge = selectedPlanAmount * 100; // Convert to cents
+      
       const response = await apiRequest(
         'POST',
         '/api/stripe/create-payment-intent',
@@ -231,7 +236,8 @@ export default function CartCheckout() {
             siblingDiscount: cart.discounts.siblingDiscount * 100, // Convert to cents
             freeAfterThree: cart.discounts.freeAfterThree * 100 // Convert to cents
           },
-          total: cart.total * 100, // Convert to cents for Stripe
+          total: amountToCharge, // Use selected payment plan amount in cents
+          paymentPlan: selectedPaymentPlan, // Include payment plan info
           parentEmail: user?.email,
         }
       );
