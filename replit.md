@@ -35,6 +35,7 @@ Preferred communication style: Simple, everyday language.
 - **Staff Invitation System**: Complete automated staff onboarding with secure token-based invitations (7-day expiration), automatic Supabase account creation, temporary password generation, professional email notifications, and seamless resend functionality for individual and bulk operations.
 - **Staff Management**: Dynamic staff position management with school-specific roles, comprehensive staff editing with data persistence, and role synchronization between invitation and edit forms.
 - **Password Reset System**: Fully functional password reset via email with persistent token storage, Brevo email integration, Supabase password updates, and secure token cleanup. Supports both existing users and new account creation scenarios.
+- **Email Service**: Real email delivery through Brevo SMTP service with professional templates for payment confirmations, staff invitations, and password resets. Configured with verified sender email and working API integration.
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, AI-powered content analysis and generation (e.g., coloring pages, worksheets).
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis and curriculum generation, Stability AI for image generation, and Hugging Face for text processing.
 - **Educational Tools**: Generators for professional coloring pages and various educational activities, curriculum/lesson plan creation, and student work analysis.

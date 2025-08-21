@@ -175,7 +175,10 @@ If you have any questions about this payment, please contact us at support@ameri
     // Create Brevo email object
     const sendSmtpEmail = new brevo.SendSmtpEmail();
     sendSmtpEmail.to = [{ email: parentEmail, name: parentName || 'Parent' }];
-    sendSmtpEmail.sender = { email: 'support@americanseekersacademy.com', name: 'American Seekers Academy' };
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'support@americanseekersacademy.com', 
+      name: 'American Seekers Academy' 
+    };
     sendSmtpEmail.subject = 'Payment Confirmation - American Seekers Academy';
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent;
@@ -208,11 +211,19 @@ export async function sendEmail(
   try {
     const sendSmtpEmail = new brevo.SendSmtpEmail();
     sendSmtpEmail.to = [{ email: to, name: toName }];
-    sendSmtpEmail.sender = { email: 'support@americanseekersacademy.com', name: 'American Seekers Academy' };
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'support@americanseekersacademy.com', 
+      name: 'American Seekers Academy' 
+    };
     sendSmtpEmail.subject = subject;
     sendSmtpEmail.htmlContent = htmlContent;
     if (textContent) {
       sendSmtpEmail.textContent = textContent;
+    }
+
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping email send');
+      return false;
     }
 
     const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
