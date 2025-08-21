@@ -271,7 +271,7 @@ router.post('/webhook', async (req, res) => {
               const enrollmentDetails = items.map((item: any) => ({
                 childName: item.childName,
                 className: item.className,
-                price: (item.totalCost || item.price) * 100, // Convert dollars to cents for email service
+                price: (item.totalCost || item.price), // Already in cents from cart checkout
                 amountPaid: Math.round(paymentIntent.amount / items.length), // Already in cents
               }));
 
