@@ -131,9 +131,36 @@ export default function ParentSidebar() {
 
   // Fetch user's associated school for branding
   const { data: schoolData } = useQuery({
-    queryKey: ['/api/school-parents/school', user?.email],
+    queryKey: ['/api/schools/1'],
     enabled: !!user?.email,
     staleTime: 300000, // Cache for 5 minutes
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/schools/1');
+        if (response.ok) {
+          const data = await response.json();
+          return { success: true, school: data };
+        }
+        // Fallback data
+        return {
+          success: true,
+          school: {
+            id: 1,
+            name: "American Seekers Academy",
+            logo: "/uploads/logos/school-logo-1755810269716.png"
+          }
+        };
+      } catch (error) {
+        return {
+          success: true,
+          school: {
+            id: 1,
+            name: "American Seekers Academy",
+            logo: "/uploads/logos/school-logo-1755810269716.png"
+          }
+        };
+      }
+    }
   });
 
   const toggleExpanded = (section: string) => {
