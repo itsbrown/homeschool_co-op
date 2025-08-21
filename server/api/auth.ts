@@ -103,11 +103,83 @@ router.post('/register', async (req, res) => {
       updatedAt: new Date()
     };
 
+    // Create user in Supabase authentication first
+    let supabaseUser;
+    try {
+      console.log('🔧 Starting Supabase account creation for:', email);
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      
+      console.log('🔧 Supabase URL:', supabaseUrl ? 'Present' : 'Missing');
+      console.log('🔧 Service Key:', supabaseServiceKey ? 'Present' : 'Missing');
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error('Supabase configuration missing');
+      }
+      
+      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      });
+      
+      console.log('🔧 Creating Supabase auth account...');
+      
+      // Create authentication account in Supabase
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: email,
+        password: userPassword,
+        email_confirm: true, // Auto-confirm email for registration
+        user_metadata: {
+          name: `${userFirstName} ${userLastName}`,
+          role: role || 'parent'
+        }
+      });
+      
+      if (authError) {
+        console.error('❌ Supabase auth creation failed:', authError);
+        throw new Error(`Authentication account creation failed: ${authError.message}`);
+      }
+      
+      supabaseUser = authData.user;
+      console.log('✅ Supabase auth account created successfully:', supabaseUser.id);
+      
+    } catch (supabaseError) {
+      console.error('❌ Supabase account creation failed:', supabaseError);
+      return res.status(500).json({ 
+        success: false, 
+        message: `Failed to create authentication account: ${supabaseError.message}` 
+      });
+    }
+
+    // Create user in local database/storage
     let user;
     try {
-      user = await storage.createUser(userData);
+      // Add Supabase ID to user data
+      const userDataWithSupabase = {
+        ...userData,
+        supabaseId: supabaseUser.id
+      };
+      
+      user = await storage.createUser(userDataWithSupabase);
+      console.log('✅ Local user record created:', user.id);
     } catch (createError) {
-      console.error('User creation failed:', createError);
+      console.error('Local user creation failed:', createError);
+      
+      // If local storage fails, clean up the Supabase account
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+        await supabaseAdmin.auth.admin.deleteUser(supabaseUser.id);
+        console.log('🧹 Cleaned up Supabase account after local storage failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup Supabase account:', cleanupError);
+      }
+      
       return res.status(500).json({ 
         success: false, 
         message: 'Failed to create user account. Please try again.' 
