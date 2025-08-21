@@ -970,9 +970,9 @@ function saveStaffMembers(staff: any[]) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
     fs.writeFileSync(STAFF_FILE, JSON.stringify(staff, null, 2));
-    console.log('Staff members saved successfully');
+    console.log('✅ Staff members saved successfully');
   } catch (error) {
-    console.error('Error saving staff members:', error);
+    console.error('❌ Error saving staff members:', error);
   }
 }
 
@@ -1440,21 +1440,51 @@ router.put("/staff/:id", async (req, res) => {
 
     const { name, email, phone, role, department, status } = req.body;
 
-    // In a real app, this would update the database
     console.log(`🔄 Updating staff member ${staffId}:`, { name, email, role, department, status });
 
+    // Get current staff data from file
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+
+    if (!fs.existsSync(STAFF_FILE)) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+    const staffIndex = allStaff.findIndex(s => s.id === staffId);
+    
+    if (staffIndex === -1) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Update the staff member data
+    const existingStaff = allStaff[staffIndex];
     const updatedStaff = {
-      id: staffId,
+      ...existingStaff,
       name,
       email,
-      phone,
+      phone: phone || existingStaff.phone,
       role,
       department,
-      subjects: [], // Would be handled separately
       status,
-      joinDate: "2021-08-15", // Keep existing date
-      avatar: "",
+      // Preserve existing fields
+      id: staffId,
+      firstName: existingStaff.firstName,
+      lastName: existingStaff.lastName,
+      subjects: existingStaff.subjects || [],
+      joinDate: existingStaff.joinDate,
+      avatar: existingStaff.avatar || "",
+      invitedAt: existingStaff.invitedAt,
+      message: existingStaff.message,
+      invitationToken: existingStaff.invitationToken
     };
+
+    // Update the staff member in the array
+    allStaff[staffIndex] = updatedStaff;
+
+    // Save back to file using the utility function
+    saveStaffMembers(allStaff);
+    console.log(`✅ Successfully updated staff member ${staffId}`);
 
     res.json({ 
       success: true, 
