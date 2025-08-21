@@ -144,7 +144,9 @@ router.post('/webhook', async (req, res) => {
     hasSignature: !!sig,
     hasEndpointSecret: !!endpointSecret,
     bodyLength: req.body?.length || 0,
-    eventType: req.body ? 'body_present' : 'no_body'
+    eventType: req.body ? 'body_present' : 'no_body',
+    signaturePrefix: sig ? sig.substring(0, 20) + '...' : 'none',
+    secretPrefix: endpointSecret ? endpointSecret.substring(0, 10) + '...' : 'none'
   });
 
   if (!sig || !endpointSecret) {
