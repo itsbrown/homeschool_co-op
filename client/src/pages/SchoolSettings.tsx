@@ -6,9 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Upload, Save, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import AppShell from '@/components/layout/AppShell';
 
 interface SchoolData {
   id: number;
@@ -18,6 +21,7 @@ interface SchoolData {
   state: string;
   registrationCode?: string;
   logo?: string;
+  status?: string;
 }
 
 export default function SchoolSettings() {
@@ -117,8 +121,40 @@ export default function SchoolSettings() {
   const school = schoolData;
 
   return (
-    <SchoolAdminLayout pageTitle="School Settings">
-      <div className="space-y-6">
+    <AppShell>
+      <div className="container mx-auto py-6">
+        {/* School Header */}
+        <Card className="mb-8">
+          <CardHeader className="pb-3">
+            <div className="flex items-center space-x-4">
+              <Avatar className="h-16 w-16">
+                {school.logo ? (
+                  <AvatarImage src={school.logo} alt={school.name} />
+                ) : (
+                  <AvatarFallback className="text-lg">
+                    {school.name.split(' ').map(word => word[0]).join('').toUpperCase()}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              <div>
+                <CardTitle className="text-2xl mb-1">{school.name}</CardTitle>
+                <CardDescription className="flex items-center space-x-2">
+                  <Badge variant="secondary">{school.type}</Badge>
+                  <Badge variant={school.status === 'active' ? 'default' : 'secondary'}>
+                    {school.status || 'active'}
+                  </Badge>
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            <Tabs defaultValue="settings" className="w-full">
+              <TabsList>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="settings" className="space-y-6">
         {/* School Information */}
         <Card>
           <CardHeader>
@@ -252,8 +288,12 @@ export default function SchoolSettings() {
               </div>
             </div>
           </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
         </Card>
       </div>
-    </SchoolAdminLayout>
+    </AppShell>
   );
 }
