@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import fs from "fs";
+import path from "path";
 import { storage } from "../storage";
 import { insertUserSchema } from "@shared/schema";
 import { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService";
@@ -518,8 +520,41 @@ router.post("/accept-invitation", async (req, res) => {
   }
 });
 
-// Store password reset tokens temporarily (in production, use Redis or database)
-const passwordResetTokens = new Map();
+// File-based storage for password reset tokens
+const passwordResetTokensFile = path.join(process.cwd(), 'data', 'password-reset-tokens.json');
+
+interface PasswordResetToken {
+  email: string;
+  userId: string;
+  expiresAt: string;
+}
+
+// Load password reset tokens from file
+function loadPasswordResetTokens(): Map<string, PasswordResetToken> {
+  try {
+    if (fs.existsSync(passwordResetTokensFile)) {
+      const data = fs.readFileSync(passwordResetTokensFile, 'utf8');
+      const tokens = JSON.parse(data);
+      return new Map(Object.entries(tokens));
+    }
+  } catch (error) {
+    console.error('Error loading password reset tokens:', error);
+  }
+  return new Map();
+}
+
+// Save password reset tokens to file
+function savePasswordResetTokens(tokens: Map<string, PasswordResetToken>) {
+  try {
+    const tokenObject = Object.fromEntries(tokens);
+    fs.writeFileSync(passwordResetTokensFile, JSON.stringify(tokenObject, null, 2));
+  } catch (error) {
+    console.error('Error saving password reset tokens:', error);
+  }
+}
+
+// Initialize password reset tokens
+let passwordResetTokens = loadPasswordResetTokens();
 
 // Password reset request
 router.post("/forgot-password", async (req, res) => {
@@ -574,15 +609,18 @@ router.post("/forgot-password", async (req, res) => {
     passwordResetTokens.set(resetToken, {
       email: user.email,
       userId: user.id,
-      expiresAt
+      expiresAt: expiresAt.toISOString()
     });
 
     // Clean up expired tokens
     for (const [token, data] of passwordResetTokens.entries()) {
-      if (new Date() > data.expiresAt) {
+      if (new Date() > new Date(data.expiresAt)) {
         passwordResetTokens.delete(token);
       }
     }
+
+    // Save tokens to file
+    savePasswordResetTokens(passwordResetTokens);
 
     const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
 
@@ -623,21 +661,32 @@ router.post("/reset-password", async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
 
-    if (new Date() > tokenData.expiresAt) {
+    if (new Date() > new Date(tokenData.expiresAt)) {
       passwordResetTokens.delete(token);
+      savePasswordResetTokens(passwordResetTokens);
       return res.status(400).json({ message: "Reset token has expired" });
     }
 
     // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update user password
+    // Update user password in Supabase
     try {
-      // For now, just mark the password as reset (implement updateUserPassword in storage)
-      console.log(`Password would be updated for user ${tokenData.userId}`);
+      const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
+        tokenData.userId,
+        { password: newPassword }
+      );
+
+      if (error) {
+        console.error('❌ Failed to update password in Supabase:', error);
+        return res.status(500).json({ message: "Error updating password" });
+      }
+
+      console.log(`✅ Password updated successfully for user ${tokenData.userId} (${tokenData.email})`);
       
       // Remove the used token
       passwordResetTokens.delete(token);
+      savePasswordResetTokens(passwordResetTokens);
 
       res.status(200).json({ 
         message: "Password reset successfully. You can now log in with your new password." 
@@ -667,8 +716,9 @@ router.get("/validate-reset-token", async (req, res) => {
       return res.status(400).json({ valid: false, message: "Invalid token" });
     }
 
-    if (new Date() > tokenData.expiresAt) {
+    if (new Date() > new Date(tokenData.expiresAt)) {
       passwordResetTokens.delete(token);
+      savePasswordResetTokens(passwordResetTokens);
       return res.status(400).json({ valid: false, message: "Token has expired" });
     }
 
