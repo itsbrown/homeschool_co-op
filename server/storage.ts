@@ -39,6 +39,7 @@ export interface IStorage {
   getSchoolByCode(registrationCode: string): Promise<School | undefined>;
   createSchool(school: InsertSchool): Promise<School>;
   updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined>;
+  getAllSchools(): Promise<School[]>;
 
   // Curriculum methods
   getCurriculum(id: number): Promise<Curriculum | undefined>;
@@ -389,6 +390,10 @@ export class MemStorage implements IStorage {
     };
     this.schoolsStore.set(id, updatedSchool);
     return updatedSchool;
+  }
+
+  async getAllSchools(): Promise<School[]> {
+    return Array.from(this.schoolsStore.values());
   }
 
   // Curriculum methods
@@ -2170,9 +2175,10 @@ export class MemStorage implements IStorage {
       return this.dbStorage.updateUser(id, user);
     }
 
-    // School methods
+    // School methods - use file-based storage since schools aren't loaded into memory
     async getSchool(id: number): Promise<School | undefined> {
-      return this.memStorage.getSchool(id);
+      const { schoolStorage } = await import('./school-storage');
+      return schoolStorage.getSchoolById(id);
     }
 
     async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
@@ -2184,7 +2190,13 @@ export class MemStorage implements IStorage {
     }
 
     async updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined> {
-      return this.memStorage.updateSchool(id, school);
+      const { schoolStorage } = await import('./school-storage');
+      return schoolStorage.updateSchool(id, school);
+    }
+
+    async getAllSchools(): Promise<School[]> {
+      const { schoolStorage } = await import('./school-storage');
+      return schoolStorage.getAllSchools();
     }
 
     async getCurriculum(id: number): Promise<Curriculum | undefined> {
