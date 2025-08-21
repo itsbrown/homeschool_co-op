@@ -96,7 +96,7 @@ export async function sendPaymentConfirmationEmail(data: PaymentConfirmationData
               <p style="margin: 0 0 8px 0;"><strong>Amount Paid:</strong> ${formatCurrency(payment.amount)}</p>
               <p style="margin: 0 0 8px 0;"><strong>Payment Date:</strong> ${formatDate(payment.createdAt)}</p>
               <p style="margin: 0 0 8px 0;"><strong>Transaction ID:</strong> ${payment.stripePaymentIntentId}</p>
-              <p style="margin: 0;"><strong>Payment Method:</strong> ${payment.paymentMethod || 'Card'}</p>
+              <p style="margin: 0;"><strong>Payment Method:</strong> Card</p>
             </div>
             
             <h3 style="color: #374151; margin-top: 24px;">Enrollment Details</h3>
@@ -149,7 +149,7 @@ Payment Details:
 - Amount Paid: ${formatCurrency(payment.amount)}
 - Payment Date: ${formatDate(payment.createdAt)}
 - Transaction ID: ${payment.stripePaymentIntentId}
-- Payment Method: ${payment.paymentMethod || 'Card'}
+- Payment Method: Card
 
 Enrollment Details:
 ${enrollmentDetails.map(item => `- ${item.childName} - ${item.className}: ${formatCurrency(item.amountPaid)} paid of ${formatCurrency(item.price)}`).join('\n')}
@@ -181,6 +181,11 @@ If you have any questions about this payment, please contact us at support@ameri
     sendSmtpEmail.textContent = textContent;
 
     // Send email via Brevo
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping payment confirmation email send');
+      return false;
+    }
+
     const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
     
     console.log('✅ Payment confirmation email sent successfully via Brevo to:', parentEmail);

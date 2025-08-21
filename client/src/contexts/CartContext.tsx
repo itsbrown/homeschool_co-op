@@ -262,6 +262,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (savedCart) {
       try {
         const parsedCart = JSON.parse(savedCart);
+        console.log('🛒 Loading cart from localStorage:', parsedCart);
         dispatch({ type: 'LOAD_CART', payload: parsedCart });
       } catch (error) {
         console.error('Error loading cart from localStorage:', error);
@@ -324,6 +325,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = () => {
     dispatch({ type: 'CLEAR_CART' });
     localStorage.removeItem('asa_cart');
+    console.log('🛒 Cart cleared - localStorage removed');
     toast({
       title: "Cart Cleared",
       description: "All items removed from cart",
