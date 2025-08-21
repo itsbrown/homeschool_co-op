@@ -1257,45 +1257,42 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
       return res.status(400).json({ message: "Can only resend invites to pending staff members" });
     }
 
-    // Generate or reuse invitation token
-    let invitationToken = staff.invitationToken;
-    if (!invitationToken) {
-      invitationToken = generateInvitationToken();
-      
-      // Update staff member with token
-      const staffIndex = allStaff.findIndex(s => s.id === staffId);
-      if (staffIndex !== -1) {
-        allStaff[staffIndex].invitationToken = invitationToken;
-        saveStaffMembers(allStaff);
-      }
-      
-      // Also save/update the invitation
-      const invitations = loadStaffInvitations();
-      const existingInvitationIndex = invitations.findIndex(i => i.email === staff.email);
-      
-      const invitationData = {
-        id: existingInvitationIndex >= 0 ? invitations[existingInvitationIndex].id : Math.max(0, ...invitations.map(i => i.id || 0)) + 1,
-        token: invitationToken,
-        email: staff.email,
-        firstName: staff.firstName || staff.name?.split(' ')[0] || '',
-        lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
-        role: staff.role,
-        department: staff.department,
-        message: staff.message || "",
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-        acceptedAt: null
-      };
-      
-      if (existingInvitationIndex >= 0) {
-        invitations[existingInvitationIndex] = invitationData;
-      } else {
-        invitations.push(invitationData);
-      }
-      
-      saveStaffInvitations(invitations);
+    // Always generate a new invitation token when resending
+    const invitationToken = generateInvitationToken();
+    
+    // Update staff member with token
+    const staffIndex = allStaff.findIndex(s => s.id === staffId);
+    if (staffIndex !== -1) {
+      allStaff[staffIndex].invitationToken = invitationToken;
+      saveStaffMembers(allStaff);
     }
+    
+    // Also save/update the invitation
+    const invitations = loadStaffInvitations();
+    const existingInvitationIndex = invitations.findIndex(i => i.email === staff.email);
+    
+    const invitationData = {
+      id: existingInvitationIndex >= 0 ? invitations[existingInvitationIndex].id : Math.max(0, ...invitations.map(i => i.id || 0)) + 1,
+      token: invitationToken,
+      email: staff.email,
+      firstName: staff.firstName || staff.name?.split(' ')[0] || '',
+      lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
+      role: staff.role,
+      department: staff.department,
+      message: staff.message || "",
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+      acceptedAt: null
+    };
+    
+    if (existingInvitationIndex >= 0) {
+      invitations[existingInvitationIndex] = invitationData;
+    } else {
+      invitations.push(invitationData);
+    }
+    
+    saveStaffInvitations(invitations);
 
     // Resend the invitation email with token
     const firstName = staff.firstName || staff.name?.split(' ')[0] || '';
