@@ -162,31 +162,10 @@ export default function ParentSidebar() {
       icon: <Calendar className="h-5 w-5" />,
     },
     {
-      title: "Finances",
+      href: "/billing",
+      title: "Payments",
       icon: <DollarSign className="h-5 w-5" />,
-      isSectionHeader: true,
-      subItems: [
-        {
-          title: 'Payment Plans',
-          href: '/payment-plans',
-          icon: <CreditCard className="h-5 w-5" />,
-        },
-        {
-          title: "Billing & Payments",
-          href: "/billing",
-          icon: <CreditCard className="h-5 w-5" />,
-        },
-        {
-          title: "Payment History",
-          href: "/payments",
-          icon: <CreditCard className="h-5 w-5" />,
-        },
-        {
-          title: "Platform Subscription",
-          href: "/platform-subscription",
-          icon: <CreditCard className="h-5 w-5" />,
-        },
-      ],
+      description: "Manage billing and view payment history"
     },
     {
       href: "/enrollment-assistant",
