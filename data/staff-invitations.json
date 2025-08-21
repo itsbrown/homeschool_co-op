@@ -22,10 +22,10 @@
     "role": "Administrator",
     "department": "Arts",
     "message": "",
-    "isActive": true,
+    "isActive": false,
     "createdAt": "2025-08-21T12:58:40.086Z",
     "expiresAt": "2025-08-28T12:58:40.086Z",
-    "acceptedAt": null
+    "acceptedAt": "2025-08-21T13:08:17.052Z"
   },
   {
     "id": 3,
@@ -78,10 +78,10 @@
     "role": "Aide",
     "department": "Technology",
     "message": "Hello",
-    "isActive": true,
+    "isActive": false,
     "createdAt": "2025-08-21T13:07:07.227Z",
     "expiresAt": "2025-08-28T13:07:07.227Z",
-    "acceptedAt": null
+    "acceptedAt": "2025-08-21T13:09:15.332Z"
   },
   {
     "id": 7,
