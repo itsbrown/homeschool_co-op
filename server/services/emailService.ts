@@ -14,27 +14,91 @@ if (process.env.BREVO_API_KEY) {
 }
 
 export async function sendWelcomeEmail(email: string, name: string) {
-  // Just log the email info instead of actually sending in development
-  console.log(`[MOCK EMAIL] Welcome email would be sent via Brevo to: ${email}`);
-  console.log(`[MOCK EMAIL] Welcome email content: Hello ${name}, welcome to American Seekers Academy!`);
-  
-  // Return a mock successful result similar to Brevo response
-  return {
-    messageId: `mock-brevo-welcome-${Date.now()}`,
-    response: 'Mock Brevo email service'
-  };
+  try {
+    if (!brevoApiInstance) {
+      console.log('📧 Brevo not configured, skipping welcome email');
+      return false;
+    }
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Welcome to American Seekers Academy!</h1>
+        </div>
+        <div style="padding: 24px;">
+          <p>Dear ${name},</p>
+          <p>Welcome to American Seekers Academy! We're excited to have you join our learning community.</p>
+          <p>Best regards,<br>The American Seekers Academy Team</p>
+        </div>
+      </div>
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.subject = "Welcome to American Seekers Academy";
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.sender = { 
+      name: "American Seekers Academy", 
+      email: "noreply@americanseekersacademy.com" 
+    };
+    sendSmtpEmail.to = [{ email, name }];
+
+    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`✅ Welcome email sent successfully via Brevo to: ${email}`);
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send welcome email via Brevo:', error);
+    return false;
+  }
 }
 
 export async function sendVerificationEmail(email: string, token: string) {
-  // Just log the email info instead of actually sending in development
-  console.log(`[MOCK EMAIL] Verification email would be sent via Brevo to: ${email}`);
-  console.log(`[MOCK EMAIL] Verification token: ${token}`);
-  
-  // Return a mock successful result similar to Brevo response
-  return {
-    messageId: `mock-brevo-verification-${Date.now()}`,
-    response: 'Mock Brevo email service'
-  };
+  try {
+    if (!brevoApiInstance) {
+      console.log('📧 Brevo not configured, skipping verification email');
+      return false;
+    }
+
+    const verificationUrl = `${process.env.CLIENT_URL || 'http://localhost:5000'}/verify-email?token=${token}`;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Email Verification</h1>
+          <p style="color: #E0E7FF; margin: 8px 0 0 0;">American Seekers Academy</p>
+        </div>
+        <div style="padding: 24px;">
+          <p>Please click the button below to verify your email address:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${verificationUrl}" style="display: inline-block; background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Verify Email
+            </a>
+          </div>
+          <p style="color: #6B7280; font-size: 14px;">
+            If the button doesn't work, copy and paste this link into your browser:<br>
+            <a href="${verificationUrl}" style="color: #4F46E5; word-break: break-all;">${verificationUrl}</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.subject = "Verify Your Email - American Seekers Academy";
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.sender = { 
+      name: "American Seekers Academy", 
+      email: "noreply@americanseekersacademy.com" 
+    };
+    sendSmtpEmail.to = [{ email, name: email }];
+
+    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`✅ Verification email sent successfully via Brevo to: ${email}`);
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send verification email via Brevo:', error);
+    return false;
+  }
 }
 
 export async function sendPasswordResetEmail(email: string, resetUrl: string) {

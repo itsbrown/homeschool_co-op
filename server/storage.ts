@@ -1,8 +1,8 @@
-import { 
-  users, type User, type InsertUser, 
-  curricula, type Curriculum, type InsertCurriculum, 
-  lessons, type Lesson, type InsertLesson, 
-  events, type Event, type InsertEvent, 
+import {
+  users, type User, type InsertUser,
+  curricula, type Curriculum, type InsertCurriculum,
+  lessons, type Lesson, type InsertLesson,
+  events, type Event, type InsertEvent,
   marketplaceItems, type MarketplaceItem, type InsertMarketplaceItem,
   knowledgeBases, type KnowledgeBase, type InsertKnowledgeBase,
   children, type Child, type InsertChild,
@@ -124,6 +124,7 @@ export interface IStorage {
   getEnrollmentById(id: number): Promise<any>;
   updateEnrollment(enrollment: any): Promise<any>;
   deleteEnrollment(id: number): Promise<void>;
+  removeEnrollment(enrollmentId: number): Promise<boolean>;
 
   // Class methods
   getClassById(id: number): Promise<Class | undefined>;
@@ -531,9 +532,9 @@ export class MemStorage implements IStorage {
   async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
     const id = this.knowledgeBaseIdCounter++;
     const now = new Date();
-    const knowledgeBase: KnowledgeBase = { 
-      ...insertKnowledgeBase, 
-      id, 
+    const knowledgeBase: KnowledgeBase = {
+      ...insertKnowledgeBase,
+      id,
       createdAt: now,
       updatedAt: now,
       downloadCount: 0,
@@ -795,8 +796,8 @@ export class MemStorage implements IStorage {
   }
 
   async getEnrollmentCountForProgram(programId: number): Promise<number> {
-    return this.getEnrollmentsByProgramId(programId).then(enrollments => 
-      enrollments.filter(enrollment => 
+    return this.getEnrollmentsByProgramId(programId).then(enrollments =>
+      enrollments.filter(enrollment =>
         enrollment.status === 'active' || enrollment.status === 'pending').length
     );
   }
@@ -987,14 +988,14 @@ export class MemStorage implements IStorage {
     // Apply filters
     if (search) {
       const searchLower = search.toLowerCase();
-      filteredClasses = filteredClasses.filter(classItem => 
-        classItem.title.toLowerCase().includes(searchLower) || 
+      filteredClasses = filteredClasses.filter(classItem =>
+        classItem.title.toLowerCase().includes(searchLower) ||
         classItem.description.toLowerCase().includes(searchLower)
       );
     }
 
     if (category) {
-      filteredClasses = filteredClasses.filter(classItem => 
+      filteredClasses = filteredClasses.filter(classItem =>
         classItem.category.toLowerCase() === category.toLowerCase()
       );
     }
@@ -1023,14 +1024,14 @@ export class MemStorage implements IStorage {
     // Apply filters
     if (search) {
       const searchLower = search.toLowerCase();
-      filteredClasses = filteredClasses.filter(classItem => 
-        classItem.title.toLowerCase().includes(searchLower) || 
+      filteredClasses = filteredClasses.filter(classItem =>
+        classItem.title.toLowerCase().includes(searchLower) ||
         classItem.description.toLowerCase().includes(searchLower)
       );
     }
 
     if (category) {
-      filteredClasses = filteredClasses.filter(classItem => 
+      filteredClasses = filteredClasses.filter(classItem =>
         classItem.category.toLowerCase() === category.toLowerCase()
       );
     }
@@ -1284,8 +1285,8 @@ export class MemStorage implements IStorage {
                 type: path.extname(file).substring(1),
                 name: file
               })),
-              metadata: { 
-                tags: ['uploaded', 'documents'], 
+              metadata: {
+                tags: ['uploaded', 'documents'],
                 objectives: ['Access uploaded content']
               },
               isPublic: true,
@@ -1334,8 +1335,8 @@ export class MemStorage implements IStorage {
           name: "antoinette_brown_blackwell.json"
         }
       ],
-      metadata: { 
-        tags: ["women's rights", "history", "biography", "pioneering women"], 
+      metadata: {
+        tags: ["women's rights", "history", "biography", "pioneering women"],
         objectives: ["Learn about women's suffrage", "Understand religious leadership", "Explore 19th century social movements"]
       },
       isPublic: true,
@@ -1361,12 +1362,12 @@ export class MemStorage implements IStorage {
         },
         {
           url: "/attached_assets/ASA_Platform_System_Architecture.md",
-          type: "md", 
+          type: "md",
           name: "System Architecture"
         }
       ],
-      metadata: { 
-        tags: ["education technology", "platform development", "system architecture"], 
+      metadata: {
+        tags: ["education technology", "platform development", "system architecture"],
         objectives: ["Understand platform design", "Learn system architecture", "Explore educational technology"]
       },
       isPublic: true,
@@ -1396,8 +1397,8 @@ export class MemStorage implements IStorage {
           name: "NLP Recommendation System"
         }
       ],
-      metadata: { 
-        tags: ["artificial intelligence", "educational technology", "NLP", "machine learning"], 
+      metadata: {
+        tags: ["artificial intelligence", "educational technology", "NLP", "machine learning"],
         objectives: ["Implement AI in education", "Understand NLP applications", "Design recommendation systems"]
       },
       isPublic: true,
@@ -1425,8 +1426,8 @@ export class MemStorage implements IStorage {
       authorId: 1, // Admin user
       price: 0, // Free
       files: [{ url: "/kb/math-fundamentals.pdf", type: "pdf", name: "Math Fundamentals Guide" }],
-      metadata: { 
-        tags: ["math", "elementary", "arithmetic", "geometry"], 
+      metadata: {
+        tags: ["math", "elementary", "arithmetic", "geometry"],
         objectives: ["Master basic arithmetic operations", "Understand fractions", "Learn introductory geometry"]
       },
       isPublic: true,
@@ -1447,8 +1448,8 @@ export class MemStorage implements IStorage {
       authorId: 2, // Sarah (educator user)
       price: 0, // Free
       files: [{ url: "/kb/physical-science.pdf", type: "pdf", name: "Physical Science Handbook" }],
-      metadata: { 
-        tags: ["science", "physics", "energy", "forces"], 
+      metadata: {
+        tags: ["science", "physics", "energy", "forces"],
         objectives: ["Understand Newton's laws", "Explore energy transformation", "Learn about simple machines"]
       },
       isPublic: true,
@@ -1469,8 +1470,8 @@ export class MemStorage implements IStorage {
       authorId: 2, // Sarah (educator user)
       price: 500, // $5.00
       files: [{ url: "/kb/creative-writing.pdf", type: "pdf", name: "Creative Writing Manual" }],
-      metadata: { 
-        tags: ["writing", "creativity", "storytelling", "language arts"], 
+      metadata: {
+        tags: ["writing", "creativity", "storytelling", "language arts"],
         objectives: ["Develop narrative writing skills", "Build character development techniques", "Master descriptive language"]
       },
       isPublic: true,
@@ -1491,8 +1492,8 @@ export class MemStorage implements IStorage {
       authorId: 1, // Admin user
       price: 0, // Free
       files: [{ url: "/kb/ancient-civilizations.pdf", type: "pdf", name: "Ancient Civilizations Resource" }],
-      metadata: { 
-        tags: ["history", "ancient", "civilizations", "world history"], 
+      metadata: {
+        tags: ["history", "ancient", "civilizations", "world history"],
         objectives: ["Compare ancient civilizations", "Understand historical timelines", "Explore cultural achievements"]
       },
       isPublic: true,
@@ -1705,275 +1706,275 @@ export class MemStorage implements IStorage {
         console.log('⚠️ classes.json not found, using fallback sample classes');
         this.createFallbackClasses();
       }
-      } catch (error) {
-        console.error('❌ Error loading classes from JSON:', error);
-        this.createFallbackClasses();
-      }
-    }
-
-    private createFallbackClasses() {
-      // Fallback sample classes only if JSON loading fails
-      const sampleClasses = [
-        {
-          title: "Introduction to Mathematics",
-          category: "mathematics",
-          categoryName: "Mathematics",
-          description: "A comprehensive introduction to basic mathematical concepts for beginners.",
-          price: 49.99,
-          startDate: new Date("2025-07-01"),
-          endDate: new Date("2025-08-15"),
-          instructorId: 1,
-          isPublished: true,
-          status: "published"
-        }
-      ];
-
-      sampleClasses.forEach(classData => {
-        this.createClass({
-          ...classData,
-          instructorId: classData.instructorId
-        });
-      });
-    }
-
-    private async initializeEnrollments() {
-      // Load enrollments from the actual JSON file
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
-
-        if (fs.existsSync(enrollmentsFilePath)) {
-          const enrollmentsData = JSON.parse(fs.readFileSync(enrollmentsFilePath, 'utf-8'));
-          console.log(`📚 Loading ${enrollmentsData.length} enrollments from enrollments.json`);
-
-          this.classEnrollments = enrollmentsData.map((enrollment: any) => ({
-            ...enrollment,
-            enrollmentDate: enrollment.enrollmentDate ? new Date(enrollment.enrollmentDate) : new Date()
-          }));
-
-          console.log(`✅ Successfully loaded ${this.classEnrollments.length} enrollments into storage`);
-        } else {
-          console.log('📚 No enrollments.json found, starting with empty enrollments');
-          this.classEnrollments = [];
-        }
-      } catch (error) {
-        console.error('❌ Error loading enrollments from JSON:', error);
-        this.classEnrollments = [];
-      }
-    }
-
-    private async saveEnrollmentsToFile() {
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
-
-        console.log(`💾 Attempting to save ${this.classEnrollments.length} enrollments to file: ${enrollmentsFilePath}`);
-        console.log(`💾 Enrollment data to save:`, JSON.stringify(this.classEnrollments, null, 2));
-
-        // Ensure data directory exists
-        const dataDir = path.dirname(enrollmentsFilePath);
-        if (!fs.existsSync(dataDir)) {
-          fs.mkdirSync(dataDir, { recursive: true });
-          console.log(`📁 Created data directory: ${dataDir}`);
-        }
-
-        const enrollmentData = JSON.stringify(this.classEnrollments, null, 2);
-        fs.writeFileSync(enrollmentsFilePath, enrollmentData);
-        console.log(`✅ Successfully saved ${this.classEnrollments.length} enrollments to enrollments.json`);
-
-        // Verify the file was written
-        const savedData = fs.readFileSync(enrollmentsFilePath, 'utf-8');
-        console.log(`🔍 Verification - File contents: ${savedData.substring(0, 100)}...`);
-      } catch (error) {
-        console.error('❌ Error saving enrollments to file:', error);
-        console.error('❌ Error details:', error.message);
-      }
-    }
-
-    private async initializeChildren() {
-      // Load children from the actual JSON file
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
-
-        if (fs.existsSync(childrenFilePath)) {
-          const childrenData = JSON.parse(fs.readFileSync(childrenFilePath, 'utf-8'));
-          console.log(`👶 Loading ${childrenData.length} children from children.json`);
-
-          childrenData.forEach((childData: any) => {
-            // Ensure the child has required fields and set defaults for missing ones
-            const normalizedChild = {
-              ...childData,
-              // Handle dates properly
-              birthDate: childData.birthDate ? new Date(childData.birthDate) : new Date(),
-              createdAt: childData.createdAt ? new Date(childData.createdAt) : new Date(),
-              updatedAt: childData.updatedAt ? new Date(childData.updatedAt) : new Date()
-            };
-
-            // Add to store with existing ID
-            this.childrenStore.set(childData.id, normalizedChild as Child);
-
-            // Update counter to be higher than max ID
-            if (childData.id >= this.childIdCounter) {
-              this.childIdCounter = childData.id + 1;
-            }
-          });
-
-          console.log(`✅ Successfully loaded ${this.childrenStore.size} children into storage`);
-          console.log(`👶 Available child IDs: [${Array.from(this.childrenStore.keys()).join(', ')}]`);
-        } else {
-          console.log('⚠️ children.json not found, no children loaded into storage');
-        }
-      } catch (error) {
-        console.error('❌ Error loading children from JSON:', error);
-      }
-    }
-
-    // Marketing Links Methods
-    async createMarketingLink(data: InsertMarketingLink): Promise<MarketingLink> {
-      const id = this.marketingLinkIdCounter++;
-      const now = new Date();
-      const marketingLink: MarketingLink = {
-        id,
-        createdAt: now,
-        updatedAt: now,
-        ...data
-      };
-      this.marketingLinksStore.set(id, marketingLink);
-      return marketingLink;
-    }
-
-    async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
-      return this.marketingLinksStore.get(id);
-    }
-
-    async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
-      for (const link of this.marketingLinksStore.values()) {
-        if (link.campaignId === campaignId) {
-          return link;
-        }
-      }
-      return undefined;
-    }
-
-    async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
-      return Array.from(this.marketingLinksStore.values()).filter(
-        link => link.schoolId === schoolId
-      );
-    }
-
-    async updateMarketingLink(id: number, data: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
-      const existing = this.marketingLinksStore.get(id);
-      if (!existing) return undefined;
-
-      const updated: MarketingLink = {
-        ...existing,
-        ...data,
-        updatedAt: new Date()
-      };
-      this.marketingLinksStore.set(id, updated);
-      return updated;
-    }
-
-    async deleteMarketingLink(id: number): Promise<boolean> {
-      return this.marketingLinksStore.delete(id);
-    }
-
-    async createLinkAnalytics(data: InsertLinkAnalytics): Promise<LinkAnalytics> {
-      const id = this.linkAnalyticsIdCounter++;
-      const analytics: LinkAnalytics = {
-        id,
-        timestamp: new Date(),
-        ...data
-      };
-      this.linkAnalyticsStore.set(id, analytics);
-      return analytics;
-    }
-
-    async incrementLinkClick(linkId: number): Promise<void> {
-      await this.createLinkAnalytics({
-        linkId,
-        event: 'click',
-        ipAddress: null,
-        userAgent: null,
-        referrer: null
-      });
-    }
-
-    async incrementLinkConversion(linkId: number): Promise<void> {
-      await this.createLinkAnalytics({
-        linkId,
-        event: 'conversion',
-        ipAddress: null,
-        userAgent: null,
-        referrer: null
-      });
-    }
-
-    async getLinkAnalytics(linkId: number): Promise<LinkAnalytics[]> {
-      return Array.from(this.linkAnalyticsStore.values()).filter(
-        analytics => analytics.linkId === linkId
-      );
-    }
-
-    async getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
-      return Array.from(this.linkAnalyticsStore.values()).filter(
-        analytics => analytics.linkId === linkId
-      );
-    }
-
-    async getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
-      return Array.from(this.linkAnalyticsStore.values()).filter(
-        analytics => analytics.linkId === schoolId
-      );
-    }
-
-    // Payment methods implementation
-    async getAllPayments(): Promise<Payment[]> {
-      return Array.from(this.paymentsStore.values());
-    }
-
-    async createPayment(payment: InsertPayment): Promise<Payment> {
-      const id = this.paymentIdCounter++;
-      const now = new Date();
-      const newPayment: Payment = {
-        id,
-        createdAt: now,
-        updatedAt: now,
-        ...payment
-      };
-      this.paymentsStore.set(id, newPayment);
-      return newPayment;
-    }
-
-    async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
-      return Array.from(this.paymentsStore.values()).filter(
-        payment => payment.parentEmail === parentEmail
-      );
-    }
-
-    async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-      return Array.from(this.paymentsStore.values()).find(
-        payment => payment.stripePaymentIntentId === stripePaymentIntentId
-      );
-    }
-
-    async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
-      const payment = this.paymentsStore.get(id);
-      if (!payment) return undefined;
-
-      const updatedPayment: Payment = {
-        ...payment,
-        status,
-        updatedAt: new Date()
-      };
-      this.paymentsStore.set(id, updatedPayment);
-      return updatedPayment;
+    } catch (error) {
+      console.error('❌ Error loading classes from JSON:', error);
+      this.createFallbackClasses();
     }
   }
+
+  private createFallbackClasses() {
+    // Fallback sample classes only if JSON loading fails
+    const sampleClasses = [
+      {
+        title: "Introduction to Mathematics",
+        category: "mathematics",
+        categoryName: "Mathematics",
+        description: "A comprehensive introduction to basic mathematical concepts for beginners.",
+        price: 49.99,
+        startDate: new Date("2025-07-01"),
+        endDate: new Date("2025-08-15"),
+        instructorId: 1,
+        isPublished: true,
+        status: "published"
+      }
+    ];
+
+    sampleClasses.forEach(classData => {
+      this.createClass({
+        ...classData,
+        instructorId: classData.instructorId
+      });
+    });
+  }
+
+  private async initializeEnrollments() {
+    // Load enrollments from the actual JSON file
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
+
+      if (fs.existsSync(enrollmentsFilePath)) {
+        const enrollmentsData = JSON.parse(fs.readFileSync(enrollmentsFilePath, 'utf-8'));
+        console.log(`📚 Loading ${enrollmentsData.length} enrollments from enrollments.json`);
+
+        this.classEnrollments = enrollmentsData.map((enrollment: any) => ({
+          ...enrollment,
+          enrollmentDate: enrollment.enrollmentDate ? new Date(enrollment.enrollmentDate) : new Date()
+        }));
+
+        console.log(`✅ Successfully loaded ${this.classEnrollments.length} enrollments into storage`);
+      } else {
+        console.log('📚 No enrollments.json found, starting with empty enrollments');
+        this.classEnrollments = [];
+      }
+    } catch (error) {
+      console.error('❌ Error loading enrollments from JSON:', error);
+      this.classEnrollments = [];
+    }
+  }
+
+  private async saveEnrollmentsToFile() {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const enrollmentsFilePath = path.join(process.cwd(), 'data', 'enrollments.json');
+
+      console.log(`💾 Attempting to save ${this.classEnrollments.length} enrollments to file: ${enrollmentsFilePath}`);
+      console.log(`💾 Enrollment data to save:`, JSON.stringify(this.classEnrollments, null, 2));
+
+      // Ensure data directory exists
+      const dataDir = path.dirname(enrollmentsFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+        console.log(`📁 Created data directory: ${dataDir}`);
+      }
+
+      const enrollmentData = JSON.stringify(this.classEnrollments, null, 2);
+      fs.writeFileSync(enrollmentsFilePath, enrollmentData);
+      console.log(`✅ Successfully saved ${this.classEnrollments.length} enrollments to enrollments.json`);
+
+      // Verify the file was written
+      const savedData = fs.readFileSync(enrollmentsFilePath, 'utf-8');
+      console.log(`🔍 Verification - File contents: ${savedData.substring(0, 100)}...`);
+    } catch (error) {
+      console.error('❌ Error saving enrollments to file:', error);
+      console.error('❌ Error details:', error.message);
+    }
+  }
+
+  private async initializeChildren() {
+    // Load children from the actual JSON file
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
+
+      if (fs.existsSync(childrenFilePath)) {
+        const childrenData = JSON.parse(fs.readFileSync(childrenFilePath, 'utf-8'));
+        console.log(`👶 Loading ${childrenData.length} children from children.json`);
+
+        childrenData.forEach((childData: any) => {
+          // Ensure the child has required fields and set defaults for missing ones
+          const normalizedChild = {
+            ...childData,
+            // Handle dates properly
+            birthDate: childData.birthDate ? new Date(childData.birthDate) : new Date(),
+            createdAt: childData.createdAt ? new Date(childData.createdAt) : new Date(),
+            updatedAt: childData.updatedAt ? new Date(childData.updatedAt) : new Date()
+          };
+
+          // Add to store with existing ID
+          this.childrenStore.set(childData.id, normalizedChild as Child);
+
+          // Update counter to be higher than max ID
+          if (childData.id >= this.childIdCounter) {
+            this.childIdCounter = childData.id + 1;
+          }
+        });
+
+        console.log(`✅ Successfully loaded ${this.childrenStore.size} children into storage`);
+        console.log(`👶 Available child IDs: [${Array.from(this.childrenStore.keys()).join(', ')}]`);
+      } else {
+        console.log('⚠️ children.json not found, no children loaded into storage');
+      }
+    } catch (error) {
+      console.error('❌ Error loading children from JSON:', error);
+    }
+  }
+
+  // Marketing Links Methods
+  async createMarketingLink(data: InsertMarketingLink): Promise<MarketingLink> {
+    const id = this.marketingLinkIdCounter++;
+    const now = new Date();
+    const marketingLink: MarketingLink = {
+      id,
+      createdAt: now,
+      updatedAt: now,
+      ...data
+    };
+    this.marketingLinksStore.set(id, marketingLink);
+    return marketingLink;
+  }
+
+  async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
+    return this.marketingLinksStore.get(id);
+  }
+
+  async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
+    for (const link of this.marketingLinksStore.values()) {
+      if (link.campaignId === campaignId) {
+        return link;
+      }
+    }
+    return undefined;
+  }
+
+  async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
+    return Array.from(this.marketingLinksStore.values()).filter(
+      link => link.schoolId === schoolId
+    );
+  }
+
+  async updateMarketingLink(id: number, data: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
+    const existing = this.marketingLinksStore.get(id);
+    if (!existing) return undefined;
+
+    const updated: MarketingLink = {
+      ...existing,
+      ...data,
+      updatedAt: new Date()
+    };
+    this.marketingLinksStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteMarketingLink(id: number): Promise<boolean> {
+    return this.marketingLinksStore.delete(id);
+  }
+
+  async createLinkAnalytics(data: InsertLinkAnalytics): Promise<LinkAnalytics> {
+    const id = this.linkAnalyticsIdCounter++;
+    const analytics: LinkAnalytics = {
+      id,
+      timestamp: new Date(),
+      ...data
+    };
+    this.linkAnalyticsStore.set(id, analytics);
+    return analytics;
+  }
+
+  async incrementLinkClick(linkId: number): Promise<void> {
+    await this.createLinkAnalytics({
+      linkId,
+      event: 'click',
+      ipAddress: null,
+      userAgent: null,
+      referrer: null
+    });
+  }
+
+  async incrementLinkConversion(linkId: number): Promise<void> {
+    await this.createLinkAnalytics({
+      linkId,
+      event: 'conversion',
+      ipAddress: null,
+      userAgent: null,
+      referrer: null
+    });
+  }
+
+  async getLinkAnalytics(linkId: number): Promise<LinkAnalytics[]> {
+    return Array.from(this.linkAnalyticsStore.values()).filter(
+      analytics => analytics.linkId === linkId
+    );
+  }
+
+  async getLinkAnalyticsByLinkId(linkId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
+    return Array.from(this.linkAnalyticsStore.values()).filter(
+      analytics => analytics.linkId === linkId
+    );
+  }
+
+  async getLinkAnalyticsBySchoolId(schoolId: number, startDate?: Date, endDate?: Date): Promise<LinkAnalytics[]> {
+    return Array.from(this.linkAnalyticsStore.values()).filter(
+      analytics => analytics.linkId === schoolId
+    );
+  }
+
+  // Payment methods implementation
+  async getAllPayments(): Promise<Payment[]> {
+    return Array.from(this.paymentsStore.values());
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const id = this.paymentIdCounter++;
+    const now = new Date();
+    const newPayment: Payment = {
+      id,
+      createdAt: now,
+      updatedAt: now,
+      ...payment
+    };
+    this.paymentsStore.set(id, newPayment);
+    return newPayment;
+  }
+
+  async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
+    return Array.from(this.paymentsStore.values()).filter(
+      payment => payment.parentEmail === parentEmail
+    );
+  }
+
+  async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
+    return Array.from(this.paymentsStore.values()).find(
+      payment => payment.stripePaymentIntentId === stripePaymentIntentId
+    );
+  }
+
+  async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
+    const payment = this.paymentsStore.get(id);
+    if (!payment) return undefined;
+
+    const updatedPayment: Payment = {
+      ...payment,
+      status,
+      updatedAt: new Date()
+    };
+    this.paymentsStore.set(id, updatedPayment);
+    return updatedPayment;
+  }
+}
 
   import { DatabaseStorage } from "./dbStorage";
   import { supabaseStorage, SupabaseStorage } from './supabase-storage';
@@ -1982,11 +1983,13 @@ export class MemStorage implements IStorage {
     private dbStorage: DatabaseStorage;
     private memStorage: MemStorage;
     private supabaseStorage: SupabaseStorage
+    private fileStorage: MemStorage; // Assuming fileStorage is also an instance of MemStorage for fallback
 
     constructor() {
       this.dbStorage = new DatabaseStorage();
       this.memStorage = new MemStorage();
-      this.supabaseStorage = supabaseStorage
+      this.supabaseStorage = supabaseStorage;
+      this.fileStorage = new MemStorage(); // Initialize fileStorage as well
     }
 
     async getAllUsers(): Promise<User[]> {
@@ -2000,7 +2003,7 @@ export class MemStorage implements IStorage {
           const path = await import('path');
           const DATA_DIR = path.join(process.cwd(), 'data');
           const USERS_FILE = path.join(DATA_DIR, 'users.json');
-          
+
           if (fs.existsSync(USERS_FILE)) {
             const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
             const users = JSON.parse(fileContent);
@@ -2028,7 +2031,18 @@ export class MemStorage implements IStorage {
     }
 
     async getAllPayments(): Promise<Payment[]> {
-      return this.dbStorage.getAllPayments();
+      try {
+        // Prefer dbStorage, but fallback to fileStorage (memStorage instance) if unavailable
+        if (this.dbStorage && typeof this.dbStorage.getAllPayments === 'function') {
+          return await this.dbStorage.getAllPayments();
+        } else {
+          console.log('💾 DB storage unavailable or method missing, using file storage fallback for getAllPayments');
+          return await this.fileStorage.getAllPayments();
+        }
+      } catch (error) {
+        console.error('❌ Error getting all payments, falling back to file storage:', error);
+        return await this.fileStorage.getAllPayments();
+      }
     }
 
     async getAllEnrollments(): Promise<ProgramEnrollment[]> {
@@ -2051,7 +2065,7 @@ export class MemStorage implements IStorage {
           const path = await import('path');
           const DATA_DIR = path.join(process.cwd(), 'data');
           const USERS_FILE = path.join(DATA_DIR, 'users.json');
-          
+
           if (fs.existsSync(USERS_FILE)) {
             const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
             const users = JSON.parse(fileContent);
@@ -2079,7 +2093,7 @@ export class MemStorage implements IStorage {
           const path = await import('path');
           const DATA_DIR = path.join(process.cwd(), 'data');
           const USERS_FILE = path.join(DATA_DIR, 'users.json');
-          
+
           if (fs.existsSync(USERS_FILE)) {
             const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
             const users = JSON.parse(fileContent);
@@ -2488,7 +2502,18 @@ export class MemStorage implements IStorage {
 
       // Payment methods implementation - use memStorage since database is failing
       async createPayment(payment: InsertPayment): Promise<Payment> {
-        return this.memStorage.createPayment(payment);
+        try {
+          // Prefer dbStorage, but fallback to fileStorage (memStorage instance) if unavailable
+          if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
+            return await this.dbStorage.createPayment(payment);
+          } else {
+            console.log('💾 DB storage unavailable or method missing, using file storage fallback for createPayment');
+            return await this.fileStorage.createPayment(payment);
+          }
+        } catch (error) {
+          console.error('❌ Error creating payment, falling back to file storage:', error);
+          return await this.fileStorage.createPayment(payment);
+        }
       }
 
       async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {

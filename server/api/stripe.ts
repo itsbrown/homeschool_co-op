@@ -186,9 +186,56 @@ router.post('/webhook', async (req, res) => {
           // Handle new enrollment payments
           const itemsJson = paymentIntent.metadata.itemsJson;
           const paymentType = paymentIntent.metadata.paymentType;
+          const parentEmail = paymentIntent.metadata.parentEmail;
           
           if (itemsJson) {
             const items = JSON.parse(itemsJson);
+            
+            // Create payment record
+            const payment = {
+              id: Date.now(),
+              stripePaymentIntentId: paymentIntent.id,
+              parentEmail: parentEmail,
+              childName: items[0]?.childName || 'Unknown',
+              className: items[0]?.className || 'Unknown',
+              amount: paymentIntent.amount,
+              currency: paymentIntent.currency,
+              status: 'completed',
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+
+            try {
+              const { storage } = await import('../storage');
+              await storage.createPayment(payment);
+              console.log('✅ Payment record created:', payment.id);
+            } catch (error) {
+              console.error('❌ Failed to create payment record:', error);
+            }
+
+            // Send confirmation email
+            try {
+              const { sendPaymentConfirmationEmail } = await import('../lib/email-service');
+              
+              const enrollmentDetails = items.map((item: any) => ({
+                childName: item.childName,
+                className: item.className,
+                price: item.totalCost || item.price,
+                amountPaid: Math.round(paymentIntent.amount / items.length),
+              }));
+
+              const emailSent = await sendPaymentConfirmationEmail({
+                parentEmail: parentEmail,
+                parentName: 'Parent', // Could be enhanced to get actual name
+                payment: payment,
+                enrollmentDetails: enrollmentDetails,
+                paymentPlan: paymentType,
+              });
+
+              console.log('📧 Payment confirmation email sent:', emailSent);
+            } catch (emailError) {
+              console.error('❌ Failed to send payment confirmation email:', emailError);
+            }
             
             if (paymentType === 'deposit') {
               // Handle deposit payments - update existing enrollments or create new ones
