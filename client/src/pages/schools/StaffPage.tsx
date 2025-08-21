@@ -43,10 +43,13 @@ export default function StaffPage() {
   const queryClient = useQueryClient();
 
   // Fetch staff data from API
-  const { data: staff, isLoading, error } = useQuery({
+  const { data: staff = [], isLoading, error } = useQuery({
     queryKey: ['/api/school-admin/staff'],
     refetchInterval: 3000,
     refetchIntervalInBackground: true,
+    // Ensure fresh data by disabling cache for debugging
+    staleTime: 0,
+    gcTime: 0, // React Query v5 uses gcTime instead of cacheTime
   });
 
   // Mutation for resending individual invites

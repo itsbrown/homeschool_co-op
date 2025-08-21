@@ -103,7 +103,11 @@ export default function StaffEditPage() {
         title: "Success",
         description: "Staff member updated successfully",
       });
+      // Invalidate both the staff list and the individual staff member cache
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff', id] });
+      // Force refetch the staff list
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/staff'] });
       navigate('/schools/staff');
     },
     onError: (error: any) => {
