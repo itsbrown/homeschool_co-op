@@ -77,7 +77,7 @@ export default function ForgotPasswordPage() {
                   >
                     {resetInfo.resetUrl}
                   </a>
-                </CardDescription>
+                </AlertDescription>
               </Alert>
             )}
 

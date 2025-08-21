@@ -1,4 +1,4 @@
-import React, { lazy } from "react";
+import React, { lazy, useEffect } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
@@ -221,6 +221,21 @@ function Router() {
 
   console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
 
+  // Handle redirects in useEffect to avoid state updates during render
+  useEffect(() => {
+    // Redirect to login if not authenticated (except for public routes)
+    if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/')) {
+      console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
+      setLocation('/login');
+    }
+
+    // Redirect authenticated users away from login page
+    if (isAuthenticated && location === '/login' && activeRole) {
+      console.log(`🔄 Redirecting authenticated user away from login page`);
+      setLocation('/dashboard');
+    }
+  }, [isAuthenticated, isLoading, location, activeRole, setLocation]);
+
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {
     // Handle Auth0 callback
@@ -328,21 +343,6 @@ function Router() {
       </div>
     );
   }
-
-  // Redirect to login if not authenticated (except for public routes)
-  if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/')) {
-    console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
-    setLocation('/login');
-    return null;
-  }
-
-  // Redirect authenticated users away from login page
-  if (isAuthenticated && location === '/login' && activeRole) {
-    console.log(`🔄 Redirecting authenticated user away from login page`);
-    setLocation('/dashboard');
-    return null;
-  }
-
 
   return (
     <Switch>
