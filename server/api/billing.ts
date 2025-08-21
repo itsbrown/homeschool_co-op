@@ -325,4 +325,103 @@ router.post('/pay-balance', async (req, res) => {
   }
 });
 
+// Confirm payment and update enrollment statuses
+router.post('/confirm-payment', async (req, res) => {
+  try {
+    const { paymentIntentId, enrollmentIds, amount, paymentDate } = req.body;
+    console.log('💳 Confirming payment:', paymentIntentId, 'for enrollments:', enrollmentIds);
+
+    // Extract user email from Supabase token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization header missing' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the Supabase token
+    const supabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.log('❌ Supabase auth error:', error);
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    const userEmail = user.email;
+    if (!userEmail) {
+      return res.status(401).json({ error: 'User email not found' });
+    }
+
+    // Update enrollment statuses
+    const allEnrollments = await storage.getAllEnrollments();
+    const updatedEnrollments = [];
+
+    for (const enrollmentId of enrollmentIds) {
+      const enrollment = allEnrollments.find(e => e.id === enrollmentId);
+      if (enrollment && enrollment.parentEmail === userEmail) {
+        enrollment.status = 'enrolled';
+        enrollment.amount = (enrollment.amount || 0) + Math.round(amount / enrollmentIds.length);
+        await storage.updateEnrollment(enrollment);
+        updatedEnrollments.push(enrollment);
+        console.log('✅ Updated enrollment:', enrollmentId, 'status to enrolled');
+      }
+    }
+
+    // Create payment record
+    const payment = await storage.createPayment({
+      stripePaymentIntentId: paymentIntentId,
+      parentEmail: userEmail,
+      childName: updatedEnrollments[0]?.childName || 'Unknown',
+      className: updatedEnrollments[0]?.className || 'Unknown',
+      amount: amount,
+      currency: 'usd',
+      status: 'completed',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    // Send confirmation email
+    try {
+      const { sendPaymentConfirmationEmail } = await import('../lib/email-service');
+      
+      const enrollmentDetails = updatedEnrollments.map(enrollment => ({
+        childName: enrollment.childName,
+        className: enrollment.className,
+        price: enrollment.totalCost || 0,
+        amountPaid: Math.round(amount / enrollmentIds.length),
+      }));
+
+      const emailSent = await sendPaymentConfirmationEmail({
+        parentEmail: userEmail,
+        parentName: user.user_metadata?.full_name || 'Parent',
+        payment: payment,
+        enrollmentDetails: enrollmentDetails,
+      });
+
+      console.log('📧 Confirmation email sent:', emailSent);
+    } catch (emailError) {
+      console.error('❌ Error sending confirmation email:', emailError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment confirmed and enrollments updated',
+      updatedEnrollments: updatedEnrollments.length,
+      paymentId: payment.id
+    });
+
+  } catch (error) {
+    console.error('❌ Error confirming payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to confirm payment'
+    });
+  }
+});
+
 export default router;

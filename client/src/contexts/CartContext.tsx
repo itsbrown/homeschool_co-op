@@ -205,6 +205,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      // Check if cart was recently cleared (within 30 seconds) to prevent refilling after payment
+      const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
+      if (clearedTimestamp) {
+        const timeSinceCleared = Date.now() - parseInt(clearedTimestamp);
+        if (timeSinceCleared < 30000) { // 30 seconds
+          console.log('🛒 Cart was recently cleared, skipping reload to prevent refilling');
+          return;
+        } else {
+          // Clear the flag after 30 seconds
+          localStorage.removeItem('asa_cart_cleared');
+        }
+      }
+
       const response = await fetch('/api/enrollments', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -325,6 +338,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = () => {
     dispatch({ type: 'CLEAR_CART' });
     localStorage.removeItem('asa_cart');
+    // Set a flag to prevent immediate reload after payment
+    localStorage.setItem('asa_cart_cleared', Date.now().toString());
     console.log('🛒 Cart cleared - localStorage removed');
     toast({
       title: "Cart Cleared",

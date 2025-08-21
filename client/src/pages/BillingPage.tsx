@@ -157,6 +157,25 @@ function PaymentForm({
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         console.log('✅ Payment successful:', paymentIntent.id);
         
+        // Update enrollment statuses and send confirmation email
+        try {
+          console.log('🔄 Updating enrollment statuses and sending confirmation...');
+          const confirmResponse = await apiRequest('POST', '/api/billing/confirm-payment', {
+            paymentIntentId: paymentIntent.id,
+            enrollmentIds: enrollmentIds,
+            amount: totalAmount,
+            paymentDate: new Date().toISOString(),
+          });
+          
+          if (confirmResponse.ok) {
+            console.log('✅ Payment confirmation and enrollment update successful');
+          } else {
+            console.warn('⚠️ Payment confirmation failed:', await confirmResponse.text());
+          }
+        } catch (error) {
+          console.error('❌ Error confirming payment:', error);
+        }
+
         // Call the success callback with payment details
         onPaymentSuccess({
           paymentIntentId: paymentIntent.id,
