@@ -188,6 +188,10 @@ function PaymentForm({
           title: "Payment Successful!",
           description: "Your balance has been paid successfully.",
         });
+        
+        // Clear cart immediately to prevent refilling
+        console.log('🛒 Clearing cart after successful payment');
+        clearCart();
 
         // Refresh data in the background
         setTimeout(() => {
@@ -973,38 +977,19 @@ export default function BillingPage() {
                         enrollmentIds={selectedEnrollments} 
                         totalAmount={getPaymentPlanAmount()} 
                         onPaymentSuccess={async (details) => {
-                          setPaymentSuccess(true);
-                          setSuccessDetails(details);
+                          console.log('🎉 Payment success callback triggered:', details);
                           
-                          // Clear cart after successful billing payment
+                          // Clear cart immediately
+                          console.log('🛒 Clearing cart after successful payment');
                           clearCart();
                           
-                          // Send confirmation email
-                          try {
-                            const token = localStorage.getItem('supabase_token');
-                            await fetch('/api/billing/confirm-payment', {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                              },
-                              body: JSON.stringify({
-                                paymentIntentId: details.paymentIntentId,
-                                parentEmail: billingSummary?.parentEmail,
-                                enrollmentDetails: selectedEnrollments.map(id => {
-                                  const enrollment = billingSummary?.enrollmentDetails.find(e => e.enrollmentId === id);
-                                  return {
-                                    childName: enrollment?.childName || '',
-                                    className: enrollment?.className || '',
-                                    price: enrollment?.classPrice || 0,
-                                    amountPaid: details.amount
-                                  };
-                                })
-                              })
-                            });
-                          } catch (error) {
-                            console.error('Failed to send confirmation email:', error);
-                          }
+                          // Update success state
+                          setSuccessDetails(details);
+                          setPaymentSuccess(true);
+                          
+                          // Clear the payment form
+                          setShowPayment(false);
+                          setClientSecret('');
                         }}
                       />
                     </Elements>
