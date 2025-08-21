@@ -56,11 +56,12 @@
     "parentEmail": "jocimarie@gmail.com",
     "tuitionAmount": 15000,
     "depositAmount": 1500,
-    "outstandingBalance": 15000,
-    "amount": 0,
+    "outstandingBalance": 0,
+    "amount": 900,
     "depositRequired": 90,
     "totalCost": 900,
-    "remainingBalance": 900
+    "remainingBalance": 0,
+    "amountPaid": 900
   },
   {
     "id": 1755794800000,
@@ -73,11 +74,12 @@
     "parentEmail": "jocimarie@gmail.com",
     "tuitionAmount": 18000,
     "depositAmount": 1800,
-    "outstandingBalance": 18000,
-    "amount": 0,
+    "outstandingBalance": 0,
+    "amount": 900,
     "depositRequired": 90,
     "totalCost": 900,
-    "remainingBalance": 900
+    "remainingBalance": 0,
+    "amountPaid": 900
   },
   {
     "id": 1752425424099,
@@ -182,5 +184,18 @@
     "depositRequired": 150,
     "totalCost": 1500,
     "remainingBalance": 1500
+  },
+  {
+    "id": 1755797780360,
+    "classId": 2,
+    "childId": 15,
+    "childName": "Test Child",
+    "className": "Elementary Math Fundamentals",
+    "enrollmentDate": "2025-08-21T17:36:20.360Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 14,
+    "totalCost": 140,
+    "remainingBalance": 140
   }
 ]

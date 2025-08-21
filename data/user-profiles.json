@@ -1,1 +1,12 @@
-{}
+{
+  "coreycreates@gmail.com": {
+    "id": "1",
+    "email": "coreycreates@gmail.com",
+    "firstName": "Jocelyn",
+    "lastName": "Brown",
+    "phoneNumber": "",
+    "avatar": "",
+    "subscription": "free",
+    "name": "Jocelyn Brown"
+  }
+}
