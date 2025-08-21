@@ -13,7 +13,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-05-27T19:43:32.236Z",
-    "message": "Welcome to our team!"
+    "message": "Welcome to our team!",
+    "invitationToken": "zsns4c5g285e83hv42ijg"
   },
   {
     "id": 2,
@@ -29,7 +30,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-05-27T20:40:17.704Z",
-    "message": "Test"
+    "message": "Test",
+    "invitationToken": "02hqm2gzee8icmns38w7vcj"
   },
   {
     "id": 3,
@@ -45,7 +47,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-06-01T23:19:52.590Z",
-    "message": ""
+    "message": "",
+    "invitationToken": "86anzq0yljcot2aw12wolp"
   },
   {
     "id": 4,
@@ -61,7 +64,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-06-02T01:08:24.597Z",
-    "message": "Hello"
+    "message": "Hello",
+    "invitationToken": "r2ucobk0okl1iew3ejnfcj"
   },
   {
     "id": 1,
@@ -93,7 +97,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-08-20T15:07:26.054Z",
-    "message": "Welcome to our team!"
+    "message": "Welcome to our team!",
+    "invitationToken": "z8mre2rops8ym6wzywh8tr"
   },
   {
     "id": 6,
@@ -109,7 +114,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-08-20T15:08:25.649Z",
-    "message": "Welcome to our team!"
+    "message": "Welcome to our team!",
+    "invitationToken": "ec50xrvam84t98lcoc1gj"
   },
   {
     "id": 7,
@@ -125,7 +131,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-08-20T15:13:41.409Z",
-    "message": "Testing token system"
+    "message": "Testing token system",
+    "invitationToken": "xgoczojy9ip6chs30zkzll"
   },
   {
     "id": 8,
@@ -141,7 +148,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-08-20T15:13:55.641Z",
-    "message": "Testing token validation"
+    "message": "Testing token validation",
+    "invitationToken": "l614uh7tffc0krop2yames"
   },
   {
     "id": 9,
@@ -157,7 +165,8 @@
     "phone": "",
     "subjects": [],
     "invitedAt": "2025-08-20T15:14:14.793Z",
-    "message": ""
+    "message": "",
+    "invitationToken": "5okzzoqzu0sul2xo8z5bi8"
   },
   {
     "id": 10,
