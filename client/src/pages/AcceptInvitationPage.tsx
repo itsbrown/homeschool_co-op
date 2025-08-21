@@ -21,6 +21,7 @@ export default function AcceptInvitationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
+  const [invitationType, setInvitationType] = useState<'staff' | 'role' | null>(null);
 
   // Get token from URL query parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -40,6 +41,7 @@ export default function AcceptInvitationPage() {
         const data = await response.json();
         if (data.valid) {
           setInvitation(data.invitation);
+          setInvitationType('staff');
           return true;
         }
       } catch (err) {
@@ -54,6 +56,7 @@ export default function AcceptInvitationPage() {
         const data = await response.json();
         if (data.valid) {
           setInvitation(data.invitation);
+          setInvitationType('role');
           return true;
         }
       } catch (err) {
@@ -77,29 +80,22 @@ export default function AcceptInvitationPage() {
   }, [token]);
 
   const handleAcceptInvitation = async () => {
-    if (!token) return;
+    if (!token || !invitationType) return;
     
     setAccepting(true);
     try {
-      // Try staff invitation first
-      let response = await fetch(`/api/school-admin/staff-invitations/accept`, {
+      // Use the correct endpoint based on invitation type
+      const endpoint = invitationType === 'staff' 
+        ? '/api/school-admin/staff-invitations/accept'
+        : '/api/admin/role-invitations/accept';
+        
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ token }),
       });
-
-      // If staff invitation fails, try role invitation
-      if (!response.ok) {
-        response = await fetch(`/api/admin/role-invitations/accept`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token }),
-        });
-      }
 
       const data = await response.json();
       
