@@ -173,7 +173,9 @@ function DashboardRouter() {
   // Show dashboard based on selected role
   console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
 
+  // For parent - route to ParentDashboard with ParentAppShell
   if (activeRole === 'parent') {
+    console.log('🏠 Routing parent to ParentDashboard');
     return (
       <ParentAppShell key={`dashboard-${activeRole}`}>
         <ParentDashboard />
@@ -220,6 +222,12 @@ function Router() {
   const [location, setLocation] = useLocation();
 
   console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
+
+  // Ensure consistent hook usage - always call useEffect before conditional returns
+  useEffect(() => {
+    // This ensures hooks are called in consistent order
+    console.log('Router effect - activeRole:', activeRole, 'isAuthenticated:', isAuthenticated);
+  }, [activeRole, isAuthenticated]);
 
   // Handle redirects in useEffect to avoid state updates during render
   useEffect(() => {
