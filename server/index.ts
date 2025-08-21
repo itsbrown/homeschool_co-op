@@ -20,6 +20,10 @@ import educatorRouter from "./api/educator";
 import authRouter from "./api/auth";
 
 const app = express();
+
+// For Stripe webhooks, we need raw body data BEFORE other parsers
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
 // Increase the size limit to 50MB for file uploads
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));

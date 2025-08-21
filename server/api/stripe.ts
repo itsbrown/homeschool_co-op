@@ -140,7 +140,15 @@ router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+  console.log('🔍 Webhook received:', {
+    hasSignature: !!sig,
+    hasEndpointSecret: !!endpointSecret,
+    bodyLength: req.body?.length || 0,
+    eventType: req.body ? 'body_present' : 'no_body'
+  });
+
   if (!sig || !endpointSecret) {
+    console.error('❌ Missing webhook requirements:', { hasSignature: !!sig, hasEndpointSecret: !!endpointSecret });
     return res.status(400).json({ error: 'Missing signature or webhook secret' });
   }
 
