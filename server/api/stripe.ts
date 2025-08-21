@@ -7,7 +7,7 @@ const router = Router();
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-04-30.basil',
 });
 
 // Create payment intent for cart checkout
@@ -168,15 +168,26 @@ router.post('/webhook', async (req, res) => {
           const enrollmentIds = JSON.parse(paymentIntent.metadata.enrollmentIds || '[]');
           console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
           
+          // Calculate payment per enrollment
+          const paymentPerEnrollment = Math.round(paymentIntent.amount / enrollmentIds.length);
+          
           // Update each enrollment with payment information
           const allEnrollments = await storage.getAllEnrollments();
           for (const enrollmentId of enrollmentIds) {
-            const enrollment = allEnrollments.find(e => e.id === enrollmentId);
+            const enrollment = allEnrollments.find(e => e.id === enrollmentId) as any;
             if (enrollment) {
               // Update enrollment with payment info
+              const newAmountPaid = (enrollment.amountPaid || enrollment.amount || 0) + paymentPerEnrollment;
+              const remainingBalance = (enrollment.totalCost || 0) - newAmountPaid;
+              
               enrollment.paymentIntentId = paymentIntent.id;
-              enrollment.amount = paymentIntent.amount; // This should be split properly in production
-              enrollment.status = 'enrolled';
+              enrollment.amount = newAmountPaid;
+              enrollment.amountPaid = newAmountPaid;
+              enrollment.remainingBalance = Math.max(0, remainingBalance);
+              enrollment.outstandingBalance = Math.max(0, remainingBalance);
+              enrollment.status = 'enrolled'; // Always enrolled after any payment
+              
+              console.log(`💰 Updated balance payment for enrollment ${enrollmentId}: paid=${newAmountPaid}, remaining=${remainingBalance}`);
               await storage.updateEnrollment(enrollment);
             }
           }
@@ -200,7 +211,8 @@ router.post('/webhook', async (req, res) => {
               className: items[0]?.className || 'Unknown',
               amount: paymentIntent.amount,
               currency: paymentIntent.currency,
-              status: 'completed',
+              status: 'completed' as const,
+              metadata: {},
               createdAt: new Date(),
               updatedAt: new Date()
             };
@@ -243,29 +255,47 @@ router.post('/webhook', async (req, res) => {
                 // Check if enrollment already exists
                 const allEnrollments = await storage.getAllEnrollments();
                 const existingEnrollment = allEnrollments.find(e => 
-                  e.classId === item.classId && e.childId === item.childId
-                );
+                  (e as any).classId === item.classId && e.childId === item.childId
+                ) as any;
                 
                 if (existingEnrollment) {
                   // Update existing enrollment with deposit payment
-                  existingEnrollment.amount = (existingEnrollment.amount || 0) + item.price;
-                  existingEnrollment.status = existingEnrollment.amount >= item.totalCost ? 'enrolled' : 'deposit_paid';
+                  const newAmountPaid = (existingEnrollment.amount || 0) + item.price;
+                  const remainingBalance = item.totalCost - newAmountPaid;
+                  
+                  // For payment plans: even a 10% payment makes them enrolled with remaining balance
+                  const status = 'enrolled'; // Always enrolled after any payment
+                  
+                  existingEnrollment.amount = newAmountPaid;
+                  existingEnrollment.amountPaid = newAmountPaid;
+                  existingEnrollment.status = status;
                   existingEnrollment.paymentIntentId = paymentIntent.id;
-                  existingEnrollment.remainingBalance = item.totalCost - existingEnrollment.amount;
+                  existingEnrollment.remainingBalance = Math.max(0, remainingBalance);
+                  existingEnrollment.outstandingBalance = Math.max(0, remainingBalance);
+                  
+                  console.log(`💰 Updated enrollment ${existingEnrollment.id}: paid=${newAmountPaid}, remaining=${remainingBalance}, status=${status}`);
                   return storage.updateEnrollment(existingEnrollment);
                 } else {
-                  // Create new enrollment with deposit status
-                  return storage.createEnrollment({
+                  // Create new enrollment - any payment makes them enrolled with payment plan if not full amount
+                  const remainingBalance = item.totalCost - item.price;
+                  const status = 'enrolled'; // Always enrolled after payment, even if partial
+                  
+                  const newEnrollment = {
                     classId: item.classId,
                     childId: item.childId,
-                    status: 'deposit_paid',
+                    status: status,
                     paymentIntentId: paymentIntent.id,
                     amount: item.price,
+                    amountPaid: item.price,
                     totalCost: item.totalCost,
                     depositRequired: item.depositRequired,
-                    remainingBalance: item.totalCost - item.price,
+                    remainingBalance: Math.max(0, remainingBalance),
+                    outstandingBalance: Math.max(0, remainingBalance),
                     enrollmentDate: new Date().toISOString()
-                  });
+                  } as any;
+                  
+                  console.log(`💰 Created new enrollment: paid=${item.price}, remaining=${remainingBalance}, status=${status}`);
+                  return storage.createEnrollment(newEnrollment);
                 }
               });
               

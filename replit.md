@@ -40,6 +40,7 @@ Preferred communication style: Simple, everyday language.
 - **Educational Tools**: Generators for professional coloring pages and various educational activities, curriculum/lesson plan creation, and student work analysis.
 - **Data Flow**: Secure user authentication via Auth0, AI-driven content processing post-upload, activity generation, role-based content access, and persistence in Supabase.
 - **UI/UX Decisions**: Focus on a professional and intuitive user experience with clear navigation, dynamic updates, and consistent design. Examples include consolidated navigation, simplified page structures, robust data handling for mixed formats (interests as strings/arrays), and clear payment plan selections.
+- **Payment Plan Logic**: Any payment (even minimum 10%) immediately changes enrollment status to "enrolled", allowing students to access classes while maintaining remaining balance for payment plans. Cart filtering properly excludes fully paid enrollments while showing items with remaining balances as "Balance Due".
 
 ## External Dependencies
 - **Auth0**: Primary authentication provider.
