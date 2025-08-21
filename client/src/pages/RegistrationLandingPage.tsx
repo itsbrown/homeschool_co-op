@@ -21,8 +21,13 @@ const parentRegistrationSchema = z.object({
   parentFirstName: z.string().min(1, "First name is required"),
   parentLastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(8, "Please confirm your password"),
   phone: z.string().min(10, "Phone number is required"),
   location: z.string().min(1, "Location selection is required"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
 type ParentRegistrationForm = z.infer<typeof parentRegistrationSchema>;
@@ -51,6 +56,8 @@ export default function RegistrationLandingPage() {
       parentFirstName: "",
       parentLastName: "",
       email: "",
+      password: "",
+      confirmPassword: "",
       phone: "",
       location: "Brighton"
     }
@@ -100,7 +107,7 @@ export default function RegistrationLandingPage() {
       // Create the user account directly via API with required fields
       const response = await apiRequest('POST', '/api/auth/register', {
         email: data.email,
-        password: 'tempPassword123', // Temporary password for parent accounts
+        password: data.password, // Use the password provided by the user
         username: data.email, // Use email as username
         name: `${data.parentFirstName} ${data.parentLastName}`, // Combined name
         parentFirstName: data.parentFirstName,
@@ -133,7 +140,7 @@ export default function RegistrationLandingPage() {
             // Sign in the user that was just created by the backend
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
               email: data.email,
-              password: 'tempPassword123'
+              password: data.password
             });
             
             if (signInData?.user && !signInError) {
@@ -170,6 +177,20 @@ export default function RegistrationLandingPage() {
         }
       } else {
         const errorData = await response.json();
+        
+        // Handle existing account scenario
+        if (response.status === 400 && errorData.message?.includes('User already exists')) {
+          toast({
+            title: "Account Already Exists",
+            description: "An account with this email already exists. Redirecting to login...",
+            variant: "destructive"
+          });
+          setTimeout(() => {
+            setLocation('/login');
+          }, 2000);
+          return;
+        }
+        
         throw new Error(errorData.message || 'Registration failed');
       }
       
@@ -284,20 +305,50 @@ export default function RegistrationLandingPage() {
                   />
                 </div>
 
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email Address</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="jane.doe@example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="email"
+                    name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email Address</FormLabel>
+                        <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="jane.doe@example.com" {...field} />
+                          <Input type="password" placeholder="Enter a secure password" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirm Password</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="Confirm your password" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="phone"
@@ -311,28 +362,29 @@ export default function RegistrationLandingPage() {
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="location"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Preferred Location</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select location" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Brighton">Brighton</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="location"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Preferred Location</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select location" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Brighton">Brighton</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+
 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h3 className="font-semibold text-blue-900 mb-2">Next Steps</h3>
