@@ -40,7 +40,7 @@ function generateTemporaryPassword(): string {
 }
 
 // Create Supabase account for staff member
-async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string }> {
+async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string; userExists?: boolean }> {
   try {
     console.log(`👤 Creating Supabase account for: ${email}`);
     
@@ -65,6 +65,11 @@ async function createStaffAccount(email: string, firstName: string, lastName: st
 
     if (authError) {
       console.error('❌ Error creating Supabase user:', authError);
+      // Check if user already exists
+      if (authError.message?.includes('already been registered') || authError.code === 'email_exists') {
+        console.log(`⚠️ User ${email} already exists, continuing with invitation acceptance`);
+        return { success: false, error: authError.message, userExists: true };
+      }
       return { success: false, error: authError.message };
     }
 
@@ -2374,8 +2379,9 @@ router.post("/staff-invitations/accept", async (req, res) => {
 
     if (!accountResult.success) {
       // Check if user already exists
-      if (accountResult.error?.includes('already registered')) {
+      if (accountResult.userExists || accountResult.error?.includes('already registered') || accountResult.error?.includes('email_exists')) {
         console.log(`⚠️ User ${invitation.email} already has an account, proceeding with invitation acceptance`);
+        // Continue with invitation acceptance even if account already exists
       } else {
         console.error(`❌ Failed to create account for ${invitation.email}:`, accountResult.error);
         return res.status(500).json({ 
