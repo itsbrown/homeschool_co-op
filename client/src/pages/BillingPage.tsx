@@ -160,11 +160,21 @@ function PaymentForm({
         // Update enrollment statuses and send confirmation email
         try {
           console.log('🔄 Updating enrollment statuses and sending confirmation...');
-          const confirmResponse = await apiRequest('POST', '/api/billing/confirm-payment', {
-            paymentIntentId: paymentIntent.id,
-            enrollmentIds: enrollmentIds,
-            amount: totalAmount,
-            paymentDate: new Date().toISOString(),
+          console.log('🔄 Enrollment IDs to update:', enrollmentIds);
+          
+          const token = localStorage.getItem('supabase_token');
+          const confirmResponse = await fetch('/api/billing/confirm-payment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              paymentIntentId: paymentIntent.id,
+              enrollmentIds: enrollmentIds,
+              amount: totalAmount,
+              paymentDate: new Date().toISOString(),
+            })
           });
           
           if (confirmResponse.ok) {
@@ -974,7 +984,7 @@ export default function BillingPage() {
                       }}
                     >
                       <PaymentForm 
-                        enrollmentIds={selectedEnrollments} 
+                        enrollmentIds={selectedEnrollments.length > 0 ? selectedEnrollments : billingSummary?.enrollmentDetails.map(d => d.enrollmentId) || []} 
                         totalAmount={getPaymentPlanAmount()} 
                         onPaymentSuccess={async (details) => {
                           console.log('🎉 Payment success callback triggered:', details);

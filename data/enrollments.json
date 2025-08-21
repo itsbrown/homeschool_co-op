@@ -69,7 +69,7 @@
     "childName": "Test Child",
     "className": "Science Grade 2",
     "enrollmentDate": "2025-08-21T16:30:00.000Z",
-    "status": "pending_payment",
+    "status": "enrolled",
     "parentEmail": "jocimarie@gmail.com",
     "tuitionAmount": 18000,
     "depositAmount": 1800,

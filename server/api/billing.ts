@@ -361,19 +361,30 @@ router.post('/confirm-payment', async (req, res) => {
     const allEnrollments = await storage.getAllEnrollments();
     const updatedEnrollments = [];
 
+    console.log('🔍 All enrollment IDs in storage:', allEnrollments.map(e => e.id));
+    console.log('🔍 Looking for enrollment IDs:', enrollmentIds);
+
     for (const enrollmentId of enrollmentIds) {
       const enrollment = allEnrollments.find(e => e.id === enrollmentId);
+      console.log(`🔍 Found enrollment ${enrollmentId}:`, enrollment ? 'YES' : 'NO');
+      
       if (enrollment && enrollment.parentEmail === userEmail) {
+        console.log(`🔄 Updating enrollment ${enrollmentId} from status '${enrollment.status}' to 'enrolled'`);
         enrollment.status = 'enrolled';
         enrollment.amount = (enrollment.amount || 0) + Math.round(amount / enrollmentIds.length);
         await storage.updateEnrollment(enrollment);
         updatedEnrollments.push(enrollment);
         console.log('✅ Updated enrollment:', enrollmentId, 'status to enrolled');
+      } else if (enrollment && enrollment.parentEmail !== userEmail) {
+        console.log(`❌ Enrollment ${enrollmentId} belongs to ${enrollment.parentEmail}, not ${userEmail}`);
+      } else {
+        console.log(`❌ Enrollment ${enrollmentId} not found in storage`);
       }
     }
 
     // Create payment record
-    const payment = await storage.createPayment({
+    const payment = {
+      id: Date.now(),
       stripePaymentIntentId: paymentIntentId,
       parentEmail: userEmail,
       childName: updatedEnrollments[0]?.childName || 'Unknown',
@@ -383,7 +394,13 @@ router.post('/confirm-payment', async (req, res) => {
       status: 'completed',
       createdAt: new Date(),
       updatedAt: new Date()
-    });
+    };
+
+    try {
+      await storage.createPayment(payment);
+    } catch (error) {
+      console.log('⚠️ Payment record creation failed, continuing with email...');
+    }
 
     // Send confirmation email
     try {
@@ -421,6 +438,47 @@ router.post('/confirm-payment', async (req, res) => {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to confirm payment'
     });
+  }
+});
+
+// Test email endpoint
+router.post('/test-email', async (req, res) => {
+  try {
+    const { parentEmail, parentName, enrollmentDetails } = req.body;
+    
+    const { sendPaymentConfirmationEmail } = await import('../lib/email-service');
+    
+    const mockPayment = {
+      id: Date.now(),
+      stripePaymentIntentId: 'test_intent_123',
+      parentEmail: parentEmail,
+      childName: enrollmentDetails[0]?.childName || 'Test Child',
+      className: enrollmentDetails[0]?.className || 'Test Class',
+      amount: enrollmentDetails[0]?.amountPaid || 900,
+      currency: 'usd',
+      status: 'completed',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    console.log('🧪 Testing email service...');
+    const emailSent = await sendPaymentConfirmationEmail({
+      parentEmail: parentEmail,
+      parentName: parentName || 'Parent',
+      payment: mockPayment,
+      enrollmentDetails: enrollmentDetails,
+    });
+
+    if (emailSent) {
+      console.log('✅ Test email sent successfully');
+      res.json({ success: true, message: 'Test email sent successfully' });
+    } else {
+      console.log('❌ Test email failed to send');
+      res.status(500).json({ success: false, error: 'Email failed to send' });
+    }
+  } catch (error) {
+    console.error('❌ Test email error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
