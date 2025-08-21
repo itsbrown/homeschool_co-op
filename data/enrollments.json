@@ -207,5 +207,15 @@
     "totalCost": 140,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-21T18:50:39.098Z"
+  },
+  {
+    "classId": 2,
+    "childId": 15,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3RydcYRFKXbVXRE30Aq84qPY",
+    "amount": 140,
+    "totalCost": 140,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-08-21T18:54:14.492Z"
   }
 ]

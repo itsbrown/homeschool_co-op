@@ -299,7 +299,7 @@ router.post('/pay-balance', async (req, res) => {
 
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount), // Amount should already be in cents
+      amount: Math.round(totalAmount * 100), // Convert dollars to cents for Stripe
       currency: 'usd',
       metadata: {
         parentEmail: userEmail,

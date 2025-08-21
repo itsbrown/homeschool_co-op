@@ -30,7 +30,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation.
-- **Enhanced Payment System**: Comprehensive payment status management supporting multiple states (pending_payment, partially_paid, payment_plan_active, enrolled with balance_due). Cart system intelligently handles enrolled items with remaining balances for payment plan scenarios.
+- **Enhanced Payment System**: Comprehensive payment status management supporting multiple states (pending_payment, partially_paid, payment_plan_active, enrolled with balance_due). Cart system intelligently handles enrolled items with remaining balances for payment plan scenarios. Fully functional Stripe webhook integration with proper currency conversion handling.
 - **AI Enrollment Assistant**: Personalized AI assistant that greets users by their actual account name (extracted from authentication metadata) and provides enrollment guidance.
 - **Staff Invitation System**: Complete automated staff onboarding with secure token-based invitations (7-day expiration), automatic Supabase account creation, temporary password generation, professional email notifications, and seamless resend functionality for individual and bulk operations.
 - **Staff Management**: Dynamic staff position management with school-specific roles, comprehensive staff editing with data persistence, and role synchronization between invitation and edit forms.

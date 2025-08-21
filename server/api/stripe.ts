@@ -83,11 +83,14 @@ router.post('/create-payment-intent', async (req, res) => {
 
     console.log('💳 Payment details:', {
       amount: total,
+      amountInCents: total + ' cents',
+      expectedInDollars: (total / 100).toFixed(2),
       description,
       parentEmail: userEmail,
       itemCount: items.length,
       childrenCount: uniqueChildren.length,
-      hasDiscounts: discounts.siblingDiscount > 0 || discounts.freeAfterThree > 0
+      hasDiscounts: discounts.siblingDiscount > 0 || discounts.freeAfterThree > 0,
+      rawItems: items
     });
 
     // Create the payment intent
