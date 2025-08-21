@@ -47,10 +47,16 @@ router.post('/', upload.single('logo'), async (req, res) => {
   try {
     const { schoolId } = req.body;
     
-    if (!schoolId) {
+    console.log('📋 Request body:', req.body);
+    console.log('📋 All body keys:', Object.keys(req.body));
+    console.log('📋 School ID from body:', schoolId);
+    console.log('📋 School ID type:', typeof schoolId);
+    
+    if (!schoolId || schoolId === '' || schoolId === 'undefined') {
+      console.log('❌ Invalid school ID:', schoolId);
       return res.status(400).json({ 
         success: false, 
-        message: 'School ID is required' 
+        message: `School ID is required (received: "${schoolId}")` 
       });
     }
     

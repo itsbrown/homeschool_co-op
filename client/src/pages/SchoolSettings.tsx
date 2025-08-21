@@ -37,19 +37,31 @@ export default function SchoolSettings() {
     enabled: !!user?.email,
   });
 
-  // Logo upload mutation
+  // Logo upload mutation  
   const logoUploadMutation = useMutation({
     mutationFn: async (file: File) => {
+      console.log('🔍 Full school data object:', schoolData);
+      console.log('🔍 School ID type:', typeof schoolData?.id);
+      console.log('🔍 School ID value:', schoolData?.id);
+      console.log('🔍 All school data keys:', schoolData ? Object.keys(schoolData) : 'no data');
+      
       if (!schoolData?.id) {
-        throw new Error('No school ID available');
+        console.error('❌ No school ID found in data:', schoolData);
+        throw new Error('No school ID available - please refresh the page');
       }
       
-      console.log('🔍 School data for upload:', schoolData);
-      console.log('📤 Uploading for school ID:', schoolData.id);
+      const schoolId = schoolData.id.toString();
+      console.log('📤 Uploading for school ID (string):', schoolId);
       
       const formData = new FormData();
       formData.append('logo', file);
-      formData.append('schoolId', schoolData.id.toString());
+      formData.append('schoolId', schoolId);
+      
+      // Log FormData contents
+      console.log('📋 FormData contents:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value);
+      }
       
       const response = await apiRequest('POST', '/api/schools/upload-logo', formData);
       if (!response.ok) {
@@ -115,6 +127,7 @@ export default function SchoolSettings() {
     }
     
     if (!schoolData?.id) {
+      console.error('❌ School data not available. Current data:', schoolData);
       toast({
         title: "School data not available",
         description: "Unable to identify school. Please refresh the page.",
@@ -281,7 +294,7 @@ export default function SchoolSettings() {
                   />
                   <Button
                     onClick={handleUpload}
-                    disabled={!selectedFile || logoUploadMutation.isPending}
+                    disabled={!selectedFile || logoUploadMutation.isPending || !schoolData?.id}
                     className="flex items-center gap-2"
                   >
                     {logoUploadMutation.isPending ? (
