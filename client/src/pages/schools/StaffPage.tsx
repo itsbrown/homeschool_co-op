@@ -45,11 +45,9 @@ export default function StaffPage() {
   // Fetch staff data from API
   const { data: staff = [], isLoading, error } = useQuery({
     queryKey: ['/api/school-admin/staff'],
-    refetchInterval: 3000,
+    refetchInterval: 5000, // Reasonable refresh interval
     refetchIntervalInBackground: true,
-    // Ensure fresh data by disabling cache for debugging
-    staleTime: 0,
-    gcTime: 0, // React Query v5 uses gcTime instead of cacheTime
+    staleTime: 1000, // Consider data stale after 1 second
   });
 
   // Mutation for resending individual invites
