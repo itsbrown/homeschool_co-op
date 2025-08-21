@@ -490,6 +490,7 @@ function Router() {
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
       <Route path="/school-admin/staff-positions" component={StaffPositionsPage} />
+      <Route path="/schools/staff/:id" component={StaffEditPage} />
       <Route path="/schools/staff/:id/edit" component={StaffEditPage} />
       <Route path="/schools/students" component={StudentsPage} />
       <Route path="/schools/students/:id" component={StudentDetailPage} />

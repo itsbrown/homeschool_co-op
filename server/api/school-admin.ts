@@ -1205,39 +1205,28 @@ router.get("/staff", async (req, res) => {
 router.get("/staff/:id", async (req, res) => {
   try {
     const staffId = parseInt(req.params.id, 10);
+    console.log(`🔍 Looking for staff member with ID: ${staffId}`);
+    
     if (isNaN(staffId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Sample staff data - in a real app this would come from database
-    const sampleStaff = [
-      {
-        id: 1,
-        name: "Dr. Sarah Johnson",
-        email: "sarah.johnson@example.com",
-        phone: "(555) 123-4567",
-        role: "Teacher",
-        department: "History",
-        subjects: ["U.S. History", "World History"],
-        status: "Active",
-        joinDate: "2021-08-15",
-        avatar: "",
-      },
-      {
-        id: 2,
-        name: "Prof. Michael Chen",
-        email: "michael.chen@example.com",
-        phone: "(555) 234-5678",
-        role: "Teacher",
-        department: "Mathematics",
-        subjects: ["Calculus", "Algebra"],
-        status: "Active",
-        joinDate: "2020-09-01",
-        avatar: "",
-      }
-    ];
+    // Get staff data from the file system
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
 
-    const staffMember = sampleStaff.find(s => s.id === staffId);
+    if (!fs.existsSync(STAFF_FILE)) {
+      console.log(`❌ Staff file not found: ${STAFF_FILE}`);
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+    console.log(`📋 Found ${allStaff.length} total staff members`);
+    console.log(`🔍 Available IDs: ${allStaff.map(s => s.id).join(', ')}`);
+    
+    const staffMember = allStaff.find(s => s.id === staffId);
+    console.log(`👤 Staff member found:`, staffMember ? 'YES' : 'NO');
+    
     if (!staffMember) {
       return res.status(404).json({ message: "Staff member not found" });
     }
