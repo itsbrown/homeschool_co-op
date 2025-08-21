@@ -22,13 +22,38 @@ import authRouter from "./api/auth";
 const app = express();
 
 // For Stripe webhooks, we need raw body data BEFORE other parsers
+// This MUST be first and specific to the webhook path
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }));
 
-// Increase the size limit to 50MB for file uploads
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: false, limit: '50mb' }));
-app.use(express.raw({ limit: '50mb' }));
-app.use(express.text({ limit: '50mb' }));
+// Skip all other body parsers for the webhook route
+app.use((req, res, next) => {
+  if (req.path === '/api/stripe/webhook') {
+    return next();
+  }
+  // Apply other body parsers only to non-webhook routes
+  express.json({ limit: '50mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (req.path === '/api/stripe/webhook') {
+    return next();
+  }
+  express.urlencoded({ extended: false, limit: '50mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (req.path === '/api/stripe/webhook') {
+    return next();
+  }
+  express.raw({ limit: '50mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (req.path === '/api/stripe/webhook') {
+    return next();
+  }
+  express.text({ limit: '50mb' })(req, res, next);
+});
 app.use(fileUpload({
   useTempFiles: false,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size

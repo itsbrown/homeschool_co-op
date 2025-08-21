@@ -155,15 +155,26 @@ router.post('/webhook', async (req, res) => {
     return res.status(400).json({ error: 'Missing signature or webhook secret' });
   }
 
-  // Ensure we have the raw body as string or buffer
+  // The raw body should be a Buffer from express.raw() middleware
   let payload = req.body;
-  if (Buffer.isBuffer(payload)) {
-    payload = payload.toString('utf8');
+  
+  console.log('🔍 Raw payload analysis:', {
+    isBuffer: Buffer.isBuffer(payload),
+    type: typeof payload,
+    length: payload?.length,
+    constructorName: payload?.constructor?.name
+  });
+
+  // For Stripe webhook verification, we need the raw body as received
+  if (!Buffer.isBuffer(payload)) {
+    console.error('❌ Payload is not a buffer. Middleware configuration issue.');
+    return res.status(400).json({ error: 'Invalid payload format' });
   }
 
   let event;
 
   try {
+    // Use the raw buffer directly for signature verification
     event = stripe.webhooks.constructEvent(payload, sig, endpointSecret);
     console.log('✅ Webhook signature verified successfully');
   } catch (err: any) {
@@ -172,7 +183,8 @@ router.post('/webhook', async (req, res) => {
       payloadType: typeof payload,
       payloadLength: payload?.length,
       signatureType: typeof sig,
-      secretExists: !!endpointSecret
+      secretExists: !!endpointSecret,
+      isBuffer: Buffer.isBuffer(payload)
     });
     return res.status(400).json({ error: 'Invalid signature' });
   }
