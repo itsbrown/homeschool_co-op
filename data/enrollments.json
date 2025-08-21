@@ -257,5 +257,55 @@
     "totalCost": 14000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-21T19:08:43.068Z"
+  },
+  {
+    "classId": 2,
+    "childId": 15,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3RydtVRFKXbVXRE31Dm0BVkD",
+    "amount": 14000,
+    "totalCost": 14000,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-08-21T19:11:44.719Z"
+  },
+  {
+    "classId": 2,
+    "childId": 15,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3RycwdRFKXbVXRE30qeR2agV",
+    "amount": 140,
+    "totalCost": 140,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-08-21T19:11:47.262Z"
+  },
+  {
+    "classId": 2,
+    "childId": 15,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3Rycy1RFKXbVXRE30ZWYqAbl",
+    "amount": 140,
+    "totalCost": 140,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-08-21T19:11:58.758Z"
+  },
+  {
+    "classId": 2,
+    "childId": 15,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3RydwWRFKXbVXRE31kQxi6rz",
+    "amount": 14000,
+    "totalCost": 14000,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-08-21T19:14:53.152Z"
+  },
+  {
+    "classId": 2,
+    "childId": 15,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3Ryd2PRFKXbVXRE30WXa6SsV",
+    "amount": 140,
+    "totalCost": 140,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-08-21T19:17:00.136Z"
   }
 ]
