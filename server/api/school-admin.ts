@@ -29,7 +29,7 @@ async function sendStaffInvitationEmail(email: string, firstName: string, lastNa
       return false;
     }
 
-    const invitationUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/accept-invitation?token=${token}`;
+    const invitationUrl = `${process.env.CLIENT_URL || 'https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev'}/accept-invitation?token=${token}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1123,10 +1123,50 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
       return res.status(400).json({ message: "Can only resend invites to pending staff members" });
     }
 
-    // Resend the invitation email using SendGrid directly
+    // Generate or reuse invitation token
+    let invitationToken = staff.invitationToken;
+    if (!invitationToken) {
+      invitationToken = generateInvitationToken();
+      
+      // Update staff member with token
+      const staffIndex = allStaff.findIndex(s => s.id === staffId);
+      if (staffIndex !== -1) {
+        allStaff[staffIndex].invitationToken = invitationToken;
+        saveStaffMembers(allStaff);
+      }
+      
+      // Also save/update the invitation
+      const invitations = loadStaffInvitations();
+      const existingInvitationIndex = invitations.findIndex(i => i.email === staff.email);
+      
+      const invitationData = {
+        id: existingInvitationIndex >= 0 ? invitations[existingInvitationIndex].id : Math.max(0, ...invitations.map(i => i.id || 0)) + 1,
+        token: invitationToken,
+        email: staff.email,
+        firstName: staff.firstName || staff.name?.split(' ')[0] || '',
+        lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
+        role: staff.role,
+        department: staff.department,
+        message: staff.message || "",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+        acceptedAt: null
+      };
+      
+      if (existingInvitationIndex >= 0) {
+        invitations[existingInvitationIndex] = invitationData;
+      } else {
+        invitations.push(invitationData);
+      }
+      
+      saveStaffInvitations(invitations);
+    }
+
+    // Resend the invitation email with token
     const firstName = staff.firstName || staff.name?.split(' ')[0] || '';
     const lastName = staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '';
-    const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
+    const message = staff.message || `Your invitation to join our school staff has been resent. Please check your email for details.`;
 
     try {
       const emailSent = await sendStaffInvitationEmail(
@@ -1135,6 +1175,7 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
         lastName,
         staff.role,
         staff.department,
+        invitationToken,
         message
       );
 
@@ -1174,12 +1215,49 @@ router.post("/staff/resend-all-invites", async (req, res) => {
     let successCount = 0;
     let failureCount = 0;
 
+    const invitations = loadStaffInvitations();
+
     // Resend invites to all pending staff members
     for (const staff of pendingStaff) {
       try {
+        // Generate or reuse invitation token
+        let invitationToken = staff.invitationToken;
+        if (!invitationToken) {
+          invitationToken = generateInvitationToken();
+          
+          // Update staff member with token
+          const staffIndex = allStaff.findIndex(s => s.id === staff.id);
+          if (staffIndex !== -1) {
+            allStaff[staffIndex].invitationToken = invitationToken;
+          }
+          
+          // Update or create invitation
+          const existingInvitationIndex = invitations.findIndex(i => i.email === staff.email);
+          const invitationData = {
+            id: existingInvitationIndex >= 0 ? invitations[existingInvitationIndex].id : Math.max(0, ...invitations.map(i => i.id || 0)) + 1,
+            token: invitationToken,
+            email: staff.email,
+            firstName: staff.firstName || staff.name?.split(' ')[0] || '',
+            lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
+            role: staff.role,
+            department: staff.department,
+            message: staff.message || "",
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+            acceptedAt: null
+          };
+          
+          if (existingInvitationIndex >= 0) {
+            invitations[existingInvitationIndex] = invitationData;
+          } else {
+            invitations.push(invitationData);
+          }
+        }
+
         const firstName = staff.firstName || staff.name?.split(' ')[0] || '';
         const lastName = staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '';
-        const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
+        const message = staff.message || `Your invitation to join our school staff has been resent. Please check your email for details.`;
 
         const emailSent = await sendStaffInvitationEmail(
           staff.email,
@@ -1187,6 +1265,7 @@ router.post("/staff/resend-all-invites", async (req, res) => {
           lastName,
           staff.role,
           staff.department,
+          invitationToken,
           message
         );
 
@@ -1200,6 +1279,10 @@ router.post("/staff/resend-all-invites", async (req, res) => {
         failureCount++;
       }
     }
+
+    // Save all changes to files
+    saveStaffMembers(allStaff);
+    saveStaffInvitations(invitations);
 
     res.json({ 
       message: `Resent ${successCount} invitations successfully`,
