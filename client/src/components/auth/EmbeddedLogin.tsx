@@ -201,7 +201,7 @@ export default function EmbeddedLogin() {
                   Sign up
                 </Button>
               </p>
-              <Button variant="link" className="p-0 h-auto text-sm" onClick={handleGeneralLogin}>
+              <Button variant="link" className="p-0 h-auto text-sm" onClick={() => window.location.href = '/forgot-password'}>
                 Forgot your password?
               </Button>
             </div>
