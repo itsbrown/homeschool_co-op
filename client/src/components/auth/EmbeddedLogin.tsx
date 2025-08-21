@@ -22,7 +22,7 @@ export default function EmbeddedLogin() {
     e.preventDefault();
     setIsLoading(true);
     setError("");
-    
+
     try {
       await loginWithRedirect({
         authorizationParams: {
@@ -39,7 +39,7 @@ export default function EmbeddedLogin() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError("");
-    
+
     try {
       await loginWithRedirect({
         authorizationParams: {
@@ -55,7 +55,7 @@ export default function EmbeddedLogin() {
   const handleGeneralLogin = async () => {
     setIsLoading(true);
     setError("");
-    
+
     try {
       await loginWithRedirect();
     } catch (err) {
@@ -201,7 +201,7 @@ export default function EmbeddedLogin() {
                   Sign up
                 </Button>
               </p>
-              <Button variant="link" className="p-0 h-auto text-sm" onClick={() => window.location.href = '/forgot-password'}>
+              <Button variant="link" className="p-0 h-auto text-sm" onClick={() => setLocation('/forgot-password')}>
                 Forgot your password?
               </Button>
             </div>
