@@ -40,21 +40,37 @@ function writeProfiles(profiles: any) {
 }
 
 // Get current user profile
-router.get("/profile", async (req, res) => {
+router.get("/profile", async (req: any, res) => {
   try {
     const profiles = readProfiles();
-    const userEmail = "coreycreates@gmail.com"; // In real app, get from Auth0 token
+    
+    // Get user data from the authenticated session
+    const authUser = req.user;
+    let userEmail = authUser?.email || "coreycreates@gmail.com";
+    let userName = authUser?.user_metadata?.full_name || authUser?.name || "User";
+    
+    console.log("🔍 Profile API - User:", authUser);
+    console.log("🔍 Profile API - Email:", userEmail);
+    console.log("🔍 Profile API - Name:", userName);
+    console.log("🔍 Profile API - User metadata:", authUser?.user_metadata);
+    
+    // Extract first and last name from full name if available
+    const nameParts = userName.split(' ');
+    const firstName = nameParts[0] || "User";
+    const lastName = nameParts.slice(1).join(' ') || "";
     
     const userProfile = profiles[userEmail] || {
-      id: "1",
-      name: "Corey Creates", 
+      id: authUser?.id || "1",
+      name: userName, 
       email: userEmail,
-      firstName: "Corey",
-      lastName: "Creates",
+      firstName: firstName,
+      lastName: lastName,
       phoneNumber: "",
-      avatar: "",
+      avatar: authUser?.user_metadata?.avatar_url || "",
       subscription: "free"
     };
+    
+    console.log("📋 Profile returned:", userProfile);
     
     res.status(200).json(userProfile);
   } catch (error) {
@@ -64,13 +80,13 @@ router.get("/profile", async (req, res) => {
 });
 
 // Update user profile
-router.patch("/profile", async (req, res) => {
+router.patch("/profile", async (req: any, res) => {
   try {
     const { firstName, lastName, phoneNumber } = req.body;
     
     console.log("Updating profile with:", { firstName, lastName, phoneNumber });
     
-    const userEmail = "coreycreates@gmail.com"; // In real app, get from Auth0 token
+    const userEmail = req.user?.email || "coreycreates@gmail.com";
     const profiles = readProfiles();
     
     // Get existing profile or create new one
