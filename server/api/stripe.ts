@@ -268,8 +268,8 @@ router.post('/webhook', async (req, res) => {
               const enrollmentDetails = items.map((item: any) => ({
                 childName: item.childName,
                 className: item.className,
-                price: item.totalCost || item.price,
-                amountPaid: Math.round(paymentIntent.amount / items.length),
+                price: (item.totalCost || item.price) * 100, // Convert dollars to cents for email service
+                amountPaid: Math.round(paymentIntent.amount / items.length), // Already in cents
               }));
 
               const emailSent = await sendPaymentConfirmationEmail({

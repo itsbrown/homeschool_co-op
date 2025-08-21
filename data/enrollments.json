@@ -197,5 +197,15 @@
     "depositRequired": 14,
     "totalCost": 140,
     "remainingBalance": 140
+  },
+  {
+    "classId": 2,
+    "childId": 15,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3RydZ7RFKXbVXRE30hR6aewo",
+    "amount": 140,
+    "totalCost": 140,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-08-21T18:50:39.098Z"
   }
 ]
