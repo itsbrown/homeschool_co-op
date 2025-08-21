@@ -218,10 +218,20 @@ export default function CartCheckout() {
         'POST',
         '/api/stripe/create-payment-intent',
         {
-          items: cart.items,
-          subtotal: cart.subtotal,
-          discounts: cart.discounts,
-          total: cart.total,
+          items: cart.items.map(item => ({
+            ...item,
+            price: item.price * 100, // Convert to cents
+            totalCost: (item.totalCost || item.price) * 100, // Convert to cents
+            depositRequired: (item.depositRequired || 0) * 100, // Convert to cents
+            amountPaid: (item.amountPaid || 0) * 100, // Convert to cents
+            remainingBalance: (item.remainingBalance || 0) * 100 // Convert to cents
+          })),
+          subtotal: cart.subtotal * 100, // Convert to cents
+          discounts: {
+            siblingDiscount: cart.discounts.siblingDiscount * 100, // Convert to cents
+            freeAfterThree: cart.discounts.freeAfterThree * 100 // Convert to cents
+          },
+          total: cart.total * 100, // Convert to cents for Stripe
           parentEmail: user?.email,
         }
       );
