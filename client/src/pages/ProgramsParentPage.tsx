@@ -56,7 +56,17 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Enrollment mutation
   const enrollmentMutation = useMutation({
     mutationFn: async ({ classId, childId }: { classId: number; childId: string }) => {
-      return apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
+      const response = await apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
+      console.log('🎯 Raw API response:', response);
+      
+      // Parse the response as JSON if it's a Response object
+      if (response instanceof Response) {
+        const jsonData = await response.json();
+        console.log('🎯 Parsed JSON data:', jsonData);
+        return jsonData;
+      }
+      
+      return response;
     },
     onSuccess: (data, variables) => {
       console.log('🎯 Enrollment success! Data:', data);
