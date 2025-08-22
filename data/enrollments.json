@@ -704,5 +704,44 @@
     "depositRequired": 90,
     "totalCost": 900,
     "remainingBalance": 900
+  },
+  {
+    "id": 1755874336964,
+    "classId": 7,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Patriots | Half Day",
+    "enrollmentDate": "2025-08-22T14:52:16.964Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
+  },
+  {
+    "id": 1755874354850,
+    "classId": 2,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Elementary Math Fundamentals",
+    "enrollmentDate": "2025-08-22T14:52:34.850Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 14,
+    "totalCost": 140,
+    "remainingBalance": 140
+  },
+  {
+    "id": 1755874385986,
+    "classId": 7,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Patriots | Half Day",
+    "enrollmentDate": "2025-08-22T14:53:05.986Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]
