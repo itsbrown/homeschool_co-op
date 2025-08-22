@@ -355,15 +355,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const totals = calculateCartTotals(cartItems);
 
-      console.log('🛒 About to dispatch LOAD_CART with items:', cartItems.length);
-      dispatch({
-        type: 'LOAD_CART',
-        payload: {
-          items: cartItems,
-          ...totals,
-        },
-      });
-      console.log('🛒 LOAD_CART dispatched successfully');
+      console.log('🛒 About to merge API enrollments with existing cart');
+      console.log('🛒 Current cart items:', state.cart.items.length);
+      console.log('🛒 API enrollment items:', cartItems.length);
+      
+      // Only update if we have new enrollments and the cart is empty
+      // This prevents overriding manually added items
+      if (cartItems.length > 0 && state.cart.items.length === 0) {
+        console.log('🛒 Cart is empty, loading API enrollments');
+        dispatch({
+          type: 'LOAD_CART',
+          payload: {
+            items: cartItems,
+            ...totals,
+          },
+        });
+      } else {
+        console.log('🛒 Cart has items or no new enrollments, preserving existing cart');
+      }
 
       console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
       console.log('🛒 Final cart items:', cartItems);
