@@ -176,7 +176,7 @@ const initialState: CartState = {
 interface CartContextType {
   cart: Cart;
   isOpen: boolean;
-  addItem: (item: Omit<CartItem, 'id'>) => void;
+  addItem: (item: Omit<CartItem, 'id'>, skipValidation?: boolean) => void;
   removeItem: (id: string) => void;
   updateItem: (id: string, updates: Partial<CartItem>) => void;
   clearCart: () => void;
@@ -361,58 +361,64 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('asa_cart', JSON.stringify(state.cart));
   }, [state.cart]);
 
-  const addItem = async (item: Omit<CartItem, 'id'>) => {
+  const addItem = async (item: Omit<CartItem, 'id'>, skipValidation = false) => {
     const newItem: CartItem = {
       ...item,
       id: `${item.classId}-${item.childId}-${Date.now()}`,
     };
 
-    // Check if item already exists in cart
-    const existsInCart = state.cart.items.some(
-      cartItem => cartItem.classId === item.classId && cartItem.childId === item.childId
-    );
+    if (!skipValidation) {
+      // Check if item already exists in cart
+      const existsInCart = state.cart.items.some(
+        cartItem => cartItem.classId === item.classId && cartItem.childId === item.childId
+      );
 
-    if (existsInCart) {
-      toast({
-        title: "Already in Cart",
-        description: `${item.className} for ${item.childName} is already in your cart`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check if user is already enrolled in this class with a completed payment
-    try {
-      const response = await apiRequest('GET', '/api/enrollments');
-      if (response.ok) {
-        const enrollments = await response.json();
-        
-        // Check for any successful enrollment (enrolled status with no remaining balance)
-        const hasSuccessfulEnrollment = enrollments.some((enrollment: any) => 
-          enrollment.classId === item.classId && 
-          enrollment.childId === item.childId &&
-          enrollment.status === 'enrolled' &&
-          enrollment.remainingBalance === 0
-        );
-
-        if (hasSuccessfulEnrollment) {
-          toast({
-            title: "Already Enrolled",
-            description: `${item.childName} is already enrolled in ${item.className}`,
-            variant: "destructive",
-          });
-          return;
-        }
+      if (existsInCart) {
+        toast({
+          title: "Already in Cart",
+          description: `${item.className} for ${item.childName} is already in your cart`,
+          variant: "destructive",
+        });
+        return;
       }
-    } catch (error) {
-      console.log('Could not check enrollment status, proceeding with cart add');
+
+      // Check if user is already enrolled in this class with a completed payment
+      try {
+        const response = await apiRequest('GET', '/api/enrollments');
+        if (response.ok) {
+          const enrollments = await response.json();
+          
+          // Check for any successful enrollment (enrolled status with no remaining balance)
+          const hasSuccessfulEnrollment = enrollments.some((enrollment: any) => 
+            enrollment.classId === item.classId && 
+            enrollment.childId === item.childId &&
+            enrollment.status === 'enrolled' &&
+            enrollment.remainingBalance === 0
+          );
+
+          if (hasSuccessfulEnrollment) {
+            toast({
+              title: "Already Enrolled",
+              description: `${item.childName} is already enrolled in ${item.className}`,
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+      } catch (error) {
+        console.log('Could not check enrollment status, proceeding with cart add');
+      }
     }
 
     dispatch({ type: 'ADD_ITEM', payload: newItem });
-    toast({
-      title: "Added to Cart",
-      description: `${item.className} for ${item.childName} added to cart`,
-    });
+    
+    // Only show toast if not skipping validation (to avoid duplicate toasts)
+    if (!skipValidation) {
+      toast({
+        title: "Added to Cart",
+        description: `${item.className} for ${item.childName} added to cart`,
+      });
+    }
   };
 
   const removeItem = (id: string) => {

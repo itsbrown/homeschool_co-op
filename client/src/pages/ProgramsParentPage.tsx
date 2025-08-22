@@ -64,7 +64,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
 
       if (selectedClass && selectedChild && data.enrollment) {
-        // Add item to cart immediately for visual feedback
+        // Add item to cart immediately for visual feedback, skip validation since we just created the enrollment
         addItem({
           classId: variables.classId,
           className: selectedClass.title,
@@ -80,7 +80,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           totalCost: selectedClass.price * 100,
           amountPaid: 0,
           remainingBalance: selectedClass.price * 100
-        });
+        }, true); // Skip validation to avoid race condition
         
         toast({
           title: "Added to Cart! 🛒",
