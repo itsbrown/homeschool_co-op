@@ -427,6 +427,59 @@ router.post('/webhook', async (req, res) => {
 
               await Promise.all(enrollmentPromises);
               console.log('✅ All 3-payment plan enrollments processed for payment:', paymentIntent.id);
+              
+              // Create scheduled payments for the remaining 2 installments
+              const amountPerPayment = Math.round(paymentIntent.amount); // Same amount as first payment
+              const schedulePromises = items.map(async (item: any, index: number) => {
+                // Create 2nd payment (due in 30 days)
+                const payment2DueDate = new Date();
+                payment2DueDate.setDate(payment2DueDate.getDate() + 30);
+                
+                const scheduledPayment2 = {
+                  id: Date.now() + index * 1000, // Unique ID for each item
+                  parentEmail: parentEmail,
+                  enrollmentId: null, // Will be set after enrollment is created
+                  amount: amountPerPayment,
+                  dueDate: payment2DueDate.toISOString(),
+                  status: 'pending' as const,
+                  paymentPlan: 'three_payments',
+                  installmentNumber: 2,
+                  totalInstallments: 3,
+                  description: `${item.childName} - ${item.className}`,
+                  stripePaymentIntentId: null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                };
+                
+                // Create 3rd payment (due in 60 days)  
+                const payment3DueDate = new Date();
+                payment3DueDate.setDate(payment3DueDate.getDate() + 60);
+                
+                const scheduledPayment3 = {
+                  id: Date.now() + index * 1000 + 1, // Unique ID for each item
+                  parentEmail: parentEmail,
+                  enrollmentId: null, // Will be set after enrollment is created
+                  amount: amountPerPayment,
+                  dueDate: payment3DueDate.toISOString(),
+                  status: 'pending' as const,
+                  paymentPlan: 'three_payments',
+                  installmentNumber: 3,
+                  totalInstallments: 3,
+                  description: `${item.childName} - ${item.className}`,
+                  stripePaymentIntentId: null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                };
+                
+                // Create both scheduled payments
+                await storage.createScheduledPayment(scheduledPayment2);
+                await storage.createScheduledPayment(scheduledPayment3);
+                
+                console.log(`📅 Created scheduled payments for ${item.childName} - ${item.className}: Payment 2 due ${payment2DueDate.toDateString()}, Payment 3 due ${payment3DueDate.toDateString()}`);
+              });
+              
+              await Promise.all(schedulePromises);
+              console.log('✅ Created scheduled payments for 3-payment plan');
             } else {
               // Handle full payments - create enrollments or update to fully paid
               const enrollmentPromises = items.map(async (item: any) => {
