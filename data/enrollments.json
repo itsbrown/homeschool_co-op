@@ -509,5 +509,57 @@
     "depositRequired": 90,
     "totalCost": 900,
     "remainingBalance": 900
+  },
+  {
+    "id": 1755874905115,
+    "classId": 7,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Patriots | Half Day",
+    "enrollmentDate": "2025-08-22T15:01:45.115Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
+  },
+  {
+    "id": 1755875040129,
+    "classId": 5,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Tycoons | Half Day",
+    "enrollmentDate": "2025-08-22T15:04:00.129Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
+  },
+  {
+    "id": 1755875048768,
+    "classId": 6,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Pioneers | Half Day",
+    "enrollmentDate": "2025-08-22T15:04:08.768Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
+  },
+  {
+    "id": 1755875076582,
+    "classId": 5,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Tycoons | Half Day",
+    "enrollmentDate": "2025-08-22T15:04:36.582Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]
