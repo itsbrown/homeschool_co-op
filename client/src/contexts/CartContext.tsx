@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { useAuth0 } from "@auth0/auth0-react"; // Assuming Auth0 for authentication
 
 export interface CartItem {
   id: string;
@@ -200,6 +201,7 @@ interface CartContextType {
   getItemCount: () => number;
   hasItem: (classId: number, childId: number) => boolean;
   loadUnpaidEnrollments: () => Promise<void>;
+  refreshCart: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -215,14 +217,48 @@ export const useCart = () => {
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const { toast } = useToast();
+  const { user, isAuthenticated, getAccessTokenSilently } = useAuth0(); // Using Auth0 hooks
 
-  const loadUnpaidEnrollments = async () => {
+  const loadUnpaidEnrollments = useCallback(async () => {
+    if (!user?.email) {
+      console.log('No user email available for cart loading');
+      return;
+    }
+
     try {
-      const token = localStorage.getItem('supabase_access_token');
+      console.log('🛒 Loading unpaid enrollments for user:', user.email);
+
+      // Get the access token for API requests
+      let token;
+      try {
+        token = await getAccessTokenSilently();
+      } catch (error) {
+        console.log('Failed to get access token:', error);
+        return;
+      }
+
       if (!token) {
         console.log('No authentication token found for cart loading');
         return;
       }
+
+      const response = await fetch('/api/parent/enrollments', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log('Authentication failed for cart loading');
+          return;
+        }
+        throw new Error(`Failed to fetch enrollments: ${response.status}`);
+      }
+
+      const enrollments = await response.json();
+      console.log('🔍 Raw enrollments from API:', enrollments);
 
       // Check if cart was recently cleared (within 30 seconds) to prevent refilling after payment
       const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
@@ -237,121 +273,114 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      const response = await fetch('/api/enrollments', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+      // Group enrollments by class+child combination to find the latest status
+      const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
+        const key = `${enrollment.classId}-${enrollment.childId}`;
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(enrollment);
+        return acc;
+      }, {});
+
+      // Filter for enrollments with remaining balance that aren't superseded by successful enrollments
+      const unpaidEnrollments = [];
+
+      for (const [key, groupEnrollments] of Object.entries(enrollmentGroups)) {
+        const enrollmentList = groupEnrollments as any[];
+
+        // Sort by enrollment date (newest first)
+        const sortedEnrollments = enrollmentList.sort((a, b) => 
+          new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
+        );
+
+        // Check if there's any successful enrollment for this class+child combination
+        const hasSuccessfulEnrollment = sortedEnrollments.some(e => 
+          e.status === 'enrolled' && e.remainingBalance === 0
+        );
+
+        console.log(`🔍 Group ${key}: hasSuccessfulEnrollment=${hasSuccessfulEnrollment}`);
+
+        // Only add to cart if there's no successful enrollment and there's a balance due
+        if (!hasSuccessfulEnrollment) {
+          const latestEnrollment = sortedEnrollments[0];
+          const hasBalance = latestEnrollment.remainingBalance > 0 || 
+                            (latestEnrollment.status === 'pending_payment' && latestEnrollment.amount === 0);
+
+          console.log(`🔍 Latest enrollment ${latestEnrollment.id}: status=${latestEnrollment.status}, remainingBalance=${latestEnrollment.remainingBalance}, hasBalance=${hasBalance}`);
+
+          if (hasBalance) {
+            unpaidEnrollments.push(latestEnrollment);
+          }
+        } else {
+          console.log(`🔍 Skipping group ${key} - already has successful enrollment`);
+        }
+      }
+
+      // Convert enrollments to cart items with enhanced status display
+      const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
+        const remainingBalance = enrollment.remainingBalance || enrollment.totalCost || 0;
+        const amountPaid = enrollment.amountPaid || 0;
+
+        let displayStatus = enrollment.status;
+        let statusText = 'Payment Required';
+
+        // Determine appropriate status text based on payment state
+        if (enrollment.status === 'partially_paid') {
+          statusText = 'Partially Paid';
+        } else if (enrollment.status === 'payment_plan_active') {
+          statusText = 'Payment Plan Active';
+        } else if (enrollment.status === 'enrolled' && remainingBalance > 0) {
+          statusText = 'Balance Due';
+        } else if (enrollment.status === 'pending_payment') {
+          statusText = 'Payment Required';
+        }
+
+        return {
+          id: `enrollment-${enrollment.id}`,
+          enrollmentId: enrollment.id,
+          classId: enrollment.classId,
+          className: enrollment.className,
+          childId: enrollment.childId,
+          childName: enrollment.childName,
+          price: remainingBalance,
+          status: displayStatus,
+          statusText: statusText,
+          depositRequired: enrollment.depositRequired,
+          amountPaid: amountPaid,
+          remainingBalance: remainingBalance,
+          totalCost: enrollment.totalCost || 0,
+        };
+      });
+
+      const totals = calculateCartTotals(cartItems);
+
+      console.log('🛒 About to dispatch LOAD_CART with items:', cartItems.length);
+      dispatch({
+        type: 'LOAD_CART',
+        payload: {
+          items: cartItems,
+          ...totals,
         },
       });
-      
-      if (response.ok) {
-        const enrollments = await response.json();
-        console.log('🔍 Fetched enrollments for cart validation:', enrollments.length, 'total enrollments');
-        console.log('🔍 First few enrollments:', enrollments.slice(0, 3));
-        
-        // Group enrollments by class+child combination to find the latest status
-        const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
-          const key = `${enrollment.classId}-${enrollment.childId}`;
-          if (!acc[key]) {
-            acc[key] = [];
-          }
-          acc[key].push(enrollment);
-          return acc;
-        }, {});
+      console.log('🛒 LOAD_CART dispatched successfully');
 
-        // Filter for enrollments with remaining balance that aren't superseded by successful enrollments
-        const unpaidEnrollments = [];
-        
-        for (const [key, groupEnrollments] of Object.entries(enrollmentGroups)) {
-          const enrollmentList = groupEnrollments as any[];
-          
-          // Sort by enrollment date (newest first)
-          const sortedEnrollments = enrollmentList.sort((a, b) => 
-            new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
-          );
-          
-          // Check if there's any successful enrollment for this class+child combination
-          const hasSuccessfulEnrollment = sortedEnrollments.some(e => 
-            e.status === 'enrolled' && e.remainingBalance === 0
-          );
-          
-          console.log(`🔍 Group ${key}: hasSuccessfulEnrollment=${hasSuccessfulEnrollment}`);
-          
-          // Only add to cart if there's no successful enrollment and there's a balance due
-          if (!hasSuccessfulEnrollment) {
-            const latestEnrollment = sortedEnrollments[0];
-            const hasBalance = latestEnrollment.remainingBalance > 0 || 
-                              (latestEnrollment.status === 'pending_payment' && latestEnrollment.amount === 0);
-            
-            console.log(`🔍 Latest enrollment ${latestEnrollment.id}: status=${latestEnrollment.status}, remainingBalance=${latestEnrollment.remainingBalance}, hasBalance=${hasBalance}`);
-            
-            if (hasBalance) {
-              unpaidEnrollments.push(latestEnrollment);
-            }
-          } else {
-            console.log(`🔍 Skipping group ${key} - already has successful enrollment`);
-          }
-        }
-        
-        // Convert enrollments to cart items with enhanced status display
-        const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
-          const remainingBalance = enrollment.remainingBalance || enrollment.totalCost || 0;
-          const amountPaid = enrollment.amountPaid || 0;
-          
-          let displayStatus = enrollment.status;
-          let statusText = 'Payment Required';
-          
-          // Determine appropriate status text based on payment state
-          if (enrollment.status === 'partially_paid') {
-            statusText = 'Partially Paid';
-          } else if (enrollment.status === 'payment_plan_active') {
-            statusText = 'Payment Plan Active';
-          } else if (enrollment.status === 'enrolled' && remainingBalance > 0) {
-            statusText = 'Balance Due';
-          } else if (enrollment.status === 'pending_payment') {
-            statusText = 'Payment Required';
-          }
-          
-          return {
-            id: `enrollment-${enrollment.id}`,
-            enrollmentId: enrollment.id,
-            classId: enrollment.classId,
-            className: enrollment.className,
-            childId: enrollment.childId,
-            childName: enrollment.childName,
-            price: remainingBalance,
-            status: displayStatus,
-            statusText: statusText,
-            depositRequired: enrollment.depositRequired,
-            amountPaid: amountPaid,
-            remainingBalance: remainingBalance,
-            totalCost: enrollment.totalCost || 0,
-          };
-        });
-        
-        const totals = calculateCartTotals(cartItems);
-        
-        console.log('🛒 About to dispatch LOAD_CART with items:', cartItems.length);
-        dispatch({
-          type: 'LOAD_CART',
-          payload: {
-            items: cartItems,
-            ...totals,
-          },
-        });
-        console.log('🛒 LOAD_CART dispatched successfully');
-        
-        console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
-        console.log('🛒 Final cart items:', cartItems);
-        console.log(`🛒 Cart items:`, cartItems);
-        console.log(`🛒 Cart totals:`, totals);
-      } else {
-        console.error('Failed to load enrollments:', response.status);
-      }
+      console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
+      console.log('🛒 Final cart items:', cartItems);
+      console.log('🛒 Cart items:', cartItems);
+      console.log('🛒 Cart totals:', totals);
     } catch (error) {
       console.error('Error loading unpaid enrollments:', error);
     }
   };
+
+  // Manual refresh function for external use
+  const refreshCart = useCallback(() => {
+    console.log('🛒 Manual cart refresh requested');
+    if (user?.email && isAuthenticated) {
+      loadUnpaidEnrollments();
+    }
+  }, [user?.email, isAuthenticated, loadUnpaidEnrollments]);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -368,23 +397,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Load unpaid enrollments when authentication is ready
+  // Load unpaid enrollments on mount and when user changes
   useEffect(() => {
-    const token = localStorage.getItem('supabase_access_token');
-    if (token) {
-      console.log('🛒 Authentication token detected, loading unpaid enrollments...');
-      // Only load if cart is empty or after significant delay to avoid overwriting fresh enrollments
+    if (user?.email && isAuthenticated) {
+      console.log('🛒 User authenticated, loading cart after delay...');
+      // Add a small delay to ensure the enrollment API has completed
       const timer = setTimeout(() => {
-        if (state.cart.items.length === 0) {
-          console.log('🛒 Cart is empty, loading unpaid enrollments...');
-          loadUnpaidEnrollments();
-        } else {
-          console.log('🛒 Cart has items, skipping unpaid enrollments load to preserve fresh data');
-        }
+        console.log('🛒 Attempting to load unpaid enrollments after delay...');
+        loadUnpaidEnrollments();
       }, 1000);
+
       return () => clearTimeout(timer);
+    } else {
+      console.log('🛒 User not authenticated, clearing cart');
+      dispatch({ type: 'CLEAR_CART' });
     }
-  }, [state.cart.items.length]);
+  }, [user?.email, isAuthenticated, loadUnpaidEnrollments]);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
@@ -425,7 +453,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const response = await apiRequest('GET', '/api/enrollments');
         if (response.ok) {
           const enrollments = await response.json();
-          
+
           // Check for any successful enrollment (enrolled status with no remaining balance)
           const hasSuccessfulEnrollment = enrollments.some((enrollment: any) => 
             enrollment.classId === item.classId && 
@@ -451,9 +479,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     console.log('🛒 Dispatching ADD_ITEM action:', newItem);
     dispatch({ type: 'ADD_ITEM', payload: newItem });
-    
+
     console.log('🛒 Cart will update via reducer and useEffect');
-    
+
     // Only show toast if not skipping validation (to avoid duplicate toasts)
     if (!skipValidation) {
       toast({
@@ -503,7 +531,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const contextValue: CartContextType = {
     cart: state.cart,
-    isOpen: state.isOpen,
     addItem,
     removeItem,
     updateItem,
@@ -513,6 +540,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getItemCount,
     hasItem,
     loadUnpaidEnrollments,
+    refreshCart
   };
 
   return (

@@ -31,7 +31,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
-  const { addItem, hasItem, openCart } = useCart();
+  const { addItem, hasItem, openCart, refreshCart } = useCart();
   // Use wouter's location hook for navigation
   const [, setLocation] = useLocation();
 
@@ -91,17 +91,17 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         }, true); // Skip validation to avoid race condition
 
         console.log('🛒 Item added to cart, triggering cart update...');
-        
+
         toast({
           title: "Added to Cart! 🛒",
           description: `${selectedChild.firstName} enrolled in ${selectedClass.title}. Complete payment in your cart.`,
         });
-        
+
         // Open cart to show the new item after a brief delay
         setTimeout(() => {
           openCart();
         }, 800);
-        
+
         // Also store enrollment data for direct payment plans access
         const enrollmentData = {
           enrollmentId: data.enrollment.id,
