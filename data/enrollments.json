@@ -603,5 +603,18 @@
     "totalCost": 90000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-22T18:24:10.709Z"
+  },
+  {
+    "id": 1755887226973,
+    "classId": 6,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Pioneers | Half Day",
+    "enrollmentDate": "2025-08-22T18:27:06.973Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

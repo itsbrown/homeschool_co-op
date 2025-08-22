@@ -436,19 +436,15 @@ router.post('/webhook', async (req, res) => {
                 payment2DueDate.setDate(payment2DueDate.getDate() + 30);
                 
                 const scheduledPayment2 = {
-                  id: Date.now() + index * 1000, // Unique ID for each item
                   parentEmail: parentEmail,
-                  enrollmentId: null, // Will be set after enrollment is created
+                  enrollmentIds: [item.classId], // Use classId as placeholder
                   amount: amountPerPayment,
-                  dueDate: payment2DueDate.toISOString(),
-                  status: 'pending' as const,
                   paymentPlan: 'three_payments',
                   installmentNumber: 2,
                   totalInstallments: 3,
+                  dueDate: payment2DueDate,
                   description: `${item.childName} - ${item.className}`,
-                  stripePaymentIntentId: null,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
+                  status: 'pending' as const
                 };
                 
                 // Create 3rd payment (due in 60 days)  
@@ -456,19 +452,15 @@ router.post('/webhook', async (req, res) => {
                 payment3DueDate.setDate(payment3DueDate.getDate() + 60);
                 
                 const scheduledPayment3 = {
-                  id: Date.now() + index * 1000 + 1, // Unique ID for each item
                   parentEmail: parentEmail,
-                  enrollmentId: null, // Will be set after enrollment is created
+                  enrollmentIds: [item.classId], // Use classId as placeholder
                   amount: amountPerPayment,
-                  dueDate: payment3DueDate.toISOString(),
-                  status: 'pending' as const,
                   paymentPlan: 'three_payments',
                   installmentNumber: 3,
                   totalInstallments: 3,
+                  dueDate: payment3DueDate,
                   description: `${item.childName} - ${item.className}`,
-                  stripePaymentIntentId: null,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
+                  status: 'pending' as const
                 };
                 
                 // Create both scheduled payments
