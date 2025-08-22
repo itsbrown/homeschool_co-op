@@ -90,13 +90,20 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         item => item.classId === action.payload.classId && item.childId === action.payload.childId
       );
 
+      console.log('🛒 ADD_ITEM reducer - existing items:', state.cart.items.length);
+      console.log('🛒 ADD_ITEM reducer - adding item:', action.payload);
+      console.log('🛒 ADD_ITEM reducer - existingItemIndex:', existingItemIndex);
+
       if (existingItemIndex >= 0) {
         // Item already exists, don't add duplicate
+        console.log('🛒 ADD_ITEM reducer - item already exists, not adding');
         return state;
       }
 
       const newItems = [...state.cart.items, action.payload];
       const totals = calculateCartTotals(newItems);
+
+      console.log('🛒 ADD_ITEM reducer - new items count:', newItems.length);
 
       return {
         ...state,
@@ -410,7 +417,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    console.log('🛒 Adding item to cart:', newItem);
     dispatch({ type: 'ADD_ITEM', payload: newItem });
+    console.log('🛒 Cart state after adding item - total items:', state.cart.items.length + 1);
     
     // Only show toast if not skipping validation (to avoid duplicate toasts)
     if (!skipValidation) {
@@ -448,7 +457,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const openCart = () => dispatch({ type: 'OPEN_CART' });
   const closeCart = () => dispatch({ type: 'CLOSE_CART' });
 
-  const getItemCount = () => state.cart.items.length;
+  const getItemCount = () => {
+    console.log('🛒 getItemCount called - current items:', state.cart.items.length);
+    return state.cart.items.length;
+  };
 
   const hasItem = (classId: number, childId: number) => {
     return state.cart.items.some(
