@@ -89,15 +89,22 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       return apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
     },
     onSuccess: (data, variables) => {
+      console.log('🎯 Enrollment onSuccess called with data:', data);
+      console.log('🎯 Variables:', variables);
+      console.log('🎯 Classes data:', classesData?.classes);
+      console.log('🎯 Children data:', children);
+      
       // Find the selected child and class data for cart item
       const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
       const selectedChild = children?.find((c: any) => c.id === parseInt(variables.childId));
 
+      console.log('🎯 Selected class:', selectedClass);
+      console.log('🎯 Selected child:', selectedChild);
+
       if (selectedClass && selectedChild) {
         console.log('🛒 Adding enrolled class to cart:', selectedClass.title);
 
-        // Add the enrollment to the cart
-        addItem({
+        const cartItem = {
           classId: variables.classId,
           className: selectedClass.title,
           childId: selectedChild.id,
@@ -112,7 +119,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           totalCost: selectedClass.price,
           amountPaid: 0,
           remainingBalance: selectedClass.price
-        }, true); // Skip validation to avoid race condition
+        };
+
+        console.log('🛒 Cart item being added:', cartItem);
+
+        // Add the enrollment to the cart
+        addItem(cartItem, true); // Skip validation to avoid race condition
 
         console.log('🛒 Item added to cart, triggering cart update...');
 
@@ -126,6 +138,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           openCart();
         }, 800);
       } else {
+        console.log('❌ Missing data - selectedClass:', !!selectedClass, 'selectedChild:', !!selectedChild);
         toast({
           title: "Enrollment Successful",
           description: "Child has been enrolled in the class.",

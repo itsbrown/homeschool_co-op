@@ -498,12 +498,12 @@
     "remainingBalance": 120
   },
   {
-    "id": 1755878491942,
+    "id": 1755878829626,
     "classId": 1,
     "childId": 18,
     "childName": "Child1 name",
     "className": "Kindergarten Reading Basics",
-    "enrollmentDate": "2025-08-22T16:01:31.942Z",
+    "enrollmentDate": "2025-08-22T16:07:09.626Z",
     "status": "pending_payment",
     "amount": 0,
     "depositRequired": 12,
