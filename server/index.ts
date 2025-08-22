@@ -100,6 +100,10 @@ app.use('/api/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/billing', billingRouter);
+// Dynamic import for scheduled payments router
+import('./api/scheduled-payments.js').then(module => {
+  app.use('/api/scheduled-payments', module.default);
+});
 app.use("/api/schools", schoolsRouter);
 app.use("/api/students", studentsRouter);
 app.use("/api/school-parents", schoolParentsRouter);

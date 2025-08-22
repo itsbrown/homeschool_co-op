@@ -138,11 +138,114 @@ function PaymentHistoryTab() {
 }
 
 function UpcomingPaymentsTab() {
+  const { data: upcomingPayments, isLoading } = useQuery({
+    queryKey: ['/api/scheduled-payments/upcoming'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
+      if (!response.ok) {
+        throw new Error('Failed to fetch upcoming payments');
+      }
+      const data = await response.json();
+      return data.success ? data.payments : [];
+    },
+  });
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount / 100);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+        <p className="text-gray-500">Loading upcoming payments...</p>
+      </div>
+    );
+  }
+
+  if (!upcomingPayments || upcomingPayments.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming payments</h3>
+        <p className="text-gray-500">Your payment plan payments will appear here when due.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="text-center py-12">
-      <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-      <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming payments</h3>
-      <p className="text-gray-500">Scheduled payment reminders will appear here.</p>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-6">
+        <Calendar className="h-5 w-5 text-blue-600" />
+        <h3 className="text-lg font-semibold">Upcoming Payment Plan Installments</h3>
+      </div>
+      
+      {upcomingPayments.map((payment: any) => (
+        <Card key={payment.id} className="border-l-4 border-l-blue-500">
+          <CardContent className="p-6">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    Payment {payment.installmentNumber} of {payment.totalInstallments}
+                  </Badge>
+                  <Badge variant="secondary">
+                    {payment.paymentPlan === 'three_payments' ? '3-Payment Plan' : payment.paymentPlan}
+                  </Badge>
+                </div>
+                
+                <h4 className="font-semibold text-lg mb-1">{payment.description}</h4>
+                <p className="text-gray-600 text-sm mb-3">Due: {formatDate(payment.dueDate)}</p>
+                
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <span>Amount: {formatCurrency(payment.amount)}</span>
+                  <span>•</span>
+                  <span>Status: {payment.status}</span>
+                </div>
+              </div>
+              
+              <div className="flex flex-col gap-2">
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-green-600">
+                    {formatCurrency(payment.amount)}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Due {formatDate(payment.dueDate)}
+                  </div>
+                </div>
+                
+                <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                  Pay Now
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+      
+      <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="flex items-start gap-3">
+          <Calendar className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div>
+            <h4 className="font-medium text-blue-900 mb-1">Payment Reminders</h4>
+            <p className="text-sm text-blue-700">
+              We'll send you email reminders 7 days before each payment is due. 
+              You can pay early at any time using the "Pay Now" button above.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -302,6 +302,56 @@ router.post('/webhook', async (req, res) => {
             } catch (emailError) {
               console.error('❌ Failed to send payment confirmation email:', emailError);
             }
+
+            // Handle scheduled payments for 3-payment plans
+            if (paymentType === 'three_payments') {
+              try {
+                console.log('🗓️ Creating scheduled payments for 3-payment plan...');
+                
+                // Get enrollment IDs from items
+                const enrollmentIds = items.map((item: any) => item.enrollmentId || item.classId);
+                const remainingAmount = Math.round(paymentIntent.amount * 2); // Remaining 2/3 of total amount
+                const installmentAmount = Math.round(remainingAmount / 2); // Split remaining into 2 payments
+                
+                // Create 2 scheduled payments (1 month and 2 months from now)
+                const scheduledPayments = [
+                  {
+                    parentEmail: parentEmail,
+                    enrollmentIds: enrollmentIds,
+                    paymentPlan: 'three_payments',
+                    installmentNumber: 2,
+                    totalInstallments: 3,
+                    amount: installmentAmount,
+                    currency: 'usd',
+                    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+                    status: 'pending' as const,
+                    originalPaymentId: payment.id,
+                    description: `Payment 2 of 3 for ${items.map((i: any) => i.className).join(', ')}`
+                  },
+                  {
+                    parentEmail: parentEmail,
+                    enrollmentIds: enrollmentIds,
+                    paymentPlan: 'three_payments',
+                    installmentNumber: 3,
+                    totalInstallments: 3,
+                    amount: installmentAmount,
+                    currency: 'usd',
+                    dueDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
+                    status: 'pending' as const,
+                    originalPaymentId: payment.id,
+                    description: `Payment 3 of 3 for ${items.map((i: any) => i.className).join(', ')}`
+                  }
+                ];
+
+                // Create the scheduled payments
+                for (const scheduledPayment of scheduledPayments) {
+                  await storage.createScheduledPayment(scheduledPayment);
+                  console.log(`✅ Created scheduled payment ${scheduledPayment.installmentNumber}/3 due ${scheduledPayment.dueDate.toLocaleDateString()}`);
+                }
+              } catch (error) {
+                console.error('❌ Failed to create scheduled payments:', error);
+              }
+            }
             
             if (paymentType === 'deposit') {
               // Handle deposit payments - update existing enrollments or create new ones
@@ -355,6 +405,28 @@ router.post('/webhook', async (req, res) => {
               
               await Promise.all(enrollmentPromises);
               console.log('✅ All deposit payments processed for payment:', paymentIntent.id);
+            } else if (paymentType === 'three_payments') {
+              // Handle 3-payment plan first payment - create enrollments with remaining balance
+              const enrollmentPromises = items.map(async (item: any) => {
+                const totalCost = item.totalCost || (item.price * 3); // Calculate total if not provided
+                const remainingBalance = totalCost - item.price; // Amount still owed after first payment
+                
+                return storage.createEnrollment({
+                  classId: item.classId,
+                  childId: item.childId,
+                  status: 'enrolled', // Enrolled after first payment
+                  paymentIntentId: paymentIntent.id,
+                  amount: item.price,
+                  amountPaid: item.price,
+                  totalCost: totalCost,
+                  remainingBalance: remainingBalance,
+                  outstandingBalance: remainingBalance,
+                  enrollmentDate: new Date().toISOString()
+                } as any);
+              });
+
+              await Promise.all(enrollmentPromises);
+              console.log('✅ All 3-payment plan enrollments processed for payment:', paymentIntent.id);
             } else {
               // Handle full payments - create enrollments or update to fully paid
               const enrollmentPromises = items.map(async (item: any) => {

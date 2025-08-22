@@ -684,6 +684,29 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
+// Scheduled payments for payment plans (3-payment plan, split payments, etc.)
+export const scheduledPayments = pgTable("scheduled_payments", {
+  id: serial("id").primaryKey(),
+  parentEmail: text("parent_email").notNull(),
+  enrollmentIds: integer("enrollment_ids").array().notNull(),
+  paymentPlan: text("payment_plan").notNull(), // "three_payments", "split", etc
+  installmentNumber: integer("installment_number").notNull(), // 1, 2, 3...
+  totalInstallments: integer("total_installments").notNull(),
+  amount: integer("amount").notNull(), // amount in cents
+  currency: text("currency").default("usd").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  status: text("status", { enum: ["pending", "paid", "overdue", "cancelled"] }).default("pending").notNull(),
+  originalPaymentId: integer("original_payment_id").references(() => payments.id),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const insertPaymentSchema = createInsertSchema(payments);
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
+
+export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertScheduledPayment = z.infer<typeof insertScheduledPaymentSchema>;
+export type ScheduledPayment = typeof scheduledPayments.$inferSelect;

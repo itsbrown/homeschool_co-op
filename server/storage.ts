@@ -15,6 +15,7 @@ import {
   marketingLinks, type MarketingLink, type InsertMarketingLink,
   linkAnalytics, type LinkAnalytics, type InsertLinkAnalytics,
   payments, type Payment, type InsertPayment,
+  scheduledPayments, type ScheduledPayment, type InsertScheduledPayment,
   schools, type School, type InsertSchool
 } from "@shared/schema";
 
@@ -2027,6 +2028,42 @@ export class MemStorage implements IStorage {
     this.paymentsStore.set(id, updatedPayment);
     return updatedPayment;
   }
+
+  // Scheduled payments methods
+  private scheduledPaymentsStore = new Map<number, ScheduledPayment>();
+  private scheduledPaymentIdCounter = 1;
+
+  async createScheduledPayment(scheduledPayment: InsertScheduledPayment): Promise<ScheduledPayment> {
+    const id = this.scheduledPaymentIdCounter++;
+    const now = new Date();
+    const newScheduledPayment: ScheduledPayment = {
+      id,
+      createdAt: now,
+      updatedAt: now,
+      ...scheduledPayment
+    };
+    this.scheduledPaymentsStore.set(id, newScheduledPayment);
+    return newScheduledPayment;
+  }
+
+  async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
+    return Array.from(this.scheduledPaymentsStore.values()).filter(
+      payment => payment.parentEmail === parentEmail
+    );
+  }
+
+  async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
+    const payment = this.scheduledPaymentsStore.get(id);
+    if (!payment) return undefined;
+
+    const updatedPayment: ScheduledPayment = {
+      ...payment,
+      status,
+      updatedAt: new Date()
+    };
+    this.scheduledPaymentsStore.set(id, updatedPayment);
+    return updatedPayment;
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -2607,6 +2644,19 @@ export class MemStorage implements IStorage {
 
       async removeEnrollment(enrollmentId: number): Promise<boolean> {
         return this.memStorage.removeEnrollment(enrollmentId);
+      }
+
+      // Scheduled payments methods 
+      async createScheduledPayment(scheduledPayment: InsertScheduledPayment): Promise<ScheduledPayment> {
+        return this.memStorage.createScheduledPayment(scheduledPayment);
+      }
+
+      async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
+        return this.memStorage.getScheduledPaymentsByParentEmail(parentEmail);
+      }
+
+      async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
+        return this.memStorage.updateScheduledPaymentStatus(id, status);
       }
   }
 
