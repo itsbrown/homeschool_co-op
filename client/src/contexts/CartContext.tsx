@@ -441,6 +441,21 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Save cart to localStorage whenever it changes
   useEffect(() => {
     console.log('🛒 Cart state changed - saving to localStorage:', state.cart);
+    
+    // Don't save empty cart if localStorage has items (prevents overriding valid cart during navigation)
+    const existingCart = localStorage.getItem('asa_cart');
+    if (existingCart && state.cart.items.length === 0) {
+      try {
+        const parsedExisting = JSON.parse(existingCart);
+        if (parsedExisting.items && parsedExisting.items.length > 0) {
+          console.log('🛒 Preventing empty cart from overriding existing cart with items');
+          return;
+        }
+      } catch (error) {
+        console.log('🛒 Error parsing existing cart, proceeding with save');
+      }
+    }
+    
     localStorage.setItem('asa_cart', JSON.stringify(state.cart));
   }, [state.cart]);
 
@@ -528,13 +543,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const clearCart = () => {
-    console.log('🛒 CART BEING CLEARED! Stack trace:');
-    console.trace('Cart clear called from:');
     dispatch({ type: 'CLEAR_CART' });
     localStorage.removeItem('asa_cart');
     // Set a flag to prevent immediate reload after payment
     localStorage.setItem('asa_cart_cleared', Date.now().toString());
-    console.log('🛒 Cart cleared - localStorage removed');
     toast({
       title: "Cart Cleared",
       description: "All items removed from cart",
