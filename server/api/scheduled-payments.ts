@@ -7,17 +7,50 @@ const router = Router();
 // Get upcoming scheduled payments for a user
 router.get('/upcoming', async (req, res) => {
   try {
-    // TODO: Fix authentication - temporarily hardcoded for testing
-    const userEmail = 'tester@testing321.com';
+    // Extract user email from Supabase token (same as billing summary)
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authorization header missing'
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    // Simple token decode for email (same as billing.ts)
+    let userEmail;
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+      userEmail = payload.email;
+      if (!userEmail) {
+        return res.status(401).json({
+          success: false,
+          error: 'Email not found in token'
+        });
+      }
+    } catch (error) {
+      console.log('❌ Token decode error:', error);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid authentication token'
+      });
+    }
 
     console.log('📅 Fetching scheduled payments for:', userEmail);
     
     // Get all scheduled payments for this parent
+    console.log('🔍 Checking storage for scheduled payments...');
     const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    console.log(`📋 Found ${scheduledPayments.length} total scheduled payments for ${userEmail}:`, scheduledPayments);
     
     // Filter for pending payments and sort by due date
     const upcomingPayments = scheduledPayments
-      .filter(payment => payment.status === 'pending')
+      .filter(payment => {
+        const isUpcoming = payment.status === 'pending';
+        console.log(`📅 Payment ${payment.id}: due ${new Date(payment.dueDate).toLocaleDateString()}, status: ${payment.status}, upcoming: ${isUpcoming}`);
+        return isUpcoming;
+      })
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
     
     console.log(`📊 Found ${upcomingPayments.length} upcoming payments`);

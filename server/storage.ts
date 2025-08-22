@@ -258,6 +258,7 @@ export class MemStorage implements IStorage {
     this.initializeKnowledgeBases().catch(console.error);
     this.initializeSampleClasses().catch(console.error);
     this.initializeChildren().catch(console.error);
+    this.initializeScheduledPayments().catch(console.error);
 
     this.createUser({
       username: "admin",
@@ -1852,6 +1853,38 @@ export class MemStorage implements IStorage {
     }
   }
 
+  private async initializeScheduledPayments() {
+    // Load scheduled payments from the JSON file
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const scheduledPaymentsFilePath = path.join(process.cwd(), 'data', 'scheduled-payments.json');
+
+      if (fs.existsSync(scheduledPaymentsFilePath)) {
+        const scheduledPaymentsData = JSON.parse(fs.readFileSync(scheduledPaymentsFilePath, 'utf-8'));
+        console.log(`💳 Loading ${scheduledPaymentsData.length} scheduled payments from scheduled-payments.json`);
+
+        // Load scheduled payments into memory store
+        for (const payment of scheduledPaymentsData) {
+          const scheduledPayment: ScheduledPayment = {
+            ...payment,
+            dueDate: new Date(payment.dueDate),
+            createdAt: new Date(payment.createdAt),
+            updatedAt: new Date(payment.updatedAt)
+          };
+          this.scheduledPaymentsStore.set(payment.id, scheduledPayment);
+          this.scheduledPaymentIdCounter = Math.max(this.scheduledPaymentIdCounter, payment.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${scheduledPaymentsData.length} scheduled payments into storage`);
+      } else {
+        console.log('💳 No scheduled-payments.json found, starting with empty scheduled payments');
+      }
+    } catch (error) {
+      console.error('❌ Error loading scheduled payments from JSON:', error);
+    }
+  }
+
   private async initializeChildren() {
     // Load children from the actual JSON file
     try {
@@ -2052,9 +2085,19 @@ export class MemStorage implements IStorage {
   }
 
   async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
-    return Array.from(this.scheduledPaymentsStore.values()).filter(
+    // Debug: check if scheduled payments are loaded
+    console.log('🔍 MemStorage: scheduledPaymentsStore size:', this.scheduledPaymentsStore.size);
+    console.log('🔍 MemStorage: looking for payments for email:', parentEmail);
+    
+    const allPayments = Array.from(this.scheduledPaymentsStore.values());
+    console.log('🔍 MemStorage: all scheduled payments:', allPayments);
+    
+    const filteredPayments = allPayments.filter(
       payment => payment.parentEmail === parentEmail
     );
+    console.log('🔍 MemStorage: filtered payments for parent:', filteredPayments);
+    
+    return filteredPayments;
   }
 
   async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
