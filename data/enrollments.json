@@ -535,5 +535,18 @@
     "depositRequired": 14,
     "totalCost": 140,
     "remainingBalance": 140
+  },
+  {
+    "id": 1755879255868,
+    "classId": 1,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Kindergarten Reading Basics",
+    "enrollmentDate": "2025-08-22T16:14:15.868Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 12,
+    "totalCost": 120,
+    "remainingBalance": 120
   }
 ]

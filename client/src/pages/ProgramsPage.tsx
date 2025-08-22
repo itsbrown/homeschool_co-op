@@ -166,7 +166,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   // Handle enrollment button click
   const handleEnrollClick = (classItem: ClassData) => {
+    console.log('🎯 handleEnrollClick called with:', classItem);
+    console.log('🎯 Children available:', children);
+    console.log('🎯 Is admin?', isAdmin);
+    
     if (!children || children.length === 0) {
+      console.log('❌ No children found');
       toast({
         title: "No Children Found",
         description: "Please add a child to your account before enrolling in classes.",
@@ -175,6 +180,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       return;
     }
     
+    console.log('✅ Opening enrollment dialog');
     setEnrollmentDialog({
       open: true,
       classId: classItem.id,
