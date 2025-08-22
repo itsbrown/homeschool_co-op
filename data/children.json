@@ -341,6 +341,29 @@
     "emergencyPhone": null,
     "createdAt": "2025-08-17T20:00:30.692Z",
     "updatedAt": "2025-08-17T20:00:30.692Z",
-    "id": 14
+    "id": 14,
+    "birthDate": "2025-08-21T21:10:27.265Z"
+  },
+  {
+    "firstName": "Hermione",
+    "lastName": "Brown",
+    "birthdate": "2016-04-23",
+    "gradeLevel": "4th Grade",
+    "gender": "female",
+    "parentEmail": "jocimarie1@gmail.com",
+    "parent_email": "jocimarie1@gmail.com",
+    "parentPhone": null,
+    "interests": [],
+    "learningStyle": null,
+    "specialNeeds": null,
+    "allergies": null,
+    "medicalInfo": null,
+    "school": null,
+    "profileImage": null,
+    "emergencyContact": null,
+    "emergencyPhone": null,
+    "createdAt": "2025-08-21T21:20:11.595Z",
+    "updatedAt": "2025-08-21T21:20:11.595Z",
+    "id": 16
   }
 ]
