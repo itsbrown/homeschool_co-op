@@ -279,6 +279,20 @@ export function EnrollmentList({ childId, isAdmin = false }: EnrollmentListProps
                           </DropdownMenuItem>
                         </>
                       )}
+                      {enrollment.paymentStatus === "pending" && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => {
+                              setSelectedEnrollment(enrollment);
+                              setCancelDialogOpen(true);
+                            }}
+                          >
+                            Remove Unpaid Enrollment
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
