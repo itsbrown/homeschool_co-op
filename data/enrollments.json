@@ -626,5 +626,18 @@
     "depositRequired": 90,
     "totalCost": 900,
     "remainingBalance": 900
+  },
+  {
+    "id": 1755872463773,
+    "classId": 4,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Yankee Doodle | Half Day",
+    "enrollmentDate": "2025-08-22T14:21:03.773Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

@@ -210,7 +210,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUnpaidEnrollments = async () => {
     try {
-      const token = localStorage.getItem('supabase_token');
+      const token = localStorage.getItem('supabase_access_token');
       if (!token) {
         console.log('No authentication token found for cart loading');
         return;
@@ -238,7 +238,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (response.ok) {
         const enrollments = await response.json();
-        console.log('🔍 Fetched enrollments for cart validation:', enrollments);
+        console.log('🔍 Fetched enrollments for cart validation:', enrollments.length, 'total enrollments');
+        console.log('🔍 First few enrollments:', enrollments.slice(0, 3));
         
         // Group enrollments by class+child combination to find the latest status
         const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
@@ -333,6 +334,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('🛒 LOAD_CART dispatched successfully');
         
         console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
+        console.log('🛒 Final cart items:', cartItems);
         console.log(`🛒 Cart items:`, cartItems);
         console.log(`🛒 Cart totals:`, totals);
       } else {
