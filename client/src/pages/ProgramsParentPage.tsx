@@ -48,7 +48,15 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Fetch children for enrollment
   const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<any[]>({
     queryKey: ["/api/parent/children"],
-    enabled: true,
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/parent/children');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch children: ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data;
+    },
   });
 
 
