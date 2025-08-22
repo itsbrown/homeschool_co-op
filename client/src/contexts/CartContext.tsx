@@ -353,7 +353,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Load cart from localStorage on mount and fetch unpaid enrollments
+  // Load cart from localStorage on mount
   useEffect(() => {
     const savedCart = localStorage.getItem('asa_cart');
     if (savedCart) {
@@ -366,27 +366,25 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('asa_cart');
       }
     }
-    
-    // Load unpaid enrollments after a brief delay to ensure auth is ready
-    const timer = setTimeout(() => {
-      console.log('🛒 Attempting to load unpaid enrollments after delay...');
-      loadUnpaidEnrollments();
-    }, 2000); // Increase delay to 2 seconds
-    
-    return () => clearTimeout(timer);
   }, []);
 
-  // Also trigger loading when authentication status changes
+  // Load unpaid enrollments when authentication is ready
   useEffect(() => {
     const token = localStorage.getItem('supabase_access_token');
     if (token) {
       console.log('🛒 Authentication token detected, loading unpaid enrollments...');
+      // Only load if cart is empty or after significant delay to avoid overwriting fresh enrollments
       const timer = setTimeout(() => {
-        loadUnpaidEnrollments();
-      }, 500);
+        if (state.cart.items.length === 0) {
+          console.log('🛒 Cart is empty, loading unpaid enrollments...');
+          loadUnpaidEnrollments();
+        } else {
+          console.log('🛒 Cart has items, skipping unpaid enrollments load to preserve fresh data');
+        }
+      }, 1000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [state.cart.items.length]);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
@@ -454,10 +452,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🛒 Dispatching ADD_ITEM action:', newItem);
     dispatch({ type: 'ADD_ITEM', payload: newItem });
     
-    // Force a small delay to ensure state is updated before logging
-    setTimeout(() => {
-      console.log('🛒 Cart updated - new item count should be:', state.cart.items.length + 1);
-    }, 10);
+    // Immediately update localStorage to prevent race conditions
+    const updatedCart = {
+      ...state.cart,
+      items: [...state.cart.items, newItem]
+    };
+    const recalculatedTotals = calculateCartTotals(updatedCart.items);
+    const finalCart = {
+      items: updatedCart.items,
+      ...recalculatedTotals
+    };
+    localStorage.setItem('asa_cart', JSON.stringify(finalCart));
+    
+    console.log('🛒 Cart updated immediately in localStorage:', finalCart);
     
     // Only show toast if not skipping validation (to avoid duplicate toasts)
     if (!skipValidation) {
