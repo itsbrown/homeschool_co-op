@@ -626,6 +626,7 @@ export default function BillingPage() {
   };
 
   const getPaymentPlanAmount = () => {
+    if (!billingSummary) return 0;
     // Get the actual balances for selected enrollments (or all if none selected)
     const enrollmentsToCalculate = selectedEnrollments.length > 0 
       ? billingSummary.enrollmentDetails.filter(detail => selectedEnrollments.includes(detail.enrollmentId))
@@ -653,6 +654,7 @@ export default function BillingPage() {
   };
 
   const getPaymentPlanDescription = () => {
+    if (!billingSummary) return '';
     // Get the actual balances for selected enrollments (or all if none selected)
     const enrollmentsToCalculate = selectedEnrollments.length > 0 
       ? billingSummary.enrollmentDetails.filter(detail => selectedEnrollments.includes(detail.enrollmentId))
@@ -707,11 +709,11 @@ export default function BillingPage() {
         // Determine which enrollments to process
         const enrollmentsToProcess = selectedEnrollments.length > 0 
           ? selectedEnrollments 
-          : billingSummary.enrollmentDetails.map(d => d.enrollmentId);
+          : billingSummary?.enrollmentDetails?.map(d => d.enrollmentId) || [];
 
         // Build payment details with selected plan
         const paymentDetails = enrollmentsToProcess.map(enrollmentId => {
-          const enrollment = billingSummary.enrollmentDetails.find(d => d.enrollmentId === enrollmentId);
+          const enrollment = billingSummary?.enrollmentDetails?.find(d => d.enrollmentId === enrollmentId);
           if (!enrollment) return null;
           
           return {
@@ -1000,7 +1002,7 @@ export default function BillingPage() {
                             Outstanding: ${detail.balance.toFixed(2)}
                           </div>
                           <div className="text-sm text-blue-600">
-                            Deposit Required: ${detail.depositRequired.toFixed(2)}
+                            Balance Due
                           </div>
                         </div>
                       </div>
