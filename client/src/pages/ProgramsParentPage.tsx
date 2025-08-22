@@ -31,7 +31,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
-  const { addItem, hasItem } = useCart();
+  const { addItem, hasItem, openCart } = useCart();
   // Use wouter's location hook for navigation
   const [, setLocation] = useLocation();
 
@@ -59,11 +59,40 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       return apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
     },
     onSuccess: (data, variables) => {
-      // Navigate to payment plan selection instead of showing success message
-      const selectedClass = classesData.classes?.find(c => c.id === variables.classId);
+      // Find the selected child and class data for cart item
+      const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
       const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
 
       if (selectedClass && selectedChild && data.enrollment) {
+        // Add item to cart immediately for visual feedback
+        addItem({
+          classId: variables.classId,
+          className: selectedClass.title,
+          childId: parseInt(variables.childId),
+          childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
+          price: selectedClass.price * 100, // Convert to cents for consistency
+          description: selectedClass.description,
+          startDate: selectedClass.startDate,
+          endDate: selectedClass.endDate,
+          status: 'pending_payment',
+          statusText: 'Payment Required',
+          enrollmentId: data.enrollment.id,
+          totalCost: selectedClass.price * 100,
+          amountPaid: 0,
+          remainingBalance: selectedClass.price * 100
+        });
+        
+        toast({
+          title: "Added to Cart! 🛒",
+          description: `${selectedChild.firstName} enrolled in ${selectedClass.title}. Complete payment in your cart.`,
+        });
+        
+        // Open cart to show the new item after a brief delay
+        setTimeout(() => {
+          openCart();
+        }, 1000);
+        
+        // Also store enrollment data for direct payment plans access
         const enrollmentData = {
           enrollmentId: data.enrollment.id,
           className: selectedClass.title,
@@ -73,11 +102,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           amountPaid: 0,
           remainingBalance: selectedClass.price
         };
-
-        // Store enrollment data and navigate to payment plans
         sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
-        // Use wouter's location setter to navigate
-        window.location.href = '/payment-plans';
+      } else {
+        toast({
+          title: "Enrollment Successful",
+          description: "Child has been enrolled in the class.",
+        });
       }
 
       setEnrollmentDialog({ open: false });
