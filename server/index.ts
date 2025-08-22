@@ -13,6 +13,7 @@ import stripeRoutes from './api/stripe';
 import marketingLinksRouter from './api/marketing-links';
 import parentRouter from './api/parent';
 import billingRouter from './api/billing';
+import scheduledPaymentsRouter from './api/scheduled-payments';
 import schoolsRouter from "./api/schools";
 import studentsRouter from "./api/students";
 import schoolParentsRouter from "./api/school-parents";
@@ -100,10 +101,7 @@ app.use('/api/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/billing', billingRouter);
-// Dynamic import for scheduled payments router
-import('./api/scheduled-payments.js').then(module => {
-  app.use('/api/scheduled-payments', module.default);
-});
+app.use('/api/scheduled-payments', scheduledPaymentsRouter);
 app.use("/api/schools", schoolsRouter);
 app.use("/api/students", studentsRouter);
 app.use("/api/school-parents", schoolParentsRouter);

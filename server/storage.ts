@@ -169,6 +169,11 @@ export interface IStorage {
   getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]>;
   getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
   updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined>;
+
+  // Scheduled Payment methods
+  createScheduledPayment(payment: any): Promise<any>;
+  getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
+  updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
 }
 
 export class MemStorage implements IStorage {
