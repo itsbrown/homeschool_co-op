@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { History, Loader2 } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import { apiRequest } from "@/lib/queryClient";
 
 interface PaymentHistoryItem {
   id: number;
@@ -30,18 +31,8 @@ export default function PaymentHistoryPage() {
     queryKey: ['/api/payment-history'],
     enabled: !!user?.email,
     queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
-      const response = await fetch('/api/payment-history/history', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
+      const response = await apiRequest('GET', '/api/payment-history/history');
+      
       if (!response.ok) {
         throw new Error(`Failed to fetch payment history: ${response.status}`);
       }
