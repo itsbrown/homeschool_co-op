@@ -23,17 +23,19 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface Enrollment {
-  id: number;
+  id?: number;
   childId: number;
   classId: number;
-  className: string;
-  classDescription: string;
-  startDate: string;
-  endDate: string;
-  schedule: string;
-  location: string;
+  className?: string;
+  classDescription?: string;
   status: 'enrolled' | 'waitlisted' | 'completed' | 'pending_payment';
   enrollmentDate: string;
+  amount?: number;
+  totalCost?: number;
+  remainingBalance?: number;
+  paymentIntentId?: string;
+  childName?: string;
+  depositRequired?: number;
 }
 
 interface Child {
@@ -62,6 +64,11 @@ export default function ChildEnrollmentsPage() {
     enabled: !!childId,
   });
 
+  // Fetch all classes to get class details
+  const { data: classes = [] } = useQuery({
+    queryKey: ['/api/classes'],
+  });
+
   const unenrollMutation = useMutation({
     mutationFn: async (enrollmentId: number) => {
       return apiRequest("DELETE", `/api/enrollments/${enrollmentId}/unenroll`);
@@ -88,11 +95,25 @@ export default function ChildEnrollmentsPage() {
   }
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'Not specified';
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  // Helper function to get class details for an enrollment
+  const getClassDetails = (enrollment: Enrollment) => {
+    const classData = classes.find((c: any) => c.id === enrollment.classId);
+    return {
+      className: enrollment.className || classData?.title || 'Unknown Class',
+      description: enrollment.classDescription || classData?.description || '',
+      schedule: classData?.schedule || 'Schedule TBD',
+      location: classData?.location || 'Location TBD',
+      startDate: classData?.startDate,
+      endDate: classData?.endDate
+    };
   };
 
   const getStatusColor = (status: string) => {
@@ -189,15 +210,15 @@ export default function ChildEnrollmentsPage() {
           ) : enrollments.length > 0 ? (
             <div className="space-y-4">
               {enrollments.map((enrollment) => (
-                <Card key={enrollment.id}>
+                <Card key={enrollment.id || `${enrollment.classId}-${enrollment.childId}`}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{enrollment.className}</CardTitle>
+                      <CardTitle className="text-lg">{getClassDetails(enrollment).className}</CardTitle>
                       <Badge className={getStatusColor(enrollment.status)}>
                         {enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
                       </Badge>
                     </div>
-                    <CardDescription>{enrollment.classDescription}</CardDescription>
+                    <CardDescription>{getClassDetails(enrollment).description}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -206,7 +227,9 @@ export default function ChildEnrollmentsPage() {
                         <div>
                           <p className="font-medium">Duration</p>
                           <p className="text-muted-foreground">
-                            {formatDate(enrollment.startDate)} - {formatDate(enrollment.endDate)}
+                            {getClassDetails(enrollment).startDate && getClassDetails(enrollment).endDate
+                              ? `${formatDate(getClassDetails(enrollment).startDate)} - ${formatDate(getClassDetails(enrollment).endDate)}`
+                              : 'Full semester'}
                           </p>
                         </div>
                       </div>
@@ -214,14 +237,14 @@ export default function ChildEnrollmentsPage() {
                         <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
                         <div>
                           <p className="font-medium">Schedule</p>
-                          <p className="text-muted-foreground">{enrollment.schedule}</p>
+                          <p className="text-muted-foreground">{getClassDetails(enrollment).schedule}</p>
                         </div>
                       </div>
                       <div className="flex items-center">
                         <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
                         <div>
                           <p className="font-medium">Location</p>
-                          <p className="text-muted-foreground">{enrollment.location}</p>
+                          <p className="text-muted-foreground">{getClassDetails(enrollment).location}</p>
                         </div>
                       </div>
                     </div>
@@ -231,11 +254,23 @@ export default function ChildEnrollmentsPage() {
                           Enrolled on {formatDate(enrollment.enrollmentDate)}
                         </p>
                         <div className="space-x-2">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              window.location.href = `/programs/class/${enrollment.classId}`;
+                            }}
+                          >
                             View Details
                           </Button>
                           {enrollment.status === 'enrolled' && (
-                            <Button variant="outline" size="sm">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                window.location.href = `/children/${enrollment.childId}?tab=enrollments`;
+                              }}
+                            >
                               Manage Enrollment
                             </Button>
                           )}

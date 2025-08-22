@@ -508,19 +508,6 @@
     "enrollmentDate": "2025-08-22T17:00:38.145Z"
   },
   {
-    "id": 1755882527802,
-    "classId": 4,
-    "childId": 18,
-    "childName": "Child1 name",
-    "className": "Yankee Doodle | Half Day",
-    "enrollmentDate": "2025-08-22T17:08:47.802Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 90,
-    "totalCost": 900,
-    "remainingBalance": 900
-  },
-  {
     "classId": 4,
     "childId": 18,
     "status": "enrolled",
@@ -529,19 +516,6 @@
     "totalCost": 90000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-22T17:21:30.493Z"
-  },
-  {
-    "id": 1755883338802,
-    "classId": 7,
-    "childId": 18,
-    "childName": "Child1 name",
-    "className": "Patriots | Half Day",
-    "enrollmentDate": "2025-08-22T17:22:18.802Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 90,
-    "totalCost": 900,
-    "remainingBalance": 900
   },
   {
     "status": "enrolled",
@@ -560,5 +534,31 @@
     "totalCost": 90000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-22T17:22:43.340Z"
+  },
+  {
+    "id": 1755883699537,
+    "classId": 2,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Elementary Math Fundamentals",
+    "enrollmentDate": "2025-08-22T17:28:19.537Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 14,
+    "totalCost": 140,
+    "remainingBalance": 140
+  },
+  {
+    "id": 1755883762814,
+    "classId": 7,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Patriots | Half Day",
+    "enrollmentDate": "2025-08-22T17:29:22.814Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

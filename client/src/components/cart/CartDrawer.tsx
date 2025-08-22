@@ -86,7 +86,7 @@ export default function CartDrawer() {
                         {item.statusText || (item.status === 'pending_payment' ? 'Payment Required' : item.status)}
                       </p>
                     )}
-                    {item.amountPaid > 0 && (
+                    {(item.amountPaid || 0) > 0 && (
                       <p className="text-xs text-muted-foreground">
                         Paid: {formatCurrency(item.amountPaid || 0)}
                       </p>
