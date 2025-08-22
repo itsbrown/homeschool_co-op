@@ -12,9 +12,11 @@ export default function CartButton() {
     openCart();
   };
 
-  const itemCount = getItemCount();
+  // Use cart.items.length directly to ensure reactivity to cart state changes
+  const itemCount = cart.items.length;
   
   console.log('🛒 CartButton render - itemCount:', itemCount, 'cart items:', cart.items.length);
+  console.log('🛒 CartButton render - cart state:', cart);
 
   return (
     <Button

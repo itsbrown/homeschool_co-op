@@ -600,5 +600,31 @@
     "depositRequired": 90,
     "totalCost": 900,
     "remainingBalance": 900
+  },
+  {
+    "id": 1755871957172,
+    "classId": 6,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Pioneers | Half Day",
+    "enrollmentDate": "2025-08-22T14:12:37.172Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
+  },
+  {
+    "id": 1755871993272,
+    "classId": 4,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Yankee Doodle | Half Day",
+    "enrollmentDate": "2025-08-22T14:13:13.272Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

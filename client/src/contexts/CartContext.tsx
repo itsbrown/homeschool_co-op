@@ -322,6 +322,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const totals = calculateCartTotals(cartItems);
         
+        console.log('🛒 About to dispatch LOAD_CART with items:', cartItems.length);
         dispatch({
           type: 'LOAD_CART',
           payload: {
@@ -329,6 +330,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...totals,
           },
         });
+        console.log('🛒 LOAD_CART dispatched successfully');
         
         console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
         console.log(`🛒 Cart items:`, cartItems);
@@ -365,6 +367,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
+    console.log('🛒 Cart state changed - saving to localStorage:', state.cart);
     localStorage.setItem('asa_cart', JSON.stringify(state.cart));
   }, [state.cart]);
 
