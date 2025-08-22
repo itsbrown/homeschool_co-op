@@ -600,5 +600,31 @@
     "depositRequired": 14,
     "totalCost": 140,
     "remainingBalance": 140
+  },
+  {
+    "id": 1755877687407,
+    "classId": 1,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Kindergarten Reading Basics",
+    "enrollmentDate": "2025-08-22T15:48:07.407Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 12,
+    "totalCost": 120,
+    "remainingBalance": 120
+  },
+  {
+    "id": 1755877699997,
+    "classId": 6,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Pioneers | Half Day",
+    "enrollmentDate": "2025-08-22T15:48:19.997Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

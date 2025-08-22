@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCart } from "@/contexts/CartContext";
 
 import { 
   Card, 
@@ -78,6 +79,7 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const { addItem, openCart } = useCart();
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -99,9 +101,20 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
       return;
     }
 
+    // Find the selected child info
+    const child = children.find(c => c.id === parseInt(selectedChild));
+    if (!child) {
+      toast({
+        title: "Error",
+        description: "Selected child not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsEnrolling(true);
     try {
-      await apiRequest("POST", "/api/program-enrollments", {
+      const response = await apiRequest("POST", "/api/program-enrollments", {
         programId: program.id,
         childId: parseInt(selectedChild),
         status: "pending",
@@ -113,12 +126,32 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
         description: "Enrollment request submitted successfully",
       });
 
+      // Add the enrollment to the cart
+      await addItem({
+        classId: program.id,
+        className: program.title,
+        childId: child.id,
+        childName: `${child.firstName} ${child.lastName}`,
+        price: program.price,
+        description: program.description,
+        startDate: program.startDate,
+        endDate: program.endDate,
+        status: "pending_payment",
+        statusText: "Payment Required"
+      });
+
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/programs"] });
       
-      // Close dialog
+      // Close dialog and open cart
       setIsEnrollDialogOpen(false);
+      
+      // Open cart after a short delay to show the added item
+      setTimeout(() => {
+        openCart();
+      }, 500);
+      
     } catch (error) {
       console.error("Failed to enroll:", error);
       toast({
