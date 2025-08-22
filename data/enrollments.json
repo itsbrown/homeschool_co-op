@@ -509,5 +509,31 @@
     "depositRequired": 12,
     "totalCost": 120,
     "remainingBalance": 120
+  },
+  {
+    "id": 1755879045521,
+    "classId": 1,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Kindergarten Reading Basics",
+    "enrollmentDate": "2025-08-22T16:10:45.521Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 12,
+    "totalCost": 120,
+    "remainingBalance": 120
+  },
+  {
+    "id": 1755879065538,
+    "classId": 2,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Elementary Math Fundamentals",
+    "enrollmentDate": "2025-08-22T16:11:05.538Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 14,
+    "totalCost": 140,
+    "remainingBalance": 140
   }
 ]
