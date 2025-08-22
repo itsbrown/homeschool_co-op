@@ -152,6 +152,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
     }
 
     case 'CLEAR_CART':
+      console.log('🛒 CLEAR_CART action dispatched!');
       return {
         ...state,
         cart: {
@@ -420,9 +421,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else if (isAuthenticated === false && user === null) {
       // Only clear cart if we're definitely not authenticated (not during loading states)
       console.log('🛒 User definitely not authenticated, clearing cart');
+      console.log('🛒 Auth state details:', { isAuthenticated, user, userEmail: user?.email });
       dispatch({ type: 'CLEAR_CART' });
     } else {
       console.log('🛒 Authentication loading or transitional state, preserving cart');
+      console.log('🛒 Auth state details:', { isAuthenticated, user: !!user, userEmail: user?.email });
     }
   }, [user?.email, isAuthenticated, loadUnpaidEnrollments]);
 
@@ -516,6 +519,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const clearCart = () => {
+    console.log('🛒 CART BEING CLEARED! Stack trace:');
+    console.trace('Cart clear called from:');
     dispatch({ type: 'CLEAR_CART' });
     localStorage.removeItem('asa_cart');
     // Set a flag to prevent immediate reload after payment
