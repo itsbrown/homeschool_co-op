@@ -152,7 +152,6 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
     }
 
     case 'CLEAR_CART':
-      console.log('🛒 CLEAR_CART action dispatched!');
       return {
         ...state,
         cart: {
@@ -170,9 +169,6 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       return { ...state, isOpen: false };
 
     case 'LOAD_CART':
-      console.log('🛒 LOAD_CART action dispatched!');
-      console.log('🛒 Payload items:', action.payload.items?.length || 0);
-      console.log('🛒 Payload:', action.payload);
       return {
         ...state,
         cart: action.payload,
@@ -440,19 +436,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
-    console.log('🛒 Cart state changed - saving to localStorage:', state.cart);
-    
     // Don't save empty cart if localStorage has items (prevents overriding valid cart during navigation)
     const existingCart = localStorage.getItem('asa_cart');
     if (existingCart && state.cart.items.length === 0) {
       try {
         const parsedExisting = JSON.parse(existingCart);
         if (parsedExisting.items && parsedExisting.items.length > 0) {
-          console.log('🛒 Preventing empty cart from overriding existing cart with items');
           return;
         }
       } catch (error) {
-        console.log('🛒 Error parsing existing cart, proceeding with save');
+        // Proceed with save if we can't parse existing cart
       }
     }
     

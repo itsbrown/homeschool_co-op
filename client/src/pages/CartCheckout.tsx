@@ -212,9 +212,17 @@ export default function CartCheckout() {
       return;
     }
 
+    // Don't redirect immediately if cart is empty - wait a moment for cart to load from localStorage
     if (cart.items.length === 0) {
-      setLocation('/programs');
-      return;
+      const timer = setTimeout(() => {
+        // Double-check after a delay to ensure cart has loaded from localStorage
+        if (cart.items.length === 0) {
+          console.log('🛒 CartCheckout: No items found after delay, redirecting to programs');
+          setLocation('/programs');
+        }
+      }, 500); // Wait 500ms for cart to load
+      
+      return () => clearTimeout(timer);
     }
 
     createPaymentIntent();
