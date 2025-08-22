@@ -417,9 +417,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, 1000);
 
       return () => clearTimeout(timer);
-    } else {
-      console.log('🛒 User not authenticated, clearing cart');
+    } else if (isAuthenticated === false && user === null) {
+      // Only clear cart if we're definitely not authenticated (not during loading states)
+      console.log('🛒 User definitely not authenticated, clearing cart');
       dispatch({ type: 'CLEAR_CART' });
+    } else {
+      console.log('🛒 Authentication loading or transitional state, preserving cart');
     }
   }, [user?.email, isAuthenticated, loadUnpaidEnrollments]);
 
