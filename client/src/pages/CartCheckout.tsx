@@ -197,6 +197,15 @@ export default function CartCheckout() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full');
 
+  // Debug cart data
+  console.log('🛒 CartCheckout - cart data:', {
+    itemsCount: cart.items.length,
+    items: cart.items,
+    subtotal: cart.subtotal,
+    discounts: cart.discounts,
+    total: cart.total
+  });
+
   useEffect(() => {
     if (!isAuthenticated) {
       setLocation('/login');
