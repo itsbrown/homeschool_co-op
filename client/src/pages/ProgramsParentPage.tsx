@@ -89,7 +89,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           className: selectedClass.title,
           childId: parseInt(variables.childId),
           childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
-          price: selectedClass.price, // Keep original price format
+          price: selectedClass.price, // Price is in dollars
           description: selectedClass.description,
           startDate: selectedClass.startDate,
           endDate: selectedClass.endDate,
@@ -191,7 +191,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       id: item.id,
       title: item.title,
       description: item.description,
-      price: item.price * 100, // Convert to cents for currency formatting
+      price: item.price, // Keep price in dollars for cart compatibility
       category: 'academic', // Set all school admin classes as academic for now
       categoryName: item.category || 'Academic',
       startDate: item.startDate,
@@ -318,7 +318,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       <div className="space-y-3 text-sm">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center"><DollarSign className="h-4 w-4 mr-1 opacity-70" />Price:</div>
-                          <div className="font-semibold">{formatCurrency(classItem.price)}</div>
+                          <div className="font-semibold">{formatCurrency(classItem.price, false)}</div>
                         </div>
 
                         {classItem.totalOrders > 0 && (
@@ -537,7 +537,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 <div className="space-y-2">
                   <Label className="font-semibold">Price</Label>
                   <p className="text-lg font-semibold text-primary">
-                    {formatCurrency(viewDetailsDialog.classData.price)}
+                    {formatCurrency(viewDetailsDialog.classData.price, false)}
                   </p>
                 </div>
               </div>
