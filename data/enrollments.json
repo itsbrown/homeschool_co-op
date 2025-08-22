@@ -580,5 +580,18 @@
     "totalCost": 90000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-22T17:34:35.153Z"
+  },
+  {
+    "id": 1755884891792,
+    "classId": 5,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Tycoons | Half Day",
+    "enrollmentDate": "2025-08-22T17:48:11.792Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]
