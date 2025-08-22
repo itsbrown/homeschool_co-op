@@ -426,11 +426,21 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else if (isAuthenticated === false && user === null) {
       // Only clear cart if we're definitely not authenticated (not during loading states)
       console.log('🛒 User definitely not authenticated, clearing cart');
-      console.log('🛒 Auth state details:', { isAuthenticated, user, userEmail: user?.email });
       dispatch({ type: 'CLEAR_CART' });
     } else {
-      console.log('🛒 Authentication loading or transitional state, preserving cart');
-      console.log('🛒 Auth state details:', { isAuthenticated, user: !!user, userEmail: user?.email });
+      // During authentication loading, ensure cart from localStorage is preserved
+      const savedCart = localStorage.getItem('asa_cart');
+      if (savedCart && state.cart.items.length === 0) {
+        try {
+          const parsedCart = JSON.parse(savedCart);
+          if (parsedCart.items && parsedCart.items.length > 0) {
+            console.log('🛒 Authentication loading - restoring cart from localStorage');
+            dispatch({ type: 'LOAD_CART', payload: parsedCart });
+          }
+        } catch (error) {
+          console.error('Error restoring cart during auth loading:', error);
+        }
+      }
     }
   }, [user?.email, isAuthenticated, loadUnpaidEnrollments]);
 

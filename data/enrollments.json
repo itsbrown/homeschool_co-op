@@ -498,32 +498,6 @@
     "remainingBalance": 120
   },
   {
-    "id": 1755881477711,
-    "classId": 1,
-    "childId": 18,
-    "childName": "Child1 name",
-    "className": "Kindergarten Reading Basics",
-    "enrollmentDate": "2025-08-22T16:51:17.711Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 12,
-    "totalCost": 120,
-    "remainingBalance": 120
-  },
-  {
-    "id": 1755881628733,
-    "classId": 1,
-    "childId": 19,
-    "childName": "Child2 Name",
-    "className": "Kindergarten Reading Basics",
-    "enrollmentDate": "2025-08-22T16:53:48.733Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 12,
-    "totalCost": 120,
-    "remainingBalance": 120
-  },
-  {
     "classId": 1,
     "childId": 19,
     "status": "enrolled",
@@ -532,5 +506,18 @@
     "totalCost": 12000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-22T17:00:38.145Z"
+  },
+  {
+    "id": 1755882527802,
+    "classId": 4,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Yankee Doodle | Half Day",
+    "enrollmentDate": "2025-08-22T17:08:47.802Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

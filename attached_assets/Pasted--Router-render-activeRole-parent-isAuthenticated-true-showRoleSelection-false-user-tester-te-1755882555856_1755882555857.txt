@@ -1,0 +1,238 @@
+🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: tester@testing321.com location: /cart/checkout
+CartCheckout.tsx:201 🛒 CartCheckout - cart data: {itemsCount: 0, items: Array(0), subtotal: 0, discounts: {…}, total: 0}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:553 🛒 getItemCount called - current items: 0
+CartContext.tsx:406 🛒 Loading cart from localStorage: {items: Array(1), subtotal: 900, discounts: {…}, total: 900}
+CartContext.tsx:432 🛒 Authentication loading or transitional state, preserving cart
+CartContext.tsx:433 🛒 Auth state details: {isAuthenticated: false, user: false, userEmail: undefined}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+CartCheckout.tsx:220 🛒 CartCheckout: No items found after delay, redirecting to programs
+App.tsx:225 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: tester@testing321.com location: /programs
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+ProgramsParentPage.tsx:211 School classes response: {items: Array(7), total: 7, page: 1, limit: 7, totalPages: 1}
+ProgramsParentPage.tsx:212 Classes error: null
+ProgramsParentPage.tsx:213 Classes loading: false
+ProgramsParentPage.tsx:214 Active tab: classes
+ProgramsParentPage.tsx:215 Transformed classes data: {classes: Array(7), pagination: {…}}
+ProgramsParentPage.tsx:233 All classes: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:234 Filtered classesList: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:235 Summer camps: []
+ProgramsParentPage.tsx:236 classesLoading: false
+ProgramsParentPage.tsx:237 classesList.length: 7
+ProgramsParentPage.tsx:399 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:400   - Children: (2) [{…}, {…}]
+ProgramsParentPage.tsx:401   - Children loading: false
+ProgramsParentPage.tsx:402   - Children error: null
+ProgramsParentPage.tsx:403   - Is authenticated: true
+ProgramsParentPage.tsx:404   - User: {id: 'eb282754-68ae-4c43-8651-0d3073fd030a', aud: 'authenticated', role: 'authenticated', email: 'tester@testing321.com', email_confirmed_at: '2025-08-22T11:00:35.532415Z', …}
+ProgramsParentPage.tsx:442 🔍 Select rendering debug:
+ProgramsParentPage.tsx:443   - Children array: (2) [{…}, {…}]
+ProgramsParentPage.tsx:444   - Array length: 2
+ProgramsParentPage.tsx:445   - First child: {id: 18, firstName: 'Child1', lastName: 'name', birthdate: '2016-09-23', gradeLevel: '4th Grade', …}
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child1 name (ID: 18)
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child2 Name (ID: 19)
+CartContext.tsx:553 🛒 getItemCount called - current items: 0
+CartContext.tsx:406 🛒 Loading cart from localStorage: {items: Array(1), subtotal: 900, discounts: {…}, total: 900}
+CartContext.tsx:432 🛒 Authentication loading or transitional state, preserving cart
+CartContext.tsx:433 🛒 Auth state details: {isAuthenticated: false, user: false, userEmail: undefined}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:211 School classes response: {items: Array(7), total: 7, page: 1, limit: 7, totalPages: 1}
+ProgramsParentPage.tsx:212 Classes error: null
+ProgramsParentPage.tsx:213 Classes loading: false
+ProgramsParentPage.tsx:214 Active tab: classes
+ProgramsParentPage.tsx:215 Transformed classes data: {classes: Array(7), pagination: {…}}
+ProgramsParentPage.tsx:233 All classes: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:234 Filtered classesList: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:235 Summer camps: []
+ProgramsParentPage.tsx:236 classesLoading: false
+ProgramsParentPage.tsx:237 classesList.length: 7
+ProgramsParentPage.tsx:399 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:400   - Children: (2) [{…}, {…}]
+ProgramsParentPage.tsx:401   - Children loading: false
+ProgramsParentPage.tsx:402   - Children error: null
+ProgramsParentPage.tsx:403   - Is authenticated: true
+ProgramsParentPage.tsx:404   - User: {id: 'eb282754-68ae-4c43-8651-0d3073fd030a', aud: 'authenticated', role: 'authenticated', email: 'tester@testing321.com', email_confirmed_at: '2025-08-22T11:00:35.532415Z', …}
+ProgramsParentPage.tsx:442 🔍 Select rendering debug:
+ProgramsParentPage.tsx:443   - Children array: (2) [{…}, {…}]
+ProgramsParentPage.tsx:444   - Array length: 2
+ProgramsParentPage.tsx:445   - First child: {id: 18, firstName: 'Child1', lastName: 'name', birthdate: '2016-09-23', gradeLevel: '4th Grade', …}
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child1 name (ID: 18)
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child2 Name (ID: 19)
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:211 School classes response: {items: Array(7), total: 7, page: 1, limit: 7, totalPages: 1}
+ProgramsParentPage.tsx:212 Classes error: null
+ProgramsParentPage.tsx:213 Classes loading: false
+ProgramsParentPage.tsx:214 Active tab: classes
+ProgramsParentPage.tsx:215 Transformed classes data: {classes: Array(7), pagination: {…}}
+ProgramsParentPage.tsx:233 All classes: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:234 Filtered classesList: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:235 Summer camps: []
+ProgramsParentPage.tsx:236 classesLoading: false
+ProgramsParentPage.tsx:237 classesList.length: 7
+ProgramsParentPage.tsx:399 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:400   - Children: (2) [{…}, {…}]
+ProgramsParentPage.tsx:401   - Children loading: false
+ProgramsParentPage.tsx:402   - Children error: null
+ProgramsParentPage.tsx:403   - Is authenticated: true
+ProgramsParentPage.tsx:404   - User: {id: 'eb282754-68ae-4c43-8651-0d3073fd030a', aud: 'authenticated', role: 'authenticated', email: 'tester@testing321.com', email_confirmed_at: '2025-08-22T11:00:35.532415Z', …}
+ProgramsParentPage.tsx:442 🔍 Select rendering debug:
+ProgramsParentPage.tsx:443   - Children array: (2) [{…}, {…}]
+ProgramsParentPage.tsx:444   - Array length: 2
+ProgramsParentPage.tsx:445   - First child: {id: 18, firstName: 'Child1', lastName: 'name', birthdate: '2016-09-23', gradeLevel: '4th Grade', …}
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child1 name (ID: 18)
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child2 Name (ID: 19)
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:211 School classes response: {items: Array(7), total: 7, page: 1, limit: 7, totalPages: 1}
+ProgramsParentPage.tsx:212 Classes error: null
+ProgramsParentPage.tsx:213 Classes loading: false
+ProgramsParentPage.tsx:214 Active tab: classes
+ProgramsParentPage.tsx:215 Transformed classes data: {classes: Array(7), pagination: {…}}
+ProgramsParentPage.tsx:233 All classes: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:234 Filtered classesList: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:235 Summer camps: []
+ProgramsParentPage.tsx:236 classesLoading: false
+ProgramsParentPage.tsx:237 classesList.length: 7
+ProgramsParentPage.tsx:399 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:400   - Children: (2) [{…}, {…}]
+ProgramsParentPage.tsx:401   - Children loading: false
+ProgramsParentPage.tsx:402   - Children error: null
+ProgramsParentPage.tsx:403   - Is authenticated: true
+ProgramsParentPage.tsx:404   - User: {id: 'eb282754-68ae-4c43-8651-0d3073fd030a', aud: 'authenticated', role: 'authenticated', email: 'tester@testing321.com', email_confirmed_at: '2025-08-22T11:00:35.532415Z', …}
+ProgramsParentPage.tsx:442 🔍 Select rendering debug:
+ProgramsParentPage.tsx:443   - Children array: (2) [{…}, {…}]
+ProgramsParentPage.tsx:444   - Array length: 2
+ProgramsParentPage.tsx:445   - First child: {id: 18, firstName: 'Child1', lastName: 'name', birthdate: '2016-09-23', gradeLevel: '4th Grade', …}
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child1 name (ID: 18)
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child2 Name (ID: 19)
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:211 School classes response: {items: Array(7), total: 7, page: 1, limit: 7, totalPages: 1}
+ProgramsParentPage.tsx:212 Classes error: null
+ProgramsParentPage.tsx:213 Classes loading: false
+ProgramsParentPage.tsx:214 Active tab: classes
+ProgramsParentPage.tsx:215 Transformed classes data: {classes: Array(7), pagination: {…}}
+ProgramsParentPage.tsx:233 All classes: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:234 Filtered classesList: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:235 Summer camps: []
+ProgramsParentPage.tsx:236 classesLoading: false
+ProgramsParentPage.tsx:237 classesList.length: 7
+ProgramsParentPage.tsx:399 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:400   - Children: (2) [{…}, {…}]
+ProgramsParentPage.tsx:401   - Children loading: false
+ProgramsParentPage.tsx:402   - Children error: null
+ProgramsParentPage.tsx:403   - Is authenticated: true
+ProgramsParentPage.tsx:404   - User: {id: 'eb282754-68ae-4c43-8651-0d3073fd030a', aud: 'authenticated', role: 'authenticated', email: 'tester@testing321.com', email_confirmed_at: '2025-08-22T11:00:35.532415Z', …}
+ProgramsParentPage.tsx:442 🔍 Select rendering debug:
+ProgramsParentPage.tsx:443   - Children array: (2) [{…}, {…}]
+ProgramsParentPage.tsx:444   - Array length: 2
+ProgramsParentPage.tsx:445   - First child: {id: 18, firstName: 'Child1', lastName: 'name', birthdate: '2016-09-23', gradeLevel: '4th Grade', …}
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child1 name (ID: 18)
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child2 Name (ID: 19)
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+App.tsx:225 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: tester@testing321.com location: /cart/checkout
+CartCheckout.tsx:201 🛒 CartCheckout - cart data: {itemsCount: 0, items: Array(0), subtotal: 0, discounts: {…}, total: 0}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:553 🛒 getItemCount called - current items: 0
+CartContext.tsx:406 🛒 Loading cart from localStorage: {items: Array(1), subtotal: 900, discounts: {…}, total: 900}
+CartContext.tsx:432 🛒 Authentication loading or transitional state, preserving cart
+CartContext.tsx:433 🛒 Auth state details: {isAuthenticated: false, user: false, userEmail: undefined}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+CartCheckout.tsx:220 🛒 CartCheckout: No items found after delay, redirecting to programs
+App.tsx:225 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: tester@testing321.com location: /programs
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+ProgramsParentPage.tsx:211 School classes response: {items: Array(7), total: 7, page: 1, limit: 7, totalPages: 1}
+ProgramsParentPage.tsx:212 Classes error: null
+ProgramsParentPage.tsx:213 Classes loading: false
+ProgramsParentPage.tsx:214 Active tab: classes
+ProgramsParentPage.tsx:215 Transformed classes data: {classes: Array(7), pagination: {…}}
+ProgramsParentPage.tsx:233 All classes: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:234 Filtered classesList: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:235 Summer camps: []
+ProgramsParentPage.tsx:236 classesLoading: false
+ProgramsParentPage.tsx:237 classesList.length: 7
+ProgramsParentPage.tsx:399 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:400   - Children: (2) [{…}, {…}]
+ProgramsParentPage.tsx:401   - Children loading: false
+ProgramsParentPage.tsx:402   - Children error: null
+ProgramsParentPage.tsx:403   - Is authenticated: true
+ProgramsParentPage.tsx:404   - User: {id: 'eb282754-68ae-4c43-8651-0d3073fd030a', aud: 'authenticated', role: 'authenticated', email: 'tester@testing321.com', email_confirmed_at: '2025-08-22T11:00:35.532415Z', …}
+ProgramsParentPage.tsx:442 🔍 Select rendering debug:
+ProgramsParentPage.tsx:443   - Children array: (2) [{…}, {…}]
+ProgramsParentPage.tsx:444   - Array length: 2
+ProgramsParentPage.tsx:445   - First child: {id: 18, firstName: 'Child1', lastName: 'name', birthdate: '2016-09-23', gradeLevel: '4th Grade', …}
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child1 name (ID: 18)
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child2 Name (ID: 19)
+CartContext.tsx:553 🛒 getItemCount called - current items: 0
+CartContext.tsx:406 🛒 Loading cart from localStorage: {items: Array(1), subtotal: 900, discounts: {…}, total: 900}
+CartContext.tsx:432 🛒 Authentication loading or transitional state, preserving cart
+CartContext.tsx:433 🛒 Auth state details: {isAuthenticated: false, user: false, userEmail: undefined}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:211 School classes response: {items: Array(7), total: 7, page: 1, limit: 7, totalPages: 1}
+ProgramsParentPage.tsx:212 Classes error: null
+ProgramsParentPage.tsx:213 Classes loading: false
+ProgramsParentPage.tsx:214 Active tab: classes
+ProgramsParentPage.tsx:215 Transformed classes data: {classes: Array(7), pagination: {…}}
+ProgramsParentPage.tsx:233 All classes: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:234 Filtered classesList: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:235 Summer camps: []
+ProgramsParentPage.tsx:236 classesLoading: false
+ProgramsParentPage.tsx:237 classesList.length: 7
+ProgramsParentPage.tsx:399 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:400   - Children: (2) [{…}, {…}]
+ProgramsParentPage.tsx:401   - Children loading: false
+ProgramsParentPage.tsx:402   - Children error: null
+ProgramsParentPage.tsx:403   - Is authenticated: true
+ProgramsParentPage.tsx:404   - User: {id: 'eb282754-68ae-4c43-8651-0d3073fd030a', aud: 'authenticated', role: 'authenticated', email: 'tester@testing321.com', email_confirmed_at: '2025-08-22T11:00:35.532415Z', …}
+ProgramsParentPage.tsx:442 🔍 Select rendering debug:
+ProgramsParentPage.tsx:443   - Children array: (2) [{…}, {…}]
+ProgramsParentPage.tsx:444   - Array length: 2
+ProgramsParentPage.tsx:445   - First child: {id: 18, firstName: 'Child1', lastName: 'name', birthdate: '2016-09-23', gradeLevel: '4th Grade', …}
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child1 name (ID: 18)
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child2 Name (ID: 19)
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:211 School classes response: {items: Array(7), total: 7, page: 1, limit: 7, totalPages: 1}
+ProgramsParentPage.tsx:212 Classes error: null
+ProgramsParentPage.tsx:213 Classes loading: false
+ProgramsParentPage.tsx:214 Active tab: classes
+ProgramsParentPage.tsx:215 Transformed classes data: {classes: Array(7), pagination: {…}}
+ProgramsParentPage.tsx:233 All classes: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:234 Filtered classesList: (7) [{…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:235 Summer camps: []
+ProgramsParentPage.tsx:236 classesLoading: false
+ProgramsParentPage.tsx:237 classesList.length: 7
+ProgramsParentPage.tsx:399 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:400   - Children: (2) [{…}, {…}]
+ProgramsParentPage.tsx:401   - Children loading: false
+ProgramsParentPage.tsx:402   - Children error: null
+ProgramsParentPage.tsx:403   - Is authenticated: true
+ProgramsParentPage.tsx:404   - User: {id: 'eb282754-68ae-4c43-8651-0d3073fd030a', aud: 'authenticated', role: 'authenticated', email: 'tester@testing321.com', email_confirmed_at: '2025-08-22T11:00:35.532415Z', …}
+ProgramsParentPage.tsx:442 🔍 Select rendering debug:
+ProgramsParentPage.tsx:443   - Children array: (2) [{…}, {…}]
+ProgramsParentPage.tsx:444   - Array length: 2
+ProgramsParentPage.tsx:445   - First child: {id: 18, firstName: 'Child1', lastName: 'name', birthdate: '2016-09-23', gradeLevel: '4th Grade', …}
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child1 name (ID: 18)
+ProgramsParentPage.tsx:461 🔍 Rendering child: Child2 Name (ID: 19)
+CartContext.tsx:553 🛒 getItemCount called - current items: 1
