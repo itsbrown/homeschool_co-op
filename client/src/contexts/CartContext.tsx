@@ -170,6 +170,9 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       return { ...state, isOpen: false };
 
     case 'LOAD_CART':
+      console.log('🛒 LOAD_CART action dispatched!');
+      console.log('🛒 Payload items:', action.payload.items?.length || 0);
+      console.log('🛒 Payload:', action.payload);
       return {
         ...state,
         cart: action.payload,
@@ -221,6 +224,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user, isAuthenticated, getAccessTokenSilently } = useAuth0(); // Using Auth0 hooks
 
   const loadUnpaidEnrollments = useCallback(async () => {
+    console.log('🛒 === LOAD_UNPAID_ENROLLMENTS CALLED ===');
+    console.log('🛒 User email:', user?.email);
+    console.log('🛒 Is authenticated:', isAuthenticated);
+    console.log('🛒 Current cart items before API call:', state.cart.items.length);
+    console.trace('🛒 loadUnpaidEnrollments called from:');
+    
     if (!user?.email) {
       console.log('No user email available for cart loading');
       return;
