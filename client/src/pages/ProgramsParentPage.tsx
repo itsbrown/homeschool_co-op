@@ -215,12 +215,13 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   console.log('Transformed classes data:', classesData);
 
   // Format currency
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, inCents: boolean = true) => {
+    const dollars = inCents ? amount / 100 : amount;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2
-    }).format(amount / 100);
+    }).format(dollars);
   };
 
 
