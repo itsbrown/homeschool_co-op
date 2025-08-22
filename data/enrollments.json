@@ -470,5 +470,44 @@
     "totalCost": 140,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-21T20:42:45.769Z"
+  },
+  {
+    "id": 1755836078690,
+    "classId": 1,
+    "childId": 17,
+    "childName": "Hermione Brown",
+    "className": "Kindergarten Reading Basics",
+    "enrollmentDate": "2025-08-22T04:14:38.690Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 12,
+    "totalCost": 120,
+    "remainingBalance": 120
+  },
+  {
+    "id": 1755836117789,
+    "classId": 1,
+    "childId": 17,
+    "childName": "Hermione Brown",
+    "className": "Kindergarten Reading Basics",
+    "enrollmentDate": "2025-08-22T04:15:17.789Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 12,
+    "totalCost": 120,
+    "remainingBalance": 120
+  },
+  {
+    "id": 1755860503688,
+    "classId": 2,
+    "childId": 18,
+    "childName": "Child1 name",
+    "className": "Elementary Math Fundamentals",
+    "enrollmentDate": "2025-08-22T11:01:43.688Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 14,
+    "totalCost": 140,
+    "remainingBalance": 140
   }
 ]
