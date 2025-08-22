@@ -372,7 +372,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Error loading unpaid enrollments:', error);
     }
-  };
+  }, [user?.email, isAuthenticated, getAccessTokenSilently]);
 
   // Manual refresh function for external use
   const refreshCart = useCallback(() => {
@@ -531,6 +531,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const contextValue: CartContextType = {
     cart: state.cart,
+    isOpen: state.isOpen,
     addItem,
     removeItem,
     updateItem,
