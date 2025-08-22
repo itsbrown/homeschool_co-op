@@ -283,6 +283,7 @@ function PaymentForm({
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
+  const { clearCart } = useCart();
   const [processing, setProcessing] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [elementMounted, setElementMounted] = useState(false);
@@ -573,7 +574,6 @@ export default function BillingPage() {
     enabled: !!isAuthenticated && !!user,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    suspense: false,
     staleTime: 0,
     refetchOnWindowFocus: false,
     notifyOnChangeProps: ['data', 'error', 'isLoading'],
@@ -695,8 +695,9 @@ export default function BillingPage() {
 
     console.log('🚀 Starting payment process for enrollments:', selectedEnrollments);
 
-    startTransition(async () => {
-      try {
+    startTransition(() => {
+      (async () => {
+        try {
         const totalAmount = getPaymentPlanAmount();
         console.log('💰 Total amount to pay:', totalAmount);
         console.log('💳 Selected payment plan:', selectedPaymentPlan);
@@ -755,20 +756,21 @@ export default function BillingPage() {
           console.error('❌ No client secret in response:', data);
           throw new Error('No client secret received from server');
         }
-      } catch (error: any) {
-        console.error('❌ Payment initialization error:', error);
-        console.error('❌ Error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
+        } catch (error: any) {
+          console.error('❌ Payment initialization error:', error);
+          console.error('❌ Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          });
 
-        toast({
-          title: "Payment Error",
-          description: error.message || "Failed to initialize payment. Please try again.",
-          variant: "destructive",
-        });
-      }
+          toast({
+            title: "Payment Error",
+            description: error.message || "Failed to initialize payment. Please try again.",
+            variant: "destructive",
+          });
+        }
+      })();
     });
   };
 
