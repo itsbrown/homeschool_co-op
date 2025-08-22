@@ -59,21 +59,22 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       return apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
     },
     onSuccess: (data, variables) => {
+      console.log('🎯 Enrollment success! Data:', data);
+      console.log('🎯 Variables:', variables);
+      console.log('🎯 Classes data:', classesData);
+      console.log('🎯 Children:', children);
+      
       // Find the selected child and class data for cart item
       const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
       const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
 
+      console.log('🎯 Found selected class:', selectedClass);
+      console.log('🎯 Found selected child:', selectedChild);
+      console.log('🎯 Enrollment from API:', data.enrollment);
+
       if (selectedClass && selectedChild && data.enrollment) {
         // Add item to cart immediately for visual feedback, skip validation since we just created the enrollment
-        console.log('🛒 Adding enrollment to cart:', {
-          classId: variables.classId,
-          className: selectedClass.title,
-          childId: parseInt(variables.childId),
-          childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
-          enrollmentId: data.enrollment.id
-        });
-
-        addItem({
+        const cartItem = {
           classId: variables.classId,
           className: selectedClass.title,
           childId: parseInt(variables.childId),
@@ -88,7 +89,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           totalCost: selectedClass.price,
           amountPaid: 0,
           remainingBalance: selectedClass.price
-        }, true); // Skip validation to avoid race condition
+        };
+
+        console.log('🛒 Adding enrollment to cart:', cartItem);
+
+        addItem(cartItem, true); // Skip validation to avoid race condition
 
         console.log('🛒 Item added to cart, triggering cart update...');
 
@@ -99,6 +104,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
         // Open cart to show the new item after a brief delay
         setTimeout(() => {
+          console.log('🛒 Opening cart...');
           openCart();
         }, 800);
 
@@ -334,7 +340,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                         View Details
                       </Button>
                       <Button 
-                        onClick={() => setEnrollmentDialog({ open: true, classId: classItem.id, classTitle: classItem.title })}
+                        onClick={() => {
+                          console.log('🎯 Enroll Now clicked for class:', classItem);
+                          setEnrollmentDialog({ open: true, classId: classItem.id, classTitle: classItem.title });
+                        }}
                         className="flex-1"
                       >
                         Enroll Now
@@ -472,11 +481,18 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
             </Button>
             <Button 
               onClick={() => {
+                console.log('🎯 Enroll button clicked in dialog');
+                console.log('🎯 Selected child ID:', selectedChildId);
+                console.log('🎯 Class ID:', enrollmentDialog.classId);
+                
                 if (selectedChildId && enrollmentDialog.classId) {
+                  console.log('🎯 Starting enrollment mutation...');
                   enrollmentMutation.mutate({
                     classId: enrollmentDialog.classId,
                     childId: selectedChildId
                   });
+                } else {
+                  console.log('❌ Missing data for enrollment:', { selectedChildId, classId: enrollmentDialog.classId });
                 }
               }}
               disabled={!selectedChildId || enrollmentMutation.isPending || childrenLoading}
