@@ -361,10 +361,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Load unpaid enrollments after a brief delay to ensure auth is ready
     const timer = setTimeout(() => {
+      console.log('🛒 Attempting to load unpaid enrollments after delay...');
       loadUnpaidEnrollments();
-    }, 1000);
+    }, 2000); // Increase delay to 2 seconds
     
     return () => clearTimeout(timer);
+  }, []);
+
+  // Also trigger loading when authentication status changes
+  useEffect(() => {
+    const token = localStorage.getItem('supabase_access_token');
+    if (token) {
+      console.log('🛒 Authentication token detected, loading unpaid enrollments...');
+      const timer = setTimeout(() => {
+        loadUnpaidEnrollments();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   // Save cart to localStorage whenever it changes

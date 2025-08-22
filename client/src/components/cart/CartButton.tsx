@@ -8,6 +8,7 @@ export default function CartButton() {
   const { getItemCount, openCart, loadUnpaidEnrollments, cart } = useCart();
 
   const handleOpenCart = async () => {
+    console.log('🛒 CartButton clicked - manually loading enrollments...');
     await loadUnpaidEnrollments();
     openCart();
   };
