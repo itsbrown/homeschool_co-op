@@ -65,22 +65,32 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
       if (selectedClass && selectedChild && data.enrollment) {
         // Add item to cart immediately for visual feedback, skip validation since we just created the enrollment
+        console.log('🛒 Adding enrollment to cart:', {
+          classId: variables.classId,
+          className: selectedClass.title,
+          childId: parseInt(variables.childId),
+          childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
+          enrollmentId: data.enrollment.id
+        });
+
         addItem({
           classId: variables.classId,
           className: selectedClass.title,
           childId: parseInt(variables.childId),
           childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
-          price: selectedClass.price * 100, // Convert to cents for consistency
+          price: selectedClass.price, // Keep original price format
           description: selectedClass.description,
           startDate: selectedClass.startDate,
           endDate: selectedClass.endDate,
           status: 'pending_payment',
           statusText: 'Payment Required',
           enrollmentId: data.enrollment.id,
-          totalCost: selectedClass.price * 100,
+          totalCost: selectedClass.price,
           amountPaid: 0,
-          remainingBalance: selectedClass.price * 100
+          remainingBalance: selectedClass.price
         }, true); // Skip validation to avoid race condition
+
+        console.log('🛒 Item added to cart, triggering cart update...');
         
         toast({
           title: "Added to Cart! 🛒",

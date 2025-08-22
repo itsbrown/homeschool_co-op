@@ -39,7 +39,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
               return;
             }
           }
-          
+
           // Fallback: Since most parents are associated with American Seekers Academy (ID: 1)
           // directly fetch school data
           const schoolResponse = await apiRequest("GET", "/api/schools/1");
@@ -100,8 +100,8 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
 
               <div className="flex items-center gap-2">
                 {userSchool?.logo && (
-                  <img 
-                    src={userSchool.logo} 
+                  <img
+                    src={userSchool.logo}
                     alt={`${userSchool.name} Logo`}
                     className="h-6 w-6 object-contain"
                     onError={(e) => {
@@ -115,15 +115,16 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
               </div>
 
               <div className="flex items-center gap-2">
-                <CartButton />
+                {/* Cart Button - Force re-render by adding key */}
+                <CartButton key="cart-button" />
                 {isAuthenticated && user && (
                   <div className="flex items-center gap-2">
                     <div className="rounded-full bg-primary/10 p-1">
                       <User className="h-4 w-4 text-primary" />
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={handleLogout}
                     >
                       <LogOut className="h-4 w-4" />
@@ -138,7 +139,8 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
           <div className="hidden lg:block">
             <div className="flex items-center justify-end bg-white px-6 py-3 shadow-sm border-b">
               <div className="flex items-center gap-4">
-                <CartButton />
+                {/* Cart Button - Force re-render by adding key */}
+                <CartButton key="cart-button" />
                 {isAuthenticated && user && (
                   <div className="flex items-center gap-3">
                     <div className="text-right">
@@ -150,9 +152,9 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                     <div className="rounded-full bg-primary/10 p-2">
                       <User className="h-4 w-4 text-primary" />
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={handleLogout}
                     >
                       <LogOut className="h-4 w-4" />

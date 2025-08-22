@@ -90,9 +90,11 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         item => item.classId === action.payload.classId && item.childId === action.payload.childId
       );
 
-      console.log('🛒 ADD_ITEM reducer - existing items:', state.cart.items.length);
-      console.log('🛒 ADD_ITEM reducer - adding item:', action.payload);
-      console.log('🛒 ADD_ITEM reducer - existingItemIndex:', existingItemIndex);
+      console.log('🛒 ADD_ITEM reducer - current state:', {
+        currentItems: state.cart.items.length,
+        addingItem: action.payload.className,
+        existingItemIndex
+      });
 
       if (existingItemIndex >= 0) {
         // Item already exists, don't add duplicate
@@ -103,15 +105,21 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       const newItems = [...state.cart.items, action.payload];
       const totals = calculateCartTotals(newItems);
 
-      console.log('🛒 ADD_ITEM reducer - new items count:', newItems.length);
-
-      return {
+      const newState = {
         ...state,
         cart: {
           items: newItems,
           ...totals,
         },
       };
+
+      console.log('🛒 ADD_ITEM reducer - state updated:', {
+        oldCount: state.cart.items.length,
+        newCount: newItems.length,
+        newTotal: totals.total
+      });
+
+      return newState;
     }
 
     case 'REMOVE_ITEM': {
@@ -392,6 +400,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `${item.classId}-${item.childId}-${Date.now()}`,
     };
 
+    console.log('🛒 addItem called with:', { 
+      item: newItem, 
+      skipValidation, 
+      currentCartSize: state.cart.items.length 
+    });
+
     if (!skipValidation) {
       // Check if item already exists in cart
       const existsInCart = state.cart.items.some(
@@ -399,6 +413,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
 
       if (existsInCart) {
+        console.log('🛒 Item already exists in cart, not adding');
         toast({
           title: "Already in Cart",
           description: `${item.className} for ${item.childName} is already in your cart`,
@@ -422,6 +437,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           );
 
           if (hasSuccessfulEnrollment) {
+            console.log('🛒 User already successfully enrolled, not adding to cart');
             toast({
               title: "Already Enrolled",
               description: `${item.childName} is already enrolled in ${item.className}`,
@@ -435,9 +451,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    console.log('🛒 Adding item to cart:', newItem);
+    console.log('🛒 Dispatching ADD_ITEM action:', newItem);
     dispatch({ type: 'ADD_ITEM', payload: newItem });
-    console.log('🛒 Cart state after adding item - total items:', state.cart.items.length + 1);
+    
+    // Force a small delay to ensure state is updated before logging
+    setTimeout(() => {
+      console.log('🛒 Cart updated - new item count should be:', state.cart.items.length + 1);
+    }, 10);
     
     // Only show toast if not skipping validation (to avoid duplicate toasts)
     if (!skipValidation) {
