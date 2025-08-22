@@ -9,7 +9,7 @@ const router = Router();
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
+  apiVersion: '2024-04-10',
 });
 
 // Create payment intent
@@ -34,7 +34,8 @@ router.post('/create-payment-intent', async (req, res) => {
       stripePaymentIntentId: paymentIntent.id,
       amount,
       currency,
-      enrollmentIds: enrollmentDetails,
+      childName: 'Multiple Children',
+      className: 'Multiple Classes',
       description: `Payment for ${enrollmentDetails.length} enrollment(s)`,
       metadata: {
         enrollmentDetails,
@@ -70,7 +71,7 @@ router.post('/confirm-payment', async (req, res) => {
       // Update payment status in database
       const payment = await storage.getPaymentByStripeId(paymentIntentId);
       if (payment) {
-        await storage.updatePaymentStatus(payment.id, 'succeeded');
+        await storage.updatePaymentStatus(payment.id, 'completed');
       }
 
       // Send confirmation email
@@ -78,7 +79,7 @@ router.post('/confirm-payment', async (req, res) => {
         parentEmail,
         payment: {
           ...payment!,
-          status: 'succeeded' as const
+          status: 'completed' as const
         },
         enrollmentDetails: enrollmentDetails.map((detail: any) => ({
           childName: detail.childName,
@@ -95,7 +96,7 @@ router.post('/confirm-payment', async (req, res) => {
         message: 'Payment confirmed and email sent',
         payment: {
           id: payment?.id,
-          status: 'succeeded',
+          status: 'completed',
           amount: paymentIntent.amount / 100,
           currency: paymentIntent.currency
         }
