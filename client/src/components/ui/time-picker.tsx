@@ -37,9 +37,9 @@ export function TimePicker({ value, onChange, placeholder = "Select time", class
   const { hour, minute, period } = parseTime(value || '');
 
   const handleTimeChange = (newHour?: string, newMinute?: string, newPeriod?: string) => {
-    const currentHour = newHour || hour;
-    const currentMinute = newMinute || minute;
-    const currentPeriod = newPeriod || period;
+    const currentHour = newHour !== undefined ? newHour : hour;
+    const currentMinute = newMinute !== undefined ? newMinute : minute;
+    const currentPeriod = newPeriod !== undefined ? newPeriod : period;
     
     if (currentHour && currentMinute && currentPeriod) {
       const timeString = `${currentHour}:${currentMinute} ${currentPeriod}`;

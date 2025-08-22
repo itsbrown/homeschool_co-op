@@ -1725,6 +1725,9 @@ export class MemStorage implements IStorage {
         const classesData = JSON.parse(fs.readFileSync(classesFilePath, 'utf-8'));
         console.log(`🏫 Loading ${classesData.length} classes from classes.json`);
 
+        // Clear existing classes first to reload fresh data
+        this.classesStore.clear();
+
         classesData.forEach((classData: any) => {
           // Ensure the class has required fields and set defaults for missing ones
           const normalizedClass = {

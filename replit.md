@@ -28,6 +28,16 @@ Preferred communication style: Simple, everyday language.
 - **Knowledge Base Storage**: File-based system
 - **Image Processing**: SVG generation for educational content
 
+## Recent Changes
+
+**Fixed Class Creation and Enrollment Issues (August 22, 2025)**
+- Fixed storage system synchronization between file-based and memory storage
+- Class creation now properly adds classes to both storage systems 
+- Time picker component updated with improved selection logic
+- All 4 classes now load correctly into memory storage
+- Class enrollment API working for all existing and newly created classes
+- Created production setup guide and test data cleanup script
+
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation.
 - **Enhanced Payment System**: Comprehensive payment status management supporting multiple states (pending_payment, partially_paid, payment_plan_active, enrolled with balance_due). Smart cart system that prevents duplicate enrollments by checking for successful payments, properly filtering out superseded pending enrollments. Fully functional Stripe webhook integration with proper currency conversion handling.

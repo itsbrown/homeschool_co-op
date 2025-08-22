@@ -1798,6 +1798,14 @@ router.post("/classes", async (req, res) => {
     // Write back to file
     fs.writeFileSync(CLASSES_FILE, JSON.stringify(existingClasses, null, 2));
 
+    // Also add to the main storage system to ensure synchronization
+    try {
+      await storage.createClass(newClass);
+      console.log('✅ Class also added to main storage system');
+    } catch (error) {
+      console.log('⚠️ Note: Class saved to file but not to main storage:', error.message);
+    }
+
     console.log('✅ Class created successfully:', newClass.title);
     return res.status(201).json({
       message: "Class created successfully",
