@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ShoppingCart } from 'lucide-react';
 
 export default function CartButton() {
-  const { getItemCount, openCart, loadUnpaidEnrollments } = useCart();
+  const { getItemCount, openCart, loadUnpaidEnrollments, cart } = useCart();
 
   const handleOpenCart = async () => {
     await loadUnpaidEnrollments();
@@ -14,7 +14,7 @@ export default function CartButton() {
 
   const itemCount = getItemCount();
   
-  console.log('🛒 CartButton render - itemCount:', itemCount);
+  console.log('🛒 CartButton render - itemCount:', itemCount, 'cart items:', cart.items.length);
 
   return (
     <Button

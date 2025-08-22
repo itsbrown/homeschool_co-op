@@ -90,7 +90,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         // Open cart to show the new item after a brief delay
         setTimeout(() => {
           openCart();
-        }, 1000);
+        }, 800);
         
         // Also store enrollment data for direct payment plans access
         const enrollmentData = {
