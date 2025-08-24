@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "email": "coreycreates@gmail.com",
+    "role": "school_admin",
+    "supabaseId": "05052776-9b5e-4330-867d-d489273eaf70",
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-01-13T06:08:43.000Z",
+    "updatedAt": "2025-01-13T06:08:43.000Z"
+  },
+  {
+    "id": 2,
+    "email": "educator.test@americanseekersacademy.com",
+    "name": "Sarah Johnson",
+    "username": "educator_test",
+    "firstName": "Sarah",
+    "lastName": "Johnson",
+    "role": "educator",
+    "subscription": "educator",
+    "createdAt": "2025-08-04T12:00:00.000Z",
+    "avatar": null,
+    "password": "$2a$10$EixZxQVkjyOptZj8GHGEc.3HEcUi8h7eAFcmNyMSZGEpj2pjHAAIC"
+  },
+  {
+    "id": 3,
+    "email": "tester@tester123.com",
+    "role": "parent",
+    "supabaseId": "9b12f7f2-cd82-40fd-b8aa-a5e0806847de",
+    "firstName": "Test",
+    "lastName": "Parent",
+    "schoolId": 1,
+    "createdAt": "2025-08-21T21:09:00.000Z",
+    "updatedAt": "2025-08-21T21:09:00.000Z"
+  },
+  {
+    "id": 4,
+    "email": "tester@testing321.com",
+    "role": "parent",
+    "supabaseId": "eb282754-68ae-4c43-8651-0d3073fd030a",
+    "firstName": "Test",
+    "lastName": "Parent",
+    "schoolId": 1,
+    "createdAt": "2025-08-22T11:15:00.000Z",
+    "updatedAt": "2025-08-22T11:15:00.000Z"
+  }
+]

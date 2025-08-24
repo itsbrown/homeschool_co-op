@@ -33,6 +33,55 @@ if (!stripePublishableKey.startsWith('pk_test_') && !stripePublishableKey.starts
 
 const stripePromise = loadStripe(stripePublishableKey);
 
+// Simple payment form component
+function SimplePaymentForm({ onSuccess, onError }: { 
+  onSuccess: () => void; 
+  onError: (error: string) => void; 
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!stripe || !elements) {
+      return;
+    }
+
+    setIsProcessing(true);
+
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: window.location.origin + '/billing'
+      },
+      redirect: 'if_required'
+    });
+
+    if (error) {
+      onError(error.message || 'Payment failed');
+    } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+      onSuccess();
+    }
+
+    setIsProcessing(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement />
+      <Button 
+        type="submit" 
+        disabled={!stripe || isProcessing} 
+        className="w-full"
+      >
+        {isProcessing ? 'Processing...' : 'Complete Payment'}
+      </Button>
+    </form>
+  );
+}
+
 interface PaymentHistoryItem {
   id: number;
   amount: number;
@@ -138,6 +187,11 @@ function PaymentHistoryTab() {
 }
 
 function UpcomingPaymentsTab() {
+  const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
+  const [showPayment, setShowPayment] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string>('');
+
   const { data: upcomingPayments, isLoading } = useQuery({
     queryKey: ['/api/scheduled-payments/upcoming'],
     queryFn: async () => {
@@ -162,6 +216,66 @@ function UpcomingPaymentsTab() {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+    });
+  };
+
+  const handlePayScheduledPayment = async (payment: any) => {
+    console.log('🔄 Pay Now clicked for scheduled payment:', payment.id);
+
+    if (isPending) {
+      console.log('⏳ Already processing, ignoring click');
+      return;
+    }
+
+    console.log('🚀 Starting scheduled payment process');
+
+    startTransition(() => {
+      (async () => {
+        try {
+          console.log('📤 Sending scheduled payment request...');
+          
+          const response = await apiRequest('POST', '/api/scheduled-payments/pay', {
+            paymentId: payment.id,
+            amount: payment.amount,
+            description: payment.description
+          });
+
+          console.log('📥 Scheduled payment response received:', response.status);
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+            console.error('❌ Scheduled payment request failed:', errorData);
+            throw new Error(`Payment request failed: ${errorData.message || response.statusText}`);
+          }
+
+          const data = await response.json();
+          console.log('✅ Scheduled payment response data:', data);
+
+          if (data.clientSecret) {
+            console.log('🔑 Client secret received, showing payment form');
+            setClientSecret(data.clientSecret);
+            setShowPayment(true);
+
+            // Auto-scroll to payment form after a brief delay
+            setTimeout(() => {
+              const paymentSection = document.querySelector('[data-payment-form]');
+              if (paymentSection) {
+                paymentSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }, 500);
+          } else {
+            console.error('❌ No client secret in response:', data);
+            throw new Error('No client secret received from server');
+          }
+        } catch (error: any) {
+          console.error('❌ Scheduled payment error:', error);
+          toast({
+            title: "Payment Error",
+            description: error.message || "Failed to process payment. Please try again.",
+            variant: "destructive",
+          });
+        }
+      })();
     });
   };
 
@@ -225,8 +339,13 @@ function UpcomingPaymentsTab() {
                   </div>
                 </div>
                 
-                <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                  Pay Now
+                <Button 
+                  size="sm" 
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={() => handlePayScheduledPayment(payment)}
+                  disabled={isPending}
+                >
+                  {isPending ? 'Processing...' : 'Pay Now'}
                 </Button>
               </div>
             </div>
@@ -246,6 +365,46 @@ function UpcomingPaymentsTab() {
           </div>
         </div>
       </div>
+
+      {/* Stripe Payment Form for scheduled payments */}
+      {showPayment && clientSecret && (
+        <div className="mt-8" data-payment-form>
+          <Card>
+            <CardHeader>
+              <CardTitle>Complete Payment</CardTitle>
+              <CardDescription>
+                Process your scheduled payment securely with Stripe
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Elements stripe={stripePromise} options={{ clientSecret }}>
+                <SimplePaymentForm 
+                  onSuccess={() => {
+                    console.log('✅ Scheduled payment completed');
+                    toast({
+                      title: "Payment Successful!",
+                      description: "Your scheduled payment has been processed successfully.",
+                      variant: "default",
+                    });
+                    // Refresh the page or redirect
+                    window.location.reload();
+                  }}
+                  onError={(error: string) => {
+                    console.error('❌ Scheduled payment failed:', error);
+                    toast({
+                      title: "Payment Failed",
+                      description: error || "Please try again.",
+                      variant: "destructive",
+                    });
+                    setShowPayment(false);
+                    setClientSecret('');
+                  }}
+                />
+              </Elements>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

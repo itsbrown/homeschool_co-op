@@ -217,7 +217,28 @@ router.post('/webhook', async (req, res) => {
         // Check if this is a balance payment or new enrollment
         const paymentType = paymentIntent.metadata.paymentType;
         
-        if (paymentType === 'balance_payment') {
+        if (paymentType === 'scheduled_payment') {
+          // Handle scheduled payment completion
+          const scheduledPaymentId = paymentIntent.metadata.scheduledPaymentId;
+          const parentEmail = paymentIntent.metadata.parentEmail;
+          
+          console.log(`💰 Processing completed scheduled payment: ${scheduledPaymentId} for ${parentEmail}`);
+          
+          // Get the scheduled payment from storage
+          const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(parentEmail);
+          const scheduledPayment = allScheduledPayments.find(p => p.id === parseInt(scheduledPaymentId));
+          
+          if (scheduledPayment) {
+            // Update the scheduled payment status to paid
+            await storage.updateScheduledPaymentStatus(parseInt(scheduledPaymentId), 'paid');
+            console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as paid`);
+            
+            console.log(`✅ Scheduled payment ${scheduledPaymentId} processing complete`);
+          } else {
+            console.error(`❌ Scheduled payment ${scheduledPaymentId} not found`);
+          }
+          
+        } else if (paymentType === 'balance_payment') {
           // Handle balance payment - update existing enrollments
           const enrollmentIds = JSON.parse(paymentIntent.metadata.enrollmentIds || '[]');
           console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
