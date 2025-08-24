@@ -289,9 +289,9 @@ export default function ChildEnrollmentsPage() {
                                 size="sm"
                                 className="bg-green-600 hover:bg-green-700"
                                 onClick={() => {
-                                  // Refresh cart to load pending enrollments, then navigate to payments
+                                  // Refresh cart to load pending enrollments, then navigate to checkout
                                   refreshCart();
-                                  setLocation('/payments');
+                                  setLocation('/cart/checkout');
                                 }}
                               >
                                 <CreditCard className="h-4 w-4 mr-2" />
