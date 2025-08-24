@@ -536,19 +536,6 @@
     "enrollmentDate": "2025-08-22T17:22:43.340Z"
   },
   {
-    "id": 1755883699537,
-    "classId": 2,
-    "childId": 18,
-    "childName": "Child1 name",
-    "className": "Elementary Math Fundamentals",
-    "enrollmentDate": "2025-08-22T17:28:19.537Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 14,
-    "totalCost": 140,
-    "remainingBalance": 140
-  },
-  {
     "id": 1755883762814,
     "classId": 7,
     "childId": 19,
@@ -582,19 +569,6 @@
     "enrollmentDate": "2025-08-22T17:34:35.153Z"
   },
   {
-    "id": 1755884891792,
-    "classId": 5,
-    "childId": 18,
-    "childName": "Child1 name",
-    "className": "Tycoons | Half Day",
-    "enrollmentDate": "2025-08-22T17:48:11.792Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 90,
-    "totalCost": 900,
-    "remainingBalance": 900
-  },
-  {
     "classId": 5,
     "childId": 18,
     "status": "enrolled",
@@ -605,19 +579,6 @@
     "enrollmentDate": "2025-08-22T18:24:10.709Z"
   },
   {
-    "id": 1755887226973,
-    "classId": 6,
-    "childId": 18,
-    "childName": "Child1 name",
-    "className": "Pioneers | Half Day",
-    "enrollmentDate": "2025-08-22T18:27:06.973Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 90,
-    "totalCost": 900,
-    "remainingBalance": 900
-  },
-  {
     "classId": 6,
     "childId": 18,
     "status": "enrolled",
@@ -626,19 +587,6 @@
     "totalCost": 90000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-22T18:29:26.768Z"
-  },
-  {
-    "id": 1755887563604,
-    "classId": 5,
-    "childId": 18,
-    "childName": "Child1 name",
-    "className": "Tycoons | Half Day",
-    "enrollmentDate": "2025-08-22T18:32:43.604Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 90,
-    "totalCost": 900,
-    "remainingBalance": 900
   },
   {
     "classId": 5,

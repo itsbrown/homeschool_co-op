@@ -70,7 +70,8 @@ export default function ChildEnrollmentsPage() {
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/classes");
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      // The API returns {classes: [...], pagination: {...}}
+      return Array.isArray(data.classes) ? data.classes : [];
     },
   });
 
