@@ -386,8 +386,15 @@ function UpcomingPaymentsTab() {
                       description: "Your scheduled payment has been processed successfully.",
                       variant: "default",
                     });
-                    // Refresh the page or redirect
-                    window.location.reload();
+                    
+                    // Hide the payment form
+                    setShowPayment(false);
+                    setClientSecret('');
+                    
+                    // Invalidate cache and refetch data
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 1000);
                   }}
                   onError={(error: string) => {
                     console.error('❌ Scheduled payment failed:', error);

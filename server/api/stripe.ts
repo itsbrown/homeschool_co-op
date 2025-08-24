@@ -233,6 +233,28 @@ router.post('/webhook', async (req, res) => {
             await storage.updateScheduledPaymentStatus(parseInt(scheduledPaymentId), 'paid');
             console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as paid`);
             
+            // Create payment record for history
+            const payment = {
+              id: Date.now(),
+              stripePaymentIntentId: paymentIntent.id,
+              parentEmail: parentEmail,
+              childName: scheduledPayment.description.includes(' - ') ? scheduledPayment.description.split(' - ')[0] : 'Child',
+              className: scheduledPayment.description.includes(' - ') ? scheduledPayment.description.split(' - ')[1] : scheduledPayment.description,
+              amount: paymentIntent.amount,
+              currency: paymentIntent.currency,
+              status: 'completed' as const,
+              metadata: {
+                scheduledPaymentId: scheduledPaymentId,
+                installmentNumber: scheduledPayment.installmentNumber,
+                totalInstallments: scheduledPayment.totalInstallments
+              },
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+
+            await storage.createPayment(payment);
+            console.log(`✅ Created payment history record for scheduled payment ${scheduledPaymentId}`);
+            
             console.log(`✅ Scheduled payment ${scheduledPaymentId} processing complete`);
           } else {
             console.error(`❌ Scheduled payment ${scheduledPaymentId} not found`);
