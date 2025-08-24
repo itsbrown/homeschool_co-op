@@ -813,8 +813,33 @@ router.get("/classes", async (req, res) => {
 
     console.log(`Found ${schoolClasses.length} classes for school ID ${schoolId} (direct access)`);
 
+    // Get enrollments to calculate enrollment counts
+    const ENROLLMENTS_FILE = path.join(DATA_DIR, 'enrollments.json');
+    let enrollments = [];
+    if (fs.existsSync(ENROLLMENTS_FILE)) {
+      enrollments = JSON.parse(fs.readFileSync(ENROLLMENTS_FILE, 'utf8'));
+    }
+
+    // Add enrollment counts to each class
+    const classesWithEnrollment = schoolClasses.map(classItem => {
+      // Count enrollments for this specific class
+      const classEnrollmentCount = enrollments.filter(enrollment => 
+        Number(enrollment.classId) === Number(classItem.id) && 
+        ['enrolled', 'confirmed', 'completed'].includes(enrollment.status)
+      ).length;
+      
+      return {
+        ...classItem,
+        enrollmentCount: classEnrollmentCount,
+        maxEnrollment: classItem.capacity || classItem.maxEnrollment || 20,
+        capacity: classItem.capacity || 20,
+        // Keep existing enrolled field but update it with actual count
+        enrolled: classEnrollmentCount
+      };
+    });
+
     // Apply additional filters if needed
-    let filteredClasses = schoolClasses;
+    let filteredClasses = classesWithEnrollment;
     if (req.query.search) {
       const searchTerm = (req.query.search as string).toLowerCase();
       filteredClasses = filteredClasses.filter(cls => 
