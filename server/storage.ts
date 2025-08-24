@@ -286,7 +286,7 @@ export class MemStorage implements IStorage {
       username: "sarah",
       email: "sarah@example.com",
       password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
-      role: "educator",
+      role: "teacher",
       name: "Sarah Johnson",
       subscription: "educator"
     });
@@ -296,7 +296,7 @@ export class MemStorage implements IStorage {
       username: "learner",
       email: "learner@example.com",
       password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
-      role: "learner",
+      role: "student",
       name: "Test Learner",
       subscription: "free"
     });
@@ -314,7 +314,7 @@ export class MemStorage implements IStorage {
       username: "educator",
       email: "educator@example.com",
       password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
-      role: "educator",
+      role: "teacher",
       name: "Test Educator",
       subscription: "educator"
     });
@@ -326,7 +326,7 @@ export class MemStorage implements IStorage {
       password: "$2a$10$JdJO7S7.eRlVhAdJBtmCQO0Pic.7x9Ebf65nGcNLAjUWXbkILhk6.", // "password"
       role: "schoolAdmin",
       name: "Corey Creates",
-      subscription: "school"
+      subscription: "institutional"
     });
   }
 
@@ -350,7 +350,21 @@ export class MemStorage implements IStorage {
   async createUser(userData: InsertUser): Promise<User> {
     const id = this.userIdCounter++;
     const now = new Date();
-    const user: User = { ...userData, id, createdAt: now };
+    const user: User = { 
+      ...userData, 
+      id, 
+      createdAt: now,
+      updatedAt: now,
+      auth0Id: userData.auth0Id || null,
+      supabaseId: userData.supabaseId || null,
+      role: userData.role || "student",
+      subscription: userData.subscription || "free",
+      permissions: userData.permissions || {},
+      isActive: userData.isActive !== undefined ? userData.isActive : true,
+      lastLogin: userData.lastLogin || null,
+      schoolId: userData.schoolId || null,
+      avatar: userData.avatar || null
+    };
     this.usersStore.set(id, user);
     return user;
   }
@@ -377,10 +391,27 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async createSchool(schoolData: InsertSchool): Promise<School> {
+  async createSchool(schoolData: InsertSchool & { adminId: number }): Promise<School> {
     const id = this.schoolIdCounter++;
     const now = new Date();
-    const school: School = { ...schoolData, id, createdAt: now, updatedAt: now };
+    const school: School = { 
+      ...schoolData, 
+      id, 
+      createdAt: now, 
+      updatedAt: now,
+      adminId: schoolData.adminId,
+      isVerified: false,
+      status: schoolData.status || "pending",
+      address: schoolData.address || null,
+      phoneNumber: schoolData.phoneNumber || null,
+      website: schoolData.website || null,
+      logo: schoolData.logo || null,
+      description: schoolData.description || null,
+      foundedYear: schoolData.foundedYear || null,
+      accreditation: schoolData.accreditation || null,
+      enrollmentSize: schoolData.enrollmentSize || null,
+      registrationCode: schoolData.registrationCode || null
+    };
     this.schoolsStore.set(id, school);
     return school;
   }
@@ -415,10 +446,20 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async createCurriculum(insertCurriculum: InsertCurriculum): Promise<Curriculum> {
+  async createCurriculum(insertCurriculum: InsertCurriculum & { authorId: number }): Promise<Curriculum> {
     const id = this.curriculumIdCounter++;
     const now = new Date();
-    const curriculum: Curriculum = { ...insertCurriculum, id, createdAt: now, updatedAt: now };
+    const curriculum: Curriculum = { 
+      ...insertCurriculum, 
+      id, 
+      createdAt: now, 
+      updatedAt: now,
+      authorId: insertCurriculum.authorId,
+      description: insertCurriculum.description || null,
+      isPublished: insertCurriculum.isPublished !== undefined ? insertCurriculum.isPublished : false,
+      isPublic: insertCurriculum.isPublic !== undefined ? insertCurriculum.isPublic : false,
+      price: insertCurriculum.price !== undefined ? insertCurriculum.price : 0
+    };
     this.curriculaStore.set(id, curriculum);
     return curriculum;
   }
@@ -454,10 +495,20 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async createLesson(insertLesson: InsertLesson): Promise<Lesson> {
+  async createLesson(insertLesson: InsertLesson & { authorId: number }): Promise<Lesson> {
     const id = this.lessonIdCounter++;
     const now = new Date();
-    const lesson: Lesson = { ...insertLesson, id, createdAt: now, updatedAt: now };
+    const lesson: Lesson = { 
+      ...insertLesson, 
+      id, 
+      createdAt: now, 
+      updatedAt: now,
+      authorId: insertLesson.authorId,
+      description: insertLesson.description || null,
+      isPublished: insertLesson.isPublished !== undefined ? insertLesson.isPublished : false,
+      status: insertLesson.status || "draft",
+      curriculumId: insertLesson.curriculumId || null
+    };
     this.lessonsStore.set(id, lesson);
     return lesson;
   }
@@ -501,10 +552,17 @@ export class MemStorage implements IStorage {
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   }
 
-  async createEvent(insertEvent: InsertEvent): Promise<Event> {
+  async createEvent(insertEvent: InsertEvent & { organizerId: number }): Promise<Event> {
     const id = this.eventIdCounter++;
     const now = new Date();
-    const event: Event = { ...insertEvent, id, createdAt: now };
+    const event: Event = { 
+      ...insertEvent, 
+      id, 
+      createdAt: now,
+      organizerId: insertEvent.organizerId,
+      description: insertEvent.description || null,
+      location: insertEvent.location || null
+    };
     this.eventsStore.set(id, event);
     return event;
   }
@@ -526,7 +584,7 @@ export class MemStorage implements IStorage {
       .slice(0, limit);
   }
 
-  async createMarketplaceItem(insertItem: InsertMarketplaceItem): Promise<MarketplaceItem> {
+  async createMarketplaceItem(insertItem: InsertMarketplaceItem & { sellerId: number }): Promise<MarketplaceItem> {
     const id = this.marketplaceItemIdCounter++;
     const now = new Date();
     const item: MarketplaceItem = {
@@ -534,7 +592,10 @@ export class MemStorage implements IStorage {
       id,
       sales: 0,
       revenue: 0,
-      createdAt: now
+      createdAt: now,
+      sellerId: insertItem.sellerId,
+      description: insertItem.description || null,
+      isActive: insertItem.isActive !== undefined ? insertItem.isActive : true
     };
     this.marketplaceItemsStore.set(id, item);
     return item;
@@ -587,7 +648,7 @@ export class MemStorage implements IStorage {
     return Array.from(this.knowledgeBaseStore.values());
   }
 
-  async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
+  async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase> {
     const id = this.knowledgeBaseIdCounter++;
     const now = new Date();
     const knowledgeBase: KnowledgeBase = {
@@ -596,7 +657,14 @@ export class MemStorage implements IStorage {
       createdAt: now,
       updatedAt: now,
       downloadCount: 0,
-      purchasedBy: []
+      purchasedBy: [],
+      authorId: insertKnowledgeBase.authorId,
+      description: insertKnowledgeBase.description || null,
+      isPublic: insertKnowledgeBase.isPublic !== undefined ? insertKnowledgeBase.isPublic : false,
+      price: insertKnowledgeBase.price !== undefined ? insertKnowledgeBase.price : 0,
+      aiProcessed: false,
+      aiInsights: null,
+      processedAt: null
     };
 
     this.knowledgeBaseStore.set(id, knowledgeBase);
@@ -1135,52 +1203,6 @@ export class MemStorage implements IStorage {
 
   async deleteClass(id: number): Promise<void> {
     this.classesStore.delete(id);
-  }
-
-  // Knowledge Base methods
-  async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
-    return this.knowledgeBaseStore.get(id);
-  }
-
-  async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
-    const publicKnowledgeBases = Array.from(this.knowledgeBaseStore.values())
-      .filter(kb => kb.isPublic)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    return limit ? publicKnowledgeBases.slice(0, limit) : publicKnowledgeBases;
-  }
-
-  async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
-    return Array.from(this.knowledgeBaseStore.values())
-      .filter(kb => kb.isPublic && kb.subject.toLowerCase() === subject.toLowerCase())
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-
-  async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
-    return Array.from(this.knowledgeBaseStore.values())
-      .filter(kb => kb.authorId === authorId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-
-  async createKnowledgeBase(knowledgeBaseData: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase> {
-    const id = this.knowledgeBaseIdCounter++;
-    const now = new Date();
-
-    const newKnowledgeBase: KnowledgeBase = {
-      ...knowledgeBaseData,
-      id,
-      createdAt: now,
-      updatedAt: now,
-      downloadCount: 0,
-      purchasedBy: []
-    };
-
-    this.knowledgeBaseStore.set(id, newKnowledgeBase);
-
-    // Persist to disk
-    await this.saveKnowledgeBasesToDisk();
-
-    return newKnowledgeBase;
   }
 
   async updateKnowledgeBase(id: number, updateData: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined> {

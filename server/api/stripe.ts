@@ -234,12 +234,13 @@ router.post('/webhook', async (req, res) => {
             console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as paid`);
             
             // Create payment record for history
+            const description = scheduledPayment.description || 'Payment';
             const payment = {
               id: Date.now(),
               stripePaymentIntentId: paymentIntent.id,
               parentEmail: parentEmail,
-              childName: scheduledPayment.description.includes(' - ') ? scheduledPayment.description.split(' - ')[0] : 'Child',
-              className: scheduledPayment.description.includes(' - ') ? scheduledPayment.description.split(' - ')[1] : scheduledPayment.description,
+              childName: description.includes(' - ') ? description.split(' - ')[0] : 'Child',
+              className: description.includes(' - ') ? description.split(' - ')[1] : description,
               amount: paymentIntent.amount,
               currency: paymentIntent.currency,
               status: 'completed' as const,
