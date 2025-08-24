@@ -952,6 +952,46 @@ router.put("/classes/:id", async (req, res) => {
   }
 });
 
+// Delete a class
+router.delete("/classes/:id", async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id);
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
+    }
+
+    console.log(`🗑️ Deleting class with ID: ${classId}`);
+
+    // Read classes from file
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
+    
+    if (!fs.existsSync(CLASSES_FILE)) {
+      return res.status(404).json({ message: 'Classes file not found' });
+    }
+
+    const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
+    const classIndex = allClasses.findIndex((cls: any) => cls.id === classId);
+
+    if (classIndex === -1) {
+      console.log('❌ Class not found with ID:', classId);
+      return res.status(404).json({ message: 'Class not found' });
+    }
+
+    // Remove the class from the array
+    const deletedClass = allClasses.splice(classIndex, 1)[0];
+
+    // Write back to file
+    fs.writeFileSync(CLASSES_FILE, JSON.stringify(allClasses, null, 2));
+
+    console.log('✅ Class deleted successfully:', deletedClass.title);
+    res.json({ message: 'Class deleted successfully', deletedClass });
+  } catch (error) {
+    console.error('❌ Error deleting class:', error);
+    res.status(500).json({ message: 'Error deleting class' });
+  }
+});
+
 // Get class roster (students enrolled in a specific class)
 router.get("/classes/:id/roster", async (req, res) => {
   try {

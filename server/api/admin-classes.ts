@@ -431,12 +431,9 @@ router.delete("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) =
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // Check if user is authorized to delete this class
-    // Use default value of 1 if userId is not available
-    const userId = req.session.userId || 1;
-    if (existingClass.instructorId !== userId) {
-      return res.status(403).json({ message: "Not authorized to delete this class" });
-    }
+    // For admin users, allow deletion of any class
+    // In a production system, you might want more granular permissions
+    console.log("Admin user deleting class:", id);
 
     // Delete class using the appropriate storage method
     if (useFileStorage) {
