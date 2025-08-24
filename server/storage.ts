@@ -2040,7 +2040,26 @@ export class MemStorage implements IStorage {
       ...payment
     };
     this.paymentsStore.set(id, newPayment);
+    
+    // Save to file for persistence
+    await this.savePaymentsToFile();
+    console.log(`💾 Saved new payment ${id} to file`);
+    
     return newPayment;
+  }
+
+  private async savePaymentsToFile(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const paymentsFilePath = path.join(process.cwd(), 'data', 'payment-history.json');
+
+      const allPayments = Array.from(this.paymentsStore.values());
+      await fs.promises.writeFile(paymentsFilePath, JSON.stringify(allPayments, null, 2));
+      console.log(`💾 Saved ${allPayments.length} payment history records to file`);
+    } catch (error) {
+      console.error('❌ Error saving payments to file:', error);
+    }
   }
 
   async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
@@ -2142,7 +2161,26 @@ export class MemStorage implements IStorage {
       updatedAt: new Date()
     };
     this.scheduledPaymentsStore.set(id, updatedPayment);
+    
+    // Save to file for persistence
+    await this.saveScheduledPaymentsToFile();
+    console.log(`💾 Saved scheduled payment ${id} status update to file`);
+    
     return updatedPayment;
+  }
+
+  private async saveScheduledPaymentsToFile(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const scheduledPaymentsFilePath = path.join(process.cwd(), 'data', 'scheduled-payments.json');
+
+      const allPayments = Array.from(this.scheduledPaymentsStore.values());
+      await fs.promises.writeFile(scheduledPaymentsFilePath, JSON.stringify(allPayments, null, 2));
+      console.log(`💾 Saved ${allPayments.length} scheduled payments to file`);
+    } catch (error) {
+      console.error('❌ Error saving scheduled payments to file:', error);
+    }
   }
 }
 

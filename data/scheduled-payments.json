@@ -2,7 +2,9 @@
   {
     "id": 1,
     "parentEmail": "tester@testing321.com",
-    "enrollmentIds": [1],
+    "enrollmentIds": [
+      1
+    ],
     "amount": 30000,
     "paymentPlan": "three_payments",
     "installmentNumber": 2,
@@ -17,16 +19,18 @@
   {
     "id": 2,
     "parentEmail": "tester@testing321.com",
-    "enrollmentIds": [1],
+    "enrollmentIds": [
+      1
+    ],
     "amount": 30000,
     "paymentPlan": "three_payments",
     "installmentNumber": 3,
     "totalInstallments": 3,
     "dueDate": "2025-10-22T18:00:00.000Z",
     "description": "Child1 - Test Class",
-    "status": "pending",
+    "status": "paid",
     "currency": "usd",
     "createdAt": "2025-08-22T18:34:00.000Z",
-    "updatedAt": "2025-08-22T18:34:00.000Z"
+    "updatedAt": "2025-08-24T02:55:46.688Z"
   }
 ]
