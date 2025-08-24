@@ -365,19 +365,38 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('🛒 Current cart items:', state.cart.items.length);
       console.log('🛒 API enrollment items:', cartItems.length);
 
-      // Only update if we have new enrollments and the cart is empty
-      // This prevents overriding manually added items
-      if (cartItems.length > 0 && state.cart.items.length === 0) {
-        console.log('🛒 Cart is empty, loading API enrollments');
-        dispatch({
-          type: 'LOAD_CART',
-          payload: {
-            items: cartItems,
-            ...totals,
-          },
-        });
+      // Load pending enrollments if we have any
+      if (cartItems.length > 0) {
+        // If cart is empty, load all pending enrollments
+        if (state.cart.items.length === 0) {
+          console.log('🛒 Cart is empty, loading API enrollments');
+          dispatch({
+            type: 'LOAD_CART',
+            payload: {
+              items: cartItems,
+              ...totals,
+            },
+          });
+        } else {
+          // If cart has items, merge with pending enrollments (avoid duplicates)
+          const existingIds = state.cart.items.map(item => item.id);
+          const newItems = cartItems.filter(item => !existingIds.includes(item.id));
+          
+          if (newItems.length > 0) {
+            console.log('🛒 Merging new pending enrollments with existing cart');
+            const allItems = [...state.cart.items, ...newItems];
+            const mergedTotals = calculateCartTotals(allItems);
+            dispatch({
+              type: 'LOAD_CART',
+              payload: {
+                items: allItems,
+                ...mergedTotals,
+              },
+            });
+          }
+        }
       } else {
-        console.log('🛒 Cart has items or no new enrollments, preserving existing cart');
+        console.log('🛒 No pending enrollments found to add to cart');
       }
 
       console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);

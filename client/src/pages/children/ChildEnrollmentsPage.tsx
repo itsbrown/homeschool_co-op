@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Plus, Calendar, Clock, MapPin, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Clock, MapPin, Trash2, CreditCard } from "lucide-react";
 import { Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useCart } from "@/contexts/CartContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +52,8 @@ export default function ChildEnrollmentsPage() {
   const childId = params?.id;
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+  const { refreshCart } = useCart();
 
   // Fetch child data
   const { data: child, isLoading: childLoading } = useQuery<Child>({
@@ -281,31 +284,45 @@ export default function ChildEnrollmentsPage() {
                             </Button>
                           )}
                           {enrollment.status === 'pending_payment' && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Unenroll
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Confirm Unenrollment</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to unenroll from "{enrollment.className}"? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => unenrollMutation.mutate(enrollment.id)}
-                                    disabled={unenrollMutation.isPending}
-                                  >
-                                    {unenrollMutation.isPending ? "Unenrolling..." : "Unenroll"}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            <>
+                              <Button 
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => {
+                                  // Refresh cart to load pending enrollments, then navigate to payments
+                                  refreshCart();
+                                  setLocation('/payments');
+                                }}
+                              >
+                                <CreditCard className="h-4 w-4 mr-2" />
+                                Pay Now
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="outline" size="sm">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Unenroll
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirm Unenrollment</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to unenroll from "{enrollment.className}"? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => enrollment.id && unenrollMutation.mutate(enrollment.id)}
+                                      disabled={unenrollMutation.isPending}
+                                    >
+                                      {unenrollMutation.isPending ? "Unenrolling..." : "Unenroll"}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
                           )}
                         </div>
                       </div>
