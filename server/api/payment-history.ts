@@ -63,17 +63,21 @@ router.get('/history', async (req, res) => {
     const payments = await storage.getPaymentsByParentEmail(userEmail!);
     
     // Transform payments to include formatted data
-    const formattedPayments = payments.map(payment => ({
+    const formattedPayments = payments.map((payment: any) => ({
       id: payment.id,
       amount: payment.amount,
-      currency: payment.currency,
+      currency: payment.currency || 'usd',
       status: payment.status,
-      description: payment.description,
+      description: payment.description || `Payment for ${payment.className || 'program'}`,
+      date: payment.createdAt,
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
       stripePaymentIntentId: payment.stripePaymentIntentId,
-      enrollmentIds: payment.enrollmentIds,
-      metadata: payment.metadata
+      enrollmentIds: payment.enrollmentIds || [],
+      metadata: payment.metadata,
+      childName: payment.childName || '',
+      programName: payment.className || '',
+      paymentMethod: payment.paymentMethod || 'card'
     }));
 
     res.json({
@@ -96,17 +100,17 @@ router.get('/all', async (req, res) => {
     
     res.json({
       success: true,
-      payments: payments.map(payment => ({
+      payments: payments.map((payment: any) => ({
         id: payment.id,
         parentEmail: payment.parentEmail,
         amount: payment.amount,
         currency: payment.currency,
         status: payment.status,
-        description: payment.description,
+        description: payment.description || 'Payment',
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt,
         stripePaymentIntentId: payment.stripePaymentIntentId,
-        enrollmentIds: payment.enrollmentIds
+        enrollmentIds: payment.enrollmentIds || []
       }))
     });
   } catch (error) {
@@ -141,11 +145,11 @@ router.get('/:paymentId', async (req, res) => {
         amount: payment.amount,
         currency: payment.currency,
         status: payment.status,
-        description: payment.description,
+        description: (payment as any).description || 'Payment',
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt,
         stripePaymentIntentId: payment.stripePaymentIntentId,
-        enrollmentIds: payment.enrollmentIds,
+        enrollmentIds: (payment as any).enrollmentIds || [],
         metadata: payment.metadata
       }
     });
