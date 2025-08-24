@@ -16,7 +16,9 @@ import {
   LogOut,
   User,
   LucideIcon,
-  Link2
+  Link2,
+  MapPin,
+  Bell
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -62,6 +64,16 @@ const schoolNavItems: NavItem[] = [
     title: 'Marketing Links',
     href: '/marketing-links',
     icon: Link2,
+  },
+  {
+    title: 'Locations',
+    href: '/schools/locations',
+    icon: MapPin,
+  },
+  {
+    title: 'Notifications',
+    href: '/schools/notifications',
+    icon: Bell,
   },
   {
     title: 'Settings',
