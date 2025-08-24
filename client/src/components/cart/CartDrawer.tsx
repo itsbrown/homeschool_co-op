@@ -23,7 +23,12 @@ export default function CartDrawer() {
   };
 
   const handleCheckout = () => {
+    console.log('🛒 CHECKOUT BUTTON CLICKED - CartDrawer.tsx:27');
+    console.log('🛒 Cart items before checkout:', cart.items);
+    console.log('🛒 Cart items length:', cart.items.length);
+    
     if (cart.items.length === 0) {
+      console.log('🛒 No items in cart, showing toast');
       toast({
         title: "No unpaid enrollments",
         description: "All your enrollments are paid or you haven't enrolled in any classes yet",
@@ -32,8 +37,14 @@ export default function CartDrawer() {
       return;
     }
 
+    console.log('🛒 Proceeding to checkout...');
     closeCart();
-    setLocation('/cart/checkout');
+    
+    // Use a slight delay to ensure cart drawer closes before navigation
+    setTimeout(() => {
+      console.log('🛒 Navigating to /cart/checkout');
+      setLocation('/cart/checkout');
+    }, 100);
   };
 
   const getUniqueChildrenCount = () => {

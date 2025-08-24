@@ -225,7 +225,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🛒 Is authenticated:', isAuthenticated);
     console.log('🛒 Current cart items before API call:', state.cart.items.length);
     console.trace('🛒 loadUnpaidEnrollments called from:');
-    
+
     if (!user?.email) {
       console.log('No user email available for cart loading');
       return;
@@ -364,7 +364,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('🛒 About to merge API enrollments with existing cart');
       console.log('🛒 Current cart items:', state.cart.items.length);
       console.log('🛒 API enrollment items:', cartItems.length);
-      
+
       // Only update if we have new enrollments and the cart is empty
       // This prevents overriding manually added items
       if (cartItems.length > 0 && state.cart.items.length === 0) {
@@ -458,7 +458,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Proceed with save if we can't parse existing cart
       }
     }
-    
+
     localStorage.setItem('asa_cart', JSON.stringify(state.cart));
   }, [state.cart]);
 

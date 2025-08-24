@@ -207,24 +207,32 @@ export default function CartCheckout() {
   });
 
   useEffect(() => {
+    console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length);
+    
     if (!isAuthenticated) {
+      console.log('🛒 User not authenticated, redirecting to login');
       setLocation('/login');
       return;
     }
 
     // Don't redirect immediately if cart is empty - wait a moment for cart to load from localStorage
     if (cart.items.length === 0) {
+      console.log('🛒 Cart is empty, waiting for cart to load...');
       const timer = setTimeout(() => {
         // Double-check after a delay to ensure cart has loaded from localStorage
         if (cart.items.length === 0) {
           console.log('🛒 CartCheckout: No items found after delay, redirecting to programs');
           setLocation('/programs');
+        } else {
+          console.log('🛒 Cart loaded with items after delay:', cart.items.length);
+          createPaymentIntent();
         }
-      }, 500); // Wait 500ms for cart to load
+      }, 1000); // Increased wait time to 1000ms for cart to load
       
       return () => clearTimeout(timer);
     }
 
+    console.log('🛒 Cart has items, creating payment intent');
     createPaymentIntent();
   }, [isAuthenticated, cart.items.length, selectedPaymentPlan]); // Re-create payment intent when payment plan changes
 
