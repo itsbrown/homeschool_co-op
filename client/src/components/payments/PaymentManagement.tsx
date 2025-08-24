@@ -99,9 +99,9 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     return payments.filter((payment: Payment) => {
       // Filter by search query
       const matchesSearch = 
-        payment.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        payment.programName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        payment.childName.toLowerCase().includes(searchQuery.toLowerCase());
+        (payment.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (payment.programName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (payment.childName || '').toLowerCase().includes(searchQuery.toLowerCase());
       
       // Filter by status
       const matchesStatus = filterStatus === 'all' || payment.status === filterStatus;

@@ -189,5 +189,26 @@
     "instructorId": 1,
     "createdAt": "2025-08-24T10:56:18.545Z",
     "updatedAt": "2025-08-24T10:56:37.852Z"
+  },
+  {
+    "id": 10,
+    "schoolId": 1,
+    "title": "Yankee Doodle | Half Day - Copy",
+    "description": "A meaningful, human connection with a teacher is an invaluable benefit to a child. We believe mentors are a necessary attribute of the traditional school model that homeschoolers can greatly benefit from. The Yankee Doodle class (ages 4–5, PreK–K) builds foundational skills through a classical education model, emphasizing literacy, counting, and responsibility. Hands-on, kinesthetic activities engage young learners, fostering a love for learning and civic virtue. The program supports homeschooling families by providing a structured yet flexible curriculum",
+    "category": "Kindergarten",
+    "gradeLevel": "pre-k-k",
+    "status": "upcoming",
+    "startDate": "2025-09-08",
+    "endDate": "2025-11-14",
+    "schedule": "Monday, Wednesday, Friday 9am-12pm",
+    "capacity": 10,
+    "maxStudents": 10,
+    "enrollmentCount": 0,
+    "location": "Brighton",
+    "price": 900,
+    "instructorName": "Sarah Johnson",
+    "instructorId": 1,
+    "createdAt": "2025-08-24T11:05:40.647Z",
+    "updatedAt": "2025-08-24T11:05:40.647Z"
   }
 ]
