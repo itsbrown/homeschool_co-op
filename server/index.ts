@@ -108,6 +108,43 @@ app.use("/api/school-parents", schoolParentsRouter);
 app.use("/api/educator", educatorRouter);
 app.use("/api/auth", authRouter);
 
+// Test endpoint for development - manually update scheduled payment
+if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+  app.post('/api/test/update-scheduled-payment', async (req, res) => {
+    try {
+      const { id, status } = req.body;
+      const { storage } = await import('./storage');
+      const payment = await storage.updateScheduledPaymentStatus(id, status);
+      
+      if (status === 'paid') {
+        // Also create payment history record
+        const scheduledPayment = (await storage.getScheduledPaymentsByParentEmail('tester@testing321.com')).find(p => p.id === id);
+        if (scheduledPayment) {
+          const paymentRecord = {
+            id: Date.now(),
+            stripePaymentIntentId: `pi_test_dev_${id}`,
+            parentEmail: scheduledPayment.parentEmail,
+            childName: scheduledPayment.description.split(' - ')[0] || 'Child',
+            className: scheduledPayment.description.split(' - ')[1] || scheduledPayment.description,
+            amount: scheduledPayment.amount,
+            currency: scheduledPayment.currency || 'usd',
+            status: 'completed' as const,
+            metadata: { testPayment: true, scheduledPaymentId: id },
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          await storage.createPayment(paymentRecord);
+          console.log('✅ Test: Created payment history record');
+        }
+      }
+      
+      res.json({ success: true, payment });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+}
+
 (async () => {
   const server = await registerRoutes(app);
 

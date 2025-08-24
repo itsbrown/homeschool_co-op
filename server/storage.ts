@@ -259,6 +259,7 @@ export class MemStorage implements IStorage {
     this.initializeSampleClasses().catch(console.error);
     this.initializeChildren().catch(console.error);
     this.initializeScheduledPayments().catch(console.error);
+    this.initializePayments().catch(console.error);
 
     this.createUser({
       username: "admin",
@@ -2065,6 +2066,37 @@ export class MemStorage implements IStorage {
     };
     this.paymentsStore.set(id, updatedPayment);
     return updatedPayment;
+  }
+
+  private async initializePayments() {
+    // Load payments from the JSON file
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const paymentsFilePath = path.join(process.cwd(), 'data', 'payment-history.json');
+
+      if (fs.existsSync(paymentsFilePath)) {
+        const paymentsData = JSON.parse(fs.readFileSync(paymentsFilePath, 'utf-8'));
+        console.log(`💰 Loading ${paymentsData.length} payments from payment-history.json`);
+
+        // Load payments into memory store
+        for (const payment of paymentsData) {
+          const paymentRecord: Payment = {
+            ...payment,
+            createdAt: new Date(payment.createdAt),
+            updatedAt: new Date(payment.updatedAt)
+          };
+          this.paymentsStore.set(payment.id, paymentRecord);
+          this.paymentIdCounter = Math.max(this.paymentIdCounter, payment.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${paymentsData.length} payments into storage`);
+      } else {
+        console.log('💰 No payment-history.json found, starting with empty payment history');
+      }
+    } catch (error) {
+      console.error('❌ Error loading payments from JSON:', error);
+    }
   }
 
   // Scheduled payments methods

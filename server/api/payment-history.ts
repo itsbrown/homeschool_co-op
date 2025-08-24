@@ -18,25 +18,49 @@ router.get('/history', async (req, res) => {
 
     const token = authHeader.split(' ')[1];
     
-    // Verify the Supabase token
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // In development/test mode, use simple JWT decoding instead of Supabase verification
+    let userEmail;
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        userEmail = payload.email;
+        if (!userEmail) {
+          return res.status(401).json({
+            success: false,
+            error: 'Email not found in token'
+          });
+        }
+      } catch (error) {
+        console.log('❌ Token decode error:', error);
+        console.log('Token parts:', token.split('.').length);
+        console.log('Payload part:', token.split('.')[1]);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid authentication token'
+        });
+      }
+    } else {
+      // Production: Verify the Supabase token
+      const supabase = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      console.log('❌ Supabase auth error:', error);
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid authentication token'
-      });
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      
+      if (error || !user) {
+        console.log('❌ Supabase auth error:', error);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid authentication token'
+        });
+      }
+      userEmail = user.email;
     }
 
-    console.log('✅ Payment history request for user:', user.email);
+    console.log('✅ Payment history request for user:', userEmail);
 
-    const payments = await storage.getPaymentsByParentEmail(user.email!);
+    const payments = await storage.getPaymentsByParentEmail(userEmail!);
     
     // Transform payments to include formatted data
     const formattedPayments = payments.map(payment => ({
