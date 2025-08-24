@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "userId": 1,
+    "locationId": 1,
+    "accessLevel": "admin",
+    "canViewReports": true,
+    "canManageStaff": true,
+    "canManageClasses": true,
+    "canManageStudents": true,
+    "canSendNotifications": true,
+    "isActive": true,
+    "assignedAt": "2025-08-24T21:50:00.000Z",
+    "createdAt": "2025-08-24T21:50:00.000Z",
+    "updatedAt": "2025-08-24T21:50:00.000Z"
+  },
+  {
+    "id": 2,
+    "userId": 1,
+    "locationId": 2,
+    "accessLevel": "admin",
+    "canViewReports": true,
+    "canManageStaff": true,
+    "canManageClasses": true,
+    "canManageStudents": true,
+    "canSendNotifications": true,
+    "isActive": true,
+    "assignedAt": "2025-08-24T21:50:00.000Z",
+    "createdAt": "2025-08-24T21:50:00.000Z",
+    "updatedAt": "2025-08-24T21:50:00.000Z"
+  },
+  {
+    "id": 3,
+    "userId": 1,
+    "locationId": 3,
+    "accessLevel": "admin",
+    "canViewReports": true,
+    "canManageStaff": true,
+    "canManageClasses": true,
+    "canManageStudents": true,
+    "canSendNotifications": true,
+    "isActive": true,
+    "assignedAt": "2025-08-24T21:50:00.000Z",
+    "createdAt": "2025-08-24T21:50:00.000Z",
+    "updatedAt": "2025-08-24T21:50:00.000Z"
+  }
+]

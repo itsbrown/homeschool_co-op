@@ -2125,6 +2125,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/parent", parentRouter);
+  
+  // Multi-location support routes
+  const locationsRouter = (await import("./api/locations")).default;
+  app.use("/api/locations", locationsRouter);
+  
+  const notificationsRouter = (await import("./api/notifications")).default;
+  app.use("/api/notifications", notificationsRouter);
 
   // Register billing routes
   const billingRouter = (await import("./api/billing")).default;

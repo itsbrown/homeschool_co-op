@@ -77,6 +77,7 @@ export type School = typeof schools.$inferSelect;
 export const schoolStudents = pgTable("school_students", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id),
+  locationId: integer("location_id").references(() => locations.id), // Multi-location support
   childId: integer("child_id").notNull().references(() => children.id),
   enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
   grade: text("grade").notNull(),
@@ -101,6 +102,7 @@ export type SchoolStudent = typeof schoolStudents.$inferSelect;
 export const schoolStaff = pgTable("school_staff", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id),
+  locationId: integer("location_id").references(() => locations.id), // Multi-location support
   userId: integer("user_id").notNull().references(() => users.id),
   role: text("role", { enum: ["teacher", "administrator", "staff", "other"] }).notNull(),
   position: text("position").notNull(), // specific job title
@@ -127,6 +129,7 @@ export type SchoolStaff = typeof schoolStaff.$inferSelect;
 export const schoolClasses = pgTable("school_classes", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id),
+  locationId: integer("location_id").references(() => locations.id), // Multi-location support
   title: text("title").notNull(),
   description: text("description"),
   subject: text("subject").notNull(),
@@ -265,6 +268,8 @@ export const emergencyContactsRelations = relations(emergencyContacts, ({ one })
 // Programs table for the Programs Category
 export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
+  schoolId: integer("school_id").references(() => schools.id), // Multi-location support
+  locationId: integer("location_id").references(() => locations.id), // Multi-location support
   title: text("title").notNull(),
   description: text("description").notNull(),
   category: text("category", { 
@@ -567,6 +572,8 @@ export const activitiesRelations = relations(activities, ({ one }) => ({
 // Classes table for AI-suggested pricing
 export const classes = pgTable("classes", {
   id: serial("id").primaryKey(),
+  schoolId: integer("school_id").references(() => schools.id), // Multi-location support
+  locationId: integer("location_id").references(() => locations.id), // Multi-location support
   title: text("title").notNull(),
   description: text("description").notNull(),
   productId: text("product_id"),
@@ -668,6 +675,142 @@ export const linkAnalytics = pgTable("link_analytics", {
 export const insertLinkAnalyticsSchema = createInsertSchema(linkAnalytics);
 export type InsertLinkAnalytics = z.infer<typeof insertLinkAnalyticsSchema>;
 export type LinkAnalytics = typeof linkAnalytics.$inferSelect;
+
+// **MULTI-LOCATION SUPPORT TABLES**
+
+// Locations table for physical campuses/sites within a school
+export const locations = pgTable("locations", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  name: text("name").notNull(), // e.g., "Downtown Campus", "North Branch"
+  code: text("code").notNull(), // e.g., "DT", "NB" for short identification
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  zipCode: text("zip_code").notNull(),
+  phoneNumber: text("phone_number"),
+  email: text("email"),
+  managerName: text("manager_name"),
+  capacity: integer("capacity"), // total capacity for this location
+  isActive: boolean("is_active").default(true).notNull(),
+  timezone: text("timezone").default("America/New_York").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertLocationSchema = createInsertSchema(locations)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    phoneNumber: z.string().nullable().default(null),
+    email: z.string().nullable().default(null),
+    managerName: z.string().nullable().default(null),
+    capacity: z.number().nullable().default(null),
+  });
+export type InsertLocation = z.infer<typeof insertLocationSchema>;
+export type Location = typeof locations.$inferSelect;
+
+// User-Location access mapping for multi-location permissions
+export const userLocations = pgTable("user_locations", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  locationId: integer("location_id").notNull().references(() => locations.id),
+  accessLevel: text("access_level", { 
+    enum: ["view", "manage", "admin"] 
+  }).notNull().default("view"),
+  canViewReports: boolean("can_view_reports").default(false).notNull(),
+  canManageStaff: boolean("can_manage_staff").default(false).notNull(),
+  canManageClasses: boolean("can_manage_classes").default(false).notNull(),
+  canManageStudents: boolean("can_manage_students").default(false).notNull(),
+  canSendNotifications: boolean("can_send_notifications").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserLocationSchema = createInsertSchema(userLocations)
+  .omit({ id: true, createdAt: true, updatedAt: true, assignedAt: true });
+export type InsertUserLocation = z.infer<typeof insertUserLocationSchema>;
+export type UserLocation = typeof userLocations.$inferSelect;
+
+// Notifications table for enhanced messaging system
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  senderId: integer("sender_id").notNull().references(() => users.id),
+  type: text("type", { 
+    enum: ["email", "in_app", "both"] 
+  }).notNull().default("both"),
+  priority: text("priority", { 
+    enum: ["low", "normal", "high", "urgent"] 
+  }).notNull().default("normal"),
+  subject: text("subject").notNull(),
+  content: text("content").notNull(),
+  targetType: text("target_type", { 
+    enum: ["individual", "role", "location", "all"] 
+  }).notNull(),
+  targetData: jsonb("target_data").notNull(), // Store recipient info as JSON
+  scheduledFor: timestamp("scheduled_for"),
+  sentAt: timestamp("sent_at"),
+  status: text("status", { 
+    enum: ["draft", "scheduled", "sending", "sent", "failed"] 
+  }).default("draft").notNull(),
+  deliveryStats: jsonb("delivery_stats").default({}), // Track delivery results
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications)
+  .omit({ id: true, createdAt: true, updatedAt: true, sentAt: true })
+  .extend({
+    scheduledFor: z.string().nullable().transform((str) => str ? new Date(str) : null),
+  });
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
+
+// Notification recipients table for tracking individual delivery
+export const notificationRecipients = pgTable("notification_recipients", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => notifications.id),
+  recipientId: integer("recipient_id").notNull().references(() => users.id),
+  deliveryType: text("delivery_type", { enum: ["email", "in_app"] }).notNull(),
+  status: text("status", { 
+    enum: ["pending", "sent", "delivered", "read", "failed"] 
+  }).default("pending").notNull(),
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  readAt: timestamp("read_at"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertNotificationRecipientSchema = createInsertSchema(notificationRecipients)
+  .omit({ id: true, createdAt: true });
+export type InsertNotificationRecipient = z.infer<typeof insertNotificationRecipientSchema>;
+export type NotificationRecipient = typeof notificationRecipients.$inferSelect;
+
+// Relations for multi-location support
+export const locationsRelations = relations(locations, ({ one, many }) => ({
+  school: one(schools, { fields: [locations.schoolId], references: [schools.id] }),
+  staff: many(schoolStaff),
+  students: many(schoolStudents),
+  classes: many(schoolClasses),
+  userAccess: many(userLocations),
+}));
+
+export const userLocationsRelations = relations(userLocations, ({ one }) => ({
+  user: one(users, { fields: [userLocations.userId], references: [users.id] }),
+  location: one(locations, { fields: [userLocations.locationId], references: [locations.id] }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one, many }) => ({
+  sender: one(users, { fields: [notifications.senderId], references: [users.id] }),
+  recipients: many(notificationRecipients),
+}));
+
+export const notificationRecipientsRelations = relations(notificationRecipients, ({ one }) => ({
+  notification: one(notifications, { fields: [notificationRecipients.notificationId], references: [notifications.id] }),
+  recipient: one(users, { fields: [notificationRecipients.recipientId], references: [users.id] }),
+}));
 
 // Payments table for tracking payment transactions
 export const payments = pgTable("payments", {
