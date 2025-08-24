@@ -139,6 +139,8 @@ import SchoolApplicationsPage from './pages/superadmin/SchoolApplicationsPage';
 import SchoolApplicationPage from './pages/SchoolApplicationPage';
 import SchoolApplicationSuccessPage from './pages/SchoolApplicationSuccessPage';
 import SchoolApplicationStatusPage from './pages/SchoolApplicationStatusPage';
+import LocationManagementPage from "@/pages/LocationManagementPage";
+import NotificationManagementPage from "@/pages/NotificationManagementPage";
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -504,6 +506,8 @@ function Router() {
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
+      <Route path="/schools/locations" component={LocationManagementPage} />
+      <Route path="/schools/notifications" component={NotificationManagementPage} />
       <Route path="/schools/settings" component={SchoolSettings} />
 
       {/* SuperAdmin routes */}

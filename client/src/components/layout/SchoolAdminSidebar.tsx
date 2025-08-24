@@ -12,6 +12,8 @@ import {
   User,
   Settings,
   Link as LucideLink,
+  MapPin,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -64,6 +66,16 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
       title: "Marketing Links",
       href: "/schools/marketing-links",
       icon: <LucideLink className="h-5 w-5" />,
+    },
+    {
+      title: "Locations",
+      href: "/schools/locations",
+      icon: <MapPin className="h-5 w-5" />,
+    },
+    {
+      title: "Notifications",
+      href: "/schools/notifications",
+      icon: <Bell className="h-5 w-5" />,
     },
     {
       title: "Knowledge Base",
