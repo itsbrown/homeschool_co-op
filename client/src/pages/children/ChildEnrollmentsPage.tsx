@@ -67,6 +67,11 @@ export default function ChildEnrollmentsPage() {
   // Fetch all classes to get class details
   const { data: classes = [] } = useQuery({
     queryKey: ['/api/classes'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/classes");
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const unenrollMutation = useMutation({
@@ -105,7 +110,7 @@ export default function ChildEnrollmentsPage() {
 
   // Helper function to get class details for an enrollment
   const getClassDetails = (enrollment: Enrollment) => {
-    const classData = classes.find((c: any) => c.id === enrollment.classId);
+    const classData = Array.isArray(classes) ? classes.find((c: any) => c.id === enrollment.classId) : null;
     return {
       className: enrollment.className || classData?.title || 'Unknown Class',
       description: enrollment.classDescription || classData?.description || '',
