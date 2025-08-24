@@ -952,6 +952,82 @@ router.put("/classes/:id", async (req, res) => {
   }
 });
 
+// Get class roster (students enrolled in a specific class)
+router.get("/classes/:id/roster", async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id);
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: "Invalid class ID" });
+    }
+
+    console.log(`📚 Fetching roster for class ID: ${classId}`);
+
+    // Read enrollment data
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const ENROLLMENTS_FILE = path.join(DATA_DIR, 'enrollments.json');
+    const CHILDREN_FILE = path.join(DATA_DIR, 'children.json');
+
+    let enrollments = [];
+    let children = [];
+
+    if (fs.existsSync(ENROLLMENTS_FILE)) {
+      enrollments = JSON.parse(fs.readFileSync(ENROLLMENTS_FILE, 'utf8'));
+    }
+
+    if (fs.existsSync(CHILDREN_FILE)) {
+      children = JSON.parse(fs.readFileSync(CHILDREN_FILE, 'utf8'));
+    }
+
+    // Get enrollments for this specific class
+    const classEnrollments = enrollments.filter(enrollment => 
+      Number(enrollment.classId) === Number(classId) && 
+      ['enrolled', 'confirmed', 'completed', 'pending_payment'].includes(enrollment.status)
+    );
+
+    console.log(`📚 Found ${classEnrollments.length} enrollments for class ${classId}`);
+
+    // Map enrollments to student data
+    const students = classEnrollments.map(enrollment => {
+      // Find child data by ID
+      const child = children.find(c => c.id === enrollment.childId);
+      
+      if (!child) {
+        // If no child data found, use enrollment data
+        return {
+          id: enrollment.childId || enrollment.id,
+          firstName: enrollment.childName ? enrollment.childName.split(' ')[0] : 'Unknown',
+          lastName: enrollment.childName ? enrollment.childName.split(' ').slice(1).join(' ') : 'Student',
+          email: child?.email || '',
+          phone: child?.phone || '',
+          gradeLevel: child?.gradeLevel || 'Unknown',
+          enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
+          status: enrollment.status === 'pending_payment' ? 'Pending' : 'Active'
+        };
+      }
+
+      return {
+        id: child.id,
+        firstName: child.firstName,
+        lastName: child.lastName,
+        email: child.email || '',
+        phone: child.phone || '',
+        gradeLevel: child.gradeLevel || 'Unknown',
+        enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
+        status: enrollment.status === 'pending_payment' ? 'Pending' : 'Active'
+      };
+    });
+
+    res.json({
+      students: students,
+      totalStudents: students.length
+    });
+
+  } catch (error) {
+    console.error("❌ Error fetching class roster:", error);
+    res.status(500).json({ message: "Failed to fetch class roster" });
+  }
+});
+
 // Staff file management functions
 const STAFF_FILE = path.join(process.cwd(), 'data', 'staff.json');
 const STAFF_INVITATIONS_FILE = path.join(process.cwd(), 'data', 'staff-invitations.json');

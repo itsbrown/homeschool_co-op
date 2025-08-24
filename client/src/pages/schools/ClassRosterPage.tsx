@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, UserPlus, Mail, Phone, Calendar, GraduationCap } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,18 +29,44 @@ interface Student {
   status: string;
 }
 
+interface ClassDetails {
+  id: number;
+  title: string;
+  gradeLevel: string;
+  schedule: string;
+  instructorName: string;
+  capacity: number;
+  enrollmentCount: number;
+}
+
+interface RosterData {
+  students: Student[];
+  totalStudents: number;
+}
+
 export default function ClassRosterPage() {
   const { id: classId } = useParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
 
   // Fetch class details
-  const { data: classData, isLoading: classLoading } = useQuery({
-    queryKey: ["/api/class-details", classId],
+  const { data: classData, isLoading: classLoading } = useQuery<ClassDetails>({
+    queryKey: ["/api/school-admin/classes", classId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/school-admin/classes/${classId}`);
+      return response.json();
+    },
+    enabled: !!classId,
   });
 
   // Fetch class roster (students enrolled in this class)
-  const { data: rosterData, isLoading: rosterLoading } = useQuery({
+  const { data: rosterData, isLoading: rosterLoading, refetch: refetchRoster } = useQuery<RosterData>({
     queryKey: ["/api/school-admin/classes", classId, "roster"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/school-admin/classes/${classId}/roster`);
+      return response.json();
+    },
+    enabled: !!classId,
   });
 
   const isLoading = classLoading || rosterLoading;
@@ -54,39 +82,8 @@ export default function ClassRosterPage() {
     );
   }
 
-  // Sample roster data for now (replace with actual API data)
-  const students: Student[] = rosterData?.students || [
-    {
-      id: 1,
-      firstName: "Emma",
-      lastName: "Johnson",
-      email: "emma.johnson@email.com",
-      phone: "(555) 123-4567",
-      gradeLevel: "3rd Grade",
-      enrollmentDate: "2025-01-15",
-      status: "Active"
-    },
-    {
-      id: 2,
-      firstName: "Liam",
-      lastName: "Smith",
-      email: "liam.smith@email.com",
-      phone: "(555) 234-5678",
-      gradeLevel: "4th Grade",
-      enrollmentDate: "2025-01-20",
-      status: "Active"
-    },
-    {
-      id: 3,
-      firstName: "Sophia",
-      lastName: "Brown",
-      email: "sophia.brown@email.com",
-      phone: "(555) 345-6789",
-      gradeLevel: "3rd Grade",
-      enrollmentDate: "2025-02-01",
-      status: "Active"
-    }
-  ];
+  // Get students from roster data or use fallback
+  const students: Student[] = rosterData?.students || [];
 
   // Filter students based on search query
   const filteredStudents = students.filter(student => {
@@ -98,6 +95,7 @@ export default function ClassRosterPage() {
   });
 
   const classTitle = classData?.title || "Class";
+  const totalEnrolled = rosterData?.totalStudents || students.length;
 
   return (
     <SchoolAdminLayout pageTitle={`${classTitle} - Roster`}>
@@ -106,9 +104,12 @@ export default function ClassRosterPage() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
             <div>
-              <h1 className="text-3xl font-bold">{classTitle} - Roster</h1>
-              <p className="text-muted-foreground">
-                Manage students enrolled in this class
+              <h1 className="text-3xl font-bold">{classTitle}</h1>
+              <p className="text-lg text-muted-foreground mb-1">
+                Class Roster
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {totalEnrolled} {totalEnrolled === 1 ? 'student' : 'students'} enrolled
               </p>
             </div>
             <Button>
@@ -144,7 +145,7 @@ export default function ClassRosterPage() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm">
-                      <strong>Capacity:</strong> {students.length}/{classData.capacity || 'Unlimited'}
+                      <strong>Capacity:</strong> {totalEnrolled}/{classData?.capacity || 'Unlimited'}
                     </span>
                   </div>
                 </div>
@@ -157,7 +158,7 @@ export default function ClassRosterPage() {
             <CardHeader>
               <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                 <div>
-                  <CardTitle>Student Roster ({students.length} students)</CardTitle>
+                  <CardTitle>Student Roster ({totalEnrolled} students)</CardTitle>
                   <CardDescription>
                     Students currently enrolled in this class
                   </CardDescription>
