@@ -649,5 +649,18 @@
     "totalCost": 90000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-08-22T18:52:51.057Z"
+  },
+  {
+    "id": 1756004420839,
+    "classId": 7,
+    "childId": 19,
+    "childName": "Child2 Name",
+    "className": "Patriots | Half Day",
+    "enrollmentDate": "2025-08-24T03:00:20.839Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]
