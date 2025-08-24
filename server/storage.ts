@@ -2096,7 +2096,7 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
+  async updatePaymentStatus(id: number, status: 'pending' | 'completed' | 'failed' | 'refunded'): Promise<Payment | undefined> {
     const payment = this.paymentsStore.get(id);
     if (!payment) return undefined;
 
@@ -2778,7 +2778,7 @@ export class MemStorage implements IStorage {
         return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
       }
 
-      async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
+      async updatePaymentStatus(id: number, status: 'pending' | 'completed' | 'failed' | 'refunded'): Promise<Payment | undefined> {
         return this.memStorage.updatePaymentStatus(id, status);
       }
 

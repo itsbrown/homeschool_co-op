@@ -236,21 +236,18 @@ router.post('/webhook', async (req, res) => {
             // Create payment record for history
             const description = scheduledPayment.description || 'Payment';
             const payment = {
-              id: Date.now(),
               stripePaymentIntentId: paymentIntent.id,
               parentEmail: parentEmail,
               childName: description.includes(' - ') ? description.split(' - ')[0] : 'Child',
               className: description.includes(' - ') ? description.split(' - ')[1] : description,
               amount: paymentIntent.amount,
-              currency: paymentIntent.currency,
+              currency: paymentIntent.currency || 'usd',
               status: 'completed' as const,
               metadata: {
                 scheduledPaymentId: scheduledPaymentId,
                 installmentNumber: scheduledPayment.installmentNumber,
                 totalInstallments: scheduledPayment.totalInstallments
-              },
-              createdAt: new Date(),
-              updatedAt: new Date()
+              }
             };
 
             await storage.createPayment(payment);
@@ -302,25 +299,24 @@ router.post('/webhook', async (req, res) => {
             
             // Create payment record
             const payment = {
-              id: Date.now(),
               stripePaymentIntentId: paymentIntent.id,
               parentEmail: parentEmail,
               childName: items[0]?.childName || 'Unknown',
               className: items[0]?.className || 'Unknown',
               amount: paymentIntent.amount,
-              currency: paymentIntent.currency,
+              currency: paymentIntent.currency || 'usd',
               status: 'completed' as const,
-              metadata: {},
-              createdAt: new Date(),
-              updatedAt: new Date()
+              metadata: {}
             };
 
+            let createdPayment;
             try {
               const { storage } = await import('../storage');
-              await storage.createPayment(payment);
-              console.log('✅ Payment record created:', payment.id);
+              createdPayment = await storage.createPayment(payment);
+              console.log('✅ Payment record created:', createdPayment.id);
             } catch (error) {
               console.error('❌ Failed to create payment record:', error);
+              return; // Exit early if payment creation fails
             }
 
             // Send confirmation email
@@ -337,7 +333,7 @@ router.post('/webhook', async (req, res) => {
               const emailSent = await sendPaymentConfirmationEmail({
                 parentEmail: parentEmail,
                 parentName: 'Parent', // Could be enhanced to get actual name
-                payment: payment,
+                payment: createdPayment || payment,
                 enrollmentDetails: enrollmentDetails,
                 paymentPlan: paymentType,
               });
@@ -369,7 +365,7 @@ router.post('/webhook', async (req, res) => {
                     currency: 'usd',
                     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
                     status: 'pending' as const,
-                    originalPaymentId: payment.id,
+                    originalPaymentId: createdPayment?.id || null,
                     description: `Payment 2 of 3 for ${items.map((i: any) => i.className).join(', ')}`
                   },
                   {
@@ -382,7 +378,7 @@ router.post('/webhook', async (req, res) => {
                     currency: 'usd',
                     dueDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
                     status: 'pending' as const,
-                    originalPaymentId: payment.id,
+                    originalPaymentId: createdPayment?.id || null,
                     description: `Payment 3 of 3 for ${items.map((i: any) => i.className).join(', ')}`
                   }
                 ];

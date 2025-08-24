@@ -31,17 +31,15 @@ export default function PaymentHistoryPage() {
     queryKey: ['/api/payment-history'],
     enabled: !!user?.email,
     queryFn: async () => {
-      // Use the working endpoint temporarily until auth is fixed
-      const response = await apiRequest('GET', '/api/payment-history/all');
+      // Use the proper user-specific endpoint
+      const response = await apiRequest('GET', '/api/payment-history/history');
       
       if (!response.ok) {
         throw new Error(`Failed to fetch payment history: ${response.status}`);
       }
 
       const data = await response.json();
-      // Filter payments for current user on frontend for now
-      const userPayments = data.success ? data.payments.filter((p: any) => p.parentEmail === user?.email) : [];
-      return userPayments;
+      return data.success ? data.payments : [];
     },
   });
 
@@ -63,6 +61,7 @@ export default function PaymentHistoryPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'succeeded':
+      case 'completed':
         return <Badge variant="default" className="bg-green-100 text-green-800">Completed</Badge>;
       case 'pending':
         return <Badge variant="secondary">Pending</Badge>;

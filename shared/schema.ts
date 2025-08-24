@@ -702,7 +702,8 @@ export const scheduledPayments = pgTable("scheduled_payments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertPaymentSchema = createInsertSchema(payments);
+export const insertPaymentSchema = createInsertSchema(payments)
+  .omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
 
