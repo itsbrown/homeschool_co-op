@@ -19,6 +19,8 @@ import studentsRouter from "./api/students";
 import schoolParentsRouter from "./api/school-parents";
 import educatorRouter from "./api/educator";
 import authRouter from "./api/auth";
+import paymentImport from "./api/payment-import";
+import accountImport from "./api/account-import";
 
 const app = express();
 
@@ -115,7 +117,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       const { id, status } = req.body;
       const { storage } = await import('./storage');
       const payment = await storage.updateScheduledPaymentStatus(id, status);
-      
+
       if (status === 'paid') {
         // Also create payment history record
         const scheduledPayment = (await storage.getScheduledPaymentsByParentEmail('tester@testing321.com')).find(p => p.id === id);
@@ -137,7 +139,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
           console.log('✅ Test: Created payment history record');
         }
       }
-      
+
       res.json({ success: true, payment });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
