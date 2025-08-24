@@ -187,6 +187,38 @@ export default function SchoolClassesPage() {
     duplicateClassMutation.mutate(classData);
   };
 
+  // Mutation for deleting a class
+  const deleteClassMutation = useMutation({
+    mutationFn: async (classId: number) => {
+      const response = await apiRequest("DELETE", `/school-admin/classes/${classId}`);
+      if (!response.ok) {
+        throw new Error('Failed to delete class');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/school-admin/classes'] });
+      toast({
+        title: "Success",
+        description: "Class has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete class. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handler for deleting a class
+  const handleDeleteClass = async (classId: number, className: string) => {
+    if (confirm(`Are you sure you want to delete "${className}"? This action cannot be undone and will remove all associated data including enrollments and payment records.`)) {
+      deleteClassMutation.mutate(classId);
+    }
+  };
+
   if (isLoading) {
     return (
       <AppShell>
@@ -414,6 +446,12 @@ export default function SchoolClassesPage() {
                                           Unassign Instructor
                                         </DropdownMenuItem>
                                       )}
+                                      <DropdownMenuItem 
+                                        onClick={() => handleDeleteClass(cls.id, cls.title)}
+                                        className="text-red-600"
+                                      >
+                                        Delete Class
+                                      </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </TableCell>
