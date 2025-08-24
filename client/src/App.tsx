@@ -456,6 +456,9 @@ function Router() {
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/schedule" component={SchedulePage} />
       <Route path="/payments" component={PaymentsPage} />
+      <Route path="/payment">
+        <Redirect to="/cart/checkout" />
+      </Route>
       <Route path="/payment-history">
         {isAuthenticated ? (
           <PaymentHistoryPage />
