@@ -43,6 +43,8 @@ interface Student {
 export default function LocationManagementPage() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingLocation, setEditingLocation] = useState<LocationOverview | null>(null)
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
@@ -169,6 +171,70 @@ export default function LocationManagementPage() {
     if (window.confirm(`Are you sure you want to delete "${location.name}"? This action cannot be undone and will affect ${location.totalStudents} students.`)) {
       deleteLocationMutation.mutate(location.id)
     }
+  }
+
+  // Update location mutation
+  const updateLocationMutation = useMutation({
+    mutationFn: ({ id, locationData }: { id: number; locationData: any }) => 
+      fetch(`/api/locations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        },
+        body: JSON.stringify(locationData)
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to update location')
+        return res.json()
+      }),
+    onSuccess: () => {
+      // Force refresh multiple related queries
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin'] })
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      setIsEditDialogOpen(false)
+      setEditingLocation(null)
+      toast({
+        title: "Success",
+        description: "Location updated successfully",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update location",
+        variant: "destructive",
+      })
+    }
+  })
+
+  const handleEditLocation = (location: LocationOverview) => {
+    setEditingLocation(location)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateLocation = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!editingLocation) return
+
+    const formData = new FormData(e.currentTarget)
+    
+    const locationData = {
+      schoolId: 1, // Default school ID for now
+      name: formData.get('name') as string,
+      code: formData.get('code') as string,
+      address: formData.get('address') as string,
+      city: formData.get('city') as string,
+      state: formData.get('state') as string,
+      zipCode: formData.get('zipCode') as string,
+      phoneNumber: formData.get('phoneNumber') as string || undefined,
+      email: formData.get('email') as string || undefined,
+      managerName: formData.get('managerName') as string || undefined,
+      capacity: formData.get('capacity') ? parseInt(formData.get('capacity') as string) : undefined,
+      timezone: formData.get('timezone') as string || 'America/New_York'
+    }
+
+    updateLocationMutation.mutate({ id: editingLocation.id, locationData })
   }
 
   if (isLoadingLocations) {
@@ -360,6 +426,150 @@ export default function LocationManagementPage() {
             </form>
           </DialogContent>
         </Dialog>
+        
+        {/* Edit Location Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Location</DialogTitle>
+              <DialogDescription>
+                Update the location information.
+              </DialogDescription>
+            </DialogHeader>
+            {editingLocation && (
+              <form onSubmit={handleUpdateLocation} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-name">Location Name *</Label>
+                    <Input
+                      id="edit-name"
+                      name="name"
+                      defaultValue={editingLocation.name}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-code">Location Code *</Label>
+                    <Input
+                      id="edit-code"
+                      name="code"
+                      defaultValue={editingLocation.locationCode || ''}
+                      required
+                      maxLength={4}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-address">Address *</Label>
+                  <Input
+                    id="edit-address"
+                    name="address"
+                    defaultValue={editingLocation.address}
+                    required
+                  />
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="edit-city">City *</Label>
+                    <Input
+                      id="edit-city"
+                      name="city"
+                      defaultValue={editingLocation.city || ''}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-state">State *</Label>
+                    <Input
+                      id="edit-state"
+                      name="state"
+                      defaultValue={editingLocation.state || ''}
+                      required
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-zipCode">ZIP Code *</Label>
+                    <Input
+                      id="edit-zipCode"
+                      name="zipCode"
+                      defaultValue={editingLocation.zipCode || ''}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-capacity">Capacity</Label>
+                    <Input
+                      id="edit-capacity"
+                      name="capacity"
+                      type="number"
+                      defaultValue={editingLocation.capacity || ''}
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-phoneNumber">Phone Number</Label>
+                    <Input
+                      id="edit-phoneNumber"
+                      name="phoneNumber"
+                      defaultValue={editingLocation.phoneNumber || ''}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-email">Email</Label>
+                    <Input
+                      id="edit-email"
+                      name="email"
+                      type="email"
+                      defaultValue={editingLocation.email || ''}
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-managerName">Manager Name</Label>
+                    <Input
+                      id="edit-managerName"
+                      name="managerName"
+                      defaultValue={editingLocation.managerName || ''}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-timezone">Timezone</Label>
+                    <Select name="timezone" defaultValue={editingLocation.timezone || 'America/New_York'}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="America/New_York">Eastern Time</SelectItem>
+                        <SelectItem value="America/Chicago">Central Time</SelectItem>
+                        <SelectItem value="America/Denver">Mountain Time</SelectItem>
+                        <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={updateLocationMutation.isPending}>
+                    {updateLocationMutation.isPending ? "Updating..." : "Update Location"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Location Overview Cards */}
@@ -483,6 +693,7 @@ export default function LocationManagementPage() {
                             size="sm"
                             title="Edit location"
                             className="h-8 w-8 p-0"
+                            onClick={() => handleEditLocation(location)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
