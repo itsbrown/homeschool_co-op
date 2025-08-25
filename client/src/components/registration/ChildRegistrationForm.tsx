@@ -35,13 +35,12 @@ const formSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   birthdate: z.string().min(1, "Birthdate is required"),
   gradeLevel: z.string().min(1, "Grade level is required"),
-  gender: z.string().optional(),
+  gender: z.string().min(1, "Gender is required"),
   interests: z.array(z.string()).optional(),
   learningStyle: z.string().optional(),
   specialNeeds: z.string().optional(),
   allergies: z.string().optional(),
   emergencyContact: z.string().optional(),
-  primaryLanguage: z.string().optional(),
   additionalLanguages: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -90,7 +89,6 @@ export default function ChildRegistrationForm({
       specialNeeds: "",
       allergies: "",
       emergencyContact: "",
-      primaryLanguage: "English",
       additionalLanguages: "",
       notes: "",
       ...defaultValues
@@ -245,7 +243,7 @@ export default function ChildRegistrationForm({
                 name="gender"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Gender (Optional)</FormLabel>
+                    <FormLabel>Gender*</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -257,19 +255,7 @@ export default function ChildRegistrationForm({
                         <SelectItem value="female">Female</SelectItem>
                       </SelectContent>
                     </Select>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="primaryLanguage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Primary Language</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., English" {...field} />
-                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
