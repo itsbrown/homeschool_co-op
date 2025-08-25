@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit } from 'lucide-react'
+import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit, Power } from 'lucide-react'
 
 interface LocationOverview {
   id: number
@@ -171,6 +171,48 @@ export default function LocationManagementPage() {
   const handleDeleteLocation = (location: LocationOverview) => {
     if (window.confirm(`Are you sure you want to delete "${location.name}"? This action cannot be undone and will affect ${location.totalStudents} students.`)) {
       deleteLocationMutation.mutate(location.id)
+    }
+  }
+
+  // Status toggle mutation
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, newStatus }: { id: number; newStatus: boolean }) => 
+      fetch(`/api/locations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        },
+        body: JSON.stringify({ isActive: newStatus })
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to update location status')
+        return res.json()
+      }),
+    onSuccess: () => {
+      // Force refresh multiple related queries
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin'] })
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      toast({
+        title: "Success",
+        description: "Location status updated successfully",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update location status",
+        variant: "destructive",
+      })
+    }
+  })
+
+  const handleToggleStatus = (location: LocationOverview) => {
+    const newStatus = location.status === 'Inactive'
+    const actionText = newStatus ? 'activate' : 'deactivate'
+    
+    if (window.confirm(`Are you sure you want to ${actionText} "${location.name}"?`)) {
+      toggleStatusMutation.mutate({ id: location.id, newStatus })
     }
   }
 
@@ -713,6 +755,20 @@ export default function LocationManagementPage() {
                             onClick={() => handleEditLocation(location)}
                           >
                             <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title={location.status === 'Active' ? 'Deactivate location' : 'Activate location'}
+                            className={`h-8 w-8 p-0 ${
+                              location.status === 'Active' 
+                                ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' 
+                                : 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                            }`}
+                            onClick={() => handleToggleStatus(location)}
+                            disabled={toggleStatusMutation.isPending}
+                          >
+                            <Power className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
