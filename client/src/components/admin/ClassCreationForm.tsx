@@ -77,8 +77,9 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
   }
   
   const [educators, setEducators] = useState<Educator[]>([]);
+  const [locations, setLocations] = useState<{id: number, name: string}[]>([]);
   
-  // Load staff members as potential instructors
+  // Load staff members as potential instructors and locations
   useEffect(() => {
     // Fetch staff members from the school admin API
     fetch('/api/school-admin/staff', {
@@ -117,6 +118,29 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       ];
       
       setEducators(defaultEducators);
+    });
+
+    // Fetch locations for the school
+    fetch('/api/locations', {
+      credentials: 'include',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+      }
+    })
+    .then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      throw new Error('Failed to fetch locations');
+    })
+    .then(locationsData => {
+      setLocations(locationsData);
+      console.log('Loaded locations:', locationsData);
+    })
+    .catch(error => {
+      console.log('Failed to load locations:', error);
+      // Fallback to default location
+      setLocations([{ id: 1, name: 'Brighton' }]);
     });
   }, []);
 
@@ -547,11 +571,26 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
           render={({ field }) => (
             <FormItem>
               <FormLabel>Location</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g. Room 101, Main Building" {...field} />
-              </FormControl>
+              <Select 
+                onValueChange={field.onChange} 
+                value={field.value}
+                defaultValue={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a location" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={location.name}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormDescription>
-                Where the class will be held (leave blank if online)
+                Select the campus location where the class will be held
               </FormDescription>
               <FormMessage />
             </FormItem>
