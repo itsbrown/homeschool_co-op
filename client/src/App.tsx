@@ -506,8 +506,16 @@ function Router() {
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
-      <Route path="/schools/locations" component={LocationManagementPage} />
-      <Route path="/schools/notifications" component={NotificationManagementPage} />
+      <Route path="/schools/locations">
+        <AppShell>
+          <LocationManagementPage />
+        </AppShell>
+      </Route>
+      <Route path="/schools/notifications">
+        <AppShell>
+          <NotificationManagementPage />
+        </AppShell>
+      </Route>
       <Route path="/schools/settings" component={SchoolSettings} />
 
       {/* SuperAdmin routes */}
