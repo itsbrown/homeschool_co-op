@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Location } from '@shared/schema'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -44,7 +45,7 @@ export default function LocationManagementPage() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingLocation, setEditingLocation] = useState<LocationOverview | null>(null)
+  const [editingLocation, setEditingLocation] = useState<Location | null>(null)
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
@@ -208,9 +209,25 @@ export default function LocationManagementPage() {
     }
   })
 
-  const handleEditLocation = (location: LocationOverview) => {
-    setEditingLocation(location)
-    setIsEditDialogOpen(true)
+  const handleEditLocation = async (location: LocationOverview) => {
+    try {
+      // Fetch complete location details for editing
+      const response = await fetch(`/api/locations/${location.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        }
+      })
+      const fullLocationData = await response.json()
+      setEditingLocation(fullLocationData)
+      setIsEditDialogOpen(true)
+    } catch (error) {
+      console.error('Error fetching location details:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load location details",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleUpdateLocation = (e: React.FormEvent<HTMLFormElement>) => {
@@ -453,7 +470,7 @@ export default function LocationManagementPage() {
                     <Input
                       id="edit-code"
                       name="code"
-                      defaultValue={editingLocation.locationCode || ''}
+                      defaultValue={editingLocation.code || ''}
                       required
                       maxLength={4}
                     />

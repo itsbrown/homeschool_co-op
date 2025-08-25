@@ -22,6 +22,27 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Get a single location by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid location ID" });
+    }
+
+    // Use the storage system that the overview endpoint uses
+    const location = await storage.getLocationById(id);
+    if (!location) {
+      return res.status(404).json({ message: "Location not found" });
+    }
+
+    res.json(location);
+  } catch (error) {
+    console.error("Error fetching location:", error);
+    res.status(500).json({ message: "Failed to fetch location" });
+  }
+});
+
 // Get accessible locations for a user
 router.get("/accessible", async (req, res) => {
   try {
