@@ -194,7 +194,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     endDate: "",
     schedule: "",
     location: "",
-    price: "0",
+    price: 0,
     capacity: "20",
     isPublished: false,
     isOnline: false,
@@ -230,7 +230,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       
       // Find instructor name based on selected ID
       const selectedEducator = educators.find(edu => edu.id.toString() === data.instructorId);
-      const instructorName = selectedEducator ? selectedEducator.name : (user.username || "Instructor");
+      const instructorName = selectedEducator ? selectedEducator.name : (user.name || user.email || "Instructor");
       
       // Convert the input price to a number (as dollars, not cents)
       // The server will handle the conversion to cents
@@ -249,7 +249,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         ageRange: data.ageRange || "",
         schedule: data.schedule || "",
         // Send price in dollars - server will convert to cents
-        price: inputPrice,
+        price: inputPrice.toString(),
         capacity: parseInt(data.capacity.toString(), 10),
         location: data.location || "",
         // Keep the date format exactly as entered in the form to prevent timezone shifts
