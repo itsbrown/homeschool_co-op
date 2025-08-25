@@ -1894,7 +1894,7 @@ router.get("/students", async (req, res) => {
     console.log('📚 Fetching students for school admin...');
     
     // Get all school students from storage
-    const allSchoolStudents = await storage.getSchoolStudents();
+    const allSchoolStudents = await storage.getAllSchoolStudents();
     console.log(`📊 Found ${allSchoolStudents.length} school students in storage`);
     
     // Get children details for each school student
@@ -1909,9 +1909,9 @@ router.get("/students", async (req, res) => {
 
           // Calculate age from birthdate
           let age = null;
-          if (child.birthDate) {
+          if (child.birthdate) {
             const today = new Date();
-            const birthDate = new Date(child.birthDate);
+            const birthDate = new Date(child.birthdate);
             age = today.getFullYear() - birthDate.getFullYear();
             const monthDiff = today.getMonth() - birthDate.getMonth();
             if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
@@ -1926,9 +1926,9 @@ router.get("/students", async (req, res) => {
             lastName: child.lastName,
             gradeLevel: child.gradeLevel || 'Not specified',
             age: age || 'Unknown',
-            parentName: child.parentEmail || 'Unknown Parent',
-            parentEmail: child.parentEmail,
-            email: child.parentEmail,
+            parentName: child.parent_email || child.parentEmail || 'Unknown Parent',
+            parentEmail: child.parent_email || child.parentEmail,
+            email: child.parent_email || child.parentEmail,
             enrollmentDate: schoolStudent.enrollmentDate,
             status: schoolStudent.status || 'Active',
             locationId: schoolStudent.locationId,
@@ -1954,7 +1954,11 @@ router.get("/students", async (req, res) => {
     res.json(validStudents);
     
   } catch (error) {
-    console.error("Error fetching school students:", error);
+    console.error("❌ Detailed error fetching school students:", {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      type: typeof error
+    });
     res.status(500).json({ message: "Error fetching school students" });
   }
 });

@@ -180,6 +180,7 @@ export interface IStorage {
 
   // School Student methods
   getSchoolStudentById(id: number): Promise<SchoolStudent | undefined>;
+  getAllSchoolStudents(): Promise<SchoolStudent[]>;
   getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]>;
   getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]>;
   getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined>;
@@ -2283,6 +2284,10 @@ export class MemStorage implements IStorage {
     return this.schoolStudentsStore.get(id);
   }
 
+  async getAllSchoolStudents(): Promise<SchoolStudent[]> {
+    return Array.from(this.schoolStudentsStore.values());
+  }
+
   async getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]> {
     return Array.from(this.schoolStudentsStore.values()).filter(
       student => student.schoolId === schoolId
@@ -3153,6 +3158,10 @@ export class MemStorage implements IStorage {
       // School Student methods
       async getSchoolStudentById(id: number): Promise<SchoolStudent | undefined> {
         return this.memStorage.getSchoolStudentById(id);
+      }
+
+      async getAllSchoolStudents(): Promise<SchoolStudent[]> {
+        return this.memStorage.getAllSchoolStudents();
       }
 
       async getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]> {
