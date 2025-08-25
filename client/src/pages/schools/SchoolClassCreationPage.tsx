@@ -42,6 +42,7 @@ export default function SchoolClassCreationPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isEditMode, setIsEditMode] = useState(false);
+  const [locations, setLocations] = useState<{id: number, name: string}[]>([]);
 
   // Get class ID from URL if in edit mode
   const classId = params.id ? parseInt(params.id, 10) : undefined;
@@ -89,6 +90,29 @@ export default function SchoolClassCreationPage() {
       return data;
     },
   });
+
+  // Fetch locations for the school
+  const { data: locationData = [] } = useQuery({
+    queryKey: ["/api/locations"],
+    queryFn: async () => {
+      const response = await fetch('/api/locations?schoolId=1', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        console.log('Failed to fetch locations');
+        return [{ id: 1, name: 'Brighton' }]; // Fallback
+      }
+      const data = await response.json();
+      return data;
+    },
+  });
+
+  // Update locations state when data is fetched
+  useEffect(() => {
+    if (locationData) {
+      setLocations(locationData);
+    }
+  }, [locationData]);
 
   // Update form when class data is loaded
   useEffect(() => {
@@ -455,9 +479,23 @@ export default function SchoolClassCreationPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Location*</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Room 101" />
-                        </FormControl>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a location" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {locations.map((location) => (
+                              <SelectItem key={location.id} value={location.name}>
+                                {location.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
