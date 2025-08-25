@@ -99,7 +99,7 @@ app.use((req, res, next) => {
 
 // Register file upload routes
 app.use('/api/file-upload', fileUploadRouter);
-app.use('/api/marketing-links', marketingLinksRouter);
+app.use('/api/school-admin/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/billing', billingRouter);
