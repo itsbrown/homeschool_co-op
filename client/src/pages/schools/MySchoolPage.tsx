@@ -36,7 +36,28 @@ interface SchoolData {
   accreditation?: string | null;
   enrollmentSize?: number;
   status?: string;
-  registrationCode?: string; // Added registrationCode property
+  registrationCode?: string;
+  locations?: LocationData[]; // Added locations array
+}
+
+// Location data interface
+interface LocationData {
+  id: number;
+  schoolId: number;
+  name: string;
+  code: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phoneNumber?: string;
+  email?: string;
+  managerName?: string;
+  capacity?: number;
+  isActive: boolean;
+  timezone: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Dashboard KPI interfaces

@@ -254,9 +254,12 @@ function saveUserLocations(userLocations: UserLocationData[]): void {
   }
 }
 
+// Get all locations for a specific school
 async function getLocationsBySchool(schoolId: number): Promise<LocationData[]> {
   const locations = loadLocations();
-  return locations.filter(location => location.schoolId === schoolId && location.isActive);
+  return locations.filter(location => 
+    location.schoolId === schoolId && location.isActive
+  );
 }
 
 async function getUserAccessibleLocations(userId: number): Promise<LocationData[]> {

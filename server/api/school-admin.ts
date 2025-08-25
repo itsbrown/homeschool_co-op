@@ -487,7 +487,37 @@ router.get("/my-school", async (req, res) => {
 
           if (school) {
             console.log('✅ Found existing school for admin:', school.name);
-            return res.json(school);
+            
+            // Load locations for this school
+            try {
+              const locationsResponse = await import('./locations');
+              const fs = await import('fs');
+              const path = await import('path');
+              
+              const DATA_DIR = path.join(process.cwd(), 'data');
+              const LOCATIONS_FILE = path.join(DATA_DIR, 'locations.json');
+              
+              let locations = [];
+              if (fs.existsSync(LOCATIONS_FILE)) {
+                const locationData = fs.readFileSync(LOCATIONS_FILE, 'utf8');
+                const allLocations = JSON.parse(locationData);
+                locations = allLocations.filter((loc: any) => 
+                  loc.schoolId === school.id && loc.isActive !== false
+                );
+              }
+              
+              console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
+              
+              // Return school with embedded locations
+              return res.json({
+                ...school,
+                locations
+              });
+            } catch (locationError) {
+              console.error('⚠️ Error loading locations:', locationError);
+              // Return school without locations if there's an error
+              return res.json(school);
+            }
           }
 
           // If no associated school found, associate the first "American Seekers Academy" school
@@ -509,7 +539,36 @@ router.get("/my-school", async (req, res) => {
             fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
             
             console.log('✅ School associated successfully');
-            return res.json(schools[schoolIndex]);
+            
+            // Load locations for the newly associated school
+            try {
+              const fs = await import('fs');
+              const path = await import('path');
+              
+              const DATA_DIR = path.join(process.cwd(), 'data');
+              const LOCATIONS_FILE = path.join(DATA_DIR, 'locations.json');
+              
+              let locations = [];
+              if (fs.existsSync(LOCATIONS_FILE)) {
+                const locationData = fs.readFileSync(LOCATIONS_FILE, 'utf8');
+                const allLocations = JSON.parse(locationData);
+                locations = allLocations.filter((loc: any) => 
+                  loc.schoolId === schools[schoolIndex].id && loc.isActive !== false
+                );
+              }
+              
+              console.log(`🏢 Found ${locations.length} locations for school ${schools[schoolIndex].name}`);
+              
+              // Return school with embedded locations
+              return res.json({
+                ...schools[schoolIndex],
+                locations
+              });
+            } catch (locationError) {
+              console.error('⚠️ Error loading locations:', locationError);
+              // Return school without locations if there's an error
+              return res.json(schools[schoolIndex]);
+            }
           }
 
           console.log('❌ No American Seekers Academy school found to associate');
