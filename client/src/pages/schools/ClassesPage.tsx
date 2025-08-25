@@ -119,6 +119,7 @@ export default function SchoolClassesPage() {
     category: true,
     instructor: true,
     gradeLevel: true,
+    location: true,
     status: true,
     enrollment: true,
     actions: true
@@ -436,6 +437,12 @@ export default function SchoolClassesPage() {
                       Grade Level
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem
+                      checked={visibleColumns.location}
+                      onCheckedChange={() => toggleColumn('location')}
+                    >
+                      Location
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
                       checked={visibleColumns.status}
                       onCheckedChange={() => toggleColumn('status')}
                     >
@@ -480,6 +487,7 @@ export default function SchoolClassesPage() {
                             {visibleColumns.category && <TableHead>Category</TableHead>}
                             {visibleColumns.instructor && <TableHead>Instructor</TableHead>}
                             {visibleColumns.gradeLevel && <TableHead>Grade Level</TableHead>}
+                            {visibleColumns.location && <TableHead>Location</TableHead>}
                             {visibleColumns.status && <TableHead>Status</TableHead>}
                             {visibleColumns.enrollment && <TableHead>Enrollment</TableHead>}
                             {visibleColumns.actions && <TableHead>Actions</TableHead>}
@@ -499,6 +507,7 @@ export default function SchoolClassesPage() {
                                   </TableCell>
                                 )}
                                 {visibleColumns.gradeLevel && <TableCell>{cls.gradeLevel}</TableCell>}
+                                {visibleColumns.location && <TableCell>{cls.location || "Not Specified"}</TableCell>}
                                 {visibleColumns.status && (
                                   <TableCell>
                                     <Badge variant="secondary">{cls.status}</Badge>
