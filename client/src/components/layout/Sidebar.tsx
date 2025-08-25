@@ -21,7 +21,10 @@ import {
   ChevronDown,
   ChevronRight,
   Building,
-  FileText
+  FileText,
+  Link2,
+  MapPin,
+  Bell
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -63,6 +66,21 @@ const schoolNavItems: {
     title: 'Knowledge Base',
     href: '/schools/knowledge-base',
     icon: Database,
+  },
+  {
+    title: 'Marketing Links',
+    href: '/schools/marketing-links',
+    icon: Link2,
+  },
+  {
+    title: 'Locations',
+    href: '/schools/locations',
+    icon: MapPin,
+  },
+  {
+    title: 'Notifications',
+    href: '/schools/notifications',
+    icon: Bell,
   },
   {
     title: 'AI Tools',
@@ -133,6 +151,21 @@ const superAdminNavItems: {
     title: 'Knowledge Base',
     href: '/schools/knowledge-base',
     icon: Database,
+  },
+  {
+    title: 'Marketing Links',
+    href: '/schools/marketing-links',
+    icon: Link2,
+  },
+  {
+    title: 'Locations',
+    href: '/schools/locations',
+    icon: MapPin,
+  },
+  {
+    title: 'Notifications',
+    href: '/schools/notifications',
+    icon: Bell,
   },
   {
     title: 'AI Tools',
