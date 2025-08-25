@@ -90,7 +90,7 @@ router.put("/:id", async (req, res) => {
     }
 
     const validatedData = insertLocationSchema.partial().parse(req.body);
-    const location = await updateLocation(id, validatedData);
+    const location = await storage.updateLocation(id, validatedData);
 
     if (!location) {
       return res.status(404).json({ message: "Location not found" });
