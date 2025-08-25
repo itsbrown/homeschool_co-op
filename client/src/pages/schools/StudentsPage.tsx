@@ -49,6 +49,9 @@ export default function StudentsPage() {
     refetchIntervalInBackground: true,
   });
 
+  // Ensure students is treated as an array
+  const studentsArray = Array.isArray(students) ? students : [];
+
   if (isLoading) {
     return (
       <AppShell>
@@ -84,7 +87,7 @@ export default function StudentsPage() {
   }
 
   // Filter and sort students based on search query and filters
-  const filteredStudents = students ? students.filter((student: any) => {
+  const filteredStudents = studentsArray.length > 0 ? studentsArray.filter((student: any) => {
     const matchesSearch = searchQuery === "" || 
       student.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.parentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -141,9 +144,9 @@ export default function StudentsPage() {
   }) : [];
 
   // Get unique grade levels, statuses, and locations for filters
-  const gradeLevels = students ? [...new Set(students.map((student: any) => student.gradeLevel))] : [];
-  const statuses = students ? [...new Set(students.map((student: any) => student.status))] : [];
-  const locations = students ? [...new Set(students.map((student: any) => student.locationName).filter(Boolean))] : [];
+  const gradeLevels = studentsArray.length > 0 ? [...new Set(studentsArray.map((student: any) => student.gradeLevel))] : [];
+  const statuses = studentsArray.length > 0 ? [...new Set(studentsArray.map((student: any) => student.status))] : [];
+  const locations = studentsArray.length > 0 ? [...new Set(studentsArray.map((student: any) => student.locationName).filter(Boolean))] : [];
 
   // Sort grade levels numerically
   gradeLevels.sort((a: any, b: any) => {
