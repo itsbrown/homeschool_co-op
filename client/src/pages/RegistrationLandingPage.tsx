@@ -59,9 +59,18 @@ export default function RegistrationLandingPage() {
       password: "",
       confirmPassword: "",
       phone: "",
-      location: "Brighton"
+      location: ""
     }
   });
+
+  // Fetch school locations
+  const { data: locationsData } = useQuery({
+    queryKey: ['/api/locations', school?.id],
+    queryFn: () => school?.id ? fetch(`/api/locations?schoolId=${school.id}`).then(res => res.json()) : null,
+    enabled: !!school?.id
+  });
+
+  const locations = locationsData || [];
 
   // Fetch school data if accessed with a registration code
   useEffect(() => {
@@ -73,10 +82,6 @@ export default function RegistrationLandingPage() {
           if (response.ok) {
             const schoolData = await response.json();
             setSchool(schoolData);
-            // Update default location if school has one
-            if (schoolData.location) {
-              form.setValue("location", schoolData.location);
-            }
           } else {
             toast({
               title: "School Not Found",
@@ -101,6 +106,13 @@ export default function RegistrationLandingPage() {
       fetchSchool();
     }
   }, [code, toast, setLocation, form]);
+
+  // Update default location when locations are loaded
+  useEffect(() => {
+    if (locations.length > 0 && !form.getValues("location")) {
+      form.setValue("location", locations[0].name);
+    }
+  }, [locations, form]);
 
   const onSubmit = async (data: ParentRegistrationForm) => {
     try {
@@ -375,7 +387,15 @@ export default function RegistrationLandingPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="Brighton">Brighton</SelectItem>
+                            {locations.length > 0 ? (
+                              locations.map((location: any) => (
+                                <SelectItem key={location.id} value={location.name}>
+                                  {location.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="Brighton">Brighton</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
