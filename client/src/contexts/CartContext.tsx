@@ -30,8 +30,19 @@ export interface Cart {
   discounts: {
     siblingDiscount: number;
     freeAfterThree: number;
+    appliedDiscounts: AppliedDiscount[];
+    totalDiscountAmount: number;
   };
   total: number;
+}
+
+export interface AppliedDiscount {
+  id: number;
+  name: string;
+  type: 'percentage' | 'fixed_amount';
+  value: number;
+  discountAmount: number;
+  priority: number;
 }
 
 interface CartState {
@@ -48,7 +59,133 @@ type CartAction =
   | { type: 'CLOSE_CART' }
   | { type: 'LOAD_CART'; payload: Cart };
 
-const calculateCartTotals = (items: CartItem[]): { subtotal: number; discounts: any; total: number } => {
+// Function to check for applicable automatic discounts
+const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, getAccessTokenSilently?: () => Promise<string>): Promise<AppliedDiscount[]> => {
+  try {
+    // Get Auth0 access token
+    if (!getAccessTokenSilently) {
+      console.log('No Auth0 token function available for discount check');
+      return [];
+    }
+
+    let token;
+    try {
+      token = await getAccessTokenSilently();
+    } catch (error) {
+      console.log('Failed to get Auth0 access token for discount check');
+      return [];
+    }
+
+    const response = await fetch('/api/school-admin/discounts', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.log('Failed to fetch discounts');
+      return [];
+    }
+
+    const { discounts } = await response.json();
+    const applicableDiscounts: AppliedDiscount[] = [];
+
+    // Filter for active, automatic discounts
+    const activeDiscounts = discounts.filter((discount: any) => 
+      discount.isActive && 
+      (discount.applicationMethod === 'automatic' || discount.applicationMethod === 'both')
+    );
+
+    // Sort by priority (higher priority applies first)
+    activeDiscounts.sort((a: any, b: any) => b.priority - a.priority);
+
+    for (const discount of activeDiscounts) {
+      // Check if discount conditions are met
+      if (!isDiscountApplicable(discount, items, subtotal)) {
+        continue;
+      }
+
+      // Calculate discount amount
+      let discountAmount = 0;
+      if (discount.type === 'percentage') {
+        discountAmount = Math.round((subtotal * discount.value) / 100);
+        // Apply max discount limit if set
+        if (discount.maxDiscountAmount && discountAmount > discount.maxDiscountAmount) {
+          discountAmount = discount.maxDiscountAmount;
+        }
+      } else {
+        discountAmount = discount.value;
+      }
+
+      // Ensure discount doesn't exceed remaining subtotal
+      const currentTotal = subtotal - applicableDiscounts.reduce((sum, d) => sum + d.discountAmount, 0);
+      if (discountAmount > currentTotal) {
+        discountAmount = currentTotal;
+      }
+
+      if (discountAmount > 0) {
+        applicableDiscounts.push({
+          id: discount.id,
+          name: discount.name,
+          type: discount.type,
+          value: discount.value,
+          discountAmount,
+          priority: discount.priority
+        });
+
+        // If discounts don't combine, stop after first applicable discount
+        if (!discount.combinableWithOthers) {
+          break;
+        }
+      }
+    }
+
+    return applicableDiscounts;
+  } catch (error) {
+    console.error('Error fetching applicable discounts:', error);
+    return [];
+  }
+};
+
+// Function to check if a discount is applicable to the current cart
+const isDiscountApplicable = (discount: any, items: CartItem[], subtotal: number): boolean => {
+  // Check minimum order amount
+  if (discount.minOrderAmount && subtotal < discount.minOrderAmount) {
+    return false;
+  }
+
+  // Check usage limits
+  if (discount.usageLimit && discount.currentUsageCount >= discount.usageLimit) {
+    return false;
+  }
+
+  // Check date validity
+  const now = new Date();
+  if (discount.validFrom && new Date(discount.validFrom) > now) {
+    return false;
+  }
+  if (discount.validUntil && new Date(discount.validUntil) < now) {
+    return false;
+  }
+
+  // Check category applicability
+  if (discount.applicableToCategories && discount.applicableToCategories.length > 0) {
+    // For now, we don't have category info in cart items, so skip this check
+    // In the future, we could add category info to cart items
+  }
+
+  // Check grade level applicability
+  if (discount.applicableToGradeLevels && discount.applicableToGradeLevels.length > 0) {
+    // For now, we don't have grade level info in cart items, so skip this check
+    // In the future, we could add grade level info to cart items
+  }
+
+  return true;
+};
+
+// Keep the synchronous version for immediate calculations
+const calculateCartTotalsSync = (items: CartItem[]): { subtotal: number; discounts: any; total: number } => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
 
   // Group items by child to calculate sibling discount
@@ -78,6 +215,50 @@ const calculateCartTotals = (items: CartItem[]): { subtotal: number; discounts: 
     discounts: {
       siblingDiscount,
       freeAfterThree: freeAfterThreeDiscount,
+      appliedDiscounts: [],
+      totalDiscountAmount: 0,
+    },
+    total,
+  };
+};
+
+// Async version that includes automatic discounts
+const calculateCartTotalsWithDiscounts = async (items: CartItem[], getAccessTokenSilently?: () => Promise<string>): Promise<{ subtotal: number; discounts: any; total: number }> => {
+  const subtotal = items.reduce((sum, item) => sum + item.price, 0);
+
+  // Group items by child to calculate sibling discount
+  const childrenWithClasses = items.reduce((acc, item) => {
+    acc[item.childId] = (acc[item.childId] || 0) + 1;
+    return acc;
+  }, {} as Record<number, number>);
+
+  const uniqueChildren = Object.keys(childrenWithClasses).length;
+
+  // Apply 10% sibling discount if more than one child
+  const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0;
+  const siblingDiscount = subtotal * siblingDiscountRate;
+
+  // Apply "Free After Three" - 4th child and beyond are free
+  let freeAfterThreeDiscount = 0;
+  if (uniqueChildren >= 4) {
+    const freeChildren = uniqueChildren - 3;
+    const averagePricePerChild = subtotal / uniqueChildren;
+    freeAfterThreeDiscount = averagePricePerChild * freeChildren;
+  }
+
+  // Get applicable automatic discounts
+  const appliedDiscounts = await fetchApplicableDiscounts(items, subtotal, getAccessTokenSilently);
+  const totalDiscountAmount = appliedDiscounts.reduce((sum, discount) => sum + discount.discountAmount, 0);
+
+  const total = Math.max(0, subtotal - siblingDiscount - freeAfterThreeDiscount - totalDiscountAmount);
+
+  return {
+    subtotal,
+    discounts: {
+      siblingDiscount,
+      freeAfterThree: freeAfterThreeDiscount,
+      appliedDiscounts,
+      totalDiscountAmount,
     },
     total,
   };
@@ -104,7 +285,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       }
 
       const newItems = [...state.cart.items, action.payload];
-      const totals = calculateCartTotals(newItems);
+      const totals = calculateCartTotalsSync(newItems);
 
       const newState = {
         ...state,
@@ -125,7 +306,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
 
     case 'REMOVE_ITEM': {
       const newItems = state.cart.items.filter(item => item.id !== action.payload);
-      const totals = calculateCartTotals(newItems);
+      const totals = calculateCartTotalsSync(newItems);
 
       return {
         ...state,
@@ -140,7 +321,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       const newItems = state.cart.items.map(item =>
         item.id === action.payload.id ? { ...item, ...action.payload.updates } : item
       );
-      const totals = calculateCartTotals(newItems);
+      const totals = calculateCartTotalsSync(newItems);
 
       return {
         ...state,
@@ -183,7 +364,12 @@ const initialState: CartState = {
   cart: {
     items: [],
     subtotal: 0,
-    discounts: { siblingDiscount: 0, freeAfterThree: 0 },
+    discounts: { 
+      siblingDiscount: 0, 
+      freeAfterThree: 0, 
+      appliedDiscounts: [],
+      totalDiscountAmount: 0
+    },
     total: 0,
   },
   isOpen: false,
@@ -202,6 +388,7 @@ interface CartContextType {
   hasItem: (classId: number, childId: number) => boolean;
   loadUnpaidEnrollments: () => Promise<void>;
   refreshCart: () => void;
+  refreshDiscounts: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -359,7 +546,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
 
-      const totals = calculateCartTotals(cartItems);
+      const totals = calculateCartTotalsSync(cartItems);
 
       console.log('🛒 About to merge API enrollments with existing cart');
       console.log('🛒 Current cart items:', state.cart.items.length);
@@ -385,7 +572,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (newItems.length > 0) {
             console.log('🛒 Merging new pending enrollments with existing cart');
             const allItems = [...state.cart.items, ...newItems];
-            const mergedTotals = calculateCartTotals(allItems);
+            const mergedTotals = calculateCartTotalsSync(allItems);
             dispatch({
               type: 'LOAD_CART',
               payload: {
@@ -415,6 +602,29 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loadUnpaidEnrollments();
     }
   }, [user?.email, isAuthenticated, loadUnpaidEnrollments]);
+
+  // Function to refresh discounts for the current cart
+  const refreshDiscounts = useCallback(async () => {
+    console.log('🛒 Manual discount refresh requested');
+    if (state.cart.items.length === 0) {
+      console.log('🛒 No items in cart, skipping discount refresh');
+      return;
+    }
+
+    try {
+      const totalsWithDiscounts = await calculateCartTotalsWithDiscounts(state.cart.items, getAccessTokenSilently);
+      dispatch({
+        type: 'LOAD_CART',
+        payload: {
+          items: state.cart.items,
+          ...totalsWithDiscounts,
+        },
+      });
+      console.log('🛒 Discount refresh completed:', totalsWithDiscounts.discounts);
+    } catch (error) {
+      console.error('Error refreshing discounts:', error);
+    }
+  }, [state.cart.items]);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -601,7 +811,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getItemCount,
     hasItem,
     loadUnpaidEnrollments,
-    refreshCart
+    refreshCart,
+    refreshDiscounts
   };
 
   return (

@@ -259,7 +259,9 @@ export default function CartCheckout() {
           subtotal: cart.subtotal * 100, // Convert to cents
           discounts: {
             siblingDiscount: cart.discounts.siblingDiscount * 100, // Convert to cents
-            freeAfterThree: cart.discounts.freeAfterThree * 100 // Convert to cents
+            freeAfterThree: cart.discounts.freeAfterThree * 100, // Convert to cents
+            appliedDiscounts: cart.discounts.appliedDiscounts || [],
+            totalDiscountAmount: (cart.discounts.totalDiscountAmount || 0) * 100 // Convert to cents
           },
           total: amountToCharge, // Use selected payment plan amount in cents
           paymentPlan: selectedPaymentPlan, // Include payment plan info
@@ -294,7 +296,9 @@ export default function CartCheckout() {
     return uniqueChildren.size;
   };
 
-  const hasDiscounts = cart.discounts.siblingDiscount > 0 || cart.discounts.freeAfterThree > 0;
+  const hasDiscounts = cart.discounts.siblingDiscount > 0 || 
+                    cart.discounts.freeAfterThree > 0 || 
+                    (cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.length > 0);
 
   const getPaymentPlanOptions = () => {
     const depositAmount = Math.round(cart.total * 0.1); // 10% deposit
@@ -489,6 +493,16 @@ export default function CartCheckout() {
                           <span>-{formatCurrency(cart.discounts.freeAfterThree)}</span>
                         </div>
                       )}
+
+                      {cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.map((discount) => (
+                        <div key={discount.id} className="flex justify-between text-sm text-blue-600">
+                          <span className="flex items-center gap-1">
+                            <Gift className="h-3 w-3" />
+                            {discount.name}:
+                          </span>
+                          <span>-{formatCurrency(discount.discountAmount)}</span>
+                        </div>
+                      ))}
                     </>
                   )}
 

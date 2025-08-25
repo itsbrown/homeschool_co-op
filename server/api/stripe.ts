@@ -105,6 +105,9 @@ router.post('/create-payment-intent', async (req, res) => {
         subtotal: subtotal.toString(),
         siblingDiscount: discounts.siblingDiscount.toString(),
         freeAfterThreeDiscount: discounts.freeAfterThree.toString(),
+        appliedDiscountsCount: discounts.appliedDiscounts?.length.toString() || '0',
+        totalDiscountAmount: discounts.totalDiscountAmount?.toString() || '0',
+        appliedDiscountsJson: JSON.stringify(discounts.appliedDiscounts || []),
         paymentType: isDepositPayment ? 'deposit' : 'full_payment',
         itemsJson: JSON.stringify(items.map((item: any) => ({
           classId: item.classId,

@@ -2964,4 +2964,523 @@ router.get("/user-locations/my-permissions", async (req, res) => {
   }
 });
 
+// ========================
+// DISCOUNT MANAGEMENT ENDPOINTS
+// ========================
+
+// Helper function to load discounts from file storage
+function loadDiscounts(): any[] {
+  try {
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const DISCOUNTS_FILE = path.join(DATA_DIR, 'discounts.json');
+    
+    if (fs.existsSync(DISCOUNTS_FILE)) {
+      const data = fs.readFileSync(DISCOUNTS_FILE, 'utf8');
+      return JSON.parse(data) || [];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error loading discounts:', error);
+    return [];
+  }
+}
+
+// Helper function to save discounts to file storage
+function saveDiscounts(discounts: any[]): void {
+  try {
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const DISCOUNTS_FILE = path.join(DATA_DIR, 'discounts.json');
+    
+    // Ensure data directory exists
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    
+    fs.writeFileSync(DISCOUNTS_FILE, JSON.stringify(discounts, null, 2));
+  } catch (error) {
+    console.error('Error saving discounts:', error);
+    throw error;
+  }
+}
+
+// Helper function to load discount applications from file storage
+function loadDiscountApplications(): any[] {
+  try {
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const APPLICATIONS_FILE = path.join(DATA_DIR, 'discount-applications.json');
+    
+    if (fs.existsSync(APPLICATIONS_FILE)) {
+      const data = fs.readFileSync(APPLICATIONS_FILE, 'utf8');
+      return JSON.parse(data) || [];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error loading discount applications:', error);
+    return [];
+  }
+}
+
+// Helper function to save discount applications to file storage
+function saveDiscountApplications(applications: any[]): void {
+  try {
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const APPLICATIONS_FILE = path.join(DATA_DIR, 'discount-applications.json');
+    
+    // Ensure data directory exists
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    
+    fs.writeFileSync(APPLICATIONS_FILE, JSON.stringify(applications, null, 2));
+  } catch (error) {
+    console.error('Error saving discount applications:', error);
+    throw error;
+  }
+}
+
+// Get all discounts for a school
+router.get('/discounts', async (req, res) => {
+  try {
+    console.log('💰 Fetching discounts for school admin');
+    
+    // For now, use file storage as database connection is not available
+    const discounts = loadDiscounts();
+    
+    // TODO: When database is available, replace with:
+    // const discounts = await storage.getDiscountsBySchool(schoolId);
+    
+    res.json({
+      success: true,
+      discounts: discounts || []
+    });
+  } catch (error) {
+    console.error('Error fetching discounts:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch discounts'
+    });
+  }
+});
+
+// Get a specific discount by ID
+router.get('/discounts/:id', async (req, res) => {
+  try {
+    const discountId = parseInt(req.params.id);
+    
+    if (isNaN(discountId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid discount ID'
+      });
+    }
+    
+    const discounts = loadDiscounts();
+    const discount = discounts.find(d => d.id === discountId);
+    
+    if (!discount) {
+      return res.status(404).json({
+        success: false,
+        error: 'Discount not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      discount
+    });
+  } catch (error) {
+    console.error('Error fetching discount:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch discount'
+    });
+  }
+});
+
+// Create a new discount
+router.post('/discounts', async (req, res) => {
+  try {
+    console.log('💰 Creating new discount:', req.body);
+    
+    // Validate required fields
+    const {
+      name,
+      description,
+      code,
+      type,
+      value,
+      applicationMethod,
+      minOrderAmount,
+      maxDiscountAmount,
+      applicableToClasses,
+      applicableToCategories,
+      applicableToGradeLevels,
+      newStudentsOnly,
+      siblingDiscount,
+      usageLimit,
+      usageLimitPerUser,
+      validFrom,
+      validUntil,
+      isActive,
+      priority,
+      combinableWithOthers
+    } = req.body;
+    
+    if (!name || !type || value === undefined || !applicationMethod) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: name, type, value, applicationMethod'
+      });
+    }
+    
+    if (!['percentage', 'fixed_amount'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Type must be either "percentage" or "fixed_amount"'
+      });
+    }
+    
+    if (!['automatic', 'manual', 'both'].includes(applicationMethod)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Application method must be "automatic", "manual", or "both"'
+      });
+    }
+    
+    // Convert amounts to cents for storage
+    const valueInCents = type === 'percentage' ? value : Math.round(value * 100);
+    const minOrderAmountInCents = minOrderAmount ? Math.round(minOrderAmount * 100) : null;
+    const maxDiscountAmountInCents = maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null;
+    
+    const discounts = loadDiscounts();
+    const newDiscount = {
+      id: Math.max(0, ...discounts.map(d => d.id || 0)) + 1,
+      schoolId: 1, // TODO: Get from authenticated user's school
+      name,
+      description: description || null,
+      code: code || null,
+      type,
+      value: valueInCents,
+      applicationMethod,
+      minOrderAmount: minOrderAmountInCents,
+      maxDiscountAmount: maxDiscountAmountInCents,
+      applicableToClasses: applicableToClasses || [],
+      applicableToCategories: applicableToCategories || [],
+      applicableToGradeLevels: applicableToGradeLevels || [],
+      newStudentsOnly: newStudentsOnly || false,
+      siblingDiscount: siblingDiscount || false,
+      usageLimit: usageLimit || null,
+      usageLimitPerUser: usageLimitPerUser || null,
+      currentUsageCount: 0,
+      validFrom: validFrom || null,
+      validUntil: validUntil || null,
+      isActive: isActive !== undefined ? isActive : true,
+      priority: priority || 0,
+      combinableWithOthers: combinableWithOthers || false,
+      createdBy: 1, // TODO: Get from authenticated user
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    discounts.push(newDiscount);
+    saveDiscounts(discounts);
+    
+    console.log('✅ Discount created successfully:', newDiscount);
+    
+    res.status(201).json({
+      success: true,
+      discount: newDiscount
+    });
+  } catch (error) {
+    console.error('Error creating discount:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create discount'
+    });
+  }
+});
+
+// Update an existing discount
+router.put('/discounts/:id', async (req, res) => {
+  try {
+    const discountId = parseInt(req.params.id);
+    
+    if (isNaN(discountId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid discount ID'
+      });
+    }
+    
+    const discounts = loadDiscounts();
+    const discountIndex = discounts.findIndex(d => d.id === discountId);
+    
+    if (discountIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Discount not found'
+      });
+    }
+    
+    const {
+      name,
+      description,
+      code,
+      type,
+      value,
+      applicationMethod,
+      minOrderAmount,
+      maxDiscountAmount,
+      applicableToClasses,
+      applicableToCategories,
+      applicableToGradeLevels,
+      newStudentsOnly,
+      siblingDiscount,
+      usageLimit,
+      usageLimitPerUser,
+      validFrom,
+      validUntil,
+      isActive,
+      priority,
+      combinableWithOthers
+    } = req.body;
+    
+    // Validate required fields if provided
+    if (type && !['percentage', 'fixed_amount'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Type must be either "percentage" or "fixed_amount"'
+      });
+    }
+    
+    if (applicationMethod && !['automatic', 'manual', 'both'].includes(applicationMethod)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Application method must be "automatic", "manual", or "both"'
+      });
+    }
+    
+    // Update discount
+    const existingDiscount = discounts[discountIndex];
+    const updatedDiscount = {
+      ...existingDiscount,
+      name: name !== undefined ? name : existingDiscount.name,
+      description: description !== undefined ? description : existingDiscount.description,
+      code: code !== undefined ? code : existingDiscount.code,
+      type: type !== undefined ? type : existingDiscount.type,
+      value: value !== undefined ? (type === 'percentage' ? value : Math.round(value * 100)) : existingDiscount.value,
+      applicationMethod: applicationMethod !== undefined ? applicationMethod : existingDiscount.applicationMethod,
+      minOrderAmount: minOrderAmount !== undefined ? (minOrderAmount ? Math.round(minOrderAmount * 100) : null) : existingDiscount.minOrderAmount,
+      maxDiscountAmount: maxDiscountAmount !== undefined ? (maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null) : existingDiscount.maxDiscountAmount,
+      applicableToClasses: applicableToClasses !== undefined ? applicableToClasses : existingDiscount.applicableToClasses,
+      applicableToCategories: applicableToCategories !== undefined ? applicableToCategories : existingDiscount.applicableToCategories,
+      applicableToGradeLevels: applicableToGradeLevels !== undefined ? applicableToGradeLevels : existingDiscount.applicableToGradeLevels,
+      newStudentsOnly: newStudentsOnly !== undefined ? newStudentsOnly : existingDiscount.newStudentsOnly,
+      siblingDiscount: siblingDiscount !== undefined ? siblingDiscount : existingDiscount.siblingDiscount,
+      usageLimit: usageLimit !== undefined ? usageLimit : existingDiscount.usageLimit,
+      usageLimitPerUser: usageLimitPerUser !== undefined ? usageLimitPerUser : existingDiscount.usageLimitPerUser,
+      validFrom: validFrom !== undefined ? validFrom : existingDiscount.validFrom,
+      validUntil: validUntil !== undefined ? validUntil : existingDiscount.validUntil,
+      isActive: isActive !== undefined ? isActive : existingDiscount.isActive,
+      priority: priority !== undefined ? priority : existingDiscount.priority,
+      combinableWithOthers: combinableWithOthers !== undefined ? combinableWithOthers : existingDiscount.combinableWithOthers,
+      updatedAt: new Date().toISOString()
+    };
+    
+    discounts[discountIndex] = updatedDiscount;
+    saveDiscounts(discounts);
+    
+    console.log('✅ Discount updated successfully:', updatedDiscount);
+    
+    res.json({
+      success: true,
+      discount: updatedDiscount
+    });
+  } catch (error) {
+    console.error('Error updating discount:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update discount'
+    });
+  }
+});
+
+// Delete a discount
+router.delete('/discounts/:id', async (req, res) => {
+  try {
+    const discountId = parseInt(req.params.id);
+    
+    if (isNaN(discountId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid discount ID'
+      });
+    }
+    
+    const discounts = loadDiscounts();
+    const discountIndex = discounts.findIndex(d => d.id === discountId);
+    
+    if (discountIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Discount not found'
+      });
+    }
+    
+    // Remove the discount
+    const deletedDiscount = discounts.splice(discountIndex, 1)[0];
+    saveDiscounts(discounts);
+    
+    console.log('✅ Discount deleted successfully:', deletedDiscount);
+    
+    res.json({
+      success: true,
+      message: 'Discount deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting discount:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to delete discount'
+    });
+  }
+});
+
+// Apply discount manually to an enrollment or payment
+router.post('/discounts/:id/apply', async (req, res) => {
+  try {
+    const discountId = parseInt(req.params.id);
+    const { parentEmail, childId, enrollmentId, originalAmount } = req.body;
+    
+    if (isNaN(discountId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid discount ID'
+      });
+    }
+    
+    if (!parentEmail || !originalAmount) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: parentEmail, originalAmount'
+      });
+    }
+    
+    const discounts = loadDiscounts();
+    const discount = discounts.find(d => d.id === discountId);
+    
+    if (!discount) {
+      return res.status(404).json({
+        success: false,
+        error: 'Discount not found'
+      });
+    }
+    
+    if (!discount.isActive) {
+      return res.status(400).json({
+        success: false,
+        error: 'Discount is not active'
+      });
+    }
+    
+    // Check if discount can be applied manually
+    if (discount.applicationMethod === 'automatic') {
+      return res.status(400).json({
+        success: false,
+        error: 'This discount can only be applied automatically'
+      });
+    }
+    
+    // Calculate discount amount
+    let discountAmount = 0;
+    if (discount.type === 'percentage') {
+      discountAmount = Math.round((originalAmount * discount.value) / 100);
+      // Apply max discount limit if set
+      if (discount.maxDiscountAmount && discountAmount > discount.maxDiscountAmount) {
+        discountAmount = discount.maxDiscountAmount;
+      }
+    } else {
+      discountAmount = discount.value;
+    }
+    
+    // Ensure discount doesn't exceed original amount
+    if (discountAmount > originalAmount) {
+      discountAmount = originalAmount;
+    }
+    
+    const finalAmount = originalAmount - discountAmount;
+    
+    // Create discount application record
+    const applications = loadDiscountApplications();
+    const newApplication = {
+      id: Math.max(0, ...applications.map(a => a.id || 0)) + 1,
+      discountId,
+      parentEmail,
+      childId: childId || null,
+      enrollmentId: enrollmentId || null,
+      paymentId: null, // Will be set when payment is processed
+      originalAmount,
+      discountAmount,
+      finalAmount,
+      applicationMethod: 'manual',
+      appliedBy: 1, // TODO: Get from authenticated user
+      createdAt: new Date().toISOString()
+    };
+    
+    applications.push(newApplication);
+    saveDiscountApplications(applications);
+    
+    // Update discount usage count
+    const discountIndex = discounts.findIndex(d => d.id === discountId);
+    if (discountIndex !== -1) {
+      discounts[discountIndex].currentUsageCount = (discounts[discountIndex].currentUsageCount || 0) + 1;
+      discounts[discountIndex].updatedAt = new Date().toISOString();
+      saveDiscounts(discounts);
+    }
+    
+    console.log('✅ Discount applied successfully:', newApplication);
+    
+    res.json({
+      success: true,
+      application: newApplication,
+      discountAmount,
+      finalAmount
+    });
+  } catch (error) {
+    console.error('Error applying discount:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to apply discount'
+    });
+  }
+});
+
+// Get discount applications/usage history
+router.get('/discounts/:id/applications', async (req, res) => {
+  try {
+    const discountId = parseInt(req.params.id);
+    
+    if (isNaN(discountId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid discount ID'
+      });
+    }
+    
+    const applications = loadDiscountApplications();
+    const discountApplications = applications.filter(app => app.discountId === discountId);
+    
+    res.json({
+      success: true,
+      applications: discountApplications
+    });
+  } catch (error) {
+    console.error('Error fetching discount applications:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch discount applications'
+    });
+  }
+});
+
 export default router;

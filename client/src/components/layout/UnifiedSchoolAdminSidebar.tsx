@@ -18,7 +18,8 @@ import {
   LucideIcon,
   Link2,
   MapPin,
-  Bell
+  Bell,
+  Target
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -54,6 +55,11 @@ const schoolNavItems: NavItem[] = [
     title: 'Students',
     href: '/schools/students',
     icon: GraduationCap,
+  },
+  {
+    title: 'Discounts',
+    href: '/schools/discounts',
+    icon: Target,
   },
   {
     title: 'Knowledge Base',

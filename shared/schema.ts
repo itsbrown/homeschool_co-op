@@ -854,3 +854,98 @@ export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments
   .omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertScheduledPayment = z.infer<typeof insertScheduledPaymentSchema>;
 export type ScheduledPayment = typeof scheduledPayments.$inferSelect;
+
+// Discounts table for managing school discounts
+export const discounts = pgTable("discounts", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").references(() => schools.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  code: text("code").unique(), // Optional discount code for manual application
+  type: text("type", { enum: ["percentage", "fixed_amount"] }).notNull(),
+  value: integer("value").notNull(), // Percentage (0-100) or fixed amount in cents
+  applicationMethod: text("application_method", { enum: ["automatic", "manual", "both"] }).default("manual").notNull(),
+  
+  // Automatic application conditions
+  minOrderAmount: integer("min_order_amount"), // Minimum order amount in cents
+  maxDiscountAmount: integer("max_discount_amount"), // Maximum discount amount in cents (for percentage discounts)
+  applicableToClasses: integer("applicable_to_classes").array(), // Specific class IDs
+  applicableToCategories: text("applicable_to_categories").array(), // Class categories
+  applicableToGradeLevels: text("applicable_to_grade_levels").array(), // Grade levels
+  newStudentsOnly: boolean("new_students_only").default(false),
+  siblingDiscount: boolean("sibling_discount").default(false), // Apply when multiple siblings enroll
+  
+  // Usage limits
+  usageLimit: integer("usage_limit"), // Total times this discount can be used
+  usageLimitPerUser: integer("usage_limit_per_user"), // Times per user/family
+  currentUsageCount: integer("current_usage_count").default(0),
+  
+  // Time constraints
+  validFrom: timestamp("valid_from"),
+  validUntil: timestamp("valid_until"),
+  
+  // Status and metadata
+  isActive: boolean("is_active").default(true).notNull(),
+  priority: integer("priority").default(0), // Higher priority discounts apply first
+  combinableWithOthers: boolean("combinable_with_others").default(false),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Track discount applications/usage
+export const discountApplications = pgTable("discount_applications", {
+  id: serial("id").primaryKey(),
+  discountId: integer("discount_id").references(() => discounts.id).notNull(),
+  parentEmail: text("parent_email").notNull(),
+  childId: integer("child_id").references(() => children.id),
+  schoolEnrollmentId: integer("school_enrollment_id").references(() => schoolClassEnrollments.id),
+  programEnrollmentId: integer("program_enrollment_id").references(() => programEnrollments.id),
+  paymentId: integer("payment_id").references(() => payments.id),
+  classId: integer("class_id").references(() => classes.id),
+  
+  // Application details
+  originalAmount: integer("original_amount").notNull(), // Original amount before discount in cents
+  discountAmount: integer("discount_amount").notNull(), // Amount of discount applied in cents
+  finalAmount: integer("final_amount").notNull(), // Final amount after discount in cents
+  applicationMethod: text("application_method", { enum: ["automatic", "manual"] }).notNull(),
+  appliedBy: integer("applied_by").references(() => users.id), // User who applied manual discount
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Define relationships for discounts
+export const discountRelations = relations(discounts, ({ one, many }) => ({
+  school: one(schools, { fields: [discounts.schoolId], references: [schools.id] }),
+  createdByUser: one(users, { fields: [discounts.createdBy], references: [users.id] }),
+  applications: many(discountApplications),
+}));
+
+export const discountApplicationRelations = relations(discountApplications, ({ one }) => ({
+  discount: one(discounts, { fields: [discountApplications.discountId], references: [discounts.id] }),
+  child: one(children, { fields: [discountApplications.childId], references: [children.id] }),
+  schoolEnrollment: one(schoolClassEnrollments, { fields: [discountApplications.schoolEnrollmentId], references: [schoolClassEnrollments.id] }),
+  programEnrollment: one(programEnrollments, { fields: [discountApplications.programEnrollmentId], references: [programEnrollments.id] }),
+  payment: one(payments, { fields: [discountApplications.paymentId], references: [payments.id] }),
+  class: one(classes, { fields: [discountApplications.classId], references: [classes.id] }),
+  appliedByUser: one(users, { fields: [discountApplications.appliedBy], references: [users.id] }),
+}));
+
+// Discount schemas for validation
+export const insertDiscountSchema = createInsertSchema(discounts)
+  .omit({ id: true, createdAt: true, updatedAt: true, currentUsageCount: true })
+  .extend({
+    // Convert dollar amounts to cents for storage
+    minOrderAmount: z.number().optional().transform(amount => amount ? Math.round(amount * 100) : undefined),
+    maxDiscountAmount: z.number().optional().transform(amount => amount ? Math.round(amount * 100) : undefined),
+    // For fixed amount discounts, convert to cents
+    value: z.number().transform(value => Math.round(value * 100)),
+  });
+
+export const insertDiscountApplicationSchema = createInsertSchema(discountApplications)
+  .omit({ id: true, createdAt: true });
+
+export type InsertDiscount = z.infer<typeof insertDiscountSchema>;
+export type Discount = typeof discounts.$inferSelect;
+export type InsertDiscountApplication = z.infer<typeof insertDiscountApplicationSchema>;
+export type DiscountApplication = typeof discountApplications.$inferSelect;

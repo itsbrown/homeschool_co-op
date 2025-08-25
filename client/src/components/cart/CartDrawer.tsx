@@ -52,7 +52,9 @@ export default function CartDrawer() {
     return uniqueChildren.size;
   };
 
-  const hasDiscounts = cart.discounts.siblingDiscount > 0 || cart.discounts.freeAfterThree > 0;
+  const hasDiscounts = cart.discounts.siblingDiscount > 0 || 
+                     cart.discounts.freeAfterThree > 0 || 
+                     (cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.length > 0);
 
   return (
     <Sheet open={isOpen} onOpenChange={closeCart}>
@@ -162,6 +164,16 @@ export default function CartDrawer() {
                         <span>-{formatCurrency(cart.discounts.freeAfterThree)}</span>
                       </div>
                     )}
+
+                    {cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.map((discount) => (
+                      <div key={discount.id} className="flex justify-between text-sm text-blue-600">
+                        <span className="flex items-center gap-1">
+                          <Gift className="h-3 w-3" />
+                          {discount.name}:
+                        </span>
+                        <span>-{formatCurrency(discount.discountAmount)}</span>
+                      </div>
+                    ))}
                   </>
                 )}
 
