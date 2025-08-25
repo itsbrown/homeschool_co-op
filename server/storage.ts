@@ -18,7 +18,8 @@ import {
   scheduledPayments, type ScheduledPayment, type InsertScheduledPayment,
   schools, type School, type InsertSchool,
   schoolStudents, type SchoolStudent, type InsertSchoolStudent,
-  userLocations, type UserLocation, type InsertUserLocation
+  userLocations, type UserLocation, type InsertUserLocation,
+  locations, type Location, type InsertLocation
 } from "@shared/schema";
 
 export interface IStorage {
@@ -193,6 +194,14 @@ export interface IStorage {
   createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation>;
   updateUserLocation(id: number, userLocation: Partial<InsertUserLocation>): Promise<UserLocation | undefined>;
   deleteUserLocation(id: number): Promise<void>;
+
+  // Location methods
+  getLocationById(id: number): Promise<Location | undefined>;
+  getLocations(): Promise<Location[]>;
+  getLocationsBySchoolId(schoolId: number): Promise<Location[]>;
+  createLocation(location: InsertLocation): Promise<Location>;
+  updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined>;
+  deleteLocation(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -211,6 +220,7 @@ export class MemStorage implements IStorage {
   private marketingLinksStore: Map<number, MarketingLink>;
   private schoolStudentsStore: Map<number, SchoolStudent>;
   private userLocationsStore: Map<number, UserLocation>;
+  private locationsStore: Map<number, Location>;
   private linkAnalyticsStore: Map<number, LinkAnalytics>;
   private paymentsStore: Map<number, Payment>;
   private schoolsStore: Map<number, School>;
@@ -233,6 +243,7 @@ export class MemStorage implements IStorage {
   private schoolIdCounter: number;
   private schoolStudentIdCounter: number;
   private userLocationIdCounter: number;
+  private locationIdCounter: number;
   private classEnrollments: any[];
 
   constructor() {
@@ -251,6 +262,7 @@ export class MemStorage implements IStorage {
     this.marketingLinksStore = new Map();
     this.schoolStudentsStore = new Map();
     this.userLocationsStore = new Map();
+    this.locationsStore = new Map();
     this.linkAnalyticsStore = new Map();
     this.paymentsStore = new Map();
     this.schoolsStore = new Map();
@@ -274,6 +286,7 @@ export class MemStorage implements IStorage {
     this.schoolIdCounter = 1;
     this.schoolStudentIdCounter = 1;
     this.userLocationIdCounter = 1;
+    this.locationIdCounter = 1;
 
     // Initialize with a default admin user
 
@@ -289,6 +302,7 @@ export class MemStorage implements IStorage {
     this.initializePayments().catch(console.error);
     this.initializeSchoolStudents().catch(console.error);
     this.initializeUserLocations().catch(console.error);
+    this.initializeLocations().catch(console.error);
 
     this.createUser({
       username: "admin",
@@ -2443,6 +2457,104 @@ export class MemStorage implements IStorage {
       console.error('❌ Error saving user locations to disk:', error);
     }
   }
+
+  // Locations initialization and methods
+  private async initializeLocations(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const locationsFilePath = path.join(process.cwd(), 'data', 'locations.json');
+
+      if (fs.existsSync(locationsFilePath)) {
+        const locationsData = JSON.parse(fs.readFileSync(locationsFilePath, 'utf-8'));
+        console.log(`🏢 Loading ${locationsData.length} locations from locations.json`);
+
+        for (const location of locationsData) {
+          const record: Location = {
+            ...location,
+            createdAt: new Date(location.createdAt),
+            updatedAt: new Date(location.updatedAt)
+          };
+          this.locationsStore.set(location.id, record);
+          this.locationIdCounter = Math.max(this.locationIdCounter, location.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${locationsData.length} locations into storage`);
+      } else {
+        console.log('🏢 No locations.json found, starting with empty locations');
+      }
+    } catch (error) {
+      console.error('❌ Error loading locations from JSON:', error);
+    }
+  }
+
+  async getLocationById(id: number): Promise<Location | undefined> {
+    return this.locationsStore.get(id);
+  }
+
+  async getLocations(): Promise<Location[]> {
+    return Array.from(this.locationsStore.values());
+  }
+
+  async getLocationsBySchoolId(schoolId: number): Promise<Location[]> {
+    return Array.from(this.locationsStore.values()).filter(
+      location => location.schoolId === schoolId && location.isActive
+    );
+  }
+
+  async createLocation(location: InsertLocation): Promise<Location> {
+    const id = this.locationIdCounter++;
+    const now = new Date();
+    const newLocation: Location = {
+      id,
+      ...location,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.locationsStore.set(id, newLocation);
+    await this.saveLocationsToDisk();
+    return newLocation;
+  }
+
+  async updateLocation(id: number, updateData: Partial<InsertLocation>): Promise<Location | undefined> {
+    const location = this.locationsStore.get(id);
+    if (!location) return undefined;
+
+    const updatedLocation: Location = {
+      ...location,
+      ...updateData,
+      updatedAt: new Date()
+    };
+
+    this.locationsStore.set(id, updatedLocation);
+    await this.saveLocationsToDisk();
+    return updatedLocation;
+  }
+
+  async deleteLocation(id: number): Promise<void> {
+    this.locationsStore.delete(id);
+    await this.saveLocationsToDisk();
+  }
+
+  private async saveLocationsToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const locationsFilePath = path.join(process.cwd(), 'data', 'locations.json');
+
+      const dataDir = path.dirname(locationsFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const locations = Array.from(this.locationsStore.values());
+      fs.writeFileSync(locationsFilePath, JSON.stringify(locations, null, 2));
+      console.log(`💾 Successfully saved ${locations.length} locations to disk`);
+    } catch (error) {
+      console.error('❌ Error saving locations to disk:', error);
+    }
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -3090,6 +3202,31 @@ export class MemStorage implements IStorage {
 
       async deleteUserLocation(id: number): Promise<void> {
         return this.memStorage.deleteUserLocation(id);
+      }
+
+      // Location methods
+      async getLocationById(id: number): Promise<Location | undefined> {
+        return this.memStorage.getLocationById(id);
+      }
+
+      async getLocations(): Promise<Location[]> {
+        return this.memStorage.getLocations();
+      }
+
+      async getLocationsBySchoolId(schoolId: number): Promise<Location[]> {
+        return this.memStorage.getLocationsBySchoolId(schoolId);
+      }
+
+      async createLocation(location: InsertLocation): Promise<Location> {
+        return this.memStorage.createLocation(location);
+      }
+
+      async updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined> {
+        return this.memStorage.updateLocation(id, location);
+      }
+
+      async deleteLocation(id: number): Promise<void> {
+        return this.memStorage.deleteLocation(id);
       }
   }
 
