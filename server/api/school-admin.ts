@@ -1891,43 +1891,68 @@ router.get("/departments", async (req, res) => {
 // Get students for the school
 router.get("/students", async (req, res) => {
   try {
-    // Get the school(s) administered by this user
-    const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId);
+    console.log('📚 Fetching students for school admin...');
+    
+    // Get all school students from storage
+    const allSchoolStudents = await storage.getSchoolStudents();
+    console.log(`📊 Found ${allSchoolStudents.length} school students in storage`);
+    
+    // Get children details for each school student
+    const studentsWithDetails = await Promise.all(
+      allSchoolStudents.map(async (schoolStudent) => {
+        try {
+          const child = await storage.getChildById(schoolStudent.childId);
+          if (!child) {
+            console.warn(`⚠️ Child not found for school student: ${schoolStudent.childId}`);
+            return null;
+          }
 
-    if (userSchools.length === 0) {
-      return res.status(404).json({ message: "No schools found for this administrator" });
-    }
+          // Calculate age from birthdate
+          let age = null;
+          if (child.birthDate) {
+            const today = new Date();
+            const birthDate = new Date(child.birthDate);
+            age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+              age--;
+            }
+          }
 
-    // For now, return sample student data
-    // In a real implementation, this would come from the database
-    const sampleStudents = [
-      {
-        id: 1,
-        name: "Emma Thompson",
-        gradeLevel: "9",
-        age: 15,
-        parentName: "James and Sarah Thompson",
-        email: "thompson.family@example.com",
-        enrollmentDate: "2023-08-10",
-        status: "Active",
-        classes: ["Introduction to American History", "Advanced Mathematics", "Biology and Ecosystems"],
-        avatar: "",
-      },
-      {
-        id: 2,
-        name: "Michael Rodriguez",
-        gradeLevel: "10",
-        age: 16,
-        parentName: "Carlos and Maria Rodriguez",
-        email: "rodriguez.family@example.com",
-        enrollmentDate: "2022-08-15",
-        status: "Active",
-        classes: ["Advanced Mathematics", "Biology and Ecosystems", "Beginner Spanish"],
-        avatar: "",
-      }
-    ];
+          return {
+            id: schoolStudent.id,
+            name: `${child.firstName} ${child.lastName}`,
+            firstName: child.firstName,
+            lastName: child.lastName,
+            gradeLevel: child.gradeLevel || 'Not specified',
+            age: age || 'Unknown',
+            parentName: child.parentEmail || 'Unknown Parent',
+            parentEmail: child.parentEmail,
+            email: child.parentEmail,
+            enrollmentDate: schoolStudent.enrollmentDate,
+            status: schoolStudent.status || 'Active',
+            locationId: schoolStudent.locationId,
+            schoolId: schoolStudent.schoolId,
+            classes: [], // We could expand this later to fetch actual class enrollments
+            avatar: child.profileImage || "",
+            allergies: child.allergies,
+            medicalInfo: child.medicalInfo,
+            interests: child.interests || [],
+            learningStyle: child.learningStyle
+          };
+        } catch (childError) {
+          console.error(`❌ Error processing school student ${schoolStudent.id}:`, childError);
+          return null;
+        }
+      })
+    );
 
-    res.json(sampleStudents);
+    // Filter out any null results
+    const validStudents = studentsWithDetails.filter(student => student !== null);
+    
+    console.log(`✅ Successfully processed ${validStudents.length} students with details`);
+    res.json(validStudents);
+    
   } catch (error) {
     console.error("Error fetching school students:", error);
     res.status(500).json({ message: "Error fetching school students" });

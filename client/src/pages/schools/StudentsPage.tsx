@@ -41,7 +41,7 @@ export default function StudentsPage() {
 
   // Fetch students data from API
   const { data: students, isLoading, error } = useQuery({
-    queryKey: ['/api/schools/students'],
+    queryKey: ['/api/school-admin/students'],
     refetchInterval: 30000, // Refetch every 30 seconds
     refetchIntervalInBackground: true,
   });
