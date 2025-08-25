@@ -139,7 +139,7 @@ import SchoolApplicationsPage from './pages/superadmin/SchoolApplicationsPage';
 import SchoolApplicationPage from './pages/SchoolApplicationPage';
 import SchoolApplicationSuccessPage from './pages/SchoolApplicationSuccessPage';
 import SchoolApplicationStatusPage from './pages/SchoolApplicationStatusPage';
-import LocationManagementPage from "@/pages/LocationManagementPage";
+import LocationManagementPage from "./pages/schools/LocationManagementPage";
 import NotificationManagementPage from "@/pages/NotificationManagementPage";
 
 function DashboardRouter() {

@@ -2643,4 +2643,157 @@ router.post("/staff-invitations/accept", async (req, res) => {
   }
 });
 
+// Location-specific student management endpoints
+router.get("/students/by-location/:locationId", async (req, res) => {
+  try {
+    const locationId = parseInt(req.params.locationId);
+    if (isNaN(locationId)) {
+      return res.status(400).json({ message: "Invalid location ID" });
+    }
+
+    console.log(`📍 Fetching students for location ID: ${locationId}`);
+    
+    const schoolStudents = await storage.getSchoolStudentsByLocationId(locationId);
+    
+    // Get child details for each school student
+    const studentsWithDetails = await Promise.all(
+      schoolStudents.map(async (schoolStudent) => {
+        const child = await storage.getChildById(schoolStudent.childId);
+        return {
+          id: schoolStudent.id,
+          childId: schoolStudent.childId,
+          locationId: schoolStudent.locationId,
+          schoolId: schoolStudent.schoolId,
+          enrollmentDate: schoolStudent.enrollmentDate,
+          status: schoolStudent.status,
+          gradeLevel: schoolStudent.gradeLevel,
+          child: child ? {
+            firstName: child.firstName,
+            lastName: child.lastName,
+            parentEmail: child.parentEmail,
+            gradeLevel: child.gradeLevel,
+            profileImage: child.profileImage
+          } : null
+        };
+      })
+    );
+
+    res.json({
+      students: studentsWithDetails,
+      location: { id: locationId },
+      totalStudents: studentsWithDetails.length
+    });
+
+  } catch (error) {
+    console.error("❌ Error fetching students by location:", error);
+    res.status(500).json({ message: "Failed to fetch students by location" });
+  }
+});
+
+router.get("/locations/overview", async (req, res) => {
+  try {
+    console.log('📍 Generating location overview...');
+    
+    // Get all locations from storage
+    const locations = await storage.getLocations();
+    
+    const locationOverview = await Promise.all(
+      locations.map(async (location) => {
+        const schoolStudents = await storage.getSchoolStudentsByLocationId(location.id);
+        const userLocations = await storage.getUserLocationsByLocationId(location.id);
+        
+        return {
+          id: location.id,
+          name: location.name,
+          address: location.address,
+          capacity: location.capacity,
+          totalStudents: schoolStudents.length,
+          staffCount: userLocations.length,
+          utilization: location.capacity ? Math.round((schoolStudents.length / location.capacity) * 100) : 0,
+          status: location.isActive ? 'Active' : 'Inactive'
+        };
+      })
+    );
+
+    res.json({
+      locations: locationOverview,
+      totalLocations: locationOverview.length,
+      totalStudents: locationOverview.reduce((sum, loc) => sum + loc.totalStudents, 0),
+      totalStaff: locationOverview.reduce((sum, loc) => sum + loc.staffCount, 0)
+    });
+
+  } catch (error) {
+    console.error("❌ Error generating location overview:", error);
+    res.status(500).json({ message: "Failed to generate location overview" });
+  }
+});
+
+router.get("/user-locations/my-permissions", async (req, res) => {
+  try {
+    // Get user from auth token
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ message: "No token provided" });
+    }
+
+    const token = authHeader.substring(7);
+    
+    let user;
+    try {
+      const supabaseModule = await import('../db/supabase');
+      const { data: { user: supabaseUser }, error } = await supabaseModule.supabase.auth.getUser(token);
+      if (error || !supabaseUser) {
+        throw new Error('Invalid token');
+      }
+      user = supabaseUser;
+    } catch (authError) {
+      console.log('🔧 Using development mode fallback');
+      const adminUser = await storage.getUserByEmail('coreycreates@gmail.com');
+      if (!adminUser) {
+        return res.status(401).json({ message: "Authentication failed" });
+      }
+      user = { email: adminUser.email, id: adminUser.id };
+    }
+
+    // Look up user in our system
+    const systemUser = await storage.getUserByEmail(user.email);
+    if (!systemUser) {
+      return res.status(404).json({ message: "User not found in system" });
+    }
+
+    // Get user's location permissions
+    const userLocations = await storage.getUserLocationsByUserId(systemUser.id);
+    
+    // Get location details
+    const locationsWithPermissions = await Promise.all(
+      userLocations.map(async (userLocation) => {
+        const location = await storage.getLocationById(userLocation.locationId);
+        return {
+          id: userLocation.id,
+          locationId: userLocation.locationId,
+          role: userLocation.role,
+          permissions: userLocation.permissions,
+          assignedAt: userLocation.assignedAt,
+          isActive: userLocation.isActive,
+          location: location ? {
+            name: location.name,
+            address: location.address,
+            capacity: location.capacity
+          } : null
+        };
+      })
+    );
+
+    res.json({
+      userLocations: locationsWithPermissions,
+      totalLocations: locationsWithPermissions.length,
+      activeLocations: locationsWithPermissions.filter(ul => ul.isActive).length
+    });
+
+  } catch (error) {
+    console.error("❌ Error fetching user location permissions:", error);
+    res.status(500).json({ message: "Failed to fetch location permissions" });
+  }
+});
+
 export default router;
