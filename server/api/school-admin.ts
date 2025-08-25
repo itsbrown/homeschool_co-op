@@ -1919,6 +1919,17 @@ router.get("/students", async (req, res) => {
             }
           }
 
+          // Get location details
+          let locationName = 'Unknown Location';
+          let locationCode = 'N/A';
+          if (schoolStudent.locationId) {
+            const location = await storage.getLocationById(schoolStudent.locationId);
+            if (location) {
+              locationName = location.name;
+              locationCode = location.code;
+            }
+          }
+
           return {
             id: schoolStudent.id,
             name: `${child.firstName} ${child.lastName}`,
@@ -1932,6 +1943,8 @@ router.get("/students", async (req, res) => {
             enrollmentDate: schoolStudent.enrollmentDate,
             status: schoolStudent.status || 'Active',
             locationId: schoolStudent.locationId,
+            locationName: locationName,
+            locationCode: locationCode,
             schoolId: schoolStudent.schoolId,
             classes: [], // We could expand this later to fetch actual class enrollments
             avatar: child.profileImage || "",

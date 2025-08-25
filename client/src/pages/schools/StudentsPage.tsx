@@ -193,6 +193,7 @@ export default function StudentsPage() {
                         <TableHead>Student</TableHead>
                         <TableHead>Grade</TableHead>
                         <TableHead>Age</TableHead>
+                        <TableHead>Location</TableHead>
                         <TableHead>Parent/Guardian</TableHead>
                         <TableHead>Enrollment</TableHead>
                         <TableHead>Status</TableHead>
@@ -222,6 +223,12 @@ export default function StudentsPage() {
                               <Badge variant="outline">{student.gradeLevel}</Badge>
                             </TableCell>
                             <TableCell>{student.age || 'N/A'}</TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="font-medium">{student.locationName || 'Unknown'}</div>
+                                <div className="text-xs text-muted-foreground">{student.locationCode || 'N/A'}</div>
+                              </div>
+                            </TableCell>
                             <TableCell>
                               <div className="space-y-1">
                                 <div className="font-medium">{student.parentName || 'N/A'}</div>
