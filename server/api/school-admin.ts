@@ -1443,6 +1443,132 @@ router.get("/staff/:id", async (req, res) => {
   }
 });
 
+// Get classes assigned to a specific staff member
+router.get("/staff/:id/classes", async (req, res) => {
+  try {
+    const staffId = parseInt(req.params.id, 10);
+    console.log(`🎓 Getting classes for staff member ${staffId}`);
+    
+    if (isNaN(staffId)) {
+      return res.status(400).json({ message: "Invalid staff ID format" });
+    }
+
+    // Get staff member to verify they exist and get their name
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    
+    if (!fs.existsSync(STAFF_FILE)) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+    const staffMember = allStaff.find(s => s.id === staffId);
+    
+    if (!staffMember) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Get all classes and filter by instructor name or teacherId
+    const classes = await storage.getAllClasses();
+    const assignedClasses = classes.filter(cls => 
+      cls.instructorName === staffMember.name || 
+      cls.teacherId === staffId ||
+      cls.instructorId === staffId
+    );
+
+    console.log(`✅ Found ${assignedClasses.length} classes for ${staffMember.name}`);
+    res.json(assignedClasses);
+  } catch (error) {
+    console.error("Error fetching staff classes:", error);
+    res.status(500).json({ message: "Error fetching staff classes" });
+  }
+});
+
+// Assign staff member to a class
+router.post("/staff/:id/assign-class", async (req, res) => {
+  try {
+    const staffId = parseInt(req.params.id, 10);
+    const { classId } = req.body;
+    
+    console.log(`🎯 Assigning staff ${staffId} to class ${classId}`);
+    
+    if (isNaN(staffId) || !classId) {
+      return res.status(400).json({ message: "Invalid staff ID or class ID" });
+    }
+
+    // Get staff member details
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    
+    if (!fs.existsSync(STAFF_FILE)) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+    const staffMember = allStaff.find(s => s.id === staffId);
+    
+    if (!staffMember) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Update the class to assign this instructor
+    const updatedClass = await storage.updateClass(classId, {
+      instructorName: staffMember.name,
+      instructorId: staffId,
+      teacherId: staffId
+    });
+
+    if (!updatedClass) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    console.log(`✅ Successfully assigned ${staffMember.name} to class ${classId}`);
+    res.json({ 
+      success: true, 
+      message: `${staffMember.name} assigned to class successfully`,
+      class: updatedClass 
+    });
+  } catch (error) {
+    console.error("Error assigning staff to class:", error);
+    res.status(500).json({ message: "Error assigning staff to class" });
+  }
+});
+
+// Unassign staff member from a class
+router.delete("/staff/:id/unassign-class/:classId", async (req, res) => {
+  try {
+    const staffId = parseInt(req.params.id, 10);
+    const classId = parseInt(req.params.classId, 10);
+    
+    console.log(`🎯 Unassigning staff ${staffId} from class ${classId}`);
+    
+    if (isNaN(staffId) || isNaN(classId)) {
+      return res.status(400).json({ message: "Invalid staff ID or class ID" });
+    }
+
+    // Update the class to remove instructor assignment
+    const updatedClass = await storage.updateClass(classId, {
+      instructorName: "No Instructor Assigned",
+      instructorId: null,
+      teacherId: null
+    });
+
+    if (!updatedClass) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    console.log(`✅ Successfully unassigned staff from class ${classId}`);
+    res.json({ 
+      success: true, 
+      message: "Staff member unassigned from class successfully",
+      class: updatedClass 
+    });
+  } catch (error) {
+    console.error("Error unassigning staff from class:", error);
+    res.status(500).json({ message: "Error unassigning staff from class" });
+  }
+});
+
 // Resend invite to individual staff member
 router.post("/staff/:id/resend-invite", async (req, res) => {
   try {

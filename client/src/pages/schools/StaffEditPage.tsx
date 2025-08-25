@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Trash2, BookOpen, Plus, X, GraduationCap, Clock, MapPin } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -14,6 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -38,6 +49,8 @@ export default function StaffEditPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
 
   const form = useForm<StaffMember>({
     defaultValues: {
@@ -83,6 +96,40 @@ export default function StaffEditPage() {
       }
       
       return await response.json();
+    },
+  });
+
+  // Fetch assigned classes for this staff member
+  const { data: assignedClasses = [], isLoading: classesLoading } = useQuery({
+    queryKey: ['/api/school-admin/staff', id, 'classes'],
+    queryFn: async () => {
+      const response = await fetch(`/api/school-admin/staff/${id}/classes`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch assigned classes');
+      }
+      
+      return await response.json();
+    },
+    enabled: !!id,
+  });
+
+  // Fetch all available classes for assignment
+  const { data: allClasses = [] } = useQuery({
+    queryKey: ['/api/school-admin/classes'],
+    queryFn: async () => {
+      const response = await fetch('/api/school-admin/classes', {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch classes');
+      }
+      
+      const data = await response.json();
+      return data.items || [];
     },
   });
 
@@ -140,6 +187,52 @@ export default function StaffEditPage() {
     },
   });
 
+  // Assign staff to class mutation
+  const assignClassMutation = useMutation({
+    mutationFn: async (classId: number) => {
+      return await apiRequest("POST", `/api/school-admin/staff/${id}/assign-class`, { classId });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Staff member assigned to class successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff', id, 'classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
+      setShowAssignDialog(false);
+      setSelectedClassId(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign staff to class",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Unassign staff from class mutation
+  const unassignClassMutation = useMutation({
+    mutationFn: async (classId: number) => {
+      return await apiRequest("DELETE", `/api/school-admin/staff/${id}/unassign-class/${classId}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Staff member unassigned from class successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff', id, 'classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unassign staff from class",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: StaffMember) => {
     updateStaffMutation.mutate(data);
   };
@@ -149,6 +242,22 @@ export default function StaffEditPage() {
       deleteStaffMutation.mutate();
     }
   };
+
+  const handleAssignClass = () => {
+    if (selectedClassId) {
+      assignClassMutation.mutate(selectedClassId);
+    }
+  };
+
+  const handleUnassignClass = (classId: number, className: string) => {
+    if (confirm(`Are you sure you want to unassign this staff member from "${className}"?`)) {
+      unassignClassMutation.mutate(classId);
+    }
+  };
+
+  // Get unassigned classes for assignment dialog
+  const assignedClassIds = assignedClasses.map((cls: any) => cls.id);
+  const unassignedClasses = allClasses.filter((cls: any) => !assignedClassIds.includes(cls.id));
 
   if (isLoading) {
     return (
@@ -356,6 +465,149 @@ export default function StaffEditPage() {
                   </div>
                 </form>
               </Form>
+            </CardContent>
+          </Card>
+
+          {/* Class Assignment Management */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <BookOpen className="h-5 w-5" />
+                    Class Assignments
+                  </CardTitle>
+                  <CardDescription>
+                    Manage which classes this staff member is assigned to teach
+                  </CardDescription>
+                </div>
+                <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      disabled={unassignedClasses.length === 0}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Assign to Class
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Assign to Class</DialogTitle>
+                      <DialogDescription>
+                        Select a class to assign {staffMember?.name} as the instructor.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <Select 
+                        value={selectedClassId?.toString() || ""} 
+                        onValueChange={(value) => setSelectedClassId(parseInt(value))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {unassignedClasses.map((cls: any) => (
+                            <SelectItem key={cls.id} value={cls.id.toString()}>
+                              {cls.title} - {cls.gradeLevel}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowAssignDialog(false);
+                          setSelectedClassId(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAssignClass}
+                        disabled={!selectedClassId || assignClassMutation.isPending}
+                      >
+                        {assignClassMutation.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : null}
+                        Assign
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {classesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="ml-2">Loading assigned classes...</span>
+                </div>
+              ) : assignedClasses.length > 0 ? (
+                <div className="space-y-3">
+                  {assignedClasses.map((cls: any) => (
+                    <div 
+                      key={cls.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <GraduationCap className="h-5 w-5 text-muted-foreground" />
+                          <div>
+                            <h4 className="font-medium">{cls.title}</h4>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                              <span>Grade: {cls.gradeLevel}</span>
+                              {cls.schedule && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {cls.schedule}
+                                </span>
+                              )}
+                              {cls.location && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {cls.location}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{cls.status || 'Active'}</Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleUnassignClass(cls.id, cls.title)}
+                          disabled={unassignClassMutation.isPending}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">No Classes Assigned</h3>
+                  <p className="text-muted-foreground mb-4">
+                    This staff member is not currently assigned to any classes.
+                  </p>
+                  {unassignedClasses.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowAssignDialog(true)}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Assign to Class
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
