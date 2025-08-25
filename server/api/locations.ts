@@ -44,8 +44,8 @@ router.post("/", async (req, res) => {
   try {
     const validatedData = insertLocationSchema.parse(req.body);
     
-    // Create location in file storage for now
-    const location = await createLocation(validatedData);
+    // Use the storage system that the overview endpoint uses
+    const location = await storage.createLocation(validatedData);
     
     res.status(201).json(location);
   } catch (error) {
@@ -96,10 +96,8 @@ router.delete("/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid location ID" });
     }
 
-    const success = await deleteLocation(id);
-    if (!success) {
-      return res.status(404).json({ message: "Location not found" });
-    }
+    // Use the storage system that the overview endpoint uses
+    await storage.deleteLocation(id);
 
     res.json({ message: "Location deleted successfully" });
   } catch (error) {
