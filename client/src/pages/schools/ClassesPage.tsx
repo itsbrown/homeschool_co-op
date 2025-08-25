@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock } from "lucide-react";
+import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,10 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
 import {
   Table,
@@ -109,6 +112,38 @@ export default function SchoolClassesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [gradeLevelFilter, setGradeLevelFilter] = useState("");
   const [activeTab, setActiveTab] = useState("list");
+  
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState({
+    className: true,
+    category: true,
+    instructor: true,
+    gradeLevel: true,
+    status: true,
+    enrollment: true,
+    actions: true
+  });
+
+  // Load column preferences from localStorage
+  useEffect(() => {
+    const savedColumns = localStorage.getItem('classTableColumns');
+    if (savedColumns) {
+      setVisibleColumns(JSON.parse(savedColumns));
+    }
+  }, []);
+
+  // Save column preferences to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('classTableColumns', JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
+
+  // Toggle column visibility
+  const toggleColumn = (column: string) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }));
+  };
 
   // Fetch classes for the school from the API
   const { data: classes, isLoading, error, refetch } = useQuery({
@@ -366,6 +401,61 @@ export default function SchoolClassesPage() {
                   </SelectContent>
                 </Select>
 
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Columns
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuLabel>Show/Hide Columns</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuCheckboxItem
+                      checked={visibleColumns.className}
+                      onCheckedChange={() => toggleColumn('className')}
+                    >
+                      Class Name
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={visibleColumns.category}
+                      onCheckedChange={() => toggleColumn('category')}
+                    >
+                      Category
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={visibleColumns.instructor}
+                      onCheckedChange={() => toggleColumn('instructor')}
+                    >
+                      Instructor
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={visibleColumns.gradeLevel}
+                      onCheckedChange={() => toggleColumn('gradeLevel')}
+                    >
+                      Grade Level
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={visibleColumns.status}
+                      onCheckedChange={() => toggleColumn('status')}
+                    >
+                      Status
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={visibleColumns.enrollment}
+                      onCheckedChange={() => toggleColumn('enrollment')}
+                    >
+                      Enrollment
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={visibleColumns.actions}
+                      onCheckedChange={() => toggleColumn('actions')}
+                    >
+                      Actions
+                    </DropdownMenuCheckboxItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <Button variant="outline" onClick={exportClassList}>
                   <FileDown className="mr-2 h-4 w-4" />
                   Export Class List
@@ -386,32 +476,36 @@ export default function SchoolClassesPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Class Name</TableHead>
-                            <TableHead>Category</TableHead>
-                            <TableHead>Instructor</TableHead>
-                            <TableHead>Grade Level</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Enrollment</TableHead>
-                            <TableHead>Actions</TableHead>
+                            {visibleColumns.className && <TableHead>Class Name</TableHead>}
+                            {visibleColumns.category && <TableHead>Category</TableHead>}
+                            {visibleColumns.instructor && <TableHead>Instructor</TableHead>}
+                            {visibleColumns.gradeLevel && <TableHead>Grade Level</TableHead>}
+                            {visibleColumns.status && <TableHead>Status</TableHead>}
+                            {visibleColumns.enrollment && <TableHead>Enrollment</TableHead>}
+                            {visibleColumns.actions && <TableHead>Actions</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {filteredClasses.length > 0 ? (
                             filteredClasses.map((cls: any) => (
                               <TableRow key={cls.id}>
-                                <TableCell className="font-medium">{cls.title}</TableCell>
-                                <TableCell>{cls.category}</TableCell>
-                                <TableCell>
-                                  {cls.instructorName && cls.instructorName !== "no-instructor" 
-                                    ? cls.instructorName 
-                                    : "No Instructor Assigned"}
-                                </TableCell>
-                                <TableCell>{cls.gradeLevel}</TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary">{cls.status}</Badge>
-                                </TableCell>
-                                <TableCell>{cls.enrollmentCount || 0}/{cls.capacity || cls.maxEnrollment || 0}</TableCell>
-                                <TableCell>
+                                {visibleColumns.className && <TableCell className="font-medium">{cls.title}</TableCell>}
+                                {visibleColumns.category && <TableCell>{cls.category}</TableCell>}
+                                {visibleColumns.instructor && (
+                                  <TableCell>
+                                    {cls.instructorName && cls.instructorName !== "no-instructor" 
+                                      ? cls.instructorName 
+                                      : "No Instructor Assigned"}
+                                  </TableCell>
+                                )}
+                                {visibleColumns.gradeLevel && <TableCell>{cls.gradeLevel}</TableCell>}
+                                {visibleColumns.status && (
+                                  <TableCell>
+                                    <Badge variant="secondary">{cls.status}</Badge>
+                                  </TableCell>
+                                )}
+                                {visibleColumns.enrollment && <TableCell>{cls.enrollmentCount || 0}/{cls.capacity || cls.maxEnrollment || 0}</TableCell>}
+                                {visibleColumns.actions && <TableCell>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                       <Button variant="ghost" className="h-8 w-8 p-0">
@@ -454,12 +548,15 @@ export default function SchoolClassesPage() {
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
-                                </TableCell>
+                                </TableCell>}
                               </TableRow>
                             ))
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                              <TableCell 
+                                colSpan={Object.values(visibleColumns).filter(Boolean).length} 
+                                className="text-center py-6 text-muted-foreground"
+                              >
                                 No classes found. Try adjusting your search or filters.
                               </TableCell>
                             </TableRow>
