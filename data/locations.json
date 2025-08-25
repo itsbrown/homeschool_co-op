@@ -52,5 +52,23 @@
     "timezone": "America/New_York",
     "createdAt": "2025-08-24T21:50:00.000Z",
     "updatedAt": "2025-08-24T21:50:00.000Z"
+  },
+  {
+    "id": 4,
+    "schoolId": 1,
+    "name": "Greece",
+    "code": "Gr",
+    "address": "85 Kuhn Rd",
+    "city": "Greece",
+    "state": "NY",
+    "zipCode": "14612",
+    "phoneNumber": "5852102021",
+    "email": "contact@americanseekersacademy.com",
+    "managerName": "Corey Brown",
+    "capacity": 50,
+    "timezone": "America/New_York",
+    "isActive": true,
+    "createdAt": "2025-08-25T12:36:07.974Z",
+    "updatedAt": "2025-08-25T12:36:07.974Z"
   }
 ]

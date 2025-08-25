@@ -93,7 +93,10 @@ export default function LocationManagementPage() {
         return res.json()
       }),
     onSuccess: () => {
+      // Force refresh multiple related queries
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin'] })
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/locations/overview'] })
       setIsAddDialogOpen(false)
       toast({
         title: "Success",
@@ -144,7 +147,10 @@ export default function LocationManagementPage() {
         return res.json()
       }),
     onSuccess: () => {
+      // Force refresh multiple related queries  
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin'] })
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/locations/overview'] })
       toast({
         title: "Success",
         description: "Location deleted successfully",
