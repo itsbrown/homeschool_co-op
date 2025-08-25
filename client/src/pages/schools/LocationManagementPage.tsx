@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { MapPin, Users, Building2, TrendingUp, Eye } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useToast } from '@/hooks/use-toast'
+import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle } from 'lucide-react'
 
 interface LocationOverview {
   id: number
@@ -38,6 +42,9 @@ interface Student {
 
 export default function LocationManagementPage() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
 
   // Fetch location overview data
   const { data: locationData, isLoading: isLoadingLocations, error: locationsError } = useQuery({
@@ -70,6 +77,59 @@ export default function LocationManagementPage() {
       }
     }).then(res => res.json())
   })
+
+  // Create location mutation
+  const createLocationMutation = useMutation({
+    mutationFn: (locationData: any) => 
+      fetch('/api/locations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        },
+        body: JSON.stringify(locationData)
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to create location')
+        return res.json()
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      setIsAddDialogOpen(false)
+      toast({
+        title: "Success",
+        description: "Location created successfully",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create location",
+        variant: "destructive",
+      })
+    }
+  })
+
+  const handleCreateLocation = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    
+    const locationData = {
+      schoolId: 1, // Default school ID for now
+      name: formData.get('name') as string,
+      code: formData.get('code') as string,
+      address: formData.get('address') as string,
+      city: formData.get('city') as string,
+      state: formData.get('state') as string,
+      zipCode: formData.get('zipCode') as string,
+      phoneNumber: formData.get('phoneNumber') as string || undefined,
+      email: formData.get('email') as string || undefined,
+      managerName: formData.get('managerName') as string || undefined,
+      capacity: formData.get('capacity') ? parseInt(formData.get('capacity') as string) : undefined,
+      timezone: formData.get('timezone') as string || 'America/New_York'
+    }
+
+    createLocationMutation.mutate(locationData)
+  }
 
   if (isLoadingLocations) {
     return (
@@ -114,6 +174,152 @@ export default function LocationManagementPage() {
             Manage students and staff across all school locations
           </p>
         </div>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Location
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Add New Location</DialogTitle>
+              <DialogDescription>
+                Create a new campus location for your school.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateLocation} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Location Name *</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    placeholder="Downtown Campus"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="code">Location Code *</Label>
+                  <Input
+                    id="code"
+                    name="code"
+                    placeholder="DT"
+                    required
+                    maxLength={4}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="address">Address *</Label>
+                <Input
+                  id="address"
+                  name="address"
+                  placeholder="123 Main Street"
+                  required
+                />
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="city">City *</Label>
+                  <Input
+                    id="city"
+                    name="city"
+                    placeholder="Atlanta"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state">State *</Label>
+                  <Input
+                    id="state"
+                    name="state"
+                    placeholder="GA"
+                    required
+                    maxLength={2}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="zipCode">ZIP Code *</Label>
+                  <Input
+                    id="zipCode"
+                    name="zipCode"
+                    placeholder="30301"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="capacity">Capacity</Label>
+                  <Input
+                    id="capacity"
+                    name="capacity"
+                    type="number"
+                    placeholder="150"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phoneNumber">Phone Number</Label>
+                  <Input
+                    id="phoneNumber"
+                    name="phoneNumber"
+                    placeholder="(404) 555-0100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="location@school.edu"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="managerName">Manager Name</Label>
+                  <Input
+                    id="managerName"
+                    name="managerName"
+                    placeholder="Sarah Johnson"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="timezone">Timezone</Label>
+                  <Select name="timezone" defaultValue="America/New_York">
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="America/New_York">Eastern Time</SelectItem>
+                      <SelectItem value="America/Chicago">Central Time</SelectItem>
+                      <SelectItem value="America/Denver">Mountain Time</SelectItem>
+                      <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createLocationMutation.isPending}>
+                  {createLocationMutation.isPending ? "Creating..." : "Create Location"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Location Overview Cards */}
