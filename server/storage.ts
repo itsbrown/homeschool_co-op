@@ -16,7 +16,9 @@ import {
   linkAnalytics, type LinkAnalytics, type InsertLinkAnalytics,
   payments, type Payment, type InsertPayment,
   scheduledPayments, type ScheduledPayment, type InsertScheduledPayment,
-  schools, type School, type InsertSchool
+  schools, type School, type InsertSchool,
+  schoolStudents, type SchoolStudent, type InsertSchoolStudent,
+  userLocations, type UserLocation, type InsertUserLocation
 } from "@shared/schema";
 
 export interface IStorage {
@@ -174,6 +176,23 @@ export interface IStorage {
   createScheduledPayment(payment: any): Promise<any>;
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
+
+  // School Student methods
+  getSchoolStudentById(id: number): Promise<SchoolStudent | undefined>;
+  getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]>;
+  getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]>;
+  getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined>;
+  createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent>;
+  updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined>;
+  deleteSchoolStudent(id: number): Promise<void>;
+
+  // User Location methods  
+  getUserLocationById(id: number): Promise<UserLocation | undefined>;
+  getUserLocationsByUserId(userId: number): Promise<UserLocation[]>;
+  getUserLocationsByLocationId(locationId: number): Promise<UserLocation[]>;
+  createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation>;
+  updateUserLocation(id: number, userLocation: Partial<InsertUserLocation>): Promise<UserLocation | undefined>;
+  deleteUserLocation(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -190,6 +209,8 @@ export class MemStorage implements IStorage {
   private classesStore: Map<number, Class>;
   private activitiesStore: Map<number, Activity>;
   private marketingLinksStore: Map<number, MarketingLink>;
+  private schoolStudentsStore: Map<number, SchoolStudent>;
+  private userLocationsStore: Map<number, UserLocation>;
   private linkAnalyticsStore: Map<number, LinkAnalytics>;
   private paymentsStore: Map<number, Payment>;
   private schoolsStore: Map<number, School>;
@@ -210,6 +231,8 @@ export class MemStorage implements IStorage {
   private linkAnalyticsIdCounter: number;
   private paymentIdCounter: number;
   private schoolIdCounter: number;
+  private schoolStudentIdCounter: number;
+  private userLocationIdCounter: number;
   private classEnrollments: any[];
 
   constructor() {
@@ -226,6 +249,8 @@ export class MemStorage implements IStorage {
     this.classesStore = new Map();
     this.activitiesStore = new Map();
     this.marketingLinksStore = new Map();
+    this.schoolStudentsStore = new Map();
+    this.userLocationsStore = new Map();
     this.linkAnalyticsStore = new Map();
     this.paymentsStore = new Map();
     this.schoolsStore = new Map();
@@ -247,6 +272,8 @@ export class MemStorage implements IStorage {
     this.linkAnalyticsIdCounter = 1;
     this.paymentIdCounter = 1;
     this.schoolIdCounter = 1;
+    this.schoolStudentIdCounter = 1;
+    this.userLocationIdCounter = 1;
 
     // Initialize with a default admin user
 
@@ -260,6 +287,8 @@ export class MemStorage implements IStorage {
     this.initializeChildren().catch(console.error);
     this.initializeScheduledPayments().catch(console.error);
     this.initializePayments().catch(console.error);
+    this.initializeSchoolStudents().catch(console.error);
+    this.initializeUserLocations().catch(console.error);
 
     this.createUser({
       username: "admin",
@@ -2204,6 +2233,216 @@ export class MemStorage implements IStorage {
       console.error('❌ Error saving scheduled payments to file:', error);
     }
   }
+
+  // School Students initialization and methods
+  private async initializeSchoolStudents(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const schoolStudentsFilePath = path.join(process.cwd(), 'data', 'school-students.json');
+
+      if (fs.existsSync(schoolStudentsFilePath)) {
+        const schoolStudentsData = JSON.parse(fs.readFileSync(schoolStudentsFilePath, 'utf-8'));
+        console.log(`🎓 Loading ${schoolStudentsData.length} school students from school-students.json`);
+
+        for (const schoolStudent of schoolStudentsData) {
+          const record: SchoolStudent = {
+            ...schoolStudent,
+            enrollmentDate: new Date(schoolStudent.enrollmentDate),
+            createdAt: new Date(schoolStudent.createdAt),
+            updatedAt: new Date(schoolStudent.updatedAt)
+          };
+          this.schoolStudentsStore.set(schoolStudent.id, record);
+          this.schoolStudentIdCounter = Math.max(this.schoolStudentIdCounter, schoolStudent.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${schoolStudentsData.length} school students into storage`);
+      } else {
+        console.log('🎓 No school-students.json found, starting with empty school students');
+      }
+    } catch (error) {
+      console.error('❌ Error loading school students from JSON:', error);
+    }
+  }
+
+  async getSchoolStudentById(id: number): Promise<SchoolStudent | undefined> {
+    return this.schoolStudentsStore.get(id);
+  }
+
+  async getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]> {
+    return Array.from(this.schoolStudentsStore.values()).filter(
+      student => student.schoolId === schoolId
+    );
+  }
+
+  async getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]> {
+    return Array.from(this.schoolStudentsStore.values()).filter(
+      student => student.locationId === locationId
+    );
+  }
+
+  async getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined> {
+    return Array.from(this.schoolStudentsStore.values()).find(
+      student => student.childId === childId
+    );
+  }
+
+  async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
+    const id = this.schoolStudentIdCounter++;
+    const now = new Date();
+    const newSchoolStudent: SchoolStudent = {
+      id,
+      ...schoolStudent,
+      enrollmentDate: schoolStudent.enrollmentDate || now,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.schoolStudentsStore.set(id, newSchoolStudent);
+    await this.saveSchoolStudentsToDisk();
+    return newSchoolStudent;
+  }
+
+  async updateSchoolStudent(id: number, updateData: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined> {
+    const schoolStudent = this.schoolStudentsStore.get(id);
+    if (!schoolStudent) return undefined;
+
+    const updatedSchoolStudent: SchoolStudent = {
+      ...schoolStudent,
+      ...updateData,
+      updatedAt: new Date()
+    };
+
+    this.schoolStudentsStore.set(id, updatedSchoolStudent);
+    await this.saveSchoolStudentsToDisk();
+    return updatedSchoolStudent;
+  }
+
+  async deleteSchoolStudent(id: number): Promise<void> {
+    this.schoolStudentsStore.delete(id);
+    await this.saveSchoolStudentsToDisk();
+  }
+
+  private async saveSchoolStudentsToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const schoolStudentsFilePath = path.join(process.cwd(), 'data', 'school-students.json');
+
+      const dataDir = path.dirname(schoolStudentsFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const schoolStudents = Array.from(this.schoolStudentsStore.values());
+      fs.writeFileSync(schoolStudentsFilePath, JSON.stringify(schoolStudents, null, 2));
+      console.log(`💾 Successfully saved ${schoolStudents.length} school students to disk`);
+    } catch (error) {
+      console.error('❌ Error saving school students to disk:', error);
+    }
+  }
+
+  // User Locations initialization and methods
+  private async initializeUserLocations(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const userLocationsFilePath = path.join(process.cwd(), 'data', 'user-locations.json');
+
+      if (fs.existsSync(userLocationsFilePath)) {
+        const userLocationsData = JSON.parse(fs.readFileSync(userLocationsFilePath, 'utf-8'));
+        console.log(`🏢 Loading ${userLocationsData.length} user locations from user-locations.json`);
+
+        for (const userLocation of userLocationsData) {
+          const record: UserLocation = {
+            ...userLocation,
+            assignedAt: new Date(userLocation.assignedAt),
+            createdAt: new Date(userLocation.createdAt),
+            updatedAt: new Date(userLocation.updatedAt)
+          };
+          this.userLocationsStore.set(userLocation.id, record);
+          this.userLocationIdCounter = Math.max(this.userLocationIdCounter, userLocation.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${userLocationsData.length} user locations into storage`);
+      } else {
+        console.log('🏢 No user-locations.json found, starting with empty user locations');
+      }
+    } catch (error) {
+      console.error('❌ Error loading user locations from JSON:', error);
+    }
+  }
+
+  async getUserLocationById(id: number): Promise<UserLocation | undefined> {
+    return this.userLocationsStore.get(id);
+  }
+
+  async getUserLocationsByUserId(userId: number): Promise<UserLocation[]> {
+    return Array.from(this.userLocationsStore.values()).filter(
+      userLocation => userLocation.userId === userId && userLocation.isActive
+    );
+  }
+
+  async getUserLocationsByLocationId(locationId: number): Promise<UserLocation[]> {
+    return Array.from(this.userLocationsStore.values()).filter(
+      userLocation => userLocation.locationId === locationId && userLocation.isActive
+    );
+  }
+
+  async createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation> {
+    const id = this.userLocationIdCounter++;
+    const now = new Date();
+    const newUserLocation: UserLocation = {
+      id,
+      ...userLocation,
+      assignedAt: now,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.userLocationsStore.set(id, newUserLocation);
+    await this.saveUserLocationsToDisk();
+    return newUserLocation;
+  }
+
+  async updateUserLocation(id: number, updateData: Partial<InsertUserLocation>): Promise<UserLocation | undefined> {
+    const userLocation = this.userLocationsStore.get(id);
+    if (!userLocation) return undefined;
+
+    const updatedUserLocation: UserLocation = {
+      ...userLocation,
+      ...updateData,
+      updatedAt: new Date()
+    };
+
+    this.userLocationsStore.set(id, updatedUserLocation);
+    await this.saveUserLocationsToDisk();
+    return updatedUserLocation;
+  }
+
+  async deleteUserLocation(id: number): Promise<void> {
+    this.userLocationsStore.delete(id);
+    await this.saveUserLocationsToDisk();
+  }
+
+  private async saveUserLocationsToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const userLocationsFilePath = path.join(process.cwd(), 'data', 'user-locations.json');
+
+      const dataDir = path.dirname(userLocationsFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const userLocations = Array.from(this.userLocationsStore.values());
+      fs.writeFileSync(userLocationsFilePath, JSON.stringify(userLocations, null, 2));
+      console.log(`💾 Successfully saved ${userLocations.length} user locations to disk`);
+    } catch (error) {
+      console.error('❌ Error saving user locations to disk:', error);
+    }
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -2797,6 +3036,60 @@ export class MemStorage implements IStorage {
 
       async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
         return this.memStorage.updateScheduledPaymentStatus(id, status);
+      }
+
+      // School Student methods
+      async getSchoolStudentById(id: number): Promise<SchoolStudent | undefined> {
+        return this.memStorage.getSchoolStudentById(id);
+      }
+
+      async getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]> {
+        return this.memStorage.getSchoolStudentsBySchoolId(schoolId);
+      }
+
+      async getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]> {
+        return this.memStorage.getSchoolStudentsByLocationId(locationId);
+      }
+
+      async getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined> {
+        return this.memStorage.getSchoolStudentByChildId(childId);
+      }
+
+      async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
+        return this.memStorage.createSchoolStudent(schoolStudent);
+      }
+
+      async updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined> {
+        return this.memStorage.updateSchoolStudent(id, schoolStudent);
+      }
+
+      async deleteSchoolStudent(id: number): Promise<void> {
+        return this.memStorage.deleteSchoolStudent(id);
+      }
+
+      // User Location methods
+      async getUserLocationById(id: number): Promise<UserLocation | undefined> {
+        return this.memStorage.getUserLocationById(id);
+      }
+
+      async getUserLocationsByUserId(userId: number): Promise<UserLocation[]> {
+        return this.memStorage.getUserLocationsByUserId(userId);
+      }
+
+      async getUserLocationsByLocationId(locationId: number): Promise<UserLocation[]> {
+        return this.memStorage.getUserLocationsByLocationId(locationId);
+      }
+
+      async createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation> {
+        return this.memStorage.createUserLocation(userLocation);
+      }
+
+      async updateUserLocation(id: number, userLocation: Partial<InsertUserLocation>): Promise<UserLocation | undefined> {
+        return this.memStorage.updateUserLocation(id, userLocation);
+      }
+
+      async deleteUserLocation(id: number): Promise<void> {
+        return this.memStorage.deleteUserLocation(id);
       }
   }
 

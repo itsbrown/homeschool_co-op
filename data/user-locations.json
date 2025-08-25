@@ -43,5 +43,20 @@
     "assignedAt": "2025-08-24T21:50:00.000Z",
     "createdAt": "2025-08-24T21:50:00.000Z",
     "updatedAt": "2025-08-24T21:50:00.000Z"
+  },
+  {
+    "id": 4,
+    "userId": 2,
+    "locationId": 1,
+    "accessLevel": "manage",
+    "canViewReports": true,
+    "canManageStaff": false,
+    "canManageClasses": true,
+    "canManageStudents": true,
+    "canSendNotifications": true,
+    "isActive": true,
+    "assignedAt": "2025-08-24T22:00:00.000Z",
+    "createdAt": "2025-08-24T22:00:00.000Z",
+    "updatedAt": "2025-08-24T22:00:00.000Z"
   }
 ]
