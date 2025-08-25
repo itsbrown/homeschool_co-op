@@ -120,8 +120,8 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       setEducators(defaultEducators);
     });
 
-    // Fetch locations for the school
-    fetch('/api/locations', {
+    // Fetch locations for the school (use schoolId 1 as default)
+    fetch('/api/locations?schoolId=1', {
       credentials: 'include',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
