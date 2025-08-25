@@ -37,7 +37,8 @@ interface StaffMember {
   email: string;
   phone: string;
   role: string;
-  department: string;
+  locationId: string;
+  classId: string;
   subjects: string[];
   status: string;
   joinDate: string;
@@ -58,7 +59,8 @@ export default function StaffEditPage() {
       email: "",
       phone: "",
       role: "",
-      department: "",
+      locationId: "",
+      classId: "",
       subjects: [],
       status: "Active",
       joinDate: "",
@@ -96,6 +98,39 @@ export default function StaffEditPage() {
       }
       
       return await response.json();
+    },
+  });
+
+  // Fetch all locations
+  const { data: locations = [] } = useQuery({
+    queryKey: ['/api/locations'],
+    queryFn: async () => {
+      const response = await fetch('/api/locations?schoolId=1', {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch locations');
+      }
+      
+      return await response.json();
+    },
+  });
+
+  // Fetch all classes for selection
+  const { data: allClassesList = [] } = useQuery({
+    queryKey: ['/api/school-admin/classes-list'],
+    queryFn: async () => {
+      const response = await fetch('/api/school-admin/classes?limit=1000', {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch classes');
+      }
+      
+      const data = await response.json();
+      return data.classes || [];
     },
   });
 
@@ -375,24 +410,47 @@ export default function StaffEditPage() {
 
                       <FormField
                         control={form.control}
-                        name="department"
+                        name="locationId"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Department</FormLabel>
+                            <FormLabel>Location</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select department" />
+                                  <SelectValue placeholder="Select location" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="Mathematics">Mathematics</SelectItem>
-                                <SelectItem value="English">English</SelectItem>
-                                <SelectItem value="Science">Science</SelectItem>
-                                <SelectItem value="History">History</SelectItem>
-                                <SelectItem value="Arts">Arts</SelectItem>
-                                <SelectItem value="Physical Education">Physical Education</SelectItem>
-                                <SelectItem value="Administration">Administration</SelectItem>
+                                {locations?.map((location: any) => (
+                                  <SelectItem key={location.id} value={location.id.toString()}>
+                                    {location.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="classId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Class</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select class" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {allClassesList?.map((classItem: any) => (
+                                  <SelectItem key={classItem.id} value={classItem.id.toString()}>
+                                    {classItem.className}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             <FormMessage />

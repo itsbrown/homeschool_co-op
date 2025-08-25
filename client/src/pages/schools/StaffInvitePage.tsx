@@ -21,7 +21,8 @@ const inviteFormSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   role: z.string().min(1, "Please select a role"),
-  department: z.string().min(1, "Please select a department"),
+  locationId: z.string().min(1, "Please select a location"),
+  classId: z.string().min(1, "Please select a class"),
   message: z.string().optional(),
 });
 
@@ -47,17 +48,34 @@ export default function StaffInvitePage() {
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
   });
 
-  // Fetch departments for dropdown with automatic updates
-  const { data: departments = [] } = useQuery({
-    queryKey: ['/api/school-admin/departments'],
+  // Fetch all locations
+  const { data: locations = [] } = useQuery({
+    queryKey: ['/api/locations'],
     queryFn: async () => {
-      const response = await fetch('/api/school-admin/departments', {
+      const response = await fetch('/api/locations?schoolId=1', {
         credentials: 'include',
       });
       if (!response.ok) {
-        throw new Error('Failed to fetch departments');
+        throw new Error('Failed to fetch locations');
       }
       return response.json();
+    },
+    retry: false,
+    refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
+  });
+
+  // Fetch all classes for selection
+  const { data: allClassesList = [] } = useQuery({
+    queryKey: ['/api/school-admin/classes-list'],
+    queryFn: async () => {
+      const response = await fetch('/api/school-admin/classes?limit=1000', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch classes');
+      }
+      const data = await response.json();
+      return data.classes || [];
     },
     retry: false,
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
@@ -71,7 +89,8 @@ export default function StaffInvitePage() {
       firstName: "",
       lastName: "",
       role: "Mentor",
-      department: "",
+      locationId: "",
+      classId: "",
       message: "",
     },
   });
@@ -206,23 +225,51 @@ export default function StaffInvitePage() {
 
                 <FormField
                   control={form.control}
-                  name="department"
+                  name="locationId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Department*</FormLabel>
+                      <FormLabel>Location*</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
                         defaultValue={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select a department" />
+                            <SelectValue placeholder="Select a location" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {departments.map((department: any) => (
-                            <SelectItem key={department.id} value={department.name}>
-                              {department.name}
+                          {locations.map((location: any) => (
+                            <SelectItem key={location.id} value={location.id.toString()}>
+                              {location.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="classId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Class*</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a class" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {allClassesList.map((classItem: any) => (
+                            <SelectItem key={classItem.id} value={classItem.id.toString()}>
+                              {classItem.className}
                             </SelectItem>
                           ))}
                         </SelectContent>
