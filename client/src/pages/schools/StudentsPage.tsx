@@ -36,6 +36,9 @@ export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [gradeLevelFilter, setGradeLevelFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [sortField, setSortField] = useState("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [activeView, setActiveView] = useState("list");
   const { toast } = useToast();
 
@@ -80,7 +83,7 @@ export default function StudentsPage() {
     );
   }
 
-  // Filter students based on search query and filters
+  // Filter and sort students based on search query and filters
   const filteredStudents = students ? students.filter((student: any) => {
     const matchesSearch = searchQuery === "" || 
       student.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -89,13 +92,58 @@ export default function StudentsPage() {
     
     const matchesGradeLevel = gradeLevelFilter === "all" || student.gradeLevel === gradeLevelFilter;
     const matchesStatus = statusFilter === "all" || student.status === statusFilter;
+    const matchesLocation = locationFilter === "all" || student.locationName === locationFilter;
     
-    return matchesSearch && matchesGradeLevel && matchesStatus;
+    return matchesSearch && matchesGradeLevel && matchesStatus && matchesLocation;
+  }).sort((a: any, b: any) => {
+    let aValue: any = "";
+    let bValue: any = "";
+    
+    switch (sortField) {
+      case "name":
+        aValue = a.name?.toLowerCase() || "";
+        bValue = b.name?.toLowerCase() || "";
+        break;
+      case "grade":
+        aValue = parseInt(a.gradeLevel) || 0;
+        bValue = parseInt(b.gradeLevel) || 0;
+        break;
+      case "age":
+        aValue = parseInt(a.age) || 0;
+        bValue = parseInt(b.age) || 0;
+        break;
+      case "location":
+        aValue = a.locationName?.toLowerCase() || "";
+        bValue = b.locationName?.toLowerCase() || "";
+        break;
+      case "parent":
+        aValue = a.parentName?.toLowerCase() || "";
+        bValue = b.parentName?.toLowerCase() || "";
+        break;
+      case "enrollment":
+        aValue = new Date(a.enrollmentDate || 0).getTime();
+        bValue = new Date(b.enrollmentDate || 0).getTime();
+        break;
+      case "status":
+        aValue = a.status?.toLowerCase() || "";
+        bValue = b.status?.toLowerCase() || "";
+        break;
+      default:
+        aValue = a.name?.toLowerCase() || "";
+        bValue = b.name?.toLowerCase() || "";
+    }
+    
+    if (sortDirection === "asc") {
+      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+    } else {
+      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+    }
   }) : [];
 
-  // Get unique grade levels and statuses for filters
+  // Get unique grade levels, statuses, and locations for filters
   const gradeLevels = students ? [...new Set(students.map((student: any) => student.gradeLevel))] : [];
   const statuses = students ? [...new Set(students.map((student: any) => student.status))] : [];
+  const locations = students ? [...new Set(students.map((student: any) => student.locationName).filter(Boolean))] : [];
 
   // Sort grade levels numerically
   gradeLevels.sort((a: any, b: any) => {
@@ -150,38 +198,82 @@ export default function StudentsPage() {
 
               <CardContent className="space-y-4">
                 {/* Search and Filters */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name, parent, or email..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-8"
-                    />
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name, parent, or email..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                    <Select value={gradeLevelFilter} onValueChange={setGradeLevelFilter}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Grade Level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Grades</SelectItem>
+                        {gradeLevels.map((grade: any) => (
+                          <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={locationFilter} onValueChange={setLocationFilter}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Locations</SelectItem>
+                        {locations.map((location: any) => (
+                          <SelectItem key={location} value={location}>{location}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        {statuses.map((status: any) => (
+                          <SelectItem key={status} value={status}>{status}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Select value={gradeLevelFilter} onValueChange={setGradeLevelFilter}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Grade Level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Grades</SelectItem>
-                      {gradeLevels.map((grade: any) => (
-                        <SelectItem key={grade} value={grade}>{grade}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      {statuses.map((status: any) => (
-                        <SelectItem key={status} value={status}>{status}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  
+                  {/* Sorting Controls */}
+                  <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-muted-foreground">Sort by:</span>
+                      <Select value={sortField} onValueChange={setSortField}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="name">Name</SelectItem>
+                          <SelectItem value="grade">Grade Level</SelectItem>
+                          <SelectItem value="age">Age</SelectItem>
+                          <SelectItem value="location">Location</SelectItem>
+                          <SelectItem value="parent">Parent/Guardian</SelectItem>
+                          <SelectItem value="enrollment">Enrollment Date</SelectItem>
+                          <SelectItem value="status">Status</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+                      >
+                        {sortDirection === "asc" ? "↑" : "↓"}
+                      </Button>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {filteredStudents.length} of {students?.length || 0} students
+                    </div>
+                  </div>
                 </div>
               </CardContent>
 
