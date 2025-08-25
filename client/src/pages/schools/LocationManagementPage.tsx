@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle } from 'lucide-react'
+import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit } from 'lucide-react'
 
 interface LocationOverview {
   id: number
@@ -129,6 +129,40 @@ export default function LocationManagementPage() {
     }
 
     createLocationMutation.mutate(locationData)
+  }
+
+  // Delete location mutation
+  const deleteLocationMutation = useMutation({
+    mutationFn: (locationId: number) => 
+      fetch(`/api/locations/${locationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        }
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to delete location')
+        return res.json()
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      toast({
+        title: "Success",
+        description: "Location deleted successfully",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete location",
+        variant: "destructive",
+      })
+    }
+  })
+
+  const handleDeleteLocation = (location: LocationOverview) => {
+    if (window.confirm(`Are you sure you want to delete "${location.name}"? This action cannot be undone and will affect ${location.totalStudents} students.`)) {
+      deleteLocationMutation.mutate(location.id)
+    }
   }
 
   if (isLoadingLocations) {
@@ -399,6 +433,7 @@ export default function LocationManagementPage() {
                     <TableHead>Capacity</TableHead>
                     <TableHead>Utilization</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -434,6 +469,28 @@ export default function LocationManagementPage() {
                         <Badge variant={location.status === 'Active' ? 'default' : 'secondary'}>
                           {location.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Edit location"
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Delete location"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleDeleteLocation(location)}
+                            disabled={deleteLocationMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
