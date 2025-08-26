@@ -389,7 +389,7 @@ export default function StaffEditPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Role</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select role" />
@@ -414,7 +414,7 @@ export default function StaffEditPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Location</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value?.toString() || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select location" />
@@ -439,7 +439,7 @@ export default function StaffEditPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Class</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value?.toString() || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select class" />

@@ -1766,9 +1766,9 @@ router.put("/staff/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    const { name, email, phone, role, department, status } = req.body;
+    const { name, email, phone, role, department, locationId, classId, status } = req.body;
 
-    console.log(`🔄 Updating staff member ${staffId}:`, { name, email, role, department, status });
+    console.log(`🔄 Updating staff member ${staffId}:`, { name, email, role, department, locationId, classId, status });
 
     // Get current staff data from file
     const DATA_DIR = path.join(process.cwd(), 'data');
@@ -1793,7 +1793,9 @@ router.put("/staff/:id", async (req, res) => {
       email,
       phone: phone || existingStaff.phone,
       role,
-      department,
+      department: department || existingStaff.department,
+      locationId: locationId || existingStaff.locationId,
+      classId: classId || existingStaff.classId,
       status,
       // Preserve existing fields
       id: staffId,
