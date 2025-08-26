@@ -190,6 +190,45 @@ const superAdminNavItems: {
   },
 ];
 
+// Sidebar navigation items for educators (limited scope)
+const educatorNavItems: {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+  subitems?: { title: string; href: string }[];
+}[] = [
+  {
+    title: 'Dashboard',
+    href: '/dashboard',
+    icon: Home,
+  },
+  {
+    title: 'My Classes',
+    href: '/educator/classes',
+    icon: BookOpen,
+  },
+  {
+    title: 'My Students',
+    href: '/educator/students',
+    icon: GraduationCap,
+  },
+  {
+    title: 'Schedule',
+    href: '/educator/schedule',
+    icon: Calendar,
+  },
+  {
+    title: 'Notifications',
+    href: '/educator/notifications',
+    icon: Bell,
+  },
+  {
+    title: 'Settings',
+    href: '/settings',
+    icon: Settings,
+  },
+];
+
 export default function Sidebar() {
   const [location] = useLocation();
   const { user, signOut, isAuthenticated } = useAuth();
@@ -217,7 +256,17 @@ export default function Sidebar() {
   };
 
   // Choose navigation items based on role
-  const navItems = activeRole === 'superAdmin' ? superAdminNavItems : schoolNavItems;
+  const getNavItems = () => {
+    if (activeRole === 'superAdmin') {
+      return superAdminNavItems;
+    } else if (activeRole === 'educator') {
+      return educatorNavItems;
+    } else {
+      return schoolNavItems;
+    }
+  };
+  
+  const navItems = getNavItems();
 
   return (
     <>
