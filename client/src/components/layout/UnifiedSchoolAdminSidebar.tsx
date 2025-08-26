@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 import { cn } from '@/lib/utils';
 import { 
   School, 
@@ -29,8 +30,8 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-// Unified navigation items for school administrators
-const schoolNavItems: NavItem[] = [
+// Navigation items for school administrators
+const adminNavItems: NavItem[] = [
   {
     title: 'Dashboard',
     href: '/dashboard',
@@ -88,6 +89,40 @@ const schoolNavItems: NavItem[] = [
   },
 ];
 
+// Navigation items for educators (limited scope)
+const educatorNavItems: NavItem[] = [
+  {
+    title: 'Dashboard',
+    href: '/dashboard',
+    icon: Home,
+  },
+  {
+    title: 'My Classes',
+    href: '/educator/classes',
+    icon: BookOpen,
+  },
+  {
+    title: 'My Students',
+    href: '/educator/students',
+    icon: GraduationCap,
+  },
+  {
+    title: 'Schedule',
+    href: '/educator/schedule',
+    icon: Calendar,
+  },
+  {
+    title: 'Notifications',
+    href: '/educator/notifications',
+    icon: Bell,
+  },
+  {
+    title: 'Settings',
+    href: '/settings',
+    icon: Settings,
+  },
+];
+
 interface SidebarProps {
   className?: string;
 }
@@ -96,6 +131,31 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { user, isAuthenticated, signOut } = useAuth();
+  const { activeRole } = useRole();
+
+  // Get appropriate navigation items based on role
+  const getNavItems = () => {
+    if (activeRole === 'educator') {
+      return educatorNavItems;
+    }
+    return adminNavItems; // Default for admin roles
+  };
+
+  // Get role display name
+  const getRoleDisplayName = () => {
+    switch (activeRole) {
+      case 'educator':
+        return 'Educator';
+      case 'school_admin':
+        return 'School Administrator';
+      case 'superAdmin':
+        return 'Super Administrator';
+      default:
+        return 'School Administrator';
+    }
+  };
+
+  const navItems = getNavItems();
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
@@ -136,7 +196,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         {/* Navigation */}
         <div className="flex-1 overflow-auto py-2">
           <nav className="grid gap-1 px-2">
-            {schoolNavItems.map((item) => {
+            {navItems.map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`);
               
               return (
@@ -170,7 +230,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-gray-900">{user.user_metadata?.full_name || user.email}</div>
-                    <div className="text-xs text-gray-500">School Administrator</div>
+                    <div className="text-xs text-gray-500">{getRoleDisplayName()}</div>
                   </div>
                 </div>
               )}
@@ -222,7 +282,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
               
               <div className="py-4">
                 <nav className="grid gap-1 px-2">
-                  {schoolNavItems.map((item) => {
+                  {navItems.map((item) => {
                     const isActive = location === item.href || location.startsWith(`${item.href}/`);
                     
                     return (
@@ -254,7 +314,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                       </div>
                       <div>
                         <div className="text-sm font-medium text-gray-900">{user.user_metadata?.full_name || user.email}</div>
-                        <div className="text-xs text-gray-500">School Administrator</div>
+                        <div className="text-xs text-gray-500">{getRoleDisplayName()}</div>
                       </div>
                     </div>
                     
