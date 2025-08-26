@@ -100,14 +100,14 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       
       // Special handling for specific users
       if (user.email === 'corey@americanseekersacademy.com') {
-        console.log(`🔑 Forcing educator role for: ${user.email}`);
+        console.log(`🔑 Forcing superAdmin role for: ${user.email}`);
         // Clear any cached parent role
         localStorage.removeItem('activeRole');
         localStorage.removeItem('selectedRole');
         localStorage.removeItem('userRole');
-        setActiveRole('educator');
-        localStorage.setItem('activeRole', 'educator');
-        setCanSwitchRoles(true); // Allow role switching for educator
+        setActiveRole('superAdmin');
+        localStorage.setItem('activeRole', 'superAdmin');
+        setCanSwitchRoles(true); // Allow role switching for superAdmin
       } else if (user.email === 'coreycreates@gmail.com') {
         console.log(`🔑 Forcing school_admin role for: ${user.email}`);
         setActiveRole('school_admin');

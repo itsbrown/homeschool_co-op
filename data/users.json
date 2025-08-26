@@ -47,7 +47,7 @@
   {
     "id": 5,
     "email": "corey@americanseekersacademy.com",
-    "role": "educator",
+    "role": "superAdmin",
     "schoolId": 1,
     "firstName": "Corey",
     "lastName": "Brown",
