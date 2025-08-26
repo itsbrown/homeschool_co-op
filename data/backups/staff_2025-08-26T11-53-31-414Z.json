@@ -14,9 +14,7 @@
     "subjects": [],
     "invitedAt": "2025-05-27T19:43:32.236Z",
     "message": "Welcome to our team!",
-    "invitationToken": "zsns4c5g285e83hv42ijg",
-    "locationId": "5",
-    "classId": "5"
+    "invitationToken": "zsns4c5g285e83hv42ijg"
   },
   {
     "id": 2,
@@ -67,9 +65,7 @@
     "subjects": [],
     "invitedAt": "2025-06-02T01:08:24.597Z",
     "message": "Hello",
-    "invitationToken": "r2ucobk0okl1iew3ejnfcj",
-    "locationId": "5",
-    "classId": "12"
+    "invitationToken": "r2ucobk0okl1iew3ejnfcj"
   },
   {
     "id": 1,
