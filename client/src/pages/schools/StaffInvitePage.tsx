@@ -75,7 +75,7 @@ export default function StaffInvitePage() {
         throw new Error('Failed to fetch classes');
       }
       const data = await response.json();
-      return data.classes || [];
+      return data.items || data.classes || [];
     },
     retry: false,
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
@@ -269,7 +269,7 @@ export default function StaffInvitePage() {
                         <SelectContent>
                           {allClassesList.map((classItem: any) => (
                             <SelectItem key={classItem.id} value={classItem.id.toString()}>
-                              {classItem.className}
+                              {classItem.title || classItem.className}
                             </SelectItem>
                           ))}
                         </SelectContent>

@@ -130,7 +130,7 @@ export default function StaffEditPage() {
       }
       
       const data = await response.json();
-      return data.classes || [];
+      return data.items || data.classes || [];
     },
   });
 
@@ -448,7 +448,7 @@ export default function StaffEditPage() {
                               <SelectContent>
                                 {allClassesList?.map((classItem: any) => (
                                   <SelectItem key={classItem.id} value={classItem.id.toString()}>
-                                    {classItem.className}
+                                    {classItem.title || classItem.className}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
