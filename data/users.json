@@ -53,5 +53,85 @@
     "lastName": "Brown",
     "createdAt": "2025-08-26T22:00:00.000Z",
     "updatedAt": "2025-08-26T22:00:00.000Z"
+  },
+  {
+    "id": 6,
+    "email": "jocimarie@gmail.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Jocelyn",
+    "lastName": "Brown",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 7,
+    "email": "corey.e.brown2025@gmail.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 8,
+    "email": "test-staff@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Test",
+    "lastName": "Staff",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 9,
+    "email": "test-invite@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Test",
+    "lastName": "User",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 10,
+    "email": "test-staff-token@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Token",
+    "lastName": "Test",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 11,
+    "email": "test-token-validation@example.com",
+    "role": "school_admin",
+    "schoolId": 1,
+    "firstName": "Validation",
+    "lastName": "Test",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 12,
+    "email": "token-fix-test@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "TokenFix",
+    "lastName": "Test",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 13,
+    "email": "test-auto-account@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Auto",
+    "lastName": "Test",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
   }
 ]
