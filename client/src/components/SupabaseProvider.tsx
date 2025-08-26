@@ -20,6 +20,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<any>;
+  resetPassword: (email: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -211,6 +212,13 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
     return { data, error };
   };
 
+  const resetPassword = async (email: string) => {
+    const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    return { data, error };
+  };
+
   const value = {
     user,
     session,
@@ -221,6 +229,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
     signUp,
     signOut,
     signInWithGoogle,
+    resetPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

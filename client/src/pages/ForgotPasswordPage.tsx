@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/components/SupabaseProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,11 +11,11 @@ import { CheckCircle, XCircle, Loader2, ArrowLeft } from "lucide-react";
 
 export default function ForgotPasswordPage() {
   const [, setLocation] = useLocation();
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [resetInfo, setResetInfo] = useState<{token?: string, resetUrl?: string} | null>(null);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,21 +29,12 @@ export default function ForgotPasswordPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccess(true);
-        setResetInfo(data); // This includes the token for testing
+      const { error } = await resetPassword(email);
+      
+      if (error) {
+        setError(error.message || "Failed to send reset email");
       } else {
-        setError(data.message || "Failed to send reset email");
+        setSuccess(true);
       }
     } catch (err) {
       setError("Network error. Please try again.");
@@ -63,24 +55,6 @@ export default function ForgotPasswordPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* For testing purposes, show the reset link */}
-            {resetInfo?.resetUrl && (
-              <Alert className="border-blue-200 bg-blue-50">
-                <AlertDescription className="text-blue-700">
-                  <strong>For testing:</strong> 
-                  <br />
-                  <a 
-                    href={resetInfo.resetUrl} 
-                    className="underline hover:no-underline break-all"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {resetInfo.resetUrl}
-                  </a>
-                </AlertDescription>
-              </Alert>
-            )}
-
             <Button 
               onClick={() => setLocation('/login')}
               className="w-full"
@@ -96,7 +70,6 @@ export default function ForgotPasswordPage() {
                 onClick={() => {
                   setSuccess(false);
                   setEmail("");
-                  setResetInfo(null);
                 }}
                 className="text-sm"
               >
