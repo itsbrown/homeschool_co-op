@@ -1716,6 +1716,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const usersRouter = await import("./api/users");
   app.use("/api/users", usersRouter.default);
 
+  // Add endpoint to get user role by email for authentication
+  app.get("/api/users/role/:email", async (req, res) => {
+    try {
+      const email = req.params.email;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({ role: user.role, email: user.email });
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+      res.status(500).json({ message: "Error fetching user role" });
+    }
+  });
+
   // Add individual student route first (more specific)
   app.get("/api/schools/students/:id", (req, res) => {
     const studentId = parseInt(req.params.id);
