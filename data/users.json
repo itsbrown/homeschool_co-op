@@ -61,6 +61,7 @@
     "schoolId": 1,
     "firstName": "Jocelyn",
     "lastName": "Brown",
+    "password": "$2b$10$udR0fB0p/INI.Guu55pL.eSa9ZmwRbX5TIhYgYqkQCUCA0uBdCd2S",
     "createdAt": "2025-08-26T22:15:00.000Z",
     "updatedAt": "2025-08-26T22:15:00.000Z"
   },
