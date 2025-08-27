@@ -344,6 +344,9 @@ export class MemStorage implements IStorage {
     this.initializeSchoolStudents().catch(console.error);
     this.initializeUserLocations().catch(console.error);
     this.initializeLocations().catch(console.error);
+    this.initializeDailyFlowTemplates().catch(console.error);
+    this.initializeDailyFlowEntries().catch(console.error);
+    this.initializeDailyFlowSchedules().catch(console.error);
 
     this.createUser({
       username: "admin",
@@ -2598,6 +2601,98 @@ export class MemStorage implements IStorage {
       console.log(`💾 Successfully saved ${locations.length} locations to disk`);
     } catch (error) {
       console.error('❌ Error saving locations to disk:', error);
+    }
+  }
+
+  // Daily Flow data initialization methods
+  private async initializeDailyFlowTemplates(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const templatesFilePath = path.join(process.cwd(), 'data', 'daily-flow-templates.json');
+
+      if (fs.existsSync(templatesFilePath)) {
+        const templatesData = JSON.parse(fs.readFileSync(templatesFilePath, 'utf-8'));
+        console.log(`📋 Loading ${templatesData.length} daily flow templates from daily-flow-templates.json`);
+
+        for (const template of templatesData) {
+          const record: DailyFlowTemplate = {
+            ...template,
+            createdAt: new Date(template.createdAt),
+            updatedAt: new Date(template.updatedAt)
+          };
+          this.dailyFlowTemplatesStore.set(template.id, record);
+          this.dailyFlowTemplateIdCounter = Math.max(this.dailyFlowTemplateIdCounter, template.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${templatesData.length} daily flow templates into storage`);
+      } else {
+        console.log('📋 No daily-flow-templates.json found, starting with empty templates');
+      }
+    } catch (error) {
+      console.error('❌ Error loading daily flow templates from JSON:', error);
+    }
+  }
+
+  private async initializeDailyFlowEntries(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const entriesFilePath = path.join(process.cwd(), 'data', 'daily-flow-entries.json');
+
+      if (fs.existsSync(entriesFilePath)) {
+        const entriesData = JSON.parse(fs.readFileSync(entriesFilePath, 'utf-8'));
+        console.log(`📊 Loading ${entriesData.length} daily flow entries from daily-flow-entries.json`);
+
+        for (const entry of entriesData) {
+          const record: DailyFlowEntry = {
+            ...entry,
+            date: new Date(entry.date),
+            createdAt: new Date(entry.createdAt),
+            updatedAt: new Date(entry.updatedAt),
+            completedActivities: entry.completedActivities || []
+          };
+          this.dailyFlowEntriesStore.set(entry.id, record);
+          this.dailyFlowEntryIdCounter = Math.max(this.dailyFlowEntryIdCounter, entry.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${entriesData.length} daily flow entries into storage`);
+      } else {
+        console.log('📊 No daily-flow-entries.json found, starting with empty entries');
+      }
+    } catch (error) {
+      console.error('❌ Error loading daily flow entries from JSON:', error);
+    }
+  }
+
+  private async initializeDailyFlowSchedules(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const schedulesFilePath = path.join(process.cwd(), 'data', 'daily-flow-schedules.json');
+
+      if (fs.existsSync(schedulesFilePath)) {
+        const schedulesData = JSON.parse(fs.readFileSync(schedulesFilePath, 'utf-8'));
+        console.log(`🗓️ Loading ${schedulesData.length} daily flow schedules from daily-flow-schedules.json`);
+
+        for (const schedule of schedulesData) {
+          const record: DailyFlowSchedule = {
+            ...schedule,
+            startDate: new Date(schedule.startDate),
+            endDate: schedule.endDate ? new Date(schedule.endDate) : null,
+            createdAt: new Date(schedule.createdAt),
+            updatedAt: new Date(schedule.updatedAt)
+          };
+          this.dailyFlowSchedulesStore.set(schedule.id, record);
+          this.dailyFlowScheduleIdCounter = Math.max(this.dailyFlowScheduleIdCounter, schedule.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${schedulesData.length} daily flow schedules into storage`);
+      } else {
+        console.log('🗓️ No daily-flow-schedules.json found, starting with empty schedules');
+      }
+    } catch (error) {
+      console.error('❌ Error loading daily flow schedules from JSON:', error);
     }
   }
 
