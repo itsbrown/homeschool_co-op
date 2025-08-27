@@ -147,6 +147,7 @@ import SchoolApplicationSuccessPage from './pages/SchoolApplicationSuccessPage';
 import SchoolApplicationStatusPage from './pages/SchoolApplicationStatusPage';
 import LocationManagementPage from "./pages/schools/LocationManagementPage";
 import NotificationManagementPage from "@/pages/NotificationManagementPage";
+import DailyFlowsPage from "./pages/DailyFlows/DailyFlowsPage";
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -458,6 +459,14 @@ function Router() {
       <Route path="/educator/students" component={() => <AppShell><EducatorStudentsPage /></AppShell>} />
       <Route path="/educator/schedule" component={SchedulePage} />
       <Route path="/educator/notifications" component={() => <AppShell><EducatorNotificationsPage /></AppShell>} />
+      
+      {/* Daily Flow routes */}
+      <Route path="/educator/daily-flows" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
+      <Route path="/schools/daily-flows/templates" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
+      <Route path="/schools/daily-flows/entries" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
+      <Route path="/schools/daily-flows/reports" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
+      <Route path="/schools/daily-flows" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
+      
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/view" component={ChildrenViewPage} />
       <Route path="/children/register" component={ChildRegistrationPage} />

@@ -24,7 +24,8 @@ import {
   FileText,
   Link2,
   MapPin,
-  Bell
+  Bell,
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -97,6 +98,16 @@ const schoolNavItems: {
     title: 'Calendar',
     href: '/schools/calendar',
     icon: Calendar,
+  },
+  {
+    title: 'Daily Flows',
+    href: '/schools/daily-flows',
+    icon: Clock,
+    subitems: [
+      { title: 'Templates', href: '/schools/daily-flows/templates' },
+      { title: 'View Entries', href: '/schools/daily-flows/entries' },
+      { title: 'Reports', href: '/schools/daily-flows/reports' }
+    ]
   },
   {
     title: 'Settings',
@@ -221,6 +232,11 @@ const educatorNavItems: {
     title: 'Notifications',
     href: '/educator/notifications',
     icon: Bell,
+  },
+  {
+    title: 'Daily Flows',
+    href: '/educator/daily-flows',
+    icon: Clock,
   },
   {
     title: 'Settings',
