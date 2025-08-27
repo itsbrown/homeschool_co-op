@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "name": "Elementary Daily Schedule",
+    "description": "Standard daily flow template for elementary students covering core subjects",
+    "schoolId": 1,
+    "gradeLevel": "Elementary",
+    "subject": "All Subjects",
+    "createdBy": "corey.e.brown2025@gmail.com",
+    "isActive": true,
+    "createdAt": "2025-08-27T06:00:00Z",
+    "updatedAt": "2025-08-27T06:00:00Z"
+  }
+]
