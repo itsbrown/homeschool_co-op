@@ -1,10 +1,15 @@
 
-import { Router } from "express";
+import { Router, Request } from "express";
 import { z } from "zod";
 import { storage } from "../storage";
 import { dailyFlowTemplateSchema, dailyFlowEntrySchema, dailyFlowScheduleSchema } from "@shared/daily-flow-schema";
 // Use proper authentication middleware
 import { jwtCheck, requireRole } from "../middleware/auth0-auth";
+
+// Extend Request to include auth from middleware
+interface AuthenticatedRequest extends Request {
+  auth?: any; // Simplified to avoid type conflicts with express-oauth2-jwt-bearer
+}
 
 const router = Router();
 
@@ -13,13 +18,11 @@ router.get("/templates", jwtCheck, async (req, res) => {
   try {
     const { schoolId, gradeLevel, subject } = req.query;
     
-    // TODO: Implement daily flow templates in storage
-    const templates: any[] = [];
-    // const templates = await storage.getDailyFlowTemplates({
-    //   schoolId: schoolId ? parseInt(schoolId as string) : undefined,
-    //   gradeLevel: gradeLevel as string,
-    //   subject: subject as string
-    // });
+    const templates = await storage.getDailyFlowTemplates({
+      schoolId: schoolId ? parseInt(schoolId as string) : undefined,
+      gradeLevel: gradeLevel as string,
+      subject: subject as string
+    });
     
     res.json(templates);
   } catch (error) {
@@ -33,12 +36,10 @@ router.post("/templates", jwtCheck, requireRole(["schoolAdmin", "superAdmin"]), 
   try {
     const validatedData = dailyFlowTemplateSchema.parse(req.body);
     
-    // TODO: Implement daily flow template creation in storage
-    const template = { id: 1, ...validatedData, createdBy: req.user?.email || 'unknown' };
-    // const template = await storage.createDailyFlowTemplate({
-    //   ...validatedData,
-    //   createdBy: req.user?.email || 'unknown'
-    // });
+    const template = await storage.createDailyFlowTemplate({
+      ...validatedData,
+      createdBy: (req as AuthenticatedRequest).auth?.email || 'unknown'
+    });
     
     res.status(201).json(template);
   } catch (error) {
@@ -59,13 +60,11 @@ router.get("/entries", jwtCheck, async (req, res) => {
       return res.status(400).json({ message: "Class ID is required" });
     }
     
-    // TODO: Implement daily flow entries in storage
-    const entries: any[] = [];
-    // const entries = await storage.getDailyFlowEntries({
-    //   classId: parseInt(classId as string),
-    //   startDate: startDate as string,
-    //   endDate: endDate as string
-    // });
+    const entries = await storage.getDailyFlowEntries({
+      classId: parseInt(classId as string),
+      startDate: startDate as string,
+      endDate: endDate as string
+    });
     
     res.json(entries);
   } catch (error) {
@@ -79,12 +78,14 @@ router.post("/entries", jwtCheck, async (req, res) => {
   try {
     const validatedData = dailyFlowEntrySchema.parse(req.body);
     
-    // TODO: Implement daily flow entry creation in storage
-    const entry = { id: 1, ...validatedData, createdBy: req.user?.email || 'unknown' };
-    // const entry = await storage.createDailyFlowEntry({
-    //   ...validatedData,
-    //   createdBy: req.user?.email || 'unknown'
-    // });
+    // Convert string dates to Date objects for storage
+    const entryData = {
+      ...validatedData,
+      completedAt: validatedData.completedAt ? new Date(validatedData.completedAt) : null,
+      createdBy: (req as AuthenticatedRequest).auth?.email || 'unknown'
+    };
+    
+    const entry = await storage.createDailyFlowEntry(entryData);
     
     res.status(201).json(entry);
   } catch (error) {
@@ -103,12 +104,10 @@ router.patch("/entries/:id", jwtCheck, async (req, res) => {
     const updateData = req.body;
     
     // Add lastModifiedBy field
-    updateData.lastModifiedBy = req.user?.email || 'unknown';
-    updateData.updatedAt = new Date().toISOString();
+    updateData.lastModifiedBy = (req as AuthenticatedRequest).auth?.email || 'unknown';
+    updateData.updatedAt = new Date();
     
-    // TODO: Implement daily flow entry update in storage
-    const updatedEntry = { id: entryId, ...updateData };
-    // const updatedEntry = await storage.updateDailyFlowEntry(entryId, updateData);
+    const updatedEntry = await storage.updateDailyFlowEntry(entryId, updateData);
     
     if (!updatedEntry) {
       return res.status(404).json({ message: "Entry not found" });
@@ -129,16 +128,14 @@ router.patch("/entries/:id/complete", jwtCheck, async (req, res) => {
     
     const updateData = {
       isCompleted: true,
-      completedBy: req.user?.email || 'unknown',
-      completedAt: new Date().toISOString(),
+      completedBy: (req as AuthenticatedRequest).auth?.email || 'unknown',
+      completedAt: new Date(),
       notes: notes || "",
-      lastModifiedBy: req.user?.email || 'unknown',
-      updatedAt: new Date().toISOString()
+      lastModifiedBy: (req as AuthenticatedRequest).auth?.email || 'unknown',
+      updatedAt: new Date()
     };
     
-    // TODO: Implement daily flow entry update in storage
-    const updatedEntry = { id: entryId, ...updateData };
-    // const updatedEntry = await storage.updateDailyFlowEntry(entryId, updateData);
+    const updatedEntry = await storage.updateDailyFlowEntry(entryId, updateData);
     
     if (!updatedEntry) {
       return res.status(404).json({ message: "Entry not found" });
@@ -160,15 +157,13 @@ router.post("/generate-from-template", jwtCheck, requireRole(["schoolAdmin", "su
       return res.status(400).json({ message: "Template ID, class ID, start date, and end date are required" });
     }
     
-    // TODO: Implement daily flow entry generation from template in storage
-    const generatedEntries: any[] = [];
-    // const generatedEntries = await storage.generateDailyFlowEntriesFromTemplate({
-    //   templateId,
-    //   classId,
-    //   startDate,
-    //   endDate,
-    //   createdBy: req.user?.email || 'unknown'
-    // });
+    const generatedEntries = await storage.generateDailyFlowEntriesFromTemplate({
+      templateId,
+      classId,
+      startDate,
+      endDate,
+      createdBy: (req as AuthenticatedRequest).auth?.email || 'unknown'
+    });
     
     res.status(201).json(generatedEntries);
   } catch (error) {
@@ -182,13 +177,11 @@ router.get("/stats", jwtCheck, async (req, res) => {
   try {
     const { classId, startDate, endDate } = req.query;
     
-    // TODO: Implement daily flow stats in storage
-    const stats = { totalEntries: 0, completedEntries: 0, completionRate: 0 };
-    // const stats = await storage.getDailyFlowStats({
-    //   classId: classId ? parseInt(classId as string) : undefined,
-    //   startDate: startDate as string,
-    //   endDate: endDate as string
-    // });
+    const stats = await storage.getDailyFlowStats({
+      classId: classId ? parseInt(classId as string) : undefined,
+      startDate: startDate as string,
+      endDate: endDate as string
+    });
     
     res.json(stats);
   } catch (error) {

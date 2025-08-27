@@ -19,7 +19,10 @@ import {
   schools, type School, type InsertSchool,
   schoolStudents, type SchoolStudent, type InsertSchoolStudent,
   userLocations, type UserLocation, type InsertUserLocation,
-  locations, type Location, type InsertLocation
+  locations, type Location, type InsertLocation,
+  dailyFlowTemplates, type DailyFlowTemplate, type InsertDailyFlowTemplate,
+  dailyFlowEntries, type DailyFlowEntry, type InsertDailyFlowEntry,
+  dailyFlowSchedules, type DailyFlowSchedule, type InsertDailyFlowSchedule
 } from "@shared/schema";
 
 export interface IStorage {
@@ -203,6 +206,31 @@ export interface IStorage {
   createLocation(location: InsertLocation): Promise<Location>;
   updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined>;
   deleteLocation(id: number): Promise<void>;
+
+  // Daily Flow Template methods
+  getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]>;
+  getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined>;
+  createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate>;
+  updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined>;
+  deleteDailyFlowTemplate(id: number): Promise<void>;
+
+  // Daily Flow Entry methods
+  getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]>;
+  getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined>;
+  createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry>;
+  updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined>;
+  deleteDailyFlowEntry(id: number): Promise<void>;
+
+  // Daily Flow Schedule methods
+  getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]>;
+  getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined>;
+  createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule>;
+  updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined>;
+  deleteDailyFlowSchedule(id: number): Promise<void>;
+
+  // Daily Flow utility methods
+  generateDailyFlowEntriesFromTemplate(params: { templateId: number; classId: number; startDate: string; endDate: string; createdBy: string }): Promise<DailyFlowEntry[]>;
+  getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }>;
 }
 
 export class MemStorage implements IStorage {
@@ -225,6 +253,9 @@ export class MemStorage implements IStorage {
   private linkAnalyticsStore: Map<number, LinkAnalytics>;
   private paymentsStore: Map<number, Payment>;
   private schoolsStore: Map<number, School>;
+  private dailyFlowTemplatesStore: Map<number, DailyFlowTemplate>;
+  private dailyFlowEntriesStore: Map<number, DailyFlowEntry>;
+  private dailyFlowSchedulesStore: Map<number, DailyFlowSchedule>;
 
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -245,6 +276,9 @@ export class MemStorage implements IStorage {
   private schoolStudentIdCounter: number;
   private userLocationIdCounter: number;
   private locationIdCounter: number;
+  private dailyFlowTemplateIdCounter: number;
+  private dailyFlowEntryIdCounter: number;
+  private dailyFlowScheduleIdCounter: number;
   private classEnrollments: any[];
 
   constructor() {
@@ -267,6 +301,9 @@ export class MemStorage implements IStorage {
     this.linkAnalyticsStore = new Map();
     this.paymentsStore = new Map();
     this.schoolsStore = new Map();
+    this.dailyFlowTemplatesStore = new Map();
+    this.dailyFlowEntriesStore = new Map();
+    this.dailyFlowSchedulesStore = new Map();
     this.classEnrollments = [];
 
     this.userIdCounter = 1;
@@ -288,6 +325,9 @@ export class MemStorage implements IStorage {
     this.schoolStudentIdCounter = 1;
     this.userLocationIdCounter = 1;
     this.locationIdCounter = 1;
+    this.dailyFlowTemplateIdCounter = 1;
+    this.dailyFlowEntryIdCounter = 1;
+    this.dailyFlowScheduleIdCounter = 1;
 
     // Initialize with a default admin user
 
@@ -2560,6 +2600,300 @@ export class MemStorage implements IStorage {
       console.error('❌ Error saving locations to disk:', error);
     }
   }
+
+  // Daily Flow Template methods
+  async getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]> {
+    let templates = Array.from(this.dailyFlowTemplatesStore.values());
+    
+    if (filters) {
+      if (filters.schoolId) {
+        templates = templates.filter(t => t.schoolId === filters.schoolId);
+      }
+      if (filters.gradeLevel) {
+        templates = templates.filter(t => t.gradeLevel === filters.gradeLevel);
+      }
+      if (filters.subject) {
+        templates = templates.filter(t => t.subject === filters.subject);
+      }
+    }
+    
+    return templates;
+  }
+
+  async getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined> {
+    return this.dailyFlowTemplatesStore.get(id);
+  }
+
+  async createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate> {
+    const id = this.dailyFlowTemplateIdCounter++;
+    const now = new Date();
+    const newTemplate: DailyFlowTemplate = {
+      id,
+      ...template,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.dailyFlowTemplatesStore.set(id, newTemplate);
+    await this.saveDailyFlowTemplatesToDisk();
+    return newTemplate;
+  }
+
+  async updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined> {
+    const existingTemplate = this.dailyFlowTemplatesStore.get(id);
+    if (!existingTemplate) return undefined;
+
+    const updatedTemplate: DailyFlowTemplate = {
+      ...existingTemplate,
+      ...template,
+      updatedAt: new Date()
+    };
+
+    this.dailyFlowTemplatesStore.set(id, updatedTemplate);
+    await this.saveDailyFlowTemplatesToDisk();
+    return updatedTemplate;
+  }
+
+  async deleteDailyFlowTemplate(id: number): Promise<void> {
+    this.dailyFlowTemplatesStore.delete(id);
+    await this.saveDailyFlowTemplatesToDisk();
+  }
+
+  private async saveDailyFlowTemplatesToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const templatesFilePath = path.join(process.cwd(), 'data', 'daily-flow-templates.json');
+
+      const dataDir = path.dirname(templatesFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const templates = Array.from(this.dailyFlowTemplatesStore.values());
+      fs.writeFileSync(templatesFilePath, JSON.stringify(templates, null, 2));
+      console.log(`💾 Successfully saved ${templates.length} daily flow templates to disk`);
+    } catch (error) {
+      console.error('❌ Error saving daily flow templates to disk:', error);
+    }
+  }
+
+  // Daily Flow Entry methods
+  async getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]> {
+    let entries = Array.from(this.dailyFlowEntriesStore.values());
+    
+    if (filters) {
+      if (filters.classId) {
+        entries = entries.filter(e => e.classId === filters.classId);
+      }
+      if (filters.startDate) {
+        entries = entries.filter(e => e.date >= filters.startDate);
+      }
+      if (filters.endDate) {
+        entries = entries.filter(e => e.date <= filters.endDate);
+      }
+    }
+    
+    return entries.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined> {
+    return this.dailyFlowEntriesStore.get(id);
+  }
+
+  async createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry> {
+    const id = this.dailyFlowEntryIdCounter++;
+    const now = new Date();
+    const newEntry: DailyFlowEntry = {
+      id,
+      ...entry,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.dailyFlowEntriesStore.set(id, newEntry);
+    await this.saveDailyFlowEntriesToDisk();
+    return newEntry;
+  }
+
+  async updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined> {
+    const existingEntry = this.dailyFlowEntriesStore.get(id);
+    if (!existingEntry) return undefined;
+
+    const updatedEntry: DailyFlowEntry = {
+      ...existingEntry,
+      ...entry,
+      updatedAt: new Date()
+    };
+
+    this.dailyFlowEntriesStore.set(id, updatedEntry);
+    await this.saveDailyFlowEntriesToDisk();
+    return updatedEntry;
+  }
+
+  async deleteDailyFlowEntry(id: number): Promise<void> {
+    this.dailyFlowEntriesStore.delete(id);
+    await this.saveDailyFlowEntriesToDisk();
+  }
+
+  private async saveDailyFlowEntriesToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const entriesFilePath = path.join(process.cwd(), 'data', 'daily-flow-entries.json');
+
+      const dataDir = path.dirname(entriesFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const entries = Array.from(this.dailyFlowEntriesStore.values());
+      fs.writeFileSync(entriesFilePath, JSON.stringify(entries, null, 2));
+      console.log(`💾 Successfully saved ${entries.length} daily flow entries to disk`);
+    } catch (error) {
+      console.error('❌ Error saving daily flow entries to disk:', error);
+    }
+  }
+
+  // Daily Flow Schedule methods
+  async getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]> {
+    let schedules = Array.from(this.dailyFlowSchedulesStore.values());
+    
+    if (filters) {
+      if (filters.templateId) {
+        schedules = schedules.filter(s => s.templateId === filters.templateId);
+      }
+      if (filters.classId) {
+        schedules = schedules.filter(s => s.classId === filters.classId);
+      }
+    }
+    
+    return schedules;
+  }
+
+  async getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined> {
+    return this.dailyFlowSchedulesStore.get(id);
+  }
+
+  async createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule> {
+    const id = this.dailyFlowScheduleIdCounter++;
+    const now = new Date();
+    const newSchedule: DailyFlowSchedule = {
+      id,
+      ...schedule,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.dailyFlowSchedulesStore.set(id, newSchedule);
+    await this.saveDailyFlowSchedulesToDisk();
+    return newSchedule;
+  }
+
+  async updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined> {
+    const existingSchedule = this.dailyFlowSchedulesStore.get(id);
+    if (!existingSchedule) return undefined;
+
+    const updatedSchedule: DailyFlowSchedule = {
+      ...existingSchedule,
+      ...schedule,
+      updatedAt: new Date()
+    };
+
+    this.dailyFlowSchedulesStore.set(id, updatedSchedule);
+    await this.saveDailyFlowSchedulesToDisk();
+    return updatedSchedule;
+  }
+
+  async deleteDailyFlowSchedule(id: number): Promise<void> {
+    this.dailyFlowSchedulesStore.delete(id);
+    await this.saveDailyFlowSchedulesToDisk();
+  }
+
+  private async saveDailyFlowSchedulesToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const schedulesFilePath = path.join(process.cwd(), 'data', 'daily-flow-schedules.json');
+
+      const dataDir = path.dirname(schedulesFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const schedules = Array.from(this.dailyFlowSchedulesStore.values());
+      fs.writeFileSync(schedulesFilePath, JSON.stringify(schedules, null, 2));
+      console.log(`💾 Successfully saved ${schedules.length} daily flow schedules to disk`);
+    } catch (error) {
+      console.error('❌ Error saving daily flow schedules to disk:', error);
+    }
+  }
+
+  // Daily Flow utility methods
+  async generateDailyFlowEntriesFromTemplate(params: { 
+    templateId: number; 
+    classId: number; 
+    startDate: string; 
+    endDate: string; 
+    createdBy: string 
+  }): Promise<DailyFlowEntry[]> {
+    const template = await this.getDailyFlowTemplateById(params.templateId);
+    if (!template) {
+      throw new Error(`Template with ID ${params.templateId} not found`);
+    }
+
+    const start = new Date(params.startDate);
+    const end = new Date(params.endDate);
+    const entries: DailyFlowEntry[] = [];
+
+    // Generate entries for each day in the date range
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      // Skip weekends if template is weekdays only
+      if (template.daysOfWeek && template.daysOfWeek.length > 0) {
+        const dayOfWeek = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        if (!template.daysOfWeek.includes(dayNames[dayOfWeek])) {
+          continue;
+        }
+      }
+
+      const entry: InsertDailyFlowEntry = {
+        templateId: template.id,
+        classId: params.classId,
+        date: d.toISOString().split('T')[0], // YYYY-MM-DD format
+        title: template.name,
+        activities: template.activities || [],
+        resources: template.resources || [],
+        notes: '',
+        isCompleted: false,
+        completedAt: null,
+        completedBy: null,
+        createdBy: params.createdBy
+      };
+
+      const newEntry = await this.createDailyFlowEntry(entry);
+      entries.push(newEntry);
+    }
+
+    return entries;
+  }
+
+  async getDailyFlowStats(filters?: { 
+    classId?: number; 
+    startDate?: string; 
+    endDate?: string 
+  }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }> {
+    const entries = await this.getDailyFlowEntries(filters);
+    const totalEntries = entries.length;
+    const completedEntries = entries.filter(e => e.isCompleted).length;
+    const completionRate = totalEntries > 0 ? (completedEntries / totalEntries) * 100 : 0;
+
+    return {
+      totalEntries,
+      completedEntries,
+      completionRate: Math.round(completionRate * 100) / 100 // Round to 2 decimal places
+    };
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -3236,6 +3570,78 @@ export class MemStorage implements IStorage {
 
       async deleteLocation(id: number): Promise<void> {
         return this.memStorage.deleteLocation(id);
+      }
+
+      // Daily Flow Template methods
+      async getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]> {
+        return this.memStorage.getDailyFlowTemplates(filters);
+      }
+
+      async getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined> {
+        return this.memStorage.getDailyFlowTemplateById(id);
+      }
+
+      async createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate> {
+        return this.memStorage.createDailyFlowTemplate(template);
+      }
+
+      async updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined> {
+        return this.memStorage.updateDailyFlowTemplate(id, template);
+      }
+
+      async deleteDailyFlowTemplate(id: number): Promise<void> {
+        return this.memStorage.deleteDailyFlowTemplate(id);
+      }
+
+      // Daily Flow Entry methods
+      async getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]> {
+        return this.memStorage.getDailyFlowEntries(filters);
+      }
+
+      async getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined> {
+        return this.memStorage.getDailyFlowEntryById(id);
+      }
+
+      async createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry> {
+        return this.memStorage.createDailyFlowEntry(entry);
+      }
+
+      async updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined> {
+        return this.memStorage.updateDailyFlowEntry(id, entry);
+      }
+
+      async deleteDailyFlowEntry(id: number): Promise<void> {
+        return this.memStorage.deleteDailyFlowEntry(id);
+      }
+
+      // Daily Flow Schedule methods
+      async getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]> {
+        return this.memStorage.getDailyFlowSchedules(filters);
+      }
+
+      async getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined> {
+        return this.memStorage.getDailyFlowScheduleById(id);
+      }
+
+      async createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule> {
+        return this.memStorage.createDailyFlowSchedule(schedule);
+      }
+
+      async updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined> {
+        return this.memStorage.updateDailyFlowSchedule(id, schedule);
+      }
+
+      async deleteDailyFlowSchedule(id: number): Promise<void> {
+        return this.memStorage.deleteDailyFlowSchedule(id);
+      }
+
+      // Daily Flow utility methods
+      async generateDailyFlowEntriesFromTemplate(params: { templateId: number; classId: number; startDate: string; endDate: string; createdBy: string }): Promise<DailyFlowEntry[]> {
+        return this.memStorage.generateDailyFlowEntriesFromTemplate(params);
+      }
+
+      async getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }> {
+        return this.memStorage.getDailyFlowStats(filters);
       }
   }
 

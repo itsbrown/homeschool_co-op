@@ -949,3 +949,93 @@ export type InsertDiscount = z.infer<typeof insertDiscountSchema>;
 export type Discount = typeof discounts.$inferSelect;
 export type InsertDiscountApplication = z.infer<typeof insertDiscountApplicationSchema>;
 export type DiscountApplication = typeof discountApplications.$inferSelect;
+
+// Daily Flow Tables
+// Daily Flow Templates - Reusable templates for scheduling
+export const dailyFlowTemplates = pgTable("daily_flow_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  gradeLevel: text("grade_level").notNull(),
+  subject: text("subject").notNull(),
+  createdBy: text("created_by").notNull(), // Email of creator
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Daily Flow Entries - Individual scheduled activities
+export const dailyFlowEntries = pgTable("daily_flow_entries", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").references(() => dailyFlowTemplates.id),
+  classId: integer("class_id").notNull().references(() => classes.id),
+  date: date("date").notNull(), // YYYY-MM-DD
+  startTime: text("start_time").notNull(), // HH:MM format
+  endTime: text("end_time").notNull(), // HH:MM format
+  subject: text("subject").notNull(),
+  lessonTitle: text("lesson_title").notNull(),
+  lessonDescription: text("lesson_description"),
+  lessonLink: text("lesson_link"),
+  materials: jsonb("materials").default([]), // Array of strings
+  objectives: jsonb("objectives").default([]), // Array of strings
+  isCompleted: boolean("is_completed").default(false).notNull(),
+  completedBy: text("completed_by"), // Email of who completed it
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  createdBy: text("created_by").notNull(), // Email of creator
+  lastModifiedBy: text("last_modified_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Daily Flow Schedules - Recurring patterns for automatic scheduling
+export const dailyFlowSchedules = pgTable("daily_flow_schedules", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => dailyFlowTemplates.id),
+  classId: integer("class_id").notNull().references(() => classes.id),
+  dayOfWeek: integer("day_of_week").notNull(), // 0 = Sunday, 6 = Saturday
+  startTime: text("start_time").notNull(), // HH:MM format
+  endTime: text("end_time").notNull(), // HH:MM format
+  subject: text("subject").notNull(),
+  lessonTitle: text("lesson_title").notNull(),
+  lessonDescription: text("lesson_description"),
+  lessonLink: text("lesson_link"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Define relationships for daily flow tables
+export const dailyFlowTemplateRelations = relations(dailyFlowTemplates, ({ one, many }) => ({
+  school: one(schools, { fields: [dailyFlowTemplates.schoolId], references: [schools.id] }),
+  entries: many(dailyFlowEntries),
+  schedules: many(dailyFlowSchedules),
+}));
+
+export const dailyFlowEntryRelations = relations(dailyFlowEntries, ({ one }) => ({
+  template: one(dailyFlowTemplates, { fields: [dailyFlowEntries.templateId], references: [dailyFlowTemplates.id] }),
+  class: one(classes, { fields: [dailyFlowEntries.classId], references: [classes.id] }),
+}));
+
+export const dailyFlowScheduleRelations = relations(dailyFlowSchedules, ({ one }) => ({
+  template: one(dailyFlowTemplates, { fields: [dailyFlowSchedules.templateId], references: [dailyFlowTemplates.id] }),
+  class: one(classes, { fields: [dailyFlowSchedules.classId], references: [classes.id] }),
+}));
+
+// Daily Flow schemas for validation
+export const insertDailyFlowTemplateSchema = createInsertSchema(dailyFlowTemplates)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertDailyFlowEntrySchema = createInsertSchema(dailyFlowEntries)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertDailyFlowScheduleSchema = createInsertSchema(dailyFlowSchedules)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+
+export type InsertDailyFlowTemplate = z.infer<typeof insertDailyFlowTemplateSchema>;
+export type DailyFlowTemplate = typeof dailyFlowTemplates.$inferSelect;
+export type InsertDailyFlowEntry = z.infer<typeof insertDailyFlowEntrySchema>;
+export type DailyFlowEntry = typeof dailyFlowEntries.$inferSelect;
+export type InsertDailyFlowSchedule = z.infer<typeof insertDailyFlowScheduleSchema>;
+export type DailyFlowSchedule = typeof dailyFlowSchedules.$inferSelect;
