@@ -22,6 +22,7 @@ import authRouter from "./api/auth";
 import paymentImport from "./api/payment-import";
 import accountImport from "./api/account-import";
 import dailyFlowsRoutes from "./api/daily-flows";
+import aiPricingRouter from "./api/ai-pricing";
 
 const app = express();
 
@@ -104,9 +105,9 @@ app.use('/api/school-admin/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
 app.use('/api/stripe', stripeRoutes);
 app.use("/api/billing", billingRouter);
-app.use("/api/ai-pricing", aiPricingRoutes);
-app.use("/api/payment-import", paymentImportRoutes);
-app.use("/api/account-import", accountImportRoutes);
+app.use("/api/ai-pricing", aiPricingRouter);
+app.use("/api/payment-import", paymentImport);
+app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
 
 // Test endpoint for development - manually update scheduled payment

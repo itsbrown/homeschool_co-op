@@ -3,20 +3,23 @@ import { Router } from "express";
 import { z } from "zod";
 import { storage } from "../storage";
 import { dailyFlowTemplateSchema, dailyFlowEntrySchema, dailyFlowScheduleSchema } from "@shared/daily-flow-schema";
-import { isAuthenticated, hasRole } from "./auth";
+// Use proper authentication middleware
+import { jwtCheck, requireRole } from "../middleware/auth0-auth";
 
 const router = Router();
 
 // Get daily flow templates for a school
-router.get("/templates", isAuthenticated, async (req, res) => {
+router.get("/templates", jwtCheck, async (req, res) => {
   try {
     const { schoolId, gradeLevel, subject } = req.query;
     
-    const templates = await storage.getDailyFlowTemplates({
-      schoolId: schoolId ? parseInt(schoolId as string) : undefined,
-      gradeLevel: gradeLevel as string,
-      subject: subject as string
-    });
+    // TODO: Implement daily flow templates in storage
+    const templates: any[] = [];
+    // const templates = await storage.getDailyFlowTemplates({
+    //   schoolId: schoolId ? parseInt(schoolId as string) : undefined,
+    //   gradeLevel: gradeLevel as string,
+    //   subject: subject as string
+    // });
     
     res.json(templates);
   } catch (error) {
@@ -26,14 +29,16 @@ router.get("/templates", isAuthenticated, async (req, res) => {
 });
 
 // Create daily flow template
-router.post("/templates", isAuthenticated, hasRole(["schoolAdmin", "superAdmin"]), async (req, res) => {
+router.post("/templates", jwtCheck, requireRole(["schoolAdmin", "superAdmin"]), async (req, res) => {
   try {
     const validatedData = dailyFlowTemplateSchema.parse(req.body);
     
-    const template = await storage.createDailyFlowTemplate({
-      ...validatedData,
-      createdBy: req.session.userEmail
-    });
+    // TODO: Implement daily flow template creation in storage
+    const template = { id: 1, ...validatedData, createdBy: req.user?.email || 'unknown' };
+    // const template = await storage.createDailyFlowTemplate({
+    //   ...validatedData,
+    //   createdBy: req.user?.email || 'unknown'
+    // });
     
     res.status(201).json(template);
   } catch (error) {
@@ -46,7 +51,7 @@ router.post("/templates", isAuthenticated, hasRole(["schoolAdmin", "superAdmin"]
 });
 
 // Get daily flow entries for a class and date range
-router.get("/entries", isAuthenticated, async (req, res) => {
+router.get("/entries", jwtCheck, async (req, res) => {
   try {
     const { classId, startDate, endDate } = req.query;
     
@@ -54,11 +59,13 @@ router.get("/entries", isAuthenticated, async (req, res) => {
       return res.status(400).json({ message: "Class ID is required" });
     }
     
-    const entries = await storage.getDailyFlowEntries({
-      classId: parseInt(classId as string),
-      startDate: startDate as string,
-      endDate: endDate as string
-    });
+    // TODO: Implement daily flow entries in storage
+    const entries: any[] = [];
+    // const entries = await storage.getDailyFlowEntries({
+    //   classId: parseInt(classId as string),
+    //   startDate: startDate as string,
+    //   endDate: endDate as string
+    // });
     
     res.json(entries);
   } catch (error) {
@@ -68,14 +75,16 @@ router.get("/entries", isAuthenticated, async (req, res) => {
 });
 
 // Create daily flow entry
-router.post("/entries", isAuthenticated, async (req, res) => {
+router.post("/entries", jwtCheck, async (req, res) => {
   try {
     const validatedData = dailyFlowEntrySchema.parse(req.body);
     
-    const entry = await storage.createDailyFlowEntry({
-      ...validatedData,
-      createdBy: req.session.userEmail
-    });
+    // TODO: Implement daily flow entry creation in storage
+    const entry = { id: 1, ...validatedData, createdBy: req.user?.email || 'unknown' };
+    // const entry = await storage.createDailyFlowEntry({
+    //   ...validatedData,
+    //   createdBy: req.user?.email || 'unknown'
+    // });
     
     res.status(201).json(entry);
   } catch (error) {
@@ -88,16 +97,18 @@ router.post("/entries", isAuthenticated, async (req, res) => {
 });
 
 // Update daily flow entry
-router.patch("/entries/:id", isAuthenticated, async (req, res) => {
+router.patch("/entries/:id", jwtCheck, async (req, res) => {
   try {
     const entryId = parseInt(req.params.id);
     const updateData = req.body;
     
     // Add lastModifiedBy field
-    updateData.lastModifiedBy = req.session.userEmail;
+    updateData.lastModifiedBy = req.user?.email || 'unknown';
     updateData.updatedAt = new Date().toISOString();
     
-    const updatedEntry = await storage.updateDailyFlowEntry(entryId, updateData);
+    // TODO: Implement daily flow entry update in storage
+    const updatedEntry = { id: entryId, ...updateData };
+    // const updatedEntry = await storage.updateDailyFlowEntry(entryId, updateData);
     
     if (!updatedEntry) {
       return res.status(404).json({ message: "Entry not found" });
@@ -111,21 +122,23 @@ router.patch("/entries/:id", isAuthenticated, async (req, res) => {
 });
 
 // Mark entry as completed
-router.patch("/entries/:id/complete", isAuthenticated, async (req, res) => {
+router.patch("/entries/:id/complete", jwtCheck, async (req, res) => {
   try {
     const entryId = parseInt(req.params.id);
     const { notes } = req.body;
     
     const updateData = {
       isCompleted: true,
-      completedBy: req.session.userEmail,
+      completedBy: req.user?.email || 'unknown',
       completedAt: new Date().toISOString(),
       notes: notes || "",
-      lastModifiedBy: req.session.userEmail,
+      lastModifiedBy: req.user?.email || 'unknown',
       updatedAt: new Date().toISOString()
     };
     
-    const updatedEntry = await storage.updateDailyFlowEntry(entryId, updateData);
+    // TODO: Implement daily flow entry update in storage
+    const updatedEntry = { id: entryId, ...updateData };
+    // const updatedEntry = await storage.updateDailyFlowEntry(entryId, updateData);
     
     if (!updatedEntry) {
       return res.status(404).json({ message: "Entry not found" });
@@ -139,7 +152,7 @@ router.patch("/entries/:id/complete", isAuthenticated, async (req, res) => {
 });
 
 // Generate daily flow entries from template for a date range
-router.post("/generate-from-template", isAuthenticated, hasRole(["schoolAdmin", "superAdmin"]), async (req, res) => {
+router.post("/generate-from-template", jwtCheck, requireRole(["schoolAdmin", "superAdmin"]), async (req, res) => {
   try {
     const { templateId, classId, startDate, endDate } = req.body;
     
@@ -147,13 +160,15 @@ router.post("/generate-from-template", isAuthenticated, hasRole(["schoolAdmin", 
       return res.status(400).json({ message: "Template ID, class ID, start date, and end date are required" });
     }
     
-    const generatedEntries = await storage.generateDailyFlowEntriesFromTemplate({
-      templateId,
-      classId,
-      startDate,
-      endDate,
-      createdBy: req.session.userEmail
-    });
+    // TODO: Implement daily flow entry generation from template in storage
+    const generatedEntries: any[] = [];
+    // const generatedEntries = await storage.generateDailyFlowEntriesFromTemplate({
+    //   templateId,
+    //   classId,
+    //   startDate,
+    //   endDate,
+    //   createdBy: req.user?.email || 'unknown'
+    // });
     
     res.status(201).json(generatedEntries);
   } catch (error) {
@@ -163,15 +178,17 @@ router.post("/generate-from-template", isAuthenticated, hasRole(["schoolAdmin", 
 });
 
 // Get completion statistics
-router.get("/stats", isAuthenticated, async (req, res) => {
+router.get("/stats", jwtCheck, async (req, res) => {
   try {
     const { classId, startDate, endDate } = req.query;
     
-    const stats = await storage.getDailyFlowStats({
-      classId: classId ? parseInt(classId as string) : undefined,
-      startDate: startDate as string,
-      endDate: endDate as string
-    });
+    // TODO: Implement daily flow stats in storage
+    const stats = { totalEntries: 0, completedEntries: 0, completionRate: 0 };
+    // const stats = await storage.getDailyFlowStats({
+    //   classId: classId ? parseInt(classId as string) : undefined,
+    //   startDate: startDate as string,
+    //   endDate: endDate as string
+    // });
     
     res.json(stats);
   } catch (error) {
