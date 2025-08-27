@@ -21,6 +21,7 @@ import educatorRouter from "./api/educator";
 import authRouter from "./api/auth";
 import paymentImport from "./api/payment-import";
 import accountImport from "./api/account-import";
+import dailyFlowsRoutes from "./api/daily-flows";
 
 const app = express();
 
@@ -102,13 +103,11 @@ app.use('/api/file-upload', fileUploadRouter);
 app.use('/api/school-admin/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
 app.use('/api/stripe', stripeRoutes);
-app.use('/api/billing', billingRouter);
-app.use('/api/scheduled-payments', scheduledPaymentsRouter);
-app.use("/api/schools", schoolsRouter);
-app.use("/api/students", studentsRouter);
-app.use("/api/school-parents", schoolParentsRouter);
-app.use("/api/educator", educatorRouter);
-app.use("/api/auth", authRouter);
+app.use("/api/billing", billingRouter);
+app.use("/api/ai-pricing", aiPricingRoutes);
+app.use("/api/payment-import", paymentImportRoutes);
+app.use("/api/account-import", accountImportRoutes);
+app.use("/api/daily-flows", dailyFlowsRoutes);
 
 // Test endpoint for development - manually update scheduled payment
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
