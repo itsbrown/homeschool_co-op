@@ -200,6 +200,227 @@ If you have any questions about this payment, please contact us at support@ameri
   }
 }
 
+// Create payment receipt email template in Brevo
+export async function createPaymentReceiptTemplate(): Promise<number | null> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, cannot create template');
+      return null;
+    }
+
+    const createSmtpTemplate = new brevo.CreateSmtpTemplate();
+    createSmtpTemplate.templateName = 'Payment Receipt - ASA Platform';
+    createSmtpTemplate.subject = 'Payment Receipt - {{params.RECEIPT_NUMBER}} - American Seekers Academy';
+    createSmtpTemplate.htmlContent = `
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Payment Receipt</h1>
+          <p style="color: #E0E7FF; margin: 8px 0 0 0;">American Seekers Academy</p>
+        </div>
+        
+        <div style="padding: 24px;">
+          <div style="background-color: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+            <h2 style="margin: 0 0 16px 0; color: #495057;">Receipt Details</h2>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span><strong>Receipt #:</strong></span>
+              <span>{{params.RECEIPT_NUMBER}}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span><strong>Date:</strong></span>
+              <span>{{params.PAYMENT_DATE}}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span><strong>Payment Method:</strong></span>
+              <span>{{params.PAYMENT_METHOD}}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span><strong>Amount Paid:</strong></span>
+              <span style="font-size: 1.2em; font-weight: bold; color: #28a745;">
+                {{params.AMOUNT}}
+              </span>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 24px;">
+            <h3 style="margin: 0 0 16px 0; color: #495057;">Payment For</h3>
+            <div style="background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 8px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background-color: #f8f9fa;">
+                    <th style="padding: 12px 8px; text-align: left; border-bottom: 1px solid #dee2e6;">Child</th>
+                    <th style="padding: 12px 8px; text-align: left; border-bottom: 1px solid #dee2e6;">Program/Class</th>
+                    <th style="padding: 12px 8px; text-align: right; border-bottom: 1px solid #dee2e6;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="padding: 12px 8px; border-bottom: 1px solid #eee;">{{params.CHILD_NAME}}</td>
+                    <td style="padding: 12px 8px; border-bottom: 1px solid #eee;">{{params.CLASS_NAME}}</td>
+                    <td style="padding: 12px 8px; border-bottom: 1px solid #eee; text-align: right;">{{params.AMOUNT}}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {{#if params.REMAINING_BALANCE}}
+          <div style="margin-bottom: 24px; padding: 16px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
+            <h3 style="margin: 0 0 12px 0; color: #856404;">Payment Plan Information</h3>
+            <p style="margin: 0 0 8px 0;"><strong>Remaining Balance:</strong> {{params.REMAINING_BALANCE}}</p>
+            {{#if params.NEXT_PAYMENT_DATE}}
+            <p style="margin: 0;"><strong>Next Payment Due:</strong> {{params.NEXT_PAYMENT_DATE}}</p>
+            {{/if}}
+          </div>
+          {{/if}}
+
+          {{#if params.NOTES}}
+          <div style="margin-bottom: 24px; padding: 16px; background-color: #e7f3ff; border-radius: 8px;">
+            <h3 style="margin: 0 0 12px 0; color: #0c5aa6;">Additional Notes</h3>
+            <p style="margin: 0;">{{params.NOTES}}</p>
+          </div>
+          {{/if}}
+
+          <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #eee;">
+            <p style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Thank you for choosing American Seekers Academy!</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;">For questions about this payment, please contact us:</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;">📧 Email: <a href="mailto:support@americanseekersacademy.com" style="color: #4F46E5;">support@americanseekersacademy.com</a></p>
+            <p style="margin: 0; font-size: 14px;">📞 Phone: (555) 123-4567</p>
+          </div>
+        </div>
+
+        <div style="background-color: #f8f9fa; padding: 16px; text-align: center; color: #6c757d; font-size: 12px;">
+          <p style="margin: 0;">This is an automated receipt. Please keep this for your records.</p>
+          <p style="margin: 8px 0 0 0;">© 2025 American Seekers Academy. All rights reserved.</p>
+        </div>
+      </body>
+    </html>
+    `;
+    createSmtpTemplate.textContent = `
+PAYMENT RECEIPT - AMERICAN SEEKERS ACADEMY
+
+Receipt #: {{params.RECEIPT_NUMBER}}
+Date: {{params.PAYMENT_DATE}}
+Payment Method: {{params.PAYMENT_METHOD}}
+Amount Paid: {{params.AMOUNT}}
+
+PAYMENT FOR:
+Child: {{params.CHILD_NAME}}
+Program/Class: {{params.CLASS_NAME}}
+Amount: {{params.AMOUNT}}
+
+{{#if params.REMAINING_BALANCE}}
+PAYMENT PLAN INFORMATION:
+Remaining Balance: {{params.REMAINING_BALANCE}}
+{{#if params.NEXT_PAYMENT_DATE}}
+Next Payment Due: {{params.NEXT_PAYMENT_DATE}}
+{{/if}}
+{{/if}}
+
+{{#if params.NOTES}}
+ADDITIONAL NOTES:
+{{params.NOTES}}
+{{/if}}
+
+Thank you for choosing American Seekers Academy!
+
+For questions about this payment, please contact us:
+Email: support@americanseekersacademy.com
+Phone: (555) 123-4567
+
+This is an automated receipt. Please keep this for your records.
+© 2025 American Seekers Academy. All rights reserved.
+    `;
+
+    // Check if template already exists first
+    try {
+      const templatesApi = new brevo.TransactionalEmailsApi();
+      templatesApi.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY!);
+      const templates = await templatesApi.getSmtpTemplates();
+      
+      const existingTemplate = templates.body.templates?.find(
+        template => template.name === 'Payment Receipt - ASA Platform'
+      );
+      
+      if (existingTemplate) {
+        console.log('✅ Payment receipt template already exists with ID:', existingTemplate.id);
+        return existingTemplate.id;
+      }
+    } catch (error) {
+      console.log('📧 Checking existing templates failed, creating new one:', error);
+    }
+
+    const result = await apiInstance.createSmtpTemplate(createSmtpTemplate);
+    console.log('✅ Payment receipt template created with ID:', result.body.id);
+    return result.body.id;
+  } catch (error) {
+    console.error('❌ Failed to create payment receipt template:', error);
+    return null;
+  }
+}
+
+// Send payment receipt using Brevo template
+export async function sendPaymentReceipt(data: {
+  parentEmail: string;
+  parentName: string;
+  receiptNumber: string;
+  paymentDate: string;
+  paymentMethod: string;
+  amount: string;
+  childName: string;
+  className: string;
+  remainingBalance?: string;
+  nextPaymentDate?: string;
+  notes?: string;
+}): Promise<boolean> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping payment receipt email send');
+      return false;
+    }
+
+    // Try to get template ID from environment or create template
+    let templateId = process.env.BREVO_PAYMENT_RECEIPT_TEMPLATE_ID ? 
+      parseInt(process.env.BREVO_PAYMENT_RECEIPT_TEMPLATE_ID) : null;
+    
+    if (!templateId) {
+      templateId = await createPaymentReceiptTemplate();
+      if (!templateId) {
+        console.error('❌ Could not create or find payment receipt template');
+        return false;
+      }
+    }
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: data.parentEmail, name: data.parentName }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'support@americanseekersacademy.com', 
+      name: 'American Seekers Academy' 
+    };
+    sendSmtpEmail.templateId = templateId;
+    sendSmtpEmail.params = {
+      RECEIPT_NUMBER: data.receiptNumber,
+      PAYMENT_DATE: data.paymentDate,
+      PAYMENT_METHOD: data.paymentMethod,
+      AMOUNT: data.amount,
+      CHILD_NAME: data.childName,
+      CLASS_NAME: data.className,
+      REMAINING_BALANCE: data.remainingBalance || '',
+      NEXT_PAYMENT_DATE: data.nextPaymentDate || '',
+      NOTES: data.notes || ''
+    };
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Payment receipt email sent successfully to:', data.parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send payment receipt email:', error);
+    return false;
+  }
+}
+
 // Generic email sending function for other use cases
 export async function sendEmail(
   to: string,

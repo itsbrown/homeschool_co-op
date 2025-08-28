@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { storage } from '../storage';
 import { createClient } from '@supabase/supabase-js';
+import { sendPaymentReceipt } from '../lib/email-service';
 
 const router = Router();
 
@@ -293,6 +294,46 @@ router.post('/manual', async (req, res) => {
     const payment = await storage.createPayment(paymentData);
     
     console.log('✅ Manual payment created:', payment.id);
+
+    // Send email receipt
+    try {
+      const parentUser = await storage.getUserByEmail(parentEmail);
+      const parentName = parentUser ? 
+        `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() : 
+        parentEmail.split('@')[0];
+
+      const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+        }).format(amount / 100);
+      };
+
+      const formatDate = (date: string) => {
+        return new Intl.DateTimeFormat('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }).format(new Date(date));
+      };
+
+      await sendPaymentReceipt({
+        parentEmail,
+        parentName,
+        receiptNumber: payment.stripePaymentIntentId || `MANUAL-${payment.id}`,
+        paymentDate: formatDate(paymentDate || payment.createdAt),
+        paymentMethod: paymentMethod === 'manual' ? 'Manual Entry' : paymentMethod,
+        amount: formatCurrency(payment.amount),
+        childName,
+        className,
+        notes: notes || undefined
+      });
+      
+      console.log('📧 Payment receipt email sent to:', parentEmail);
+    } catch (emailError) {
+      console.error('❌ Failed to send payment receipt email:', emailError);
+      // Don't fail the payment creation if email fails
+    }
 
     res.json({
       success: true,

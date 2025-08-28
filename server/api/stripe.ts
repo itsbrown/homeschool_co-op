@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import Stripe from 'stripe';
 import { storage } from '../storage';
+import { sendPaymentReceipt } from '../lib/email-service';
 
 const router = Router();
 
@@ -256,6 +257,45 @@ router.post('/webhook', async (req, res) => {
             await storage.createPayment(payment);
             console.log(`✅ Created payment history record for scheduled payment ${scheduledPaymentId}`);
             
+            // Send email receipt for scheduled payment
+            try {
+              const parentUser = await storage.getUserByEmail(parentEmail);
+              const parentName = parentUser ? 
+                `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() : 
+                parentEmail.split('@')[0];
+
+              const formatCurrency = (amount: number) => {
+                return new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                }).format(amount / 100);
+              };
+
+              const formatDate = (date: string) => {
+                return new Intl.DateTimeFormat('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                }).format(new Date(date));
+              };
+
+              await sendPaymentReceipt({
+                parentEmail,
+                parentName,
+                receiptNumber: paymentIntent.id,
+                paymentDate: formatDate(new Date().toISOString()),
+                paymentMethod: 'Credit Card',
+                amount: formatCurrency(paymentIntent.amount),
+                childName: payment.childName,
+                className: payment.className,
+                notes: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`
+              });
+              
+              console.log('📧 Scheduled payment receipt email sent to:', parentEmail);
+            } catch (emailError) {
+              console.error('❌ Failed to send scheduled payment receipt email:', emailError);
+            }
+            
             console.log(`✅ Scheduled payment ${scheduledPaymentId} processing complete`);
           } else {
             console.error(`❌ Scheduled payment ${scheduledPaymentId} not found`);
@@ -291,6 +331,52 @@ router.post('/webhook', async (req, res) => {
           }
           
           console.log('✅ Balance payment processed for:', paymentIntent.id);
+          
+          // Send email receipt for balance payment
+          try {
+            const parentEmail = paymentIntent.metadata.parentEmail;
+            if (parentEmail) {
+              const parentUser = await storage.getUserByEmail(parentEmail);
+              const parentName = parentUser ? 
+                `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() : 
+                parentEmail.split('@')[0];
+
+              // Get first enrollment for display details
+              const allEnrollments = await storage.getAllEnrollments();
+              const firstEnrollment = allEnrollments.find(e => enrollmentIds.includes(e.id)) as any;
+              
+              const formatCurrency = (amount: number) => {
+                return new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                }).format(amount / 100);
+              };
+
+              const formatDate = (date: string) => {
+                return new Intl.DateTimeFormat('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                }).format(new Date(date));
+              };
+
+              await sendPaymentReceipt({
+                parentEmail,
+                parentName,
+                receiptNumber: paymentIntent.id,
+                paymentDate: formatDate(new Date().toISOString()),
+                paymentMethod: 'Credit Card',
+                amount: formatCurrency(paymentIntent.amount),
+                childName: firstEnrollment?.childName || 'Student',
+                className: firstEnrollment?.className || 'Class',
+                notes: `Balance payment for ${enrollmentIds.length} enrollment${enrollmentIds.length > 1 ? 's' : ''}`
+              });
+              
+              console.log('📧 Balance payment receipt email sent to:', parentEmail);
+            }
+          } catch (emailError) {
+            console.error('❌ Failed to send balance payment receipt email:', emailError);
+          }
         } else {
           // Handle new enrollment payments
           const itemsJson = paymentIntent.metadata.itemsJson;
@@ -322,28 +408,43 @@ router.post('/webhook', async (req, res) => {
               return; // Exit early if payment creation fails
             }
 
-            // Send confirmation email
+            // Send confirmation email receipt
             try {
-              const { sendPaymentConfirmationEmail } = await import('../lib/email-service');
-              
-              const enrollmentDetails = items.map((item: any) => ({
-                childName: item.childName,
-                className: item.className,
-                price: (item.totalCost || item.price), // Already in cents from cart checkout
-                amountPaid: Math.round(paymentIntent.amount / items.length), // Already in cents
-              }));
+              const parentUser = await storage.getUserByEmail(parentEmail);
+              const parentName = parentUser ? 
+                `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() : 
+                parentEmail.split('@')[0];
 
-              const emailSent = await sendPaymentConfirmationEmail({
-                parentEmail: parentEmail,
-                parentName: 'Parent', // Could be enhanced to get actual name
-                payment: createdPayment || payment,
-                enrollmentDetails: enrollmentDetails,
-                paymentPlan: paymentType,
+              const formatCurrency = (amount: number) => {
+                return new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                }).format(amount / 100);
+              };
+
+              const formatDate = (date: string) => {
+                return new Intl.DateTimeFormat('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                }).format(new Date(date));
+              };
+
+              await sendPaymentReceipt({
+                parentEmail,
+                parentName,
+                receiptNumber: paymentIntent.id,
+                paymentDate: formatDate(new Date().toISOString()),
+                paymentMethod: 'Credit Card',
+                amount: formatCurrency(paymentIntent.amount),
+                childName: payment.childName,
+                className: payment.className,
+                notes: paymentType ? `Payment plan: ${paymentType}` : undefined
               });
 
-              console.log('📧 Payment confirmation email sent:', emailSent);
+              console.log('📧 New enrollment payment receipt email sent to:', parentEmail);
             } catch (emailError) {
-              console.error('❌ Failed to send payment confirmation email:', emailError);
+              console.error('❌ Failed to send enrollment payment receipt email:', emailError);
             }
 
             // Handle scheduled payments for 3-payment plans
