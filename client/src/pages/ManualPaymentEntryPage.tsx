@@ -33,6 +33,8 @@ export default function ManualPaymentEntryPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCustomChild, setShowCustomChild] = useState(false);
+  const [showCustomClass, setShowCustomClass] = useState(false);
 
   const form = useForm<ManualPaymentForm>({
     resolver: zodResolver(manualPaymentSchema),
@@ -49,13 +51,23 @@ export default function ManualPaymentEntryPage() {
     }
   });
 
-  // Fetch users for parent selection
-  const { data: users = [] } = useQuery({
+  // Fetch parent users for selection
+  const { data: parentUsers = [] } = useQuery({
     queryKey: ['/api/users'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/users');
       const data = await response.json();
-      return data.filter((user: any) => user.role === 'parent' || user.role === 'student');
+      return data.filter((user: any) => user.role === 'parent');
+    }
+  });
+
+  // Fetch children for selection
+  const { data: children = [] } = useQuery({
+    queryKey: ['/api/school-admin/students'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/school-admin/students');
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     }
   });
 
@@ -146,9 +158,9 @@ export default function ManualPaymentEntryPage() {
                             <SelectValue placeholder="Select parent" />
                           </SelectTrigger>
                           <SelectContent>
-                            {users.map((user: any) => (
+                            {parentUsers.map((user: any) => (
                               <SelectItem key={user.email} value={user.email}>
-                                {user.fullName} ({user.email})
+                                {user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.fullName || user.email} ({user.email})
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -167,12 +179,58 @@ export default function ManualPaymentEntryPage() {
                     <FormItem>
                       <FormLabel>Child Name</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter child's full name" />
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            if (value === 'custom') {
+                              setShowCustomChild(true);
+                              field.onChange('');
+                            } else {
+                              setShowCustomChild(false);
+                              field.onChange(value);
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select child" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {children.map((child: any, index: number) => {
+                              const childName = child.firstName && child.lastName ? `${child.firstName} ${child.lastName}` : child.name;
+                              // Create unique key using ID and index to avoid duplicates
+                              const uniqueKey = `child-${child.id}-${index}`;
+                              return (
+                                <SelectItem key={uniqueKey} value={childName}>
+                                  {childName}
+                                  {child.parentEmail && ` (Parent: ${child.parentEmail})`}
+                                </SelectItem>
+                              );
+                            })}
+                            <SelectItem value="custom">Enter custom name...</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {/* Custom Child Name Input */}
+                {showCustomChild && (
+                  <FormField
+                    control={form.control}
+                    name="childName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Custom Child Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter child's full name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {/* Class Name */}
                 <FormField
@@ -184,7 +242,15 @@ export default function ManualPaymentEntryPage() {
                       <FormControl>
                         <Select
                           value={field.value}
-                          onValueChange={field.onChange}
+                          onValueChange={(value) => {
+                            if (value === 'custom') {
+                              setShowCustomClass(true);
+                              field.onChange('');
+                            } else {
+                              setShowCustomClass(false);
+                              field.onChange(value);
+                            }
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select class or enter custom" />
@@ -192,9 +258,10 @@ export default function ManualPaymentEntryPage() {
                           <SelectContent>
                             {classes.map((cls: any) => (
                               <SelectItem key={cls.id} value={cls.title || cls.name}>
-                                {cls.title || cls.name} - ${cls.price}
+                                {cls.title || cls.name} {cls.price && `- $${cls.price}`}
                               </SelectItem>
                             ))}
+                            <SelectItem value="custom">Enter custom class...</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormControl>
@@ -203,6 +270,26 @@ export default function ManualPaymentEntryPage() {
                   )}
                 />
 
+                {/* Custom Class Name Input */}
+                {showCustomClass && (
+                  <FormField
+                    control={form.control}
+                    name="className"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Custom Class Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter class/program name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+
+              {/* Amount - moved outside grid for better spacing */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Amount */}
                 <FormField
                   control={form.control}
