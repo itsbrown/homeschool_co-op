@@ -129,6 +129,7 @@ import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
 import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
 import DiscountsPage from "./pages/schools/DiscountsPage";
+import ManualPaymentEntryPage from "./pages/ManualPaymentEntryPage";
 import MarketingLinksPage from '@/pages/MarketingLinksPage';
 import ParentDashboard from "./components/dashboards/ParentDashboard";
 import ParentAppShell from "./components/layout/ParentAppShell";
@@ -525,6 +526,11 @@ function Router() {
       <Route path="/schools/students/:id/classes" component={StudentClassesPage} />
       <Route path="/schools/students/register" component={StudentRegistrationPage} />
       <Route path="/schools/discounts" component={DiscountsPage} />
+      <Route path="/schools/manual-payments">
+        <AppShell>
+          <ManualPaymentEntryPage />
+        </AppShell>
+      </Route>
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />

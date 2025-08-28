@@ -20,7 +20,8 @@ import {
   Link2,
   MapPin,
   Bell,
-  Target
+  Target,
+  CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -61,6 +62,11 @@ const adminNavItems: NavItem[] = [
     title: 'Discounts',
     href: '/schools/discounts',
     icon: Target,
+  },
+  {
+    title: 'Manual Payments',
+    href: '/schools/manual-payments',
+    icon: CreditCard,
   },
   {
     title: 'Knowledge Base',
