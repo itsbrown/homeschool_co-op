@@ -43,5 +43,25 @@
     "currency": "usd",
     "status": "completed",
     "metadata": {}
+  },
+  {
+    "id": 1756005681824,
+    "createdAt": "2025-08-28T14:54:32.803Z",
+    "updatedAt": "2025-08-28T14:54:32.803Z",
+    "stripePaymentIntentId": "manual_1756392872803_wimwhbi6j",
+    "parentEmail": "tester@testing321.com",
+    "childName": "Test Child",
+    "className": "Test Manual Payment Class",
+    "amount": 5000,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "paymentMethod": "cash",
+      "createdBy": "corey@americanseekersacademy.com",
+      "createdByRole": "schoolAdmin",
+      "isManualPayment": true,
+      "notes": "Payment received in cash at office",
+      "originalPaymentDate": "2025-08-28T14:54:32.803Z"
+    }
   }
 ]

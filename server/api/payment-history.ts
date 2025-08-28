@@ -218,7 +218,7 @@ router.post('/manual', async (req, res) => {
 
     // Verify user has school admin role
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || !['schoolAdmin', 'superAdmin', 'admin'].includes(user.role)) {
+    if (!user || !['school_admin', 'schoolAdmin', 'superAdmin', 'admin'].includes(user.role)) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions. School administrator access required.'
