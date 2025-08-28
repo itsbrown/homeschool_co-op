@@ -1,6 +1,7 @@
 import { Router } from "express";
 import fs from 'fs';
 import path from 'path';
+import { storage } from '../storage';
 
 const router = Router();
 
@@ -121,6 +122,29 @@ router.patch("/profile", async (req: any, res) => {
   } catch (error) {
     console.error("Update user profile error:", error);
     res.status(500).json({ message: "Error updating user profile" });
+  }
+});
+
+// Get user role by email
+router.get("/role/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    console.log(`🔍 Role lookup for email: ${email}`);
+    
+    const user = await storage.getUserByEmail(decodeURIComponent(email));
+    
+    if (!user) {
+      console.log(`❌ User not found for email: ${email}`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`✅ Role found for ${email}: ${user.role}`);
+    res.json({ role: user.role });
+    
+  } catch (error) {
+    console.error('❌ Error fetching user role:', error);
+    res.status(500).json({ error: 'Failed to fetch user role' });
   }
 });
 
