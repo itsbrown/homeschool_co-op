@@ -40,6 +40,7 @@ import parentRouter from "./api/parent";
 import { handleEnrollmentMessage } from "./api/enrollment-assistant";
 import migrationRouter from "./routes/migration";
 import marketingLinksRouter from "./api/marketing-links";
+import aiInsightsRouter from "./api/ai-insights";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import archiver from 'archiver';
 import fs from 'fs';
@@ -1652,6 +1653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register API routers
   app.use("/api/classes", classesRouter);
   app.use("/api/ai", aiPricingRouter);
+  app.use("/api/ai-insights", aiInsightsRouter);
   app.use("/api/admin", adminClassesRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/activities", activitiesRouter);

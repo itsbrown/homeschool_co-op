@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   DollarSign,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -206,6 +207,12 @@ export default function ParentSidebar() {
       href: "/enrollment-assistant",
       title: "AI Enrollment Assistant",
       icon: <Bot className="h-5 w-5" />,
+    },
+    {
+      href: "/ai-insights",
+      title: "AI Insights",
+      icon: <Brain className="h-5 w-5" />,
+      badge: "Beta"
     },
     {
       href: "/settings",

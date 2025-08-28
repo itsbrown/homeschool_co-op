@@ -57,6 +57,7 @@ import ClassesPage from "./pages/ClassesPage";
 import CalendarPage from "./pages/CalendarPage";
 import ProgramsBrowseRedirect from "@/pages/ProgramsBrowseRedirect";
 import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
+import AIInsightsDashboard from "@/pages/AIInsightsDashboard";
 import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
 import SchoolLandingPage from "@/pages/SchoolLandingPage";
@@ -492,6 +493,7 @@ function Router() {
       <Route path="/settings" component={SettingsPage} />
       <Route path="/school-settings" component={SchoolSettings} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
+      <Route path="/ai-insights" component={AIInsightsDashboard} />
 
       {/* Dashboard route */}
       <Route path="/dashboard" component={DashboardRouter} />
