@@ -58,6 +58,7 @@ import CalendarPage from "./pages/CalendarPage";
 import ProgramsBrowseRedirect from "@/pages/ProgramsBrowseRedirect";
 import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
 import AIInsightsDashboard from "@/pages/AIInsightsDashboard";
+import { SupportAssistantTrigger } from "@/components/AISupportAssistant";
 import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
 import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
 import SchoolLandingPage from "@/pages/SchoolLandingPage";
@@ -598,6 +599,7 @@ function App() {
                 <TooltipProvider>
                   <Toaster />
                   <Router />
+                  <SupportAssistantTrigger />
                 </TooltipProvider>
               </CartProvider>
             </AIStatusProvider>

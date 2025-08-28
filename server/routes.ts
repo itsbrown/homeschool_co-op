@@ -1,6 +1,7 @@
 import express, { type Express, type Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { registerTechnicalSupportRoutes } from "./api/technical-support.js";
 import { nlpService } from "./nlp-service";
 import bcrypt from "bcryptjs";
 import session from "express-session";
@@ -2515,6 +2516,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Serve uploaded files (including PDFs)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+  // Register technical support routes
+  registerTechnicalSupportRoutes(app);
 
   const httpServer = createServer(app);
   // Backup management endpoints

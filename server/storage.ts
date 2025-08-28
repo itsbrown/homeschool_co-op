@@ -85,6 +85,16 @@ export interface IStorage {
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivityDownloadCount(id: number): Promise<Activity | undefined>;
   updateActivityPdfUrl(id: number, pdfUrl: string): Promise<Activity | undefined>;
+
+  // Technical Support methods
+  createTechnicalIssue(issue: any): Promise<any>;
+  getTechnicalIssue(id: string): Promise<any>;
+  getAllTechnicalIssues(): Promise<any[]>;
+  updateTechnicalIssue(id: string, updates: any): Promise<any>;
+  
+  // Notification methods
+  createAdminNotification(notification: any): Promise<any>;
+  createUserNotification(notification: any): Promise<any>;
   getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]>;
   getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
   getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;
@@ -256,6 +266,9 @@ export class MemStorage implements IStorage {
   private dailyFlowTemplatesStore: Map<number, DailyFlowTemplate>;
   private dailyFlowEntriesStore: Map<number, DailyFlowEntry>;
   private dailyFlowSchedulesStore: Map<number, DailyFlowSchedule>;
+  private technicalIssuesStore: Map<string, any>;
+  private adminNotificationsStore: Map<string, any>;
+  private userNotificationsStore: Map<string, any>;
 
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -304,6 +317,9 @@ export class MemStorage implements IStorage {
     this.dailyFlowTemplatesStore = new Map();
     this.dailyFlowEntriesStore = new Map();
     this.dailyFlowSchedulesStore = new Map();
+    this.technicalIssuesStore = new Map();
+    this.adminNotificationsStore = new Map();
+    this.userNotificationsStore = new Map();
     this.classEnrollments = [];
 
     this.userIdCounter = 1;
@@ -2989,6 +3005,41 @@ export class MemStorage implements IStorage {
       completionRate: Math.round(completionRate * 100) / 100 // Round to 2 decimal places
     };
   }
+
+  // Technical Support methods
+  async createTechnicalIssue(issue: any): Promise<any> {
+    this.technicalIssuesStore.set(issue.id, { ...issue, timestamp: new Date() });
+    return issue;
+  }
+
+  async getTechnicalIssue(id: string): Promise<any> {
+    return this.technicalIssuesStore.get(id);
+  }
+
+  async getAllTechnicalIssues(): Promise<any[]> {
+    return Array.from(this.technicalIssuesStore.values());
+  }
+
+  async updateTechnicalIssue(id: string, updates: any): Promise<any> {
+    const issue = this.technicalIssuesStore.get(id);
+    if (issue) {
+      const updatedIssue = { ...issue, ...updates };
+      this.technicalIssuesStore.set(id, updatedIssue);
+      return updatedIssue;
+    }
+    return null;
+  }
+
+  // Notification methods  
+  async createAdminNotification(notification: any): Promise<any> {
+    this.adminNotificationsStore.set(notification.id, { ...notification, createdAt: new Date() });
+    return notification;
+  }
+
+  async createUserNotification(notification: any): Promise<any> {
+    this.userNotificationsStore.set(notification.id, { ...notification, createdAt: new Date() });
+    return notification;
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -3737,6 +3788,32 @@ export class MemStorage implements IStorage {
 
       async getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }> {
         return this.memStorage.getDailyFlowStats(filters);
+      }
+
+      // Technical Support methods
+      async createTechnicalIssue(issue: any): Promise<any> {
+        return this.memStorage.createTechnicalIssue(issue);
+      }
+
+      async getTechnicalIssue(id: string): Promise<any> {
+        return this.memStorage.getTechnicalIssue(id);
+      }
+
+      async getAllTechnicalIssues(): Promise<any[]> {
+        return this.memStorage.getAllTechnicalIssues();
+      }
+
+      async updateTechnicalIssue(id: string, updates: any): Promise<any> {
+        return this.memStorage.updateTechnicalIssue(id, updates);
+      }
+
+      // Notification methods
+      async createAdminNotification(notification: any): Promise<any> {
+        return this.memStorage.createAdminNotification(notification);
+      }
+
+      async createUserNotification(notification: any): Promise<any> {
+        return this.memStorage.createUserNotification(notification);
       }
   }
 
