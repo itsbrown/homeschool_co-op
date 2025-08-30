@@ -25,7 +25,8 @@ import {
   Link2,
   MapPin,
   Bell,
-  Clock
+  Clock,
+  Percent
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -108,6 +109,11 @@ const schoolNavItems: {
       { title: 'View Entries', href: '/schools/daily-flows/entries' },
       { title: 'Reports', href: '/schools/daily-flows/reports' }
     ]
+  },
+  {
+    title: 'Discounts',
+    href: '/schools/discounts',
+    icon: Percent,
   },
   {
     title: 'Settings',
@@ -193,6 +199,11 @@ const superAdminNavItems: {
     title: 'Calendar',
     href: '/schools/calendar',
     icon: Calendar,
+  },
+  {
+    title: 'Discounts',
+    href: '/schools/discounts',
+    icon: Percent,
   },
   {
     title: 'Settings',
