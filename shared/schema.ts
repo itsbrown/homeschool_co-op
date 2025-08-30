@@ -601,6 +601,7 @@ export const classes = pgTable("classes", {
   totalDiscounted: integer("total_discounted").default(0), // in cents
   totalCollected: integer("total_collected").default(0), // in cents
   isPublished: boolean("is_published").default(false).notNull(),
+  isAdminOnly: boolean("is_admin_only").default(false).notNull(),
   enrollmentCount: integer("enrollment_count").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

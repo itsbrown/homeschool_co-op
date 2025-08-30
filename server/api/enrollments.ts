@@ -111,4 +111,30 @@ router.delete('/:enrollmentId', async (req: any, res) => {
   }
 });
 
+// Get enrollments for a specific class
+router.get('/class/:classId', async (req, res) => {
+  try {
+    const classId = parseInt(req.params.classId);
+    
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
+    }
+
+    console.log(`📚 Fetching enrollments for class ID: ${classId}`);
+    
+    // Get all enrollments and filter by class ID
+    const allEnrollments = await storage.getAllEnrollments();
+    const classEnrollments = allEnrollments.filter((e: any) => 
+      e.programId === classId || e.classId === classId
+    );
+    
+    console.log(`📚 Found ${classEnrollments.length} enrollments for class ${classId}`);
+    
+    res.json(classEnrollments);
+  } catch (error) {
+    console.error('Error fetching class enrollments:', error);
+    res.status(500).json({ message: 'Failed to fetch enrollments' });
+  }
+});
+
 export default router;

@@ -568,6 +568,7 @@ function Router() {
       <Route path="/admin/role-management" component={RoleManagementPage} />
       <Route path="/admin/features" component={FeaturesOverviewPage} />
       <Route path="/admin/classes/edit/:id" component={ClassCreationPage} />
+      <Route path="/admin/classes/:classId/enrollments" component={() => React.lazy(() => import('./pages/admin/ClassEnrollmentsPage'))} />
       <Route path="/admin/programs" component={Dashboard} />
       <Route path="/admin/programs/:rest*" component={Dashboard} />
       <Route path="/admin/users" component={Dashboard} />

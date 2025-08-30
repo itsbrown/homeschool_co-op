@@ -61,6 +61,7 @@ import {
   Eye,
   EyeOff,
   Upload,
+  UserPlus,
 } from "lucide-react";
 
 export function AdminClassesPage() {
@@ -216,6 +217,12 @@ export function AdminClassesPage() {
     setLocation("/admin/classes/upload");
   };
 
+  // Handle manual enrollment for admin-only classes
+  const handleManualEnrollment = (classId: number) => {
+    console.log("Managing enrollments for class:", classId);
+    setLocation(`/admin/classes/${classId}/enrollments`);
+  };
+
   return (
     <AdminShell>
       <div className="flex flex-col space-y-6">
@@ -320,6 +327,7 @@ export function AdminClassesPage() {
                                       <TableHead>Price</TableHead>
                                       <TableHead>Enrollment</TableHead>
                                       <TableHead>Status</TableHead>
+                                      <TableHead>Visibility</TableHead>
                                       <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                   </TableHeader>
@@ -371,6 +379,13 @@ export function AdminClassesPage() {
                                             {classItem.isPublished || classItem.status === 'published' ? "Published" : "Draft"}
                                           </Badge>
                                         </TableCell>
+                                        <TableCell>
+                                          <Badge
+                                            variant={classItem.isAdminOnly ? "destructive" : "outline"}
+                                          >
+                                            {classItem.isAdminOnly ? "Admin Only" : "Public"}
+                                          </Badge>
+                                        </TableCell>
                                         <TableCell className="text-right">
                                           <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
@@ -389,6 +404,14 @@ export function AdminClassesPage() {
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 Edit
                                               </DropdownMenuItem>
+                                              {classItem.isAdminOnly && (
+                                                <DropdownMenuItem
+                                                  onClick={() => handleManualEnrollment(classItem.id)}
+                                                >
+                                                  <UserPlus className="mr-2 h-4 w-4" />
+                                                  Manage Enrollments
+                                                </DropdownMenuItem>
+                                              )}
                                               <DropdownMenuItem
                                                 onClick={() =>
                                                   handleTogglePublish(

@@ -33,6 +33,9 @@ router.get('/', async (req, res) => {
     // Get classes with pagination
     let classes = await storage.getClasses(options);
 
+    // Filter out admin-only classes for public API
+    classes = classes.filter(c => !c.isAdminOnly);
+
     // Additional filtering by categoryName if provided
     if (categoryName && classes.length > 0) {
       classes = classes.filter(c => c.categoryName === categoryName);
@@ -90,8 +93,8 @@ router.get('/category/:categoryName', async (req, res) => {
       status: 'published'
     });
 
-    // Filter by category name
-    const filteredClasses = allClasses.filter(c => c.categoryName === categoryName);
+    // Filter by category name and exclude admin-only classes
+    const filteredClasses = allClasses.filter(c => c.categoryName === categoryName && !c.isAdminOnly);
 
     // Apply pagination manually
     const startIndex = (page - 1) * limit;
