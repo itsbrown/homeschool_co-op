@@ -60,6 +60,45 @@ type CartAction =
   | { type: 'LOAD_CART'; payload: Cart };
 
 // Function to check for applicable automatic discounts
+// Fetch sibling discount settings from school admin
+const fetchSiblingDiscountSettings = async (getAccessTokenSilently?: () => Promise<string>): Promise<{ rate: number; isActive: boolean }> => {
+  if (!getAccessTokenSilently) {
+    throw new Error('No Auth0 token function available');
+  }
+
+  const token = await getAccessTokenSilently();
+  const response = await fetch('/api/school-admin/discounts', {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch discount settings');
+  }
+
+  const { discounts } = await response.json();
+  
+  // Find active sibling discount
+  const siblingDiscountSetting = discounts.find((discount: any) => 
+    discount.isActive && 
+    discount.siblingDiscount === true &&
+    (discount.applicationMethod === 'automatic' || discount.applicationMethod === 'both')
+  );
+
+  if (!siblingDiscountSetting) {
+    return { rate: 0, isActive: false };
+  }
+
+  // Convert percentage value to decimal rate (e.g., 10 -> 0.10)
+  const rate = siblingDiscountSetting.type === 'percentage' 
+    ? siblingDiscountSetting.value / 100 
+    : 0; // For fixed amounts, we'll use 0 for now as it's complex to calculate
+
+  return { rate, isActive: true };
+};
+
 const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, getAccessTokenSilently?: () => Promise<string>): Promise<AppliedDiscount[]> => {
   try {
     // Get Auth0 access token
@@ -196,8 +235,8 @@ const calculateCartTotalsSync = (items: CartItem[]): { subtotal: number; discoun
 
   const uniqueChildren = Object.keys(childrenWithClasses).length;
 
-  // Apply 10% sibling discount if more than one child
-  const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0;
+  // For sync calculation, use fallback rate (this will be updated by async calculation)
+  const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0; // Fallback rate
   const siblingDiscount = subtotal * siblingDiscountRate;
 
   // Apply "Free After Three" - 4th child and beyond are free
@@ -234,9 +273,22 @@ const calculateCartTotalsWithDiscounts = async (items: CartItem[], getAccessToke
 
   const uniqueChildren = Object.keys(childrenWithClasses).length;
 
-  // Apply 10% sibling discount if more than one child
-  const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0;
-  const siblingDiscount = subtotal * siblingDiscountRate;
+  // Get sibling discount rate from school admin settings
+  let siblingDiscountRate = 0;
+  let siblingDiscount = 0;
+  
+  if (uniqueChildren > 1) {
+    try {
+      // Fetch active sibling discount from school admin settings
+      const siblingDiscountSettings = await fetchSiblingDiscountSettings(getAccessTokenSilently);
+      siblingDiscountRate = siblingDiscountSettings.rate;
+      siblingDiscount = subtotal * siblingDiscountRate;
+    } catch (error) {
+      console.log('Failed to fetch sibling discount settings, using default 0%');
+      siblingDiscountRate = 0;
+      siblingDiscount = 0;
+    }
+  }
 
   // Apply "Free After Three" - 4th child and beyond are free
   let freeAfterThreeDiscount = 0;

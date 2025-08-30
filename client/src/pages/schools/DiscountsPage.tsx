@@ -797,13 +797,24 @@ function DiscountFormDialog({
               <Label htmlFor="newStudentsOnly">New students only</Label>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="siblingDiscount"
-                checked={formData.siblingDiscount}
-                onCheckedChange={(checked) => setFormData({ ...formData, siblingDiscount: checked })}
-              />
-              <Label htmlFor="siblingDiscount">Sibling discount</Label>
+            <div className="p-4 border rounded-lg bg-blue-50/50 space-y-3">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="siblingDiscount"
+                  checked={formData.siblingDiscount}
+                  onCheckedChange={(checked) => setFormData({ ...formData, siblingDiscount: checked })}
+                />
+                <Label htmlFor="siblingDiscount" className="font-medium">Sibling Discount</Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Apply this discount automatically when families enroll multiple children. 
+                {formData.siblingDiscount && formData.type === 'percentage' && (
+                  <span className="font-medium text-blue-600"> Active: {formData.value}% off when 2+ siblings are enrolled.</span>
+                )}
+                {formData.siblingDiscount && formData.type === 'fixed_amount' && (
+                  <span className="font-medium text-blue-600"> Active: ${formData.value} off when 2+ siblings are enrolled.</span>
+                )}
+              </p>
             </div>
 
             <div className="flex items-center space-x-2">
