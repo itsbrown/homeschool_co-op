@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Loader2 } from "lucide-react";
 
@@ -32,6 +33,7 @@ const classFormSchema = z.object({
   instructorName: z.string().min(1, "Instructor name is required"),
   price: z.coerce.number().min(0, "Price cannot be negative"),
   status: z.string().min(1, "Please select a status"),
+  isAdminOnly: z.boolean().default(false),
 });
 
 type ClassFormValues = z.infer<typeof classFormSchema>;
@@ -65,6 +67,7 @@ export default function SchoolClassCreationPage() {
       instructorName: "",
       price: 0,
       status: "upcoming",
+      isAdminOnly: false,
     },
   });
 
@@ -142,6 +145,7 @@ export default function SchoolClassCreationPage() {
         instructorName: classData.instructorName || "",
         price: classData.price || 0,
         status: classData.status || "upcoming",
+        isAdminOnly: classData.isAdminOnly || false,
       });
     }
   }, [classData, classId, form]);
@@ -348,6 +352,27 @@ export default function SchoolClassCreationPage() {
                           </SelectContent>
                         </Select>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="isAdminOnly"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Admin Only Class</FormLabel>
+                          <FormDescription>
+                            When enabled, this class will only be visible to administrators and will not appear in public class listings for parents and students.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
