@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -36,6 +36,7 @@ const formSchema = z.object({
   birthdate: z.string().min(1, "Birthdate is required"),
   gradeLevel: z.string().min(1, "Grade level is required"),
   gender: z.string().min(1, "Gender is required"),
+  school: z.string().optional(),
   interests: z.array(z.string()).optional(),
   learningStyle: z.string().optional(),
   specialNeeds: z.string().optional(),
@@ -84,6 +85,7 @@ export default function ChildRegistrationForm({
       birthdate: "",
       gradeLevel: "",
       gender: "",
+      school: "",
       interests: [],
       learningStyle: "",
       specialNeeds: "",
@@ -94,6 +96,21 @@ export default function ChildRegistrationForm({
       ...defaultValues
     },
   });
+
+  // Retrieve school information from sessionStorage and set it in the form
+  useEffect(() => {
+    const schoolContext = sessionStorage.getItem('schoolRegistrationContext');
+    if (schoolContext) {
+      try {
+        const { schoolName } = JSON.parse(schoolContext);
+        if (schoolName && !form.getValues('school')) {
+          form.setValue('school', schoolName);
+        }
+      } catch (error) {
+        console.error('Error parsing school context:', error);
+      }
+    }
+  }, [form]);
 
   // Handle form submission
   const onSubmit = async (data: FormValues) => {
@@ -256,6 +273,31 @@ export default function ChildRegistrationForm({
                         <SelectItem value="female">Female</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="school"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>School</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="School name" 
+                        readOnly={!!form.getValues('school')}
+                        className={form.getValues('school') ? "bg-gray-50" : ""}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {form.getValues('school') ? 
+                        "School automatically assigned from registration link" : 
+                        "Optional: Enter your child's school name"
+                      }
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

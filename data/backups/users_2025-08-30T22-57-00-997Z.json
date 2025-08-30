@@ -39,15 +39,5 @@
     "lastName": "Brown",
     "createdAt": "2025-08-26T22:15:00.000Z",
     "updatedAt": "2025-08-26T22:15:00.000Z"
-  },
-  {
-    "id": 8,
-    "email": "kpdinvestors@gmail.com",
-    "role": "parent",
-    "schoolId": 1,
-    "firstName": "Parent",
-    "lastName": "Puccia",
-    "createdAt": "2025-08-30T22:54:00.000Z",
-    "updatedAt": "2025-08-30T22:54:00.000Z"
   }
 ]

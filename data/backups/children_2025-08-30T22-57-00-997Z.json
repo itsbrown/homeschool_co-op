@@ -54,12 +54,12 @@
     "specialNeeds": null,
     "allergies": null,
     "medicalInfo": null,
-    "school": "American Seekers Academy",
+    "school": null,
     "profileImage": null,
     "emergencyContact": null,
     "emergencyPhone": null,
     "createdAt": "2025-08-30T22:54:00.346Z",
-    "updatedAt": "2025-08-30T22:57:50.000Z",
+    "updatedAt": "2025-08-30T22:54:00.346Z",
     "id": 3
   }
 ]
