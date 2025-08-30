@@ -108,6 +108,7 @@ export function ChildForm({ defaultValues, onSuccess, childId }: ChildFormProps)
   };
 
   const gradeLevels = [
+    "Littles",
     "Pre-K",
     "Kindergarten",
     "1st Grade",
