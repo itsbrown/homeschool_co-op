@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Plus, Edit, Trash2, Percent, DollarSign, Users, Calendar, Eye, Target } from 'lucide-react';
-import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import AppShell from '@/components/layout/AppShell';
 
 interface Discount {
   id: number;
@@ -297,8 +297,13 @@ export default function DiscountsPage() {
   const discounts = discountsData?.discounts || [];
 
   return (
-    <SchoolAdminLayout pageTitle="Discount Management">
+    <AppShell>
       <div className="space-y-6">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-3xl font-bold">Discount Management</h1>
+          <p className="text-muted-foreground">Create and manage discounts for classes and enrollments. Set up automatic discounts for siblings and other special offers.</p>
+        </div>
         {/* Header */}
         <Card>
           <CardHeader>
@@ -490,7 +495,7 @@ export default function DiscountsPage() {
           />
         </Dialog>
       </div>
-    </SchoolAdminLayout>
+    </AppShell>
   );
 }
 
