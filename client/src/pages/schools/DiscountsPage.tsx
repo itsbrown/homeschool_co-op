@@ -591,7 +591,7 @@ function DiscountFormDialog({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select discount type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="percentage">Percentage</SelectItem>
@@ -625,7 +625,7 @@ function DiscountFormDialog({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select application method" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="automatic">Automatic</SelectItem>
