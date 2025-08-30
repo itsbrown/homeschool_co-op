@@ -240,5 +240,26 @@
     "createdAt": "2025-08-24T11:39:20.452Z",
     "updatedAt": "2025-08-24T11:39:38.774Z",
     "isAdminOnly": false
+  },
+  {
+    "id": 14,
+    "schoolId": 1,
+    "title": "Macaroni Single Day",
+    "description": "Our Macaroni Class (ages 6 months to 3 years) welcomes our youngest learners into a warm, nurturing academic setting designed to spark curiosity, encourage sensory exploration, and build foundational social skills. Beyond engaging lessons on numbers, letters, colors, and syllables, your child will delight in a vibrant morning filled with play, music, movement, obstacle courses, tumbling, classic stories, and enriching arts and crafts—all in just three hours, three days a week. With a consistent, rhythmic schedule, your little one will thrive in a thoughtfully crafted routine at ASA, brimming with exceptional educational activities and high-quality creative projects. Our co-op is purposefully designed for homeschooling families, striking a perfect balance between learning and living, and instilling a lifelong passion for discovery.",
+    "category": "Early Childhood",
+    "gradeLevel": "littles",
+    "status": "active",
+    "startDate": "2025-09-08",
+    "endDate": "2025-11-14",
+    "schedule": "Monday, Wednesday, Friday 9am-12pm",
+    "capacity": 10,
+    "maxStudents": 10,
+    "enrollmentCount": 0,
+    "location": "Brighton",
+    "price": 300,
+    "instructorName": "Corey Brown",
+    "instructorId": 1,
+    "createdAt": "2025-08-30T22:36:41.346Z",
+    "updatedAt": "2025-08-30T22:36:41.346Z"
   }
 ]

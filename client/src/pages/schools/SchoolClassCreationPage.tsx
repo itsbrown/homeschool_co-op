@@ -317,7 +317,8 @@ export default function SchoolClassCreationPage() {
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="littles">Littles</SelectItem>
-                            <SelectItem value="pre-k-k">Pre K - K</SelectItem>
+                            <SelectItem value="pre-k">Pre K</SelectItem>
+                            <SelectItem value="kindergarten">Kindergarten</SelectItem>
                             <SelectItem value="grades-1-2">Grades 1-2</SelectItem>
                             <SelectItem value="grades-3-5">Grades 3-5</SelectItem>
                             <SelectItem value="grades-6-8">Grades 6-8</SelectItem>
