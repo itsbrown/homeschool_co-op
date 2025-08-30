@@ -217,6 +217,7 @@ export default function ChildRegistrationForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="Littles">Littles</SelectItem>
                         <SelectItem value="Pre-K">Pre-K</SelectItem>
                         <SelectItem value="Kindergarten">Kindergarten</SelectItem>
                         <SelectItem value="1st Grade">1st Grade</SelectItem>
