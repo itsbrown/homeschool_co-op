@@ -319,10 +319,16 @@ export default function SchoolClassCreationPage() {
                             <SelectItem value="littles">Littles</SelectItem>
                             <SelectItem value="pre-k">Pre K</SelectItem>
                             <SelectItem value="kindergarten">Kindergarten</SelectItem>
-                            <SelectItem value="grades-1-2">Grades 1-2</SelectItem>
-                            <SelectItem value="grades-3-5">Grades 3-5</SelectItem>
-                            <SelectItem value="grades-6-8">Grades 6-8</SelectItem>
-                            <SelectItem value="grades-9-12">Grades 9-12</SelectItem>
+                            <SelectItem value="1st-grade">1st Grade</SelectItem>
+                            <SelectItem value="2nd-grade">2nd Grade</SelectItem>
+                            <SelectItem value="3rd-grade">3rd Grade</SelectItem>
+                            <SelectItem value="4th-grade">4th Grade</SelectItem>
+                            <SelectItem value="5th-grade">5th Grade</SelectItem>
+                            <SelectItem value="6th-grade">6th Grade</SelectItem>
+                            <SelectItem value="7th-grade">7th Grade</SelectItem>
+                            <SelectItem value="8th-grade">8th Grade</SelectItem>
+                            <SelectItem value="9th-grade">9th Grade</SelectItem>
+                            <SelectItem value="10th-grade">10th Grade</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
