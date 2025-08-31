@@ -115,7 +115,6 @@ export default function ChildRegistrationForm({
   // Reset form when defaultValues change (important for editing existing children)
   useEffect(() => {
     if (defaultValues && Object.keys(defaultValues).length > 0) {
-      console.log('🔄 Resetting form with new defaultValues:', defaultValues);
       form.reset({
         firstName: "",
         lastName: "",
