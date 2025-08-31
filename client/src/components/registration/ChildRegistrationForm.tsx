@@ -249,7 +249,7 @@ export default function ChildRegistrationForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Grade Level*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select grade level" />
@@ -284,7 +284,7 @@ export default function ChildRegistrationForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Gender*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select gender" />

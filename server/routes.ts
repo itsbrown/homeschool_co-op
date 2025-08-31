@@ -1726,7 +1726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Invalid child ID' });
       }
 
-      console.log(`📝 Updating child ${childId} with data:`, updateData);
+      console.log(`📝 Updating child ${childId} with data:`, JSON.stringify(updateData, null, 2));
 
       // Verify the user is authenticated and is a parent
       if (!req.user || !req.user.email) {
