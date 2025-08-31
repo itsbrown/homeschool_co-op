@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
-import { Redirect, useRoute } from "wouter";
+import { Redirect, useRoute, useLocation } from "wouter";
 import PageLayout from "@/components/layout/PageLayout";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ import ChildRegistrationForm from "@/components/registration/ChildRegistrationFo
 export default function ChildProfileEditPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [match, params] = useRoute("/children/:id/edit");
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   
   const childId = params?.id;
@@ -32,23 +33,39 @@ export default function ChildProfileEditPage() {
     return <Redirect to="/children" />;
   }
 
-  // For now, assume all authenticated users are parents since the server logs show the user is correctly identified as a parent
-  // We'll simplify the role check to avoid infinite renders
-  
-  // Fetch child data for editing
+  // Use the correct API endpoint for parent access to children
   const { data: childData, isLoading: childLoading, error } = useQuery({
-    queryKey: ["/api/children", childId],
-    enabled: !!childId && isAuthenticated
+    queryKey: ["/api/parent/children", childId],
+    enabled: !!childId && isAuthenticated,
+    select: (data: any[]) => {
+      // Find the specific child by ID from the parent's children array
+      return data?.find((child: any) => child.id === parseInt(childId));
+    }
   });
 
-  if (error) {
-    toast({
-      title: "Error",
-      description: "Failed to load child information",
-      variant: "destructive",
-    });
-    return <Redirect to="/children" />;
-  }
+  // Handle errors with useEffect to avoid calling toast during render
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load child information",
+        variant: "destructive",
+      });
+      setLocation("/children");
+    }
+  }, [error, toast, setLocation]);
+
+  // Handle child not found with useEffect
+  useEffect(() => {
+    if (!childLoading && !error && childData === undefined) {
+      toast({
+        title: "Error",
+        description: "Child not found",
+        variant: "destructive",
+      });
+      setLocation("/children");
+    }
+  }, [childLoading, error, childData, toast, setLocation]);
 
   if (childLoading) {
     return (
@@ -60,30 +77,32 @@ export default function ChildProfileEditPage() {
     );
   }
 
-  if (!childData) {
-    toast({
-      title: "Error",
-      description: "Child not found",
-      variant: "destructive",
-    });
-    return <Redirect to="/children" />;
+  // If we're still loading or had errors, don't render the form yet
+  if (!childData || error) {
+    return (
+      <PageLayout title="Edit Child Profile" backTo="/children">
+        <div className="flex justify-center items-center min-h-96">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      </PageLayout>
+    );
   }
 
   // Convert the child data to the format expected by ChildRegistrationForm
   const defaultValues = {
-    firstName: (childData as any)?.firstName || "",
-    lastName: (childData as any)?.lastName || "",
-    birthdate: (childData as any)?.birthdate || "",
-    gradeLevel: (childData as any)?.gradeLevel || "",
-    gender: (childData as any)?.gender || "",
-    school: (childData as any)?.school || "",
-    interests: Array.isArray((childData as any)?.interests) ? (childData as any).interests : [],
-    learningStyle: (childData as any)?.learningStyle || "",
-    specialNeeds: (childData as any)?.specialNeeds || "",
-    allergies: (childData as any)?.allergies || "",
-    emergencyContact: (childData as any)?.emergencyContact || "",
-    additionalLanguages: (childData as any)?.additionalLanguages || "",
-    notes: (childData as any)?.notes || "",
+    firstName: childData?.firstName || "",
+    lastName: childData?.lastName || "",
+    birthdate: childData?.birthdate || "",
+    gradeLevel: childData?.gradeLevel || "",
+    gender: childData?.gender || "",
+    school: childData?.school || "",
+    interests: Array.isArray(childData?.interests) ? childData.interests : [],
+    learningStyle: childData?.learningStyle || "",
+    specialNeeds: childData?.specialNeeds || "",
+    allergies: childData?.allergies || "",
+    emergencyContact: childData?.emergencyContact || "",
+    additionalLanguages: childData?.additionalLanguages || "",
+    notes: childData?.notes || "",
   };
 
   const handleSuccess = (updatedChildId: string) => {
@@ -92,7 +111,7 @@ export default function ChildProfileEditPage() {
       description: "Child profile updated successfully",
     });
     // Navigate back to children list
-    window.location.href = "/children";
+    setLocation("/children");
   };
 
   return (

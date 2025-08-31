@@ -1,0 +1,43 @@
+
+/api/children:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this error
+chunk-NFC5BX5N.js?v=b83301ca:521 Warning: Cannot update a component (`Toaster`) while rendering a different component (`ChildProfileEditPage`). To locate the bad setState() call inside `ChildProfileEditPage`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render
+    at ChildProfileEditPage (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/ChildProfileEditPage.tsx?t=1756611318994:26:61)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=b83301ca:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=b83301ca:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?t=1756611318994&v=pcYKkJujKZB-9R9IOQyux:291:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=b83301ca:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=b83301ca:64:5)
+    at CartProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/CartContext.tsx:301:32)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at NotificationProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/hooks/useNotifications.tsx:20:40)
+    at RoleProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/RoleContext.tsx:30:32)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=b83301ca:2805:3)
+    at App
+printWarning @ chunk-NFC5BX5N.js?v=b83301ca:521Understand this error
+2chunk-NFC5BX5N.js?v=b83301ca:11555 Uncaught Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooks (chunk-NFC5BX5N.js?v=b83301ca:11555:23)
+    at updateFunctionComponent (chunk-NFC5BX5N.js?v=b83301ca:14582:28)
+    at beginWork (chunk-NFC5BX5N.js?v=b83301ca:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=b83301ca:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=b83301ca:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=b83301ca:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=b83301ca:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=b83301ca:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=b83301ca:19137:13)
+    at renderRootSync (chunk-NFC5BX5N.js?v=b83301ca:19116:15)Understand this error
+chunk-NFC5BX5N.js?v=b83301ca:14032 The above error occurred in the <ChildProfileEditPage> component:
+
+    at ChildProfileEditPage (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/ChildProfileEditPage.tsx?t=1756611318994:26:61)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=b83301ca:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=b83301ca:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?t=1756611318994&v=pcYKkJujKZB-9R9IOQyux:291:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=b83301ca:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=b83301ca:64:5)
+    at CartProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/CartContext.tsx:301:32)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at NotificationProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/hooks/useNotifications.tsx:20:40)
+    at RoleProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/RoleContext.tsx:30:32)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=b83301ca:2805:3)
+    at App
