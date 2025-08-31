@@ -1716,6 +1716,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update child endpoint
+  app.patch("/api/children/:id", jwtCheck, async (req, res) => {
+    try {
+      const childId = parseInt(req.params.id);
+      const updateData = req.body;
+
+      if (isNaN(childId)) {
+        return res.status(400).json({ message: 'Invalid child ID' });
+      }
+
+      console.log(`📝 Updating child ${childId} with data:`, updateData);
+
+      // Verify the user is authenticated and is a parent
+      if (!req.user || !req.user.email) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Check if user is a parent
+      const user = await storage.getUserByEmail(req.user.email);
+      if (!user || user.role !== 'parent') {
+        console.log(`❌ Access denied - user role: ${user?.role}, required: parent`);
+        return res.status(403).json({ message: "Only parents can update children" });
+      }
+
+      // Check if the child belongs to this parent
+      const existingChild = await storage.getChildById(childId);
+      if (!existingChild) {
+        return res.status(404).json({ message: "Child not found" });
+      }
+
+      if (existingChild.parentEmail !== req.user.email) {
+        console.log(`❌ Access denied - child belongs to different parent`);
+        return res.status(403).json({ message: "You can only update your own children" });
+      }
+
+      // Update the child using the storage system
+      const updatedChild = await storage.updateChild(childId, updateData);
+
+      if (!updatedChild) {
+        return res.status(404).json({ message: "Child not found" });
+      }
+
+      console.log(`✅ Child ${childId} updated successfully:`, updatedChild.firstName, updatedChild.lastName);
+
+      return res.status(200).json({
+        message: "Child updated successfully",
+        id: childId,
+        child: updatedChild
+      });
+    } catch (error) {
+      console.error("Error updating child:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Import and register users API router
   const usersRouter = await import("./api/users");
   app.use("/api/users", usersRouter.default);
