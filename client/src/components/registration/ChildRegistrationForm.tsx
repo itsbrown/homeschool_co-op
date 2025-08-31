@@ -473,15 +473,7 @@ export default function ChildRegistrationForm({
               <Button type="button" variant="outline" onClick={() => setLocation("/dashboard")}>
                 Cancel
               </Button>
-              <Button 
-                type="submit"
-                onClick={() => {
-                  console.log('🔘 Submit button clicked!');
-                  console.log('📋 Current form values:', form.getValues());
-                  console.log('📝 Form is valid:', form.formState.isValid);
-                  console.log('🚨 Form errors:', form.formState.errors);
-                }}
-              >
+              <Button type="submit">
                 {childId ? "Update Child" : "Register Child"}
               </Button>
             </div>
