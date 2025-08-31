@@ -110,7 +110,7 @@ export default function ChildRegistrationForm({
         console.error('Error parsing school context:', error);
       }
     }
-  }, [form]);
+  }, [defaultValues]); // Changed dependency to avoid infinite loop
 
   // Handle form submission
   const onSubmit = async (data: FormValues) => {
