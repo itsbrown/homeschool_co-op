@@ -110,7 +110,30 @@ export default function ChildRegistrationForm({
         console.error('Error parsing school context:', error);
       }
     }
-  }, [defaultValues]); // Changed dependency to avoid infinite loop
+  }, [form]);
+
+  // Reset form when defaultValues change (important for editing existing children)
+  useEffect(() => {
+    if (defaultValues && Object.keys(defaultValues).length > 0) {
+      console.log('🔄 Resetting form with new defaultValues:', defaultValues);
+      form.reset({
+        firstName: "",
+        lastName: "",
+        birthdate: "",
+        gradeLevel: "",
+        gender: "",
+        school: "",
+        interests: [],
+        learningStyle: "",
+        specialNeeds: "",
+        allergies: "",
+        emergencyContact: "",
+        additionalLanguages: "",
+        notes: "",
+        ...defaultValues
+      });
+    }
+  }, [defaultValues, form]);
 
   // Handle form submission
   const onSubmit = async (data: FormValues) => {

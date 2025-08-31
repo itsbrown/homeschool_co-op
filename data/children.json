@@ -50,16 +50,19 @@
     "parent_email": "kpdinvestors@gmail.com",
     "parentPhone": null,
     "interests": [],
-    "learningStyle": null,
-    "specialNeeds": null,
-    "allergies": null,
+    "learningStyle": "",
+    "specialNeeds": "",
+    "allergies": "",
     "medicalInfo": null,
     "school": "American Seekers Academy",
     "profileImage": null,
-    "emergencyContact": null,
+    "emergencyContact": "",
     "emergencyPhone": null,
     "createdAt": "2025-08-30T22:54:00.346Z",
-    "updatedAt": "2025-08-30T22:57:50.000Z",
-    "id": 3
+    "updatedAt": "2025-08-31T04:19:37.815Z",
+    "id": 3,
+    "birthDate": "2025-08-31T04:17:20.459Z",
+    "additionalLanguages": "",
+    "notes": ""
   }
 ]
