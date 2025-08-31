@@ -468,7 +468,10 @@ export default function ChildRegistrationForm({
               <Button type="button" variant="outline" onClick={() => setLocation("/dashboard")}>
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button 
+                type="submit"
+                onClick={() => console.log('🔘 Submit button clicked!')}
+              >
                 {childId ? "Update Child" : "Register Child"}
               </Button>
             </div>
