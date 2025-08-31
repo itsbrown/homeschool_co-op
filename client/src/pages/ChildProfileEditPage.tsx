@@ -13,7 +13,14 @@ export default function ChildProfileEditPage() {
   const { toast } = useToast();
   
   const childId = params?.id;
-  const isParent = user?.role === 'parent';
+
+  // Check user role from backend API
+  const { data: userRole, isLoading: roleLoading } = useQuery({
+    queryKey: ["/api/users/role", user?.email],
+    enabled: !!user?.email && isAuthenticated
+  });
+
+  const isParent = userRole?.role === 'parent';
 
   // Fetch child data for editing
   const { data: childData, isLoading: childLoading, error } = useQuery({
@@ -28,8 +35,8 @@ export default function ChildProfileEditPage() {
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
-  // Show loading while auth is loading
-  if (authLoading) {
+  // Show loading while auth or role is loading
+  if (authLoading || roleLoading) {
     return (
       <PageLayout>
         <div className="flex justify-center items-center min-h-96">
@@ -44,12 +51,13 @@ export default function ChildProfileEditPage() {
   }
 
   // Ensure only parents can access this page
-  if (user && user.role !== 'parent') {
+  if (user && userRole && !isParent) {
     return (
       <PageLayout>
         <div className="container mx-auto p-4 text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
           <p>Only parents can edit children profiles.</p>
+          <p className="text-sm text-gray-500 mt-2">Current role: {userRole.role}</p>
         </div>
       </PageLayout>
     );
