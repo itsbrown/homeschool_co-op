@@ -137,12 +137,16 @@ export default function ChildRegistrationForm({
   // Handle form submission
   const onSubmit = async (data: FormValues) => {
     try {
+      console.log('🔄 Form submission started:', { childId, data });
+      console.log('📝 Form errors:', form.formState.errors);
+      
       const endpoint = childId 
         ? `/api/children/${childId}` 
         : "/api/parent/children";
 
       const method = childId ? "PATCH" : "POST";
 
+      console.log('📡 Sending request:', { method, endpoint, data });
       const response = await apiRequest(method, endpoint, data);
 
       if (!response.ok) {
