@@ -470,7 +470,12 @@ export default function ChildRegistrationForm({
               </Button>
               <Button 
                 type="submit"
-                onClick={() => console.log('🔘 Submit button clicked!')}
+                onClick={() => {
+                  console.log('🔘 Submit button clicked!');
+                  console.log('📋 Current form values:', form.getValues());
+                  console.log('📝 Form is valid:', form.formState.isValid);
+                  console.log('🚨 Form errors:', form.formState.errors);
+                }}
               >
                 {childId ? "Update Child" : "Register Child"}
               </Button>
