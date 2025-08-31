@@ -148,13 +148,16 @@ export default function ChildRegistrationForm({
 
       console.log('📡 Sending request:', { method, endpoint, data });
       const response = await apiRequest(method, endpoint, data);
+      console.log('📨 Response received:', { status: response.status, ok: response.ok });
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Request failed:', errorData);
         throw new Error(errorData.message || "Failed to register child");
       }
 
       const result = await response.json();
+      console.log('✅ Request successful:', result);
 
       // Store the registered child ID in session storage for future use
       sessionStorage.setItem('registeredChildId', JSON.stringify(result.id));
