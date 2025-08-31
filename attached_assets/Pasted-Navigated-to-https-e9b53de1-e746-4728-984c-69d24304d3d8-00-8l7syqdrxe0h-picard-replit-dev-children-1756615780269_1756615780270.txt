@@ -1,0 +1,133 @@
+Navigated to https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/children
+client:495 [vite] connecting...
+client:618 [vite] connected.
+chunk-NFC5BX5N.js?v=b83301ca:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+CartCheckout.tsx:21 🔑 CartCheckout Stripe key check: Present
+BillingPage.tsx:20 🔑 Stripe publishable key check: Present
+BillingPage.tsx:21 🔑 Stripe publishable key starts with: pk_test_51RkR2Q...
+ResetPasswordPage.tsx:14 Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+_GoTrueClient @ @supabase_supabase-js.js?v=b83301ca:5041
+SupabaseAuthClient @ @supabase_supabase-js.js?v=b83301ca:6907
+_initSupabaseAuthClient @ @supabase_supabase-js.js?v=b83301ca:7105
+SupabaseClient @ @supabase_supabase-js.js?v=b83301ca:6978
+createClient @ @supabase_supabase-js.js?v=b83301ca:7145
+(anonymous) @ ResetPasswordPage.tsx:14Understand this warning
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: parent, canSwitchRoles: false, showRoleSelection: false, user: undefined
+App.tsx:237 🔐 Router render - activeRole: parent isAuthenticated: false showRoleSelection: false user: undefined location: /children
+App.tsx:242 Router effect - activeRole: parent isAuthenticated: false
+CartContext.tsx:687 🛒 Loading cart from localStorage: {items: Array(0), subtotal: 0, discounts: {…}, total: 0}
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: null
+RoleContext.tsx:91 🔄 No user - resetting state and clearing storage
+SupabaseProvider.tsx:52 🔍 Initializing authentication...
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, user: undefined
+App.tsx:237 🔐 Router render - activeRole:  isAuthenticated: false showRoleSelection: false user: undefined location: /children
+App.tsx:242 Router effect - activeRole:  isAuthenticated: false
+SupabaseProvider.tsx:90 Auth state change: {event: 'SIGNED_IN', session: {…}}
+SupabaseProvider.tsx:98 🔍 SupabaseProvider user state updated: {email: 'kpdinvestors@gmail.com', authenticated: true, userId: '31ad8076-c274-47bd-acf1-cefcd481efcc'}
+SupabaseProvider.tsx:107 ✅ Stored Supabase access token
+SupabaseProvider.tsx:124 ✅ User signed in successfully, checking for redirect...
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, user: kpdinvestors@gmail.com
+App.tsx:237 🔐 Router render - activeRole:  isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+CartContext.tsx:687 🛒 Loading cart from localStorage: {items: Array(0), subtotal: 0, discounts: {…}, total: 0}
+App.tsx:242 Router effect - activeRole:  isAuthenticated: true
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: kpdinvestors@gmail.com
+RoleContext.tsx:102 🔄 Role check for user: kpdinvestors@gmail.com
+RoleContext.tsx:105 🔄 hasMultipleRoles: false savedRole: parent
+RoleContext.tsx:55 🔍 Fetching role for user: kpdinvestors@gmail.com
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+SupabaseProvider.tsx:90 Auth state change: {event: 'SIGNED_IN', session: {…}}
+SupabaseProvider.tsx:98 🔍 SupabaseProvider user state updated: {email: 'kpdinvestors@gmail.com', authenticated: true, userId: '31ad8076-c274-47bd-acf1-cefcd481efcc'}
+SupabaseProvider.tsx:107 ✅ Stored Supabase access token
+SupabaseProvider.tsx:124 ✅ User signed in successfully, checking for redirect...
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, user: kpdinvestors@gmail.com
+App.tsx:237 🔐 Router render - activeRole:  isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: kpdinvestors@gmail.com
+RoleContext.tsx:102 🔄 Role check for user: kpdinvestors@gmail.com
+RoleContext.tsx:105 🔄 hasMultipleRoles: false savedRole: parent
+RoleContext.tsx:55 🔍 Fetching role for user: kpdinvestors@gmail.com
+SupabaseProvider.tsx:54 Supabase session check: {session: {…}, error: null}
+SupabaseProvider.tsx:68 ✅ Stored initial Supabase access token
+SupabaseProvider.tsx:72 🔍 Initial auth state: {hasSession: true, userEmail: 'kpdinvestors@gmail.com', userId: '31ad8076-c274-47bd-acf1-cefcd481efcc'}
+ParentAppShell.tsx:51 No school association found for user, using default school
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, user: kpdinvestors@gmail.com
+App.tsx:237 🔐 Router render - activeRole:  isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: kpdinvestors@gmail.com
+RoleContext.tsx:102 🔄 Role check for user: kpdinvestors@gmail.com
+RoleContext.tsx:105 🔄 hasMultipleRoles: false savedRole: parent
+RoleContext.tsx:55 🔍 Fetching role for user: kpdinvestors@gmail.com
+RoleContext.tsx:59 ✅ Role fetched for kpdinvestors@gmail.com: parent
+RoleContext.tsx:140 🎯 Single role user - setting role: parent for kpdinvestors@gmail.com
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: parent, canSwitchRoles: false, showRoleSelection: false, user: kpdinvestors@gmail.com
+App.tsx:237 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+App.tsx:242 Router effect - activeRole: parent isAuthenticated: true
+SupabaseProvider.tsx:90 Auth state change: {event: 'INITIAL_SESSION', session: {…}}
+SupabaseProvider.tsx:98 🔍 SupabaseProvider user state updated: {email: 'kpdinvestors@gmail.com', authenticated: true, userId: '31ad8076-c274-47bd-acf1-cefcd481efcc'}
+SupabaseProvider.tsx:107 ✅ Stored Supabase access token
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: parent, canSwitchRoles: false, showRoleSelection: false, user: kpdinvestors@gmail.com
+App.tsx:237 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: kpdinvestors@gmail.com
+RoleContext.tsx:102 🔄 Role check for user: kpdinvestors@gmail.com
+RoleContext.tsx:105 🔄 hasMultipleRoles: false savedRole: parent
+RoleContext.tsx:55 🔍 Fetching role for user: kpdinvestors@gmail.com
+RoleContext.tsx:59 ✅ Role fetched for kpdinvestors@gmail.com: parent
+RoleContext.tsx:140 🎯 Single role user - setting role: parent for kpdinvestors@gmail.com
+RoleContext.tsx:59 ✅ Role fetched for kpdinvestors@gmail.com: parent
+RoleContext.tsx:140 🎯 Single role user - setting role: parent for kpdinvestors@gmail.com
+RoleContext.tsx:59 ✅ Role fetched for kpdinvestors@gmail.com: parent
+RoleContext.tsx:140 🎯 Single role user - setting role: parent for kpdinvestors@gmail.com
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+App.tsx:237 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children/3/edit
+chunk-NFC5BX5N.js?v=b83301ca:18625 [Violation] 'setTimeout' handler took 71ms
+App.tsx:237 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+CartContext.tsx:687 🛒 Loading cart from localStorage: {items: Array(0), subtotal: 0, discounts: {…}, total: 0}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+ParentAppShell.tsx:51 No school association found for user, using default school
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+App.tsx:237 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children/3/edit
+App.tsx:237 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /children
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+CartContext.tsx:687 🛒 Loading cart from localStorage: {items: Array(0), subtotal: 0, discounts: {…}, total: 0}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+ParentAppShell.tsx:51 No school association found for user, using default school
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:844 🛒 getItemCount called - current items: 0
