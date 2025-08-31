@@ -137,27 +137,20 @@ export default function ChildRegistrationForm({
   // Handle form submission
   const onSubmit = async (data: FormValues) => {
     try {
-      console.log('🔄 Form submission started:', { childId, data });
-      console.log('📝 Form errors:', form.formState.errors);
-      
       const endpoint = childId 
         ? `/api/children/${childId}` 
         : "/api/parent/children";
 
       const method = childId ? "PATCH" : "POST";
 
-      console.log('📡 Sending request:', { method, endpoint, data });
       const response = await apiRequest(method, endpoint, data);
-      console.log('📨 Response received:', { status: response.status, ok: response.ok });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ Request failed:', errorData);
         throw new Error(errorData.message || "Failed to register child");
       }
 
       const result = await response.json();
-      console.log('✅ Request successful:', result);
 
       // Store the registered child ID in session storage for future use
       sessionStorage.setItem('registeredChildId', JSON.stringify(result.id));
