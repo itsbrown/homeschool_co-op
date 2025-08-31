@@ -169,6 +169,11 @@ export default function ChildRegistrationForm({
       // Invalidate the children query to refresh the data
       queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
       
+      // Also invalidate the specific child query if we're editing
+      if (childId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/parent/children", childId] });
+      }
+      
       if (onSuccess) {
         onSuccess(result.id);
       } else {

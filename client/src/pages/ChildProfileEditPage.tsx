@@ -105,6 +105,13 @@ export default function ChildProfileEditPage() {
     notes: childData?.notes || "",
   };
 
+  // Debug logging
+  useEffect(() => {
+    if (childData) {
+      console.log('🎯 ChildProfileEditPage - Rendering form with:', { childId, defaultValues });
+    }
+  }, [childData, childId]);
+
   const handleSuccess = (updatedChildId: string) => {
     toast({
       title: "Success",
