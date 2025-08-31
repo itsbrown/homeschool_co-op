@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { storage } from "../storage";
 
 const router = Router();
 
@@ -131,16 +132,26 @@ router.post("/", isParent, (req: Request, res: Response) => {
 });
 
 // Update a child's information
-router.patch("/:id", isParent, (req: Request, res: Response) => {
+router.patch("/:id", isParent, async (req: Request, res: Response) => {
   try {
     const childId = parseInt(req.params.id);
+    const updateData = req.body;
     
-    // In a real application, we would update the child in the database
-    // For this test implementation, we'll just return success
+    console.log(`📝 Updating child ${childId} with data:`, updateData);
+    
+    // Update the child using the storage system
+    const updatedChild = await storage.updateChild(childId, updateData);
+    
+    if (!updatedChild) {
+      return res.status(404).json({ message: "Child not found" });
+    }
+    
+    console.log(`✅ Child ${childId} updated successfully:`, updatedChild);
     
     return res.status(200).json({
       message: "Child updated successfully",
-      id: childId
+      id: childId,
+      child: updatedChild
     });
   } catch (error) {
     console.error("Error updating child:", error);
