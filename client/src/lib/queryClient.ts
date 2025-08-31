@@ -20,6 +20,15 @@ export async function apiRequest(
 ): Promise<Response> {
   const token = localStorage.getItem('supabase_token');
   const activeRole = localStorage.getItem('activeRole');
+  
+  console.log('🔐 apiRequest debug:', { 
+    method, 
+    url, 
+    hasToken: !!token, 
+    tokenStart: token?.substring(0, 20) + '...', 
+    activeRole,
+    bodyType: typeof body
+  });
 
   // Check if body is FormData to handle file uploads properly
   const isFormData = body instanceof FormData;
