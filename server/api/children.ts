@@ -1,19 +1,36 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
+import { jwtCheck } from "../middleware/auth0-auth";
 
 const router = Router();
 
-// Middleware to check if user is authenticated as a parent
-const isParent = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ message: "Unauthorized" });
+// Middleware to check if user is authenticated as a parent using JWT
+const isParent = async (req: any, res: Response, next: NextFunction) => {
+  try {
+    // Ensure JWT authentication has been verified first
+    if (!req.user || !req.user.email) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    
+    // Get user role from storage using email
+    const userEmail = req.user.email;
+    console.log(`🔍 Checking parent access for: ${userEmail}`);
+    
+    // Use the same role checking logic as the working endpoints  
+    const user = await storage.getUserByEmail(userEmail);
+    const userRole = user?.role;
+    
+    if (userRole !== 'parent') {
+      console.log(`❌ Access denied - user role: ${userRole}, required: parent`);
+      return res.status(403).json({ message: "Only parents can access this resource" });
+    }
+    
+    console.log(`✅ Parent access granted for: ${userEmail}`);
+    next();
+  } catch (error) {
+    console.error("Error in parent middleware:", error);
+    return res.status(500).json({ message: "Authentication error" });
   }
-  
-  if (req.session.userRole !== 'parent') {
-    return res.status(403).json({ message: "Only parents can access this resource" });
-  }
-  
-  next();
 };
 
 // Get all children for the parent user
@@ -132,7 +149,7 @@ router.post("/", isParent, (req: Request, res: Response) => {
 });
 
 // Update a child's information
-router.patch("/:id", isParent, async (req: Request, res: Response) => {
+router.patch("/:id", jwtCheck, isParent, async (req: Request, res: Response) => {
   try {
     const childId = parseInt(req.params.id);
     const updateData = req.body;
