@@ -204,6 +204,7 @@ export const children = pgTable("children", {
   lastName: text("last_name").notNull(),
   birthdate: date("birthdate").notNull(),
   gradeLevel: text("grade_level").notNull(),
+  gender: text("gender"),
   school: text("school"),
   learningStyle: text("learning_style"),
   specialNeeds: text("special_needs"),
@@ -211,6 +212,9 @@ export const children = pgTable("children", {
   allergies: text("allergies"),
   medicalInfo: text("medical_info"),
   profileImage: text("profile_image"),
+  emergencyContact: text("emergency_contact"),
+  additionalLanguages: text("additional_languages"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -219,13 +223,17 @@ export const insertChildSchema = createInsertSchema(children)
   .omit({ id: true, createdAt: true, updatedAt: true, parentId: true })
   .extend({
     // Set default values for nullable fields
+    gender: z.string().nullable().default(null),
     school: z.string().nullable().default(null),
     learningStyle: z.string().nullable().default(null),
     specialNeeds: z.string().nullable().default(null),
     interests: z.array(z.string()).nullable().default(null),
     allergies: z.string().nullable().default(null),
     medicalInfo: z.string().nullable().default(null),
-    profileImage: z.string().nullable().default(null)
+    profileImage: z.string().nullable().default(null),
+    emergencyContact: z.string().nullable().default(null),
+    additionalLanguages: z.string().nullable().default(null),
+    notes: z.string().nullable().default(null)
   });
 export type InsertChild = z.infer<typeof insertChildSchema>;
 export type Child = typeof children.$inferSelect;

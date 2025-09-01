@@ -33,8 +33,7 @@ router.get('/children', jwtCheck, async (req: any, res) => {
     console.log('🔍 All children in storage:', allChildren.map(c => ({ 
       id: c.id, 
       firstName: c.firstName, 
-      lastName: c.lastName, 
-      parentEmail: c.parentEmail || c.parent_email 
+      lastName: c.lastName 
     })));
     
     const children = await storage.getChildrenByParentEmail(userEmail);
@@ -49,25 +48,24 @@ router.get('/children', jwtCheck, async (req: any, res) => {
     // Transform children data to ensure consistent format
     const transformedChildren = children.map(child => ({
       id: child.id,
-      firstName: child.firstName || child.first_name,
-      lastName: child.lastName || child.last_name,
+      firstName: child.firstName,
+      lastName: child.lastName,
       birthdate: child.birthdate,
-      gradeLevel: child.gradeLevel || child.grade_level,
+      gradeLevel: child.gradeLevel,
       gender: child.gender,
-      parentId: child.parentId || child.parent_id,
-      parentEmail: child.parentEmail || child.parent_email || userEmail,
-      specialNeeds: child.specialNeeds || child.special_needs,
+      parentId: child.parentId,
+      specialNeeds: child.specialNeeds,
       interests: child.interests,
       school: child.school,
-      learningStyle: child.learningStyle || child.learning_style,
+      learningStyle: child.learningStyle,
       allergies: child.allergies,
-      medicalInfo: child.medicalInfo || child.medical_info,
-      profileImage: child.profileImage || child.profile_image,
+      medicalInfo: child.medicalInfo,
+      profileImage: child.profileImage,
       emergencyContact: child.emergencyContact,
       additionalLanguages: child.additionalLanguages,
       notes: child.notes,
-      createdAt: child.createdAt || child.created_at,
-      updatedAt: child.updatedAt || child.updated_at
+      createdAt: child.createdAt,
+      updatedAt: child.updatedAt
     }));
 
     return res.status(200).json(transformedChildren);
@@ -144,9 +142,6 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       birthdate,
       gradeLevel,
       gender: gender || null,
-      parentEmail: userEmail,
-      parent_email: userEmail, // Ensure both field names are set for compatibility
-      parentPhone: parentPhone || null,
       interests: interests || null,
       learningStyle: learningStyle || null,
       specialNeeds: specialNeeds || null,
@@ -155,9 +150,8 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       school: school || null,
       profileImage: profileImage || null,
       emergencyContact: emergencyContact || null,
-      emergencyPhone: emergencyPhone || null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      additionalLanguages: additionalLanguages || null,
+      notes: notes || null
     };
 
     console.log('👶 Creating child in storage:', newChild);
@@ -178,7 +172,7 @@ router.post('/children', jwtCheck, async (req: any, res) => {
     return res.status(500).json({ 
       message: 'Internal server error',
       error: 'CHILD_REGISTRATION_ERROR',
-      debug: error.message
+      debug: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
