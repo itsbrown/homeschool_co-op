@@ -105,6 +105,9 @@ export default function ChildProfileEditPage() {
     notes: childData?.notes || "",
   };
 
+  console.log('🔍 Frontend childData received:', childData);
+  console.log('📝 Frontend defaultValues created:', defaultValues);
+
 
   const handleSuccess = (updatedChildId: string) => {
     toast({
