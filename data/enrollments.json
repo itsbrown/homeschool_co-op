@@ -29,5 +29,31 @@
     "depositRequired": 30,
     "totalCost": 300,
     "remainingBalance": 300
+  },
+  {
+    "id": 1756700788788,
+    "classId": 5,
+    "childId": 4,
+    "childName": "Sebastian Puccia",
+    "className": "Tycoons | Half Day",
+    "enrollmentDate": "2025-09-01T04:26:28.788Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
+  },
+  {
+    "id": 1756700810624,
+    "classId": 5,
+    "childId": 5,
+    "childName": "Salena Puccia",
+    "className": "Tycoons | Half Day",
+    "enrollmentDate": "2025-09-01T04:26:50.624Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

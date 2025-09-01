@@ -237,7 +237,11 @@ const calculateCartTotalsSync = (items: CartItem[]): { subtotal: number; discoun
 
   // For sync calculation, use fallback rate (this will be updated by async calculation)
   const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0; // Fallback rate
-  const siblingDiscount = subtotal * siblingDiscountRate;
+  
+  // Apply sibling discount per line item (10% off each item)
+  const siblingDiscount = uniqueChildren > 1 
+    ? items.reduce((sum, item) => sum + (item.price * siblingDiscountRate), 0)
+    : 0;
 
   // Apply "Free After Three" - 4th child and beyond are free
   let freeAfterThreeDiscount = 0;
@@ -282,7 +286,9 @@ const calculateCartTotalsWithDiscounts = async (items: CartItem[], getAccessToke
       // Fetch active sibling discount from school admin settings
       const siblingDiscountSettings = await fetchSiblingDiscountSettings(getAccessTokenSilently);
       siblingDiscountRate = siblingDiscountSettings.rate;
-      siblingDiscount = subtotal * siblingDiscountRate;
+      
+      // Apply sibling discount per line item (percentage off each item)
+      siblingDiscount = items.reduce((sum, item) => sum + (item.price * siblingDiscountRate), 0);
     } catch (error) {
       console.log('Failed to fetch sibling discount settings, using default 0%');
       siblingDiscountRate = 0;
