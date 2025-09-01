@@ -112,7 +112,9 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       profileImage,
       emergencyContact,
       emergencyPhone,
-      parentPhone
+      parentPhone,
+      additionalLanguages,
+      notes
     } = req.body;
 
     console.log('👶 Child registration data:', { firstName, lastName, gradeLevel, userEmail });
@@ -123,6 +125,16 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       return res.status(400).json({ 
         message: 'Missing required fields',
         required: ['firstName', 'lastName', 'birthdate', 'gradeLevel']
+      });
+    }
+
+    // Find the parent user to get their ID
+    const parent = await storage.getUserByEmail(userEmail);
+    if (!parent) {
+      console.log('❌ Parent user not found:', userEmail);
+      return res.status(404).json({ 
+        message: 'Parent user not found',
+        error: 'PARENT_NOT_FOUND'
       });
     }
 
@@ -151,7 +163,8 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       profileImage: profileImage || null,
       emergencyContact: emergencyContact || null,
       additionalLanguages: additionalLanguages || null,
-      notes: notes || null
+      notes: notes || null,
+      parentId: parent.id
     };
 
     console.log('👶 Creating child in storage:', newChild);
