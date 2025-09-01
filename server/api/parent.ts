@@ -53,6 +53,7 @@ router.get('/children', jwtCheck, async (req: any, res) => {
       lastName: child.lastName || child.last_name,
       birthdate: child.birthdate,
       gradeLevel: child.gradeLevel || child.grade_level,
+      gender: child.gender,
       parentId: child.parentId || child.parent_id,
       parentEmail: child.parentEmail || child.parent_email || userEmail,
       specialNeeds: child.specialNeeds || child.special_needs,
@@ -62,6 +63,9 @@ router.get('/children', jwtCheck, async (req: any, res) => {
       allergies: child.allergies,
       medicalInfo: child.medicalInfo || child.medical_info,
       profileImage: child.profileImage || child.profile_image,
+      emergencyContact: child.emergencyContact,
+      additionalLanguages: child.additionalLanguages,
+      notes: child.notes,
       createdAt: child.createdAt || child.created_at,
       updatedAt: child.updatedAt || child.updated_at
     }));
