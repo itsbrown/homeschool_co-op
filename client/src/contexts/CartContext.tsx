@@ -396,7 +396,12 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         cart: {
           items: [],
           subtotal: 0,
-          discounts: { siblingDiscount: 0, freeAfterThree: 0 },
+          discounts: { 
+            siblingDiscount: 0, 
+            freeAfterThree: 0,
+            appliedDiscounts: [],
+            totalDiscountAmount: 0
+          },
           total: 0,
         },
       };

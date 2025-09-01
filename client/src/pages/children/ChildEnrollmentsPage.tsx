@@ -85,6 +85,8 @@ export default function ChildEnrollmentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}/enrollments`] });
       queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+      // Refresh cart to remove unenrolled items
+      refreshCart();
       toast({
         title: "Success",
         description: "Successfully unenrolled from the class",
