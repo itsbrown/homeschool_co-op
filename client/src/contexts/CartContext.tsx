@@ -498,7 +498,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const response = await fetch('/api/parent/enrollments', {
+      const response = await fetch('/api/enrollments', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
