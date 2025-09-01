@@ -115,22 +115,7 @@ export default function ChildRegistrationForm({
   // Reset form when defaultValues change (important for editing existing children)
   useEffect(() => {
     if (defaultValues && Object.keys(defaultValues).length > 0) {
-      form.reset({
-        firstName: "",
-        lastName: "",
-        birthdate: "",
-        gradeLevel: "",
-        gender: "",
-        school: "",
-        interests: [],
-        learningStyle: "",
-        specialNeeds: "",
-        allergies: "",
-        emergencyContact: "",
-        additionalLanguages: "",
-        notes: "",
-        ...defaultValues
-      });
+      form.reset(defaultValues);
     }
   }, [defaultValues, form]);
 
@@ -201,9 +186,7 @@ export default function ChildRegistrationForm({
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
-            console.log('❌ Form validation failed:', errors);
-          })} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
