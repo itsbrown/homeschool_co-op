@@ -6,6 +6,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/components/SupabaseProvider";
 
 import {
   Form,
@@ -61,6 +62,7 @@ export default function ChildRegistrationForm({
 }: ChildRegistrationFormProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Define the available interests
   const availableInterests = [
@@ -96,6 +98,42 @@ export default function ChildRegistrationForm({
       ...defaultValues
     },
   });
+
+  // Fetch parent's school association and auto-populate school field
+  useEffect(() => {
+    const fetchParentSchool = async () => {
+      if (user?.email && !defaultValues?.school) {
+        try {
+          // First try to get school association through school-parents API
+          const response = await apiRequest('GET', `/api/school-parents/school/${user.email}`);
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.school?.name) {
+              form.setValue('school', result.school.name);
+              return;
+            }
+          }
+
+          // Fallback: Since most parents are associated with American Seekers Academy (ID: 1)
+          // directly fetch school data
+          const schoolResponse = await apiRequest('GET', '/api/schools/1');
+          if (schoolResponse.ok) {
+            const schoolData = await schoolResponse.json();
+            if (schoolData?.name) {
+              form.setValue('school', schoolData.name);
+              return;
+            }
+          }
+        } catch (error) {
+          console.log('No school association found for user, using default school');
+          // Final fallback: use the known school data
+          form.setValue('school', 'American Seekers Academy');
+        }
+      }
+    };
+
+    fetchParentSchool();
+  }, [user?.email, defaultValues?.school, form]);
 
   // Retrieve school information from sessionStorage and set it in the form
   useEffect(() => {
