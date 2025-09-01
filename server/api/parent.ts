@@ -164,7 +164,8 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       emergencyContact: emergencyContact || null,
       additionalLanguages: additionalLanguages || null,
       notes: notes || null,
-      parentId: parent.id
+      parentId: parent.id,
+      parentEmail: userEmail
     };
 
     console.log('👶 Creating child in storage:', newChild);
