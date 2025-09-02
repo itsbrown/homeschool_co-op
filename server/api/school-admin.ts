@@ -3520,6 +3520,10 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
 
     console.log(`🏫 Processing contact import for school ID: ${schoolId}`);
 
+    // Get all locations for this school to enable location matching
+    const schoolLocations = await storage.getLocationsBySchool(schoolId);
+    console.log(`📍 Found ${schoolLocations.length} locations for school:`, schoolLocations.map(l => l.name));
+
     // Process the uploaded files with school association
     const files = req.files as Express.Multer.File[];
     const results = {
@@ -3573,14 +3577,33 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
         // Process records based on type and associate with school
         for (const record of records) {
           try {
+            // Look for location information in CSV
+            const locationName = record.Location || record.location || record['Location Name'] || record.locationName;
+            let locationId = null;
+            
+            if (locationName && schoolLocations.length > 0) {
+              // Try to match location by name (case-insensitive)
+              const matchedLocation = schoolLocations.find(loc => 
+                loc.name.toLowerCase() === locationName.toLowerCase() ||
+                loc.code?.toLowerCase() === locationName.toLowerCase()
+              );
+              if (matchedLocation) {
+                locationId = matchedLocation.id;
+                console.log(`📍 Matched location "${locationName}" to ID: ${locationId}`);
+              } else {
+                console.log(`⚠️ Could not match location "${locationName}" to existing locations`);
+              }
+            }
+
             if (fileType === 'parents') {
-              // Create parent account associated with school
+              // Create parent account associated with school and location
               const parentData = {
                 email: record.Email || record.email,
                 firstName: record['First Name'] || record.firstName || record.first_name,
                 lastName: record['Last Name'] || record.lastName || record.last_name,
                 phone: record.Phone || record.phone,
-                schoolId: schoolId // Associate with this school
+                schoolId: schoolId, // Associate with this school
+                locationId: locationId // Associate with specific location if found
               };
 
               if (parentData.email && parentData.firstName && parentData.lastName) {
@@ -3591,20 +3614,21 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
                   schoolId: schoolId
                 });
                 results.parents.successful++;
-                console.log(`✅ Created parent: ${parentData.email} for school ${schoolId}`);
+                console.log(`✅ Created parent: ${parentData.email} for school ${schoolId}${locationId ? ` at location ${locationId}` : ''}`);
               } else {
                 results.parents.failed++;
                 results.errors.push(`Missing required fields for parent: ${JSON.stringify(record)}`);
               }
             } else if (fileType === 'children') {
-              // Create child record associated with school
+              // Create child record associated with school and location
               const childData = {
                 firstName: record['First Name'] || record.firstName || record.first_name,
                 lastName: record['Last Name'] || record.lastName || record.last_name,
                 parentEmail: record['Parent Email'] || record.parentEmail || record.parent_email,
                 grade: record.Grade || record.grade,
                 birthDate: record['Birth Date'] || record.birthDate || record.birth_date,
-                schoolId: schoolId // Associate with this school
+                schoolId: schoolId, // Associate with this school
+                locationId: locationId // Associate with specific location if found
               };
 
               if (childData.firstName && childData.lastName && childData.parentEmail) {
@@ -3614,20 +3638,21 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
                   schoolId: schoolId
                 });
                 results.children.successful++;
-                console.log(`✅ Created child: ${childData.firstName} ${childData.lastName} for school ${schoolId}`);
+                console.log(`✅ Created child: ${childData.firstName} ${childData.lastName} for school ${schoolId}${locationId ? ` at location ${locationId}` : ''}`);
               } else {
                 results.children.failed++;
                 results.errors.push(`Missing required fields for child: ${JSON.stringify(record)}`);
               }
             } else if (fileType === 'staff') {
-              // Create staff account associated with school
+              // Create staff account associated with school and location
               const staffData = {
                 email: record.Email || record.email,
                 firstName: record['First Name'] || record.firstName || record.first_name,
                 lastName: record['Last Name'] || record.lastName || record.last_name,
                 position: record.Position || record.position || 'Teacher',
                 department: record.Department || record.department || 'General',
-                schoolId: schoolId // Associate with this school
+                schoolId: schoolId, // Associate with this school
+                locationId: locationId // Associate with specific location if found
               };
 
               if (staffData.email && staffData.firstName && staffData.lastName) {
@@ -3637,7 +3662,7 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
                   schoolId: schoolId
                 });
                 results.staff.successful++;
-                console.log(`✅ Created staff: ${staffData.email} for school ${schoolId}`);
+                console.log(`✅ Created staff: ${staffData.email} for school ${schoolId}${locationId ? ` at location ${locationId}` : ''}`);
               } else {
                 results.staff.failed++;
                 results.errors.push(`Missing required fields for staff: ${JSON.stringify(record)}`);
