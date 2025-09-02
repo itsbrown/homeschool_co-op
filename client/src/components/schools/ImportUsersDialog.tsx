@@ -1,71 +1,68 @@
-import React, { useState, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Upload, FileText, CheckCircle, AlertCircle, Download } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ImportUsersDialogProps {
   open: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  schoolId: number;
 }
 
 interface ImportResult {
+  schoolId: number;
   parents: { successful: number; failed: number };
   children: { successful: number; failed: number };
   staff: { successful: number; failed: number };
   errors: string[];
-  schoolId?: number;
 }
 
-export default function ImportUsersDialog({ open, onClose }: ImportUsersDialogProps) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+function ImportUsersDialog({ open, onOpenChange, schoolId }: ImportUsersDialogProps) {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const importUsersMutation = useMutation({
-    mutationFn: async (files: FileList) => {
-      const formData = new FormData();
-      Array.from(files).forEach((file) => {
-        formData.append('files', file);
-      });
-
-      const response = await fetch('/api/school-admin/contact-import', {
-        method: 'POST',
+    mutationFn: async (formData: FormData) => {
+      const response = await apiRequest("POST", "/api/school-admin/import-users", {
         body: formData,
+        headers: {}, // Let the browser set Content-Type for FormData
       });
 
       if (!response.ok) {
-        throw new Error('Failed to import users');
+        const error = await response.json();
+        throw new Error(error.error || "Import failed");
       }
 
       return response.json();
     },
     onSuccess: (data) => {
-      setImportResult(data.results);
-      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      setImportResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/users"] });
       toast({
-        title: 'Import Completed',
-        description: 'User import has been processed. Check the results below.',
+        title: "Import Completed",
+        description: `Successfully imported users. Check results for details.`,
+        variant: "default",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
-        title: 'Import Failed',
-        description: error.message || 'Failed to import users.',
-        variant: 'destructive',
+        title: "Import Failed",
+        description: error.message,
+        variant: "destructive",
       });
     },
   });
@@ -73,37 +70,59 @@ export default function ImportUsersDialog({ open, onClose }: ImportUsersDialogPr
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     setSelectedFiles(files);
-    setImportResult(null);
   };
 
-  const handleImport = () => {
-    if (selectedFiles && selectedFiles.length > 0) {
-      importUsersMutation.mutate(selectedFiles);
+  const handleImport = async () => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      toast({
+        title: "No Files Selected",
+        description: "Please select at least one CSV file to import.",
+        variant: "destructive",
+      });
+      return;
     }
+
+    const formData = new FormData();
+    formData.append("schoolId", schoolId.toString());
+
+    Array.from(selectedFiles).forEach((file, index) => {
+      formData.append(`files`, file);
+    });
+
+    importUsersMutation.mutate(formData);
   };
 
   const handleClose = () => {
     setSelectedFiles(null);
     setImportResult(null);
+    onOpenChange(false);
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
-    onClose();
   };
 
-  const getTotalSuccessful = () => {
+  const handleDownloadTemplate = (templateType: string) => {
+    const link = document.createElement('a');
+    link.href = `/api/school-admin/csv-template/${templateType}`;
+    link.download = `${templateType}_template.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getTotalSuccessful = (): number => {
     if (!importResult) return 0;
     return importResult.parents.successful + importResult.children.successful + importResult.staff.successful;
   };
 
-  const getTotalFailed = () => {
+  const getTotalFailed = (): number => {
     if (!importResult) return 0;
     return importResult.parents.failed + importResult.children.failed + importResult.staff.failed;
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Import Users</DialogTitle>
           <DialogDescription>
@@ -111,46 +130,56 @@ export default function ImportUsersDialog({ open, onClose }: ImportUsersDialogPr
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto space-y-4">
           {!importResult && (
             <>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">CSV Format Requirements</CardTitle>
-                  <CardDescription className="text-xs">
+                  <CardTitle className="text-base">CSV Format Requirements</CardTitle>
+                  <CardDescription>
                     Your CSV files should include these columns:
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="text-sm space-y-3">
-                  <div><strong>Required:</strong> First Name, Last Name, Email</div>
-                  <div><strong>Optional:</strong> Phone, Location, Emergency Contact info (for parents), Grade (for children), Position (for staff)</div>
-                  <div><strong>File naming:</strong> Use "parent", "student", "child", "staff", or "teacher" in filename</div>
-                  <Separator />
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Download sample templates:</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="justify-start h-8"
-                        onClick={() => window.open('/api/school-admin/csv-template/parents', '_blank')}
+                <CardContent className="space-y-3">
+                  <div>
+                    <p className="font-medium text-sm">Required: First Name, Last Name, Email</p>
+                    <p className="text-sm text-muted-foreground">
+                      Optional: Phone, Location, Emergency Contact info (for parents), Grade (for children), Position (for staff)
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <p className="font-medium text-sm">File naming: Use "parent", "student", "child", "staff", or "teacher" in filename</p>
+                  </div>
+                  
+                  <div>
+                    <p className="font-medium text-sm mb-2">Download sample templates:</p>
+                    <div className="flex flex-col space-y-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 justify-start"
+                        onClick={() => handleDownloadTemplate('parents')}
                       >
-                        📥 Parents Template
+                        <Download className="mr-2 h-3 w-3" />
+                        📋 Parents Template
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="justify-start h-8"
-                        onClick={() => window.open('/api/school-admin/csv-template/children', '_blank')}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 justify-start"
+                        onClick={() => handleDownloadTemplate('children')}
                       >
-                        📥 Children Template
+                        <Download className="mr-2 h-3 w-3" />
+                        👶 Children Template
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="justify-start h-8"
-                        onClick={() => window.open('/api/school-admin/csv-template/staff', '_blank')}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 justify-start"
+                        onClick={() => handleDownloadTemplate('staff')}
                       >
+                        <Download className="mr-2 h-3 w-3" />
                         📥 Staff Template
                       </Button>
                     </div>
@@ -202,18 +231,6 @@ export default function ImportUsersDialog({ open, onClose }: ImportUsersDialogPr
                   </CardContent>
                 </Card>
               )}
-
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={handleClose}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleImport}
-                  disabled={!selectedFiles || selectedFiles.length === 0 || importUsersMutation.isPending}
-                >
-                  {importUsersMutation.isPending ? 'Importing...' : 'Import Users'}
-                </Button>
-              </div>
             </>
           )}
 
@@ -308,16 +325,27 @@ export default function ImportUsersDialog({ open, onClose }: ImportUsersDialogPr
                   )}
                 </CardContent>
               </Card>
-
-              <div className="flex justify-end">
-                <Button onClick={handleClose}>
-                  Close
-                </Button>
-              </div>
             </div>
+          )}
+        </div>
+
+        {/* Fixed footer outside scrolling area */}
+        <div className="flex justify-end space-x-2 pt-4 border-t bg-background">
+          <Button type="button" variant="outline" onClick={handleClose}>
+            Cancel
+          </Button>
+          {!importResult && (
+            <Button
+              onClick={handleImport}
+              disabled={!selectedFiles || selectedFiles.length === 0 || importUsersMutation.isPending}
+            >
+              {importUsersMutation.isPending ? 'Importing...' : 'Import Users'}
+            </Button>
           )}
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
+export default ImportUsersDialog;
