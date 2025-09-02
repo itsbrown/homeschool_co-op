@@ -43,12 +43,16 @@ export default function StaffPage() {
   const queryClient = useQueryClient();
 
   // Fetch staff data from API
-  const { data: staff = [], isLoading, error } = useQuery({
+  const { data: staff, isLoading, error } = useQuery({
     queryKey: ['/api/school-admin/staff'],
     refetchInterval: 5000, // Reasonable refresh interval
     refetchIntervalInBackground: true,
     staleTime: 1000, // Consider data stale after 1 second
   });
+
+  // Ensure staff is treated as an array
+  const staffArray = Array.isArray(staff) ? staff : [];
+  const staffData = staffArray;
 
   // Mutation for resending individual invites
   const resendInviteMutation = useMutation({
@@ -127,7 +131,7 @@ export default function StaffPage() {
   }
 
   // Filter staff based on search query and filters
-  const filteredStaff = staff?.filter((member: any) => {
+  const filteredStaff = staffData.filter((member: any) => {
     const matchesSearch = searchQuery === "" || 
       member.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -137,12 +141,12 @@ export default function StaffPage() {
     const matchesStatus = selectedStatus === "all" || member.status === selectedStatus;
     
     return matchesSearch && matchesRole && matchesDepartment && matchesStatus;
-  }) || [];
+  });
 
   // Extract unique values for filter dropdowns
-  const roles = staff ? [...new Set(staff.map((member: any) => member.role))] : [];
-  const departments = staff ? [...new Set(staff.map((member: any) => member.department))] : [];
-  const statuses = staff ? [...new Set(staff.map((member: any) => member.status))] : [];
+  const roles = [...new Set(staffData.map((member: any) => member.role))];
+  const departments = [...new Set(staffData.map((member: any) => member.department))];
+  const statuses = [...new Set(staffData.map((member: any) => member.status))];
 
   return (
     <SchoolAdminLayout pageTitle="Staff">

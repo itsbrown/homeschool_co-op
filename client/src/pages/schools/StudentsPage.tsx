@@ -51,6 +51,7 @@ export default function StudentsPage() {
 
   // Ensure students is treated as an array
   const studentsArray = Array.isArray(students) ? students : [];
+  const studentsData = studentsArray;
 
   if (isLoading) {
     return (
@@ -274,7 +275,7 @@ export default function StudentsPage() {
                       </Button>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {filteredStudents.length} of {students?.length || 0} students
+                      {filteredStudents.length} of {studentsData.length || 0} students
                     </div>
                   </div>
                 </div>

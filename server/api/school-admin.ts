@@ -3723,8 +3723,9 @@ router.get('/users', async (req: any, res) => {
       return res.status(403).json({ message: 'Unable to determine school association' });
     }
 
-    // Get all users for this school
-    const users = await storage.getUsersBySchool(schoolId);
+    // Get all users for this school (use getAllUsers since getUsersBySchool doesn't exist)
+    const allUsers = await storage.getAllUsers();
+    const users = allUsers.filter((user: any) => user.schoolId === schoolId);
     console.log(`👥 Found ${users.length} users for school ${schoolId}`);
     
     res.status(200).json(users);

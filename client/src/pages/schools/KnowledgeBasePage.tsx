@@ -52,6 +52,10 @@ export default function KnowledgeBasePage() {
     refetchIntervalInBackground: true,
   });
 
+  // Ensure knowledge bases is treated as an array
+  const knowledgeBasesArray = Array.isArray(knowledgeBases) ? knowledgeBases : [];
+  const knowledgeBasesData = knowledgeBasesArray;
+
   if (isLoading) {
     return (
       <SchoolAdminLayout pageTitle="Knowledge Base">
@@ -87,7 +91,7 @@ export default function KnowledgeBasePage() {
   }
 
   // Filter knowledge bases based on search query and filters
-  const filteredKnowledgeBases = knowledgeBases ? knowledgeBases.filter((kb: any) => {
+  const filteredKnowledgeBases = knowledgeBasesData.filter((kb: any) => {
     const matchesSearch = searchQuery === "" || 
       kb.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       kb.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -97,11 +101,11 @@ export default function KnowledgeBasePage() {
     const matchesStatus = statusFilter === "all" || kb.status === statusFilter;
     
     return matchesSearch && matchesSubject && matchesStatus;
-  }) : [];
+  });
 
   // Get unique values for filter dropdowns
-  const subjects = knowledgeBases ? [...new Set(knowledgeBases.map((kb: any) => kb.subjectArea))] : [];
-  const statuses = knowledgeBases ? [...new Set(knowledgeBases.map((kb: any) => kb.status))] : [];
+  const subjects = [...new Set(knowledgeBasesData.map((kb: any) => kb.subjectArea))];
+  const statuses = [...new Set(knowledgeBasesData.map((kb: any) => kb.status))];
 
   return (
     <SchoolAdminLayout pageTitle="Knowledge Base">
