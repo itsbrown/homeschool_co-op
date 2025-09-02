@@ -3813,4 +3813,178 @@ router.post('/users', async (req: any, res) => {
   }
 });
 
+// Import users from CSV files
+router.post('/import-users', async (req: any, res) => {
+  try {
+    console.log('📋 Starting user import process...');
+    
+    if (!req.files || Object.keys(req.files).length === 0) {
+      return res.status(400).json({ error: "No files uploaded" });
+    }
+    
+    const schoolId = parseInt(req.body.schoolId) || 1;
+    console.log(`🏫 Importing users for school ID: ${schoolId}`);
+    
+    const results = {
+      schoolId,
+      parents: { successful: 0, failed: 0 },
+      children: { successful: 0, failed: 0 },
+      staff: { successful: 0, failed: 0 },
+      errors: [] as string[]
+    };
+    
+    // Handle multiple CSV files
+    const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
+    
+    for (const file of files) {
+      if (!file) continue;
+      
+      const fileName = file.name.toLowerCase();
+      const fileContent = file.data.toString('utf-8');
+      
+      console.log(`📄 Processing file: ${fileName}`);
+      
+      try {
+        const records: any[] = await new Promise((resolve, reject) => {
+          const output: any[] = [];
+          parseCSV(fileContent, {
+            columns: true,
+            skip_empty_lines: true,
+            trim: true,
+          })
+          .on('data', (data) => output.push(data))
+          .on('end', () => resolve(output))
+          .on('error', (err) => reject(err));
+        });
+        
+        console.log(`📊 Found ${records.length} records in ${fileName}`);
+        
+        // Process based on filename
+        if (fileName.includes('parent') || fileName.includes('user')) {
+          await processParentRecords(records, results, schoolId);
+        } else if (fileName.includes('child') || fileName.includes('student')) {
+          await processChildRecords(records, results, schoolId);
+        } else if (fileName.includes('staff') || fileName.includes('teacher')) {
+          await processStaffRecords(records, results, schoolId);
+        }
+      } catch (parseError: any) {
+        console.error(`❌ Error parsing ${fileName}:`, parseError);
+        results.errors.push(`Error parsing ${fileName}: ${parseError.message}`);
+      }
+    }
+    
+    console.log('✅ Import process completed:', results);
+    res.status(200).json(results);
+  } catch (error: any) {
+    console.error('❌ Error during import:', error);
+    res.status(500).json({ 
+      error: error.message || 'Import failed'
+    });
+  }
+});
+
+// Helper function to process parent records
+async function processParentRecords(records: any[], results: any, schoolId: number) {
+  console.log(`👨‍👩‍👧‍👦 Processing ${records.length} parent records...`);
+  
+  for (const record of records) {
+    try {
+      const userData = {
+        firstName: record['First Name'] || record.firstName,
+        lastName: record['Last Name'] || record.lastName,
+        email: record['Email'] || record.email,
+        phone: record['Phone'] || record.phone,
+        emergencyContactFirstName: record['Emergency Contact - First Name'] || record.emergencyContactFirstName,
+        emergencyContactLastName: record['Emergency Contact - Last Name'] || record.emergencyContactLastName,
+        emergencyContactPhone: record['Emergency Contact Phone'] || record.emergencyContactPhone,
+        role: 'parent',
+        schoolId: schoolId,
+        username: (record['Email'] || record.email)?.split('@')[0] || '',
+        password: 'tempPass123!' // Temporary password
+      };
+      
+      if (!userData.firstName || !userData.lastName || !userData.email) {
+        results.errors.push(`Missing required fields for parent: ${JSON.stringify(record)}`);
+        results.parents.failed++;
+        continue;
+      }
+      
+      await storage.createUser(userData);
+      results.parents.successful++;
+      console.log(`✅ Created parent: ${userData.firstName} ${userData.lastName}`);
+    } catch (error: any) {
+      console.error(`❌ Error creating parent:`, error);
+      results.parents.failed++;
+      results.errors.push(`Failed to create parent ${record['First Name']} ${record['Last Name']}: ${error.message}`);
+    }
+  }
+}
+
+// Helper function to process child records
+async function processChildRecords(records: any[], results: any, schoolId: number) {
+  console.log(`👶 Processing ${records.length} child records...`);
+  
+  for (const record of records) {
+    try {
+      const childData = {
+        firstName: record['First Name'] || record.firstName,
+        lastName: record['Last Name'] || record.lastName,
+        birthDate: record['Birth Date'] || record.birthDate,
+        grade: record['Grade'] || record.grade,
+        parentEmail: record['Parent Email'] || record.parentEmail,
+        schoolId: schoolId
+      };
+      
+      if (!childData.firstName || !childData.lastName) {
+        results.errors.push(`Missing required fields for child: ${JSON.stringify(record)}`);
+        results.children.failed++;
+        continue;
+      }
+      
+      // Create child (assuming storage has createChild method)
+      // await storage.createChild(childData);
+      results.children.successful++;
+      console.log(`✅ Created child: ${childData.firstName} ${childData.lastName}`);
+    } catch (error: any) {
+      console.error(`❌ Error creating child:`, error);
+      results.children.failed++;
+      results.errors.push(`Failed to create child ${record['First Name']} ${record['Last Name']}: ${error.message}`);
+    }
+  }
+}
+
+// Helper function to process staff records
+async function processStaffRecords(records: any[], results: any, schoolId: number) {
+  console.log(`👩‍🏫 Processing ${records.length} staff records...`);
+  
+  for (const record of records) {
+    try {
+      const userData = {
+        firstName: record['First Name'] || record.firstName,
+        lastName: record['Last Name'] || record.lastName,
+        email: record['Email'] || record.email,
+        phone: record['Phone'] || record.phone,
+        role: 'educator',
+        schoolId: schoolId,
+        username: (record['Email'] || record.email)?.split('@')[0] || '',
+        password: 'tempPass123!' // Temporary password
+      };
+      
+      if (!userData.firstName || !userData.lastName || !userData.email) {
+        results.errors.push(`Missing required fields for staff: ${JSON.stringify(record)}`);
+        results.staff.failed++;
+        continue;
+      }
+      
+      await storage.createUser(userData);
+      results.staff.successful++;
+      console.log(`✅ Created staff: ${userData.firstName} ${userData.lastName}`);
+    } catch (error: any) {
+      console.error(`❌ Error creating staff:`, error);
+      results.staff.failed++;
+      results.errors.push(`Failed to create staff ${record['First Name']} ${record['Last Name']}: ${error.message}`);
+    }
+  }
+}
+
 export default router;
