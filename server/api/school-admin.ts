@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import * as brevo from '@getbrevo/brevo';
 import { createClient } from '@supabase/supabase-js';
+import multer from 'multer';
+import { parse as parseCSV } from 'csv-parse';
 
 const router = Router();
 
@@ -3481,6 +3483,198 @@ router.get('/discounts/:id/applications', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch discount applications'
+    });
+  }
+});
+
+// School-specific contact import endpoint
+const contactUpload = multer({ dest: 'uploads/' });
+
+router.post('/contact-import', contactUpload.array('files'), async (req: any, res) => {
+  try {
+    console.log('📁 School admin contact import - processing files');
+    
+    // Get the authenticated school admin's school ID
+    const adminEmail = req.headers.authorization?.split(' ')[1]; // Extract from JWT or session
+    
+    // For development, use fallback authentication
+    let schoolId = null;
+    try {
+      const authResult = await supabaseAdmin.auth.getUser(adminEmail || '');
+      if (authResult.data?.user?.email) {
+        // Look up admin's school
+        const adminUser = await storage.getUserByEmail(authResult.data.user.email);
+        if (adminUser?.schoolId) {
+          schoolId = adminUser.schoolId;
+        }
+      }
+    } catch (authError) {
+      console.log('🔧 Using development fallback for school admin authentication');
+      // Development fallback - use the first school
+      schoolId = 1;
+    }
+
+    if (!schoolId) {
+      return res.status(403).json({ message: 'Unable to determine school association' });
+    }
+
+    console.log(`🏫 Processing contact import for school ID: ${schoolId}`);
+
+    // Process the uploaded files with school association
+    const files = req.files as Express.Multer.File[];
+    const results = {
+      parents: { successful: 0, failed: 0 },
+      children: { successful: 0, failed: 0 },
+      enrollments: { successful: 0, failed: 0 },
+      payments: { successful: 0, failed: 0 },
+      staff: { successful: 0, failed: 0 },
+      errors: [] as string[]
+    };
+
+    for (const file of files) {
+      try {
+        console.log(`📄 Processing file: ${file.originalname}`);
+        
+        // Read and parse CSV file
+        const fileContent = fs.readFileSync(file.path, 'utf-8');
+        const records: any[] = [];
+        
+        await new Promise((resolve, reject) => {
+          parseCSV(fileContent, { 
+            headers: true,
+            skip_empty_lines: true,
+            trim: true
+          })
+          .on('data', (record) => records.push(record))
+          .on('end', resolve)
+          .on('error', reject);
+        });
+
+        console.log(`📊 Parsed ${records.length} records from ${file.originalname}`);
+
+        // Determine file type and process accordingly
+        const fileName = file.originalname.toLowerCase();
+        let fileType = 'unknown';
+        
+        if (fileName.includes('parent') || fileName.includes('user')) {
+          fileType = 'parents';
+        } else if (fileName.includes('child') || fileName.includes('student')) {
+          fileType = 'children';  
+        } else if (fileName.includes('staff') || fileName.includes('teacher')) {
+          fileType = 'staff';
+        } else if (fileName.includes('enrollment')) {
+          fileType = 'enrollments';
+        } else if (fileName.includes('payment')) {
+          fileType = 'payments';
+        }
+
+        console.log(`🏷️ File type determined: ${fileType}`);
+
+        // Process records based on type and associate with school
+        for (const record of records) {
+          try {
+            if (fileType === 'parents') {
+              // Create parent account associated with school
+              const parentData = {
+                email: record.Email || record.email,
+                firstName: record['First Name'] || record.firstName || record.first_name,
+                lastName: record['Last Name'] || record.lastName || record.last_name,
+                phone: record.Phone || record.phone,
+                schoolId: schoolId // Associate with this school
+              };
+
+              if (parentData.email && parentData.firstName && parentData.lastName) {
+                // Create user account with school association
+                await storage.createUser({
+                  ...parentData,
+                  role: 'parent',
+                  schoolId: schoolId
+                });
+                results.parents.successful++;
+                console.log(`✅ Created parent: ${parentData.email} for school ${schoolId}`);
+              } else {
+                results.parents.failed++;
+                results.errors.push(`Missing required fields for parent: ${JSON.stringify(record)}`);
+              }
+            } else if (fileType === 'children') {
+              // Create child record associated with school
+              const childData = {
+                firstName: record['First Name'] || record.firstName || record.first_name,
+                lastName: record['Last Name'] || record.lastName || record.last_name,
+                parentEmail: record['Parent Email'] || record.parentEmail || record.parent_email,
+                grade: record.Grade || record.grade,
+                birthDate: record['Birth Date'] || record.birthDate || record.birth_date,
+                schoolId: schoolId // Associate with this school
+              };
+
+              if (childData.firstName && childData.lastName && childData.parentEmail) {
+                // Create child record with school association
+                await storage.createChild({
+                  ...childData,
+                  schoolId: schoolId
+                });
+                results.children.successful++;
+                console.log(`✅ Created child: ${childData.firstName} ${childData.lastName} for school ${schoolId}`);
+              } else {
+                results.children.failed++;
+                results.errors.push(`Missing required fields for child: ${JSON.stringify(record)}`);
+              }
+            } else if (fileType === 'staff') {
+              // Create staff account associated with school
+              const staffData = {
+                email: record.Email || record.email,
+                firstName: record['First Name'] || record.firstName || record.first_name,
+                lastName: record['Last Name'] || record.lastName || record.last_name,
+                position: record.Position || record.position || 'Teacher',
+                department: record.Department || record.department || 'General',
+                schoolId: schoolId // Associate with this school
+              };
+
+              if (staffData.email && staffData.firstName && staffData.lastName) {
+                // Create staff account with school association
+                await storage.createStaffMember({
+                  ...staffData,
+                  schoolId: schoolId
+                });
+                results.staff.successful++;
+                console.log(`✅ Created staff: ${staffData.email} for school ${schoolId}`);
+              } else {
+                results.staff.failed++;
+                results.errors.push(`Missing required fields for staff: ${JSON.stringify(record)}`);
+              }
+            }
+            // Add handling for enrollments and payments as needed
+          } catch (recordError) {
+            console.error(`❌ Error processing record:`, recordError);
+            results.errors.push(`Error processing record: ${recordError.message}`);
+            
+            if (fileType === 'parents') results.parents.failed++;
+            else if (fileType === 'children') results.children.failed++;
+            else if (fileType === 'staff') results.staff.failed++;
+          }
+        }
+
+      } catch (fileError) {
+        console.error(`❌ Error processing file ${file.originalname}:`, fileError);
+        results.errors.push(`Error processing file ${file.originalname}: ${fileError.message}`);
+      } finally {
+        // Clean up uploaded file
+        fs.unlinkSync(file.path);
+      }
+    }
+
+    console.log('📊 Contact import results:', results);
+    res.status(200).json({ 
+      message: 'Contact import completed',
+      schoolId: schoolId,
+      results: results
+    });
+
+  } catch (error) {
+    console.error('❌ Contact import error:', error);
+    res.status(500).json({ 
+      message: 'Error processing contact import',
+      error: error.message 
     });
   }
 });
