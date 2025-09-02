@@ -467,6 +467,10 @@ export class MemStorage implements IStorage {
       isActive: userData.isActive !== undefined ? userData.isActive : true,
       lastLogin: userData.lastLogin || null,
       schoolId: userData.schoolId || null,
+      emergencyContactFirstName: userData.emergencyContactFirstName || null,
+      emergencyContactLastName: userData.emergencyContactLastName || null,
+      emergencyContactPhone: userData.emergencyContactPhone || null,
+      emergencyContactRelationship: userData.emergencyContactRelationship || null,
       avatar: userData.avatar || null,
       phone: userData.phone || null
     };
@@ -488,7 +492,13 @@ export class MemStorage implements IStorage {
     this.usersStore.set(id, updatedUser);
     
     // Save to persistent storage (same as child editing)
-    await this.saveUsersToDisk();
+    console.log('🔧 CRITICAL DEBUG: About to call saveUsersToDisk()');
+    try {
+      await this.saveUsersToDisk();
+      console.log('🔧 CRITICAL DEBUG: saveUsersToDisk() completed successfully');
+    } catch (error) {
+      console.error('🔧 CRITICAL DEBUG: saveUsersToDisk() failed:', error);
+    }
     
     return updatedUser;
   }
@@ -927,7 +937,7 @@ export class MemStorage implements IStorage {
     }
   }
 
-  private async saveUsersToDisk(): Promise<void> {
+  async saveUsersToDisk(): Promise<void> {
     console.log('🔧 DEBUG: saveUsersToDisk method called');
     try {
       const fs = await import('fs');
@@ -1035,7 +1045,9 @@ export class MemStorage implements IStorage {
       id,
       createdAt: now,
       updatedAt: now,
-      schoolId: programData.schoolId || null
+      schoolId: programData.schoolId || null,
+      isPublished: programData.isPublished ?? false,
+      locationId: programData.locationId || null
     };
 
     this.programsStore.set(id, program);
@@ -1092,7 +1104,9 @@ export class MemStorage implements IStorage {
       createdAt: now,
       updatedAt: now,
       transactionId: enrollmentData.transactionId || null,
-      totalPaid: enrollmentData.totalPaid || null
+      totalPaid: enrollmentData.totalPaid || null,
+      discountCode: enrollmentData.discountCode || null,
+      discountAmount: enrollmentData.discountAmount || null
     };
 
     this.programEnrollmentsStore.set(id, enrollment);
@@ -1337,6 +1351,9 @@ export class MemStorage implements IStorage {
       createdAt: now,
       updatedAt: now,
       enrollmentCount: 0,
+      isPublished: classData.isPublished ?? false,
+      capacity: classData.capacity || null,
+      locationId: classData.locationId || null,
       schoolId: classData.schoolId || null,
       startDate: typeof classData.startDate === 'string' ? classData.startDate : classData.startDate?.toISOString() || null,
       endDate: typeof classData.endDate === 'string' ? classData.endDate : classData.endDate?.toISOString() || null
@@ -2074,7 +2091,9 @@ export class MemStorage implements IStorage {
       id,
       createdAt: now,
       updatedAt: now,
-      ...data
+      ...data,
+      isActive: data.isActive ?? true,
+      clickCount: data.clickCount ?? 0
     };
     this.marketingLinksStore.set(id, marketingLink);
     return marketingLink;
@@ -2283,7 +2302,9 @@ export class MemStorage implements IStorage {
       id,
       createdAt: now,
       updatedAt: now,
-      ...scheduledPayment
+      ...scheduledPayment,
+      description: scheduledPayment.description || null,
+      currency: scheduledPayment.currency || 'USD'
     };
     this.scheduledPaymentsStore.set(id, newScheduledPayment);
     return newScheduledPayment;
@@ -2400,6 +2421,8 @@ export class MemStorage implements IStorage {
     const newSchoolStudent: SchoolStudent = {
       id,
       ...schoolStudent,
+      status: schoolStudent.status ?? 'active',
+      locationId: schoolStudent.locationId || null,
       enrollmentDate: schoolStudent.enrollmentDate || now,
       createdAt: now,
       updatedAt: now
@@ -2502,6 +2525,13 @@ export class MemStorage implements IStorage {
     const newUserLocation: UserLocation = {
       id,
       ...userLocation,
+      isActive: userLocation.isActive ?? true,
+      accessLevel: userLocation.accessLevel ?? 'view',
+      canViewReports: userLocation.canViewReports ?? false,
+      canManageStaff: userLocation.canManageStaff ?? false,
+      canManageClasses: userLocation.canManageClasses ?? false,
+      canManageStudents: userLocation.canManageStudents ?? false,
+      canSendNotifications: userLocation.canSendNotifications ?? false,
       assignedAt: now,
       createdAt: now,
       updatedAt: now
@@ -2601,6 +2631,8 @@ export class MemStorage implements IStorage {
     const newLocation: Location = {
       id,
       ...location,
+      isActive: location.isActive ?? true,
+      timezone: location.timezone || 'UTC',
       createdAt: now,
       updatedAt: now
     };
@@ -2770,6 +2802,8 @@ export class MemStorage implements IStorage {
     const newTemplate: DailyFlowTemplate = {
       id,
       ...template,
+      isActive: template.isActive ?? true,
+      description: template.description || null,
       createdAt: now,
       updatedAt: now
     };
@@ -2847,6 +2881,13 @@ export class MemStorage implements IStorage {
     const newEntry: DailyFlowEntry = {
       id,
       ...entry,
+      materials: entry.materials ?? {},
+      notes: entry.notes || null,
+      templateId: entry.templateId || null,
+      isCompleted: entry.isCompleted ?? false,
+      completedAt: entry.completedAt || null,
+      completedBy: entry.completedBy || null,
+      lastModifiedBy: entry.lastModifiedBy || null,
       createdAt: now,
       updatedAt: now
     };
@@ -2921,6 +2962,9 @@ export class MemStorage implements IStorage {
     const newSchedule: DailyFlowSchedule = {
       id,
       ...schedule,
+      isActive: schedule.isActive ?? true,
+      lessonDescription: schedule.lessonDescription || null,
+      lessonLink: schedule.lessonLink || null,
       createdAt: now,
       updatedAt: now
     };
@@ -3302,9 +3346,10 @@ export class MemStorage implements IStorage {
         console.log('💾 Database unavailable, using file storage for user update');
         
         try {
-          // Update user in memory storage (which now automatically saves to file)
-          const updatedUser = await this.memStorage.updateUser(id, user);
-          console.log(`✅ Memory storage update successful for user ID: ${id}`);
+          // DIRECT TEST: Call the memory storage updateUser method directly 
+          console.log('🔧 DIRECT TEST: Calling sharedMemStorage.updateUser directly');
+          const updatedUser = await sharedMemStorage.updateUser(id, user);
+          console.log(`✅ DIRECT TEST: Memory storage update successful for user ID: ${id}`);
           
           return updatedUser;
         } catch (fallbackError) {

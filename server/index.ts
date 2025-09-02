@@ -128,6 +128,20 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       res.status(500).json({ success: false, error: error.message });
     }
   });
+
+  // Test endpoint for saveUsersToDisk
+  app.post('/api/test/save-users-to-disk', async (req, res) => {
+    try {
+      const { sharedMemStorage } = await import('./storage');
+      console.log('🔧 TEST ENDPOINT: Calling saveUsersToDisk manually');
+      await sharedMemStorage.saveUsersToDisk();
+      console.log('🔧 TEST ENDPOINT: saveUsersToDisk completed');
+      res.json({ success: true, message: 'saveUsersToDisk called successfully' });
+    } catch (error) {
+      console.error('🔧 TEST ENDPOINT: saveUsersToDisk failed:', error);
+      res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    }
+  });
 }
 
 (async () => {

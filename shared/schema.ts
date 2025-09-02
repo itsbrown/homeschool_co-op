@@ -24,6 +24,7 @@ export const users = pgTable("users", {
   emergencyContactFirstName: text("emergency_contact_first_name"), // Emergency contact first name
   emergencyContactLastName: text("emergency_contact_last_name"), // Emergency contact last name
   emergencyContactPhone: text("emergency_contact_phone"), // Emergency contact phone
+  emergencyContactRelationship: text("emergency_contact_relationship"), // Emergency contact relationship
   isActive: boolean("is_active").default(true).notNull(),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
