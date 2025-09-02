@@ -3238,49 +3238,61 @@ export class MemStorage implements IStorage {
     }
 
     async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
+      console.log(`🔄 CombinedStorage.updateUser called for user ID: ${id}`);
       try {
+        console.log(`📡 Attempting database update for user ID: ${id}`);
         // Try database storage first
-        return await this.dbStorage.updateUser(id, user);
+        const result = await this.dbStorage.updateUser(id, user);
+        console.log(`✅ Database update successful for user ID: ${id}`);
+        return result;
       } catch (error) {
+        console.log(`💾 Database update failed for user ID: ${id}, error:`, error instanceof Error ? error.message : error);
         console.log('💾 Database unavailable, using file storage for user update');
-        // Update user in memory first
-        const updatedUser = await this.memStorage.updateUser(id, user);
         
-        // Also persist to file storage immediately
-        if (updatedUser) {
-          try {
-            const fs = await import('fs');
-            const path = await import('path');
-            const DATA_DIR = path.join(process.cwd(), 'data');
-            const USERS_FILE = path.join(DATA_DIR, 'users.json');
+        try {
+          // Update user in memory first
+          const updatedUser = await this.memStorage.updateUser(id, user);
+          console.log(`✅ Memory storage update successful for user ID: ${id}`);
+          
+          // Also persist to file storage immediately
+          if (updatedUser) {
+            try {
+              const fs = await import('fs');
+              const path = await import('path');
+              const DATA_DIR = path.join(process.cwd(), 'data');
+              const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
-            // Ensure data directory exists
-            if (!fs.existsSync(DATA_DIR)) {
-              fs.mkdirSync(DATA_DIR, { recursive: true });
-            }
+              // Ensure data directory exists
+              if (!fs.existsSync(DATA_DIR)) {
+                fs.mkdirSync(DATA_DIR, { recursive: true });
+              }
 
-            // Read existing users from file
-            let users = [];
-            if (fs.existsSync(USERS_FILE)) {
-              const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
-              users = JSON.parse(fileContent);
-            }
-            
-            // Find and update user in file
-            const userIndex = users.findIndex((u: any) => u.id === id);
-            if (userIndex >= 0) {
-              users[userIndex] = updatedUser;
+              // Read existing users from file
+              let users = [];
+              if (fs.existsSync(USERS_FILE)) {
+                const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+                users = JSON.parse(fileContent);
+              }
               
-              // Write back to file
-              fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-              console.log(`💾 Updated user in file: ${updatedUser.email}`);
+              // Find and update user in file
+              const userIndex = users.findIndex((u: any) => u.id === id);
+              if (userIndex >= 0) {
+                users[userIndex] = updatedUser;
+                
+                // Write back to file
+                fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+                console.log(`💾 Updated user in file: ${updatedUser.email}`);
+              }
+            } catch (fileError) {
+              console.log('❌ Failed to update user in file:', fileError);
             }
-          } catch (fileError) {
-            console.log('❌ Failed to update user in file:', fileError);
           }
+          
+          return updatedUser;
+        } catch (fallbackError) {
+          console.error('❌ Fallback storage also failed:', fallbackError);
+          throw fallbackError;
         }
-        
-        return updatedUser;
       }
     }
 

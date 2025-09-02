@@ -1,0 +1,170 @@
+ RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+hook.js:608 Warning: Encountered two children with the same key, `8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. Error Component Stack
+    at tbody (<anonymous>)
+    at _c5 (table.tsx:30:6)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (table.tsx:8:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at SchoolAdminLayout (SchoolAdminLayout.tsx:9:45)
+    at UsersPage (UsersPage.tsx:38:39)
+    at Route (wouter.js?v=b83301ca:323:16)
+    at Switch (wouter.js?v=b83301ca:379:17)
+    at Router (App.tsx:237:55)
+    at Provider (chunk-XOUBXFGS.js?v=b83301ca:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=b83301ca:64:5)
+    at CartProvider (CartContext.tsx:467:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:14:40)
+    at RoleProvider (RoleContext.tsx:27:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at QueryClientProvider (@tanstack_react-query.js?v=b83301ca:2805:3)
+    at App (<anonymous>)
+overrideMethod @ hook.js:608
+printWarning @ chunk-NFC5BX5N.js?v=b83301ca:521
+error @ chunk-NFC5BX5N.js?v=b83301ca:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=b83301ca:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=b83301ca:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=b83301ca:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=b83301ca:14290
+updateHostComponent @ chunk-NFC5BX5N.js?v=b83301ca:14807
+beginWork @ chunk-NFC5BX5N.js?v=b83301ca:15935
+beginWork$1 @ chunk-NFC5BX5N.js?v=b83301ca:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=b83301ca:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=b83301ca:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=b83301ca:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b83301ca:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b83301ca:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b83301ca:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=b83301ca:555
+flush @ @tanstack_react-query.js?v=b83301ca:569
+batch @ @tanstack_react-query.js?v=b83301ca:587
+dispatch_fn @ @tanstack_react-query.js?v=b83301ca:996
+setData @ @tanstack_react-query.js?v=b83301ca:696
+onSuccess @ @tanstack_react-query.js?v=b83301ca:897
+resolve @ @tanstack_react-query.js?v=b83301ca:456
+Promise.then
+run @ @tanstack_react-query.js?v=b83301ca:498
+start @ @tanstack_react-query.js?v=b83301ca:536
+fetch @ @tanstack_react-query.js?v=b83301ca:926
+executeFetch_fn @ @tanstack_react-query.js?v=b83301ca:2211
+onSubscribe @ @tanstack_react-query.js?v=b83301ca:1898
+subscribe @ @tanstack_react-query.js?v=b83301ca:24
+(anonymous) @ @tanstack_react-query.js?v=b83301ca:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=b83301ca:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b83301ca:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b83301ca:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b83301ca:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b83301ca:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b83301ca:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b83301ca:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b83301ca:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=b83301ca:19328
+workLoop @ chunk-NFC5BX5N.js?v=b83301ca:197
+flushWork @ chunk-NFC5BX5N.js?v=b83301ca:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=b83301ca:384Understand this error
+chunk-NFC5BX5N.js?v=b83301ca:18625 [Violation] 'setTimeout' handler took 131ms
+hook.js:608 Warning: Encountered two children with the same key, `8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. Error Component Stack
+    at tbody (<anonymous>)
+    at _c5 (table.tsx:30:6)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (table.tsx:8:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at SchoolAdminLayout (SchoolAdminLayout.tsx:9:45)
+    at UsersPage (UsersPage.tsx:38:39)
+    at Route (wouter.js?v=b83301ca:323:16)
+    at Switch (wouter.js?v=b83301ca:379:17)
+    at Router (App.tsx:237:55)
+    at Provider (chunk-XOUBXFGS.js?v=b83301ca:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=b83301ca:64:5)
+    at CartProvider (CartContext.tsx:467:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:14:40)
+    at RoleProvider (RoleContext.tsx:27:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at QueryClientProvider (@tanstack_react-query.js?v=b83301ca:2805:3)
+    at App (<anonymous>)
+overrideMethod @ hook.js:608
+printWarning @ chunk-NFC5BX5N.js?v=b83301ca:521
+error @ chunk-NFC5BX5N.js?v=b83301ca:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=b83301ca:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=b83301ca:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=b83301ca:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=b83301ca:14292
+updateHostComponent @ chunk-NFC5BX5N.js?v=b83301ca:14807
+beginWork @ chunk-NFC5BX5N.js?v=b83301ca:15935
+beginWork$1 @ chunk-NFC5BX5N.js?v=b83301ca:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=b83301ca:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=b83301ca:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=b83301ca:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b83301ca:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b83301ca:9119
+flushSync @ chunk-NFC5BX5N.js?v=b83301ca:18959
+flushSync$1 @ chunk-NFC5BX5N.js?v=b83301ca:21538
+dispatchDiscreteCustomEvent @ chunk-VSHUKEGI.js?v=b83301ca:53
+handleSelect @ @radix-ui_react-dropdown-menu.js?v=b83301ca:432
+handleEvent @ chunk-5Q5YC75F.js?v=b83301ca:6
+callCallback2 @ chunk-NFC5BX5N.js?v=b83301ca:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=b83301ca:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=b83301ca:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=b83301ca:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=b83301ca:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=b83301ca:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=b83301ca:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=b83301ca:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=b83301ca:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=b83301ca:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=b83301ca:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=b83301ca:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=b83301ca:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=b83301ca:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=b83301ca:5449Understand this error
+users:1 [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) <input data-replit-metadata=​"client/​src/​components/​schools/​CreateUserDialog.tsx:​251:​22" data-component-name=​"Input" type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" placeholder=​"••••••••" name=​"password" id=​":​r4a:​-form-item" aria-describedby=​":​r4a:​-form-item-description" aria-invalid=​"false" value>​flex
+users:1 [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) <input data-replit-metadata=​"client/​src/​components/​schools/​CreateUserDialog.tsx:​264:​22" data-component-name=​"Input" type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" placeholder=​"••••••••" name=​"confirmPassword" id=​":​r4b:​-form-item" aria-describedby=​":​r4b:​-form-item-description" aria-invalid=​"false" value>​flex
+queryClient.ts:47  PUT https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/school-admin/users/8 500 (Internal Server Error)
+apiRequest @ queryClient.ts:47
+mutationFn @ CreateUserDialog.tsx:113
+fn @ @tanstack_react-query.js?v=b83301ca:1189
+run @ @tanstack_react-query.js?v=b83301ca:494
+start @ @tanstack_react-query.js?v=b83301ca:536
+execute @ @tanstack_react-query.js?v=b83301ca:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=b83301ca:2630
+(anonymous) @ @tanstack_react-query.js?v=b83301ca:3295
+onSubmit @ CreateUserDialog.tsx:140
+(anonymous) @ chunk-C6KZGCIG.js?v=b83301ca:1465
+await in (anonymous)
+callCallback2 @ chunk-NFC5BX5N.js?v=b83301ca:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=b83301ca:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=b83301ca:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=b83301ca:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=b83301ca:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=b83301ca:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=b83301ca:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=b83301ca:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=b83301ca:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=b83301ca:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=b83301ca:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=b83301ca:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=b83301ca:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=b83301ca:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=b83301ca:5449Understand this error
+queryClient.ts:69 ❌ API 500: {"message":"Error updating user","error":"Database connection not available"}
