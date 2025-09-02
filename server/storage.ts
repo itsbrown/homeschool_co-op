@@ -436,13 +436,7 @@ export class MemStorage implements IStorage {
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    console.log(`🔍 FileStorage.getUser searching for ID: ${id}`);
-    console.log(`📊 Total users in memory store: ${this.usersStore.size}`);
-    console.log(`🔑 Available user IDs in store:`, Array.from(this.usersStore.keys()));
-    
-    const user = this.usersStore.get(id);
-    console.log(`🎯 FileStorage.getUser result for ID ${id}:`, user ? 'Found' : 'Not found');
-    return user;
+    return this.usersStore.get(id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
@@ -3150,8 +3144,26 @@ export class MemStorage implements IStorage {
         return result;
       } catch (error) {
         console.log(`💾 Database lookup failed for user ID: ${id}, using file storage fallback`);
-        // Fall back to file storage if database is unavailable
-        return await this.fileStorage.getUser(id);
+        // Fall back to reading directly from JSON file
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const DATA_DIR = path.join(process.cwd(), 'data');
+          const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+          if (fs.existsSync(USERS_FILE)) {
+            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+            const users = JSON.parse(fileContent);
+            const user = users.find((u: any) => u.id === id);
+            console.log(`🔍 File storage direct lookup for user ID ${id}:`, user ? 'Found' : 'Not found');
+            return user;
+          }
+          return undefined;
+        } catch (fileError) {
+          console.log('❌ File storage direct lookup failed:', fileError);
+          // Final fallback to memory storage
+          return await this.fileStorage.getUser(id);
+        }
       }
     }
 
