@@ -1362,5 +1362,28 @@
     "isActive": true,
     "lastLogin": null,
     "avatar": null
+  },
+  {
+    "firstName": "Omar",
+    "lastName": "Hill",
+    "email": "Ohillny@gmail.com",
+    "role": "parent",
+    "phone": "5854026400",
+    "password": "password",
+    "schoolId": 1,
+    "id": 66,
+    "createdAt": "2025-09-02T23:42:38.920Z",
+    "updatedAt": "2025-09-02T23:42:38.920Z",
+    "auth0Id": null,
+    "supabaseId": null,
+    "subscription": "free",
+    "permissions": {},
+    "isActive": true,
+    "lastLogin": null,
+    "emergencyContactFirstName": null,
+    "emergencyContactLastName": null,
+    "emergencyContactPhone": null,
+    "emergencyContactRelationship": null,
+    "avatar": null
   }
 ]

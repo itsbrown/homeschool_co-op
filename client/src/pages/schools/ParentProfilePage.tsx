@@ -110,11 +110,6 @@ export default function ParentProfilePage() {
 
   const { data: profile, isLoading, error } = useQuery<ParentProfile>({
     queryKey: [`/api/parent-profile/${parentId}`],
-    queryFn: async () => {
-      const response = await fetch(`/api/parent-profile/${parentId}`);
-      if (!response.ok) throw new Error('Failed to fetch parent profile');
-      return response.json();
-    },
     enabled: !!parentId,
   });
 
