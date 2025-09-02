@@ -3266,6 +3266,42 @@ export class MemStorage implements IStorage {
       }
     }
 
+    private async syncUserToFile(updatedUser: User): Promise<void> {
+      console.log(`📁 Starting file sync for user: ${updatedUser.email} (ID: ${updatedUser.id})`);
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const DATA_DIR = path.join(process.cwd(), 'data');
+        const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+        // Read existing users from file
+        let users = [];
+        if (fs.existsSync(USERS_FILE)) {
+          const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+          users = JSON.parse(fileContent);
+        }
+        
+        console.log(`📄 File has ${users.length} users, looking for ID: ${updatedUser.id}`);
+        
+        // Find and update user in file
+        const userIndex = users.findIndex((u: any) => u.id === updatedUser.id);
+        
+        console.log(`🔍 User index found: ${userIndex}`);
+        
+        if (userIndex >= 0) {
+          users[userIndex] = updatedUser;
+          
+          // Write back to file
+          fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+          console.log(`💾 Updated user in file: ${updatedUser.email}`);
+        } else {
+          console.log(`❌ User ID ${updatedUser.id} not found in file`);
+        }
+      } catch (fileError) {
+        console.log('❌ Failed to update user in file:', fileError);
+      }
+    }
+
     async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
       console.log(`🔄 CombinedStorage.updateUser called for user ID: ${id}`);
       try {
@@ -3285,37 +3321,7 @@ export class MemStorage implements IStorage {
           
           // Also persist to file storage immediately
           if (updatedUser) {
-            try {
-              const fs = await import('fs');
-              const path = await import('path');
-              const DATA_DIR = path.join(process.cwd(), 'data');
-              const USERS_FILE = path.join(DATA_DIR, 'users.json');
-
-              // Ensure data directory exists
-              if (!fs.existsSync(DATA_DIR)) {
-                fs.mkdirSync(DATA_DIR, { recursive: true });
-              }
-
-              // Read existing users from file
-              let users = [];
-              if (fs.existsSync(USERS_FILE)) {
-                const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
-                users = JSON.parse(fileContent);
-              }
-              
-              // Find and update user in file
-              const userIndex = users.findIndex((u: any) => u.id === id);
-              
-              if (userIndex >= 0) {
-                users[userIndex] = updatedUser;
-                
-                // Write back to file
-                fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-                console.log(`💾 Updated user in file: ${updatedUser.email}`);
-              }
-            } catch (fileError) {
-              console.log('❌ Failed to update user in file:', fileError);
-            }
+            await this.syncUserToFile(updatedUser);
           }
           
           return updatedUser;
