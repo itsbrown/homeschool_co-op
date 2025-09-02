@@ -351,6 +351,9 @@ export class MemStorage implements IStorage {
     // Add sample events for testing the calendar
     this.initializeSampleEvents();
 
+    // Load users from file
+    this.loadUsersFromJSON().catch(console.error);
+
     // Load enrollments from file
     this.initializeEnrollments().catch(console.error);
     this.initializeKnowledgeBases().catch(console.error);
@@ -492,12 +495,10 @@ export class MemStorage implements IStorage {
     this.usersStore.set(id, updatedUser);
     
     // Save to persistent storage (same as child editing)
-    console.log('🔧 CRITICAL DEBUG: About to call saveUsersToDisk()');
     try {
       await this.saveUsersToDisk();
-      console.log('🔧 CRITICAL DEBUG: saveUsersToDisk() completed successfully');
     } catch (error) {
-      console.error('🔧 CRITICAL DEBUG: saveUsersToDisk() failed:', error);
+      console.error('❌ Error saving user changes to disk:', error);
     }
     
     return updatedUser;
@@ -937,8 +938,44 @@ export class MemStorage implements IStorage {
     }
   }
 
+  private async loadUsersFromJSON(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const dataDir = path.join(process.cwd(), 'data');
+      const filePath = path.join(dataDir, 'users.json');
+      
+      if (fs.existsSync(filePath)) {
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const users = JSON.parse(fileContent);
+        
+        // Clear existing users and load from file
+        this.usersStore.clear();
+        let maxId = 0;
+        
+        for (const user of users) {
+          this.usersStore.set(user.id, {
+            ...user,
+            createdAt: new Date(user.createdAt),
+            updatedAt: new Date(user.updatedAt)
+          });
+          maxId = Math.max(maxId, user.id);
+        }
+        
+        // Update the counter to avoid ID conflicts
+        this.userIdCounter = maxId + 1;
+        
+        console.log(`✅ Successfully loaded ${users.length} users from storage`);
+      } else {
+        console.log('👥 No users.json found, starting with empty users');
+      }
+    } catch (error) {
+      console.error('❌ Error loading users from JSON:', error);
+    }
+  }
+
   async saveUsersToDisk(): Promise<void> {
-    console.log('🔧 DEBUG: saveUsersToDisk method called');
     try {
       const fs = await import('fs');
       const path = await import('path');
@@ -946,17 +983,13 @@ export class MemStorage implements IStorage {
       const dataDir = path.join(process.cwd(), 'data');
       const filePath = path.join(dataDir, 'users.json');
 
-      console.log('🔧 DEBUG: Writing to file path:', filePath);
-
       // Ensure data directory exists
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
-        console.log('🔧 DEBUG: Created data directory');
       }
 
       // Convert Map to Array for JSON serialization
       const users = Array.from(this.usersStore.values());
-      console.log('🔧 DEBUG: About to save', users.length, 'users');
 
       // Write to file
       fs.writeFileSync(filePath, JSON.stringify(users, null, 2));
@@ -3346,10 +3379,8 @@ export class MemStorage implements IStorage {
         console.log('💾 Database unavailable, using file storage for user update');
         
         try {
-          // DIRECT TEST: Call the memory storage updateUser method directly 
-          console.log('🔧 DIRECT TEST: Calling sharedMemStorage.updateUser directly');
+          // Update user in memory storage (which automatically saves to file)
           const updatedUser = await sharedMemStorage.updateUser(id, user);
-          console.log(`✅ DIRECT TEST: Memory storage update successful for user ID: ${id}`);
           
           return updatedUser;
         } catch (fallbackError) {
