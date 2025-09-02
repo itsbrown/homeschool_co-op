@@ -467,7 +467,8 @@ export class MemStorage implements IStorage {
       isActive: userData.isActive !== undefined ? userData.isActive : true,
       lastLogin: userData.lastLogin || null,
       schoolId: userData.schoolId || null,
-      avatar: userData.avatar || null
+      avatar: userData.avatar || null,
+      phone: userData.phone || null
     };
     this.usersStore.set(id, user);
     return user;
@@ -479,7 +480,11 @@ export class MemStorage implements IStorage {
       return undefined;
     }
 
-    const updatedUser: User = { ...existingUser, ...updateData };
+    const updatedUser: User = { 
+      ...existingUser, 
+      ...updateData,
+      updatedAt: new Date()
+    };
     this.usersStore.set(id, updatedUser);
     
     // Save to persistent storage (same as child editing)
@@ -798,7 +803,7 @@ export class MemStorage implements IStorage {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
 
-    const updatedKnowledgeBase = {
+    const updatedKnowledgeBase: KnowledgeBase = {
       ...knowledgeBase,
       ...updateData,
       updatedAt: new Date()
@@ -812,7 +817,7 @@ export class MemStorage implements IStorage {
     const knowledgeBase = this.knowledgeBaseStore.get(id);
     if (!knowledgeBase) return undefined;
 
-    const updatedKnowledgeBase = {
+    const updatedKnowledgeBase: KnowledgeBase = {
       ...knowledgeBase,
       downloadCount: knowledgeBase.downloadCount + 1
     };
@@ -826,13 +831,14 @@ export class MemStorage implements IStorage {
     if (!knowledgeBase) return undefined;
 
     // Check if user has already purchased
-    if (knowledgeBase.purchasedBy.includes(userId)) {
+    const purchasedByArray = Array.isArray(knowledgeBase.purchasedBy) ? knowledgeBase.purchasedBy : [];
+    if (purchasedByArray.includes(userId)) {
       return knowledgeBase;
     }
 
-    const updatedKnowledgeBase = {
+    const updatedKnowledgeBase: KnowledgeBase = {
       ...knowledgeBase,
-      purchasedBy: [...knowledgeBase.purchasedBy, userId]
+      purchasedBy: [...purchasedByArray, userId]
     };
 
     this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
@@ -922,6 +928,7 @@ export class MemStorage implements IStorage {
   }
 
   private async saveUsersToDisk(): Promise<void> {
+    console.log('🔧 DEBUG: saveUsersToDisk method called');
     try {
       const fs = await import('fs');
       const path = await import('path');
@@ -929,13 +936,17 @@ export class MemStorage implements IStorage {
       const dataDir = path.join(process.cwd(), 'data');
       const filePath = path.join(dataDir, 'users.json');
 
+      console.log('🔧 DEBUG: Writing to file path:', filePath);
+
       // Ensure data directory exists
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
+        console.log('🔧 DEBUG: Created data directory');
       }
 
       // Convert Map to Array for JSON serialization
       const users = Array.from(this.usersStore.values());
+      console.log('🔧 DEBUG: About to save', users.length, 'users');
 
       // Write to file
       fs.writeFileSync(filePath, JSON.stringify(users, null, 2));
@@ -1023,7 +1034,8 @@ export class MemStorage implements IStorage {
       ...programData,
       id,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      schoolId: programData.schoolId || null
     };
 
     this.programsStore.set(id, program);
@@ -1066,7 +1078,7 @@ export class MemStorage implements IStorage {
   async getEnrollmentCountForProgram(programId: number): Promise<number> {
     return this.getEnrollmentsByProgramId(programId).then(enrollments =>
       enrollments.filter(enrollment =>
-        enrollment.status === 'active' || enrollment.status === 'pending').length
+        enrollment.status === 'confirmed' || enrollment.status === 'pending').length
     );
   }
 
@@ -1078,7 +1090,9 @@ export class MemStorage implements IStorage {
       ...enrollmentData,
       id,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      transactionId: enrollmentData.transactionId || null,
+      totalPaid: enrollmentData.totalPaid || null
     };
 
     this.programEnrollmentsStore.set(id, enrollment);
@@ -1322,7 +1336,10 @@ export class MemStorage implements IStorage {
       id,
       createdAt: now,
       updatedAt: now,
-      enrollmentCount: 0
+      enrollmentCount: 0,
+      schoolId: classData.schoolId || null,
+      startDate: typeof classData.startDate === 'string' ? classData.startDate : classData.startDate?.toISOString() || null,
+      endDate: typeof classData.endDate === 'string' ? classData.endDate : classData.endDate?.toISOString() || null
     };
 
     this.classesStore.set(id, newClass);
@@ -1336,7 +1353,9 @@ export class MemStorage implements IStorage {
     const updatedClass: Class = {
       ...classItem,
       ...updateData,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      startDate: updateData.startDate ? (typeof updateData.startDate === 'string' ? updateData.startDate : updateData.startDate.toISOString()) : classItem.startDate,
+      endDate: updateData.endDate ? (typeof updateData.endDate === 'string' ? updateData.endDate : updateData.endDate.toISOString()) : classItem.endDate
     };
 
     this.classesStore.set(id, updatedClass);
@@ -1347,53 +1366,6 @@ export class MemStorage implements IStorage {
     this.classesStore.delete(id);
   }
 
-  async updateKnowledgeBase(id: number, updateData: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined> {
-    const knowledgeBase = this.knowledgeBaseStore.get(id);
-    if (!knowledgeBase) return undefined;
-
-    const updatedKnowledgeBase: KnowledgeBase = {
-      ...knowledgeBase,
-      ...updateData,
-      updatedAt: new Date()
-    };
-
-    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
-    await this.saveKnowledgeBasesToDisk();
-    return updatedKnowledgeBase;
-  }
-
-  async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
-    const knowledgeBase = this.knowledgeBaseStore.get(id);
-    if (!knowledgeBase) return undefined;
-
-    const updatedKnowledgeBase: KnowledgeBase = {
-      ...knowledgeBase,
-      downloadCount: knowledgeBase.downloadCount + 1,
-      updatedAt: new Date()
-    };
-
-    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
-    return updatedKnowledgeBase;
-  }
-
-  async addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined> {
-    const knowledgeBase = this.knowledgeBaseStore.get(id);
-    if (!knowledgeBase) return undefined;
-
-    // Check if user has already purchased
-    if (knowledgeBase.purchasedBy.includes(userId)) {
-      return knowledgeBase;
-    }
-
-    const updatedKnowledgeBase: KnowledgeBase = {
-      ...knowledgeBase,
-      purchasedBy: [...knowledgeBase.purchasedBy, userId],
-      updatedAt: new Date()
-    };
-
-    this.knowledgeBaseStore.set(id, updatedKnowledgeBase);
-    return updatedKnowledgeBase;
-  }
 
   async deleteKnowledgeBase(id: number): Promise<void> {
     this.knowledgeBaseStore.delete(id);
@@ -1515,7 +1487,10 @@ export class MemStorage implements IStorage {
               downloadCount: 0,
               purchasedBy: [],
               createdAt: new Date(),
-              updatedAt: new Date()
+              updatedAt: new Date(),
+              aiProcessed: false,
+              aiInsights: null,
+              processedAt: null
             };
 
             this.knowledgeBaseStore.set(kb.id, kb);
@@ -1814,9 +1789,10 @@ export class MemStorage implements IStorage {
       ...activity,
       id,
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now || null,
       downloadCount: 0,
-      isPublic: activity.isPublic || false
+      isPublic: activity.isPublic || false,
+      pdfUrl: activity.pdfUrl || ''
     };
 
     this.activitiesStore.set(id, newActivity);
@@ -1856,7 +1832,7 @@ export class MemStorage implements IStorage {
 
     const updatedActivity: Activity = {
       ...activity,
-      downloadCount: activity.downloadCount + 1,
+      downloadCount: (activity.downloadCount || 0) + 1,
       updatedAt: new Date()
     };
 
@@ -2130,14 +2106,16 @@ export class MemStorage implements IStorage {
     const updated: MarketingLink = {
       ...existing,
       ...data,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      isActive: data.isActive !== undefined ? data.isActive : existing.isActive,
+      clickCount: data.clickCount !== undefined ? data.clickCount : existing.clickCount
     };
     this.marketingLinksStore.set(id, updated);
     return updated;
   }
 
-  async deleteMarketingLink(id: number): Promise<boolean> {
-    return this.marketingLinksStore.delete(id);
+  async deleteMarketingLink(id: number): Promise<void> {
+    this.marketingLinksStore.delete(id);
   }
 
   async createLinkAnalytics(data: InsertLinkAnalytics): Promise<LinkAnalytics> {
@@ -2145,13 +2123,19 @@ export class MemStorage implements IStorage {
     const analytics: LinkAnalytics = {
       id,
       timestamp: new Date(),
-      ...data
+      ...data,
+      ipAddress: data.ipAddress || null,
+      userAgent: data.userAgent || null,
+      referrer: data.referrer || null
     };
     this.linkAnalyticsStore.set(id, analytics);
     return analytics;
   }
 
-  async incrementLinkClick(linkId: number): Promise<void> {
+  async incrementLinkClick(campaignId: string): Promise<void> {
+    const link = await this.getMarketingLinkByCampaignId(campaignId);
+    if (!link) return;
+    const linkId = link.id;
     await this.createLinkAnalytics({
       linkId,
       event: 'click',
@@ -2161,7 +2145,10 @@ export class MemStorage implements IStorage {
     });
   }
 
-  async incrementLinkConversion(linkId: number): Promise<void> {
+  async incrementLinkConversion(campaignId: string): Promise<void> {
+    const link = await this.getMarketingLinkByCampaignId(campaignId);
+    if (!link) return;
+    const linkId = link.id;
     await this.createLinkAnalytics({
       linkId,
       event: 'conversion',
@@ -2201,7 +2188,10 @@ export class MemStorage implements IStorage {
       id,
       createdAt: now,
       updatedAt: now,
-      ...payment
+      ...payment,
+      metadata: payment.metadata || {},
+      currency: payment.currency || 'usd',
+      status: payment.status || 'pending'
     };
     this.paymentsStore.set(id, newPayment);
     
@@ -2238,13 +2228,13 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async updatePaymentStatus(id: number, status: 'pending' | 'completed' | 'failed' | 'refunded'): Promise<Payment | undefined> {
+  async updatePaymentStatus(id: number, status: 'pending' | 'failed' | 'succeeded' | 'canceled'): Promise<Payment | undefined> {
     const payment = this.paymentsStore.get(id);
     if (!payment) return undefined;
 
     const updatedPayment: Payment = {
       ...payment,
-      status,
+      status: status === 'succeeded' ? 'completed' : status === 'canceled' ? 'refunded' : status,
       updatedAt: new Date()
     };
     this.paymentsStore.set(id, updatedPayment);
@@ -2840,7 +2830,7 @@ export class MemStorage implements IStorage {
         entries = entries.filter(e => e.date >= filters.startDate);
       }
       if (filters.endDate) {
-        entries = entries.filter(e => e.date <= filters.endDate);
+        entries = entries.filter(e => e.date <= filters.endDate!);
       }
     }
     
@@ -3084,6 +3074,9 @@ export class MemStorage implements IStorage {
   import { DatabaseStorage } from "./dbStorage";
   import { supabaseStorage, SupabaseStorage } from './supabase-storage';
 
+  // Create a shared MemStorage instance to ensure consistency
+  const sharedMemStorage = new MemStorage();
+
   class CombinedStorage {
     private dbStorage: DatabaseStorage;
     private memStorage: MemStorage;
@@ -3092,9 +3085,9 @@ export class MemStorage implements IStorage {
 
     constructor() {
       this.dbStorage = new DatabaseStorage();
-      this.memStorage = new MemStorage();
+      this.memStorage = sharedMemStorage; // Use the shared instance
       this.supabaseStorage = supabaseStorage;
-      this.fileStorage = new MemStorage(); // Initialize fileStorage as well
+      this.fileStorage = sharedMemStorage; // Use the shared instance for consistency
     }
 
     async getAllUsers(): Promise<User[]> {
@@ -3982,3 +3975,4 @@ export class MemStorage implements IStorage {
 
   // Use the MemStorage implementation for classes functionality
   export const storage = new CombinedStorage();
+  export { sharedMemStorage };
