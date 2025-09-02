@@ -30,37 +30,9 @@ const app = express();
 // This MUST be first and specific to the webhook path
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }));
 
-// Skip all other body parsers for special routes
-app.use((req, res, next) => {
-  if (req.path === '/api/stripe/webhook' || req.path === '/api/school-admin/contact-import' || req.path === '/api/school-admin/import-users') {
-    return next();
-  }
-  // Apply other body parsers only to normal routes
-  express.json({ limit: '50mb' })(req, res, next);
-});
-
-app.use((req, res, next) => {
-  if (req.path === '/api/stripe/webhook' || req.path === '/api/school-admin/contact-import' || req.path === '/api/school-admin/import-users') {
-    return next();
-  }
-  express.urlencoded({ extended: false, limit: '50mb' })(req, res, next);
-});
-
-app.use((req, res, next) => {
-  // Skip raw and text parsers for file upload routes
-  if (req.path === '/api/stripe/webhook' || req.path === '/api/school-admin/contact-import' || req.path === '/api/school-admin/import-users') {
-    return next();
-  }
-  express.raw({ limit: '50mb' })(req, res, next);
-});
-
-app.use((req, res, next) => {
-  // Skip raw and text parsers for file upload routes  
-  if (req.path === '/api/stripe/webhook' || req.path === '/api/school-admin/contact-import' || req.path === '/api/school-admin/import-users') {
-    return next();
-  }
-  express.text({ limit: '50mb' })(req, res, next);
-});
+// Standard body parsers for most routes
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
 // Apply fileUpload middleware only to file upload routes
 app.use('/api/school-admin/contact-import', fileUpload({
