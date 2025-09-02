@@ -436,7 +436,13 @@ export class MemStorage implements IStorage {
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    return this.usersStore.get(id);
+    console.log(`🔍 FileStorage.getUser searching for ID: ${id}`);
+    console.log(`📊 Total users in memory store: ${this.usersStore.size}`);
+    console.log(`🔑 Available user IDs in store:`, Array.from(this.usersStore.keys()));
+    
+    const user = this.usersStore.get(id);
+    console.log(`🎯 FileStorage.getUser result for ID ${id}:`, user ? 'Found' : 'Not found');
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
