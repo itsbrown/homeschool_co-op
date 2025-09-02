@@ -8,6 +8,37 @@ import { parse as parseCSV } from 'csv-parse';
 
 const router = Router();
 
+// Download CSV template - Must be first to avoid conflicts
+router.get('/csv-template/:type', (req: any, res) => {
+  const type = req.params.type;
+  
+  let csvContent = '';
+  let filename = '';
+  
+  if (type === 'parents') {
+    csvContent = 'First Name,Last Name,Email,Phone,Location\n';
+    csvContent += 'John,Doe,john.doe@example.com,555-0123,Greece\n';
+    csvContent += 'Jane,Smith,jane.smith@example.com,555-0124,Brighton\n';
+    filename = 'parents_template.csv';
+  } else if (type === 'children') {
+    csvContent = 'First Name,Last Name,Parent Email,Grade,Birth Date\n';
+    csvContent += 'Emma,Doe,john.doe@example.com,K,2019-05-15\n';
+    csvContent += 'Noah,Smith,jane.smith@example.com,3,2016-08-22\n';
+    filename = 'children_template.csv';
+  } else if (type === 'staff') {
+    csvContent = 'First Name,Last Name,Email,Phone,Position,Location\n';
+    csvContent += 'Sarah,Johnson,sarah.johnson@example.com,555-0125,Teacher,Greece\n';
+    csvContent += 'Mike,Wilson,mike.wilson@example.com,555-0126,Administrator,Brighton\n';
+    filename = 'staff_template.csv';
+  } else {
+    return res.status(400).json({ message: 'Invalid template type' });
+  }
+  
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csvContent);
+});
+
 // Initialize Brevo
 let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
 if (process.env.BREVO_API_KEY) {
@@ -3705,6 +3736,7 @@ router.post('/contact-import', async (req: any, res) => {
     });
   }
 });
+
 
 // Get all users for the school
 router.get('/users', async (req: any, res) => {

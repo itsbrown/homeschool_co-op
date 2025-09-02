@@ -126,7 +126,30 @@ export default function ImportUsersDialog({ open, onClose }: ImportUsersDialogPr
                   <div><strong>Optional:</strong> Phone, Location, Grade (for children), Position (for staff)</div>
                   <div><strong>File naming:</strong> Use "parent", "student", "child", "staff", or "teacher" in filename</div>
                   <Separator />
-                  <div className="text-xs text-muted-foreground">
+                  <div className="flex gap-2 mt-3">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => window.open('/api/school-admin/csv-template/parents', '_blank')}
+                    >
+                      📥 Download Parents Template
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => window.open('/api/school-admin/csv-template/children', '_blank')}
+                    >
+                      📥 Download Children Template
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => window.open('/api/school-admin/csv-template/staff', '_blank')}
+                    >
+                      📥 Download Staff Template
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
                     Example: "parents.csv", "students.csv", "staff_members.csv"
                   </div>
                 </CardContent>
