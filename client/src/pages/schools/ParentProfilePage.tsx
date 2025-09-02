@@ -1,5 +1,5 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRoute } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   ArrowLeft, 
   User, 
@@ -26,9 +44,14 @@ import {
   AlertTriangle,
   DollarSign,
   Clock,
-  CheckCircle
+  CheckCircle,
+  Plus,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { Link } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface ParentProfile {
@@ -104,14 +127,242 @@ interface ParentProfile {
   };
 }
 
+// School Admin Child Form Component for managing children within parent profiles
+function SchoolAdminChildForm({ parentEmail, childToEdit, onSuccess, onCancel }: {
+  parentEmail: string;
+  childToEdit?: any;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [formData, setFormData] = useState({
+    firstName: childToEdit?.firstName || '',
+    lastName: childToEdit?.lastName || '',
+    birthdate: childToEdit?.birthDate || '',
+    gradeLevel: childToEdit?.grade || '',
+    allergies: childToEdit?.allergies || '',
+    medicalConditions: childToEdit?.medicalConditions || '',
+    additionalLanguages: childToEdit?.additionalLanguages || '',
+    notes: childToEdit?.notes || '',
+  });
+
+  const gradeLevels = [
+    "Littles", "Pre-K", "Kindergarten", "1st Grade", "2nd Grade", "3rd Grade",
+    "4th Grade", "5th Grade", "6th Grade", "7th Grade", "8th Grade",
+    "9th Grade", "10th Grade", "11th Grade", "12th Grade",
+  ];
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const childData = {
+        ...formData,
+        parentEmail,
+        specialNeeds: null,
+        medicalInfo: formData.medicalConditions,
+        interests: null,
+        emergencyContact: null,
+        profileImage: null,
+        school: null,
+        learningStyle: null,
+      };
+
+      if (childToEdit) {
+        // Update existing child
+        await apiRequest("PATCH", `/api/children/${childToEdit.id}`, childData);
+        toast({
+          title: "Success",
+          description: "Child information updated successfully",
+        });
+      } else {
+        // Create new child with parent email
+        await apiRequest("POST", "/api/children", childData);
+        toast({
+          title: "Success", 
+          description: "Child added successfully",
+        });
+      }
+
+      // Invalidate parent profile query to refresh children list
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile`] });
+      onSuccess();
+
+    } catch (error) {
+      console.error("Failed to save child:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save child information. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="text-sm font-medium">First Name</label>
+          <input
+            type="text"
+            className="w-full p-2 border border-gray-300 rounded-md"
+            value={formData.firstName}
+            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+            required
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Last Name</label>
+          <input
+            type="text"
+            className="w-full p-2 border border-gray-300 rounded-md"
+            value={formData.lastName}
+            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="text-sm font-medium">Birth Date</label>
+          <input
+            type="date"
+            className="w-full p-2 border border-gray-300 rounded-md"
+            value={formData.birthdate}
+            onChange={(e) => setFormData({ ...formData, birthdate: e.target.value })}
+            required
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Grade Level</label>
+          <select
+            className="w-full p-2 border border-gray-300 rounded-md"
+            value={formData.gradeLevel}
+            onChange={(e) => setFormData({ ...formData, gradeLevel: e.target.value })}
+            required
+          >
+            <option value="">Select grade level</option>
+            {gradeLevels.map((grade) => (
+              <option key={grade} value={grade}>
+                {grade}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Allergies</label>
+        <textarea
+          className="w-full p-2 border border-gray-300 rounded-md"
+          rows={2}
+          value={formData.allergies}
+          onChange={(e) => setFormData({ ...formData, allergies: e.target.value })}
+          placeholder="Any known allergies..."
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Medical Conditions</label>
+        <textarea
+          className="w-full p-2 border border-gray-300 rounded-md"
+          rows={2}
+          value={formData.medicalConditions}
+          onChange={(e) => setFormData({ ...formData, medicalConditions: e.target.value })}
+          placeholder="Any medical conditions to note..."
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Additional Languages</label>
+        <input
+          type="text"
+          className="w-full p-2 border border-gray-300 rounded-md"
+          value={formData.additionalLanguages}
+          onChange={(e) => setFormData({ ...formData, additionalLanguages: e.target.value })}
+          placeholder="Languages spoken at home..."
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Notes</label>
+        <textarea
+          className="w-full p-2 border border-gray-300 rounded-md"
+          rows={3}
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          placeholder="Additional notes about the child..."
+        />
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Saving..." : childToEdit ? "Update Child" : "Add Child"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export default function ParentProfilePage() {
   const [match, params] = useRoute('/schools/parents/:parentId');
   const parentId = params?.parentId;
+  const [addChildDialogOpen, setAddChildDialogOpen] = useState(false);
+  const [editChildDialogOpen, setEditChildDialogOpen] = useState(false);
+  const [selectedChild, setSelectedChild] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [childToDelete, setChildToDelete] = useState<any>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: profile, isLoading, error } = useQuery<ParentProfile>({
     queryKey: [`/api/parent-profile/${parentId}`],
     enabled: !!parentId,
   });
+
+  // Child management handlers
+  const handleAddChildSuccess = () => {
+    setAddChildDialogOpen(false);
+    queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+  };
+
+  const handleEditChildSuccess = () => {
+    setEditChildDialogOpen(false);
+    setSelectedChild(null);
+    queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+  };
+
+  const handleDeleteChild = async () => {
+    if (!childToDelete) return;
+
+    try {
+      // For now, we'll call a delete endpoint when available
+      // Currently there's no delete endpoint, so we'll show a toast
+      toast({
+        title: "Feature Coming Soon",
+        description: "Child deletion will be available in a future update.",
+        variant: "default",
+      });
+      setDeleteDialogOpen(false);
+      setChildToDelete(null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete child. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -283,20 +534,51 @@ export default function ParentProfilePage() {
           <TabsContent value="children">
             <Card>
               <CardHeader>
-                <CardTitle>Children</CardTitle>
-                <CardDescription>
-                  Information about {profile.parent.firstName}'s children
-                </CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Children</CardTitle>
+                    <CardDescription>
+                      Information about {profile.parent.firstName}'s children
+                    </CardDescription>
+                  </div>
+                  <Dialog open={addChildDialogOpen} onOpenChange={setAddChildDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Child
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Add New Child</DialogTitle>
+                        <DialogDescription>
+                          Add a new child to {profile.parent.firstName} {profile.parent.lastName}'s family
+                        </DialogDescription>
+                      </DialogHeader>
+                      <SchoolAdminChildForm
+                        parentEmail={profile.parent.email}
+                        onSuccess={handleAddChildSuccess}
+                        onCancel={() => setAddChildDialogOpen(false)}
+                      />
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
                 {profile.children.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No children found.</p>
+                  <div className="text-center py-8">
+                    <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No children found.</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Click "Add Child" to add the first child to this family.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     {profile.children.map((child) => (
                       <Card key={child.id} className="p-4">
                         <div className="flex justify-between items-start">
-                          <div>
+                          <div className="flex-1">
                             <h3 className="font-semibold text-lg">
                               {child.firstName} {child.lastName}
                             </h3>
@@ -309,7 +591,29 @@ export default function ParentProfilePage() {
                               {child.notes && <p>Notes: {child.notes}</p>}
                             </div>
                           </div>
-                          <Badge variant="outline">ID: {child.id}</Badge>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline">ID: {child.id}</Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedChild(child);
+                                setEditChildDialogOpen(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setChildToDelete(child);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </Card>
                     ))}
@@ -317,6 +621,56 @@ export default function ParentProfilePage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Edit Child Dialog */}
+            <Dialog open={editChildDialogOpen} onOpenChange={setEditChildDialogOpen}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Edit Child Information</DialogTitle>
+                  <DialogDescription>
+                    Update {selectedChild?.firstName} {selectedChild?.lastName}'s information
+                  </DialogDescription>
+                </DialogHeader>
+                {selectedChild && (
+                  <SchoolAdminChildForm
+                    parentEmail={profile.parent.email}
+                    childToEdit={selectedChild}
+                    onSuccess={handleEditChildSuccess}
+                    onCancel={() => {
+                      setEditChildDialogOpen(false);
+                      setSelectedChild(null);
+                    }}
+                  />
+                )}
+              </DialogContent>
+            </Dialog>
+
+            {/* Delete Child Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Child</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete {childToDelete?.firstName} {childToDelete?.lastName}? 
+                    This action cannot be undone and will remove all associated enrollment and payment history.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => {
+                    setDeleteDialogOpen(false);
+                    setChildToDelete(null);
+                  }}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteChild}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete Child
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </TabsContent>
 
           <TabsContent value="enrollments">
