@@ -3850,8 +3850,11 @@ router.put('/users/:id', async (req: any, res) => {
     };
 
     // Update user
+    console.log(`🔄 API: Calling storage.updateUser for user ID: ${userId}`);
+    console.log(`📄 API: Update data:`, userData);
+    
     const updatedUser = await storage.updateUser(userId, userData);
-    console.log(`✅ Updated user: ${userData.email || existingUser.email} for school ${schoolId}`);
+    console.log(`✅ API: Updated user: ${userData.email || existingUser.email} for school ${schoolId}`);
     
     res.status(200).json(updatedUser);
   } catch (error) {
