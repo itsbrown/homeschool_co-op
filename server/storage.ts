@@ -921,6 +921,31 @@ export class MemStorage implements IStorage {
     }
   }
 
+  private async saveUsersToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+
+      const dataDir = path.join(process.cwd(), 'data');
+      const filePath = path.join(dataDir, 'users.json');
+
+      // Ensure data directory exists
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      // Convert Map to Array for JSON serialization
+      const users = Array.from(this.usersStore.values());
+
+      // Write to file
+      fs.writeFileSync(filePath, JSON.stringify(users, null, 2));
+
+      console.log(`💾 Successfully saved ${users.length} users to disk`);
+    } catch (error) {
+      console.error('❌ Error saving users to disk:', error);
+    }
+  }
+
   async getAllChildren(): Promise<Child[]> {
     return Array.from(this.childrenStore.values());
   }
