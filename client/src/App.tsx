@@ -53,6 +53,7 @@ import ChildProfileEditPage from "@/pages/ChildProfileEditPage";
 import ChildEnrollmentsPage from "@/pages/children/ChildEnrollmentsPage";
 import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import ClassCreationPage from "./pages/admin/ClassCreationPage";
+import ContactImportPage from "./pages/admin/ContactImportPage";
 import ClassesPage from "./pages/ClassesPage";
 import CalendarPage from "./pages/CalendarPage";
 import ProgramsBrowseRedirect from "@/pages/ProgramsBrowseRedirect";
@@ -564,6 +565,7 @@ function Router() {
       <Route path="/admin/classes" component={SimpleClassesPage} />
       <Route path="/admin/classes/new" component={ClassCreationPage} />
       <Route path="/admin/classes/upload" component={ClassesUploadPage} />
+      <Route path="/admin/contact-import" component={ContactImportPage} />
       <Route path="/admin/roles" component={RolesAndPermissionsPage} />
       <Route path="/admin/role-management" component={RoleManagementPage} />
       <Route path="/admin/features" component={FeaturesOverviewPage} />

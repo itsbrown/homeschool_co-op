@@ -15,7 +15,8 @@ import {
   PieChart,
   FileText,
   BookOpenCheck,
-  Shield
+  Shield,
+  Upload
 } from 'lucide-react';
 import { useAuth } from "@/hooks/useAuth0";
 import { cn } from '@/lib/utils';
@@ -40,6 +41,7 @@ type AdminLayoutProps = {
 const navItems = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: <Home className="h-5 w-5" /> },
   { name: 'Users', href: '/admin/users', icon: <Users className="h-5 w-5" /> },
+  { name: 'Contact Import', href: '/admin/contact-import', icon: <Upload className="h-5 w-5" /> },
   { name: 'Schools', href: '/admin/schools', icon: <School className="h-5 w-5" /> },
   { name: 'Classes', href: '/admin/classes', icon: <Calendar className="h-5 w-5" /> },
   { name: 'Curriculum', href: '/admin/curriculum', icon: <BookOpen className="h-5 w-5" /> },
