@@ -3817,8 +3817,15 @@ router.post('/users', async (req: any, res) => {
 router.post('/import-users', async (req: any, res) => {
   try {
     console.log('📋 Starting user import process...');
+    console.log('📊 Request details:');
+    console.log('  - Body:', req.body);
+    console.log('  - Files:', req.files);
+    console.log('  - Content-Type:', req.get('Content-Type'));
+    console.log('  - Method:', req.method);
+    console.log('  - Path:', req.path);
     
     if (!req.files || Object.keys(req.files).length === 0) {
+      console.error('❌ No files found in request');
       return res.status(400).json({ error: "No files uploaded" });
     }
     

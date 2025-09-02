@@ -37,17 +37,29 @@ function ImportUsersDialog({ open, onOpenChange, schoolId }: ImportUsersDialogPr
 
   const importUsersMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await apiRequest("POST", "/api/school-admin/import-users", {
+      console.log('🚀 Sending import request with FormData:', formData);
+      console.log('📊 FormData entries:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value);
+      }
+      
+      const response = await fetch('/api/school-admin/import-users', {
+        method: 'POST',
         body: formData,
-        headers: {}, // Let the browser set Content-Type for FormData
+        // Don't set Content-Type - let browser handle it for FormData
       });
 
+      console.log('📨 Response status:', response.status);
+      
       if (!response.ok) {
         const error = await response.json();
+        console.error('❌ Response error:', error);
         throw new Error(error.error || "Import failed");
       }
 
-      return response.json();
+      const result = await response.json();
+      console.log('✅ Import result:', result);
+      return result;
     },
     onSuccess: (data) => {
       setImportResult(data);
@@ -82,13 +94,19 @@ function ImportUsersDialog({ open, onOpenChange, schoolId }: ImportUsersDialogPr
       return;
     }
 
+    console.log('📁 Selected files:', selectedFiles);
+    console.log('🏫 School ID:', schoolId);
+
     const formData = new FormData();
     formData.append("schoolId", schoolId.toString());
 
-    Array.from(selectedFiles).forEach((file, index) => {
-      formData.append(`files`, file);
+    // Use consistent naming for multiple files
+    Array.from(selectedFiles).forEach((file) => {
+      console.log(`📎 Adding file: ${file.name} (${file.size} bytes)`);
+      formData.append("files", file);
     });
 
+    console.log('🚀 Calling mutation with FormData');
     importUsersMutation.mutate(formData);
   };
 
