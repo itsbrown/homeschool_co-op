@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowLeft, FileSpreadsheet, Upload, Check, AlertCircle, Users, UserPlus, Mail } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth0";
-import AppShell from "@/components/layout/AppShell";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 
 export default function ContactImportPage() {
   const [location, setLocation] = useLocation();
@@ -116,7 +116,7 @@ export default function ContactImportPage() {
   };
 
   return (
-    <AppShell>
+    <SchoolAdminLayout pageTitle="Contact Import">
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
@@ -407,6 +407,6 @@ export default function ContactImportPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }

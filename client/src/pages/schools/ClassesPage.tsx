@@ -32,7 +32,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { apiRequest } from "@/lib/queryClient";
 
 // Sample class data (will be replaced with API data)
@@ -257,20 +257,20 @@ export default function SchoolClassesPage() {
 
   if (isLoading) {
     return (
-      <AppShell>
+      <SchoolAdminLayout pageTitle="Classes">
         <div className="container mx-auto p-4">
           <div className="flex items-center justify-center h-96">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
             <span className="ml-2 text-lg">Loading classes...</span>
           </div>
         </div>
-      </AppShell>
+      </SchoolAdminLayout>
     );
   }
 
   if (error) {
     return (
-      <AppShell>
+      <SchoolAdminLayout pageTitle="Classes">
         <div className="container mx-auto p-4">
           <div className="max-w-4xl mx-auto p-6">
             <Card>
@@ -289,7 +289,7 @@ export default function SchoolClassesPage() {
             </Card>
           </div>
         </div>
-      </AppShell>
+      </SchoolAdminLayout>
     );
   }
 
@@ -342,7 +342,7 @@ export default function SchoolClassesPage() {
   };
 
   return (
-    <AppShell>
+    <SchoolAdminLayout pageTitle="Classes">
       <div className="container mx-auto p-4">
         <div className="max-w-6xl mx-auto p-6">
           <div className="flex flex-col space-y-6">
@@ -658,6 +658,6 @@ export default function SchoolClassesPage() {
           </div>
         </div>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }

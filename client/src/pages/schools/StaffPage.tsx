@@ -30,7 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { apiRequest } from "@/lib/queryClient";
 
 export default function StaffPage() {
@@ -94,18 +94,18 @@ export default function StaffPage() {
 
   if (isLoading) {
     return (
-      <AppShell>
+      <SchoolAdminLayout pageTitle="Staff">
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading staff information...</span>
         </div>
-      </AppShell>
+      </SchoolAdminLayout>
     );
   }
 
   if (error) {
     return (
-      <AppShell>
+      <SchoolAdminLayout pageTitle="Staff">
         <div className="max-w-4xl mx-auto p-6">
           <Card>
             <CardHeader>
@@ -122,7 +122,7 @@ export default function StaffPage() {
             </CardFooter>
           </Card>
         </div>
-      </AppShell>
+      </SchoolAdminLayout>
     );
   }
 
@@ -145,7 +145,7 @@ export default function StaffPage() {
   const statuses = staff ? [...new Set(staff.map((member: any) => member.status))] : [];
 
   return (
-    <AppShell>
+    <SchoolAdminLayout pageTitle="Staff">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
           <div>
@@ -447,6 +447,6 @@ export default function StaffPage() {
           </Tabs>
         </div>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }

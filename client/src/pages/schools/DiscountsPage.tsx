@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Plus, Edit, Trash2, Percent, DollarSign, Users, Calendar, Eye, Target } from 'lucide-react';
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface Discount {
   id: number;
@@ -297,7 +297,7 @@ export default function DiscountsPage() {
   const discounts = discountsData?.discounts || [];
 
   return (
-    <AppShell>
+    <SchoolAdminLayout pageTitle="Discounts">
       <div className="space-y-6">
         {/* Page Header */}
         <div>
@@ -495,7 +495,7 @@ export default function DiscountsPage() {
           />
         </Dialog>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }
 

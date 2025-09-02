@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -265,20 +265,20 @@ export default function MySchoolPage() {
 
   if (isLoading) {
     return (
-      <AppShell>
+      <SchoolAdminLayout pageTitle="My School">
         <div className="container mx-auto p-4">
           <div className="h-full flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <span className="ml-2">Loading school information...</span>
           </div>
         </div>
-      </AppShell>
+      </SchoolAdminLayout>
     );
   }
 
   if (!school) {
     return (
-      <AppShell>
+      <SchoolAdminLayout pageTitle="My School">
         <div className="container mx-auto p-4">
           <div className="max-w-3xl mx-auto my-8">
             <Card>
@@ -317,12 +317,12 @@ export default function MySchoolPage() {
             </Card>
           </div>
         </div>
-      </AppShell>
+      </SchoolAdminLayout>
     );
   }
 
   return (
-    <AppShell>
+    <SchoolAdminLayout pageTitle="My School">
       <div className="container mx-auto p-4">
         <div className="max-w-6xl mx-auto my-8">
           <Card className="mb-8">
@@ -1003,6 +1003,6 @@ export default function MySchoolPage() {
           </Card>
         </div>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }

@@ -30,7 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -54,18 +54,18 @@ export default function StudentsPage() {
 
   if (isLoading) {
     return (
-      <AppShell>
+      <SchoolAdminLayout pageTitle="Students">
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="ml-2 text-lg">Loading students...</span>
         </div>
-      </AppShell>
+      </SchoolAdminLayout>
     );
   }
 
   if (error) {
     return (
-      <AppShell>
+      <SchoolAdminLayout pageTitle="Students">
         <div className="max-w-4xl mx-auto p-6">
           <Card>
             <CardHeader>
@@ -82,7 +82,7 @@ export default function StudentsPage() {
             </CardFooter>
           </Card>
         </div>
-      </AppShell>
+      </SchoolAdminLayout>
     );
   }
 
@@ -159,7 +159,7 @@ export default function StudentsPage() {
   });
 
   return (
-    <AppShell>
+    <SchoolAdminLayout pageTitle="Students">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
           <div>
@@ -458,6 +458,6 @@ export default function StudentsPage() {
           </Tabs>
         </div>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }
