@@ -39,6 +39,9 @@ export default function UsersPage() {
   const [selectedRole, setSelectedRole] = useState('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  
+  // Default school ID - in real app this would come from auth context
+  const schoolId = 1;
 
   // Fetch users for the school
   const { data: users = [], isLoading } = useQuery({
@@ -294,7 +297,8 @@ export default function UsersPage() {
       />
       <ImportUsersDialog 
         open={showImportDialog} 
-        onClose={() => setShowImportDialog(false)} 
+        onOpenChange={setShowImportDialog}
+        schoolId={schoolId}
       />
       </div>
     </SchoolAdminLayout>
