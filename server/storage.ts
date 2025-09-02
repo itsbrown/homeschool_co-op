@@ -3062,8 +3062,20 @@ export class MemStorage implements IStorage {
       try {
         return await this.dbStorage.getAllUsers();
       } catch (error) {
-        console.log('💾 Database unavailable, using file storage fallback for getAllUsers');
-        // Fall back to file storage if database is unavailable
+        console.log('💾 Database unavailable, using memory storage fallback for getAllUsers');
+        // First try memory storage (where imported users are stored)
+        try {
+          const memUsers = await this.memStorage.getAllUsers();
+          if (memUsers.length > 0) {
+            console.log('🧠 Memory storage getAllUsers returned', memUsers.length, 'users');
+            return memUsers;
+          }
+        } catch (memError) {
+          console.log('❌ Memory storage failed:', memError);
+        }
+
+        // Fall back to file storage if memory storage has no users
+        console.log('📁 Falling back to file storage for getAllUsers');
         try {
           const fs = await import('fs');
           const path = await import('path');
