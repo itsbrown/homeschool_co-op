@@ -121,36 +121,42 @@ export default function ImportUsersDialog({ open, onClose }: ImportUsersDialogPr
                     Your CSV files should include these columns:
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="text-sm space-y-2">
+                <CardContent className="text-sm space-y-3">
                   <div><strong>Required:</strong> First Name, Last Name, Email</div>
-                  <div><strong>Optional:</strong> Phone, Location, Grade (for children), Position (for staff)</div>
+                  <div><strong>Optional:</strong> Phone, Location, Emergency Contact info (for parents), Grade (for children), Position (for staff)</div>
                   <div><strong>File naming:</strong> Use "parent", "student", "child", "staff", or "teacher" in filename</div>
                   <Separator />
-                  <div className="flex gap-2 mt-3">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => window.open('/api/school-admin/csv-template/parents', '_blank')}
-                    >
-                      📥 Download Parents Template
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => window.open('/api/school-admin/csv-template/children', '_blank')}
-                    >
-                      📥 Download Children Template
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => window.open('/api/school-admin/csv-template/staff', '_blank')}
-                    >
-                      📥 Download Staff Template
-                    </Button>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Download sample templates:</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="justify-start h-8"
+                        onClick={() => window.open('/api/school-admin/csv-template/parents', '_blank')}
+                      >
+                        📥 Parents Template
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="justify-start h-8"
+                        onClick={() => window.open('/api/school-admin/csv-template/children', '_blank')}
+                      >
+                        📥 Children Template
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="justify-start h-8"
+                        onClick={() => window.open('/api/school-admin/csv-template/staff', '_blank')}
+                      >
+                        📥 Staff Template
+                      </Button>
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Example: "parents.csv", "students.csv", "staff_members.csv"
+                  <div className="text-xs text-muted-foreground">
+                    Example filenames: "parents.csv", "students.csv", "staff_members.csv"
                   </div>
                 </CardContent>
               </Card>

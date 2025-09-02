@@ -16,9 +16,9 @@ router.get('/csv-template/:type', (req: any, res) => {
   let filename = '';
   
   if (type === 'parents') {
-    csvContent = 'First Name,Last Name,Email,Phone,Location\n';
-    csvContent += 'John,Doe,john.doe@example.com,555-0123,Greece\n';
-    csvContent += 'Jane,Smith,jane.smith@example.com,555-0124,Brighton\n';
+    csvContent = 'First Name,Last Name,Email,Phone,Location,Emergency Contact - First Name,Emergency Contact - Last Name,Emergency Contact Phone\n';
+    csvContent += 'John,Doe,john.doe@example.com,555-0123,Greece,Mary,Doe,555-0199\n';
+    csvContent += 'Jane,Smith,jane.smith@example.com,555-0124,Brighton,Tom,Smith,555-0198\n';
     filename = 'parents_template.csv';
   } else if (type === 'children') {
     csvContent = 'First Name,Last Name,Parent Email,Grade,Birth Date\n';
@@ -3627,6 +3627,9 @@ router.post('/contact-import', async (req: any, res) => {
                 firstName: record['First Name'] || record.firstName || record.first_name,
                 lastName: record['Last Name'] || record.lastName || record.last_name,
                 phone: record.Phone || record.phone,
+                emergencyContactFirstName: record['Emergency Contact - First Name'] || record.emergencyContactFirstName,
+                emergencyContactLastName: record['Emergency Contact - Last Name'] || record.emergencyContactLastName,
+                emergencyContactPhone: record['Emergency Contact Phone'] || record.emergencyContactPhone,
                 schoolId: schoolId, // Associate with this school
                 locationId: locationId // Associate with specific location if found
               };

@@ -20,6 +20,10 @@ export const users = pgTable("users", {
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),
   permissions: jsonb("permissions").default({}).notNull(), // Custom permissions
   schoolId: integer("school_id"), // Link user to school
+  phone: text("phone"), // User's phone number
+  emergencyContactFirstName: text("emergency_contact_first_name"), // Emergency contact first name
+  emergencyContactLastName: text("emergency_contact_last_name"), // Emergency contact last name
+  emergencyContactPhone: text("emergency_contact_phone"), // Emergency contact phone
   isActive: boolean("is_active").default(true).notNull(),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
