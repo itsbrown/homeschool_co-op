@@ -3135,7 +3135,18 @@ export class MemStorage implements IStorage {
     }
 
     async getUser(id: number): Promise<User | undefined> {
-      return this.dbStorage.getUser(id);
+      console.log(`🔄 CombinedStorage.getUser called for user ID: ${id}`);
+      try {
+        console.log(`📡 Attempting database lookup for user ID: ${id}`);
+        // Try database storage first
+        const result = await this.dbStorage.getUser(id);
+        console.log(`✅ Database lookup successful for user ID: ${id}`);
+        return result;
+      } catch (error) {
+        console.log(`💾 Database lookup failed for user ID: ${id}, using file storage fallback`);
+        // Fall back to file storage if database is unavailable
+        return await this.fileStorage.getUser(id);
+      }
     }
 
     async getUserByUsername(username: string): Promise<User | undefined> {
