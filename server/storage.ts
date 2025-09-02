@@ -3321,7 +3321,11 @@ export class MemStorage implements IStorage {
           
           // Also persist to file storage immediately
           if (updatedUser) {
+            console.log(`🚀 About to call syncUserToFile for user: ${updatedUser.email}`);
             await this.syncUserToFile(updatedUser);
+            console.log(`✅ syncUserToFile completed for user: ${updatedUser.email}`);
+          } else {
+            console.log(`❌ No updatedUser returned from memory storage`);
           }
           
           return updatedUser;
