@@ -276,7 +276,15 @@ export default function UsersPage() {
                   filteredUsers.map((user: any) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">
-                        {user.firstName} {user.lastName}
+                        {user.role === 'parent' ? (
+                          <Link href={`/schools/parents/${user.id}`}>
+                            <Button variant="link" className="h-auto p-0 font-medium">
+                              {user.firstName} {user.lastName}
+                            </Button>
+                          </Link>
+                        ) : (
+                          <span>{user.firstName} {user.lastName}</span>
+                        )}
                       </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>

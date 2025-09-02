@@ -47,6 +47,7 @@ import { handleEnrollmentMessage } from "./api/enrollment-assistant";
 import migrationRouter from "./routes/migration";
 import marketingLinksRouter from "./api/marketing-links";
 import aiInsightsRouter from "./api/ai-insights";
+import parentProfileRouter from "./api/parent-profile";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import archiver from 'archiver';
 import fs from 'fs';
@@ -2241,6 +2242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/parent", parentRouter);
+  app.use("/api/parent-profile", parentProfileRouter);
   
   // Multi-location support routes
   const locationsRouter = (await import("./api/locations")).default;
