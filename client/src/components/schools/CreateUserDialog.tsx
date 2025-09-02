@@ -38,10 +38,15 @@ const createUserSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   role: z.enum(['parent', 'educator', 'staff', 'school_admin']),
   phone: z.string().optional(),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
+  password: z.string().optional(),
+  confirmPassword: z.string().optional(),
+}).refine((data) => {
+  // Skip password validation when editing existing user (password is optional)
+  if (!data.password && !data.confirmPassword) return true;
+  if (data.password && data.password.length < 6) return false;
+  return data.password === data.confirmPassword;
+}, {
+  message: "Passwords don't match or password is too short",
   path: ["confirmPassword"],
 });
 
@@ -50,34 +55,73 @@ type CreateUserForm = z.infer<typeof createUserSchema>;
 interface CreateUserDialogProps {
   open: boolean;
   onClose: () => void;
+  editUser?: any;
 }
 
-export default function CreateUserDialog({ open, onClose }: CreateUserDialogProps) {
+export default function CreateUserDialog({ open, onClose, editUser }: CreateUserDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
-      firstName: '',
-      lastName: '',
-      email: '',
-      role: 'parent',
-      phone: '',
+      firstName: editUser?.firstName || '',
+      lastName: editUser?.lastName || '',
+      email: editUser?.email || '',
+      role: editUser?.role || 'parent',
+      phone: editUser?.phone || '',
       password: '',
       confirmPassword: '',
     },
   });
 
+  // Update form when editUser changes
+  React.useEffect(() => {
+    if (editUser) {
+      form.reset({
+        firstName: editUser.firstName || '',
+        lastName: editUser.lastName || '',
+        email: editUser.email || '',
+        role: editUser.role || 'parent',
+        phone: editUser.phone || '',
+        password: '',
+        confirmPassword: '',
+      });
+    } else {
+      form.reset({
+        firstName: '',
+        lastName: '',
+        email: '',
+        role: 'parent',
+        phone: '',
+        password: '',
+        confirmPassword: '',
+      });
+    }
+  }, [editUser, form]);
+
   const createUserMutation = useMutation({
     mutationFn: async (userData: CreateUserForm) => {
       const { confirmPassword, ...data } = userData;
-      return apiRequest('POST', '/api/school-admin/users', data);
+      // Remove password fields if they're empty (for edit mode)
+      if (!data.password) {
+        delete data.password;
+      }
+      
+      if (editUser) {
+        // Update existing user
+        return apiRequest('PUT', `/api/school-admin/users/${editUser.id}`, data);
+      } else {
+        // Create new user
+        return apiRequest('POST', '/api/school-admin/users', data);
+      }
     },
     onSuccess: () => {
       toast({
-        title: 'User Created',
-        description: 'The user account has been created successfully.',
+        title: editUser ? 'User Updated' : 'User Created',
+        description: editUser 
+          ? 'The user account has been updated successfully.'
+          : 'The user account has been created successfully.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
       form.reset();
@@ -86,7 +130,7 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create user account.',
+        description: error.message || `Failed to ${editUser ? 'update' : 'create'} user account.`,
         variant: 'destructive',
       });
     },
@@ -100,9 +144,12 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Create New User</DialogTitle>
+          <DialogTitle>{editUser ? 'Edit User' : 'Create New User'}</DialogTitle>
           <DialogDescription>
-            Add a new user account to your school. They will receive login credentials via email.
+            {editUser 
+              ? 'Update the user account details. Leave password fields empty to keep current password.'
+              : 'Add a new user account to your school. They will receive login credentials via email.'
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -230,7 +277,10 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
                 type="submit" 
                 disabled={createUserMutation.isPending}
               >
-                {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+                {createUserMutation.isPending 
+                  ? (editUser ? 'Updating...' : 'Creating...') 
+                  : (editUser ? 'Update User' : 'Create User')
+                }
               </Button>
             </div>
           </form>

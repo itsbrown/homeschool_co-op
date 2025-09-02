@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,9 +39,12 @@ export default function UsersPage() {
   const [selectedRole, setSelectedRole] = useState('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
   
   // Default school ID - in real app this would come from auth context
   const schoolId = 1;
+  
+  const queryClient = useQueryClient();
 
   // Fetch users for the school
   const { data: users = [], isLoading } = useQuery({
@@ -89,6 +92,33 @@ export default function UsersPage() {
         return 'Staff';
       default:
         return role;
+    }
+  };
+
+  const handleEditUser = (user: any) => {
+    setEditingUser(user);
+    setShowCreateDialog(true); // Reuse the create dialog for editing
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/school-admin/users/${userId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete user');
+      }
+      
+      // Refresh the users list
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Failed to delete user. Please try again.');
     }
   };
 
@@ -270,11 +300,14 @@ export default function UsersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditUser(user)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit User
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDeleteUser(user.id)}
+                            >
                               <Trash2 className="h-4 w-4 mr-2" />
                               Delete User
                             </DropdownMenuItem>
@@ -293,7 +326,11 @@ export default function UsersPage() {
       {/* Dialogs */}
       <CreateUserDialog 
         open={showCreateDialog} 
-        onClose={() => setShowCreateDialog(false)} 
+        onClose={() => {
+          setShowCreateDialog(false);
+          setEditingUser(null);
+        }}
+        editUser={editingUser}
       />
       <ImportUsersDialog 
         open={showImportDialog} 

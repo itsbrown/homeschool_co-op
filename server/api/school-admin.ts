@@ -3813,6 +3813,101 @@ router.post('/users', async (req: any, res) => {
   }
 });
 
+// Update an existing user
+router.put('/users/:id', async (req: any, res) => {
+  try {
+    console.log('📝 Updating user for school admin...');
+    
+    const userId = parseInt(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+
+    // Get school ID from auth context
+    let schoolId = null;
+    
+    try {
+      // For development, use fallback authentication
+      schoolId = 1; // Use school ID 1 for development
+    } catch (authError) {
+      console.log('🔧 Using development fallback for school admin authentication');
+      schoolId = 1;
+    }
+
+    if (!schoolId) {
+      return res.status(403).json({ message: 'Unable to determine school association' });
+    }
+
+    // Verify user belongs to this school before updating
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser || existingUser.schoolId !== schoolId) {
+      return res.status(404).json({ message: 'User not found or access denied' });
+    }
+
+    const userData = {
+      ...req.body,
+      schoolId: schoolId // Maintain school association
+    };
+
+    // Update user
+    const updatedUser = await storage.updateUser(userId, userData);
+    console.log(`✅ Updated user: ${userData.email || existingUser.email} for school ${schoolId}`);
+    
+    res.status(200).json(updatedUser);
+  } catch (error) {
+    console.error('❌ Error updating user:', error);
+    res.status(500).json({ 
+      message: 'Error updating user',
+      error: error.message 
+    });
+  }
+});
+
+// Delete a user
+router.delete('/users/:id', async (req: any, res) => {
+  try {
+    console.log('🗑️ Deleting user for school admin...');
+    
+    const userId = parseInt(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+
+    // Get school ID from auth context
+    let schoolId = null;
+    
+    try {
+      // For development, use fallback authentication
+      schoolId = 1; // Use school ID 1 for development
+    } catch (authError) {
+      console.log('🔧 Using development fallback for school admin authentication');
+      schoolId = 1;
+    }
+
+    if (!schoolId) {
+      return res.status(403).json({ message: 'Unable to determine school association' });
+    }
+
+    // Verify user belongs to this school before deleting
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser || existingUser.schoolId !== schoolId) {
+      return res.status(404).json({ message: 'User not found or access denied' });
+    }
+
+    // Delete user
+    await storage.deleteUser(userId);
+    console.log(`✅ Deleted user: ${existingUser.email} (ID: ${userId}) from school ${schoolId}`);
+    
+    res.status(200).json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting user:', error);
+    res.status(500).json({ 
+      message: 'Error deleting user',
+      error: error.message 
+    });
+  }
+});
+
 // Import users from CSV files
 router.post('/import-users', async (req: any, res) => {
   try {

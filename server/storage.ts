@@ -40,6 +40,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: number): Promise<void>;
 
   // School methods
   getSchool(id: number): Promise<School | undefined>;
@@ -481,6 +482,11 @@ export class MemStorage implements IStorage {
     const updatedUser: User = { ...existingUser, ...updateData };
     this.usersStore.set(id, updatedUser);
     return updatedUser;
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    this.usersStore.delete(id);
+    await this.saveUsersToDisk();
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -3233,6 +3239,39 @@ export class MemStorage implements IStorage {
 
     async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
       return this.dbStorage.updateUser(id, user);
+    }
+
+    async deleteUser(id: number): Promise<void> {
+      try {
+        // Try database storage first
+        return await this.dbStorage.deleteUser(id);
+      } catch (error) {
+        console.log('💾 Database unavailable, using file storage for user deletion');
+        // Fall back to memory storage and file persistence
+        this.memStorage.deleteUser(id);
+        
+        // Also remove from file storage
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const DATA_DIR = path.join(process.cwd(), 'data');
+          const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+          if (fs.existsSync(USERS_FILE)) {
+            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+            let users = JSON.parse(fileContent);
+            
+            // Remove user from file
+            users = users.filter((u: any) => u.id !== id);
+            
+            // Write back to file
+            fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+            console.log(`💾 Deleted user from file: ID ${id}`);
+          }
+        } catch (fileError) {
+          console.log('❌ Failed to delete user from file:', fileError);
+        }
+      }
     }
 
     // School methods - use file-based storage since schools aren't loaded into memory
