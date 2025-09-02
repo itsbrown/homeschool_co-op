@@ -481,6 +481,10 @@ export class MemStorage implements IStorage {
 
     const updatedUser: User = { ...existingUser, ...updateData };
     this.usersStore.set(id, updatedUser);
+    
+    // Save to persistent storage (same as child editing)
+    await this.saveUsersToDisk();
+    
     return updatedUser;
   }
 
@@ -3266,41 +3270,6 @@ export class MemStorage implements IStorage {
       }
     }
 
-    private async syncUserToFile(updatedUser: User): Promise<void> {
-      console.log(`📁 Starting file sync for user: ${updatedUser.email} (ID: ${updatedUser.id})`);
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        const DATA_DIR = path.join(process.cwd(), 'data');
-        const USERS_FILE = path.join(DATA_DIR, 'users.json');
-
-        // Read existing users from file
-        let users = [];
-        if (fs.existsSync(USERS_FILE)) {
-          const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
-          users = JSON.parse(fileContent);
-        }
-        
-        console.log(`📄 File has ${users.length} users, looking for ID: ${updatedUser.id}`);
-        
-        // Find and update user in file
-        const userIndex = users.findIndex((u: any) => u.id === updatedUser.id);
-        
-        console.log(`🔍 User index found: ${userIndex}`);
-        
-        if (userIndex >= 0) {
-          users[userIndex] = updatedUser;
-          
-          // Write back to file
-          fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-          console.log(`💾 Updated user in file: ${updatedUser.email}`);
-        } else {
-          console.log(`❌ User ID ${updatedUser.id} not found in file`);
-        }
-      } catch (fileError) {
-        console.log('❌ Failed to update user in file:', fileError);
-      }
-    }
 
     async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
       console.log(`🔄 CombinedStorage.updateUser called for user ID: ${id}`);
@@ -3315,18 +3284,9 @@ export class MemStorage implements IStorage {
         console.log('💾 Database unavailable, using file storage for user update');
         
         try {
-          // Update user in memory first
+          // Update user in memory storage (which now automatically saves to file)
           const updatedUser = await this.memStorage.updateUser(id, user);
           console.log(`✅ Memory storage update successful for user ID: ${id}`);
-          
-          // Also persist to file storage immediately
-          if (updatedUser) {
-            console.log(`🚀 About to call syncUserToFile for user: ${updatedUser.email}`);
-            await this.syncUserToFile(updatedUser);
-            console.log(`✅ syncUserToFile completed for user: ${updatedUser.email}`);
-          } else {
-            console.log(`❌ No updatedUser returned from memory storage`);
-          }
           
           return updatedUser;
         } catch (fallbackError) {
