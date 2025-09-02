@@ -32,6 +32,7 @@ import {
 import { Link } from 'wouter';
 import CreateUserDialog from '@/components/schools/CreateUserDialog';
 import ImportUsersDialog from '@/components/schools/ImportUsersDialog';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -97,9 +98,10 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <SchoolAdminLayout pageTitle="Users">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Users</h1>
           <p className="text-muted-foreground">
@@ -294,6 +296,7 @@ export default function UsersPage() {
         open={showImportDialog} 
         onClose={() => setShowImportDialog(false)} 
       />
-    </div>
+      </div>
+    </SchoolAdminLayout>
   );
 }

@@ -142,6 +142,7 @@ import AIStatusProvider from "@/contexts/AIStatusContext";
 import RoleSelectionComponent from "@/components/RoleSelection";
 import EducatorDashboard from "./components/dashboards/EducatorDashboard";
 import AppShell from "./components/layout/AppShell";
+import SchoolAdminLayout from "./components/layout/SchoolAdminLayout";
 import AIStatusPanel from "./components/AIStatusPanel";
 import AllSchoolsPage from "./pages/superadmin/AllSchoolsPage";
 import SchoolDetailsPage from "./pages/superadmin/SchoolDetailsPage";
@@ -533,22 +534,22 @@ function Router() {
       <Route path="/schools/students/register" component={StudentRegistrationPage} />
       <Route path="/schools/discounts" component={DiscountsPage} />
       <Route path="/schools/manual-payments">
-        <AppShell>
+        <SchoolAdminLayout pageTitle="Manual Payments">
           <ManualPaymentEntryPage />
-        </AppShell>
+        </SchoolAdminLayout>
       </Route>
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
       <Route path="/schools/locations">
-        <AppShell>
+        <SchoolAdminLayout pageTitle="Location Management">
           <LocationManagementPage />
-        </AppShell>
+        </SchoolAdminLayout>
       </Route>
       <Route path="/schools/notifications">
-        <AppShell>
+        <SchoolAdminLayout pageTitle="Notifications">
           <NotificationManagementPage />
-        </AppShell>
+        </SchoolAdminLayout>
       </Route>
       <Route path="/schools/contact-import" component={SchoolContactImportPage} />
       <Route path="/schools/users" component={UsersPage} />
