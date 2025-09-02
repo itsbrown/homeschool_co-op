@@ -5,6 +5,7 @@ import path from 'path';
 import * as brevo from '@getbrevo/brevo';
 import { createClient } from '@supabase/supabase-js';
 import { parse as parseCSV } from 'csv-parse';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 
@@ -3852,9 +3853,20 @@ router.put('/users/:id', async (req: any, res) => {
       schoolId: schoolId // Maintain school association
     };
 
+    // Hash password if it's being updated
+    if (userData.password && userData.password.trim() !== '') {
+      console.log('🔒 Password provided, hashing before storage...');
+      userData.password = await bcrypt.hash(userData.password, 10);
+      console.log('✅ Password hashed successfully');
+    } else if (userData.password === '') {
+      // Remove empty password from update data - don't change existing password
+      delete userData.password;
+      console.log('🔒 Empty password provided, keeping existing password');
+    }
+
     // Update user
     console.log(`🔄 API: Calling storage.updateUser for user ID: ${userId}`);
-    console.log(`📄 API: Update data:`, userData);
+    console.log(`📄 API: Update data:`, { ...userData, password: userData.password ? '[HASHED]' : 'not provided' });
     
     const updatedUser = await storage.updateUser(userId, userData);
     console.log(`✅ API: Updated user: ${userData.email || existingUser.email} for school ${schoolId}`);
