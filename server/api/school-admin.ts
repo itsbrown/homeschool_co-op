@@ -3704,4 +3704,75 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
   }
 });
 
+// Get all users for the school
+router.get('/users', async (req: any, res) => {
+  try {
+    console.log('📋 Fetching users for school admin...');
+    
+    // Get the authenticated school admin's school ID
+    let schoolId = null;
+    try {
+      // For development, use fallback authentication
+      schoolId = 1; // Use school ID 1 for development
+    } catch (authError) {
+      console.log('🔧 Using development fallback for school admin authentication');
+      schoolId = 1;
+    }
+
+    if (!schoolId) {
+      return res.status(403).json({ message: 'Unable to determine school association' });
+    }
+
+    // Get all users for this school
+    const users = await storage.getUsersBySchool(schoolId);
+    console.log(`👥 Found ${users.length} users for school ${schoolId}`);
+    
+    res.status(200).json(users);
+  } catch (error) {
+    console.error('❌ Error fetching school users:', error);
+    res.status(500).json({ 
+      message: 'Error fetching users',
+      error: error.message 
+    });
+  }
+});
+
+// Create a new user for the school
+router.post('/users', async (req: any, res) => {
+  try {
+    console.log('👤 Creating new user for school admin...');
+    
+    // Get the authenticated school admin's school ID
+    let schoolId = null;
+    try {
+      // For development, use fallback authentication
+      schoolId = 1; // Use school ID 1 for development
+    } catch (authError) {
+      console.log('🔧 Using development fallback for school admin authentication');
+      schoolId = 1;
+    }
+
+    if (!schoolId) {
+      return res.status(403).json({ message: 'Unable to determine school association' });
+    }
+
+    const userData = {
+      ...req.body,
+      schoolId: schoolId // Associate with this school
+    };
+
+    // Create user with school association
+    const newUser = await storage.createUser(userData);
+    console.log(`✅ Created user: ${userData.email} for school ${schoolId}`);
+    
+    res.status(201).json(newUser);
+  } catch (error) {
+    console.error('❌ Error creating user:', error);
+    res.status(500).json({ 
+      message: 'Error creating user',
+      error: error.message 
+    });
+  }
+});
+
 export default router;

@@ -55,6 +55,7 @@ import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
 import ClassCreationPage from "./pages/admin/ClassCreationPage";
 import ContactImportPage from "./pages/admin/ContactImportPage";
 import SchoolContactImportPage from "./pages/schools/ContactImportPage";
+import UsersPage from "./pages/schools/UsersPage";
 import ClassesPage from "./pages/ClassesPage";
 import CalendarPage from "./pages/CalendarPage";
 import ProgramsBrowseRedirect from "@/pages/ProgramsBrowseRedirect";
@@ -550,6 +551,7 @@ function Router() {
         </AppShell>
       </Route>
       <Route path="/schools/contact-import" component={SchoolContactImportPage} />
+      <Route path="/schools/users" component={UsersPage} />
       <Route path="/schools/settings" component={SchoolSettings} />
 
       {/* SuperAdmin routes */}

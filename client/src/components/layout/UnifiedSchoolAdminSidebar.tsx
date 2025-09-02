@@ -21,7 +21,8 @@ import {
   MapPin,
   Bell,
   Target,
-  CreditCard
+  CreditCard,
+  UserPlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -57,6 +58,11 @@ const adminNavItems: NavItem[] = [
     title: 'Students',
     href: '/schools/students',
     icon: GraduationCap,
+  },
+  {
+    title: 'Users',
+    href: '/schools/users',
+    icon: UserPlus,
   },
   {
     title: 'Discounts',
