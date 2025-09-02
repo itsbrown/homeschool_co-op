@@ -25,7 +25,7 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
 
     console.log('✅ Token verified successfully for:', user.email);
     console.log('🔍 User object fields:', Object.keys(user));
-    console.log('🔍 User ID field:', user.id, 'Sub field:', user.sub);
+    console.log('🔍 User ID field:', user.id);
 
     // Sync user with database
     let dbUser;
@@ -59,8 +59,8 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
       }
     }
 
-    // Use the correct user ID field (sub is the standard field for Supabase)
-    const userIdentifier = user.id || user.sub || user.email;
+    // Use the correct user ID field (id is the standard field for Supabase)
+    const userIdentifier = user.id || user.email;
 
     // Include database user info if available
     req.user = {
@@ -125,7 +125,7 @@ export const requireRole = (allowedRoles: string[]) => {
       'student': []
     };
 
-    const userPermissions = roleHierarchy[userRole as keyof typeof roleHierarchy] || [];
+    const userPermissions = (roleHierarchy as any)[userRole] || [];
     const hasHierarchicalAccess = allowedRoles.some(role => userPermissions.includes(role));
 
     if (hasHierarchicalAccess) {

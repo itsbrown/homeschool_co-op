@@ -16,11 +16,15 @@ interface AuthenticatedRequest extends Request {
     email: string;
     role: string;
     isActive: boolean;
+    schoolId?: number;
+    dbUserId?: number;
     payload: {
       email: string;
       role: string;
     };
   };
+  user?: any; // From Supabase auth middleware
+  session?: any; // For session-based endpoints still in use
 }
 // Removed session-based children router - using Auth0 endpoints instead
 import * as emergencyContactsApi from "./api/emergency-contacts";
@@ -51,6 +55,42 @@ import os from 'os';
 import stream from 'stream';
 import { promisify } from 'util';
 import Stripe from "stripe";
+
+// For historical and test users (keep these for test compatibility)
+const testUsers = {
+  admin: {
+    id: 1,
+    name: "Admin User",
+    email: "admin@example.com",
+    role: "admin",
+    avatar: null,
+    subscription: "premium"
+  },
+  educator: {
+    id: 2,
+    name: "Educator User",
+    email: "educator@example.com",
+    role: "educator",
+    avatar: null,
+    subscription: "educator"
+  },
+  parent: {
+    id: 3,
+    name: "Parent User",
+    email: "parent@example.com",
+    role: "parent",
+    avatar: null,
+    subscription: "family"
+  },
+  learner: {
+    id: 4,
+    name: "Learner User",
+    email: "learner@example.com",
+    role: "student",
+    avatar: null,
+    subscription: "free"
+  }
+};
 
 // Removed express-session declarations - using Auth0 token-based authentication
 
@@ -101,7 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Children endpoint is now handled directly below with Auth0 authentication
 
   // Parent-Child sync endpoint
-  app.post("/api/sync-children", jwtCheck, async (req, res) => {
+  app.post("/api/sync-children", jwtCheck, async (req: AuthenticatedRequest, res) => {
     try {
       const user = req.user;
       console.log('Sync children - Auth0 user payload:', JSON.stringify(user, null, 2));
@@ -165,7 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auth0 user sync endpoint
-  app.post("/api/auth/sync", jwtCheck, async (req, res) => {
+  app.post("/api/auth/sync", jwtCheck, async (req: AuthenticatedRequest, res) => {
     try {
       const user = req.user;
 
@@ -1205,7 +1245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   const stripe = process.env.STRIPE_SECRET_KEY ? 
-    new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' }) : 
+    new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' }) : 
     null;
 
   // Create payment intent for knowledge base purchase

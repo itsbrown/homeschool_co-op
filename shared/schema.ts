@@ -205,6 +205,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
 export const children = pgTable("children", {
   id: serial("id").primaryKey(),
   parentId: integer("parent_id").notNull().references(() => users.id),
+  parentEmail: text("parent_email"), // Used for linking children to parents via email
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   birthdate: date("birthdate").notNull(),
