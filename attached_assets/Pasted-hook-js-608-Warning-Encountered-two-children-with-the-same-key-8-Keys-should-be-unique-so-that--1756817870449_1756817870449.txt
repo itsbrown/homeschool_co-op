@@ -1,0 +1,34 @@
+hook.js:608 Warning: Encountered two children with the same key, `8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. Error Component Stack
+    at tbody (<anonymous>)
+    at _c5 (table.tsx:30:6)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (table.tsx:8:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at SchoolAdminLayout (SchoolAdminLayout.tsx:9:45)
+    at UsersPage (UsersPage.tsx:38:39)
+    at Route (wouter.js?v=b83301ca:323:16)
+    at Switch (wouter.js?v=b83301ca:379:17)
+    at Router (App.tsx:237:55)
+    at Provider (chunk-XOUBXFGS.js?v=b83301ca:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=b83301ca:64:5)
+    at CartProvider (CartContext.tsx:467:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:14:40)
+    at RoleProvider (RoleContext.tsx:27:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at QueryClientProvider (@tanstack_react-query.js?v=b83301ca:2805:3)
+    at App (<anonymous>)
+overrideMethod @ hook.js:608Understand this error
+users:1 [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) <input data-replit-metadata=​"client/​src/​components/​schools/​CreateUserDialog.tsx:​251:​22" data-component-name=​"Input" type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" placeholder=​"••••••••" name=​"password" id=​":​r4a:​-form-item" aria-describedby=​":​r4a:​-form-item-description" aria-invalid=​"false" value=​"Test123">​flex
+users:1 [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) <input data-replit-metadata=​"client/​src/​components/​schools/​CreateUserDialog.tsx:​264:​22" data-component-name=​"Input" type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" placeholder=​"••••••••" name=​"confirmPassword" id=​":​r4b:​-form-item" aria-describedby=​":​r4b:​-form-item-description" aria-invalid=​"false" value=​"Test123">​flex
+/api/school-admin/users/8:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:69 ❌ API 500: {"message":"Error updating user","error":"Database connection not available"}

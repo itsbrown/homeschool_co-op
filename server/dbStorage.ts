@@ -60,6 +60,11 @@ export class DatabaseStorage implements IStorage {
     return updatedUser;
   }
 
+  async deleteUser(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(users).where(eq(users.id, id));
+  }
+
   // Curriculum methods
   async getCurriculum(id: number): Promise<Curriculum | undefined> {
     const [curriculum] = await db.select().from(curricula).where(eq(curricula.id, id));
