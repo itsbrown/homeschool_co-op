@@ -3066,20 +3066,8 @@ export class MemStorage implements IStorage {
       try {
         return await this.dbStorage.getAllUsers();
       } catch (error) {
-        console.log('💾 Database unavailable, using memory storage fallback for getAllUsers');
-        // First try memory storage (where imported users are stored)
-        try {
-          const memUsers = await this.memStorage.getAllUsers();
-          if (memUsers.length > 0) {
-            console.log('🧠 Memory storage getAllUsers returned', memUsers.length, 'users');
-            return memUsers;
-          }
-        } catch (memError) {
-          console.log('❌ Memory storage failed:', memError);
-        }
-
-        // Fall back to file storage if memory storage has no users
-        console.log('📁 Falling back to file storage for getAllUsers');
+        console.log('💾 Database unavailable, using file storage fallback for getAllUsers');
+        // Prioritize file storage (where real users are stored) over memory storage
         try {
           const fs = await import('fs');
           const path = await import('path');
@@ -3092,9 +3080,18 @@ export class MemStorage implements IStorage {
             console.log('🔍 File storage getAllUsers returned', users.length, 'users');
             return users;
           }
-          return [];
         } catch (fileError) {
           console.log('❌ File storage fallback failed:', fileError);
+        }
+
+        // Only use memory storage if file storage fails
+        console.log('🧠 Using memory storage as final fallback');
+        try {
+          const memUsers = await this.memStorage.getAllUsers();
+          console.log('🧠 Memory storage getAllUsers returned', memUsers.length, 'users');
+          return memUsers;
+        } catch (memError) {
+          console.log('❌ Memory storage failed:', memError);
           return [];
         }
       }
