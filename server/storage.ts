@@ -3194,9 +3194,40 @@ export class MemStorage implements IStorage {
         // Try database storage first
         return await this.dbStorage.createUser(user);
       } catch (error) {
-        console.log('💾 Database unavailable, using memory storage for user creation');
-        // Fall back to memory storage if database is unavailable
-        return await this.memStorage.createUser(user);
+        console.log('💾 Database unavailable, using file storage for user creation');
+        // Create user in memory first
+        const newUser = await this.memStorage.createUser(user);
+        
+        // Also persist to file storage immediately
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const DATA_DIR = path.join(process.cwd(), 'data');
+          const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+          // Ensure data directory exists
+          if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+          }
+
+          // Read existing users from file
+          let users = [];
+          if (fs.existsSync(USERS_FILE)) {
+            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+            users = JSON.parse(fileContent);
+          }
+          
+          // Add new user to file
+          users.push(newUser);
+          
+          // Write back to file
+          fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+          console.log(`💾 Persisted user to file: ${newUser.email}`);
+        } catch (fileError) {
+          console.log('❌ Failed to persist user to file:', fileError);
+        }
+        
+        return newUser;
       }
     }
 

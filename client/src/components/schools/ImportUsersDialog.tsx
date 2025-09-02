@@ -332,15 +332,22 @@ function ImportUsersDialog({ open, onOpenChange, schoolId }: ImportUsersDialogPr
 
         {/* Fixed footer outside scrolling area */}
         <div className="flex justify-end space-x-2 pt-4 border-t bg-background">
-          <Button type="button" variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
           {!importResult && (
-            <Button
-              onClick={handleImport}
-              disabled={!selectedFiles || selectedFiles.length === 0 || importUsersMutation.isPending}
-            >
-              {importUsersMutation.isPending ? 'Importing...' : 'Import Users'}
+            <>
+              <Button type="button" variant="outline" onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleImport}
+                disabled={!selectedFiles || selectedFiles.length === 0 || importUsersMutation.isPending}
+              >
+                {importUsersMutation.isPending ? 'Importing...' : 'Import Users'}
+              </Button>
+            </>
+          )}
+          {importResult && (
+            <Button onClick={handleClose} className="bg-green-600 hover:bg-green-700">
+              ✓ Close
             </Button>
           )}
         </div>
