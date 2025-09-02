@@ -3815,6 +3815,9 @@ router.post('/users', async (req: any, res) => {
 
 // Update an existing user
 router.put('/users/:id', async (req: any, res) => {
+  console.log('🚀 PUT /users/:id endpoint reached');
+  console.log('📄 Request params:', req.params);
+  console.log('📄 Request body:', req.body);
   try {
     console.log('📝 Updating user for school admin...');
     

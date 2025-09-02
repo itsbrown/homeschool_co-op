@@ -1,0 +1,181 @@
+
+client:618 [vite] connected.
+CartCheckout.tsx:21 🔑 CartCheckout Stripe key check: Present
+BillingPage.tsx:20 🔑 Stripe publishable key check: Present
+BillingPage.tsx:21 🔑 Stripe publishable key starts with: pk_test_51RkR2Q...
+ResetPasswordPage.tsx:14 Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+overrideMethod @ hook.js:608
+_GoTrueClient @ @supabase_supabase-js.js?v=b83301ca:5041
+SupabaseAuthClient @ @supabase_supabase-js.js?v=b83301ca:6907
+_initSupabaseAuthClient @ @supabase_supabase-js.js?v=b83301ca:7105
+SupabaseClient @ @supabase_supabase-js.js?v=b83301ca:6978
+createClient @ @supabase_supabase-js.js?v=b83301ca:7145
+(anonymous) @ ResetPasswordPage.tsx:14Understand this warning
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: undefined
+App.tsx:241 🔐 Router render - activeRole: school_admin isAuthenticated: false showRoleSelection: false user: undefined location: /schools/users
+App.tsx:246 Router effect - activeRole: school_admin isAuthenticated: false
+CartContext.tsx:698 🛒 Loading cart from localStorage: Object
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: null
+RoleContext.tsx:91 🔄 No user - resetting state and clearing storage
+SupabaseProvider.tsx:52 🔍 Initializing authentication...
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, user: undefined
+App.tsx:241 🔐 Router render - activeRole:  isAuthenticated: false showRoleSelection: false user: undefined location: /schools/users
+App.tsx:246 Router effect - activeRole:  isAuthenticated: false
+SupabaseProvider.tsx:90 Auth state change: Object
+SupabaseProvider.tsx:98 🔍 SupabaseProvider user state updated: Object
+SupabaseProvider.tsx:107 ✅ Stored Supabase access token
+SupabaseProvider.tsx:124 ✅ User signed in successfully, checking for redirect...
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+App.tsx:241 🔐 Router render - activeRole:  isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/users
+App.tsx:246 Router effect - activeRole:  isAuthenticated: true
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: coreycreates@gmail.com
+RoleContext.tsx:102 🔄 Role check for user: coreycreates@gmail.com
+RoleContext.tsx:105 🔄 hasMultipleRoles: false savedRole: school_admin
+RoleContext.tsx:132 🔑 Forcing school_admin role for: coreycreates@gmail.com
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+App.tsx:241 🔐 Router render - activeRole: school_admin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/users
+App.tsx:246 Router effect - activeRole: school_admin isAuthenticated: true
+SupabaseProvider.tsx:90 Auth state change: Object
+SupabaseProvider.tsx:98 🔍 SupabaseProvider user state updated: Object
+SupabaseProvider.tsx:107 ✅ Stored Supabase access token
+SupabaseProvider.tsx:124 ✅ User signed in successfully, checking for redirect...
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+App.tsx:241 🔐 Router render - activeRole: school_admin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/users
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: coreycreates@gmail.com
+RoleContext.tsx:102 🔄 Role check for user: coreycreates@gmail.com
+RoleContext.tsx:105 🔄 hasMultipleRoles: false savedRole: school_admin
+RoleContext.tsx:132 🔑 Forcing school_admin role for: coreycreates@gmail.com
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+SupabaseProvider.tsx:54 Supabase session check: Object
+SupabaseProvider.tsx:68 ✅ Stored initial Supabase access token
+SupabaseProvider.tsx:72 🔍 Initial auth state: Object
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+App.tsx:241 🔐 Router render - activeRole: school_admin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/users
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: coreycreates@gmail.com
+RoleContext.tsx:102 🔄 Role check for user: coreycreates@gmail.com
+RoleContext.tsx:105 🔄 hasMultipleRoles: false savedRole: school_admin
+RoleContext.tsx:132 🔑 Forcing school_admin role for: coreycreates@gmail.com
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+SupabaseProvider.tsx:90 Auth state change: Object
+SupabaseProvider.tsx:98 🔍 SupabaseProvider user state updated: Object
+SupabaseProvider.tsx:107 ✅ Stored Supabase access token
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+App.tsx:241 🔐 Router render - activeRole: school_admin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/users
+RoleContext.tsx:88 🔄 RoleContext useEffect triggered - user: coreycreates@gmail.com
+RoleContext.tsx:102 🔄 Role check for user: coreycreates@gmail.com
+RoleContext.tsx:105 🔄 hasMultipleRoles: false savedRole: school_admin
+RoleContext.tsx:132 🔑 Forcing school_admin role for: coreycreates@gmail.com
+RoleContext.tsx:166 🔄 RoleProvider rendering - activeRole: school_admin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+hook.js:608 Warning: Encountered two children with the same key, `8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. Error Component Stack
+    at tbody (<anonymous>)
+    at _c5 (table.tsx:30:6)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (table.tsx:8:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at SchoolAdminLayout (SchoolAdminLayout.tsx:9:45)
+    at UsersPage (UsersPage.tsx:38:39)
+    at Route (wouter.js?v=b83301ca:323:16)
+    at Switch (wouter.js?v=b83301ca:379:17)
+    at Router (App.tsx:237:55)
+    at Provider (chunk-XOUBXFGS.js?v=b83301ca:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=b83301ca:64:5)
+    at CartProvider (CartContext.tsx:467:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:14:40)
+    at RoleProvider (RoleContext.tsx:27:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at QueryClientProvider (@tanstack_react-query.js?v=b83301ca:2805:3)
+    at App (<anonymous>)
+overrideMethod @ hook.js:608
+printWarning @ chunk-NFC5BX5N.js?v=b83301ca:521
+error @ chunk-NFC5BX5N.js?v=b83301ca:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=b83301ca:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=b83301ca:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=b83301ca:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=b83301ca:14290
+updateHostComponent @ chunk-NFC5BX5N.js?v=b83301ca:14807
+beginWork @ chunk-NFC5BX5N.js?v=b83301ca:15935
+beginWork$1 @ chunk-NFC5BX5N.js?v=b83301ca:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=b83301ca:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=b83301ca:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=b83301ca:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b83301ca:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b83301ca:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b83301ca:18627Understand this error
+hook.js:608 Warning: Encountered two children with the same key, `8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. Error Component Stack
+    at tbody (<anonymous>)
+    at _c5 (table.tsx:30:6)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (table.tsx:8:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at SchoolAdminLayout (SchoolAdminLayout.tsx:9:45)
+    at UsersPage (UsersPage.tsx:38:39)
+    at Route (wouter.js?v=b83301ca:323:16)
+    at Switch (wouter.js?v=b83301ca:379:17)
+    at Router (App.tsx:237:55)
+    at Provider (chunk-XOUBXFGS.js?v=b83301ca:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=b83301ca:64:5)
+    at CartProvider (CartContext.tsx:467:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:14:40)
+    at RoleProvider (RoleContext.tsx:27:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at QueryClientProvider (@tanstack_react-query.js?v=b83301ca:2805:3)
+    at App (<anonymous>)
+overrideMethod @ hook.js:608
+printWarning @ chunk-NFC5BX5N.js?v=b83301ca:521
+error @ chunk-NFC5BX5N.js?v=b83301ca:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=b83301ca:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=b83301ca:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=b83301ca:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=b83301ca:14292
+updateHostComponent @ chunk-NFC5BX5N.js?v=b83301ca:14807
+beginWork @ chunk-NFC5BX5N.js?v=b83301ca:15935
+beginWork$1 @ chunk-NFC5BX5N.js?v=b83301ca:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=b83301ca:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=b83301ca:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=b83301ca:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b83301ca:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b83301ca:9119
+flushSync @ chunk-NFC5BX5N.js?v=b83301ca:18959
+flushSync$1 @ chunk-NFC5BX5N.js?v=b83301ca:21538
+dispatchDiscreteCustomEvent @ chunk-VSHUKEGI.js?v=b83301ca:53
+handleSelect @ @radix-ui_react-dropdown-menu.js?v=b83301ca:432
+handleEvent @ chunk-5Q5YC75F.js?v=b83301ca:6
+callCallback2 @ chunk-NFC5BX5N.js?v=b83301ca:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=b83301ca:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=b83301ca:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=b83301ca:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=b83301ca:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=b83301ca:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=b83301ca:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=b83301ca:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=b83301ca:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=b83301ca:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=b83301ca:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=b83301ca:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=b83301ca:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=b83301ca:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=b83301ca:5449Understand this error
+users:1 [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) <input data-replit-metadata=​"client/​src/​components/​schools/​CreateUserDialog.tsx:​251:​22" data-component-name=​"Input" type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" placeholder=​"••••••••" name=​"password" id=​":​r4a:​-form-item" aria-describedby=​":​r4a:​-form-item-description" aria-invalid=​"false" value=​"Test123">​flex
+users:1 [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) <input data-replit-metadata=​"client/​src/​components/​schools/​CreateUserDialog.tsx:​264:​22" data-component-name=​"Input" type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" placeholder=​"••••••••" name=​"confirmPassword" id=​":​r4b:​-form-item" aria-describedby=​":​r4b:​-form-item-description" aria-invalid=​"false" value=​"Test123">​flex
+/api/school-admin/users/8:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:69 ❌ API 500: {"message":"Error updating user","error":"Database connection not available"}
