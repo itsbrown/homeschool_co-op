@@ -483,6 +483,10 @@ export class MemStorage implements IStorage {
     return updatedUser;
   }
 
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.usersStore.values());
+  }
+
   // School methods
   async getSchool(id: number): Promise<School | undefined> {
     return this.schoolsStore.get(id);
