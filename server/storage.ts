@@ -3285,7 +3285,6 @@ export class MemStorage implements IStorage {
           
           // Also persist to file storage immediately
           if (updatedUser) {
-            console.log(`📁 Starting file persistence for user: ${updatedUser.email}`);
             try {
               const fs = await import('fs');
               const path = await import('path');
