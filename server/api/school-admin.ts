@@ -3488,11 +3488,27 @@ router.get('/discounts/:id/applications', async (req, res) => {
 });
 
 // School-specific contact import endpoint
-const contactUpload = multer({ dest: 'uploads/' });
+const contactUpload = multer({ 
+  dest: 'uploads/',
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 10 // Max 10 files
+  }
+});
 
 router.post('/contact-import', contactUpload.array('files'), async (req: any, res) => {
   try {
     console.log('📁 School admin contact import - processing files');
+    console.log('📊 Request files:', req.files);
+    console.log('📊 Request body:', req.body);
+    
+    // Check if files were uploaded
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ 
+        message: 'No files uploaded',
+        error: 'Please select at least one CSV file to import' 
+      });
+    }
     
     // Get the authenticated school admin's school ID
     const adminEmail = req.headers.authorization?.split(' ')[1]; // Extract from JWT or session
@@ -3697,9 +3713,18 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
 
   } catch (error) {
     console.error('❌ Contact import error:', error);
+    
+    // Handle specific multer errors
+    if (error.code === 'UNEXPECTED_END_OF_FORM') {
+      return res.status(400).json({ 
+        message: 'Invalid file upload',
+        error: 'The form data was incomplete. Please try uploading the file again.' 
+      });
+    }
+    
     res.status(500).json({ 
       message: 'Error processing contact import',
-      error: error.message 
+      error: error.message || 'An unexpected error occurred'
     });
   }
 });
