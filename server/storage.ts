@@ -3303,11 +3303,8 @@ export class MemStorage implements IStorage {
                 users = JSON.parse(fileContent);
               }
               
-              console.log(`📄 File has ${users.length} users, searching for ID: ${id}`);
-              
               // Find and update user in file
               const userIndex = users.findIndex((u: any) => u.id === id);
-              console.log(`🔍 User index in file: ${userIndex}`);
               
               if (userIndex >= 0) {
                 users[userIndex] = updatedUser;
@@ -3315,8 +3312,6 @@ export class MemStorage implements IStorage {
                 // Write back to file
                 fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
                 console.log(`💾 Updated user in file: ${updatedUser.email}`);
-              } else {
-                console.log(`❌ User ID ${id} not found in file for update`);
               }
             } catch (fileError) {
               console.log('❌ Failed to update user in file:', fileError);
