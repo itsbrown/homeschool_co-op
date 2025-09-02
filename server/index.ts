@@ -30,36 +30,40 @@ const app = express();
 // This MUST be first and specific to the webhook path
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }));
 
-// Skip all other body parsers for the webhook route
+// Skip all other body parsers for special routes
 app.use((req, res, next) => {
-  if (req.path === '/api/stripe/webhook') {
+  if (req.path === '/api/stripe/webhook' || req.path === '/api/school-admin/contact-import') {
     return next();
   }
-  // Apply other body parsers only to non-webhook routes
+  // Apply other body parsers only to normal routes
   express.json({ limit: '50mb' })(req, res, next);
 });
 
 app.use((req, res, next) => {
-  if (req.path === '/api/stripe/webhook') {
+  if (req.path === '/api/stripe/webhook' || req.path === '/api/school-admin/contact-import') {
     return next();
   }
   express.urlencoded({ extended: false, limit: '50mb' })(req, res, next);
 });
 
 app.use((req, res, next) => {
-  if (req.path === '/api/stripe/webhook') {
+  // Skip raw and text parsers for file upload routes
+  if (req.path === '/api/stripe/webhook' || req.path === '/api/school-admin/contact-import') {
     return next();
   }
   express.raw({ limit: '50mb' })(req, res, next);
 });
 
 app.use((req, res, next) => {
-  if (req.path === '/api/stripe/webhook') {
+  // Skip raw and text parsers for file upload routes  
+  if (req.path === '/api/stripe/webhook' || req.path === '/api/school-admin/contact-import') {
     return next();
   }
   express.text({ limit: '50mb' })(req, res, next);
 });
-app.use(fileUpload({
+
+// Apply fileUpload middleware only to file upload routes
+app.use('/api/school-admin/contact-import', fileUpload({
   useTempFiles: false,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
   abortOnLimit: true,

@@ -4,7 +4,6 @@ import fs from 'fs';
 import path from 'path';
 import * as brevo from '@getbrevo/brevo';
 import { createClient } from '@supabase/supabase-js';
-import multer from 'multer';
 import { parse as parseCSV } from 'csv-parse';
 
 const router = Router();
@@ -3487,28 +3486,23 @@ router.get('/discounts/:id/applications', async (req, res) => {
   }
 });
 
-// School-specific contact import endpoint
-const contactUpload = multer({ 
-  dest: 'uploads/',
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-    files: 10 // Max 10 files
-  }
-});
-
-router.post('/contact-import', contactUpload.array('files'), async (req: any, res) => {
+// School-specific contact import endpoint using express-fileupload instead of multer
+router.post('/contact-import', async (req: any, res) => {
   try {
     console.log('📁 School admin contact import - processing files');
     console.log('📊 Request files:', req.files);
     console.log('📊 Request body:', req.body);
     
-    // Check if files were uploaded
-    if (!req.files || req.files.length === 0) {
+    // Check if files were uploaded using express-fileupload format
+    if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ 
         message: 'No files uploaded',
         error: 'Please select at least one CSV file to import' 
       });
     }
+
+    // Convert express-fileupload format to array
+    const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
     
     // Get the authenticated school admin's school ID
     const adminEmail = req.headers.authorization?.split(' ')[1]; // Extract from JWT or session
@@ -3540,8 +3534,7 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
     const schoolLocations = await storage.getLocationsBySchool(schoolId);
     console.log(`📍 Found ${schoolLocations.length} locations for school:`, schoolLocations.map(l => l.name));
 
-    // Process the uploaded files with school association
-    const files = req.files as Express.Multer.File[];
+    // Files are already processed above
     const results = {
       parents: { successful: 0, failed: 0 },
       children: { successful: 0, failed: 0 },
@@ -3553,10 +3546,10 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
 
     for (const file of files) {
       try {
-        console.log(`📄 Processing file: ${file.originalname}`);
+        console.log(`📄 Processing file: ${file.name}`);
         
-        // Read and parse CSV file
-        const fileContent = fs.readFileSync(file.path, 'utf-8');
+        // Read and parse CSV file using express-fileupload data
+        const fileContent = file.data.toString('utf-8');
         const records: any[] = [];
         
         await new Promise((resolve, reject) => {
@@ -3696,11 +3689,10 @@ router.post('/contact-import', contactUpload.array('files'), async (req: any, re
         }
 
       } catch (fileError) {
-        console.error(`❌ Error processing file ${file.originalname}:`, fileError);
-        results.errors.push(`Error processing file ${file.originalname}: ${fileError.message}`);
+        console.error(`❌ Error processing file ${file.name}:`, fileError);
+        results.errors.push(`Error processing file ${file.name}: ${fileError.message}`);
       } finally {
-        // Clean up uploaded file
-        fs.unlinkSync(file.path);
+        // File cleanup not needed with express-fileupload (memory-based)
       }
     }
 
