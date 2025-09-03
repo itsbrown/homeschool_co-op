@@ -68,5 +68,18 @@
     "depositRequired": 130,
     "totalCost": 1300,
     "remainingBalance": 1300
+  },
+  {
+    "id": 1756867126290,
+    "classId": 11,
+    "childId": 27,
+    "childName": "Lucas Barber-callan",
+    "className": "Pioneers | Full Day",
+    "enrollmentDate": "2025-09-03T02:38:46.290Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 130,
+    "totalCost": 1300,
+    "remainingBalance": 1300
   }
 ]
