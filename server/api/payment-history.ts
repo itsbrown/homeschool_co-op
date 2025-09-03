@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { storage } from '../storage';
 import { createClient } from '@supabase/supabase-js';
 import { sendPaymentReceipt } from '../lib/email-service';
+import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 
 const router = Router();
 
@@ -66,7 +67,7 @@ router.get('/history', async (req, res) => {
     // Transform payments to include formatted data
     const formattedPayments = payments.map((payment: any) => ({
       id: payment.id,
-      amount: payment.amount / 100, // Convert from cents to dollars for display
+      amount: CurrencyUtils.toDisplay(payment.amount || 0),
       currency: payment.currency || 'usd',
       status: payment.status,
       description: payment.description || `Payment for ${payment.className || 'program'}`,
@@ -104,7 +105,7 @@ router.get('/all', async (req, res) => {
       payments: payments.map((payment: any) => ({
         id: payment.id,
         parentEmail: payment.parentEmail,
-        amount: payment.amount / 100, // Convert from cents to dollars for display
+        amount: CurrencyUtils.toDisplay(payment.amount || 0),
         currency: payment.currency,
         status: payment.status,
         description: payment.description || 'Payment',
@@ -143,7 +144,7 @@ router.get('/:paymentId', async (req, res) => {
       payment: {
         id: payment.id,
         parentEmail: payment.parentEmail,
-        amount: payment.amount,
+        amount: CurrencyUtils.toDisplay(payment.amount),
         currency: payment.currency,
         status: payment.status,
         description: (payment as any).description || 'Payment',
@@ -255,6 +256,9 @@ router.post('/manual', async (req, res) => {
       });
     }
 
+    // Convert user input to storage format (cents)
+    const amountInCents = CurrencyUtils.toStorage(amount);
+
     // Verify parent exists
     try {
       const parentUser = await storage.getUserByEmail(parentEmail);
@@ -272,13 +276,13 @@ router.post('/manual', async (req, res) => {
       });
     }
 
-    // Create payment record
+    // Create payment record using unified currency system
     const paymentData = {
       stripePaymentIntentId: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       parentEmail,
       childName,
       className,
-      amount: Math.round(amount * 100), // Convert to cents for storage consistency
+      amount: amountInCents, // Already converted to cents
       currency,
       status: 'completed' as const, // Manual payments are immediately completed
       metadata: {
@@ -309,25 +313,18 @@ router.post('/manual', async (req, res) => {
       console.log(`🔍 Found ${matchingEnrollments.length} matching enrollments for manual payment`);
 
       if (matchingEnrollments.length > 0) {
-        // Apply payment to the most recent matching enrollment
+        // Apply payment to the most recent matching enrollment using unified billing service
         const enrollment = matchingEnrollments[0] as any;
-        const paymentAmount = Math.round(amount * 100); // Convert to cents
         
-        // Update enrollment with payment info
-        const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
-        const newAmountPaid = currentAmountPaid + paymentAmount;
-        const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+        // Update enrollment using centralized billing logic
+        const updatedEnrollment = BillingCalculationService.applyPaymentToEnrollment(enrollment, amountInCents);
         
-        enrollment.paymentIntentId = payment.stripePaymentIntentId;
-        enrollment.amount = newAmountPaid;
-        enrollment.amountPaid = newAmountPaid;
-        enrollment.remainingBalance = remainingBalance;
-        enrollment.outstandingBalance = remainingBalance;
-        enrollment.status = remainingBalance <= 0 ? 'enrolled' : 'enrolled'; // Any payment enrolls student
+        // Add payment tracking info
+        updatedEnrollment.paymentIntentId = payment.stripePaymentIntentId;
         
-        await storage.updateEnrollment(enrollment);
+        await storage.updateEnrollment(updatedEnrollment);
         
-        console.log(`✅ Updated enrollment ${enrollment.id}: paid=${newAmountPaid/100}, remaining=${remainingBalance/100}, status=${enrollment.status}`);
+        console.log(`✅ Updated enrollment ${updatedEnrollment.id}: paid=${CurrencyUtils.format(updatedEnrollment.amountPaid)}, remaining=${CurrencyUtils.format(updatedEnrollment.remainingBalance)}, status=${updatedEnrollment.status}`);
       } else {
         console.log(`ℹ️ No matching enrollment found for manual payment - payment recorded as general payment`);
       }
@@ -343,11 +340,8 @@ router.post('/manual', async (req, res) => {
         parentUser.name || parentEmail.split('@')[0] : 
         parentEmail.split('@')[0];
 
-      const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-        }).format(amount / 100);
+      const formatCurrency = (amountInCents: number) => {
+        return CurrencyUtils.format(amountInCents);
       };
 
       const formatDate = (date: string) => {
@@ -383,7 +377,7 @@ router.post('/manual', async (req, res) => {
         parentEmail: payment.parentEmail,
         childName: payment.childName,
         className: payment.className,
-        amount: payment.amount,
+        amount: CurrencyUtils.toDisplay(payment.amount),
         currency: payment.currency,
         status: payment.status,
         description: description || `Manual payment for ${childName} - ${className}`,

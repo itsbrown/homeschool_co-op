@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { storage } from '../storage';
 import { jwtCheck, requireRole } from '../middleware/auth0-auth';
+import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 
 const router = Router();
 
@@ -83,10 +84,9 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
       }
     }
 
-    // Calculate summary statistics
-    const totalAmountPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) / 100; // Convert from cents to dollars
-    const totalAmountDue = allEnrollments.reduce((sum, enrollment) => 
-      sum + ((enrollment.remainingBalance || enrollment.totalCost || 0) - (enrollment.amountPaid || enrollment.amount || 0)), 0) / 100; // Convert from cents to dollars
+    // Calculate summary statistics using unified billing service
+    const totalAmountPaid = BillingCalculationService.calculateTotalPaid(paymentHistory);
+    const totalAmountDue = BillingCalculationService.calculateTotalDue(allEnrollments);
 
     const profile = {
       parent: {
@@ -127,16 +127,16 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
           childName: enrollment.childName,
           enrollmentDate: enrollment.enrollmentDate,
           status: enrollment.status,
-          amount: (enrollment.amount || 0) / 100, // Convert from cents to dollars for display
-          depositRequired: (enrollment.depositRequired || 0) / 100, // Convert from cents to dollars for display
-          totalCost: (enrollment.totalCost || 0) / 100, // Convert from cents to dollars for display
-          remainingBalance: (enrollment.remainingBalance || 0) / 100, // Convert from cents to dollars for display
+          amount: CurrencyUtils.toDisplay(enrollment.amount || 0),
+          depositRequired: CurrencyUtils.toDisplay(enrollment.depositRequired || 0),
+          totalCost: CurrencyUtils.toDisplay(enrollment.totalCost || 0),
+          remainingBalance: CurrencyUtils.toDisplay(enrollment.remainingBalance || 0),
           paymentPlan: enrollment.paymentPlan
         };
       }),
       paymentHistory: paymentHistory.map(payment => ({
         id: payment.id,
-        amount: payment.amount / 100, // Convert from cents to dollars for display
+        amount: CurrencyUtils.toDisplay(payment.amount || 0),
         status: payment.status,
         paymentDate: payment.createdAt,
         paymentMethod: 'stripe',
@@ -145,7 +145,7 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
       })),
       scheduledPayments: scheduledPayments.map(payment => ({
         id: payment.id,
-        amount: (payment.amount || 0) / 100, // Convert from cents to dollars for display
+        amount: CurrencyUtils.toDisplay(payment.amount || 0),
         dueDate: payment.dueDate,
         status: payment.status,
         description: payment.description || '',
@@ -155,8 +155,8 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
       summary: {
         totalChildren: children.length,
         totalEnrollments: allEnrollments.length,
-        totalAmountPaid,
-        totalAmountDue,
+        totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid),
+        totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue),
         activeEnrollments: allEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length
       }
     };
