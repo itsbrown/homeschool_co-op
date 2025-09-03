@@ -397,8 +397,25 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    console.log(`🔍 Found user for login: ${user.email}, ID: ${user.id}`);
+    console.log(`🔒 Stored password hash exists: ${!!user.password}`);
+    console.log(`🔒 Password hash length: ${user.password?.length || 'N/A'}`);
+    console.log(`🔒 Provided password: ${password}`);
+    
+    // Check if the stored password is actually hashed (bcrypt hashes start with $2a$, $2b$, etc.)
+    const isHashed = user.password && user.password.startsWith('$2');
+    console.log(`🔒 Password appears to be hashed: ${isHashed}`);
+    
+    if (!user.password) {
+      console.log('❌ No password stored for user');
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+    
     const passwordValid = await bcrypt.compare(password, user.password);
+    console.log(`🔒 Password comparison result: ${passwordValid}`);
+    
     if (!passwordValid) {
+      console.log('❌ Password comparison failed');
       return res.status(401).json({ message: "Invalid credentials" });
     }
 

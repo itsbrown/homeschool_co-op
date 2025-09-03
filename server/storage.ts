@@ -3379,8 +3379,21 @@ export class MemStorage implements IStorage {
         // Try database storage first
         return await this.dbStorage.getUserByUsername(username);
       } catch (error) {
-        console.log('💾 Database unavailable, using file storage fallback for username lookup');
-        // Fall back to file storage if database is unavailable
+        console.log('💾 Database unavailable, checking memory storage for username lookup');
+        
+        // Try memory storage first as it's most up-to-date
+        try {
+          const memUser = await sharedMemStorage.getUserByUsername(username);
+          if (memUser) {
+            console.log('🧠 Found user in memory storage:', username);
+            return memUser;
+          }
+        } catch (memError) {
+          console.log('🧠 Memory storage lookup failed:', memError);
+        }
+        
+        // Fall back to file storage if memory storage also fails
+        console.log('💾 Using file storage fallback for username lookup');
         try {
           const fs = await import('fs');
           const path = await import('path');
@@ -3407,8 +3420,21 @@ export class MemStorage implements IStorage {
         // Try database storage first
         return await this.dbStorage.getUserByEmail(email);
       } catch (error) {
-        console.log('💾 Database unavailable, using file storage fallback for email lookup');
-        // Fall back to file storage if database is unavailable
+        console.log('💾 Database unavailable, checking memory storage for email lookup');
+        
+        // Try memory storage first as it's most up-to-date
+        try {
+          const memUser = await sharedMemStorage.getUserByEmail(email);
+          if (memUser) {
+            console.log('🧠 Found user in memory storage:', email);
+            return memUser;
+          }
+        } catch (memError) {
+          console.log('🧠 Memory storage lookup failed:', memError);
+        }
+        
+        // Fall back to file storage if memory storage also fails
+        console.log('💾 Using file storage fallback for email lookup');
         try {
           const fs = await import('fs');
           const path = await import('path');
