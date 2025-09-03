@@ -147,3 +147,13 @@
 .m-32 {
   margin: 32px;
 }
+
+/* Fix dropdown z-index issues in dialogs */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+/* Alternative selector for SelectContent */
+[data-radix-select-content] {
+  z-index: 9999 !important;
+}

@@ -163,14 +163,6 @@ function SchoolAdminEnrollmentForm({ parentEmail, children, onSuccess, onCancel 
 
   const classes = classesResponse?.items || [];
 
-  // Debug logging for dropdown issues
-  console.log('🔍 Debug - children prop:', children);
-  console.log('🔍 Debug - classesResponse:', classesResponse);
-  console.log('🔍 Debug - classes:', classes);
-  console.log('🔍 Debug - children length:', children.length);
-  console.log('🔍 Debug - classes length:', classes.length);
-  console.log('🔍 Debug - first child:', children[0]);
-  console.log('🔍 Debug - first class:', classes[0]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
