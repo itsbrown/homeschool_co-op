@@ -118,6 +118,17 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
       })),
       enrollments: allEnrollments.map(enrollment => {
         const classInfo = (classes as any[]).find(c => c.id === enrollment.classId);
+        
+        // Calculate actual payments made for this enrollment
+        const enrollmentPayments = paymentHistory.filter(payment => 
+          payment.childName === enrollment.childName &&
+          ['completed', 'succeeded'].includes(payment.status)
+        );
+        
+        const totalPaid = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
+        const totalCost = enrollment.totalCost || 0;
+        const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid);
+        
         return {
           id: enrollment.id,
           classId: enrollment.classId,
@@ -127,10 +138,10 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
           childName: enrollment.childName,
           enrollmentDate: enrollment.enrollmentDate,
           status: enrollment.status,
-          amount: CurrencyUtils.toDisplay(enrollment.amount || 0),
+          amount: CurrencyUtils.toDisplay(totalPaid),
           depositRequired: CurrencyUtils.toDisplay(enrollment.depositRequired || 0),
-          totalCost: CurrencyUtils.toDisplay(enrollment.totalCost || 0),
-          remainingBalance: CurrencyUtils.toDisplay(enrollment.remainingBalance || 0),
+          totalCost: CurrencyUtils.toDisplay(totalCost),
+          remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
           paymentPlan: enrollment.paymentPlan
         };
       }),
