@@ -140,7 +140,7 @@ function createClass(classData: InsertClass & { instructorId: number } & Record<
     status: classData.status || 'published',
     // Explicitly include custom fields that might not be in the schema
     subject: classData.subject || '',
-    gradeLevel: classData.gradeLevel || '',
+    gradeLevels: classData.gradeLevels || [],
     ageRange: classData.ageRange || '',
     schedule: classData.schedule || ''
   };
@@ -189,7 +189,7 @@ function updateClass(id: number, classData: Partial<InsertClass> & Record<string
     endDate: classData.endDate || existingFields.endDate,
     // Explicitly handle the custom fields from the form that aren't in the schema
     subject: classData.subject !== undefined ? classData.subject : existingFields.subject,
-    gradeLevel: classData.gradeLevel !== undefined ? classData.gradeLevel : existingFields.gradeLevel,
+    gradeLevels: classData.gradeLevels !== undefined ? classData.gradeLevels : existingFields.gradeLevels,
     ageRange: classData.ageRange !== undefined ? classData.ageRange : existingFields.ageRange,
     schedule: classData.schedule !== undefined ? classData.schedule : existingFields.schedule,
     updatedAt: new Date().toISOString()

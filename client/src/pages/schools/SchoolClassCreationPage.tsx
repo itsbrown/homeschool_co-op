@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MultiSelect, type Option } from "@/components/ui/multi-select";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -22,7 +23,7 @@ const classFormSchema = z.object({
   title: z.string().min(3, "Class title must be at least 3 characters long"),
   description: z.string().min(10, "Please provide a detailed description of at least 10 characters"),
   category: z.string().min(1, "Please select a category"),
-  gradeLevel: z.string().min(1, "Please select a grade level"),
+  gradeLevels: z.array(z.string()).min(1, "Please select at least one grade level"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
   schedule: z.string().min(1, "Schedule information is required"),
@@ -56,7 +57,7 @@ export default function SchoolClassCreationPage() {
       title: "",
       description: "",
       category: "",
-      gradeLevel: "",
+      gradeLevels: [],
       startDate: "",
       endDate: "",
       schedule: "",
@@ -134,7 +135,7 @@ export default function SchoolClassCreationPage() {
         title: classData.title || "",
         description: classData.description || "",
         category: classData.category || "",
-        gradeLevel: classData.gradeLevel || "",
+        gradeLevels: classData.gradeLevels || classData.gradeLevel ? [classData.gradeLevel] : [],
         startDate,
         endDate,
         schedule: classData.schedule || "",
@@ -302,38 +303,40 @@ export default function SchoolClassCreationPage() {
                 <div className="grid gap-6 sm:grid-cols-2">
                   <FormField
                     control={form.control}
-                    name="gradeLevel"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Grade Level*</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
-                          value={field.value}
-                        >
+                    name="gradeLevels"
+                    render={({ field }) => {
+                      const gradeOptions: Option[] = [
+                        { label: "Littles", value: "littles" },
+                        { label: "Pre K", value: "pre-k" },
+                        { label: "Kindergarten", value: "kindergarten" },
+                        { label: "1st Grade", value: "1st-grade" },
+                        { label: "2nd Grade", value: "2nd-grade" },
+                        { label: "3rd Grade", value: "3rd-grade" },
+                        { label: "4th Grade", value: "4th-grade" },
+                        { label: "5th Grade", value: "5th-grade" },
+                        { label: "6th Grade", value: "6th-grade" },
+                        { label: "7th Grade", value: "7th-grade" },
+                        { label: "8th Grade", value: "8th-grade" },
+                        { label: "9th Grade", value: "9th-grade" },
+                        { label: "10th Grade", value: "10th-grade" },
+                      ];
+                      
+                      return (
+                        <FormItem>
+                          <FormLabel>Grade Level*</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select grade level" />
-                            </SelectTrigger>
+                            <MultiSelect
+                              options={gradeOptions}
+                              selected={field.value || []}
+                              onChange={field.onChange}
+                              placeholder="Select grade levels"
+                              className="w-full"
+                            />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="littles">Littles</SelectItem>
-                            <SelectItem value="pre-k">Pre K</SelectItem>
-                            <SelectItem value="kindergarten">Kindergarten</SelectItem>
-                            <SelectItem value="1st-grade">1st Grade</SelectItem>
-                            <SelectItem value="2nd-grade">2nd Grade</SelectItem>
-                            <SelectItem value="3rd-grade">3rd Grade</SelectItem>
-                            <SelectItem value="4th-grade">4th Grade</SelectItem>
-                            <SelectItem value="5th-grade">5th Grade</SelectItem>
-                            <SelectItem value="6th-grade">6th Grade</SelectItem>
-                            <SelectItem value="7th-grade">7th Grade</SelectItem>
-                            <SelectItem value="8th-grade">8th Grade</SelectItem>
-                            <SelectItem value="9th-grade">9th Grade</SelectItem>
-                            <SelectItem value="10th-grade">10th Grade</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
 
                   <FormField
