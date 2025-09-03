@@ -136,8 +136,9 @@ interface ParentProfile {
 }
 
 // School Admin Enrollment Form Component for creating enrollments
-function SchoolAdminEnrollmentForm({ parentEmail, children, onSuccess, onCancel }: {
+function SchoolAdminEnrollmentForm({ parentEmail, parentId, children, onSuccess, onCancel }: {
   parentEmail: string;
+  parentId: string;
   children: any[];
   onSuccess: () => void;
   onCancel: () => void;
@@ -189,7 +190,7 @@ function SchoolAdminEnrollmentForm({ parentEmail, children, onSuccess, onCancel 
       });
 
       // Invalidate parent profile query to refresh enrollments list
-      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       onSuccess();
     } catch (error) {
       console.error("Failed to create enrollment:", error);
@@ -909,6 +910,7 @@ export default function ParentProfilePage() {
                 </DialogHeader>
                 <SchoolAdminEnrollmentForm
                   parentEmail={profile.parent.email}
+                  parentId={parentId!}
                   children={profile.children}
                   onSuccess={() => {
                     setAddEnrollmentDialogOpen(false);

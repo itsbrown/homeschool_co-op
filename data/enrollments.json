@@ -55,5 +55,18 @@
     "depositRequired": 90,
     "totalCost": 900,
     "remainingBalance": 900
+  },
+  {
+    "id": 1756866808252,
+    "classId": 11,
+    "childId": 26,
+    "childName": "Beau Carber-Callan",
+    "className": "Pioneers | Full Day",
+    "enrollmentDate": "2025-09-03T02:33:28.252Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 130,
+    "totalCost": 1300,
+    "remainingBalance": 1300
   }
 ]
