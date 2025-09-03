@@ -2,7 +2,9 @@
 import { Router, Request, Response } from "express";
 import { storage } from "../storage";
 import { parse } from "csv-parse/sync";
+import * as fileUpload from "express-fileupload";
 import { UploadedFile } from "express-fileupload";
+import path from "path";
 
 // Import handling modes
 type ImportMode = 'skip' | 'override' | 'update';
@@ -32,6 +34,17 @@ interface ImportPreview {
 }
 
 const router = Router();
+
+// Configure file upload middleware
+router.use(fileUpload.default({
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max file size
+  },
+  abortOnLimit: true,
+  useTempFiles: true,
+  tempFileDir: path.join(process.cwd(), 'uploads', 'temp'),
+  createParentPath: true,
+}));
 
 // Preview import to show duplicates and changes
 router.post("/preview-import", async (req: Request, res: Response) => {
