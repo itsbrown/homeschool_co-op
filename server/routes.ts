@@ -2368,6 +2368,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('📋 Child data to create:', JSON.stringify(childData, null, 2));
 
+      // Check for potential duplicate before creating
+      const existingChildren = await storage.getAllChildren();
+      const isDuplicate = existingChildren.some(child => 
+        child.firstName.toLowerCase() === firstName.toLowerCase() && 
+        child.lastName.toLowerCase() === lastName.toLowerCase() && 
+        child.parentEmail === parentEmail &&
+        child.birthdate === birthdate
+      );
+
+      if (isDuplicate) {
+        console.warn('⚠️ Potential duplicate child detected:', { firstName, lastName, parentEmail });
+        return res.status(400).json({
+          success: false,
+          message: 'A child with the same name, birthdate, and parent already exists',
+          code: 'DUPLICATE_CHILD'
+        });
+      }
+
       // Create the child using storage
       const newChild = await storage.createChild(childData);
 
@@ -2379,6 +2397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Also create a school student record to link this child to the school system
       console.log('🎓 Creating school student record for child ID:', newChild.id);
+      let schoolStudent = null;
       try {
         const schoolStudentData = {
           childId: newChild.id,
@@ -2389,7 +2408,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
 
         console.log('🎓 School student data:', JSON.stringify(schoolStudentData, null, 2));
-        const schoolStudent = await storage.createSchoolStudent(schoolStudentData);
+        schoolStudent = await storage.createSchoolStudent(schoolStudentData);
         console.log('✅ School student record created successfully:', {
           schoolStudentId: schoolStudent.id,
           childId: schoolStudent.childId,
@@ -2401,7 +2420,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: schoolStudentError.message,
           stack: schoolStudentError.stack
         });
-        // Don't fail the entire operation if school student creation fails
+        
+        // Rollback: Delete the child record if school student creation fails
+        console.log('🔄 Rolling back child creation due to school student error...');
+        try {
+          await storage.deleteChild(newChild.id);
+          console.log('✅ Child record rolled back successfully');
+        } catch (rollbackError) {
+          console.error('❌ Failed to rollback child creation:', rollbackError);
+        }
+        
+        throw new Error(`Failed to create complete student record: ${schoolStudentError.message}`);
       }
 
       res.json({
