@@ -163,6 +163,11 @@ function SchoolAdminEnrollmentForm({ parentEmail, children, onSuccess, onCancel 
 
   const classes = classesResponse?.items || [];
 
+  // Debug logging for dropdown issues
+  console.log('🔍 Debug - children prop:', children);
+  console.log('🔍 Debug - classesResponse:', classesResponse);
+  console.log('🔍 Debug - classes:', classes);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.childId || !formData.classId) {
