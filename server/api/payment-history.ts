@@ -66,7 +66,7 @@ router.get('/history', async (req, res) => {
     // Transform payments to include formatted data
     const formattedPayments = payments.map((payment: any) => ({
       id: payment.id,
-      amount: payment.amount,
+      amount: payment.amount / 100, // Convert from cents to dollars for display
       currency: payment.currency || 'usd',
       status: payment.status,
       description: payment.description || `Payment for ${payment.className || 'program'}`,
@@ -104,7 +104,7 @@ router.get('/all', async (req, res) => {
       payments: payments.map((payment: any) => ({
         id: payment.id,
         parentEmail: payment.parentEmail,
-        amount: payment.amount,
+        amount: payment.amount / 100, // Convert from cents to dollars for display
         currency: payment.currency,
         status: payment.status,
         description: payment.description || 'Payment',
@@ -278,7 +278,7 @@ router.post('/manual', async (req, res) => {
       parentEmail,
       childName,
       className,
-      amount: Math.round(amount * 100), // Convert to cents
+      amount: Math.round(amount * 100), // Convert to cents for storage consistency
       currency,
       status: 'completed' as const, // Manual payments are immediately completed
       metadata: {
