@@ -16,7 +16,9 @@
     "message": "Welcome to our team!",
     "invitationToken": "zsns4c5g285e83hv42ijg",
     "locationId": "5",
-    "classIds": ["5"]
+    "classIds": [
+      "5"
+    ]
   },
   {
     "id": 2,
@@ -51,7 +53,9 @@
     "invitedAt": "2025-06-01T23:19:52.590Z",
     "message": "",
     "invitationToken": "wii2mfdjk5jb7tw0jo9m6v",
-    "classIds": ["13"]
+    "classIds": [
+      "13"
+    ]
   },
   {
     "id": 4,
@@ -70,6 +74,8 @@
     "message": "Hello",
     "invitationToken": "r2ucobk0okl1iew3ejnfcj",
     "locationId": "5",
-    "classIds": ["12"]
+    "classIds": [
+      "12"
+    ]
   }
 ]

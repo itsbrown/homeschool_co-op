@@ -1544,6 +1544,19 @@ router.post("/staff/:id/assign-class", async (req, res) => {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
+    // Update staff member's class assignments
+    if (!staffMember.classIds) {
+      staffMember.classIds = [];
+    }
+    
+    // Add class if not already assigned
+    if (!staffMember.classIds.includes(classId.toString())) {
+      staffMember.classIds.push(classId.toString());
+      
+      // Save updated staff data
+      fs.writeFileSync(STAFF_FILE, JSON.stringify(allStaff, null, 2));
+    }
+
     // Update the class to assign this instructor
     const updatedClass = await storage.updateClass(classId, {
       instructorName: staffMember.name,
@@ -1559,7 +1572,12 @@ router.post("/staff/:id/assign-class", async (req, res) => {
     res.json({ 
       success: true, 
       message: `${staffMember.name} assigned to class successfully`,
-      class: updatedClass 
+      class: updatedClass,
+      staffMember: {
+        id: staffMember.id,
+        name: staffMember.name,
+        classIds: staffMember.classIds
+      }
     });
   } catch (error) {
     console.error("Error assigning staff to class:", error);
@@ -1577,6 +1595,23 @@ router.delete("/staff/:id/unassign-class/:classId", async (req, res) => {
     
     if (isNaN(staffId) || isNaN(classId)) {
       return res.status(400).json({ message: "Invalid staff ID or class ID" });
+    }
+
+    // Get staff member details and update their class assignments
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    
+    if (fs.existsSync(STAFF_FILE)) {
+      const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+      const staffMember = allStaff.find(s => s.id === staffId);
+      
+      if (staffMember && staffMember.classIds) {
+        // Remove class from staff member's assignments
+        staffMember.classIds = staffMember.classIds.filter(id => id !== classId.toString());
+        
+        // Save updated staff data
+        fs.writeFileSync(STAFF_FILE, JSON.stringify(allStaff, null, 2));
+      }
     }
 
     // Update the class to remove instructor assignment

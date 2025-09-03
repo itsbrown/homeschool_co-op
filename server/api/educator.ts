@@ -42,14 +42,25 @@ router.get('/classes', async (req, res) => {
       return res.json([]);
     }
 
-    // Find classes assigned to this educator
-    // Classes can be assigned by instructorName, instructorEmail, or instructorId
-    const assignedClasses = classes.filter(cls => 
-      cls.instructorName === staffMember.name ||
-      cls.instructorEmail === email ||
-      cls.instructorId === staffMember.id ||
-      cls.instructorName === `${staffMember.firstName} ${staffMember.lastName}`
-    );
+    // Find classes assigned to this educator using classIds array
+    let assignedClasses = [];
+    
+    if (staffMember.classIds && Array.isArray(staffMember.classIds)) {
+      // Use the staff member's classIds array for multiple class assignments
+      assignedClasses = classes.filter(cls => 
+        staffMember.classIds.includes(cls.id.toString())
+      );
+      console.log(`📚 Found ${assignedClasses.length} classes using classIds array:`, staffMember.classIds);
+    } else {
+      // Fallback to legacy single class assignment methods
+      assignedClasses = classes.filter(cls => 
+        cls.instructorName === staffMember.name ||
+        cls.instructorEmail === email ||
+        cls.instructorId === staffMember.id ||
+        cls.instructorName === `${staffMember.firstName} ${staffMember.lastName}`
+      );
+      console.log(`📚 Found ${assignedClasses.length} classes using legacy method`);
+    }
 
     console.log(`✅ Found ${assignedClasses.length} classes for educator ${email}`);
     
@@ -106,13 +117,25 @@ router.get('/students', async (req, res) => {
       return res.json({ students: [], totalStudents: 0 });
     }
 
-    // Find classes assigned to this educator
-    const assignedClasses = classes.filter(cls => 
-      cls.instructorName === staffMember.name ||
-      cls.instructorEmail === email ||
-      cls.instructorId === staffMember.id ||
-      cls.instructorName === `${staffMember.firstName} ${staffMember.lastName}`
-    );
+    // Find classes assigned to this educator using classIds array
+    let assignedClasses = [];
+    
+    if (staffMember.classIds && Array.isArray(staffMember.classIds)) {
+      // Use the staff member's classIds array for multiple class assignments
+      assignedClasses = classes.filter(cls => 
+        staffMember.classIds.includes(cls.id.toString())
+      );
+      console.log(`📚 Found ${assignedClasses.length} classes using classIds array:`, staffMember.classIds);
+    } else {
+      // Fallback to legacy single class assignment methods
+      assignedClasses = classes.filter(cls => 
+        cls.instructorName === staffMember.name ||
+        cls.instructorEmail === email ||
+        cls.instructorId === staffMember.id ||
+        cls.instructorName === `${staffMember.firstName} ${staffMember.lastName}`
+      );
+      console.log(`📚 Found ${assignedClasses.length} classes using legacy method`);
+    }
 
     const assignedClassIds = assignedClasses.map(cls => cls.id);
 
@@ -210,11 +233,19 @@ router.get('/class-students/:classId', async (req, res) => {
     }
 
     // Verify this educator teaches this class
-    const isAuthorized = 
-      targetClass.instructorName === staffMember.name ||
-      targetClass.instructorEmail === email ||
-      targetClass.instructorId === staffMember.id ||
-      targetClass.instructorName === `${staffMember.firstName} ${staffMember.lastName}`;
+    let isAuthorized = false;
+    
+    if (staffMember.classIds && Array.isArray(staffMember.classIds)) {
+      // Check if class is in the staff member's classIds array
+      isAuthorized = staffMember.classIds.includes(classId.toString());
+    } else {
+      // Fallback to legacy authorization methods
+      isAuthorized = 
+        targetClass.instructorName === staffMember.name ||
+        targetClass.instructorEmail === email ||
+        targetClass.instructorId === staffMember.id ||
+        targetClass.instructorName === `${staffMember.firstName} ${staffMember.lastName}`;
+    }
 
     if (!isAuthorized) {
       console.log(`❌ Educator ${email} not authorized for class ${classId}`);

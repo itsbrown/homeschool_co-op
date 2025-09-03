@@ -41,6 +41,7 @@ import imageServicesRouter from "./api/image-services";
 import ocrTestRouter from "./api/ocr-test";
 import schoolsRouter from "./api/schools";
 import schoolAdminRouter from "./api/school-admin";
+import educatorRouter from "./api/educator";
 import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
 import { handleEnrollmentMessage } from "./api/enrollment-assistant";
@@ -2266,6 +2267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
+  app.use("/api/educator", educatorRouter);
   app.use("/api/parent", parentRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
