@@ -589,8 +589,8 @@ export default function ParentProfilePage() {
                               {child.firstName} {child.lastName}
                             </h3>
                             <div className="text-sm text-muted-foreground space-y-1 mt-2">
-                              <p>Grade: {child.grade}</p>
-                              <p>Birth Date: {new Date(child.birthDate).toLocaleDateString()}</p>
+                              <p>Grade: {child.gradeLevel}</p>
+                              <p>Birth Date: {new Date(child.birthdate).toLocaleDateString()}</p>
                               {child.allergies && <p>Allergies: {child.allergies}</p>}
                               {child.medicalConditions && <p>Medical Conditions: {child.medicalConditions}</p>}
                               {child.additionalLanguages && <p>Languages: {child.additionalLanguages}</p>}
