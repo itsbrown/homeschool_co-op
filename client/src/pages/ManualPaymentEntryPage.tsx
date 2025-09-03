@@ -53,9 +53,9 @@ export default function ManualPaymentEntryPage() {
 
   // Fetch parent users for selection
   const { data: parentUsers = [] } = useQuery({
-    queryKey: ['/api/users'],
+    queryKey: ['/api/school-admin/users'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/users');
+      const response = await apiRequest('GET', '/api/school-admin/users');
       const data = await response.json();
       return data.filter((user: any) => user.role === 'parent');
     }
