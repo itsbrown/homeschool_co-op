@@ -81,5 +81,18 @@
     "depositRequired": 130,
     "totalCost": 1300,
     "remainingBalance": 1300
+  },
+  {
+    "id": 1756902470363,
+    "classId": 4,
+    "childId": 6,
+    "childName": "Eva Corcoran Flores",
+    "className": "Yankee Doodle | Half Day",
+    "enrollmentDate": "2025-09-03T12:27:50.363Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 90,
+    "totalCost": 900,
+    "remainingBalance": 900
   }
 ]

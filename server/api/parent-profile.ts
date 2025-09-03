@@ -84,9 +84,9 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
     }
 
     // Calculate summary statistics
-    const totalAmountPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-    const totalAmountDue = scheduledPayments.reduce((sum, payment) => 
-      payment.status === 'pending' ? sum + (payment.amount || 0) : sum, 0);
+    const totalAmountPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) / 100; // Convert from cents to dollars
+    const totalAmountDue = allEnrollments.reduce((sum, enrollment) => 
+      sum + ((enrollment.remainingBalance || enrollment.totalCost || 0) - (enrollment.amountPaid || enrollment.amount || 0)), 0) / 100; // Convert from cents to dollars
 
     const profile = {
       parent: {
@@ -127,16 +127,16 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
           childName: enrollment.childName,
           enrollmentDate: enrollment.enrollmentDate,
           status: enrollment.status,
-          amount: enrollment.amount,
-          depositRequired: enrollment.depositRequired,
-          totalCost: enrollment.totalCost,
-          remainingBalance: enrollment.remainingBalance,
+          amount: (enrollment.amount || 0) / 100, // Convert from cents to dollars for display
+          depositRequired: (enrollment.depositRequired || 0) / 100, // Convert from cents to dollars for display
+          totalCost: (enrollment.totalCost || 0) / 100, // Convert from cents to dollars for display
+          remainingBalance: (enrollment.remainingBalance || 0) / 100, // Convert from cents to dollars for display
           paymentPlan: enrollment.paymentPlan
         };
       }),
       paymentHistory: paymentHistory.map(payment => ({
         id: payment.id,
-        amount: payment.amount,
+        amount: payment.amount / 100, // Convert from cents to dollars for display
         status: payment.status,
         paymentDate: payment.createdAt,
         paymentMethod: 'stripe',
@@ -145,7 +145,7 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
       })),
       scheduledPayments: scheduledPayments.map(payment => ({
         id: payment.id,
-        amount: payment.amount,
+        amount: (payment.amount || 0) / 100, // Convert from cents to dollars for display
         dueDate: payment.dueDate,
         status: payment.status,
         description: payment.description || '',
