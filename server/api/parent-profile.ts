@@ -86,7 +86,19 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
 
     // Calculate summary statistics using unified billing service
     const totalAmountPaid = BillingCalculationService.calculateTotalPaid(paymentHistory);
-    const totalAmountDue = BillingCalculationService.calculateTotalDue(allEnrollments);
+    
+    // Calculate total amount due by summing actual remaining balances (not stored values)
+    const totalAmountDue = CurrencyUtils.sum(
+      allEnrollments.map(enrollment => {
+        const enrollmentPayments = paymentHistory.filter(payment => 
+          payment.childName === enrollment.childName &&
+          ['completed', 'succeeded'].includes(payment.status)
+        );
+        const totalPaid = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
+        const totalCost = enrollment.totalCost || 0;
+        return CurrencyUtils.calculateBalance(totalCost, totalPaid);
+      })
+    );
 
     const profile = {
       parent: {
