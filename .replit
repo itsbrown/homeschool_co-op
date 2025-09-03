@@ -46,4 +46,4 @@ task = "shell.exec"
 args = "NODE_ENV=development tsx server/index.ts"
 
 [agent]
-integrations = ["javascript_anthropic==1.0.0", "perplexity_v0==1.0.0", "javascript_websocket==1.0.0", "javascript_supabase==1.0.0", "javascript_sendgrid==1.0.0", "javascript_stripe==1.0.0"]
+integrations = ["javascript_anthropic==1.0.0", "perplexity_v0==1.0.0", "javascript_stripe==1.0.0", "javascript_supabase==1.0.0", "javascript_websocket==1.0.0", "javascript_sendgrid==1.0.0"]

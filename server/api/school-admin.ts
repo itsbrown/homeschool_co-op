@@ -3961,11 +3961,13 @@ router.put('/users/:id', async (req: any, res) => {
       schoolId: schoolId // Maintain school association
     };
 
-    // Hash password if it's being updated
+    // Handle password updates - need to sync with both local storage and Supabase
+    let plainTextPassword = null;
     if (userData.password && userData.password.trim() !== '') {
-      console.log('🔒 Password provided, hashing before storage...');
+      console.log('🔒 Password provided, will update both local storage and Supabase...');
+      plainTextPassword = userData.password; // Store for Supabase update
       userData.password = await bcrypt.hash(userData.password, 10);
-      console.log('✅ Password hashed successfully');
+      console.log('✅ Password hashed successfully for local storage');
     } else if (userData.password === '') {
       // Remove empty password from update data - don't change existing password
       delete userData.password;
@@ -3978,6 +3980,47 @@ router.put('/users/:id', async (req: any, res) => {
     
     const updatedUser = await storage.updateUser(userId, userData);
     console.log(`✅ API: Updated user: ${userData.email || existingUser.email} for school ${schoolId}`);
+
+    // Also update password in Supabase if it was changed
+    if (plainTextPassword && existingUser.email) {
+      try {
+        console.log('🔄 Syncing password update to Supabase...');
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabaseUrl = process.env.VITE_SUPABASE_URL;
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+        if (supabaseUrl && supabaseServiceKey) {
+          const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+          
+          // Find user by email in Supabase and update password
+          const { data: users, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+          if (listError) {
+            console.error('❌ Failed to list Supabase users:', listError);
+          } else {
+            const supabaseUser = users.users.find(u => u.email === existingUser.email);
+            if (supabaseUser) {
+              const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+                supabaseUser.id,
+                { password: plainTextPassword }
+              );
+              
+              if (updateError) {
+                console.error('❌ Failed to update password in Supabase:', updateError);
+              } else {
+                console.log('✅ Password successfully synced to Supabase');
+              }
+            } else {
+              console.log('⚠️ User not found in Supabase - only local password updated');
+            }
+          }
+        } else {
+          console.log('⚠️ Supabase credentials not available - only local password updated');
+        }
+      } catch (supabaseError) {
+        console.error('❌ Error syncing password to Supabase:', supabaseError);
+        // Don't fail the request if Supabase sync fails - local update was successful
+      }
+    }
     
     res.status(200).json(updatedUser);
   } catch (error) {
