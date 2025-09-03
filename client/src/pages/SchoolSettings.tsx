@@ -22,6 +22,10 @@ interface SchoolData {
   registrationCode?: string;
   logo?: string;
   status?: string;
+  membershipFeeAmount?: number;
+  membershipRenewalMonth?: number;
+  membershipRenewalDay?: number;
+  membershipGracePeriodDays?: number;
 }
 
 export default function SchoolSettings() {
@@ -340,6 +344,84 @@ export default function SchoolSettings() {
               </div>
             </div>
           </CardContent>
+                </Card>
+
+                {/* Membership Configuration */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Annual Membership Fees</CardTitle>
+                    <CardDescription>
+                      Configure annual membership fees for parent families. When enabled, families are automatically enrolled in annual memberships when they register for classes.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Membership Fee Amount</Label>
+                        <div className="mt-1 p-2 bg-gray-50 rounded border">
+                          ${((schoolData?.membershipFeeAmount || 0) / 100).toFixed(2)}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Current annual membership fee (in USD)
+                        </p>
+                      </div>
+                      <div>
+                        <Label>Renewal Date</Label>
+                        <div className="mt-1 p-2 bg-gray-50 rounded border">
+                          {schoolData?.membershipRenewalMonth ? 
+                            new Date(0, (schoolData.membershipRenewalMonth - 1), schoolData.membershipRenewalDay || 1).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+                            : 'Not configured'
+                          }
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Annual membership renewal date
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Grace Period</Label>
+                      <div className="mt-1 p-2 bg-gray-50 rounded border">
+                        {schoolData?.membershipGracePeriodDays || 30} days
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Grace period after expiration before membership becomes inactive
+                      </p>
+                    </div>
+                    
+                    <div className="pt-4 border-t">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium">Membership Status</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {schoolData?.membershipFeeAmount && schoolData?.membershipFeeAmount > 0 
+                              ? `Membership fees are enabled at $${((schoolData.membershipFeeAmount) / 100).toFixed(2)} annually`
+                              : 'Membership fees are not configured'
+                            }
+                          </p>
+                        </div>
+                        <Badge variant={schoolData?.membershipFeeAmount && schoolData?.membershipFeeAmount > 0 ? "default" : "secondary"}>
+                          {schoolData?.membershipFeeAmount && schoolData?.membershipFeeAmount > 0 ? "Enabled" : "Disabled"}
+                        </Badge>
+                      </div>
+                      
+                      <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h5 className="font-medium text-blue-900 mb-2">How Membership Fees Work</h5>
+                        <ul className="text-sm text-blue-800 space-y-1">
+                          <li>• Parents are automatically assigned annual membership when they enroll children in classes</li>
+                          <li>• Membership fees are separate from class fees and tracked independently</li>
+                          <li>• School administrators can mark membership payments as paid manually</li>
+                          <li>• Expired memberships enter a grace period before becoming inactive</li>
+                        </ul>
+                      </div>
+
+                      <div className="mt-4">
+                        <Button variant="outline" className="w-full">
+                          Configure Membership Settings
+                          <span className="ml-2 text-xs bg-blue-100 px-2 py-1 rounded">Coming Soon</span>
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
                 </Card>
               </TabsContent>
             </Tabs>

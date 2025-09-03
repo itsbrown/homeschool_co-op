@@ -9,6 +9,7 @@ import {
   emergencyContacts, type EmergencyContact, type InsertEmergencyContact,
   programs, type Program, type InsertProgram,
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
+  membershipEnrollments, type MembershipEnrollment, type InsertMembershipEnrollment,
   classes, type Class, type InsertClass,
   activities, type Activity, type InsertActivity,
   roleInvitations, type RoleInvitation, type InsertRoleInvitation,
@@ -144,6 +145,16 @@ export interface IStorage {
   updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined>;
   deleteProgramEnrollment(id: number): Promise<void>;
 
+  // Membership Enrollment methods
+  getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
+  getMembershipEnrollmentsByParentId(parentUserId: number): Promise<MembershipEnrollment[]>;
+  getMembershipEnrollmentsBySchoolId(schoolId: number): Promise<MembershipEnrollment[]>;
+  getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment | undefined>;
+  createMembershipEnrollment(enrollment: InsertMembershipEnrollment): Promise<MembershipEnrollment>;
+  updateMembershipEnrollment(id: number, enrollment: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined>;
+  deleteMembershipEnrollment(id: number): Promise<void>;
+  createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment>;
+
   // Class Enrollment methods
   createEnrollment(enrollment: any): Promise<any>;
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
@@ -255,6 +266,7 @@ export class MemStorage implements IStorage {
   private emergencyContactsStore: Map<number, EmergencyContact>;
   private programsStore: Map<number, Program>;
   private programEnrollmentsStore: Map<number, ProgramEnrollment>;
+  private membershipEnrollmentsStore: Map<number, MembershipEnrollment>;
   private classesStore: Map<number, Class>;
   private activitiesStore: Map<number, Activity>;
   private marketingLinksStore: Map<number, MarketingLink>;
@@ -281,6 +293,7 @@ export class MemStorage implements IStorage {
   private emergencyContactIdCounter: number;
   private programIdCounter: number;
   private programEnrollmentIdCounter: number;
+  private membershipEnrollmentIdCounter: number;
   private classIdCounter: number;
   private activityIdCounter: number;
   private marketingLinkIdCounter: number;
@@ -306,6 +319,7 @@ export class MemStorage implements IStorage {
     this.emergencyContactsStore = new Map();
     this.programsStore = new Map();
     this.programEnrollmentsStore = new Map();
+    this.membershipEnrollmentsStore = new Map();
     this.classesStore = new Map();
     this.activitiesStore = new Map();
     this.marketingLinksStore = new Map();
@@ -333,6 +347,7 @@ export class MemStorage implements IStorage {
     this.emergencyContactIdCounter = 1;
     this.programIdCounter = 1;
     this.programEnrollmentIdCounter = 1;
+    this.membershipEnrollmentIdCounter = 1;
     this.classIdCounter = 1;
     this.activityIdCounter = 1;
     this.marketingLinkIdCounter = 1;
@@ -1162,6 +1177,99 @@ export class MemStorage implements IStorage {
 
   async deleteProgramEnrollment(id: number): Promise<void> {
     this.programEnrollmentsStore.delete(id);
+  }
+
+  // Membership Enrollment methods
+  async getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined> {
+    return this.membershipEnrollmentsStore.get(id);
+  }
+
+  async getMembershipEnrollmentsByParentId(parentUserId: number): Promise<MembershipEnrollment[]> {
+    return Array.from(this.membershipEnrollmentsStore.values())
+      .filter(enrollment => enrollment.parentUserId === parentUserId);
+  }
+
+  async getMembershipEnrollmentsBySchoolId(schoolId: number): Promise<MembershipEnrollment[]> {
+    return Array.from(this.membershipEnrollmentsStore.values())
+      .filter(enrollment => enrollment.schoolId === schoolId);
+  }
+
+  async getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment | undefined> {
+    return Array.from(this.membershipEnrollmentsStore.values())
+      .find(enrollment => 
+        enrollment.parentUserId === parentUserId && 
+        enrollment.schoolId === schoolId && 
+        enrollment.membershipYear === membershipYear
+      );
+  }
+
+  async createMembershipEnrollment(enrollmentData: InsertMembershipEnrollment): Promise<MembershipEnrollment> {
+    const id = this.membershipEnrollmentIdCounter++;
+    const now = new Date();
+
+    const enrollment: MembershipEnrollment = {
+      ...enrollmentData,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.membershipEnrollmentsStore.set(id, enrollment);
+    return enrollment;
+  }
+
+  async updateMembershipEnrollment(id: number, updateData: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined> {
+    const enrollment = this.membershipEnrollmentsStore.get(id);
+    if (!enrollment) return undefined;
+
+    const updatedEnrollment: MembershipEnrollment = {
+      ...enrollment,
+      ...updateData,
+      updatedAt: new Date()
+    };
+
+    this.membershipEnrollmentsStore.set(id, updatedEnrollment);
+    return updatedEnrollment;
+  }
+
+  async deleteMembershipEnrollment(id: number): Promise<void> {
+    this.membershipEnrollmentsStore.delete(id);
+  }
+
+  async createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment> {
+    // Check if enrollment already exists
+    const existing = await this.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+    if (existing) {
+      return existing;
+    }
+
+    // Get school to get membership configuration
+    const school = await this.getSchool(schoolId);
+    if (!school) {
+      throw new Error('School not found');
+    }
+
+    // Calculate membership dates
+    const renewalDate = new Date(membershipYear, (school.membershipRenewalMonth || 9) - 1, school.membershipRenewalDay || 1);
+    const expirationDate = new Date(membershipYear + 1, (school.membershipRenewalMonth || 9) - 1, school.membershipRenewalDay || 1);
+    const gracePeriodEnd = new Date(expirationDate);
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + (school.membershipGracePeriodDays || 30));
+
+    // Create new membership enrollment
+    const enrollmentData: InsertMembershipEnrollment = {
+      schoolId,
+      parentUserId,
+      membershipYear,
+      amount: school.membershipFeeAmount || 0,
+      amountPaid: 0,
+      remainingBalance: school.membershipFeeAmount || 0,
+      status: 'pending_payment',
+      dueDate: renewalDate,
+      expirationDate,
+      gracePeriodEnd
+    };
+
+    return this.createMembershipEnrollment(enrollmentData);
   }
 
   // Class Enrollment methods

@@ -23,6 +23,7 @@ import paymentImport from "./api/payment-import";
 import accountImport from "./api/account-import";
 import dailyFlowsRoutes from "./api/daily-flows";
 import aiPricingRouter from "./api/ai-pricing";
+import { MembershipStatusService } from "./services/membership-status-service.js";
 
 const app = express();
 
@@ -166,5 +167,8 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     // Initialize and start backup service
     await backupService.init();
     backupService.startAutomaticBackups(24); // Backup every 24 hours
+    
+    // Initialize membership status tracking service
+    MembershipStatusService.initializeMembershipStatusJob();
   });
 })();

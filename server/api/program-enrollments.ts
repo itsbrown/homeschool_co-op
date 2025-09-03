@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { insertProgramEnrollmentSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { formatZodError } from "../utils";
+import { MembershipService } from "../services/membership-service.js";
 
 // Get all enrollments for a parent's children
 export const getMyChildrenEnrollments = async (req: any, res: Response) => {
@@ -148,6 +149,17 @@ export const createEnrollment = async (req: Request, res: Response) => {
     }
     
     const enrollment = await storage.createProgramEnrollment(validatedData);
+    
+    // Ensure membership enrollment for this parent and school
+    if (program.schoolId) {
+      try {
+        await MembershipService.ensureMembershipEnrollment(child.parentId, program.schoolId);
+      } catch (error) {
+        console.error(`⚠️ Failed to create membership enrollment for parent ${child.parentId} at school ${program.schoolId}:`, error);
+        // Don't fail the main enrollment if membership creation fails
+      }
+    }
+    
     res.status(201).json(enrollment);
   } catch (error: any) {
     if (error instanceof ZodError) {

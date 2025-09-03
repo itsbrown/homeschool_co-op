@@ -58,6 +58,10 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
     const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(parent.email);
     console.log(`📅 Found ${scheduledPayments.length} scheduled payments for parent ${parent.email}`);
 
+    // Get membership enrollments for this parent
+    const membershipEnrollments = await storage.getMembershipEnrollmentsByParentId(parent.id);
+    console.log(`🏅 Found ${membershipEnrollments.length} membership enrollments for parent ${parent.email}`);
+
     // Get emergency contacts for the children
     const emergencyContacts = [];
     for (const child of children) {
@@ -88,7 +92,7 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
     const totalAmountPaid = BillingCalculationService.calculateTotalPaid(paymentHistory);
     
     // Calculate total amount due by summing actual remaining balances (not stored values)
-    const totalAmountDue = CurrencyUtils.sum(
+    const classAmountDue = CurrencyUtils.sum(
       allEnrollments.map(enrollment => {
         const enrollmentPayments = paymentHistory.filter(payment => 
           payment.childName === enrollment.childName &&
@@ -99,6 +103,21 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
         return CurrencyUtils.calculateBalance(totalCost, totalPaid);
       })
     );
+
+    // Calculate membership amount due
+    const membershipAmountDue = CurrencyUtils.sum(
+      membershipEnrollments.map(membership => {
+        const membershipPayments = paymentHistory.filter(payment => 
+          payment.description?.includes('Membership') &&
+          ['completed', 'succeeded'].includes(payment.status)
+        );
+        const totalPaid = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
+        return CurrencyUtils.calculateBalance(membership.amount, totalPaid);
+      })
+    );
+
+    // Total amount due includes both class and membership fees
+    const totalAmountDue = classAmountDue + membershipAmountDue;
 
     const profile = {
       parent: {
@@ -157,6 +176,33 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
           paymentPlan: enrollment.paymentPlan
         };
       }),
+      membershipEnrollments: membershipEnrollments.map(membership => {
+        // Get school info for membership display
+        const school = classes.find(c => c.schoolId === membership.schoolId) || { schoolId: membership.schoolId };
+        
+        // Calculate actual membership payments made
+        const membershipPayments = paymentHistory.filter(payment => 
+          payment.description?.includes('Membership') &&
+          ['completed', 'succeeded'].includes(payment.status)
+        );
+        
+        const totalPaid = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
+        const actualRemainingBalance = CurrencyUtils.calculateBalance(membership.amount, totalPaid);
+        
+        return {
+          id: membership.id,
+          schoolId: membership.schoolId,
+          schoolName: school.schoolName || 'Unknown School',
+          membershipYear: membership.membershipYear,
+          amount: CurrencyUtils.toDisplay(totalPaid),
+          totalCost: CurrencyUtils.toDisplay(membership.amount),
+          remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
+          status: membership.status,
+          dueDate: membership.dueDate,
+          expirationDate: membership.expirationDate,
+          gracePeriodEnd: membership.gracePeriodEnd
+        };
+      }),
       paymentHistory: paymentHistory.map(payment => ({
         id: payment.id,
         amount: CurrencyUtils.toDisplay(payment.amount || 0),
@@ -178,9 +224,11 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
       summary: {
         totalChildren: children.length,
         totalEnrollments: allEnrollments.length,
+        totalMemberships: membershipEnrollments.length,
         totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid),
         totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue),
-        activeEnrollments: allEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length
+        activeEnrollments: allEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length,
+        activeMemberships: membershipEnrollments.filter(m => ['active', 'pending_payment'].includes(m.status)).length
       }
     };
 

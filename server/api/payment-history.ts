@@ -3,6 +3,7 @@ import { storage } from '../storage';
 import { createClient } from '@supabase/supabase-js';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
+import { MembershipService } from '../services/membership-service.js';
 
 const router = Router();
 
@@ -611,6 +612,217 @@ router.post('/refund/:paymentId', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to process refund'
+    });
+  }
+});
+
+// Create manual membership payment
+router.post('/membership/manual', async (req, res) => {
+  try {
+    console.log('🏅 Manual membership payment creation request received');
+    
+    // Extract and verify user role from token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authorization header missing'
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+    let userEmail;
+
+    // Decode token to get user email
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        userEmail = payload.email;
+        if (!userEmail) {
+          return res.status(401).json({
+            success: false,
+            error: 'Email not found in token'
+          });
+        }
+      } catch (error) {
+        console.log('❌ Token decode error:', error);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid authentication token'
+        });
+      }
+    } else {
+      // Production: Verify the Supabase token
+      const supabase = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      
+      if (error || !user) {
+        console.log('❌ Supabase auth error:', error);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid authentication token'
+        });
+      }
+      userEmail = user.email;
+    }
+
+    // Verify user has school admin role
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || !['school_admin', 'schoolAdmin', 'superAdmin', 'admin'].includes(user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions. School administrator access required.'
+      });
+    }
+
+    console.log('✅ Manual membership payment authorized for school admin:', userEmail);
+
+    const {
+      membershipId,
+      parentEmail,
+      amount,
+      currency = 'usd',
+      paymentMethod = 'manual',
+      description,
+      notes,
+      paymentDate
+    } = req.body;
+
+    // Validate required fields
+    if (!membershipId || !parentEmail || !amount) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: membershipId, parentEmail, and amount are required'
+      });
+    }
+
+    // Get membership enrollment to validate
+    const membership = await storage.getMembershipEnrollmentById(membershipId);
+    if (!membership) {
+      return res.status(404).json({
+        success: false,
+        error: 'Membership enrollment not found'
+      });
+    }
+
+    // Verify parent email matches membership
+    const membershipParent = await storage.getUser(membership.parentUserId);
+    if (!membershipParent || membershipParent.email !== parentEmail) {
+      return res.status(400).json({
+        success: false,
+        error: 'Parent email does not match membership enrollment'
+      });
+    }
+
+    // Convert amount to cents
+    const amountInCents = CurrencyUtils.toCents(amount);
+
+    // Create payment record
+    const paymentData = {
+      parentEmail,
+      childName: 'Membership Fee', // For membership, use this generic name
+      className: `${membership.membershipYear} Annual Membership`,
+      amount: amountInCents,
+      currency: currency.toLowerCase(),
+      status: 'completed',
+      paymentMethod,
+      stripePaymentIntentId: `MANUAL-MEMBERSHIP-${Date.now()}`,
+      description: description || `Manual payment for ${membership.membershipYear} annual membership`,
+      metadata: {
+        membershipId: membership.id,
+        paymentType: 'membership',
+        membershipYear: membership.membershipYear,
+        schoolId: membership.schoolId,
+        notes: notes || ''
+      }
+    };
+
+    const payment = await storage.createPayment(paymentData);
+    console.log('✅ Manual membership payment created:', payment.id);
+
+    // Update membership enrollment status and payment amounts
+    try {
+      const existingPayments = await storage.getPaymentsByParentEmail(parentEmail);
+      const membershipPayments = existingPayments.filter(p => 
+        p.metadata?.membershipId === membership.id &&
+        ['completed', 'succeeded'].includes(p.status)
+      );
+      
+      const totalPaid = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
+      
+      // Update membership status using the service
+      await MembershipService.updateMembershipStatus(membership.id, totalPaid);
+      
+      console.log(`✅ Updated membership ${membership.id}: total paid=${CurrencyUtils.format(totalPaid)}`);
+    } catch (membershipError) {
+      console.error('❌ Error updating membership enrollment:', membershipError);
+      // Don't fail the payment creation if membership update fails
+    }
+
+    // Send email receipt
+    try {
+      const parentUser = await storage.getUserByEmail(parentEmail);
+      const parentName = parentUser ? 
+        parentUser.name || parentEmail.split('@')[0] : 
+        parentEmail.split('@')[0];
+
+      const formatCurrency = (amountInCents: number) => {
+        return CurrencyUtils.format(amountInCents);
+      };
+
+      const formatDate = (date: string) => {
+        return new Intl.DateTimeFormat('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }).format(new Date(date));
+      };
+
+      await sendPaymentReceipt({
+        parentEmail,
+        parentName,
+        receiptNumber: payment.stripePaymentIntentId || `MANUAL-MEMBERSHIP-${payment.id}`,
+        paymentDate: formatDate(paymentDate || payment.createdAt),
+        paymentMethod: paymentMethod === 'manual' ? 'Manual Entry' : paymentMethod,
+        amount: formatCurrency(payment.amount),
+        childName: 'Membership Fee',
+        className: `${membership.membershipYear} Annual Membership`,
+        notes: notes || `Annual membership payment for ${membership.membershipYear}`
+      });
+      
+      console.log('📧 Membership payment receipt email sent to:', parentEmail);
+    } catch (emailError) {
+      console.error('❌ Failed to send membership payment receipt email:', emailError);
+      // Don't fail the payment creation if email fails
+    }
+
+    res.json({
+      success: true,
+      payment: {
+        id: payment.id,
+        membershipId: membership.id,
+        parentEmail: payment.parentEmail,
+        membershipYear: membership.membershipYear,
+        amount: CurrencyUtils.toDisplay(payment.amount),
+        currency: payment.currency,
+        status: payment.status,
+        description: description || `Manual membership payment for ${membership.membershipYear}`,
+        createdAt: payment.createdAt,
+        updatedAt: payment.updatedAt,
+        paymentMethod,
+        notes: notes || ''
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating manual membership payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create manual membership payment'
     });
   }
 });

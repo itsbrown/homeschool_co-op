@@ -59,6 +59,14 @@ export const schools = pgTable("schools", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   registrationCode: text("registration_code").unique(), // Unique code for registration links
+  
+  // Membership Configuration
+  membershipFeeAmount: integer("membership_fee_amount").default(0), // Annual membership fee in cents
+  membershipRenewalMonth: integer("membership_renewal_month").default(9), // Month for renewal (1-12, default September)
+  membershipRenewalDay: integer("membership_renewal_day").default(1), // Day for renewal (1-31)
+  membershipGracePeriodDays: integer("membership_grace_period_days").default(30), // Grace period in days
+  membershipDescription: text("membership_description"), // Benefits description
+  membershipRequired: boolean("membership_required").default(true), // Whether membership is required
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -74,6 +82,14 @@ export const insertSchoolSchema = createInsertSchema(schools)
     accreditation: z.string().nullable().default(null),
     enrollmentSize: z.number().nullable().default(null),
     registrationCode: z.string().nullable().default(null),
+    
+    // Membership configuration fields
+    membershipFeeAmount: z.number().default(0),
+    membershipRenewalMonth: z.number().min(1).max(12).default(9),
+    membershipRenewalDay: z.number().min(1).max(31).default(1),
+    membershipGracePeriodDays: z.number().default(30),
+    membershipDescription: z.string().nullable().default(null),
+    membershipRequired: z.boolean().default(true),
   });
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
 export type School = typeof schools.$inferSelect;
@@ -372,6 +388,48 @@ export type ProgramEnrollment = typeof programEnrollments.$inferSelect;
 export const programEnrollmentsRelations = relations(programEnrollments, ({ one }) => ({
   program: one(programs, { fields: [programEnrollments.programId], references: [programs.id] }),
   child: one(children, { fields: [programEnrollments.childId], references: [children.id] })
+}));
+
+// Membership enrollments table - tracks annual membership payments for parents
+export const membershipEnrollments = pgTable("membership_enrollments", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  parentUserId: integer("parent_user_id").notNull().references(() => users.id),
+  membershipYear: integer("membership_year").notNull(), // Year this membership covers (e.g., 2025)
+  amount: integer("amount").notNull(), // Total membership fee in cents
+  amountPaid: integer("amount_paid").default(0).notNull(), // Amount paid so far in cents
+  remainingBalance: integer("remaining_balance").notNull(), // Remaining balance in cents
+  status: text("status", { 
+    enum: ["pending_payment", "enrolled", "expired", "grace_period", "suspended"] 
+  }).default("pending_payment").notNull(),
+  dueDate: timestamp("due_date").notNull(), // When membership payment is due
+  expirationDate: timestamp("expiration_date").notNull(), // When membership expires
+  gracePeriodEnd: timestamp("grace_period_end"), // End of grace period if applicable
+  paymentMethod: text("payment_method", { 
+    enum: ["credit_card", "paypal", "bank_transfer", "cash", "check", "other"] 
+  }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMembershipEnrollmentSchema = createInsertSchema(membershipEnrollments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    // Set default values for optional fields
+    status: z.enum(["pending_payment", "enrolled", "expired", "grace_period", "suspended"]).default("pending_payment"),
+    amountPaid: z.number().default(0),
+    notes: z.string().nullable().default(null),
+    paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "check", "other"]).nullable().default(null),
+    gracePeriodEnd: z.date().nullable().default(null),
+  });
+export type InsertMembershipEnrollment = z.infer<typeof insertMembershipEnrollmentSchema>;
+export type MembershipEnrollment = typeof membershipEnrollments.$inferSelect;
+
+// Define membership enrollment relations
+export const membershipEnrollmentsRelations = relations(membershipEnrollments, ({ one }) => ({
+  school: one(schools, { fields: [membershipEnrollments.schoolId], references: [schools.id] }),
+  parent: one(users, { fields: [membershipEnrollments.parentUserId], references: [users.id] })
 }));
 
 // Curriculum table

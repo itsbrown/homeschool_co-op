@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useRoute } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -104,6 +104,19 @@ interface ParentProfile {
     remainingBalance: number;
     paymentPlan?: string;
   }>;
+  membershipEnrollments: Array<{
+    id: number;
+    schoolId: number;
+    schoolName: string;
+    membershipYear: number;
+    amount: number;
+    totalCost: number;
+    remainingBalance: number;
+    status: string;
+    dueDate: string;
+    expirationDate: string;
+    gracePeriodEnd: string;
+  }>;
   paymentHistory: Array<{
     id: number;
     amount: number;
@@ -129,9 +142,11 @@ interface ParentProfile {
   summary: {
     totalChildren: number;
     totalEnrollments: number;
+    totalMemberships: number;
     totalAmountPaid: number;
     totalAmountDue: number;
     activeEnrollments: number;
+    activeMemberships: number;
   };
 }
 
@@ -470,12 +485,41 @@ export default function ParentProfilePage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [childToDelete, setChildToDelete] = useState<any>(null);
   const [addEnrollmentDialogOpen, setAddEnrollmentDialogOpen] = useState(false);
+  const [membershipPaymentDialog, setMembershipPaymentDialog] = useState<{ open: boolean; membership: any }>({ open: false, membership: null });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: profile, isLoading, error } = useQuery<ParentProfile>({
     queryKey: [`/api/parent-profile/${parentId}`],
     enabled: !!parentId,
+  });
+
+  // Membership payment mutation
+  const markMembershipPaidMutation = useMutation({
+    mutationFn: async ({ membershipId, parentEmail, amount }: { membershipId: number; parentEmail: string; amount: number }) => {
+      return apiRequest("POST", "/api/payment-history/membership/manual", {
+        membershipId,
+        parentEmail,
+        amount,
+        description: `Manual membership payment marked as paid`,
+        notes: `Payment marked as paid by school administrator`
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Payment Recorded",
+        description: "Membership has been marked as paid successfully."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setMembershipPaymentDialog({ open: false, membership: null });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to record membership payment",
+        variant: "destructive",
+      });
+    },
   });
 
   // Child management handlers
@@ -664,22 +708,24 @@ export default function ParentProfilePage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Member Since</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Memberships</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-sm font-medium">
-                {new Date(profile.parent.createdAt).toLocaleDateString()}
-              </div>
+              <div className="text-2xl font-bold">{profile.summary.totalMemberships}</div>
+              <p className="text-xs text-muted-foreground">
+                {profile.summary.activeMemberships} active
+              </p>
             </CardContent>
           </Card>
         </div>
 
         {/* Detailed Information */}
         <Tabs defaultValue="children" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="children">Children</TabsTrigger>
             <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
+            <TabsTrigger value="memberships">Memberships</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="emergency">Emergency Contacts</TabsTrigger>
           </TabsList>
@@ -925,6 +971,93 @@ export default function ParentProfilePage() {
             </Dialog>
           </TabsContent>
 
+          <TabsContent value="memberships">
+            <Card>
+              <CardHeader>
+                <CardTitle>Annual Membership</CardTitle>
+                <CardDescription>
+                  Family membership status and payment history
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {profile.membershipEnrollments.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    <div className="flex flex-col items-center space-y-3">
+                      <GraduationCap className="h-12 w-12 text-muted-foreground/50" />
+                      <p>No membership enrollments found</p>
+                      <p className="text-sm">This family hasn't been enrolled in any membership programs yet.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {profile.membershipEnrollments.map((membership) => (
+                      <div key={membership.id} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h3 className="font-semibold text-lg">{membership.schoolName} Membership {membership.membershipYear}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Due: {new Date(membership.dueDate).toLocaleDateString()} • 
+                              Expires: {new Date(membership.expirationDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <Badge variant={
+                            membership.status === 'active' ? 'default' :
+                            membership.status === 'pending_payment' ? 'secondary' :
+                            membership.status === 'grace_period' ? 'outline' :
+                            membership.status === 'expired' ? 'destructive' : 'secondary'
+                          }>
+                            {membership.status.replace('_', ' ').toUpperCase()}
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Total Cost</p>
+                            <p className="font-semibold">${membership.totalCost.toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Amount Paid</p>
+                            <p className="font-semibold text-green-600">${membership.amount.toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Balance Due</p>
+                            <p className={`font-semibold ${membership.remainingBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                              ${membership.remainingBalance.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {membership.status === 'grace_period' && (
+                          <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                            <div className="flex items-center">
+                              <AlertTriangle className="h-4 w-4 text-yellow-600 mr-2" />
+                              <p className="text-sm text-yellow-800">
+                                Grace period ends {new Date(membership.gracePeriodEnd).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {membership.remainingBalance > 0 && (
+                          <div className="mt-3 flex justify-end">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => setMembershipPaymentDialog({ open: true, membership })}
+                              disabled={markMembershipPaidMutation.isPending}
+                            >
+                              {markMembershipPaidMutation.isPending ? "Processing..." : "Mark as Paid"}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="payments">
             <div className="space-y-6">
               {/* Payment History */}
@@ -1049,6 +1182,64 @@ export default function ParentProfilePage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Mark Membership as Paid Dialog */}
+        <Dialog open={membershipPaymentDialog.open} onOpenChange={(open) => setMembershipPaymentDialog({ open, membership: membershipPaymentDialog.membership })}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Mark Membership as Paid</DialogTitle>
+              <DialogDescription>
+                Record a manual payment for this membership. This action will mark the full remaining balance as paid.
+              </DialogDescription>
+            </DialogHeader>
+            {membershipPaymentDialog.membership && (
+              <div className="space-y-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-semibold mb-2">{membershipPaymentDialog.membership.schoolName} Membership {membershipPaymentDialog.membership.membershipYear}</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Parent:</span>
+                      <p className="font-medium">{profile?.parent.email}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Remaining Balance:</span>
+                      <p className="font-medium text-orange-600">${membershipPaymentDialog.membership.remainingBalance.toFixed(2)}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  <p>• This will create a manual payment record</p>
+                  <p>• The membership status will be updated to "Active"</p>
+                  <p>• A payment receipt will be emailed to the parent</p>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setMembershipPaymentDialog({ open: false, membership: null })}
+                disabled={markMembershipPaidMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (membershipPaymentDialog.membership && profile?.parent.email) {
+                    markMembershipPaidMutation.mutate({
+                      membershipId: membershipPaymentDialog.membership.id,
+                      parentEmail: profile.parent.email,
+                      amount: membershipPaymentDialog.membership.remainingBalance
+                    });
+                  }
+                }}
+                disabled={markMembershipPaidMutation.isPending}
+              >
+                {markMembershipPaidMutation.isPending ? "Processing..." : "Mark as Paid"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </SchoolAdminLayout>
   );
