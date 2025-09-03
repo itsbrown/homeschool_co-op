@@ -603,6 +603,10 @@ export const classes = pgTable("classes", {
   durationWeeks: integer("duration_weeks"),
   sessionsPerWeek: integer("sessions_per_week"),
   sessionLengthMinutes: integer("session_length_minutes"),
+  startTime: text("start_time"), // HH:MM format
+  endTime: text("end_time"), // HH:MM format
+  schedule: text("schedule"), // Text description like "Monday, Wednesday, Friday 9am-2pm"
+  status: text("status", { enum: ["upcoming", "active", "completed", "cancelled"] }).default("upcoming").notNull(),
   gradeLevels: text("grade_levels").array(),
   capacity: integer("capacity"),
   location: text("location"),
@@ -641,6 +645,10 @@ export const insertClassSchema = createInsertSchema(classes)
     durationWeeks: z.number().optional(),
     sessionsPerWeek: z.number().optional(),
     sessionLengthMinutes: z.number().optional(),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
+    schedule: z.string().optional(),
+    status: z.string().optional(),
     gradeLevels: z.array(z.string()).optional(),
     capacity: z.number().optional(),
     location: z.string().optional(),

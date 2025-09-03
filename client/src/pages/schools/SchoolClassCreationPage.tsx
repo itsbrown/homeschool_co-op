@@ -131,6 +131,53 @@ export default function SchoolClassCreationPage() {
         new Date(classData.endDate).toISOString().split('T')[0] : 
         "";
       
+      // Parse schedule to extract times
+      // Example: "Monday, Wednesday, Friday 9am-2pm"
+      let startTime = classData.startTime || "";
+      let endTime = classData.endTime || "";
+      
+      if (classData.schedule && !startTime && !endTime) {
+        // Try to extract time from schedule string
+        const timePattern = /(\d{1,2}(?::\d{2})?)([ap]m)?[-–](\d{1,2}(?::\d{2})?)([ap]m)/i;
+        const match = classData.schedule.match(timePattern);
+        
+        if (match) {
+          let start = match[1];
+          let startPeriod = match[2] || '';
+          let end = match[3];
+          let endPeriod = match[4] || '';
+          
+          // Convert to 24-hour format for the time inputs
+          if (startPeriod.toLowerCase() === 'pm' && !start.includes('12')) {
+            const hour = parseInt(start.split(':')[0]);
+            start = `${hour + 12}:${start.includes(':') ? start.split(':')[1] : '00'}`;
+          } else if (startPeriod.toLowerCase() === 'am' && start.includes('12')) {
+            start = start.replace('12', '00');
+          } else if (!start.includes(':')) {
+            start = start + ':00';
+          }
+          
+          if (endPeriod.toLowerCase() === 'pm' && !end.includes('12')) {
+            const hour = parseInt(end.split(':')[0]);
+            end = `${hour + 12}:${end.includes(':') ? end.split(':')[1] : '00'}`;
+          } else if (endPeriod.toLowerCase() === 'am' && end.includes('12')) {
+            end = end.replace('12', '00');
+          } else if (!end.includes(':')) {
+            end = end + ':00';
+          }
+          
+          startTime = start;
+          endTime = end;
+        }
+      }
+      
+      // Find the instructor ID from staff members
+      const instructor = staffMembers.find(
+        staff => staff.instructorName === classData.instructorName || 
+                staff.name === classData.instructorName ||
+                staff.id === classData.instructorId
+      );
+      
       form.reset({
         title: classData.title || "",
         description: classData.description || "",
@@ -139,17 +186,17 @@ export default function SchoolClassCreationPage() {
         startDate,
         endDate,
         schedule: classData.schedule || "",
-        startTime: classData.startTime || "",
-        endTime: classData.endTime || "",
+        startTime,
+        endTime,
         capacity: classData.capacity || 10,
         location: classData.location || "",
-        instructorName: classData.instructorName || "",
+        instructorName: instructor ? instructor.id.toString() : "",
         price: classData.price || 0,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
       });
     }
-  }, [classData, classId, form]);
+  }, [classData, classId, form, staffMembers]);
 
   // Create class mutation
   const createClassMutation = useMutation({
