@@ -247,7 +247,7 @@ function SchoolAdminEnrollmentForm({ parentEmail, children, onSuccess, onCancel 
                 <div>
                   <div className="font-medium">{classItem.title}</div>
                   <div className="text-sm text-muted-foreground">
-                    ${(classItem.price / 100).toFixed(2)} - {classItem.categoryName}
+                    ${classItem.price.toFixed(2)} - {classItem.categoryName}
                   </div>
                 </div>
               </SelectItem>
