@@ -26,9 +26,9 @@
     "enrollmentDate": "2025-09-01T03:25:43.228Z",
     "status": "pending_payment",
     "amount": 0,
-    "depositRequired": 30,
-    "totalCost": 300,
-    "remainingBalance": 300
+    "depositRequired": 3000,
+    "totalCost": 30000,
+    "remainingBalance": 30000
   },
   {
     "id": 1756700788788,
@@ -39,9 +39,9 @@
     "enrollmentDate": "2025-09-01T04:26:28.788Z",
     "status": "pending_payment",
     "amount": 0,
-    "depositRequired": 90,
-    "totalCost": 900,
-    "remainingBalance": 900
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
   },
   {
     "id": 1756700810624,
@@ -52,9 +52,9 @@
     "enrollmentDate": "2025-09-01T04:26:50.624Z",
     "status": "pending_payment",
     "amount": 0,
-    "depositRequired": 90,
-    "totalCost": 900,
-    "remainingBalance": 900
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
   },
   {
     "id": 1756866808252,
@@ -65,9 +65,9 @@
     "enrollmentDate": "2025-09-03T02:33:28.252Z",
     "status": "pending_payment",
     "amount": 0,
-    "depositRequired": 130,
-    "totalCost": 1300,
-    "remainingBalance": 1300
+    "depositRequired": 13000,
+    "totalCost": 130000,
+    "remainingBalance": 130000
   },
   {
     "id": 1756867126290,
@@ -78,9 +78,9 @@
     "enrollmentDate": "2025-09-03T02:38:46.290Z",
     "status": "pending_payment",
     "amount": 0,
-    "depositRequired": 130,
-    "totalCost": 1300,
-    "remainingBalance": 1300
+    "depositRequired": 13000,
+    "totalCost": 130000,
+    "remainingBalance": 130000
   },
   {
     "id": 1756902470363,
@@ -91,8 +91,8 @@
     "enrollmentDate": "2025-09-03T12:27:50.363Z",
     "status": "pending_payment",
     "amount": 0,
-    "depositRequired": 90,
-    "totalCost": 900,
-    "remainingBalance": 900
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
   }
 ]
