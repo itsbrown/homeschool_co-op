@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, Trash2, Percent, DollarSign, Users, Calendar, Eye, Target } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, Percent, DollarSign, Users, Calendar, Eye, Target, Copy } from 'lucide-react';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface Discount {
@@ -39,6 +39,7 @@ interface Discount {
   isActive: boolean;
   priority: number;
   combinableWithOthers: boolean;
+  adminOnly: boolean;
   createdBy: number;
   createdAt: string;
   updatedAt: string;
@@ -64,6 +65,7 @@ interface DiscountFormData {
   isActive: boolean;
   priority: number;
   combinableWithOthers: boolean;
+  adminOnly: boolean;
 }
 
 const categoryOptions = [
@@ -104,6 +106,7 @@ export default function DiscountsPage() {
     isActive: true,
     priority: 0,
     combinableWithOthers: false,
+    adminOnly: false,
   });
 
   const [formData, setFormData] = useState<DiscountFormData>(getInitialFormData());
@@ -203,6 +206,39 @@ export default function DiscountsPage() {
     },
   });
 
+  // Duplicate discount mutation
+  const duplicateDiscountMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/school-admin/discounts/${id}/duplicate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        },
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to duplicate discount');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/discounts'] });
+      toast({
+        title: "Success",
+        description: "Discount duplicated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Delete discount mutation
   const deleteDiscountMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -274,6 +310,7 @@ export default function DiscountsPage() {
       isActive: discount.isActive,
       priority: discount.priority,
       combinableWithOthers: discount.combinableWithOthers,
+      adminOnly: discount.adminOnly || false,
     });
     setSelectedCategories(discount.applicableToCategories || []);
     setSelectedGradeLevels(discount.applicableToGradeLevels || []);
@@ -375,6 +412,7 @@ export default function DiscountsPage() {
                     <TableHead>Type</TableHead>
                     <TableHead>Value</TableHead>
                     <TableHead>Application</TableHead>
+                    <TableHead>Admin Only</TableHead>
                     <TableHead>Usage</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
@@ -415,6 +453,17 @@ export default function DiscountsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        {discount.adminOnly ? (
+                          <Badge variant="destructive" className="text-xs">
+                            Admin Only
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">
+                            All Users
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="text-sm">
                           <div>{discount.currentUsageCount} used</div>
                           {discount.usageLimit && (
@@ -435,8 +484,18 @@ export default function DiscountsPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleEdit(discount)}
+                            title="Edit discount"
                           >
                             <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => duplicateDiscountMutation.mutate(discount.id)}
+                            disabled={duplicateDiscountMutation.isPending}
+                            title="Duplicate discount"
+                          >
+                            <Copy className="h-4 w-4" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -829,6 +888,23 @@ function DiscountFormDialog({
                 onCheckedChange={(checked) => setFormData({ ...formData, combinableWithOthers: checked })}
               />
               <Label htmlFor="combinableWithOthers">Can combine with other discounts</Label>
+            </div>
+
+            <div className="p-4 border rounded-lg bg-orange-50/50 space-y-3">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="adminOnly"
+                  checked={formData.adminOnly}
+                  onCheckedChange={(checked) => setFormData({ ...formData, adminOnly: checked })}
+                />
+                <Label htmlFor="adminOnly" className="font-medium">Admin Only Discount</Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                This discount can only be applied by school administrators. 
+                {formData.adminOnly && (
+                  <span className="font-medium text-orange-600"> Parents cannot see or apply this discount - admins only.</span>
+                )}
+              </p>
             </div>
 
             <div className="flex items-center space-x-2">

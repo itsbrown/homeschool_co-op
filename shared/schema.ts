@@ -212,6 +212,8 @@ export const children = pgTable("children", {
   gradeLevel: text("grade_level").notNull(),
   gender: text("gender"),
   school: text("school"),
+  schoolId: integer("school_id").references(() => schools.id),
+  locationId: integer("location_id").references(() => locations.id),
   learningStyle: text("learning_style"),
   specialNeeds: text("special_needs"),
   interests: text("interests").array(),

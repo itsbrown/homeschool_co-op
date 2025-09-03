@@ -14,14 +14,12 @@
     "medicalInfo": null,
     "profileImage": null,
     "createdAt": "2025-01-20T10:00:00.000Z",
-    "updatedAt": "2025-09-03T06:34:52.005Z",
+    "updatedAt": "2025-05-28T13:34:56.159Z",
     "parentEmail": "coreycreates@gmail.com",
     "parentPhone": "7185010546",
     "emergencyContact": "Jocelyn Brown",
     "emergencyPhone": "7185019708",
-    "birthDate": "2025-07-13T23:00:39.705Z",
-    "schoolId": null,
-    "locationId": null
+    "birthDate": "2025-07-13T23:00:39.705Z"
   },
   {
     "id": 2,
@@ -38,11 +36,9 @@
     "medicalInfo": "No known allergies",
     "profileImage": null,
     "createdAt": "2025-01-27T18:55:00.000Z",
-    "updatedAt": "2025-09-03T06:34:52.006Z",
+    "updatedAt": "2025-01-27T18:55:00.000Z",
     "parentEmail": "coreycreates@gmail.com",
-    "birthDate": "2025-07-13T23:00:39.705Z",
-    "schoolId": null,
-    "locationId": null
+    "birthDate": "2025-07-13T23:00:39.705Z"
   },
   {
     "firstName": "Silvie",
@@ -89,10 +85,8 @@
     "parentEmail": "kpdinvestors@gmail.com",
     "id": 4,
     "createdAt": "2025-09-01T04:08:04.544Z",
-    "updatedAt": "2025-09-03T06:34:52.006Z",
-    "birthDate": "2025-09-01T04:10:29.471Z",
-    "schoolId": 1,
-    "locationId": 4
+    "updatedAt": "2025-09-01T04:08:04.544Z",
+    "birthDate": "2025-09-01T04:10:29.471Z"
   },
   {
     "firstName": "Salena",
@@ -114,10 +108,8 @@
     "parentEmail": "kpdinvestors@gmail.com",
     "id": 5,
     "createdAt": "2025-09-01T04:25:54.790Z",
-    "updatedAt": "2025-09-03T06:34:52.006Z",
-    "birthDate": "2025-09-03T00:00:15.617Z",
-    "schoolId": 1,
-    "locationId": 4
+    "updatedAt": "2025-09-01T04:25:54.790Z",
+    "birthDate": "2025-09-03T00:00:15.617Z"
   },
   {
     "firstName": "Eva",

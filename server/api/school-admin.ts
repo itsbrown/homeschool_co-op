@@ -3207,7 +3207,8 @@ router.post('/discounts', async (req, res) => {
       validUntil,
       isActive,
       priority,
-      combinableWithOthers
+      combinableWithOthers,
+      adminOnly
     } = req.body;
     
     if (!name || !type || value === undefined || !applicationMethod) {
@@ -3261,6 +3262,7 @@ router.post('/discounts', async (req, res) => {
       isActive: isActive !== undefined ? isActive : true,
       priority: priority || 0,
       combinableWithOthers: combinableWithOthers || false,
+      adminOnly: adminOnly || false,
       createdBy: 1, // TODO: Get from authenticated user
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -3326,7 +3328,8 @@ router.put('/discounts/:id', async (req, res) => {
       validUntil,
       isActive,
       priority,
-      combinableWithOthers
+      combinableWithOthers,
+      adminOnly
     } = req.body;
     
     // Validate required fields if provided
@@ -3368,6 +3371,7 @@ router.put('/discounts/:id', async (req, res) => {
       isActive: isActive !== undefined ? isActive : existingDiscount.isActive,
       priority: priority !== undefined ? priority : existingDiscount.priority,
       combinableWithOthers: combinableWithOthers !== undefined ? combinableWithOthers : existingDiscount.combinableWithOthers,
+      adminOnly: adminOnly !== undefined ? adminOnly : existingDiscount.adminOnly,
       updatedAt: new Date().toISOString()
     };
     
@@ -3426,6 +3430,58 @@ router.delete('/discounts/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to delete discount'
+    });
+  }
+});
+
+// Duplicate an existing discount
+router.post('/discounts/:id/duplicate', async (req, res) => {
+  try {
+    const discountId = parseInt(req.params.id);
+    
+    if (isNaN(discountId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid discount ID'
+      });
+    }
+    
+    const discounts = loadDiscounts();
+    const originalDiscount = discounts.find(d => d.id === discountId);
+    
+    if (!originalDiscount) {
+      return res.status(404).json({
+        success: false,
+        error: 'Discount not found'
+      });
+    }
+    
+    // Create a copy of the discount with a new ID and name
+    const duplicatedDiscount = {
+      ...originalDiscount,
+      id: Math.max(0, ...discounts.map(d => d.id || 0)) + 1,
+      name: `${originalDiscount.name} (Copy)`,
+      code: originalDiscount.code ? `${originalDiscount.code}_COPY` : null,
+      currentUsageCount: 0,
+      isActive: false, // Start inactive so admin can review before activation
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    discounts.push(duplicatedDiscount);
+    saveDiscounts(discounts);
+    
+    console.log('✅ Discount duplicated successfully:', duplicatedDiscount);
+    
+    res.status(201).json({
+      success: true,
+      discount: duplicatedDiscount
+    });
+  } catch (error) {
+    console.error('Error duplicating discount:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to duplicate discount'
     });
   }
 });

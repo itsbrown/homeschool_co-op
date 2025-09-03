@@ -147,7 +147,28 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       age--;
     }
 
-    // Create the new child object
+    // Get parent's location data to inherit
+    let parentLocationId = null;
+    if (parent.schoolId) {
+      // Get the primary location for the parent's school
+      try {
+        const locations = await storage.getLocationsBySchoolId(parent.schoolId);
+        if (locations && locations.length > 0) {
+          // Use the first location as default, or you could implement logic to choose a specific one
+          parentLocationId = locations[0].id;
+        }
+      } catch (error) {
+        console.log('⚠️ Could not fetch parent location, child will inherit school only');
+      }
+    }
+
+    console.log('🏠 Parent location inheritance:', {
+      parentSchoolId: parent.schoolId,
+      parentLocationId,
+      parentEmail: userEmail
+    });
+
+    // Create the new child object with inherited location
     const newChild = {
       firstName,
       lastName,
@@ -160,6 +181,8 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       allergies: allergies || null,
       medicalInfo: medicalInfo || null,
       school: school || null,
+      schoolId: parent.schoolId || null, // Inherit parent's school
+      locationId: parentLocationId, // Inherit parent's primary location
       profileImage: profileImage || null,
       emergencyContact: emergencyContact || null,
       additionalLanguages: additionalLanguages || null,

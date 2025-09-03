@@ -1,1 +1,47 @@
-[]
+[
+  {
+    "id": 1,
+    "parentEmail": "alice.adams@email.com",
+    "amount": 15000,
+    "currency": "usd",
+    "status": "succeeded",
+    "description": "Payment for Math Explorers - Adaluna Brown",
+    "stripePaymentIntentId": "pi_1234567890",
+    "enrollmentIds": [1],
+    "paymentMethod": "card",
+    "className": "Math Explorers",
+    "childName": "Adaluna Brown",
+    "createdAt": "2025-08-15T10:30:00.000Z",
+    "updatedAt": "2025-08-15T10:30:00.000Z"
+  },
+  {
+    "id": 2,
+    "parentEmail": "alice.adams@email.com",
+    "amount": 8000,
+    "currency": "usd",
+    "status": "succeeded",
+    "description": "Payment for Science Lab - Adaluna Brown",
+    "stripePaymentIntentId": "pi_1234567891",
+    "enrollmentIds": [2],
+    "paymentMethod": "card",
+    "className": "Science Lab",
+    "childName": "Adaluna Brown",
+    "createdAt": "2025-08-20T14:15:00.000Z",
+    "updatedAt": "2025-08-20T14:15:00.000Z"
+  },
+  {
+    "id": 3,
+    "parentEmail": "robert.brown@email.com",
+    "amount": 12000,
+    "currency": "usd",
+    "status": "succeeded",
+    "description": "Payment for Art Studio - Isabella Brown",
+    "stripePaymentIntentId": "pi_1234567892",
+    "enrollmentIds": [3],
+    "paymentMethod": "card",
+    "className": "Art Studio",
+    "childName": "Isabella Brown",
+    "createdAt": "2025-08-25T09:45:00.000Z",
+    "updatedAt": "2025-08-25T09:45:00.000Z"
+  }
+]
