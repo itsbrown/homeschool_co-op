@@ -2298,6 +2298,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName: newChild.lastName
       });
 
+      // Also create a school student record to link this child to the school system
+      try {
+        const schoolStudentData = {
+          childId: newChild.id,
+          schoolId: 1, // Default school ID
+          enrollmentDate: new Date().toISOString(),
+          status: 'Active',
+          locationId: 1 // Default location
+        };
+
+        const schoolStudent = await storage.createSchoolStudent(schoolStudentData);
+        console.log('✅ School student record created:', schoolStudent.id);
+      } catch (schoolStudentError) {
+        console.warn('⚠️ Failed to create school student record:', schoolStudentError);
+        // Don't fail the entire operation if school student creation fails
+      }
+
       res.json({
         success: true,
         message: 'Child created successfully',
