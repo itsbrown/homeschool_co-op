@@ -1501,13 +1501,25 @@ router.get("/staff/:id/classes", async (req, res) => {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    // Get all classes and filter by instructor name or teacherId
+    // Get all classes and filter by classIds array or legacy assignment methods
     const classes = await storage.getAllClasses();
-    const assignedClasses = classes.filter(cls => 
-      cls.instructorName === staffMember.name || 
-      cls.teacherId === staffId ||
-      cls.instructorId === staffId
-    );
+    let assignedClasses = [];
+    
+    if (staffMember.classIds && Array.isArray(staffMember.classIds)) {
+      // Use the staff member's classIds array for multiple class assignments
+      assignedClasses = classes.filter(cls => 
+        staffMember.classIds.includes(cls.id.toString())
+      );
+      console.log(`📚 Found ${assignedClasses.length} classes using classIds array:`, staffMember.classIds);
+    } else {
+      // Fallback to legacy single class assignment methods
+      assignedClasses = classes.filter(cls => 
+        cls.instructorName === staffMember.name || 
+        cls.teacherId === staffId ||
+        cls.instructorId === staffId
+      );
+      console.log(`📚 Found ${assignedClasses.length} classes using legacy method`);
+    }
 
     console.log(`✅ Found ${assignedClasses.length} classes for ${staffMember.name}`);
     res.json(assignedClasses);

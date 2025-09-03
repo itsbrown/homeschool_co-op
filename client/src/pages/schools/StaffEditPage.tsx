@@ -293,6 +293,12 @@ export default function StaffEditPage() {
   // Get unassigned classes for assignment dialog
   const assignedClassIds = assignedClasses.map((cls: any) => cls.id);
   const unassignedClasses = allClasses.filter((cls: any) => !assignedClassIds.includes(cls.id));
+  
+  // Debug logging
+  console.log('🔍 Debug - allClasses:', allClasses.length, allClasses);
+  console.log('🔍 Debug - assignedClasses:', assignedClasses.length, assignedClasses);
+  console.log('🔍 Debug - assignedClassIds:', assignedClassIds);
+  console.log('🔍 Debug - unassignedClasses:', unassignedClasses.length, unassignedClasses);
 
   if (isLoading) {
     return (
