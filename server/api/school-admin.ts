@@ -1227,12 +1227,15 @@ router.post("/staff/invite", async (req, res) => {
 
   try {
     console.log("📧 Staff invitation request received:", req.body);
-    const { email, firstName, lastName, role, department, message } = req.body;
+    const { email, firstName, lastName, role, locationId, classId, message } = req.body;
 
-    if (!email || !firstName || !lastName || !role || !department) {
-      console.log("❌ Missing required fields:", { email, firstName, lastName, role, department });
+    if (!email || !firstName || !lastName || !role) {
+      console.log("❌ Missing required fields:", { email, firstName, lastName, role });
       return res.status(400).json({ message: "Missing required fields" });
     }
+
+    // Use role as department for compatibility
+    const department = role;
 
     const staffMembers = loadStaffMembers();
     console.log("📋 Current staff members count:", staffMembers.length);
