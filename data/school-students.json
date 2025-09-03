@@ -148,5 +148,75 @@
     "locationId": 1,
     "createdAt": "2025-09-03T00:27:43.440Z",
     "updatedAt": "2025-09-03T00:27:43.440Z"
+  },
+  {
+    "id": 14,
+    "childId": 13,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:37:56.045Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:37:56.045Z",
+    "updatedAt": "2025-09-03T00:37:56.045Z"
+  },
+  {
+    "id": 15,
+    "childId": 14,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:38:20.131Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:38:20.131Z",
+    "updatedAt": "2025-09-03T00:38:20.131Z"
+  },
+  {
+    "id": 16,
+    "childId": 15,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:38:57.816Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:38:57.817Z",
+    "updatedAt": "2025-09-03T00:38:57.817Z"
+  },
+  {
+    "id": 17,
+    "childId": 16,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:39:17.566Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:39:17.566Z",
+    "updatedAt": "2025-09-03T00:39:17.566Z"
+  },
+  {
+    "id": 18,
+    "childId": 17,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:43:36.855Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:43:36.855Z",
+    "updatedAt": "2025-09-03T00:43:36.855Z"
+  },
+  {
+    "id": 19,
+    "childId": 18,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:47:58.648Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:47:58.648Z",
+    "updatedAt": "2025-09-03T00:47:58.648Z"
+  },
+  {
+    "id": 20,
+    "childId": 19,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:48:43.054Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:48:43.054Z",
+    "updatedAt": "2025-09-03T00:48:43.054Z"
   }
 ]
