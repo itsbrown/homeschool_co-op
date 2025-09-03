@@ -2954,7 +2954,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/knowledge-bases/processing-stats", isAuthenticated, getProcessingStats);
 
   // Auth routes
-  // app.use("/api/auth", authRoutes); // This line is commented out in the original code, but it should be included here for consistency.
+  const authRoutes = await import("./api/auth");
+  app.use("/api/auth", authRoutes.default);
 
   // User management routes
   const userManagementModule = await import("./api/user-management");

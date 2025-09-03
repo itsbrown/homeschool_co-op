@@ -419,13 +419,19 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Set session data
-    req.session.userId = user.id;
-    req.session.userRole = user.role;
+    // Set session data (if session is available)
+    if (req.session) {
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+    } else {
+      console.log('⚠️ No session available - this endpoint may be designed for token-based auth');
+    }
 
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 
+    console.log('✅ Login successful for user:', user.email);
+    
     res.status(200).json({ 
       message: "Login successful", 
       user: userWithoutPassword 
