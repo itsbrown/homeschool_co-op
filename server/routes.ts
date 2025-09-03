@@ -1553,6 +1553,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/program-enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
   app.delete('/api/program-enrollments/:id', isAuthenticated, requireAdmin, programEnrollmentsApi.deleteEnrollment);
 
+  // Manual membership enrollment creation for school admins
+  app.post('/api/admin/membership-enrollments', jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin', 'admin']), async (req, res) => {
+    try {
+      const { parentUserId, schoolId, membershipYear } = req.body;
+      
+      if (!parentUserId || !schoolId) {
+        return res.status(400).json({ message: 'Parent ID and School ID are required' });
+      }
+      
+      // Get the school to fetch membership settings
+      const school = await storage.getSchoolById(schoolId);
+      if (!school) {
+        return res.status(404).json({ message: 'School not found' });
+      }
+      
+      if (!school.membershipFeeAmount || school.membershipFeeAmount <= 0) {
+        return res.status(400).json({ message: 'School does not have membership fees configured' });
+      }
+      
+      // Use current year if not provided
+      const currentYear = membershipYear || new Date().getFullYear();
+      
+      // Check if membership already exists for this parent, school, and year
+      const existingMembership = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, currentYear);
+      if (existingMembership) {
+        return res.status(400).json({ message: 'Membership already exists for this year' });
+      }
+      
+      // Create the membership enrollment
+      const membershipData = {
+        parentUserId,
+        schoolId,
+        membershipYear: currentYear,
+        amount: school.membershipFeeAmount,
+        status: 'pending_payment' as const,
+        dueDate: school.membershipRenewalDate || new Date(currentYear, 8, 1), // September 1st default
+        expirationDate: new Date(currentYear + 1, 7, 31), // August 31st of next year
+        gracePeriodEnd: new Date(currentYear, 8, 30), // September 30th
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const membership = await storage.createMembershipEnrollment(membershipData);
+      
+      res.status(201).json(membership);
+    } catch (error: any) {
+      console.error('Error creating membership enrollment:', error);
+      res.status(500).json({ message: 'Failed to create membership enrollment', error: error.message });
+    }
+  });
+
   // AI Enrollment Assistant with Anthropic AI
   app.post('/api/ai/enrollment-assistant', jwtCheck, handleEnrollmentMessage);
 

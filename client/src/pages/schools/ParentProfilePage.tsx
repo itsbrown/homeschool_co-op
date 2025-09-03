@@ -486,6 +486,7 @@ export default function ParentProfilePage() {
   const [childToDelete, setChildToDelete] = useState<any>(null);
   const [addEnrollmentDialogOpen, setAddEnrollmentDialogOpen] = useState(false);
   const [membershipPaymentDialog, setMembershipPaymentDialog] = useState<{ open: boolean; membership: any }>({ open: false, membership: null });
+  const [createMembershipDialog, setCreateMembershipDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -517,6 +518,28 @@ export default function ParentProfilePage() {
       toast({
         title: "Error",
         description: error.message || "Failed to record membership payment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create membership mutation
+  const createMembershipMutation = useMutation({
+    mutationFn: async (membershipData: { parentUserId: number; schoolId: number; membershipYear: number }) => {
+      return apiRequest("POST", "/api/admin/membership-enrollments", membershipData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Membership Created",
+        description: "Annual membership has been created successfully."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setCreateMembershipDialog(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create membership",
         variant: "destructive",
       });
     },
@@ -982,10 +1005,16 @@ export default function ParentProfilePage() {
               <CardContent>
                 {profile.membershipEnrollments.length === 0 ? (
                   <div className="text-center text-muted-foreground py-8">
-                    <div className="flex flex-col items-center space-y-3">
+                    <div className="flex flex-col items-center space-y-4">
                       <GraduationCap className="h-12 w-12 text-muted-foreground/50" />
                       <p>No membership enrollments found</p>
                       <p className="text-sm">This family hasn't been enrolled in any membership programs yet.</p>
+                      <Button 
+                        onClick={() => setCreateMembershipDialog(true)}
+                        className="mt-4"
+                      >
+                        Create Membership
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -1236,6 +1265,74 @@ export default function ParentProfilePage() {
                 disabled={markMembershipPaidMutation.isPending}
               >
                 {markMembershipPaidMutation.isPending ? "Processing..." : "Mark as Paid"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Membership Dialog */}
+        <Dialog open={createMembershipDialog} onOpenChange={setCreateMembershipDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Annual Membership</DialogTitle>
+              <DialogDescription>
+                Create a new annual membership enrollment for this family
+              </DialogDescription>
+            </DialogHeader>
+            {profile && (
+              <div className="space-y-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-semibold mb-2">Family Information</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Parent:</span>
+                      <p className="font-medium">{profile.parent.firstName} {profile.parent.lastName}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Email:</span>
+                      <p className="font-medium">{profile.parent.email}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-semibold mb-2">Membership Details</h4>
+                  <div className="text-sm space-y-1">
+                    <p>• Membership Year: {new Date().getFullYear()}</p>
+                    <p>• School: American Seekers Academy</p>
+                    <p>• Status: Pending Payment</p>
+                    <p>• Annual membership fee will be determined by school settings</p>
+                  </div>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  <p>• This will create a new membership enrollment for the current school year</p>
+                  <p>• The family will be able to see and pay for their membership</p>
+                  <p>• Membership fees are configured in school settings</p>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setCreateMembershipDialog(false)}
+                disabled={createMembershipMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (profile) {
+                    createMembershipMutation.mutate({
+                      parentUserId: profile.parent.id,
+                      schoolId: 1, // American Seekers Academy
+                      membershipYear: new Date().getFullYear()
+                    });
+                  }
+                }}
+                disabled={createMembershipMutation.isPending}
+              >
+                {createMembershipMutation.isPending ? "Creating..." : "Create Membership"}
               </Button>
             </div>
           </DialogContent>
