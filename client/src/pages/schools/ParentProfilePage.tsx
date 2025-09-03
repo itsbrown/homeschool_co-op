@@ -142,8 +142,8 @@ function SchoolAdminChildForm({ parentEmail, childToEdit, onSuccess, onCancel }:
   const [formData, setFormData] = useState({
     firstName: childToEdit?.firstName || '',
     lastName: childToEdit?.lastName || '',
-    birthdate: childToEdit?.birthDate || '',
-    gradeLevel: childToEdit?.grade || '',
+    birthdate: childToEdit?.birthdate || '',
+    gradeLevel: childToEdit?.gradeLevel || '',
     allergies: childToEdit?.allergies || '',
     medicalConditions: childToEdit?.medicalConditions || '',
     additionalLanguages: childToEdit?.additionalLanguages || '',

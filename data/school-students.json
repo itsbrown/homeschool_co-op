@@ -128,5 +128,25 @@
     "notes": "Enrolled at North Branch",
     "createdAt": "2025-08-20T10:00:00.000Z",
     "updatedAt": "2025-08-20T10:00:00.000Z"
+  },
+  {
+    "id": 12,
+    "childId": 11,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:27:15.054Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:27:15.054Z",
+    "updatedAt": "2025-09-03T00:27:15.054Z"
+  },
+  {
+    "id": 13,
+    "childId": 12,
+    "schoolId": 1,
+    "enrollmentDate": "2025-09-03T00:27:43.440Z",
+    "status": "active",
+    "locationId": 1,
+    "createdAt": "2025-09-03T00:27:43.440Z",
+    "updatedAt": "2025-09-03T00:27:43.440Z"
   }
 ]

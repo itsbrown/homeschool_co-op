@@ -192,7 +192,8 @@
     "notes": null,
     "id": 9,
     "createdAt": "2025-09-03T00:19:40.534Z",
-    "updatedAt": "2025-09-03T00:19:40.534Z"
+    "updatedAt": "2025-09-03T00:19:40.534Z",
+    "birthDate": "2025-09-03T00:25:52.545Z"
   },
   {
     "firstName": "Olivia",
@@ -212,6 +213,47 @@
     "notes": null,
     "id": 10,
     "createdAt": "2025-09-03T00:20:05.879Z",
-    "updatedAt": "2025-09-03T00:20:05.879Z"
+    "updatedAt": "2025-09-03T00:20:05.879Z",
+    "birthDate": "2025-09-03T00:25:52.545Z"
+  },
+  {
+    "firstName": "Miles",
+    "lastName": "Marek",
+    "birthdate": "2023-01-01",
+    "gradeLevel": "Littles",
+    "parentEmail": "erica_wilson223@yahoo.com",
+    "specialNeeds": null,
+    "medicalInfo": null,
+    "interests": null,
+    "emergencyContact": null,
+    "profileImage": null,
+    "school": null,
+    "learningStyle": null,
+    "allergies": null,
+    "additionalLanguages": null,
+    "notes": null,
+    "id": 11,
+    "createdAt": "2025-09-03T00:27:15.050Z",
+    "updatedAt": "2025-09-03T00:27:15.050Z"
+  },
+  {
+    "firstName": "Maddox",
+    "lastName": "Marek",
+    "birthdate": "2025-01-02",
+    "gradeLevel": "Littles",
+    "parentEmail": "erica_wilson223@yahoo.com",
+    "specialNeeds": null,
+    "medicalInfo": null,
+    "interests": null,
+    "emergencyContact": null,
+    "profileImage": null,
+    "school": null,
+    "learningStyle": null,
+    "allergies": null,
+    "additionalLanguages": null,
+    "notes": null,
+    "id": 12,
+    "createdAt": "2025-09-03T00:27:43.436Z",
+    "updatedAt": "2025-09-03T00:27:43.436Z"
   }
 ]
