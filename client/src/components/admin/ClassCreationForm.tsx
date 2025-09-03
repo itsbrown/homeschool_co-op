@@ -77,73 +77,38 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     role: string;
   }
   
-  const [educators, setEducators] = useState<Educator[]>([]);
-  const [locations, setLocations] = useState<{id: number, name: string}[]>([]);
-  
-  // Load staff members as potential instructors and locations
-  useEffect(() => {
-    // Fetch staff members from the school admin API
-    fetch('/api/school-admin/staff', {
-      credentials: 'include',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
-      }
-    })
-    .then(response => {
-      if (response.ok) {
-        return response.json();
-      }
-      throw new Error('Failed to fetch staff');
-    })
-    .then(staffData => {
+  // Load staff members as potential instructors using React Query
+  const { data: staffData = [], isLoading: isLoadingStaff } = useQuery({
+    queryKey: ['/api/school-admin/staff'],
+    select: (staffData: any[]) => {
       // Convert staff to educator format
-      const staffEducators = staffData.map((staff: any) => ({
+      return staffData.map((staff: any) => ({
         id: staff.id,
         name: staff.name || `${staff.firstName} ${staff.lastName}`,
         username: staff.email,
         role: staff.role,
         email: staff.email
       }));
-      
-      setEducators(staffEducators);
-      console.log("Loaded staff as educators:", staffEducators);
-    })
-    .catch(error => {
-      console.log("Failed to load staff, using fallback educators:", error);
-      // Fallback to default educators
-      const defaultEducators = [
-        { id: 1, name: "Admin User", username: "admin", role: "admin" },
-        { id: 2, name: "Educator User", username: "educator", role: "educator" },
-        { id: 3, name: "Jane Smith", username: "jsmith", role: "educator" },
-        { id: 4, name: "Michael Davis", username: "mdavis", role: "educator" }
-      ];
-      
-      setEducators(defaultEducators);
-    });
+    },
+    retry: 1,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
 
-    // Fetch locations for the school (use schoolId 1 as default)
-    fetch('/api/locations?schoolId=1', {
+  // Load locations using React Query
+  const { data: locations = [], isLoading: isLoadingLocations } = useQuery({
+    queryKey: ['/api/locations'],
+    queryFn: () => fetch('/api/locations?schoolId=1', {
       credentials: 'include',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
       }
-    })
-    .then(response => {
-      if (response.ok) {
-        return response.json();
-      }
-      throw new Error('Failed to fetch locations');
-    })
-    .then(locationsData => {
-      setLocations(locationsData);
-      console.log('Loaded locations:', locationsData);
-    })
-    .catch(error => {
-      console.log('Failed to load locations:', error);
-      // Fallback to default location
-      setLocations([{ id: 1, name: 'Brighton' }]);
-    });
-  }, []);
+    }).then(res => {
+      if (!res.ok) throw new Error('Failed to fetch locations');
+      return res.json();
+    }),
+    retry: 1,
+    staleTime: 1000 * 60 * 10, // 10 minutes
+  });
 
   // Process initialData to ensure all fields are properly formatted for the form
   const processedInitialData = initialData ? {
@@ -185,7 +150,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
   console.log("ProcessedInitialData:", processedInitialData);
 
   // Default values based on initialData or set defaults
-  const defaultValues: Partial<ClassFormValues> = processedInitialData || {
+  const defaultValues: Partial<ClassFormValues> = processedInitialData as Partial<ClassFormValues> || {
     title: "",
     description: "",
     subject: "",
@@ -196,7 +161,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     endDate: "",
     schedule: "",
     location: "",
-    price: 0,
+    price: "0",
     capacity: "20",
     isPublished: false,
     isOnline: false,
@@ -231,7 +196,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const method = classId ? "PATCH" : "POST";
       
       // Find instructor name based on selected ID
-      const selectedEducator = educators.find(edu => edu.id.toString() === data.instructorId);
+      const selectedEducator = staffData.find((edu: any) => edu.id.toString() === data.instructorId);
       const instructorName = selectedEducator ? selectedEducator.name : (user.name || user.email || "Instructor");
       
       // Convert the input price to a number (as dollars, not cents)
@@ -618,11 +583,16 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {educators.map((educator) => (
-                    <SelectItem key={educator.id} value={educator.id.toString()}>
-                      {educator.name} ({educator.role})
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="">No Instructor Assigned</SelectItem>
+                  {isLoadingStaff ? (
+                    <SelectItem value="" disabled>Loading staff...</SelectItem>
+                  ) : (
+                    staffData.map((educator) => (
+                      <SelectItem key={educator.id} value={educator.id.toString()}>
+                        {educator.name} ({educator.role})
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <FormDescription>

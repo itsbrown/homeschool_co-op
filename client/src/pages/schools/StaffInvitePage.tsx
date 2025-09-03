@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,7 @@ type InviteFormValues = z.infer<typeof inviteFormSchema>;
 export default function StaffInvitePage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch staff positions for dropdown with automatic updates
   const { data: staffPositions = [] } = useQuery({
@@ -121,6 +122,11 @@ export default function StaffInvitePage() {
         title: "Invitation sent",
         description: "Your invitation has been sent successfully.",
       });
+      
+      // Invalidate staff queries to refresh staff lists everywhere
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/staff'] });
+      
       navigate("/schools/staff");
     },
     onError: (error: any) => {
