@@ -13,7 +13,9 @@ import {
   Edit, 
   Trash2,
   Users,
-  Filter
+  Filter,
+  Mail,
+  Key
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -33,6 +35,7 @@ import { Link } from 'wouter';
 import CreateUserDialog from '@/components/schools/CreateUserDialog';
 import ImportUsersDialog from '@/components/schools/ImportUsersDialog';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import { useToast } from '@/hooks/use-toast';
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -100,6 +103,8 @@ export default function UsersPage() {
     setShowCreateDialog(true); // Reuse the create dialog for editing
   };
 
+  const { toast } = useToast();
+
   const handleDeleteUser = async (userId: number) => {
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       return;
@@ -116,9 +121,65 @@ export default function UsersPage() {
       
       // Refresh the users list
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
+      });
     } catch (error) {
       console.error('Error deleting user:', error);
-      alert('Failed to delete user. Please try again.');
+      toast({
+        title: "Error",
+        description: "Failed to delete user. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSendInvite = async (userId: number, userName: string) => {
+    try {
+      const response = await fetch(`/api/school-admin/users/${userId}/send-invite`, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to send invite');
+      }
+      
+      toast({
+        title: "Success",
+        description: `Account invite sent to ${userName}`,
+      });
+    } catch (error) {
+      console.error('Error sending invite:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send invite. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSendPasswordReset = async (userId: number, userName: string) => {
+    try {
+      const response = await fetch(`/api/school-admin/users/${userId}/send-password-reset`, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to send password reset');
+      }
+      
+      toast({
+        title: "Success",
+        description: `Password reset email sent to ${userName}`,
+      });
+    } catch (error) {
+      console.error('Error sending password reset:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send password reset. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -311,6 +372,14 @@ export default function UsersPage() {
                             <DropdownMenuItem onClick={() => handleEditUser(user)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit User
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSendInvite(user.id, `${user.firstName || user.name} ${user.lastName || ''}`)}>
+                              <Mail className="h-4 w-4 mr-2" />
+                              Send Account Invite
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSendPasswordReset(user.id, `${user.firstName || user.name} ${user.lastName || ''}`)}>
+                              <Key className="h-4 w-4 mr-2" />
+                              Send Password Reset
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-destructive"

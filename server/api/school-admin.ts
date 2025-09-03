@@ -6,6 +6,8 @@ import * as brevo from '@getbrevo/brevo';
 import { createClient } from '@supabase/supabase-js';
 import { parse as parseCSV } from 'csv-parse';
 import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
+import { sendAccountInviteEmail, sendPasswordResetEmail } from '../lib/sendgrid-service';
 
 const router = Router();
 
@@ -4147,5 +4149,100 @@ async function processStaffRecords(records: any[], results: any, schoolId: numbe
     }
   }
 }
+
+// Send account invite email to existing user
+router.post('/users/:userId/send-invite', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    console.log(`📧 Sending account invite to user ID: ${userId}`);
+
+    // Get user details
+    const user = await storage.getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Generate a temporary password if user doesn't have one or needs a new one
+    const temporaryPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
+    
+    // Hash the temporary password and update user
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+    await storage.updateUser(userId, { password: hashedPassword });
+
+    // Send invite email
+    const emailSuccess = await sendAccountInviteEmail({
+      email: user.email,
+      firstName: user.firstName || user.name || 'User',
+      lastName: user.lastName || '',
+      role: user.role,
+      temporaryPassword
+    });
+
+    if (!emailSuccess) {
+      return res.status(500).json({ message: 'Failed to send invite email' });
+    }
+
+    console.log(`✅ Account invite sent successfully to ${user.email}`);
+    res.json({ message: 'Account invite sent successfully' });
+  } catch (error) {
+    console.error('❌ Error sending account invite:', error);
+    res.status(500).json({ message: 'Failed to send account invite' });
+  }
+});
+
+// Send password reset email to existing user
+router.post('/users/:userId/send-password-reset', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    console.log(`🔑 Sending password reset to user ID: ${userId}`);
+
+    // Get user details
+    const user = await storage.getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Generate reset token
+    const resetToken = uuidv4();
+    const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+
+    // Store reset token (using simple file storage for now)
+    const tokensFile = path.join(process.cwd(), 'data', 'password-reset-tokens.json');
+    let tokens = {};
+    try {
+      if (fs.existsSync(tokensFile)) {
+        tokens = JSON.parse(fs.readFileSync(tokensFile, 'utf8'));
+      }
+    } catch (err) {
+      console.log('Creating new password reset tokens file');
+    }
+
+    tokens[resetToken] = {
+      userId: userId,
+      email: user.email,
+      expiry: tokenExpiry.toISOString(),
+      used: false
+    };
+
+    fs.writeFileSync(tokensFile, JSON.stringify(tokens, null, 2));
+
+    // Send password reset email
+    const emailSuccess = await sendPasswordResetEmail({
+      email: user.email,
+      firstName: user.firstName || user.name || 'User',
+      resetToken
+    });
+
+    if (!emailSuccess) {
+      return res.status(500).json({ message: 'Failed to send password reset email' });
+    }
+
+    console.log(`✅ Password reset email sent successfully to ${user.email}`);
+    res.json({ message: 'Password reset email sent successfully' });
+  } catch (error) {
+    console.error('❌ Error sending password reset:', error);
+    res.status(500).json({ message: 'Failed to send password reset email' });
+  }
+});
 
 export default router;
