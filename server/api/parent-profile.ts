@@ -30,6 +30,13 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
     const children = await storage.getChildrenByParentEmail(parent.email);
     console.log(`👶 Found ${children.length} children for parent ${parent.email}`);
 
+    // Get school student records to map child IDs to school student IDs
+    const schoolStudents = await storage.getAllSchoolStudents();
+    const childToSchoolStudentMap = new Map();
+    schoolStudents.forEach(ss => {
+      childToSchoolStudentMap.set(ss.childId, ss.id);
+    });
+
     // Get enrollments for all children
     const allEnrollments = [];
     for (const child of children) {
@@ -95,6 +102,7 @@ router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', '
       },
       children: children.map(child => ({
         id: child.id,
+        schoolStudentId: childToSchoolStudentMap.get(child.id) || null,
         firstName: child.firstName,
         lastName: child.lastName,
         birthDate: child.birthdate,

@@ -2267,6 +2267,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/parent", parentRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
+  // Delete child as school admin
+  app.delete("/api/school-admin/children/:id", jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin', 'admin']), async (req: any, res: any) => {
+    try {
+      const childId = parseInt(req.params.id);
+      
+      if (isNaN(childId)) {
+        return res.status(400).json({ message: 'Invalid child ID' });
+      }
+
+      console.log('🗑️ Deleting child with ID:', childId);
+
+      // First, get the child data before deleting
+      const child = await storage.getChild(childId);
+      
+      if (!child) {
+        return res.status(404).json({ message: 'Child not found' });
+      }
+
+      // Now delete the child record
+      await storage.deleteChild(childId);
+
+      // Also delete the corresponding school student record
+      try {
+        const schoolStudents = await storage.getAllSchoolStudents();
+        const schoolStudent = schoolStudents.find(ss => ss.childId === childId);
+        
+        if (schoolStudent) {
+          await storage.deleteSchoolStudent(schoolStudent.id);
+          console.log('✅ Also deleted school student record with ID:', schoolStudent.id);
+        }
+      } catch (schoolStudentError) {
+        console.warn('⚠️ Failed to delete school student record:', schoolStudentError);
+        // Don't fail the entire operation if school student deletion fails
+      }
+
+      console.log('✅ Child deleted successfully:', child.firstName, child.lastName);
+
+      res.json({
+        success: true,
+        message: 'Child deleted successfully',
+        child: {
+          id: child.id,
+          firstName: child.firstName,
+          lastName: child.lastName
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error deleting child:', error);
+      res.status(500).json({ 
+        message: 'Failed to delete child',
+        error: error.message 
+      });
+    }
+  });
+
   app.post("/api/school-admin/children", jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin']), async (req, res) => {
     try {
       console.log('👶 School admin child creation endpoint hit');

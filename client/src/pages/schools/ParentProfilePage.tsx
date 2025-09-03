@@ -68,6 +68,7 @@ interface ParentProfile {
   };
   children: Array<{
     id: number;
+    schoolStudentId: number | null;
     firstName: string;
     lastName: string;
     birthDate: string;
@@ -346,16 +347,21 @@ export default function ParentProfilePage() {
     if (!childToDelete) return;
 
     try {
-      // For now, we'll call a delete endpoint when available
-      // Currently there's no delete endpoint, so we'll show a toast
+      // Delete the child using the school admin endpoint
+      await apiRequest("DELETE", `/api/school-admin/children/${childToDelete.id}`);
+      
       toast({
-        title: "Feature Coming Soon",
-        description: "Child deletion will be available in a future update.",
-        variant: "default",
+        title: "Success",
+        description: `${childToDelete.firstName} ${childToDelete.lastName} has been removed successfully.`,
       });
+      
+      // Refresh the parent profile data
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      
       setDeleteDialogOpen(false);
       setChildToDelete(null);
     } catch (error) {
+      console.error("Failed to delete child:", error);
       toast({
         title: "Error",
         description: "Failed to delete child. Please try again.",
@@ -592,7 +598,7 @@ export default function ParentProfilePage() {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge variant="outline">ID: {child.id}</Badge>
+                            <Badge variant="outline">ID: {child.schoolStudentId || child.id}</Badge>
                             <Button
                               variant="outline"
                               size="sm"
