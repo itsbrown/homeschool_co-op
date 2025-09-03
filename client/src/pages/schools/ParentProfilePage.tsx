@@ -590,7 +590,7 @@ export default function ParentProfilePage() {
                             </h3>
                             <div className="text-sm text-muted-foreground space-y-1 mt-2">
                               <p>Grade: {child.grade}</p>
-                              <p>Birth Date: {new Date(child.birthDate).toLocaleDateString()}</p>
+                              <p>Birth Date: {child.birthDate ? new Date(child.birthDate + 'T00:00:00').toLocaleDateString() : 'No date set'}</p>
                               {child.allergies && <p>Allergies: {child.allergies}</p>}
                               {child.medicalConditions && <p>Medical Conditions: {child.medicalConditions}</p>}
                               {child.additionalLanguages && <p>Languages: {child.additionalLanguages}</p>}
