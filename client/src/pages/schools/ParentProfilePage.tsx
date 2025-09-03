@@ -173,15 +173,15 @@ function SchoolAdminChildForm({ parentEmail, childToEdit, onSuccess, onCancel }:
       };
 
       if (childToEdit) {
-        // Update existing child
-        await apiRequest("PATCH", `/api/children/${childToEdit.id}`, childData);
+        // Update existing child using school admin endpoint
+        await apiRequest("PATCH", `/api/school-admin/children/${childToEdit.id}`, childData);
         toast({
           title: "Success",
           description: "Child information updated successfully",
         });
       } else {
-        // Create new child with parent email
-        await apiRequest("POST", "/api/children", childData);
+        // Create new child using school admin endpoint
+        await apiRequest("POST", "/api/school-admin/children", childData);
         toast({
           title: "Success", 
           description: "Child added successfully",

@@ -2242,6 +2242,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/parent", parentRouter);
+  
+  // School Admin Child Management endpoints (with JWT auth for school admins)
+  app.post("/api/school-admin/children", jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin']), async (req, res) => {
+    try {
+      console.log('👶 School admin child creation endpoint hit');
+      console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+
+      const {
+        firstName,
+        lastName,
+        birthdate,
+        gradeLevel,
+        parentEmail,
+        allergies,
+        medicalInfo,
+        additionalLanguages,
+        notes
+      } = req.body;
+
+      // Validate required fields
+      if (!firstName || !lastName || !birthdate || !gradeLevel || !parentEmail) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      console.log('👤 Creating child for parent:', parentEmail);
+
+      // Create child data object
+      const childData = {
+        firstName,
+        lastName,
+        birthdate,
+        gradeLevel,
+        parentEmail,
+        specialNeeds: null,
+        medicalInfo: medicalInfo || null,
+        interests: null,
+        emergencyContact: null,
+        profileImage: null,
+        school: null,
+        learningStyle: null,
+        allergies: allergies || null,
+        additionalLanguages: additionalLanguages || null,
+        notes: notes || null
+      };
+
+      console.log('📋 Child data to create:', JSON.stringify(childData, null, 2));
+
+      // Create the child using storage
+      const newChild = await storage.createChild(childData);
+
+      console.log('✅ Child created successfully:', {
+        id: newChild.id,
+        firstName: newChild.firstName,
+        lastName: newChild.lastName
+      });
+
+      res.json({
+        success: true,
+        message: 'Child created successfully',
+        child: {
+          id: newChild.id,
+          firstName: newChild.firstName,
+          lastName: newChild.lastName,
+          parentEmail: parentEmail
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error creating child for school admin:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Failed to create child',
+        error: error.message 
+      });
+    }
+  });
+
+  app.patch("/api/school-admin/children/:id", jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin']), async (req, res) => {
+    try {
+      const childId = parseInt(req.params.id);
+      const updateData = req.body;
+
+      if (isNaN(childId)) {
+        return res.status(400).json({ message: 'Invalid child ID' });
+      }
+
+      console.log(`📝 School admin updating child ${childId} with data:`, JSON.stringify(updateData, null, 2));
+
+      // Update the child using the storage system
+      const updatedChild = await storage.updateChild(childId, updateData);
+
+      if (!updatedChild) {
+        return res.status(404).json({ message: "Child not found" });
+      }
+
+      console.log(`✅ Child ${childId} updated successfully by school admin:`, updatedChild.firstName, updatedChild.lastName);
+
+      return res.status(200).json({
+        message: "Child updated successfully",
+        id: childId,
+        child: updatedChild
+      });
+    } catch (error) {
+      console.error("Error updating child for school admin:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.use("/api/parent-profile", parentProfileRouter);
   
   // Multi-location support routes
