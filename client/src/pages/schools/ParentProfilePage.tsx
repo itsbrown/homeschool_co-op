@@ -128,6 +128,143 @@ interface ParentProfile {
   };
 }
 
+// School Admin Enrollment Form Component for creating enrollments
+function SchoolAdminEnrollmentForm({ parentEmail, children, onSuccess, onCancel }: {
+  parentEmail: string;
+  children: any[];
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [formData, setFormData] = useState({
+    childId: '',
+    classId: '',
+  });
+
+  // Fetch available classes for enrollment
+  const { data: classesResponse, isLoading: classesLoading } = useQuery({
+    queryKey: ['/api/school-admin/classes'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/school-admin/classes?limit=100");
+      const data = await response.json();
+      return data;
+    },
+  });
+
+  const classes = classesResponse?.items || [];
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.childId || !formData.classId) {
+      toast({
+        title: "Error",
+        description: "Please select both a child and a class",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Create enrollment using the class enrollment endpoint
+      await apiRequest("POST", `/api/classes/${formData.classId}/enroll`, {
+        childId: parseInt(formData.childId),
+      });
+
+      toast({
+        title: "Success",
+        description: "Child enrolled successfully",
+      });
+
+      // Invalidate parent profile query to refresh enrollments list
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile`] });
+      onSuccess();
+    } catch (error) {
+      console.error("Failed to create enrollment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create enrollment. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (classesLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Select Child</label>
+        <Select
+          value={formData.childId}
+          onValueChange={(value) => setFormData({ ...formData, childId: value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Choose a child" />
+          </SelectTrigger>
+          <SelectContent>
+            {children.map((child) => (
+              <SelectItem key={child.id} value={child.id.toString()}>
+                {child.firstName} {child.lastName} (Grade: {child.grade})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Select Class</label>
+        <Select
+          value={formData.classId}
+          onValueChange={(value) => setFormData({ ...formData, classId: value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Choose a class" />
+          </SelectTrigger>
+          <SelectContent>
+            {classes.map((classItem: any) => (
+              <SelectItem key={classItem.id} value={classItem.id.toString()}>
+                <div>
+                  <div className="font-medium">{classItem.title}</div>
+                  <div className="text-sm text-muted-foreground">
+                    ${(classItem.price / 100).toFixed(2)} - {classItem.categoryName}
+                  </div>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Creating..." : "Create Enrollment"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 // School Admin Child Form Component for managing children within parent profiles
 function SchoolAdminChildForm({ parentEmail, childToEdit, onSuccess, onCancel }: {
   parentEmail: string;
@@ -323,6 +460,7 @@ export default function ParentProfilePage() {
   const [selectedChild, setSelectedChild] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [childToDelete, setChildToDelete] = useState<any>(null);
+  const [addEnrollmentDialogOpen, setAddEnrollmentDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -681,11 +819,21 @@ export default function ParentProfilePage() {
 
           <TabsContent value="enrollments">
             <Card>
-              <CardHeader>
-                <CardTitle>Enrollments</CardTitle>
-                <CardDescription>
-                  Current and past enrollments for all children
-                </CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="space-y-1">
+                  <CardTitle>Enrollments</CardTitle>
+                  <CardDescription>
+                    Current and past enrollments for all children
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => setAddEnrollmentDialogOpen(true)}
+                  disabled={profile.children.length === 0}
+                  className="ml-auto"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Enrollment
+                </Button>
               </CardHeader>
               <CardContent>
                 {profile.enrollments.length === 0 ? (
@@ -741,6 +889,30 @@ export default function ParentProfilePage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Add Enrollment Dialog */}
+            <Dialog open={addEnrollmentDialogOpen} onOpenChange={setAddEnrollmentDialogOpen}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Add New Enrollment</DialogTitle>
+                  <DialogDescription>
+                    Enroll a child in a class for {profile.parent.firstName} {profile.parent.lastName}
+                  </DialogDescription>
+                </DialogHeader>
+                <SchoolAdminEnrollmentForm
+                  parentEmail={profile.parent.email}
+                  children={profile.children}
+                  onSuccess={() => {
+                    setAddEnrollmentDialogOpen(false);
+                    toast({
+                      title: "Success",
+                      description: "Enrollment created successfully",
+                    });
+                  }}
+                  onCancel={() => setAddEnrollmentDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="payments">
