@@ -142,8 +142,8 @@ function SchoolAdminChildForm({ parentEmail, childToEdit, onSuccess, onCancel }:
   const [formData, setFormData] = useState({
     firstName: childToEdit?.firstName || '',
     lastName: childToEdit?.lastName || '',
-    birthdate: childToEdit?.birthdate || '',
-    gradeLevel: childToEdit?.gradeLevel || '',
+    birthdate: childToEdit?.birthDate || '',
+    gradeLevel: childToEdit?.grade || '',
     allergies: childToEdit?.allergies || '',
     medicalConditions: childToEdit?.medicalConditions || '',
     additionalLanguages: childToEdit?.additionalLanguages || '',
@@ -589,8 +589,8 @@ export default function ParentProfilePage() {
                               {child.firstName} {child.lastName}
                             </h3>
                             <div className="text-sm text-muted-foreground space-y-1 mt-2">
-                              <p>Grade: {child.gradeLevel}</p>
-                              <p>Birth Date: {new Date(child.birthdate).toLocaleDateString()}</p>
+                              <p>Grade: {child.grade}</p>
+                              <p>Birth Date: {new Date(child.birthDate).toLocaleDateString()}</p>
                               {child.allergies && <p>Allergies: {child.allergies}</p>}
                               {child.medicalConditions && <p>Medical Conditions: {child.medicalConditions}</p>}
                               {child.additionalLanguages && <p>Languages: {child.additionalLanguages}</p>}
