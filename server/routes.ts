@@ -1835,28 +1835,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Add individual student route first (more specific)
   app.get("/api/schools/students/:id", (req, res) => {
-    const studentId = parseInt(req.params.id);
-    console.log('🔍 Fetching individual student by ID:', studentId);
+    const requestedId = parseInt(req.params.id);
+    console.log('🔍 Fetching individual student by ID:', requestedId);
 
     try {
-      const filePath = path.join(process.cwd(), 'data/children.json');
-
-      if (fs.existsSync(filePath)) {
-        const fileData = fs.readFileSync(filePath, 'utf-8');
-        const fileChildren = JSON.parse(fileData);
-
-        const student = fileChildren.find((child: any) => child.id === studentId);
-
-        if (!student) {
-          console.log('❌ Student not found with ID:', studentId);
-          return res.status(404).json({ message: 'Student not found' });
-        }
-
-        console.log('✅ Student found:', student);
-        return res.json(student);
+      // Load both children and school-students data
+      const childrenPath = path.join(process.cwd(), 'data/children.json');
+      const schoolStudentsPath = path.join(process.cwd(), 'data/school-students.json');
+      
+      if (!fs.existsSync(childrenPath)) {
+        console.log('❌ Children data file not found');
+        return res.status(404).json({ message: 'Student data not available' });
       }
 
-      res.status(404).json({ message: 'Student not found' });
+      const childrenData = fs.readFileSync(childrenPath, 'utf-8');
+      const children = JSON.parse(childrenData);
+
+      let targetChildId = requestedId;
+
+      // Check if the requested ID is a school student ID
+      if (fs.existsSync(schoolStudentsPath)) {
+        const schoolStudentsData = fs.readFileSync(schoolStudentsPath, 'utf-8');
+        const schoolStudents = JSON.parse(schoolStudentsData);
+        
+        const schoolStudent = schoolStudents.find((ss: any) => ss.id === requestedId);
+        if (schoolStudent) {
+          targetChildId = schoolStudent.childId;
+          console.log('🔗 Mapped school student ID', requestedId, 'to child ID', targetChildId);
+        }
+      }
+
+      // Find the child by ID
+      const student = children.find((child: any) => child.id === targetChildId);
+
+      if (!student) {
+        console.log('❌ Student not found with child ID:', targetChildId);
+        return res.status(404).json({ message: 'Student not found' });
+      }
+
+      console.log('✅ Student found:', {
+        id: student.id,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        parentEmail: student.parentEmail
+      });
+      return res.json(student);
     } catch (error) {
       console.error('❌ Error loading student:', error);
       res.status(500).json({ message: 'Error loading student' });
