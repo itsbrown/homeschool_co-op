@@ -846,11 +846,16 @@ export default function BillingPage() {
   const handlePaySelected = async () => {
     console.log('🔄 Pay Selected button clicked');
 
-    if (selectedEnrollments.length === 0) {
-      console.log('❌ No enrollments selected');
+    // Allow payment if specific enrollments are selected OR if user wants to pay all enrollments
+    const enrollmentsToProcess = selectedEnrollments.length > 0 
+      ? selectedEnrollments 
+      : billingSummary?.enrollmentDetails?.map(d => d.enrollmentId) || [];
+
+    if (enrollmentsToProcess.length === 0) {
+      console.log('❌ No enrollments available to process');
       toast({
-        title: "No Enrollments Selected",
-        description: "Please select at least one enrollment to pay.",
+        title: "No Enrollments Available",
+        description: "There are no enrollments available to pay.",
         variant: "destructive",
       });
       return;
@@ -861,7 +866,7 @@ export default function BillingPage() {
       return; // Prevent multiple clicks while processing
     }
 
-    console.log('🚀 Starting payment process for enrollments:', selectedEnrollments);
+    console.log('🚀 Starting payment process for enrollments:', enrollmentsToProcess);
 
     startTransition(() => {
       (async () => {
