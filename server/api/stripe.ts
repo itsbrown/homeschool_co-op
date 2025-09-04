@@ -392,7 +392,8 @@ router.post('/webhook', async (req, res) => {
             console.error(`❌ Scheduled payment ${scheduledPaymentId} not found`);
           }
           
-        } else if (paymentType === 'balance_payment') {
+        } else if (paymentType === 'balance_payment' || !paymentType) {
+          console.log('🔍 Processing balance payment or fallback payment...');
           // Handle balance payment - update existing enrollments
           const enrollmentIds = JSON.parse(paymentIntent.metadata.enrollmentIds || '[]');
           const parentEmail = paymentIntent.metadata.parentEmail;
