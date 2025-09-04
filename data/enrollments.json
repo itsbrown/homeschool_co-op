@@ -50,11 +50,11 @@
     "childName": "Salena Puccia",
     "className": "Tycoons | Half Day",
     "enrollmentDate": "2025-09-01T04:26:50.624Z",
-    "status": "pending_payment",
-    "amount": 0,
+    "status": "enrolled",
+    "amount": 90000,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 90000
+    "remainingBalance": 0
   },
   {
     "id": 1756866808252,

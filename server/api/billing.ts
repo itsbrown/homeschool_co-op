@@ -567,4 +567,115 @@ router.post('/test-email', async (req, res) => {
 });
 
 
+// Manual payment processing endpoint for when CartSuccess doesn't trigger
+router.post('/process-recent-payment', async (req, res) => {
+  try {
+    console.log('🔄 Manual payment processing requested');
+    
+    const authResult = await authenticateRequest(req);
+    if (!authResult.success) {
+      return res.status(401).json({ error: authResult.error });
+    }
+
+    const userEmail = authResult.user.email;
+    const { paymentIntentId } = req.body;
+
+    console.log(`🔍 Processing recent payment for user: ${userEmail}, PI: ${paymentIntentId || 'auto-detect'}`);
+
+    // Get the most recent payment intent for this user from Stripe
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    
+    let targetPaymentIntent;
+    if (paymentIntentId) {
+      // Use specific payment intent if provided
+      targetPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    } else {
+      // Find the most recent successful payment for this user
+      const paymentIntents = await stripe.paymentIntents.list({
+        limit: 10,
+      });
+      
+      targetPaymentIntent = paymentIntents.data.find(pi => 
+        pi.status === 'succeeded' && 
+        pi.metadata?.parentEmail === userEmail &&
+        pi.metadata?.itemsJson // Only cart payments
+      );
+    }
+
+    if (!targetPaymentIntent) {
+      return res.status(404).json({ error: 'No recent successful payment found' });
+    }
+
+    console.log(`💰 Found payment intent ${targetPaymentIntent.id} for processing`);
+
+    // Process the payment using the same logic as the webhook
+    const itemsJson = targetPaymentIntent.metadata.itemsJson;
+    if (!itemsJson) {
+      return res.status(400).json({ error: 'Payment has no enrollment items to process' });
+    }
+
+    const items = JSON.parse(itemsJson);
+    console.log(`📋 Processing ${items.length} enrollment items`);
+
+    // Calculate payment per item
+    const amountPerItem = Math.round(targetPaymentIntent.amount / items.length);
+    
+    // Update each enrollment
+    const updatedEnrollments = [];
+    for (const item of items) {
+      try {
+        // Find enrollment by child and class
+        const allEnrollments = await storage.getAllEnrollments();
+        const enrollment = allEnrollments.find(e => 
+          e.childId === item.childId && e.classId === item.classId
+        ) as any;
+        
+        if (enrollment) {
+          const currentAmount = enrollment.amount || 0;
+          const newAmount = currentAmount + amountPerItem;
+          const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
+          
+          const updatedEnrollment = {
+            ...enrollment,
+            amount: newAmount,
+            remainingBalance: remainingBalance,
+            status: 'enrolled' as const,
+            paymentIntentId: targetPaymentIntent.id
+          };
+          
+          await storage.updateEnrollment(updatedEnrollment);
+          updatedEnrollments.push(updatedEnrollment);
+          console.log(`✅ Updated enrollment for ${item.childName} in ${item.className}: amount=${newAmount}, remaining=${remainingBalance}`);
+        } else {
+          console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
+      }
+    }
+    
+    console.log(`✅ Manually processed ${updatedEnrollments.length} enrollments for payment ${targetPaymentIntent.id}`);
+
+    res.json({
+      success: true,
+      message: `Successfully processed payment ${targetPaymentIntent.id}`,
+      enrollmentsUpdated: updatedEnrollments.length,
+      paymentAmount: targetPaymentIntent.amount / 100, // Convert to dollars
+      updatedEnrollments: updatedEnrollments.map(e => ({
+        childName: e.childName,
+        className: e.className,
+        newAmount: e.amount / 100,
+        remainingBalance: e.remainingBalance / 100
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ Error in manual payment processing:', error);
+    res.status(500).json({ 
+      error: 'Failed to process payment',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
