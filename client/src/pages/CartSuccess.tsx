@@ -6,7 +6,7 @@ import { useLocation } from 'wouter';
 import { CheckCircle, ArrowRight, Calendar, CreditCard, Loader2, AlertCircle } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
 
 export default function CartSuccess() {
@@ -145,11 +145,9 @@ export default function CartSuccess() {
             localStorage.removeItem('cart');
             localStorage.removeItem('selectedPaymentPlan');
             
-            // Invalidate billing summary to refresh data
-            if (typeof window !== 'undefined') {
-              const { queryClient } = await import('@/lib/queryClient');
-              queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-            }
+            // Invalidate billing summary to refresh data immediately
+            queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['payment-history'] });
           } else {
             throw new Error(`Only ${successCount} of ${cart.items.length} enrollments were processed successfully`);
           }
@@ -298,10 +296,15 @@ export default function CartSuccess() {
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button 
-            onClick={() => setLocation('/billing')}
+            onClick={async () => {
+              // Force refresh billing data before navigation
+              await queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+              await queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+              setTimeout(() => setLocation('/billing'), 100); // Small delay to ensure cache refresh
+            }}
             className="flex items-center gap-2"
           >
-            View Billing
+            View Updated Billing
             <ArrowRight className="h-4 w-4" />
           </Button>
           <Button 

@@ -25,7 +25,7 @@ export default function BalanceIndicator() {
   const [, setLocation] = useLocation();
 
   const { data: billingSummary } = useQuery<BillingSummary>({
-    queryKey: ['/api/billing/summary'],
+    queryKey: ['billing-summary'],
     enabled: !!user?.email && isAuthenticated,
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/billing/summary');
