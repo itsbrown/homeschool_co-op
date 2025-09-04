@@ -89,16 +89,12 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
           variant: "destructive",
         });
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-        // Process bulk enrollments
-        await processBulkEnrollments(paymentIntent.id);
-
-        toast({
-          title: "Payment Successful!",
-          description: "Your children have been enrolled in the selected classes.",
-        });
-
-        clearCart();
-        setLocation('/cart/success');
+        // Save payment plan to localStorage for success page processing
+        localStorage.setItem('selectedPaymentPlan', selectedPaymentPlan);
+        
+        console.log('✅ Payment succeeded, Stripe will redirect to success page');
+        // Don't process enrollments here - let Stripe redirect handle it
+        // The CartSuccess page will process the enrollments after redirect
       }
     } catch (error: any) {
       console.error("Payment error:", error);
@@ -112,55 +108,6 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
     }
   };
 
-  const processBulkEnrollments = async (paymentIntentId: string) => {
-    const selectedPlanAmount = getSelectedPlanAmount();
-    const amountPerItem = Math.round(selectedPlanAmount / cart.items.length);
-
-    const paymentPromises = cart.items.map(async (item) => {
-      if (!item.enrollmentId) {
-        throw new Error(`No enrollment ID found for ${item.className}`);
-      }
-
-      const response = await apiRequest(
-        'POST',
-        `/api/billing/enrollments/${item.enrollmentId}/payment`,
-        {
-          amount: amountPerItem,
-          paymentType: selectedPaymentPlan
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to process payment for ${item.className}`);
-      }
-
-      return response.json();
-    });
-
-    try {
-      // Process all payments
-      const results = await Promise.all(paymentPromises);
-
-      // Clear cart
-      clearCart();
-
-      toast({
-        title: "Payment Successful!",
-        description: `Successfully processed payment for ${cart.items.length} enrollment${cart.items.length > 1 ? 's' : ''}`,
-      });
-
-      // Redirect to success page
-      setLocation('/cart/success');
-
-    } catch (error) {
-      console.error('Payment error:', error);
-      toast({
-        title: "Payment Failed",
-        description: error instanceof Error ? error.message : "There was an error processing your payment",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
