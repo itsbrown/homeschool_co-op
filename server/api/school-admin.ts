@@ -206,13 +206,18 @@ function generateInvitationToken(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
-// Send staff invitation email
+// Send staff invitation email using SendGrid
 async function sendStaffInvitationEmail(email: string, firstName: string, lastName: string, role: string, department: string, token: string, message?: string): Promise<boolean> {
   try {
-    if (!brevoApiInstance) {
-      console.log('📧 Brevo not configured, skipping email send');
+    // Use SendGrid instead of Brevo to avoid IP authorization issues
+    const sgMail = await import('@sendgrid/mail');
+    
+    if (!process.env.SENDGRID_API_KEY) {
+      console.log('📧 SendGrid not configured, skipping email send');
       return false;
     }
+    
+    sgMail.default.setApiKey(process.env.SENDGRID_API_KEY);
 
     const invitationUrl = `${process.env.CLIENT_URL || 'https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev'}/accept-invitation?token=${token}`;
 
@@ -266,17 +271,21 @@ ${invitationUrl}
 If you have any questions, please contact us at support@americanseekersacademy.com
     `;
 
-    const sendSmtpEmail = new brevo.SendSmtpEmail();
-    sendSmtpEmail.to = [{ email: email, name: `${firstName} ${lastName}` }];
-    sendSmtpEmail.sender = { email: 'support@americanseekersacademy.com', name: 'American Seekers Academy' };
-    sendSmtpEmail.subject = `Staff Invitation - ${role} Position at American Seekers Academy`;
-    sendSmtpEmail.htmlContent = htmlContent;
-    sendSmtpEmail.textContent = textContent;
+    const mailOptions = {
+      to: email,
+      from: {
+        email: 'support@americanseekersacademy.com',
+        name: 'American Seekers Academy'
+      },
+      subject: `Staff Invitation - ${role} Position at American Seekers Academy`,
+      text: textContent,
+      html: htmlContent
+    };
 
-    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await sgMail.default.send(mailOptions);
 
-    console.log('✅ Staff invitation email sent successfully via Brevo to:', email);
-    console.log('📧 Brevo Message ID:', result.body.messageId);
+    console.log('✅ Staff invitation email sent successfully via SendGrid to:', email);
+    console.log('📧 SendGrid Response:', result[0]?.statusCode);
     return true;
   } catch (error) {
     console.error('❌ Failed to send staff invitation email:', error);
