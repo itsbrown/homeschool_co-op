@@ -14,7 +14,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 // Helper function to process balance payments
-async function processBalancePayment(paymentIntent: Stripe.PaymentIntent, userEmail: string, enrollmentIds: number[], totalAmount: number) {
+export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent, userEmail: string, enrollmentIds: number[], totalAmount: number) {
   try {
     console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
     
@@ -453,7 +453,6 @@ router.post('/pay-balance', async (req, res) => {
         paymentPlan: paymentPlan,
         paymentType: 'balance_payment'
       },
-      confirm: true,
       automatic_payment_methods: {
         enabled: true,
         allow_redirects: 'never'
@@ -461,16 +460,6 @@ router.post('/pay-balance', async (req, res) => {
     });
 
     console.log('✅ Payment intent created:', paymentIntent.id);
-    
-    // Process payment immediately if it succeeded
-    if (paymentIntent.status === 'succeeded') {
-      console.log('💰 Payment succeeded immediately, processing balance updates...');
-      
-      // Process balance payment logic directly
-      await processBalancePayment(paymentIntent, userEmail, enrollmentIds, totalAmount);
-      
-      console.log('✅ Balance payment processed successfully');
-    }
 
     res.json({
       success: true,

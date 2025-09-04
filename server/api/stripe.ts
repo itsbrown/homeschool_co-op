@@ -406,29 +406,17 @@ router.post('/webhook', async (req, res) => {
           const parentEmail = paymentIntent.metadata.parentEmail;
           console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
           
-          // Calculate payment per enrollment
-          const paymentPerEnrollment = Math.round(paymentIntent.amount / enrollmentIds.length);
-          
-          // Update each enrollment with payment information
-          const allEnrollments = await storage.getAllEnrollments();
-          for (const enrollmentId of enrollmentIds) {
-            const enrollment = allEnrollments.find(e => e.id === enrollmentId) as any;
-            if (enrollment) {
-              // Update enrollment with payment info - ADD payment to existing amount
-              const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
-              const newAmountPaid = currentAmountPaid + paymentPerEnrollment;
-              const remainingBalance = (enrollment.totalCost || 0) - newAmountPaid;
-              
-              enrollment.paymentIntentId = paymentIntent.id;
-              enrollment.amount = newAmountPaid;
-              enrollment.amountPaid = newAmountPaid;
-              enrollment.remainingBalance = Math.max(0, remainingBalance);
-              enrollment.outstandingBalance = Math.max(0, remainingBalance);
-              enrollment.status = 'enrolled'; // Always enrolled after any payment
-              
-              console.log(`💰 Balance payment: enrollment ${enrollmentId} - was ${currentAmountPaid}, adding ${paymentPerEnrollment}, now ${newAmountPaid}, remaining ${Math.max(0, remainingBalance)}`);
-              await storage.updateEnrollment(enrollment);
-            }
+          if (enrollmentIds.length > 0 && parentEmail) {
+            // Calculate payment amount in dollars (Stripe amount is in cents)
+            const totalAmount = paymentIntent.amount / 100;
+            
+            // Import and call the processBalancePayment function
+            const { processBalancePayment } = await import('../api/billing.js');
+            await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
+            
+            console.log('✅ Balance payment processed via webhook');
+          } else {
+            console.log('⚠️ Missing enrollment IDs or parent email in payment metadata');
           }
           
           console.log('✅ Balance payment processed for:', paymentIntent.id);
