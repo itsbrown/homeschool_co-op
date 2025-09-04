@@ -24,11 +24,11 @@
     "childName": "Silvie Puccia",
     "className": "Macaroni Single Day",
     "enrollmentDate": "2025-09-01T03:25:43.228Z",
-    "status": "pending_payment",
-    "amount": 0,
+    "status": "enrolled",
+    "amount": 10000,
     "depositRequired": 3000,
     "totalCost": 30000,
-    "remainingBalance": 30000
+    "remainingBalance": 20000
   },
   {
     "id": 1756700788788,
@@ -37,11 +37,11 @@
     "childName": "Sebastian Puccia",
     "className": "Tycoons | Half Day",
     "enrollmentDate": "2025-09-01T04:26:28.788Z",
-    "status": "pending_payment",
-    "amount": 0,
+    "status": "enrolled",
+    "amount": 45000,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 90000
+    "remainingBalance": 45000
   },
   {
     "id": 1756700810624,
