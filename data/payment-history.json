@@ -69,5 +69,23 @@
       "notes": "",
       "originalPaymentDate": "2025-09-03"
     }
+  },
+  {
+    "id": 5,
+    "createdAt": "2025-09-04T20:33:17.239Z",
+    "updatedAt": "2025-09-04T20:33:17.239Z",
+    "stripePaymentIntentId": "enrollment_1756697143228_1757017997239",
+    "childName": "Silvie Puccia",
+    "className": "Macaroni Single Day",
+    "amount": 1000,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "enrollmentId": 1756697143228,
+      "paymentType": "test_payment",
+      "previousAmount": 10000,
+      "newAmount": 11000,
+      "remainingBalance": 19000
+    }
   }
 ]

@@ -25,10 +25,10 @@
     "className": "Macaroni Single Day",
     "enrollmentDate": "2025-09-01T03:25:43.228Z",
     "status": "enrolled",
-    "amount": 10000,
+    "amount": 11000,
     "depositRequired": 3000,
     "totalCost": 30000,
-    "remainingBalance": 20000
+    "remainingBalance": 19000
   },
   {
     "id": 1756700788788,
