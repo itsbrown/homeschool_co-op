@@ -312,6 +312,13 @@ router.post('/webhook', async (req, res) => {
         const paymentType = paymentIntent.metadata.paymentType;
         console.log('🔍 Payment type:', paymentType);
         
+        // Check if this payment was already processed (to avoid double processing)
+        const existingPayment = await storage.getPaymentByStripeId(paymentIntent.id);
+        if (existingPayment) {
+          console.log('⚠️ Payment already processed, skipping:', paymentIntent.id);
+          break;
+        }
+        
         if (paymentType === 'scheduled_payment') {
           // Handle scheduled payment completion
           const scheduledPaymentId = paymentIntent.metadata.scheduledPaymentId;

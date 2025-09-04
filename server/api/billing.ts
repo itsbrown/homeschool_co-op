@@ -4,6 +4,7 @@ import { storage } from '../storage';
 import { insertPaymentSchema, type InsertPayment } from '@shared/schema';
 import { sendPaymentConfirmationEmail } from '../lib/email-service';
 import { createClient } from '@supabase/supabase-js';
+import { dataLayer } from '../services/dataLayer.js';
 
 const router = Router();
 
@@ -11,6 +12,72 @@ const router = Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-04-10',
 });
+
+// Helper function to process balance payments
+async function processBalancePayment(paymentIntent: Stripe.PaymentIntent, userEmail: string, enrollmentIds: number[], totalAmount: number) {
+  try {
+    console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
+    
+    // Get all enrollments
+    const enrollments = [];
+    for (const enrollmentId of enrollmentIds) {
+      const enrollment = await storage.getEnrollmentById(enrollmentId);
+      if (enrollment && enrollment.paymentStatus !== 'completed') {
+        enrollments.push(enrollment);
+      }
+    }
+    
+    if (enrollments.length === 0) {
+      console.log('⚠️ No valid enrollments found for payment processing');
+      return;
+    }
+    
+    // Calculate payment per enrollment
+    const paymentPerEnrollment = Math.round((totalAmount * 100) / enrollments.length);
+    
+    // Update each enrollment
+    for (const enrollment of enrollments) {
+      const newAmountPaid = (enrollment.totalPaid || 0) + paymentPerEnrollment;
+      const classData = await storage.getClassById(enrollment.programId);
+      const totalCost = classData?.price || 0;
+      
+      // Update enrollment with payment
+      await storage.updateEnrollment(enrollment.id, {
+        totalPaid: newAmountPaid,
+        paymentStatus: newAmountPaid >= totalCost ? 'completed' : 'partially_paid',
+        status: 'enrolled'
+      });
+      
+      console.log(`✅ Updated enrollment ${enrollment.id}: paid ${newAmountPaid} of ${totalCost}`);
+    }
+    
+    // Create payment record
+    const paymentRecord = {
+      stripePaymentIntentId: paymentIntent.id,
+      parentEmail: userEmail,
+      childName: enrollments[0].childName || 'Multiple Children',
+      className: enrollments.length > 1 ? 'Multiple Classes' : enrollments[0].className || 'Class',
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency || 'usd',
+      status: 'completed' as const,
+      metadata: {
+        enrollmentIds: enrollmentIds,
+        paymentDate: new Date().toISOString()
+      }
+    };
+    
+    await storage.createPayment(paymentRecord);
+    console.log('✅ Payment record created:', paymentRecord.stripePaymentIntentId);
+    
+    // Send real-time update
+    await dataLayer.pushBillingUpdate(userEmail);
+    console.log('📡 Real-time billing update sent');
+    
+  } catch (error) {
+    console.error('❌ Error processing balance payment:', error);
+    throw error;
+  }
+}
 
 // Create payment intent
 router.post('/create-payment-intent', async (req, res) => {
@@ -385,10 +452,25 @@ router.post('/pay-balance', async (req, res) => {
         enrollmentIds: JSON.stringify(enrollmentIds),
         paymentPlan: paymentPlan,
         paymentType: 'balance_payment'
+      },
+      confirm: true,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never'
       }
     });
 
     console.log('✅ Payment intent created:', paymentIntent.id);
+    
+    // Process payment immediately if it succeeded
+    if (paymentIntent.status === 'succeeded') {
+      console.log('💰 Payment succeeded immediately, processing balance updates...');
+      
+      // Process balance payment logic directly
+      await processBalancePayment(paymentIntent, userEmail, enrollmentIds, totalAmount);
+      
+      console.log('✅ Balance payment processed successfully');
+    }
 
     res.json({
       success: true,
