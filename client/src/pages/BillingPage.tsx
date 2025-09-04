@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useCart } from '@/contexts/CartContext';
@@ -686,7 +686,6 @@ export default function BillingPage() {
     amount?: number;
     paymentDate?: string;
   }>({});
-  const [redirectCountdown, setRedirectCountdown] = useState(10);
 
   // Debug logging for state changes
   React.useEffect(() => {
@@ -1021,19 +1020,19 @@ export default function BillingPage() {
                   <p className="text-sm text-muted-foreground">
                     Your account will be automatically updated. Thank you for your payment!
                   </p>
-                  <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-700 text-center">
-                      Redirecting to dashboard in {redirectCountdown} seconds...
-                    </p>
-                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-center">
                 <Button 
-                  onClick={() => window.location.href = '/dashboard'}
+                  onClick={() => {
+                    setPaymentSuccess(false);
+                    setShowPayment(false);
+                    queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+                    window.location.reload();
+                  }}
                   className="w-full"
                 >
-                  Continue to Dashboard
+                  View Updated Billing
                 </Button>
               </CardFooter>
             </Card>

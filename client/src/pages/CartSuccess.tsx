@@ -141,9 +141,15 @@ export default function CartSuccess() {
               description: `Successfully processed payment for ${successCount} enrollment${successCount > 1 ? 's' : ''}`,
             });
 
-            // Clear cart data
+            // Clear cart data and invalidate billing cache
             localStorage.removeItem('cart');
             localStorage.removeItem('selectedPaymentPlan');
+            
+            // Invalidate billing summary to refresh data
+            if (typeof window !== 'undefined') {
+              const { queryClient } = await import('@/lib/queryClient');
+              queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+            }
           } else {
             throw new Error(`Only ${successCount} of ${cart.items.length} enrollments were processed successfully`);
           }
