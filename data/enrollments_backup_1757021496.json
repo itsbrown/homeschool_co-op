@@ -1,0 +1,98 @@
+[
+  {
+    "id": 1749407107800,
+    "classId": 4,
+    "childId": 1,
+    "childName": "Adaluna Brown",
+    "className": "Macaroni",
+    "enrollmentDate": "2025-06-08T18:25:07.800Z",
+    "status": "enrolled"
+  },
+  {
+    "id": 1749407259489,
+    "classId": 2,
+    "childId": 2,
+    "childName": "Hermione Brown",
+    "className": "Seekers Full Day 9AM - 2PM",
+    "enrollmentDate": "2025-06-08T18:27:39.489Z",
+    "status": "enrolled"
+  },
+  {
+    "id": 1756697143228,
+    "classId": 14,
+    "childId": 3,
+    "childName": "Silvie Puccia",
+    "className": "Macaroni Single Day",
+    "enrollmentDate": "2025-09-01T03:25:43.228Z",
+    "status": "enrolled",
+    "amount": 23642,
+    "depositRequired": 3000,
+    "totalCost": 30000,
+    "remainingBalance": 6358
+  },
+  {
+    "id": 1756700788788,
+    "classId": 5,
+    "childId": 4,
+    "childName": "Sebastian Puccia",
+    "className": "Tycoons | Half Day",
+    "enrollmentDate": "2025-09-01T04:26:28.788Z",
+    "status": "enrolled",
+    "amount": 57642,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 32358
+  },
+  {
+    "id": 1756700810624,
+    "classId": 5,
+    "childId": 5,
+    "childName": "Salena Puccia",
+    "className": "Tycoons | Half Day",
+    "enrollmentDate": "2025-09-01T04:26:50.624Z",
+    "status": "enrolled",
+    "amount": 102642,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 0
+  },
+  {
+    "id": 1756866808252,
+    "classId": 11,
+    "childId": 26,
+    "childName": "Beau Carber-Callan",
+    "className": "Pioneers | Full Day",
+    "enrollmentDate": "2025-09-03T02:33:28.252Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 13000,
+    "totalCost": 130000,
+    "remainingBalance": 130000
+  },
+  {
+    "id": 1756867126290,
+    "classId": 11,
+    "childId": 27,
+    "childName": "Lucas Barber-callan",
+    "className": "Pioneers | Full Day",
+    "enrollmentDate": "2025-09-03T02:38:46.290Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 13000,
+    "totalCost": 130000,
+    "remainingBalance": 130000
+  },
+  {
+    "id": 1756902470363,
+    "classId": 4,
+    "childId": 6,
+    "childName": "Eva Corcoran Flores",
+    "className": "Yankee Doodle | Half Day",
+    "enrollmentDate": "2025-09-03T12:27:50.363Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
+  }
+]

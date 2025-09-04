@@ -404,8 +404,9 @@ router.post('/webhook', async (req, res) => {
           for (const enrollmentId of enrollmentIds) {
             const enrollment = allEnrollments.find(e => e.id === enrollmentId) as any;
             if (enrollment) {
-              // Update enrollment with payment info
-              const newAmountPaid = (enrollment.amountPaid || enrollment.amount || 0) + paymentPerEnrollment;
+              // Update enrollment with payment info - ADD payment to existing amount
+              const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
+              const newAmountPaid = currentAmountPaid + paymentPerEnrollment;
               const remainingBalance = (enrollment.totalCost || 0) - newAmountPaid;
               
               enrollment.paymentIntentId = paymentIntent.id;
@@ -415,7 +416,7 @@ router.post('/webhook', async (req, res) => {
               enrollment.outstandingBalance = Math.max(0, remainingBalance);
               enrollment.status = 'enrolled'; // Always enrolled after any payment
               
-              console.log(`💰 Updated balance payment for enrollment ${enrollmentId}: paid=${newAmountPaid}, remaining=${remainingBalance}`);
+              console.log(`💰 Balance payment: enrollment ${enrollmentId} - was ${currentAmountPaid}, adding ${paymentPerEnrollment}, now ${newAmountPaid}, remaining ${Math.max(0, remainingBalance)}`);
               await storage.updateEnrollment(enrollment);
             }
           }
