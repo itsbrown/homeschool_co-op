@@ -81,12 +81,12 @@ router.post('/confirm-payment', async (req, res) => {
           ...payment!,
           status: 'completed' as const
         },
-        enrollmentDetails: enrollmentDetails.map((detail: any) => ({
+        enrollmentDetails: enrollmentDetails?.map((detail: any) => ({
           childName: detail.childName,
           className: detail.className,
           price: detail.price,
           amountPaid: detail.amountPaid
-        }))
+        })) || []
       };
 
       await sendPaymentConfirmationEmail(emailData);
