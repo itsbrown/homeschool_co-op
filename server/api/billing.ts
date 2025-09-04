@@ -200,8 +200,12 @@ router.get('/summary', async (req, res) => {
     const childIds = children.map(child => child.id);
     console.log('👶 Found children:', childIds);
 
-    // Get all enrollments for these children
-    const allEnrollments = await storage.getEnrollmentsByChildIds(childIds);
+    // Get all enrollments for these children (using individual child lookups)
+    const allEnrollments = [];
+    for (const childId of childIds) {
+      const childEnrollments = await storage.getEnrollmentsByChildId(childId);
+      allEnrollments.push(...childEnrollments);
+    }
     console.log('📋 Found enrollments:', allEnrollments.length);
 
     // Calculate enrollment details with balances
@@ -220,7 +224,10 @@ router.get('/summary', async (req, res) => {
       // Calculate balance based on enrollment data
       const totalAmount = enrollment.totalCost || classDetails.price || 0;
       const totalPaid = enrollment.amount || 0;
-      const balance = totalAmount - totalPaid;
+      // Use remainingBalance if available, otherwise calculate from totalCost - amount
+      const balance = enrollment.remainingBalance !== undefined 
+        ? enrollment.remainingBalance 
+        : (totalAmount - totalPaid);
 
       if (balance > 0) {
         enrollmentDetails.push({
