@@ -700,19 +700,7 @@ export default function BillingPage() {
     });
   }, [isAuthenticated, user, selectedEnrollments, showPayment, isPending, clientSecret]);
 
-  // Handle automatic redirect after payment success
-  React.useEffect(() => {
-    if (paymentSuccess && redirectCountdown > 0) {
-      const timer = setTimeout(() => {
-        setRedirectCountdown(prev => prev - 1);
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    } else if (paymentSuccess && redirectCountdown === 0) {
-      // Auto-redirect to dashboard after countdown
-      window.location.href = '/dashboard';
-    }
-  }, [paymentSuccess, redirectCountdown]);
+  // Removed automatic redirect after payment success - users can manually navigate
 
   // Fetch billing summary
   const { data: billingSummary, isLoading, error } = useQuery<BillingSummary>({
