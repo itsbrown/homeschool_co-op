@@ -378,14 +378,21 @@ router.post('/webhook', async (req, res) => {
             console.error('❌ Failed to send balance payment receipt email:', emailError);
           }
         } else {
-          // Handle new enrollment payments
+          // Handle new enrollment payments (cart checkout)
           const itemsJson = paymentIntent.metadata.itemsJson;
           const paymentType = paymentIntent.metadata.paymentType;
           const parentEmail = paymentIntent.metadata.parentEmail;
           
-          if (itemsJson) {
+          console.log('💰 Processing cart checkout payment:', {
+            paymentType,
+            parentEmail,
+            hasItemsJson: !!itemsJson,
+            paymentIntentId: paymentIntent.id
+          });
+          
+          if (itemsJson && parentEmail) {
             const items = JSON.parse(itemsJson);
-            console.log('💰 Processing cart payment enrollments:', items.length, 'items');
+            console.log('💰 Processing cart payment enrollments:', items.length, 'items for', parentEmail);
             
             // Calculate payment per item
             const amountPerItem = Math.round(paymentIntent.amount / items.length);
@@ -758,6 +765,109 @@ router.post('/test-email', async (req, res) => {
       error: error.message,
       stack: error.stack,
       timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Backup payment processing endpoint - processes any successful payment by payment intent ID
+router.post('/process-payment/:paymentIntentId', async (req, res) => {
+  try {
+    const { paymentIntentId } = req.params;
+    console.log('🔄 Manual payment processing requested for:', paymentIntentId);
+
+    // Get the payment intent from Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment has not succeeded'
+      });
+    }
+
+    // Extract metadata
+    const itemsJson = paymentIntent.metadata.itemsJson;
+    const parentEmail = paymentIntent.metadata.parentEmail;
+    const paymentType = paymentIntent.metadata.paymentType;
+
+    if (!itemsJson || !parentEmail) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required payment metadata'
+      });
+    }
+
+    const items = JSON.parse(itemsJson);
+    console.log('💰 Processing manual payment for', items.length, 'items for', parentEmail);
+
+    // Calculate payment per item
+    const amountPerItem = Math.round(paymentIntent.amount / items.length);
+    
+    // Update each enrollment
+    const updatedEnrollments = [];
+    for (const item of items) {
+      try {
+        // Find enrollment by child and class
+        const allEnrollments = await storage.getAllEnrollments();
+        const enrollment = allEnrollments.find(e => 
+          e.childId === item.childId && e.classId === item.classId
+        ) as any;
+        
+        if (enrollment) {
+          const currentAmount = enrollment.amount || 0;
+          const newAmount = currentAmount + amountPerItem;
+          const remainingBalance = Math.max(0, (enrollment.totalCost || item.totalCost || 0) - newAmount);
+          
+          const updatedEnrollment = {
+            ...enrollment,
+            amount: newAmount,
+            remainingBalance: remainingBalance,
+            status: 'enrolled' as const,
+            paymentIntentId: paymentIntent.id
+          };
+          
+          await storage.updateEnrollment(updatedEnrollment);
+          updatedEnrollments.push(updatedEnrollment);
+          console.log(`✅ Updated enrollment for ${item.childName} in ${item.className}: amount=${newAmount}, remaining=${remainingBalance}`);
+        } else {
+          console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
+      }
+    }
+
+    // Create payment record for history
+    const payment = {
+      stripePaymentIntentId: paymentIntent.id,
+      parentEmail: parentEmail,
+      childName: items[0]?.childName || 'Student',
+      className: items.length > 1 ? `${items.length} classes` : items[0]?.className || 'Class',
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency || 'usd',
+      status: 'completed' as const,
+      metadata: {
+        itemCount: items.length,
+        paymentType: paymentType,
+        manuallyProcessed: true
+      }
+    };
+
+    await storage.createPayment(payment);
+    console.log('✅ Created payment history record for manual processing');
+
+    res.json({
+      success: true,
+      message: `Successfully processed payment for ${updatedEnrollments.length} enrollments`,
+      updatedEnrollments: updatedEnrollments.length,
+      paymentIntentId: paymentIntent.id
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing manual payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process payment'
     });
   }
 });

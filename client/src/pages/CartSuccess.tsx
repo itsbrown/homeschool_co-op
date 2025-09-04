@@ -45,7 +45,28 @@ export default function CartSuccess() {
           }
           
           if (!cartData) {
-            console.log('❌ No cart data found anywhere, skipping enrollment processing');
+            console.log('❌ No cart data found anywhere, trying to recover from payment intent');
+            // Try to process payment using backup system
+            try {
+              console.log('🔄 Attempting backup payment processing...');
+              const response = await apiRequest('POST', `/api/stripe/process-payment/${paymentIntent}`, {});
+              if (response.ok) {
+                const result = await response.json();
+                console.log('✅ Backup payment processing successful:', result);
+                setProcessing(false);
+                toast({
+                  title: "Payment Successful!",
+                  description: `Successfully processed payment for ${result.updatedEnrollments} enrollment${result.updatedEnrollments > 1 ? 's' : ''}`,
+                  duration: 8000,
+                });
+                return;
+              } else {
+                const errorData = await response.json();
+                console.error('❌ Backup payment processing failed:', errorData);
+              }
+            } catch (error) {
+              console.error('❌ Failed to process payment via backup system:', error);
+            }
             // Don't throw error - just show success page
             setProcessing(false);
             return;
