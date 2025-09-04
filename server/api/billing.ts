@@ -368,40 +368,65 @@ router.post('/confirm-payment', async (req, res) => {
     // Update enrollment statuses
     const allEnrollments = await storage.getAllEnrollments();
     const updatedEnrollments = [];
+    const amountPerEnrollment = Math.round(amount / enrollmentIds.length);
 
     console.log('🔍 All enrollment IDs in storage:', allEnrollments.map(e => e.id));
     console.log('🔍 Looking for enrollment IDs:', enrollmentIds);
+
+    // Get user's children to verify ownership
+    const userChildren = await storage.getChildrenByParentEmail(userEmail);
+    const userChildIds = userChildren.map(child => child.id);
 
     for (const enrollmentId of enrollmentIds) {
       const enrollment = allEnrollments.find(e => e.id === enrollmentId);
       console.log(`🔍 Found enrollment ${enrollmentId}:`, enrollment ? 'YES' : 'NO');
       
-      if (enrollment && enrollment.parentEmail === userEmail) {
-        console.log(`🔄 Updating enrollment ${enrollmentId} from status '${enrollment.status}' to 'enrolled'`);
-        enrollment.status = 'enrolled';
-        enrollment.amount = (enrollment.amount || 0) + Math.round(amount / enrollmentIds.length);
-        await storage.updateEnrollment(enrollment);
-        updatedEnrollments.push(enrollment);
-        console.log('✅ Updated enrollment:', enrollmentId, 'status to enrolled');
-      } else if (enrollment && enrollment.parentEmail !== userEmail) {
-        console.log(`❌ Enrollment ${enrollmentId} belongs to ${enrollment.parentEmail}, not ${userEmail}`);
+      if (enrollment && userChildIds.includes(enrollment.childId)) {
+        console.log(`🔄 Updating enrollment ${enrollmentId} from status '${enrollment.status}' to 'completed'`);
+        
+        // Update the enrollment with payment information
+        const updatedEnrollment = {
+          ...enrollment,
+          status: 'completed' as const,
+          totalPaid: (enrollment.totalPaid || 0) + amountPerEnrollment,
+          notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}` : `Payment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}`
+        };
+        
+        await storage.updateEnrollment(updatedEnrollment);
+        updatedEnrollments.push(updatedEnrollment);
+        console.log('✅ Updated enrollment:', enrollmentId, 'status to completed, amount paid:', amountPerEnrollment);
+      } else if (enrollment && !userChildIds.includes(enrollment.childId)) {
+        console.log(`❌ Enrollment ${enrollmentId} belongs to child ${enrollment.childId}, not authorized for user ${userEmail}`);
       } else {
         console.log(`❌ Enrollment ${enrollmentId} not found in storage`);
       }
     }
 
+    // Get child and class details for payment record
+    let childName = 'Multiple Children';
+    let className = 'Multiple Classes';
+    
+    if (updatedEnrollments.length === 1) {
+      const enrollment = updatedEnrollments[0];
+      const child = await storage.getChildById(enrollment.childId);
+      const classDetails = await storage.getClassById(enrollment.classId);
+      childName = child ? `${child.firstName} ${child.lastName}` : 'Unknown Child';
+      className = classDetails?.className || 'Unknown Class';
+    }
+
     // Create payment record
     const payment = {
-      id: Date.now(),
       stripePaymentIntentId: paymentIntentId,
       parentEmail: userEmail,
-      childName: updatedEnrollments[0]?.childName || 'Unknown',
-      className: updatedEnrollments[0]?.className || 'Unknown',
+      childName: childName,
+      className: className,
       amount: amount,
       currency: 'usd',
-      status: 'completed',
-      createdAt: new Date(),
-      updatedAt: new Date()
+      status: 'completed' as const,
+      metadata: {
+        enrollmentIds: enrollmentIds,
+        paymentDate: paymentDate
+      }
     };
 
     try {
@@ -414,11 +439,15 @@ router.post('/confirm-payment', async (req, res) => {
     try {
       const { sendPaymentConfirmationEmail } = await import('../lib/email-service');
       
-      const enrollmentDetails = updatedEnrollments.map(enrollment => ({
-        childName: enrollment.childName,
-        className: enrollment.className,
-        price: enrollment.totalCost || 0,
-        amountPaid: Math.round(amount / enrollmentIds.length),
+      const enrollmentDetails = await Promise.all(updatedEnrollments.map(async (enrollment) => {
+        const child = await storage.getChildById(enrollment.childId);
+        const classDetails = await storage.getClassById(enrollment.classId);
+        return {
+          childName: child ? `${child.firstName} ${child.lastName}` : 'Unknown Child',
+          className: classDetails?.className || 'Unknown Class',
+          price: classDetails?.price || 0,
+          amountPaid: Math.round(amount / enrollmentIds.length),
+        };
       }));
 
       const emailSent = await sendPaymentConfirmationEmail({
