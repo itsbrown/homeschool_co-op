@@ -393,6 +393,7 @@ router.post('/webhook', async (req, res) => {
         } else if (paymentType === 'balance_payment') {
           // Handle balance payment - update existing enrollments
           const enrollmentIds = JSON.parse(paymentIntent.metadata.enrollmentIds || '[]');
+          const parentEmail = paymentIntent.metadata.parentEmail;
           console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
           
           // Calculate payment per enrollment
@@ -420,6 +421,17 @@ router.post('/webhook', async (req, res) => {
           }
           
           console.log('✅ Balance payment processed for:', paymentIntent.id);
+          
+          // 🚀 PUSH REAL-TIME UPDATE TO FRONTEND
+          if (parentEmail) {
+            try {
+              const { dataLayer } = await import('../services/dataLayer.js');
+              await dataLayer.refreshUserData(parentEmail);
+              console.log('📡 Pushed real-time billing update to frontend');
+            } catch (error) {
+              console.error('❌ Failed to push real-time update:', error);
+            }
+          }
           
           // Send email receipt for balance payment
           try {

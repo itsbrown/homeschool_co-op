@@ -2914,6 +2914,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerTechnicalSupportRoutes(app);
 
   const httpServer = createServer(app);
+  
+  // Initialize WebSocket data layer for real-time updates
+  try {
+    const { dataLayer } = await import('./services/dataLayer.js');
+    dataLayer.init(httpServer);
+    console.log('🔌 Real-time data layer initialized');
+  } catch (error) {
+    console.error('❌ Failed to initialize data layer:', error);
+  }
   // Backup management endpoints
   app.get("/api/admin/backups", async (req, res) => {
     try {

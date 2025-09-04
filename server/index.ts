@@ -24,6 +24,7 @@ import accountImport from "./api/account-import";
 import dailyFlowsRoutes from "./api/daily-flows";
 import aiPricingRouter from "./api/ai-pricing";
 import { MembershipStatusService } from "./services/membership-status-service.js";
+import { dataLayer } from "./services/dataLayer.js";
 
 const app = express();
 

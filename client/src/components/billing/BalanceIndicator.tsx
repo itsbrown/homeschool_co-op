@@ -5,6 +5,7 @@ import { AlertTriangle, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/SupabaseProvider';
 import { useLocation } from 'wouter';
+import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
 
 interface BillingSummary {
   totalBalance: number;
@@ -23,6 +24,9 @@ interface BillingSummary {
 export default function BalanceIndicator() {
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  
+  // Initialize real-time updates
+  useRealTimeUpdates();
 
   const { data: billingSummary } = useQuery<BillingSummary>({
     queryKey: ['billing-summary'],
