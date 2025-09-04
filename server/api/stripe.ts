@@ -305,10 +305,12 @@ router.post('/webhook', async (req, res) => {
     case 'payment_intent.succeeded':
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
       console.log('💳 Payment succeeded:', paymentIntent.id);
+      console.log('🔍 Payment metadata:', paymentIntent.metadata);
       
       try {
         // Check if this is a balance payment or new enrollment
         const paymentType = paymentIntent.metadata.paymentType;
+        console.log('🔍 Payment type:', paymentType);
         
         if (paymentType === 'scheduled_payment') {
           // Handle scheduled payment completion
