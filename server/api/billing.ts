@@ -276,18 +276,21 @@ router.get('/summary', async (req, res) => {
         ? enrollment.remainingBalance 
         : (totalAmount - totalPaid);
 
+      // Always show all enrollments, but only add positive balances to total
+      enrollmentDetails.push({
+        enrollmentId: enrollment.id,
+        childName: `${child.firstName} ${child.lastName}`,
+        className: classDetails.title,
+        classPrice: totalAmount,
+        amountPaid: totalPaid,
+        balance: balance,
+        status: enrollment.status,
+        enrollmentDate: enrollment.enrollmentDate,
+        depositRequired: enrollment.depositRequired || Math.round(totalAmount * 0.1)
+      });
+      
+      // Only add positive balances to the total outstanding amount
       if (balance > 0) {
-        enrollmentDetails.push({
-          enrollmentId: enrollment.id,
-          childName: `${child.firstName} ${child.lastName}`,
-          className: classDetails.title,
-          classPrice: totalAmount,
-          amountPaid: totalPaid,
-          balance: balance,
-          status: enrollment.status,
-          enrollmentDate: enrollment.enrollmentDate,
-          depositRequired: enrollment.depositRequired || Math.round(totalAmount * 0.1)
-        });
         totalBalance += balance;
       }
     }
