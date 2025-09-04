@@ -605,7 +605,7 @@ function PaymentForm({
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(amount);
+    }).format(amount / 100); // Convert cents to dollars
   };
 
   return (
@@ -749,7 +749,7 @@ export default function BillingPage() {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(amount);
+    }).format(amount / 100); // Convert cents to dollars
   };
 
   const formatDate = (dateString: string) => {
