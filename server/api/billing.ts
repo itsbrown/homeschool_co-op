@@ -519,4 +519,52 @@ router.post('/test-email', async (req, res) => {
   }
 });
 
+// Manual fix endpoint for specific payment that went through but didn't update enrollments
+router.post('/manual-fix-payment', async (req, res) => {
+  try {
+    console.log('🔧 Manual fix: Updating enrollments for kpdinvestors@gmail.com payment of $21.00');
+    
+    // The specific enrollments that were paid for
+    const enrollmentIds = [1756697143228, 1756700788788, 1756700810624];
+    const totalPaidAmount = 2100; // $21.00 in cents
+    const amountPerEnrollment = Math.round(totalPaidAmount / enrollmentIds.length);
+    
+    const allEnrollments = await storage.getAllEnrollments();
+    const updatedCount = [];
+    
+    for (const enrollmentId of enrollmentIds) {
+      const enrollment = allEnrollments.find(e => e.id === enrollmentId);
+      
+      if (enrollment) {
+        console.log(`🔄 Updating enrollment ${enrollmentId} with payment of $${amountPerEnrollment/100}`);
+        
+        const updatedEnrollment = {
+          ...enrollment,
+          status: 'completed' as const,
+          totalPaid: (enrollment.totalPaid || 0) + amountPerEnrollment,
+          notes: enrollment.notes ? `${enrollment.notes}\nManual fix: Payment of $${amountPerEnrollment/100} applied on ${new Date().toISOString()}` : `Manual fix: Payment of $${amountPerEnrollment/100} applied on ${new Date().toISOString()}`
+        };
+        
+        await storage.updateEnrollment(updatedEnrollment);
+        updatedCount.push(enrollmentId);
+        console.log('✅ Updated enrollment:', enrollmentId);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Manual fix applied: Updated ${updatedCount.length} enrollments`,
+      updatedEnrollments: updatedCount,
+      totalAmount: totalPaidAmount
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in manual fix:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Manual fix failed'
+    });
+  }
+});
+
 export default router;
