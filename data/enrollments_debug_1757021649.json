@@ -25,11 +25,10 @@
     "className": "Macaroni Single Day",
     "enrollmentDate": "2025-09-01T03:25:43.228Z",
     "status": "enrolled",
-    "amount": 30000,
-    "amountPaid": 30000,
+    "amount": 23642,
     "depositRequired": 3000,
     "totalCost": 30000,
-    "remainingBalance": 0
+    "remainingBalance": 6358
   },
   {
     "id": 1756700788788,
@@ -39,11 +38,10 @@
     "className": "Tycoons | Half Day",
     "enrollmentDate": "2025-09-01T04:26:28.788Z",
     "status": "enrolled",
-    "amount": 90000,
-    "amountPaid": 90000,
+    "amount": 57642,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 0
+    "remainingBalance": 32358
   },
   {
     "id": 1756700810624,
