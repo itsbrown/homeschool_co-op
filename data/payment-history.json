@@ -141,5 +141,59 @@
       "newAmount": 97111,
       "remainingBalance": 0
     }
+  },
+  {
+    "id": 9,
+    "createdAt": "2025-09-04T21:13:51.682Z",
+    "updatedAt": "2025-09-04T21:13:51.682Z",
+    "stripePaymentIntentId": "enrollment_1756697143228_1757020431682",
+    "childName": "Silvie Puccia",
+    "className": "Macaroni Single Day",
+    "amount": 5531,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "enrollmentId": 1756697143228,
+      "paymentType": "balance_payment",
+      "previousAmount": 18111,
+      "newAmount": 23642,
+      "remainingBalance": 6358
+    }
+  },
+  {
+    "id": 10,
+    "createdAt": "2025-09-04T21:13:52.900Z",
+    "updatedAt": "2025-09-04T21:13:52.900Z",
+    "stripePaymentIntentId": "enrollment_1756700788788_1757020432900",
+    "childName": "Sebastian Puccia",
+    "className": "Tycoons | Half Day",
+    "amount": 5531,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "enrollmentId": 1756700788788,
+      "paymentType": "balance_payment",
+      "previousAmount": 52111,
+      "newAmount": 57642,
+      "remainingBalance": 32358
+    }
+  },
+  {
+    "id": 11,
+    "createdAt": "2025-09-04T21:13:53.886Z",
+    "updatedAt": "2025-09-04T21:13:53.886Z",
+    "stripePaymentIntentId": "enrollment_1756700810624_1757020433886",
+    "childName": "Salena Puccia",
+    "className": "Tycoons | Half Day",
+    "amount": 5531,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "enrollmentId": 1756700810624,
+      "paymentType": "balance_payment",
+      "previousAmount": 97111,
+      "newAmount": 102642,
+      "remainingBalance": 0
+    }
   }
 ]

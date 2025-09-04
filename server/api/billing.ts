@@ -383,7 +383,8 @@ router.post('/pay-balance', async (req, res) => {
       metadata: {
         parentEmail: userEmail,
         enrollmentIds: JSON.stringify(enrollmentIds),
-        paymentPlan: paymentPlan
+        paymentPlan: paymentPlan,
+        paymentType: 'balance_payment'
       }
     });
 
