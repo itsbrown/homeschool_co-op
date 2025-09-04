@@ -705,8 +705,11 @@ export default function BillingPage() {
   // Removed automatic redirect after payment success - users can manually navigate
 
   // Fetch billing summary
-  const { data: billingSummary, isLoading, error } = useQuery<BillingSummary>({
+  const { data: billingSummary, isLoading, error, refetch } = useQuery<BillingSummary>({
     queryKey: ['billing-summary'],
+    staleTime: 0, // Always fetch fresh data
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
     queryFn: async () => {
       try {
         console.log('📊 Fetching billing summary...');
@@ -1027,11 +1030,12 @@ export default function BillingPage() {
               </CardContent>
               <CardFooter className="flex justify-center">
                 <Button 
-                  onClick={() => {
+                  onClick={async () => {
                     setPaymentSuccess(false);
                     setShowPayment(false);
                     queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-                    window.location.reload();
+                    queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+                    await refetch();
                   }}
                   className="w-full"
                 >

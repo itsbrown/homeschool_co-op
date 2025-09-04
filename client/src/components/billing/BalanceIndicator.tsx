@@ -27,6 +27,9 @@ export default function BalanceIndicator() {
   const { data: billingSummary } = useQuery<BillingSummary>({
     queryKey: ['billing-summary'],
     enabled: !!user?.email && isAuthenticated,
+    staleTime: 0, // Always consider data stale - fetch fresh data
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/billing/summary');
       if (!response.ok) throw new Error('Failed to fetch billing summary');
