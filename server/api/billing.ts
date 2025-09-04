@@ -117,6 +117,53 @@ router.post('/confirm-payment', async (req, res) => {
   }
 });
 
+// Process individual enrollment payment
+router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
+  try {
+    const { enrollmentId } = req.params;
+    const { amount, paymentType } = req.body;
+
+    console.log(`💰 Processing individual enrollment payment: ${enrollmentId}, amount: ${amount}, type: ${paymentType}`);
+
+    // Get the enrollment
+    const enrollment = await storage.getEnrollmentById(parseInt(enrollmentId));
+    if (!enrollment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Enrollment not found'
+      });
+    }
+
+    // Update enrollment with payment
+    const currentAmount = enrollment.amount || 0;
+    const newAmount = currentAmount + amount;
+    const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
+
+    const updatedEnrollment = {
+      ...enrollment,
+      amount: newAmount,
+      remainingBalance: remainingBalance,
+      status: 'enrolled' as const, // Any payment makes them enrolled
+    };
+
+    await storage.updateEnrollment(updatedEnrollment);
+
+    console.log(`✅ Updated enrollment ${enrollmentId}: amount=${newAmount}, remaining=${remainingBalance}`);
+
+    res.json({
+      success: true,
+      enrollment: updatedEnrollment
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing enrollment payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process payment'
+    });
+  }
+});
+
 // Get payment status
 router.get('/payment-status/:paymentIntentId', async (req, res) => {
   try {

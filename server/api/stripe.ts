@@ -385,6 +385,46 @@ router.post('/webhook', async (req, res) => {
           
           if (itemsJson) {
             const items = JSON.parse(itemsJson);
+            console.log('💰 Processing cart payment enrollments:', items.length, 'items');
+            
+            // Calculate payment per item
+            const amountPerItem = Math.round(paymentIntent.amount / items.length);
+            
+            // Update each enrollment
+            const updatedEnrollments = [];
+            for (const item of items) {
+              try {
+                // Find enrollment by child and class
+                const allEnrollments = await storage.getAllEnrollments();
+                const enrollment = allEnrollments.find(e => 
+                  e.childId === item.childId && e.classId === item.classId
+                ) as any;
+                
+                if (enrollment) {
+                  const currentAmount = enrollment.amount || 0;
+                  const newAmount = currentAmount + amountPerItem;
+                  const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
+                  
+                  const updatedEnrollment = {
+                    ...enrollment,
+                    amount: newAmount,
+                    remainingBalance: remainingBalance,
+                    status: 'enrolled' as const,
+                    paymentIntentId: paymentIntent.id
+                  };
+                  
+                  await storage.updateEnrollment(updatedEnrollment);
+                  updatedEnrollments.push(updatedEnrollment);
+                  console.log(`✅ Updated enrollment for ${item.childName} in ${item.className}: amount=${newAmount}, remaining=${remainingBalance}`);
+                } else {
+                  console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
+                }
+              } catch (error) {
+                console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
+              }
+            }
+            
+            console.log(`✅ Updated ${updatedEnrollments.length} enrollments for payment ${paymentIntent.id}`);
             
             // Create payment record
             const payment = {
