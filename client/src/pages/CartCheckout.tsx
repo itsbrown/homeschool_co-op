@@ -71,6 +71,13 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
       return;
     }
 
+    // Backup cart data before processing payment
+    const cartData = localStorage.getItem('cart');
+    if (cartData) {
+      sessionStorage.setItem('cart_backup', cartData);
+      console.log('💾 Backed up cart data to sessionStorage');
+    }
+
     setProcessing(true);
 
     try {

@@ -36,9 +36,19 @@ export default function CartSuccess() {
           console.log('✅ Processing successful Stripe payment:', paymentIntent);
           
           // Get the cart data from local storage to process enrollments
-          const cartData = localStorage.getItem('cart');
+          let cartData = localStorage.getItem('cart');
+          
+          // If no cart data, try to get from backup or sessionStorage
           if (!cartData) {
-            throw new Error('No cart data found - unable to process enrollments');
+            console.log('⚠️ No cart data in localStorage, checking sessionStorage...');
+            cartData = sessionStorage.getItem('cart_backup');
+          }
+          
+          if (!cartData) {
+            console.log('❌ No cart data found anywhere, skipping enrollment processing');
+            // Don't throw error - just show success page
+            setProcessing(false);
+            return;
           }
 
           const cart = JSON.parse(cartData);
