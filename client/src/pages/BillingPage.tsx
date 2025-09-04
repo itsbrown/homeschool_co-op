@@ -393,7 +393,9 @@ function UpcomingPaymentsTab() {
                     
                     // Invalidate cache and refetch data
                     setTimeout(() => {
-                      window.location.reload();
+                      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+                      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+                      queryClient.invalidateQueries({ queryKey: ['payment-history'] });
                     }, 1000);
                   }}
                   onError={(error: string) => {
@@ -507,7 +509,7 @@ function PaymentForm({
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/billing?payment=success`,
+          return_url: `${window.location.origin}/billing`,
         },
         redirect: 'if_required',
       });
@@ -572,8 +574,9 @@ function PaymentForm({
 
         // Refresh data in the background
         setTimeout(() => {
-          window.location.reload();
-        }, 3000);
+          queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+          queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+        }, 1000);
       } else {
         console.warn('⚠️ Unexpected payment result:', paymentIntent);
         toast({

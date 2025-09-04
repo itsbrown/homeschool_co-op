@@ -298,11 +298,17 @@ export default function CartSuccess() {
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button 
-            onClick={() => setLocation('/dashboard')}
+            onClick={() => setLocation('/billing')}
             className="flex items-center gap-2"
           >
-            View Dashboard
+            View Billing
             <ArrowRight className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => setLocation('/dashboard')}
+          >
+            View Dashboard
           </Button>
           <Button 
             variant="outline"

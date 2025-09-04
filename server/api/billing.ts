@@ -148,7 +148,28 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
 
     await storage.updateEnrollment(updatedEnrollment);
 
+    // Create payment record for history tracking
+    const paymentData: InsertPayment = {
+      stripePaymentIntentId: `enrollment_${enrollmentId}_${Date.now()}`,
+      parentEmail: enrollment.parentEmail,
+      childName: enrollment.childName,
+      className: enrollment.className,
+      amount: amount,
+      currency: 'usd',
+      status: 'completed',
+      metadata: {
+        enrollmentId: parseInt(enrollmentId),
+        paymentType: paymentType || 'enrollment_payment',
+        previousAmount: currentAmount,
+        newAmount: newAmount,
+        remainingBalance: remainingBalance
+      }
+    };
+
+    await storage.createPayment(paymentData);
+
     console.log(`✅ Updated enrollment ${enrollmentId}: amount=${newAmount}, remaining=${remainingBalance}`);
+    console.log(`✅ Created payment record for enrollment ${enrollmentId}`);
 
     res.json({
       success: true,
