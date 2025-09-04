@@ -18,7 +18,7 @@ export async function apiRequest(
   body?: unknown,
   options?: RequestInit
 ): Promise<Response> {
-  const token = localStorage.getItem('supabase_token');
+  let token = localStorage.getItem('supabase_token');
   const activeRole = localStorage.getItem('activeRole');
 
   // Check if body is FormData to handle file uploads properly
