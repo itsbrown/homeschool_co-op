@@ -25,15 +25,15 @@
     "className": "Macaroni Single Day",
     "enrollmentDate": "2025-09-01T03:25:43.228Z",
     "status": "enrolled",
-    "amount": 7000,
-    "totalPaid": 7000,
+    "amount": 28000,
+    "totalPaid": 28000,
     "depositRequired": 3000,
     "totalCost": 30000,
-    "remainingBalance": 23000,
+    "remainingBalance": 2000,
     "paymentStatus": "payment_plan_active",
     "paymentPlanStatus": "in_progress",
-    "amountPaid": 7000,
-    "paymentIntentId": "pi_3S3y2lRFKXbVXRE31n3d46qO"
+    "amountPaid": 28000,
+    "paymentIntentId": "pi_3S3yDTRFKXbVXRE30k2O1nSA"
   },
   {
     "id": 1756700788788,
@@ -43,15 +43,15 @@
     "className": "Tycoons | Half Day",
     "enrollmentDate": "2025-09-01T04:26:28.788Z",
     "status": "enrolled",
-    "amount": 7000,
-    "totalPaid": 7000,
+    "amount": 28000,
+    "totalPaid": 28000,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 83000,
+    "remainingBalance": 62000,
     "paymentStatus": "payment_plan_active",
     "paymentPlanStatus": "in_progress",
-    "amountPaid": 7000,
-    "paymentIntentId": "pi_3S3y2lRFKXbVXRE31n3d46qO"
+    "amountPaid": 28000,
+    "paymentIntentId": "pi_3S3yDTRFKXbVXRE30k2O1nSA"
   },
   {
     "id": 1756700810624,
@@ -61,15 +61,15 @@
     "className": "Tycoons | Half Day",
     "enrollmentDate": "2025-09-01T04:26:50.624Z",
     "status": "enrolled",
-    "amount": 7000,
-    "totalPaid": 7000,
+    "amount": 28000,
+    "totalPaid": 28000,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 83000,
+    "remainingBalance": 62000,
     "paymentStatus": "payment_plan_active",
     "paymentPlanStatus": "in_progress",
-    "amountPaid": 7000,
-    "paymentIntentId": "pi_3S3y2lRFKXbVXRE31n3d46qO"
+    "amountPaid": 28000,
+    "paymentIntentId": "pi_3S3yDTRFKXbVXRE30k2O1nSA"
   },
   {
     "id": 1756866808252,

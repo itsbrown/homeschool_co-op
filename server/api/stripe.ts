@@ -475,12 +475,12 @@ router.post('/webhook', async (req, res) => {
           // Break out of switch after processing scheduled payment
           break;
           
-        } else if (paymentType === 'balance_payment' || !paymentType) {
-          console.log('🔍 Processing balance payment or fallback payment...');
+        } else if (paymentType === 'balance_payment' || paymentType === 'three_payments' || !paymentType) {
+          console.log('🔍 Processing balance payment, three_payments plan, or fallback payment...');
           // Handle balance payment - update existing enrollments
           const enrollmentIds = JSON.parse(paymentIntent.metadata.enrollmentIds || '[]');
           const parentEmail = paymentIntent.metadata.parentEmail;
-          console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
+          console.log('💰 Processing payment for enrollments:', enrollmentIds, 'payment type:', paymentType);
           
           if (enrollmentIds.length > 0 && parentEmail) {
             // Calculate payment amount in dollars (Stripe amount is in cents)
@@ -490,7 +490,7 @@ router.post('/webhook', async (req, res) => {
             const { processBalancePayment } = await import('../api/billing.js');
             await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
             
-            console.log('✅ Balance payment processed via webhook');
+            console.log('✅ Balance payment processed via webhook for payment type:', paymentType);
           } else {
             console.log('⚠️ Missing enrollment IDs or parent email in payment metadata');
           }
