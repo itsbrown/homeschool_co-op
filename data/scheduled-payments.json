@@ -23,8 +23,8 @@
     "totalInstallments": 3,
     "dueDate": "2025-11-05T03:36:30.489Z",
     "description": "Multiple Classes",
-    "status": "pending",
+    "status": "paid",
     "createdAt": "2025-09-05T03:36:30.489Z",
-    "updatedAt": "2025-09-05T03:36:30.489Z"
+    "updatedAt": "2025-09-05T04:19:40.000Z"
   }
 ]
