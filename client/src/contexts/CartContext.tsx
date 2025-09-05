@@ -238,10 +238,21 @@ const calculateCartTotalsSync = (items: CartItem[]): { subtotal: number; discoun
   // For sync calculation, use fallback rate (this will be updated by async calculation)
   const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0; // Fallback rate
   
-  // Apply sibling discount per line item (10% off each item)
-  const siblingDiscount = uniqueChildren > 1 
-    ? items.reduce((sum, item) => sum + (item.price * siblingDiscountRate), 0)
-    : 0;
+  // Apply sibling discount: 10% off for 2nd child and beyond (not the first child)
+  let siblingDiscount = 0;
+  if (uniqueChildren > 1) {
+    // Sort children by first occurrence in cart (first child gets no discount)
+    const childOrder = [...new Set(items.map(item => item.childId))];
+    
+    siblingDiscount = items.reduce((sum, item) => {
+      const childIndex = childOrder.indexOf(item.childId);
+      // First child (index 0) gets no discount, subsequent children get discount
+      if (childIndex > 0) {
+        return sum + (item.price * siblingDiscountRate);
+      }
+      return sum;
+    }, 0);
+  }
 
   // Apply "Free After Three" - 4th child and beyond are free
   let freeAfterThreeDiscount = 0;
@@ -287,8 +298,17 @@ const calculateCartTotalsWithDiscounts = async (items: CartItem[], getAccessToke
       const siblingDiscountSettings = await fetchSiblingDiscountSettings(getAccessTokenSilently);
       siblingDiscountRate = siblingDiscountSettings.rate;
       
-      // Apply sibling discount per line item (percentage off each item)
-      siblingDiscount = items.reduce((sum, item) => sum + (item.price * siblingDiscountRate), 0);
+      // Apply sibling discount: 10% off for 2nd child and beyond (not the first child)
+      const childOrder = [...new Set(items.map(item => item.childId))];
+      
+      siblingDiscount = items.reduce((sum, item) => {
+        const childIndex = childOrder.indexOf(item.childId);
+        // First child (index 0) gets no discount, subsequent children get discount
+        if (childIndex > 0) {
+          return sum + (item.price * siblingDiscountRate);
+        }
+        return sum;
+      }, 0);
     } catch (error) {
       console.log('Failed to fetch sibling discount settings, using default 0%');
       siblingDiscountRate = 0;
