@@ -15,11 +15,11 @@ export default function CartDrawer() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amountInCents: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(amount);
+    }).format(amountInCents / 100);
   };
 
   const handleCheckout = () => {
