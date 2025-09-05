@@ -402,16 +402,17 @@
     "childName": "Silvie Puccia",
     "className": "Macaroni",
     "totalCost": 9000000,
-    "remainingBalance": 901250,
-    "paymentStatus": "stripe_managed",
+    "remainingBalance": 0,
+    "paymentStatus": "completed",
     "paymentSystemVersion": "v2_stripe",
     "status": "enrolled",
     "createdAt": "2025-09-05T16:08:56.170Z",
-    "updatedAt": "2025-09-05T16:09:22.649Z",
+    "updatedAt": "2025-09-05T16:21:57.413Z",
     "id": 1757088536170,
-    "amount": 8098750,
-    "totalPaid": 8098750,
-    "paymentIntentId": "pi_3S42C4RFKXbVXRE31MMfpMzt"
+    "amount": 24296250,
+    "totalPaid": 24296250,
+    "paymentIntentId": "pi_3S42C4RFKXbVXRE31MMfpMzt",
+    "enrollmentDate": "2025-09-05T16:15:33.629Z"
   },
   {
     "programId": 5,
@@ -421,16 +422,17 @@
     "childName": "Sebastian Puccia",
     "className": "Tycoons | Half Day",
     "totalCost": 9000000,
-    "remainingBalance": 901250,
-    "paymentStatus": "stripe_managed",
+    "remainingBalance": 0,
+    "paymentStatus": "completed",
     "paymentSystemVersion": "v2_stripe",
     "status": "enrolled",
     "createdAt": "2025-09-05T16:08:56.188Z",
-    "updatedAt": "2025-09-05T16:09:22.655Z",
+    "updatedAt": "2025-09-05T16:21:57.420Z",
     "id": 1757088536188,
-    "amount": 8098750,
-    "totalPaid": 8098750,
-    "paymentIntentId": "pi_3S42C4RFKXbVXRE31MMfpMzt"
+    "amount": 24296250,
+    "totalPaid": 24296250,
+    "paymentIntentId": "pi_3S42C4RFKXbVXRE31MMfpMzt",
+    "enrollmentDate": "2025-09-05T16:15:33.629Z"
   },
   {
     "classId": 3,
@@ -453,5 +455,18 @@
     "remainingBalance": 0,
     "enrollmentDate": "2025-09-05T16:09:20.822Z",
     "id": 1757088560822
+  },
+  {
+    "id": 1757089329313,
+    "classId": 3,
+    "childId": 4,
+    "childName": "Sebastian Puccia",
+    "className": "Macaroni",
+    "enrollmentDate": "2025-09-05T16:22:09.312Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
   }
 ]
