@@ -335,6 +335,42 @@ router.post('/webhook', async (req, res) => {
             await storage.updateScheduledPaymentStatus(parseInt(scheduledPaymentId), 'paid');
             console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as paid`);
             
+            // UPDATE ENROLLMENT BALANCES - This was missing!
+            console.log('💰 Updating enrollment balances for scheduled payment...');
+            const enrollmentIds = scheduledPayment.enrollmentIds || [];
+            const paymentAmountPerEnrollment = Math.round(paymentIntent.amount / enrollmentIds.length);
+            
+            for (const enrollmentId of enrollmentIds) {
+              try {
+                const allEnrollments = await storage.getAllEnrollments();
+                const enrollment = allEnrollments.find(e => e.id === enrollmentId) as any;
+                
+                if (enrollment) {
+                  const currentAmountPaid = enrollment.amount || enrollment.amountPaid || 0;
+                  const newAmountPaid = currentAmountPaid + paymentAmountPerEnrollment;
+                  const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+                  
+                  // Update enrollment with new payment
+                  const updatedEnrollment = {
+                    ...enrollment,
+                    amount: newAmountPaid,
+                    amountPaid: newAmountPaid,
+                    remainingBalance: newBalance,
+                    paymentIntentId: paymentIntent.id,
+                    // Update payment status based on remaining balance
+                    paymentStatus: newBalance <= 0 ? 'completed' : 'payment_plan_active'
+                  };
+                  
+                  await storage.updateEnrollment(updatedEnrollment);
+                  console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+                } else {
+                  console.error(`❌ Enrollment ${enrollmentId} not found for scheduled payment`);
+                }
+              } catch (error) {
+                console.error(`❌ Error updating enrollment ${enrollmentId}:`, error);
+              }
+            }
+            
             // Create payment record for history
             const description = scheduledPayment.description || 'Payment';
             const payment = {
@@ -392,6 +428,15 @@ router.post('/webhook', async (req, res) => {
               console.log('📧 Scheduled payment receipt email sent to:', parentEmail);
             } catch (emailError) {
               console.error('❌ Failed to send scheduled payment receipt email:', emailError);
+            }
+            
+            // 🚀 PUSH REAL-TIME UPDATE TO FRONTEND for scheduled payments
+            try {
+              const { dataLayer } = await import('../services/dataLayer.js');
+              await dataLayer.refreshUserData(parentEmail);
+              console.log('📡 Pushed real-time billing update to frontend for scheduled payment');
+            } catch (error) {
+              console.error('❌ Failed to push real-time update for scheduled payment:', error);
             }
             
             console.log(`✅ Scheduled payment ${scheduledPaymentId} processing complete`);
