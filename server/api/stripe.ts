@@ -350,13 +350,20 @@ router.post('/webhook', async (req, res) => {
                   const newAmountPaid = currentAmountPaid + paymentAmountPerEnrollment;
                   const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
                   
-                  // Update enrollment with new payment
+                  // Update enrollment with new payment and installment tracking
+                  const currentInstallmentsPaid = (enrollment.installmentsPaid || 0) + 1;
+                  const totalInstallments = enrollment.totalInstallments || scheduledPayment.totalInstallments || 3;
+                  
                   const updatedEnrollment = {
                     ...enrollment,
                     amount: newAmountPaid,
                     amountPaid: newAmountPaid,
+                    totalPaid: newAmountPaid,
                     remainingBalance: newBalance,
                     paymentIntentId: paymentIntent.id,
+                    installmentsPaid: currentInstallmentsPaid,
+                    totalInstallments: totalInstallments,
+                    paymentPlanStatus: newBalance <= 0 ? 'completed' : 'in_progress',
                     // Update payment status based on remaining balance
                     paymentStatus: newBalance <= 0 ? 'completed' : 'payment_plan_active'
                   };
@@ -433,8 +440,26 @@ router.post('/webhook', async (req, res) => {
             // 🚀 PUSH REAL-TIME UPDATE TO FRONTEND for scheduled payments
             try {
               const { dataLayer } = await import('../services/dataLayer.js');
+              
+              // Send specific billing update with new data
+              dataLayer.broadcastBillingUpdate(parentEmail, {
+                type: 'scheduled_payment_complete',
+                paymentId: scheduledPaymentId,
+                amount: paymentIntent.amount,
+                totalBalanceFormatted: `${newAmountPaid / 100}`,
+                timestamp: new Date().toISOString()
+              });
+              
+              // Also send payment complete notification
+              dataLayer.broadcastPaymentComplete(parentEmail, {
+                amount: paymentIntent.amount,
+                paymentId: scheduledPaymentId,
+                description: scheduledPayment.description,
+                timestamp: new Date().toISOString()
+              });
+              
               await dataLayer.refreshUserData(parentEmail);
-              console.log('📡 Pushed real-time billing update to frontend for scheduled payment');
+              console.log('📡 Pushed comprehensive real-time billing update to frontend for scheduled payment');
             } catch (error) {
               console.error('❌ Failed to push real-time update for scheduled payment:', error);
             }

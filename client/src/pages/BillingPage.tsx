@@ -15,6 +15,7 @@ import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useLocation } from 'wouter';
 import { useCart } from '@/contexts/CartContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
@@ -193,9 +194,28 @@ function UpcomingPaymentsTab() {
   const [isPending, startTransition] = useTransition();
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
+  
+  // Enable real-time updates for scheduled payments 
+  const { isConnected } = useRealTimeUpdates({
+    onBillingUpdate: (data) => {
+      console.log('🔄 Upcoming payments: Real-time billing update received:', data);
+      refetchUpcoming();
+    },
+    onPaymentComplete: (data) => {
+      console.log('💳 Upcoming payments: Real-time payment complete:', data);
+      refetchUpcoming();
+      toast({
+        title: "Payment Completed!",
+        description: "Your scheduled payment has been processed successfully.",
+        variant: "default",
+      });
+    }
+  });
 
-  const { data: upcomingPayments, isLoading } = useQuery({
+  const { data: upcomingPayments, isLoading, refetch: refetchUpcoming } = useQuery({
     queryKey: ['/api/scheduled-payments/upcoming'],
+    staleTime: 0,
+    refetchInterval: 2000, // Refresh every 2 seconds
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
       if (!response.ok) {
@@ -678,6 +698,25 @@ export default function BillingPage() {
   const { toast } = useToast();
   const { clearCart } = useCart();
   const [, navigate] = useLocation();
+  
+  // Enable real-time updates for billing data
+  const { isConnected } = useRealTimeUpdates({
+    onBillingUpdate: (data) => {
+      console.log('🔄 Real-time billing update received:', data);
+      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+    },
+    onPaymentComplete: (data) => {
+      console.log('💳 Real-time payment complete:', data);
+      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+      toast({
+        title: "Payment Completed!",
+        description: `Payment of ${data.amount ? (data.amount / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : 'your payment'} has been processed successfully.`,
+        variant: "default",
+      });
+    }
+  });
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<{[enrollmentId: number]: number}>({});
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('deposit_all');
@@ -699,10 +738,11 @@ export default function BillingPage() {
 
   // Removed automatic redirect after payment success - users can manually navigate
 
-  // Fetch billing summary
+  // Fetch billing summary with aggressive refreshing for real-time updates
   const { data: billingSummary, isLoading, error, refetch } = useQuery<BillingSummary>({
     queryKey: ['billing-summary'],
     staleTime: 0, // Always fetch fresh data
+    refetchInterval: 1500, // Refresh every 1.5 seconds 
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     queryFn: async () => {
