@@ -26,11 +26,14 @@
     "enrollmentDate": "2025-09-01T03:25:43.228Z",
     "status": "enrolled",
     "amount": 23333,
-    "totalPaid": 23333,
+    "totalPaid": 30000,
     "depositRequired": 3000,
     "totalCost": 30000,
-    "remainingBalance": 6667,
-    "paymentStatus": "partially_paid"
+    "remainingBalance": 0,
+    "paymentStatus": "completed",
+    "paymentPlanStatus": "in_progress",
+    "installmentsPaid": 1,
+    "totalInstallments": 3
   },
   {
     "id": 1756700788788,
@@ -41,11 +44,14 @@
     "enrollmentDate": "2025-09-01T04:26:28.788Z",
     "status": "enrolled",
     "amount": 23333,
-    "totalPaid": 23333,
+    "totalPaid": 38889,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 66667,
-    "paymentStatus": "partially_paid"
+    "remainingBalance": 51111,
+    "paymentStatus": "payment_plan_active",
+    "paymentPlanStatus": "in_progress",
+    "installmentsPaid": 1,
+    "totalInstallments": 3
   },
   {
     "id": 1756700810624,
@@ -56,11 +62,14 @@
     "enrollmentDate": "2025-09-01T04:26:50.624Z",
     "status": "enrolled",
     "amount": 23334,
-    "totalPaid": 23334,
+    "totalPaid": 38889,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 66666,
-    "paymentStatus": "partially_paid"
+    "remainingBalance": 51111,
+    "paymentStatus": "payment_plan_active",
+    "paymentPlanStatus": "in_progress",
+    "installmentsPaid": 1,
+    "totalInstallments": 3
   },
   {
     "id": 1756866808252,
