@@ -342,11 +342,11 @@ router.post('/webhook', async (req, res) => {
             
             for (const enrollmentId of enrollmentIds) {
               try {
-                const allEnrollments = await storage.getAllEnrollments();
-                const enrollment = allEnrollments.find(e => e.id === enrollmentId) as any;
+                // Use specific enrollment lookup instead of getting all enrollments
+                const enrollment = await storage.getEnrollmentById(enrollmentId);
                 
                 if (enrollment) {
-                  const currentAmountPaid = enrollment.amount || enrollment.amountPaid || 0;
+                  const currentAmountPaid = enrollment.totalPaid || enrollment.amountPaid || enrollment.amount || 0;
                   const newAmountPaid = currentAmountPaid + paymentAmountPerEnrollment;
                   const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
                   
@@ -449,7 +449,7 @@ router.post('/webhook', async (req, res) => {
                 type: 'scheduled_payment_complete',
                 paymentId: scheduledPaymentId,
                 amount: paymentIntent.amount,
-                totalBalanceFormatted: `${newAmountPaid / 100}`,
+                totalBalanceFormatted: `$${(paymentIntent.amount / 100).toFixed(2)}`,
                 timestamp: new Date().toISOString()
               });
               
