@@ -194,6 +194,7 @@ function UpcomingPaymentsTab() {
   const [isPending, startTransition] = useTransition();
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
+  const [currentPayment, setCurrentPayment] = useState<any>(null);
   
   // Enable real-time updates for scheduled payments 
   const { isConnected } = useRealTimeUpdates({
@@ -288,6 +289,7 @@ function UpcomingPaymentsTab() {
           if (data.clientSecret) {
             console.log('🔑 Client secret received, showing payment form');
             setClientSecret(data.clientSecret);
+            setCurrentPayment(payment);
             setShowPayment(true);
 
             // Auto-scroll to payment form after a brief delay
@@ -419,13 +421,14 @@ function UpcomingPaymentsTab() {
                     // Hide the payment form
                     setShowPayment(false);
                     setClientSecret('');
+                    setCurrentPayment(null);
                     
                     // Navigate to payment success page
                     const successParams = new URLSearchParams({
                       payment_intent: `scheduled_${Date.now()}`,
-                      amount: '70000', // $700.00 in cents for final payment
+                      amount: String(currentPayment?.amount || 0), // Use actual payment amount
                       date: new Date().toISOString(),
-                      enrollments: JSON.stringify([1756697143228, 1756700788788, 1756700810624])
+                      enrollments: JSON.stringify(currentPayment?.enrollmentIds || [])
                     });
                     
                     navigate(`/payment-success?${successParams.toString()}`);
@@ -439,6 +442,7 @@ function UpcomingPaymentsTab() {
                     });
                     setShowPayment(false);
                     setClientSecret('');
+                    setCurrentPayment(null);
                   }}
                 />
               </Elements>

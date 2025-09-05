@@ -46,5 +46,22 @@
       "totalInstallments": 1,
       "isFirstInstallment": true
     }
+  },
+  {
+    "id": 3,
+    "createdAt": "2025-09-05T12:04:19.487Z",
+    "updatedAt": "2025-09-05T12:04:19.487Z",
+    "stripePaymentIntentId": "pi_3S3yMtRFKXbVXRE316GZDImB",
+    "parentEmail": "kpdinvestors@gmail.com",
+    "childName": "Payment 2 of 3",
+    "className": "Multiple Classes",
+    "amount": 63000,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "scheduledPaymentId": "1",
+      "installmentNumber": 2,
+      "totalInstallments": 3
+    }
   }
 ]
