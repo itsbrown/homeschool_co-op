@@ -490,12 +490,26 @@
     "childName": "Sebastian Puccia",
     "className": "Yankee Doodle | Half Day",
     "totalCost": 9000000,
-    "remainingBalance": 9000000,
-    "paymentStatus": "pending_payment",
+    "remainingBalance": 2500,
+    "paymentStatus": "stripe_managed",
     "paymentSystemVersion": "v2_stripe",
-    "status": "pending_payment",
+    "status": "enrolled",
     "createdAt": "2025-09-05T17:00:50.654Z",
-    "updatedAt": "2025-09-05T17:00:50.654Z",
-    "id": 1757091650654
+    "updatedAt": "2025-09-05T17:01:38.035Z",
+    "id": 1757091650654,
+    "amount": 8997500,
+    "totalPaid": 8997500,
+    "paymentIntentId": "pi_3S430IRFKXbVXRE31oa5imT8"
+  },
+  {
+    "classId": 4,
+    "childId": 4,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3S430IRFKXbVXRE31oa5imT8",
+    "amount": 9000000,
+    "totalCost": 9000000,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-09-05T17:01:25.431Z",
+    "id": 1757091685431
   }
 ]
