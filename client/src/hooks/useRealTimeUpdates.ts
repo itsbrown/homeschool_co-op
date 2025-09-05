@@ -3,8 +3,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/components/SupabaseProvider';
 
 interface DataUpdate {
-  type: 'billing_update' | 'payment_complete' | 'enrollment_update';
-  data: any;
+  type: 'billing_update' | 'payment_complete' | 'enrollment_update' | 'connection_established' | 'pong';
+  data?: any;
+  message?: string;
   userEmail?: string;
   timestamp: string;
 }
@@ -15,7 +16,12 @@ export function useRealTimeUpdates() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 3; // Reduce max attempts
+  
+  // Check if we're in development environment
+  const isDevelopment = window.location.hostname.includes('replit.dev') || 
+                       window.location.hostname === 'localhost' ||
+                       window.location.hostname.includes('.replit.app');
 
   const handleMessage = useCallback((event: MessageEvent) => {
     try {
@@ -94,15 +100,20 @@ export function useRealTimeUpdates() {
         console.log('🔌 WebSocket disconnected:', event.code, event.reason);
         wsRef.current = null;
 
-        // Attempt reconnection if not a clean close
-        if (event.code !== 1000 && reconnectAttemptsRef.current < maxReconnectAttempts) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+        // In development, be less aggressive with reconnection attempts
+        const shouldReconnect = event.code !== 1000 && reconnectAttemptsRef.current < maxReconnectAttempts;
+        const baseDelay = isDevelopment ? 5000 : 1000; // Longer delays in dev
+        
+        if (shouldReconnect) {
+          const delay = Math.min(baseDelay * Math.pow(2, reconnectAttemptsRef.current), 30000);
           console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttemptsRef.current++;
             connect();
           }, delay);
+        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+          console.log('❌ Max reconnection attempts reached, WebSocket disabled');
         }
       };
 
