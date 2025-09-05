@@ -38,22 +38,7 @@
     "totalCost": 30000,
     "remainingBalance": 30000
   },
-  {
-    "programId": 13,
-    "parentId": 0,
-    "parentEmail": "kpdinvestors@gmail.com",
-    "childId": 3,
-    "childName": "Silvie Puccia",
-    "className": "Test Class",
-    "totalCost": 50000,
-    "remainingBalance": 50000,
-    "paymentStatus": "stripe_managed",
-    "paymentSystemVersion": "v2_stripe",
-    "status": "enrolled",
-    "createdAt": "2025-09-05T12:50:37.140Z",
-    "updatedAt": "2025-09-05T12:50:37.140Z",
-    "enrollmentDate": "2025-09-05T12:54:30.603Z"
-  },
+  1757076462387,
   {
     "programId": 12,
     "parentId": 0,
@@ -83,7 +68,8 @@
     "paymentSystemVersion": "v2_stripe",
     "status": "enrolled",
     "createdAt": "2025-09-05T12:56:09.826Z",
-    "updatedAt": "2025-09-05T12:56:09.826Z"
+    "updatedAt": "2025-09-05T12:56:09.826Z",
+    "enrollmentDate": "2025-09-05T13:30:11.014Z"
   },
   {
     "programId": 11,
@@ -98,6 +84,7 @@
     "paymentSystemVersion": "v2_stripe",
     "status": "enrolled",
     "createdAt": "2025-09-05T12:57:02.358Z",
-    "updatedAt": "2025-09-05T12:57:02.358Z"
+    "updatedAt": "2025-09-05T12:57:02.358Z",
+    "enrollmentDate": "2025-09-05T13:30:11.014Z"
   }
 ]
