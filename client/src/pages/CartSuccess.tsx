@@ -8,11 +8,13 @@ import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
+import { useCart } from '@/contexts/CartContext';
 
 export default function CartSuccess() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { clearCart } = useCart();
   const [processing, setProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processedEnrollments, setProcessedEnrollments] = useState<number>(0);
@@ -145,7 +147,11 @@ export default function CartSuccess() {
             localStorage.removeItem('cart');
             localStorage.removeItem('selectedPaymentPlan');
             
+            // Clear cart in context (this will remove items from UI)
+            clearCart();
+            
             // Invalidate billing summary to refresh data immediately
+            queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
             queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
             queryClient.invalidateQueries({ queryKey: ['payment-history'] });
           } else {
