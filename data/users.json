@@ -1086,5 +1086,28 @@
     "emergencyContactPhone": null,
     "emergencyContactRelationship": null,
     "avatar": null
+  },
+  {
+    "username": "606human@protonmail.com",
+    "email": "606human@protonmail.com",
+    "password": "$2b$10$GVpvwKtij4UWUXoTJgspQ.9pknY8tiYtOknyJj8WFhu5hVFUnm0vK",
+    "role": "parent",
+    "name": "Corey_parent Brown",
+    "schoolId": 1,
+    "phone": "7185010546",
+    "id": 67,
+    "createdAt": "2025-09-05T18:21:13.556Z",
+    "updatedAt": "2025-09-05T18:21:13.556Z",
+    "auth0Id": null,
+    "supabaseId": null,
+    "subscription": "free",
+    "permissions": {},
+    "isActive": true,
+    "lastLogin": null,
+    "emergencyContactFirstName": null,
+    "emergencyContactLastName": null,
+    "emergencyContactPhone": null,
+    "emergencyContactRelationship": null,
+    "avatar": null
   }
 ]

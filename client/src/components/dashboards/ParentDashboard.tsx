@@ -114,30 +114,25 @@ export default function ParentDashboard() {
     console.log('🔄 Starting sync process...');
     setIsSyncing(true);
     try {
-      console.log('🔐 Getting Auth0 token...');
-      const token = await getAccessTokenSilently();
-      console.log('✅ Token received, length:', token?.length);
-
       console.log('📡 Making sync request...');
-      const response = await apiRequest("POST", "/api/sync-children", undefined, { token });
+      const response = await apiRequest("POST", "/api/sync-children");
       console.log('📨 Response received:', response.status);
 
       const result = await response.json();
       console.log('📊 Sync result:', result);
-      console.log('🔍 Debug info:', result.debug);
 
       toast({
         title: "Sync Complete",
-        description: `Successfully synced ${result.syncedChildren} children with your account`,
+        description: `Successfully synced ${result.syncedChildren || 0} children with your account`,
       });
 
       // Refresh children data
-      queryClient.invalidateQueries({ queryKey: ["/api/children"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
     } catch (error) {
       console.error('❌ Sync error:', error);
       toast({
         title: "Sync Failed",
-        description: `Unable to sync children accounts: ${error.message}`,
+        description: `Unable to sync children accounts: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
     } finally {
@@ -371,7 +366,7 @@ export default function ParentDashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {childrenData.map((child: any) => {
+                  {childrenData.map((child: any, index: number) => {
                     // Calculate age from birthdate
                     const calculateAge = (birthdate: string) => {
                       if (!birthdate) return 'Unknown';
@@ -389,7 +384,7 @@ export default function ParentDashboard() {
                     const age = calculateAge(child.birthdate);
 
                     return (
-                      <div key={child.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div key={child.id || `child-${index}`} className="flex items-center justify-between p-4 border rounded-lg">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                             <User className="h-5 w-5 text-blue-600" />
@@ -435,8 +430,8 @@ export default function ParentDashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {enrollmentsData.map((enrollment: any) => (
-                    <div key={enrollment.id} className="border rounded-lg p-4">
+                  {enrollmentsData.map((enrollment: any, index: number) => (
+                    <div key={enrollment.id || `enrollment-${index}`} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-medium">{enrollment.className}</h4>

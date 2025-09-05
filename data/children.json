@@ -454,7 +454,8 @@
     "notes": null,
     "id": 21,
     "createdAt": "2025-09-03T01:04:51.124Z",
-    "updatedAt": "2025-09-03T01:04:51.124Z"
+    "updatedAt": "2025-09-03T01:04:51.124Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Malia",
@@ -474,7 +475,8 @@
     "notes": null,
     "id": 22,
     "createdAt": "2025-09-03T01:06:22.952Z",
-    "updatedAt": "2025-09-03T01:06:22.952Z"
+    "updatedAt": "2025-09-03T01:06:22.952Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Jett",
@@ -494,7 +496,8 @@
     "notes": null,
     "id": 23,
     "createdAt": "2025-09-03T01:06:53.624Z",
-    "updatedAt": "2025-09-03T01:06:53.624Z"
+    "updatedAt": "2025-09-03T01:06:53.624Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Josephine",
@@ -514,7 +517,8 @@
     "notes": null,
     "id": 24,
     "createdAt": "2025-09-03T01:07:49.272Z",
-    "updatedAt": "2025-09-03T01:07:49.272Z"
+    "updatedAt": "2025-09-03T01:07:49.272Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "James",
@@ -534,7 +538,8 @@
     "notes": null,
     "id": 25,
     "createdAt": "2025-09-03T01:08:19.131Z",
-    "updatedAt": "2025-09-03T01:08:19.131Z"
+    "updatedAt": "2025-09-03T01:08:19.131Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Beau",
@@ -554,7 +559,8 @@
     "notes": null,
     "id": 26,
     "createdAt": "2025-09-03T01:09:42.791Z",
-    "updatedAt": "2025-09-03T01:09:42.791Z"
+    "updatedAt": "2025-09-03T01:09:42.791Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Lucas",
@@ -574,7 +580,8 @@
     "notes": null,
     "id": 27,
     "createdAt": "2025-09-03T01:09:57.718Z",
-    "updatedAt": "2025-09-03T01:09:57.718Z"
+    "updatedAt": "2025-09-03T01:09:57.718Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Andrea",
@@ -594,7 +601,8 @@
     "notes": null,
     "id": 28,
     "createdAt": "2025-09-03T01:12:03.119Z",
-    "updatedAt": "2025-09-03T01:12:03.119Z"
+    "updatedAt": "2025-09-03T01:12:03.119Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Camila",
@@ -614,7 +622,8 @@
     "notes": null,
     "id": 29,
     "createdAt": "2025-09-03T01:12:42.113Z",
-    "updatedAt": "2025-09-03T01:12:42.113Z"
+    "updatedAt": "2025-09-03T01:12:42.113Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Arlo",
@@ -634,7 +643,8 @@
     "notes": null,
     "id": 30,
     "createdAt": "2025-09-03T01:13:33.367Z",
-    "updatedAt": "2025-09-03T01:13:33.367Z"
+    "updatedAt": "2025-09-03T01:13:33.367Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Daniel",
@@ -654,7 +664,8 @@
     "notes": null,
     "id": 31,
     "createdAt": "2025-09-03T01:14:42.298Z",
-    "updatedAt": "2025-09-03T01:14:42.298Z"
+    "updatedAt": "2025-09-03T01:14:42.298Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Cristine",
@@ -674,7 +685,8 @@
     "notes": null,
     "id": 32,
     "createdAt": "2025-09-03T01:15:59.859Z",
-    "updatedAt": "2025-09-03T01:15:59.859Z"
+    "updatedAt": "2025-09-03T01:15:59.859Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Judaea",
@@ -694,7 +706,8 @@
     "notes": null,
     "id": 33,
     "createdAt": "2025-09-03T01:18:32.252Z",
-    "updatedAt": "2025-09-03T01:18:32.252Z"
+    "updatedAt": "2025-09-03T01:18:32.252Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Gabriel",
@@ -714,7 +727,8 @@
     "notes": null,
     "id": 34,
     "createdAt": "2025-09-03T01:19:05.205Z",
-    "updatedAt": "2025-09-03T01:19:05.205Z"
+    "updatedAt": "2025-09-03T01:19:05.205Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Evangelina ",
@@ -734,7 +748,8 @@
     "notes": null,
     "id": 35,
     "createdAt": "2025-09-03T01:19:28.256Z",
-    "updatedAt": "2025-09-03T01:19:28.256Z"
+    "updatedAt": "2025-09-03T01:19:28.256Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Zayne",
@@ -754,7 +769,8 @@
     "notes": null,
     "id": 36,
     "createdAt": "2025-09-03T01:20:17.784Z",
-    "updatedAt": "2025-09-03T01:20:17.784Z"
+    "updatedAt": "2025-09-03T01:20:17.784Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Camryn",
@@ -774,7 +790,8 @@
     "notes": null,
     "id": 37,
     "createdAt": "2025-09-03T01:21:10.614Z",
-    "updatedAt": "2025-09-03T01:21:10.614Z"
+    "updatedAt": "2025-09-03T01:21:10.614Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Lucas",
@@ -794,7 +811,8 @@
     "notes": null,
     "id": 38,
     "createdAt": "2025-09-03T01:21:38.243Z",
-    "updatedAt": "2025-09-03T01:21:38.243Z"
+    "updatedAt": "2025-09-03T01:21:38.243Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Joshua",
@@ -814,7 +832,8 @@
     "notes": null,
     "id": 39,
     "createdAt": "2025-09-03T01:22:37.209Z",
-    "updatedAt": "2025-09-03T01:22:37.209Z"
+    "updatedAt": "2025-09-03T01:22:37.209Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Tatum",
@@ -834,7 +853,8 @@
     "notes": null,
     "id": 40,
     "createdAt": "2025-09-03T01:24:53.098Z",
-    "updatedAt": "2025-09-03T01:24:53.098Z"
+    "updatedAt": "2025-09-03T01:24:53.098Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Norah",
@@ -854,7 +874,8 @@
     "notes": null,
     "id": 41,
     "createdAt": "2025-09-03T01:25:08.372Z",
-    "updatedAt": "2025-09-03T01:25:08.372Z"
+    "updatedAt": "2025-09-03T01:25:08.372Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Hallie",
@@ -874,7 +895,8 @@
     "notes": null,
     "id": 42,
     "createdAt": "2025-09-03T01:26:08.735Z",
-    "updatedAt": "2025-09-03T01:26:08.735Z"
+    "updatedAt": "2025-09-03T01:26:08.735Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Eden",
@@ -894,7 +916,8 @@
     "notes": null,
     "id": 43,
     "createdAt": "2025-09-03T01:26:52.943Z",
-    "updatedAt": "2025-09-03T01:26:52.943Z"
+    "updatedAt": "2025-09-03T01:26:52.943Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Delaney",
@@ -914,7 +937,8 @@
     "notes": null,
     "id": 44,
     "createdAt": "2025-09-03T01:28:07.406Z",
-    "updatedAt": "2025-09-03T01:28:07.406Z"
+    "updatedAt": "2025-09-03T01:28:07.406Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Dutton",
@@ -934,7 +958,8 @@
     "notes": null,
     "id": 45,
     "createdAt": "2025-09-03T01:28:56.955Z",
-    "updatedAt": "2025-09-03T01:28:56.955Z"
+    "updatedAt": "2025-09-03T01:28:56.955Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Banner",
@@ -954,7 +979,8 @@
     "notes": null,
     "id": 46,
     "createdAt": "2025-09-03T01:30:09.890Z",
-    "updatedAt": "2025-09-03T01:30:09.890Z"
+    "updatedAt": "2025-09-03T01:30:09.890Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Eli",
@@ -974,7 +1000,8 @@
     "notes": null,
     "id": 47,
     "createdAt": "2025-09-03T01:30:54.814Z",
-    "updatedAt": "2025-09-03T01:30:54.814Z"
+    "updatedAt": "2025-09-03T01:30:54.814Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Dean",
@@ -994,7 +1021,8 @@
     "notes": null,
     "id": 48,
     "createdAt": "2025-09-03T01:31:30.751Z",
-    "updatedAt": "2025-09-03T01:31:30.751Z"
+    "updatedAt": "2025-09-03T01:31:30.751Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Lucy",
@@ -1014,7 +1042,8 @@
     "notes": null,
     "id": 49,
     "createdAt": "2025-09-03T01:33:44.169Z",
-    "updatedAt": "2025-09-03T01:33:44.169Z"
+    "updatedAt": "2025-09-03T01:33:44.169Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Jackson",
@@ -1034,7 +1063,8 @@
     "notes": null,
     "id": 50,
     "createdAt": "2025-09-03T01:34:26.824Z",
-    "updatedAt": "2025-09-03T01:34:26.824Z"
+    "updatedAt": "2025-09-03T01:34:26.824Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Andrew",
@@ -1054,7 +1084,8 @@
     "notes": null,
     "id": 51,
     "createdAt": "2025-09-03T01:34:39.638Z",
-    "updatedAt": "2025-09-03T01:34:39.638Z"
+    "updatedAt": "2025-09-03T01:34:39.638Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Alaiya",
@@ -1074,7 +1105,8 @@
     "notes": null,
     "id": 52,
     "createdAt": "2025-09-03T01:35:22.054Z",
-    "updatedAt": "2025-09-03T01:35:22.054Z"
+    "updatedAt": "2025-09-03T01:35:22.054Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Clay",
@@ -1094,7 +1126,8 @@
     "notes": null,
     "id": 53,
     "createdAt": "2025-09-03T01:36:32.490Z",
-    "updatedAt": "2025-09-03T01:36:32.490Z"
+    "updatedAt": "2025-09-03T01:36:32.490Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Cecelia",
@@ -1114,7 +1147,8 @@
     "notes": null,
     "id": 54,
     "createdAt": "2025-09-03T01:37:28.586Z",
-    "updatedAt": "2025-09-03T01:37:28.586Z"
+    "updatedAt": "2025-09-03T01:37:28.586Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Cece",
@@ -1134,7 +1168,8 @@
     "notes": null,
     "id": 55,
     "createdAt": "2025-09-03T01:38:27.917Z",
-    "updatedAt": "2025-09-03T01:38:27.917Z"
+    "updatedAt": "2025-09-03T01:38:27.917Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Hollyn",
@@ -1154,7 +1189,8 @@
     "notes": null,
     "id": 56,
     "createdAt": "2025-09-03T01:39:16.276Z",
-    "updatedAt": "2025-09-03T01:39:16.276Z"
+    "updatedAt": "2025-09-03T01:39:16.276Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Violet",
@@ -1174,7 +1210,8 @@
     "notes": null,
     "id": 57,
     "createdAt": "2025-09-03T01:40:30.530Z",
-    "updatedAt": "2025-09-03T01:40:30.530Z"
+    "updatedAt": "2025-09-03T01:40:30.530Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Juliette",
@@ -1194,7 +1231,8 @@
     "notes": null,
     "id": 58,
     "createdAt": "2025-09-03T01:41:05.136Z",
-    "updatedAt": "2025-09-03T01:41:05.136Z"
+    "updatedAt": "2025-09-03T01:41:05.136Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Eden",
@@ -1214,7 +1252,8 @@
     "notes": null,
     "id": 59,
     "createdAt": "2025-09-03T01:41:50.348Z",
-    "updatedAt": "2025-09-03T01:41:50.348Z"
+    "updatedAt": "2025-09-03T01:41:50.348Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Serina",
@@ -1234,7 +1273,8 @@
     "notes": null,
     "id": 60,
     "createdAt": "2025-09-03T01:42:47.029Z",
-    "updatedAt": "2025-09-03T01:42:47.029Z"
+    "updatedAt": "2025-09-03T01:42:47.029Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Isaias",
@@ -1254,7 +1294,8 @@
     "notes": null,
     "id": 61,
     "createdAt": "2025-09-03T01:43:44.195Z",
-    "updatedAt": "2025-09-03T01:43:44.195Z"
+    "updatedAt": "2025-09-03T01:43:44.195Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Aiden",
@@ -1274,7 +1315,8 @@
     "notes": null,
     "id": 62,
     "createdAt": "2025-09-03T01:44:29.881Z",
-    "updatedAt": "2025-09-03T01:44:29.881Z"
+    "updatedAt": "2025-09-03T01:44:29.881Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Sarah",
@@ -1294,7 +1336,8 @@
     "notes": null,
     "id": 63,
     "createdAt": "2025-09-03T01:44:58.123Z",
-    "updatedAt": "2025-09-03T01:44:58.123Z"
+    "updatedAt": "2025-09-03T01:44:58.123Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Lily",
@@ -1314,7 +1357,8 @@
     "notes": null,
     "id": 64,
     "createdAt": "2025-09-03T01:45:20.085Z",
-    "updatedAt": "2025-09-03T01:45:20.085Z"
+    "updatedAt": "2025-09-03T01:45:20.085Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Isabella",
@@ -1334,7 +1378,8 @@
     "notes": null,
     "id": 65,
     "createdAt": "2025-09-03T01:46:13.173Z",
-    "updatedAt": "2025-09-03T01:46:13.173Z"
+    "updatedAt": "2025-09-03T01:46:13.173Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Avia",
@@ -1354,7 +1399,8 @@
     "notes": null,
     "id": 66,
     "createdAt": "2025-09-03T01:47:09.080Z",
-    "updatedAt": "2025-09-03T01:47:09.080Z"
+    "updatedAt": "2025-09-03T01:47:09.080Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Simon",
@@ -1374,7 +1420,8 @@
     "notes": null,
     "id": 67,
     "createdAt": "2025-09-03T01:47:27.369Z",
-    "updatedAt": "2025-09-03T01:47:27.369Z"
+    "updatedAt": "2025-09-03T01:47:27.369Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Lucas",
@@ -1394,7 +1441,8 @@
     "notes": null,
     "id": 68,
     "createdAt": "2025-09-03T01:48:02.196Z",
-    "updatedAt": "2025-09-03T01:48:02.196Z"
+    "updatedAt": "2025-09-03T01:48:02.196Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Noah",
@@ -1414,7 +1462,8 @@
     "notes": null,
     "id": 69,
     "createdAt": "2025-09-03T01:48:26.060Z",
-    "updatedAt": "2025-09-03T01:48:26.060Z"
+    "updatedAt": "2025-09-03T01:48:26.060Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Emma",
@@ -1434,7 +1483,8 @@
     "notes": null,
     "id": 70,
     "createdAt": "2025-09-03T01:48:40.874Z",
-    "updatedAt": "2025-09-03T01:48:40.874Z"
+    "updatedAt": "2025-09-03T01:48:40.874Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Geo",
@@ -1454,7 +1504,8 @@
     "notes": null,
     "id": 71,
     "createdAt": "2025-09-03T01:49:10.591Z",
-    "updatedAt": "2025-09-03T01:49:10.591Z"
+    "updatedAt": "2025-09-03T01:49:10.591Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
   },
   {
     "firstName": "Zora",
@@ -1474,6 +1525,31 @@
     "notes": null,
     "id": 72,
     "createdAt": "2025-09-03T01:50:52.139Z",
-    "updatedAt": "2025-09-03T01:50:52.139Z"
+    "updatedAt": "2025-09-03T01:50:52.139Z",
+    "birthDate": "2025-09-05T17:32:46.539Z"
+  },
+  {
+    "firstName": "Dawn",
+    "lastName": "Brown",
+    "birthdate": "2015-04-22",
+    "gradeLevel": "4th Grade",
+    "gender": "female",
+    "interests": [],
+    "learningStyle": null,
+    "specialNeeds": null,
+    "allergies": null,
+    "medicalInfo": null,
+    "school": "American Seekers Academy",
+    "schoolId": 1,
+    "locationId": 4,
+    "profileImage": null,
+    "emergencyContact": null,
+    "additionalLanguages": null,
+    "notes": null,
+    "parentId": 67,
+    "parentEmail": "606human@protonmail.com",
+    "id": 73,
+    "createdAt": "2025-09-05T18:22:08.899Z",
+    "updatedAt": "2025-09-05T18:22:08.899Z"
   }
 ]

@@ -499,7 +499,8 @@
     "id": 1757091650654,
     "amount": 8997500,
     "totalPaid": 8997500,
-    "paymentIntentId": "pi_3S430IRFKXbVXRE31oa5imT8"
+    "paymentIntentId": "pi_3S430IRFKXbVXRE31oa5imT8",
+    "enrollmentDate": "2025-09-05T17:32:46.534Z"
   },
   {
     "classId": 4,
@@ -511,5 +512,48 @@
     "remainingBalance": 0,
     "enrollmentDate": "2025-09-05T17:01:25.431Z",
     "id": 1757091685431
+  },
+  {
+    "id": 1757096545021,
+    "classId": 13,
+    "childId": 73,
+    "childName": "Dawn Brown",
+    "className": "Seekers | Full Day",
+    "enrollmentDate": "2025-09-05T18:22:25.021Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 130,
+    "totalCost": 1300,
+    "remainingBalance": 1300
+  },
+  {
+    "programId": 13,
+    "parentId": 0,
+    "parentEmail": "606human@protonmail.com",
+    "childId": 73,
+    "childName": "Dawn Brown",
+    "className": "Seekers | Full Day",
+    "totalCost": 130000,
+    "remainingBalance": 2500,
+    "paymentStatus": "stripe_managed",
+    "paymentSystemVersion": "v2_stripe",
+    "status": "enrolled",
+    "createdAt": "2025-09-05T18:22:31.690Z",
+    "updatedAt": "2025-09-05T18:22:54.598Z",
+    "id": 1757096551690,
+    "amount": 127500,
+    "totalPaid": 127500,
+    "paymentIntentId": "pi_3S44HLRFKXbVXRE313pQuHlc"
+  },
+  {
+    "classId": 13,
+    "childId": 73,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3S44HLRFKXbVXRE313pQuHlc",
+    "amount": 130000,
+    "totalCost": 130000,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-09-05T18:22:52.211Z",
+    "id": 1757096572211
   }
 ]
