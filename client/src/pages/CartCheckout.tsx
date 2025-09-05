@@ -169,26 +169,35 @@ export default function CartCheckout() {
       return;
     }
 
-    // Don't redirect immediately if cart is empty - wait a moment for cart to load from localStorage
-    if (cart.items.length === 0) {
-      console.log('🛒 Cart is empty, waiting for cart to load...');
-      const timer = setTimeout(() => {
-        // Double-check after a delay to ensure cart has loaded from localStorage
-        if (cart.items.length === 0) {
-          console.log('🛒 CartCheckout: No items found after delay, redirecting to programs');
-          setLocation('/programs');
-        } else {
-          console.log('🛒 Cart loaded with items after delay:', cart.items.length);
-          createPaymentIntent();
-        }
-      }, 1000); // Increased wait time to 1000ms for cart to load
-      
-      return () => clearTimeout(timer);
+    // If cart has items, proceed with checkout
+    if (cart.items.length > 0) {
+      console.log('🛒 Cart has items, creating payment intent');
+      createPaymentIntent();
+      return;
     }
 
-    console.log('🛒 Cart has items, creating payment intent');
-    createPaymentIntent();
-  }, [isAuthenticated, cart.items.length, selectedPaymentPlan]); // Re-create payment intent when payment plan changes
+    // If cart is empty, wait longer for localStorage to load
+    console.log('🛒 Cart is empty, waiting for cart to load...');
+    let attempts = 0;
+    const maxAttempts = 10; // Try for up to 5 seconds (10 * 500ms)
+    
+    const timer = setInterval(() => {
+      attempts++;
+      console.log(`🛒 Cart loading attempt ${attempts}/${maxAttempts} - items:`, cart.items.length);
+      
+      if (cart.items.length > 0) {
+        console.log('🛒 Cart loaded with items:', cart.items.length);
+        clearInterval(timer);
+        createPaymentIntent();
+      } else if (attempts >= maxAttempts) {
+        console.log('🛒 CartCheckout: No items found after multiple attempts, redirecting to programs');
+        clearInterval(timer);
+        setLocation('/programs');
+      }
+    }, 500);
+    
+    return () => clearInterval(timer);
+  }, [isAuthenticated]); // Re-create payment intent when payment plan changes
 
   const createPaymentIntent = async () => {
     try {

@@ -1,0 +1,179 @@
+🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:219 School classes response: {items: Array(12), total: 12, page: 1, limit: 12, totalPages: 1}
+ProgramsParentPage.tsx:220 Classes error: null
+ProgramsParentPage.tsx:221 Classes loading: false
+ProgramsParentPage.tsx:222 Active tab: classes
+ProgramsParentPage.tsx:223 Transformed classes data: {classes: Array(12), pagination: {…}}
+ProgramsParentPage.tsx:242 All classes: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:243 Filtered classesList: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:244 Summer camps: []
+ProgramsParentPage.tsx:245 classesLoading: false
+ProgramsParentPage.tsx:246 classesList.length: 12
+ProgramsParentPage.tsx:408 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:409   - Children: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:410   - Children loading: false
+ProgramsParentPage.tsx:411   - Children error: null
+ProgramsParentPage.tsx:412   - Is authenticated: true
+ProgramsParentPage.tsx:413   - User: {id: '31ad8076-c274-47bd-acf1-cefcd481efcc', aud: 'authenticated', role: 'authenticated', email: 'kpdinvestors@gmail.com', email_confirmed_at: '2025-08-30T22:38:58.128412Z', …}
+ProgramsParentPage.tsx:451 🔍 Select rendering debug:
+ProgramsParentPage.tsx:452   - Children array: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:453   - Array length: 3
+ProgramsParentPage.tsx:454   - First child: {id: 3, firstName: 'Silvie', lastName: 'Puccia', birthdate: '2022-08-16', gradeLevel: 'Littles', …}
+ProgramsParentPage.tsx:470 🔍 Rendering child: Silvie Puccia (ID: 3)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Sebastian Puccia (ID: 4)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Salena Puccia (ID: 5)
+CartContext.tsx:853 🛒 getItemCount called - current items: 1
+[Violation] Forced reflow while executing JavaScript took 59ms
+CartDrawer.tsx:26 🛒 🚨 CHECKOUT BUTTON CLICKED - EVENT RECEIVED!
+CartDrawer.tsx:27 🛒 Event details: SyntheticBaseEvent {_reactName: 'onClick', _targetInst: null, type: 'click', nativeEvent: PointerEvent, target: button.inline-flex.items-center.justify-center.gap-2.whitespace-nowrap.rounded-md.text-sm.font-medi…, …}
+CartDrawer.tsx:28 🛒 Event type: click
+CartDrawer.tsx:29 🛒 Event target: <button data-replit-metadata=​"client/​src/​components/​cart/​CartDrawer.tsx:​222:​16" data-component-name=​"Button" class=​"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​pointer-events-none disabled:​opacity-50 [&_svg]​:​pointer-events-none [&_svg]​:​size-4 [&_svg]​:​shrink-0 bg-primary text-primary-foreground hover:​bg-primary/​90 h-10 px-4 py-2 flex-1" type=​"button">​…​</button>​
+CartDrawer.tsx:34 🛒 After preventDefault/stopPropagation
+CartDrawer.tsx:35 🛒 Cart items before checkout: [{…}]
+CartDrawer.tsx:36 🛒 Cart items length: 1
+CartDrawer.tsx:48 🛒 About to close cart...
+CartDrawer.tsx:51 🛒 Cart closed, setting timeout for navigation...
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:219 School classes response: {items: Array(12), total: 12, page: 1, limit: 12, totalPages: 1}
+ProgramsParentPage.tsx:220 Classes error: null
+ProgramsParentPage.tsx:221 Classes loading: false
+ProgramsParentPage.tsx:222 Active tab: classes
+ProgramsParentPage.tsx:223 Transformed classes data: {classes: Array(12), pagination: {…}}
+ProgramsParentPage.tsx:242 All classes: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:243 Filtered classesList: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:244 Summer camps: []
+ProgramsParentPage.tsx:245 classesLoading: false
+ProgramsParentPage.tsx:246 classesList.length: 12
+ProgramsParentPage.tsx:408 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:409   - Children: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:410   - Children loading: false
+ProgramsParentPage.tsx:411   - Children error: null
+ProgramsParentPage.tsx:412   - Is authenticated: true
+ProgramsParentPage.tsx:413   - User: {id: '31ad8076-c274-47bd-acf1-cefcd481efcc', aud: 'authenticated', role: 'authenticated', email: 'kpdinvestors@gmail.com', email_confirmed_at: '2025-08-30T22:38:58.128412Z', …}
+ProgramsParentPage.tsx:451 🔍 Select rendering debug:
+ProgramsParentPage.tsx:452   - Children array: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:453   - Array length: 3
+ProgramsParentPage.tsx:454   - First child: {id: 3, firstName: 'Silvie', lastName: 'Puccia', birthdate: '2022-08-16', gradeLevel: 'Littles', …}
+ProgramsParentPage.tsx:470 🔍 Rendering child: Silvie Puccia (ID: 3)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Sebastian Puccia (ID: 4)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Salena Puccia (ID: 5)
+CartContext.tsx:853 🛒 getItemCount called - current items: 1
+CartDrawer.tsx:54 🛒 🚀 EXECUTING NAVIGATION TO /cart/checkout
+CartDrawer.tsx:55 🛒 Current location before navigation: /programs
+CartDrawer.tsx:57 🛒 setLocation called with /cart/checkout
+App.tsx:244 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /cart/checkout
+CartCheckout.tsx:155 🛒 CartCheckout - cart data: {itemsCount: 0, items: Array(0), subtotal: 0, discounts: {…}, total: 0}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartContext.tsx:853 🛒 getItemCount called - current items: 0
+useRealTimeUpdates.ts:76 🔌 Connecting to WebSocket: wss://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/ws?email=kpdinvestors%40gmail.com
+CartContext.tsx:696 🛒 Loading cart from localStorage: {items: Array(1), subtotal: 30000, discounts: {…}, total: 30000}
+CartContext.tsx:727 🛒 Authentication loading - restoring cart from localStorage
+CartCheckout.tsx:164 🛒 CartCheckout useEffect - isAuthenticated: true cart items: 0
+CartCheckout.tsx:174 🛒 Cart is empty, waiting for cart to load...
+chunk-NFC5BX5N.js?v=a443a619:18625 [Violation] 'setTimeout' handler took 137ms
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:853 🛒 getItemCount called - current items: 1
+useRealTimeUpdates.ts:94 🔌 WebSocket disconnected: 1000 Client disconnect
+ParentAppShell.tsx:52 No school association found for user, using default school
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:853 🛒 getItemCount called - current items: 1
+useRealTimeUpdates.ts:81 ✅ WebSocket connected for: kpdinvestors@gmail.com
+useRealTimeUpdates.ts:23 📡 Received real-time update: connection_established {type: 'connection_established', message: 'Real-time updates enabled', timestamp: '2025-09-05T14:12:49.652Z'}
+useRealTimeUpdates.ts:48 🔌 WebSocket connection established: Real-time updates enabled
+CartCheckout.tsx:178 🛒 CartCheckout: No items found after delay, redirecting to programs
+App.tsx:244 🔐 Router render - activeRole: parent isAuthenticated: true showRoleSelection: false user: kpdinvestors@gmail.com location: /programs
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+ProgramsParentPage.tsx:219 School classes response: {items: Array(12), total: 12, page: 1, limit: 12, totalPages: 1}
+ProgramsParentPage.tsx:220 Classes error: null
+ProgramsParentPage.tsx:221 Classes loading: false
+ProgramsParentPage.tsx:222 Active tab: classes
+ProgramsParentPage.tsx:223 Transformed classes data: {classes: Array(12), pagination: {…}}
+ProgramsParentPage.tsx:242 All classes: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:243 Filtered classesList: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:244 Summer camps: []
+ProgramsParentPage.tsx:245 classesLoading: false
+ProgramsParentPage.tsx:246 classesList.length: 12
+ProgramsParentPage.tsx:408 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:409   - Children: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:410   - Children loading: false
+ProgramsParentPage.tsx:411   - Children error: null
+ProgramsParentPage.tsx:412   - Is authenticated: true
+ProgramsParentPage.tsx:413   - User: {id: '31ad8076-c274-47bd-acf1-cefcd481efcc', aud: 'authenticated', role: 'authenticated', email: 'kpdinvestors@gmail.com', email_confirmed_at: '2025-08-30T22:38:58.128412Z', …}
+ProgramsParentPage.tsx:451 🔍 Select rendering debug:
+ProgramsParentPage.tsx:452   - Children array: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:453   - Array length: 3
+ProgramsParentPage.tsx:454   - First child: {id: 3, firstName: 'Silvie', lastName: 'Puccia', birthdate: '2022-08-16', gradeLevel: 'Littles', …}
+ProgramsParentPage.tsx:470 🔍 Rendering child: Silvie Puccia (ID: 3)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Sebastian Puccia (ID: 4)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Salena Puccia (ID: 5)
+CartContext.tsx:853 🛒 getItemCount called - current items: 0
+useRealTimeUpdates.ts:76 🔌 Connecting to WebSocket: wss://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/ws?email=kpdinvestors%40gmail.com
+CartContext.tsx:696 🛒 Loading cart from localStorage: {items: Array(1), subtotal: 30000, discounts: {…}, total: 30000}
+CartContext.tsx:727 🛒 Authentication loading - restoring cart from localStorage
+chunk-NFC5BX5N.js?v=a443a619:18625 [Violation] 'setTimeout' handler took 199ms
+[Violation] Forced reflow while executing JavaScript took 36ms
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:219 School classes response: {items: Array(12), total: 12, page: 1, limit: 12, totalPages: 1}
+ProgramsParentPage.tsx:220 Classes error: null
+ProgramsParentPage.tsx:221 Classes loading: false
+ProgramsParentPage.tsx:222 Active tab: classes
+ProgramsParentPage.tsx:223 Transformed classes data: {classes: Array(12), pagination: {…}}
+ProgramsParentPage.tsx:242 All classes: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:243 Filtered classesList: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:244 Summer camps: []
+ProgramsParentPage.tsx:245 classesLoading: false
+ProgramsParentPage.tsx:246 classesList.length: 12
+ProgramsParentPage.tsx:408 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:409   - Children: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:410   - Children loading: false
+ProgramsParentPage.tsx:411   - Children error: null
+ProgramsParentPage.tsx:412   - Is authenticated: true
+ProgramsParentPage.tsx:413   - User: {id: '31ad8076-c274-47bd-acf1-cefcd481efcc', aud: 'authenticated', role: 'authenticated', email: 'kpdinvestors@gmail.com', email_confirmed_at: '2025-08-30T22:38:58.128412Z', …}
+ProgramsParentPage.tsx:451 🔍 Select rendering debug:
+ProgramsParentPage.tsx:452   - Children array: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:453   - Array length: 3
+ProgramsParentPage.tsx:454   - First child: {id: 3, firstName: 'Silvie', lastName: 'Puccia', birthdate: '2022-08-16', gradeLevel: 'Littles', …}
+ProgramsParentPage.tsx:470 🔍 Rendering child: Silvie Puccia (ID: 3)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Sebastian Puccia (ID: 4)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Salena Puccia (ID: 5)
+CartContext.tsx:853 🛒 getItemCount called - current items: 1
+chunk-NFC5BX5N.js?v=a443a619:377 [Violation] 'message' handler took 182ms
+useRealTimeUpdates.ts:94 🔌 WebSocket disconnected: 1000 Client disconnect
+useRealTimeUpdates.ts:81 ✅ WebSocket connected for: kpdinvestors@gmail.com
+useRealTimeUpdates.ts:23 📡 Received real-time update: connection_established {type: 'connection_established', message: 'Real-time updates enabled', timestamp: '2025-09-05T14:12:50.699Z'}
+useRealTimeUpdates.ts:48 🔌 WebSocket connection established: Real-time updates enabled
+ParentAppShell.tsx:52 No school association found for user, using default school
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+ProgramsParentPage.tsx:219 School classes response: {items: Array(12), total: 12, page: 1, limit: 12, totalPages: 1}
+ProgramsParentPage.tsx:220 Classes error: null
+ProgramsParentPage.tsx:221 Classes loading: false
+ProgramsParentPage.tsx:222 Active tab: classes
+ProgramsParentPage.tsx:223 Transformed classes data: {classes: Array(12), pagination: {…}}
+ProgramsParentPage.tsx:242 All classes: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:243 Filtered classesList: (12) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:244 Summer camps: []
+ProgramsParentPage.tsx:245 classesLoading: false
+ProgramsParentPage.tsx:246 classesList.length: 12
+ProgramsParentPage.tsx:408 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:409   - Children: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:410   - Children loading: false
+ProgramsParentPage.tsx:411   - Children error: null
+ProgramsParentPage.tsx:412   - Is authenticated: true
+ProgramsParentPage.tsx:413   - User: {id: '31ad8076-c274-47bd-acf1-cefcd481efcc', aud: 'authenticated', role: 'authenticated', email: 'kpdinvestors@gmail.com', email_confirmed_at: '2025-08-30T22:38:58.128412Z', …}
+ProgramsParentPage.tsx:451 🔍 Select rendering debug:
+ProgramsParentPage.tsx:452   - Children array: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:453   - Array length: 3
+ProgramsParentPage.tsx:454   - First child: {id: 3, firstName: 'Silvie', lastName: 'Puccia', birthdate: '2022-08-16', gradeLevel: 'Littles', …}
+ProgramsParentPage.tsx:470 🔍 Rendering child: Silvie Puccia (ID: 3)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Sebastian Puccia (ID: 4)
+ProgramsParentPage.tsx:470 🔍 Rendering child: Salena Puccia (ID: 5)
+CartContext.tsx:853 🛒 getItemCount called - current items: 1
+inner.html:1 [Violation] 'message' handler took 529ms
