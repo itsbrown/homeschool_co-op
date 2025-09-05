@@ -1,0 +1,67 @@
+ASA Learning Platform Payment System Debug Guide (Updated)
+This updated guide addresses the persistent issue where successful payments (e.g., $466.67 on Sept 4, 2025) do not update the billing balance (still showing $1,400 due with 3 pending enrollments) or reflect in the payment history tab. It incorporates handling for monthly installment payments (3 payments, first immediate), ensures payment info is saved/retrieved correctly, and follows best practices for payment UX based on industry standards (e.g., transparency, real-time updates, minimal friction).
+Updated Issue Summary
+
+Core Problem: Payments succeed on Stripe but fail to update enrollment balances, payment history, or UI (billing page banner). For monthly plans, the system must handle 3 installments ($1,400 total ≈ $466.67 x 3), applying the first immediately and tracking remaining due.
+Root Causes (Potential): Incomplete installment logic in processBalancePayment; webhook failures; inadequate UI refresh; missing payment plan tracking in data files.
+Best Practices Integrated:
+Payment UX: Clear pricing, real-time validation, specific button labels (e.g., "Pay Now"), minimal fields, post-payment confirmation with updated balance/next steps (from sources like GoCardless, Baymard, Stripe).
+Installments: Transparent terms upfront; use Stripe webhooks for updates; track plans manually in backend (since file-based); show next due dates; avoid upfront full payment requests (from Stripe docs and guides).
+
+
+
+Enhanced Validation Steps
+Re-run these in Replit to verify fixes, focusing on installments.
+1. Payment Intent Creation with Installment Support
+
+File: server/api/stripe.ts
+Update: Add paymentPlan: 'monthly' | 'full' to metadata. For monthly, calculate installment amount (total / 3).
+Action: Test /api/billing/create-payment with monthly option.
+Validation:
+Ensure metadata includes paymentPlan. For $1,400 total, monthly intent amount = $466.67 (rounded).
+
+
+Replit Command:curl -X POST http://localhost:3000/api/billing/create-payment -H "Content-Type: application/json" -d '{"parentEmail":"test@example.com","enrollmentIds":[1,2,3],"totalAmountCents":140000,"paymentPlan":"monthly"}'
+
+
+
+2. Webhook Processing for Installments
+
+File: server/api/stripe.ts
+Update: In payment_intent.succeeded handler, check metadata.paymentPlan. If 'monthly', apply payment to first installment, update remainingBalance, set paymentPlanStatus: 'in_progress', and add to history with next due dates (e.g., +1 month, +2 months).
+Action: Simulate success event with installment metadata.
+Validation:
+After $466.67 payment, enrollments.json shows remainingBalance: 93333 cents ($933.33), totalPaid: 46667.
+payment-history.json logs transaction with installment: 1/3, next due.
+
+
+Replit Command:stripe trigger payment_intent.succeeded
+
+
+
+3. Balance Update Logic for Installments
+
+File: server/api/stripe.ts (processBalancePayment)
+Update: Enhance function to handle plans:async function processBalancePayment(paymentIntent: any) {
+  const { parentEmail, enrollmentIds, paymentType, paymentPlan } = paymentIntent.metadata;
+  const enrollmentIdArray = JSON.parse(enrollmentIds);
+  const totalAmount = paymentIntent.amount; // e.g., 46667 cents
+  const isMonthly = paymentPlan === 'monthly';
+  const installmentCount = isMonthly ? 3 : 1;
+  const paymentPerInstallment = isMonthly ? Math.round(totalAmount / installmentCount) : totalAmount;
+
+  // Distribute across enrollments
+  const paymentPerEnrollment = Math.round(paymentPerInstallment / enrollmentIdArray.length);
+
+  // Update each enrollment
+  for (const id of enrollmentIdArray) {
+    // Load enrollment, add to totalPaid, subtract from remainingBalance
+    // If monthly, set paymentPlanStatus, nextDueDate: new Date() + 1 month
+  }
+
+  // Log to payment-history.json with installment details
+  // Trigger WebSocket update
+}
+
+
+**Validation

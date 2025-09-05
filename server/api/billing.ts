@@ -26,10 +26,20 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-04-10',
 });
 
-// Helper function to process balance payments
+// Helper function to process balance payments with installment support
 export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent, userEmail: string, enrollmentIds: number[], totalAmount: number) {
   try {
-    console.log('💰 Processing balance payment for enrollments:', enrollmentIds);
+    const { paymentPlan = 'full' } = paymentIntent.metadata;
+    const isMonthly = paymentPlan === 'monthly';
+    const currentPaymentAmount = paymentIntent.amount; // Amount being paid now
+    
+    console.log('💰 Processing balance payment with installment support:', {
+      enrollmentIds,
+      paymentPlan,
+      isMonthly,
+      currentPaymentAmount,
+      totalAmount: totalAmount * 100
+    });
     
     // Get all enrollments
     const enrollments = [];
@@ -45,42 +55,73 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       return;
     }
     
-    // Calculate payment per enrollment
-    const paymentPerEnrollment = Math.round((totalAmount * 100) / enrollments.length);
+    // Calculate payment per enrollment for this installment
+    const paymentPerEnrollment = Math.round(currentPaymentAmount / enrollments.length);
     
     // Update each enrollment
     for (const enrollment of enrollments) {
       const newAmountPaid = (enrollment.totalPaid || 0) + paymentPerEnrollment;
       const classData = await storage.getClassById(enrollment.programId);
       const totalCost = classData?.price || 0;
+      const remainingBalance = Math.max(0, totalCost - newAmountPaid);
       
-      // Update enrollment with payment
-      await storage.updateEnrollment(enrollment.id, {
+      // Determine payment status
+      let paymentStatus: string;
+      if (remainingBalance === 0) {
+        paymentStatus = 'completed';
+      } else if (isMonthly) {
+        paymentStatus = 'payment_plan_active';
+      } else {
+        paymentStatus = 'partially_paid';
+      }
+      
+      // For monthly plans, add plan tracking fields
+      const updateData: any = {
         totalPaid: newAmountPaid,
-        paymentStatus: newAmountPaid >= totalCost ? 'completed' : 'partially_paid',
+        remainingBalance,
+        paymentStatus,
         status: 'enrolled'
-      });
+      };
       
-      console.log(`✅ Updated enrollment ${enrollment.id}: paid ${newAmountPaid} of ${totalCost}`);
+      if (isMonthly && remainingBalance > 0) {
+        const nextDueDate = new Date();
+        nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+        updateData.nextDueDate = nextDueDate.toISOString();
+        updateData.paymentPlanStatus = 'in_progress';
+        updateData.installmentsPaid = 1;
+        updateData.totalInstallments = 3;
+      }
+      
+      await storage.updateEnrollment(enrollment.id, updateData);
+      console.log(`✅ Updated enrollment ${enrollment.id}: paid ${newAmountPaid} of ${totalCost}, remaining ${remainingBalance}, status ${paymentStatus}`);
     }
     
-    // Create payment record
+    // Create payment record with installment details
     const paymentRecord = {
       stripePaymentIntentId: paymentIntent.id,
       parentEmail: userEmail,
       childName: enrollments[0].childName || 'Multiple Children',
       className: enrollments.length > 1 ? 'Multiple Classes' : enrollments[0].className || 'Class',
-      amount: paymentIntent.amount,
+      amount: currentPaymentAmount,
       currency: paymentIntent.currency || 'usd',
       status: 'completed' as const,
       metadata: {
         enrollmentIds: enrollmentIds,
-        paymentDate: new Date().toISOString()
+        paymentDate: new Date().toISOString(),
+        paymentPlan,
+        installmentNumber: isMonthly ? 1 : 1,
+        totalInstallments: isMonthly ? 3 : 1,
+        isFirstInstallment: true
       }
     };
     
     await storage.createPayment(paymentRecord);
     console.log('✅ Payment record created:', paymentRecord.stripePaymentIntentId);
+    
+    // For monthly plans, create scheduled payments for remaining installments
+    if (isMonthly && enrollments.length > 0) {
+      await createScheduledInstallments(userEmail, enrollmentIds, enrollments, currentPaymentAmount);
+    }
     
     // Send real-time update
     await dataLayer.refreshUserData(userEmail);
@@ -92,18 +133,71 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
   }
 }
 
+// Create scheduled installments for monthly plans
+async function createScheduledInstallments(
+  parentEmail: string,
+  enrollmentIds: number[],
+  enrollments: any[],
+  installmentAmount: number
+) {
+  try {
+    const installments = [
+      { number: 2, monthsFromNow: 1 },
+      { number: 3, monthsFromNow: 2 }
+    ];
+    
+    for (const installment of installments) {
+      const dueDate = new Date();
+      dueDate.setMonth(dueDate.getMonth() + installment.monthsFromNow);
+      
+      const scheduledPayment = {
+        parentEmail,
+        enrollmentIds,
+        amount: installmentAmount,
+        paymentPlan: 'monthly',
+        installmentNumber: installment.number,
+        totalInstallments: 3,
+        dueDate,
+        description: enrollments.length > 1 ? 
+          'Multiple Classes' : 
+          `${enrollments[0].childName} - ${enrollments[0].className}`,
+        status: 'pending' as const
+      };
+      
+      await storage.createScheduledPayment(scheduledPayment);
+      console.log(`📅 Created scheduled payment ${installment.number}/3 due ${dueDate.toDateString()}`);
+    }
+  } catch (error) {
+    console.error('❌ Error creating scheduled installments:', error);
+  }
+}
+
 // Create payment intent
 router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
   try {
-    const { amount, currency = 'usd', parentEmail, enrollmentDetails } = req.body;
+    const { amount, currency = 'usd', parentEmail, enrollmentDetails, paymentPlan = 'full' } = req.body;
+
+    // Calculate installment amount for monthly plans
+    const isMonthly = paymentPlan === 'monthly';
+    const installmentAmount = isMonthly ? Math.round((amount * 100) / 3) : Math.round(amount * 100);
+    
+    console.log('💳 Payment plan details:', {
+      paymentPlan,
+      totalAmount: amount * 100,
+      installmentAmount,
+      isMonthly
+    });
 
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
+      amount: installmentAmount, // For monthly: first installment; for full: total amount
       currency,
       metadata: {
         parentEmail,
-        enrollmentDetails: JSON.stringify(enrollmentDetails)
+        enrollmentDetails: JSON.stringify(enrollmentDetails),
+        paymentPlan,
+        paymentType: 'balance_payment',
+        enrollmentIds: JSON.stringify(enrollmentDetails.map((e: any) => e.enrollmentId))
       }
     });
 
