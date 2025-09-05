@@ -551,7 +551,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Group enrollments by class+child combination to find the latest status
       const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
-        const key = `${enrollment.classId}-${enrollment.childId}`;
+        // Handle both classId and programId (they refer to the same thing)
+        const classId = enrollment.classId || enrollment.programId;
+        const key = `${classId}-${enrollment.childId}`;
         if (!acc[key]) {
           acc[key] = [];
         }
