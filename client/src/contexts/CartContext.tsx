@@ -560,8 +560,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Only add to cart if there's no successful enrollment and there's a balance due
         if (!hasSuccessfulEnrollment) {
           const latestEnrollment = sortedEnrollments[0];
-          const hasBalance = latestEnrollment.remainingBalance > 0 || 
-                            (latestEnrollment.status === 'pending_payment' && latestEnrollment.amount === 0);
+          const hasBalance = latestEnrollment.remainingBalance > 0 && 
+                            latestEnrollment.paymentSystemVersion === 'v2_stripe';
 
           console.log(`🔍 Latest enrollment ${latestEnrollment.id}: status=${latestEnrollment.status}, remainingBalance=${latestEnrollment.remainingBalance}, hasBalance=${hasBalance}`);
 
@@ -584,12 +584,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Determine appropriate status text based on payment state
         if (enrollment.status === 'partially_paid') {
           statusText = 'Partially Paid';
-        } else if (enrollment.status === 'payment_plan_active') {
-          statusText = 'Payment Plan Active';
-        } else if (enrollment.status === 'enrolled' && remainingBalance > 0) {
+        } else if (enrollment.paymentSystemVersion === 'v2_stripe' && remainingBalance > 0) {
           statusText = 'Balance Due';
-        } else if (enrollment.status === 'pending_payment') {
-          statusText = 'Payment Required';
+        } else if (enrollment.paymentSystemVersion === 'v2_stripe') {
+          statusText = 'Stripe Managed';
         }
 
         return {

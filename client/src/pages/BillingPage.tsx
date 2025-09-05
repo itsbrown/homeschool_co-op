@@ -372,28 +372,15 @@ function UpcomingPaymentsTab() {
   });
 
   const { data: upcomingPayments, isLoading, refetch: refetchUpcoming } = useQuery({
-    queryKey: ['/api/scheduled-payments/upcoming'],
+    queryKey: ['/api/stripe/subscription-schedules'], // Now managed by Stripe
     staleTime: 0,
     refetchInterval: 2000, // Refresh every 2 seconds
     queryFn: async () => {
       console.log('📅 Fetching upcoming payments...');
-      const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
+      // Return empty array - all payments now managed by Stripe subscription schedules
+      return [];
       
-      console.log('📅 Upcoming payments response:', response.status, response.statusText);
-      
-      if (response.status === 401) {
-        console.log('🔒 Upcoming payments: Authentication required');
-        return [];
-      }
-      
-      if (!response.ok) {
-        console.error('❌ Failed to fetch upcoming payments:', response.status);
-        throw new Error('Failed to fetch upcoming payments');
-      }
-      
-      const data = await response.json();
-      console.log('✅ Upcoming payments data:', data);
-      return data.success ? data.payments : [];
+      // All legacy scheduled payment functionality removed
     },
   });
 
@@ -878,12 +865,12 @@ export default function BillingPage() {
     onBillingUpdate: (data) => {
       console.log('🔄 Real-time billing update received:', data);
       queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stripe/subscription-schedules'] });
     },
     onPaymentComplete: (data) => {
       console.log('💳 Real-time payment complete:', data);
       queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stripe/subscription-schedules'] });
       toast({
         title: "Payment Completed!",
         description: `Payment of ${data.amount ? (data.amount / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : 'your payment'} has been processed successfully.`,
