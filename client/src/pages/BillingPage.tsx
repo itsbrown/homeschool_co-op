@@ -217,11 +217,23 @@ function UpcomingPaymentsTab() {
     staleTime: 0,
     refetchInterval: 2000, // Refresh every 2 seconds
     queryFn: async () => {
+      console.log('📅 Fetching upcoming payments...');
       const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
+      
+      console.log('📅 Upcoming payments response:', response.status, response.statusText);
+      
+      if (response.status === 401) {
+        console.log('🔒 Upcoming payments: Authentication required');
+        return [];
+      }
+      
       if (!response.ok) {
+        console.error('❌ Failed to fetch upcoming payments:', response.status);
         throw new Error('Failed to fetch upcoming payments');
       }
+      
       const data = await response.json();
+      console.log('✅ Upcoming payments data:', data);
       return data.success ? data.payments : [];
     },
   });
