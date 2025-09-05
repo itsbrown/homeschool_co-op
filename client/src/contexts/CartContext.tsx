@@ -681,7 +681,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
-        console.log('🛒 No pending enrollments found to add to cart');
+        console.log('🛒 No pending enrollments found - clearing cart completely');
+        dispatch({ type: 'CLEAR_CART' });
+        localStorage.removeItem('asa_cart_items');
+        localStorage.setItem('asa_cart_cleared', Date.now().toString());
       }
 
       console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
