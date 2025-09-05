@@ -125,6 +125,29 @@ router.post('/create-payment-intent', async (req, res) => {
       }
     }
     
+    // Create enrollments first to get enrollment IDs for metadata
+    const enrollmentIds = [];
+    for (const item of items) {
+      const enrollment = await storage.createEnrollment({
+        programId: item.classId,
+        parentId: 0, // Will be updated later  
+        parentEmail: userEmail,
+        childId: item.childId,
+        childName: item.childName,
+        className: item.className,
+        totalCost: item.totalCost,
+        remainingBalance: item.totalCost,
+        paymentStatus: 'pending_payment',
+        paymentSystemVersion: 'v2_stripe',
+        status: 'pending_payment',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      enrollmentIds.push(enrollment.id);
+    }
+
+    console.log('📝 Created enrollments for full payment with IDs:', enrollmentIds);
+
     // For full payments, use the existing payment intent flow
     const isDepositPayment = items.some((item: any) => item.paymentType === 'deposit');
     const paymentTypeDescription = isDepositPayment ? 'Deposit Payment' : 'Class Enrollment Payment';
@@ -143,6 +166,7 @@ router.post('/create-payment-intent', async (req, res) => {
       itemCount: items.length,
       childrenCount: uniqueChildren.length,
       hasDiscounts: discounts.siblingDiscount > 0 || discounts.freeAfterThree > 0,
+      enrollmentIds,
       rawItems: items
     });
 
@@ -162,7 +186,8 @@ router.post('/create-payment-intent', async (req, res) => {
         totalDiscountAmount: discounts.totalDiscountAmount?.toString() || '0',
         appliedDiscountsJson: JSON.stringify(discounts.appliedDiscounts || []),
         paymentType: isDepositPayment ? 'deposit' : 'full_payment',
-        itemsJson: JSON.stringify(items.map((item: any) => ({
+        enrollmentIdsJson: JSON.stringify(enrollmentIds), // Add enrollment IDs to metadata
+        itemsJson: JSON.stringify(items.map((item: any, index: number) => ({
           classId: item.classId,
           className: item.className,
           childId: item.childId,
@@ -170,7 +195,8 @@ router.post('/create-payment-intent', async (req, res) => {
           price: item.price,
           paymentType: item.paymentType || 'deposit',
           depositRequired: item.depositRequired,
-          totalCost: item.totalCost
+          totalCost: item.totalCost,
+          enrollmentId: enrollmentIds[index] // Add enrollment ID to each item
         })))
       },
       automatic_payment_methods: {
@@ -1007,73 +1033,85 @@ router.post('/process-payment/:paymentIntentId', async (req, res) => {
 
     // Extract metadata
     const itemsJson = paymentIntent.metadata.itemsJson;
+    const enrollmentIdsJson = paymentIntent.metadata.enrollmentIdsJson;
     const parentEmail = paymentIntent.metadata.parentEmail;
     const paymentType = paymentIntent.metadata.paymentType;
 
-    if (!itemsJson || !parentEmail) {
+    if (!parentEmail) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required payment metadata'
+        error: 'Missing parent email in payment metadata'
       });
     }
 
-    const items = JSON.parse(itemsJson);
-    console.log('💰 Processing manual payment for', items.length, 'items for', parentEmail);
-
-    // Calculate payment per item
-    const amountPerItem = Math.round(paymentIntent.amount / items.length);
+    let enrollmentIds = [];
+    let items = [];
     
-    // Update each enrollment
-    const updatedEnrollments = [];
-    for (const item of items) {
+    // Try to get enrollment IDs from metadata (new approach)
+    if (enrollmentIdsJson) {
       try {
-        // Find enrollment by child and class - try multiple lookup methods
-        const allEnrollments = await storage.getAllEnrollments();
-        console.log(`🔍 Looking for enrollment: childId=${item.childId}, classId=${item.classId}`);
-        
-        let enrollment = allEnrollments.find(e => 
-          e.childId === item.childId && e.classId === item.classId
-        ) as any;
-        
-        // If not found, try with programId instead of classId
-        if (!enrollment) {
-          enrollment = allEnrollments.find(e => 
-            e.childId === item.childId && e.programId === item.classId
-          ) as any;
+        enrollmentIds = JSON.parse(enrollmentIdsJson);
+        console.log('💰 Processing manual payment using enrollment IDs:', enrollmentIds);
+      } catch (error) {
+        console.error('❌ Error parsing enrollment IDs from metadata:', error);
+      }
+    }
+    
+    // Parse items for additional info
+    if (itemsJson) {
+      try {
+        items = JSON.parse(itemsJson);
+        // If items have enrollment IDs but we didn't get them from enrollmentIdsJson
+        if (enrollmentIds.length === 0 && items.length > 0 && items[0].enrollmentId) {
+          enrollmentIds = items.map(item => item.enrollmentId);
+          console.log('💰 Got enrollment IDs from items:', enrollmentIds);
         }
-        
-        // If still not found, try with status pending_payment
-        if (!enrollment) {
-          enrollment = allEnrollments.find(e => 
-            e.childId === item.childId && 
-            (e.classId === item.classId || e.programId === item.classId) &&
-            e.status === 'pending_payment'
-          ) as any;
-        }
-        
-        console.log(`🔍 Enrollment found:`, !!enrollment);
+      } catch (error) {
+        console.error('❌ Error parsing items from metadata:', error);
+      }
+    }
+
+    if (enrollmentIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No enrollment IDs found in payment metadata'
+      });
+    }
+
+    // Calculate payment per enrollment
+    const amountPerEnrollment = Math.round(paymentIntent.amount / enrollmentIds.length);
+    
+    // Update each enrollment using enrollment IDs
+    const updatedEnrollments = [];
+    for (let i = 0; i < enrollmentIds.length; i++) {
+      const enrollmentId = enrollmentIds[i];
+      try {
+        const enrollment = await storage.getEnrollmentById(enrollmentId);
         
         if (enrollment) {
-          const currentAmount = enrollment.amount || 0;
-          const newAmount = currentAmount + amountPerItem;
-          const remainingBalance = Math.max(0, (enrollment.totalCost || item.totalCost || 0) - newAmount);
+          const currentAmount = enrollment.amount || enrollment.totalPaid || 0;
+          const newAmount = currentAmount + amountPerEnrollment;
+          const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
           
           const updatedEnrollment = {
             ...enrollment,
             amount: newAmount,
+            totalPaid: newAmount,
             remainingBalance: remainingBalance,
+            paymentStatus: remainingBalance > 0 ? 'stripe_managed' : 'completed',
             status: 'enrolled' as const,
-            paymentIntentId: paymentIntent.id
+            paymentIntentId: paymentIntent.id,
+            updatedAt: new Date().toISOString()
           };
           
           await storage.updateEnrollment(updatedEnrollment);
           updatedEnrollments.push(updatedEnrollment);
-          console.log(`✅ Updated enrollment for ${item.childName} in ${item.className}: amount=${newAmount}, remaining=${remainingBalance}`);
+          console.log(`✅ Updated enrollment ${enrollmentId}: amount=${newAmount}, remaining=${remainingBalance}`);
         } else {
-          console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
+          console.log(`❌ Enrollment ${enrollmentId} not found`);
         }
       } catch (error) {
-        console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
+        console.error(`❌ Error updating enrollment ${enrollmentId}:`, error);
       }
     }
 
