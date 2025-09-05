@@ -328,7 +328,7 @@ export default function ParentDashboard() {
                             <div className="space-y-2">
                               <div className="flex justify-between items-center">
                                 <Badge variant="secondary">{program.ageRange}</Badge>
-                                <span className="text-lg font-bold">${program.price}</span>
+                                <span className="text-lg font-bold">${(program.price / 100).toFixed(2)}</span>
                               </div>
                               <div className="text-sm text-muted-foreground">
                                 Duration: {program.duration}

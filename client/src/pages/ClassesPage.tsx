@@ -11,13 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
-// Format currency
+// Format currency (amount is in cents)
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2
-  }).format(amount);
+  }).format(amount / 100);
 };
 
 export default function ClassesPage() {
@@ -173,7 +173,7 @@ export default function ClassesPage() {
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center"><DollarSign className="h-4 w-4 mr-1 opacity-70" />Price:</div>
-                    <div className="font-semibold">{formatCurrency(classItem.price / 100)}</div>
+                    <div className="font-semibold">{formatCurrency(classItem.price)}</div>
                   </div>
                   
                   {classItem.totalOrders > 0 && (
