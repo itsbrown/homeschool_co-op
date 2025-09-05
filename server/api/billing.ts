@@ -66,32 +66,19 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       const totalCost = classData?.price || 0;
       const remainingBalance = Math.max(0, totalCost - newAmountPaid);
       
-      // Determine payment status
-      let paymentStatus: string;
-      if (remainingBalance === 0) {
-        paymentStatus = 'completed';
-      } else if (isMonthly) {
-        paymentStatus = 'payment_plan_active';
-      } else {
-        paymentStatus = 'partially_paid';
-      }
+      // All payments now use Stripe-managed status
+      const paymentStatus = 'stripe_managed';
+      const paymentSystemVersion = 'v2_stripe';
       
-      // For monthly plans, add plan tracking fields
+      // Update enrollment with Stripe-managed payment system
       const updateData: any = {
         totalPaid: newAmountPaid,
         remainingBalance,
         paymentStatus,
-        status: 'enrolled'
+        paymentSystemVersion,
+        status: 'enrolled',
+        updatedAt: new Date().toISOString()
       };
-      
-      if (isMonthly && remainingBalance > 0) {
-        const nextDueDate = new Date();
-        nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-        updateData.nextDueDate = nextDueDate.toISOString();
-        updateData.paymentPlanStatus = 'in_progress';
-        updateData.installmentsPaid = 1;
-        updateData.totalInstallments = 3;
-      }
       
       await storage.updateEnrollment(enrollment.id, updateData);
       console.log(`✅ Updated enrollment ${enrollment.id}: paid ${newAmountPaid} of ${totalCost}, remaining ${remainingBalance}, status ${paymentStatus}`);
@@ -119,11 +106,8 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     await storage.createPayment(paymentRecord);
     console.log('✅ Payment record created:', paymentRecord.stripePaymentIntentId);
     
-    // For payment plans (monthly or three_payments), create scheduled payments for remaining installments
-    const needsScheduledPayments = (paymentPlan === 'monthly' || paymentPlan === 'three_payments') && enrollments.length > 0;
-    if (needsScheduledPayments) {
-      await createScheduledInstallments(userEmail, enrollmentIds, enrollments, currentPaymentAmount, paymentPlan);
-    }
+    // Payment plans are now handled by Stripe Subscription Schedules in the stripe-payment-plans service
+    // No manual scheduled payments needed - all payment scheduling is managed by Stripe
     
     // Add small delay to ensure all storage operations are committed
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -138,45 +122,9 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
   }
 }
 
-// Create scheduled installments for payment plans (monthly or three_payments)
-async function createScheduledInstallments(
-  parentEmail: string,
-  enrollmentIds: number[],
-  enrollments: any[],
-  installmentAmount: number,
-  paymentPlan: string = 'monthly'
-) {
-  try {
-    const installments = [
-      { number: 2, monthsFromNow: 1 },
-      { number: 3, monthsFromNow: 2 }
-    ];
-    
-    for (const installment of installments) {
-      const dueDate = new Date();
-      dueDate.setMonth(dueDate.getMonth() + installment.monthsFromNow);
-      
-      const scheduledPayment = {
-        parentEmail,
-        enrollmentIds,
-        amount: installmentAmount,
-        paymentPlan: paymentPlan,
-        installmentNumber: installment.number,
-        totalInstallments: 3,
-        dueDate,
-        description: enrollments.length > 1 ? 
-          'Multiple Classes' : 
-          `${enrollments[0].childName} - ${enrollments[0].className}`,
-        status: 'pending' as const
-      };
-      
-      await storage.createScheduledPayment(scheduledPayment);
-      console.log(`📅 Created scheduled payment ${installment.number}/3 due ${dueDate.toDateString()}`);
-    }
-  } catch (error) {
-    console.error('❌ Error creating scheduled installments:', error);
-  }
-}
+// DEPRECATED: Legacy scheduled installments - now handled by Stripe Subscription Schedules
+// This function is kept for reference but should not be used in new code
+// All payment plans are now managed directly through Stripe's native APIs
 
 // Create payment intent
 router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {

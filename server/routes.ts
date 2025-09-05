@@ -50,6 +50,7 @@ import marketingLinksRouter from "./api/marketing-links";
 import aiInsightsRouter from "./api/ai-insights";
 import parentProfileRouter from "./api/parent-profile";
 import accountImportRouter from "./api/account-import";
+import paymentCleanupRouter from "./api/payment-cleanup";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import archiver from 'archiver';
 import fs from 'fs';
@@ -1756,6 +1757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/migration", migrationRouter);
   app.use("/api/school-admin/marketing-links", marketingLinksRouter);
   app.use("/api/account-import", accountImportRouter);
+  app.use("/api/payment-cleanup", paymentCleanupRouter);
 
   // Import and register enrollments API router
   const enrollmentsRouter = await import("./api/enrollments");
