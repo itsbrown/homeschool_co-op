@@ -198,7 +198,7 @@ export default function ParentSidebar() {
       icon: <Calendar className="h-5 w-5" />,
     },
     {
-      href: "/billing",
+      href: "/payments",
       title: "Payments",
       icon: <DollarSign className="h-5 w-5" />,
       description: "Manage billing and view payment history"
