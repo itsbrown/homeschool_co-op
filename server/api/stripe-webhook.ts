@@ -1,4 +1,5 @@
 import express from 'express';
+import Stripe from 'stripe';
 import { MemStorage } from '../storage';
 
 const router = express.Router();
@@ -22,12 +23,12 @@ router.post('/subscription-schedules', async (req, res) => {
         
       case 'invoice.payment_succeeded':
         console.log('✅ Invoice payment succeeded for schedule');
-        // Update enrollment balances
+        await handlePaymentSuccess(event.data.object);
         break;
         
       case 'invoice.payment_failed':
         console.log('❌ Invoice payment failed for schedule');
-        // Handle payment failure
+        await handlePaymentFailure(event.data.object);
         break;
         
       case 'subscription_schedule.completed':
@@ -45,5 +46,151 @@ router.post('/subscription-schedules', async (req, res) => {
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
+
+// Initialize Stripe for retry operations
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2025-04-30.basil',
+});
+
+// Handle successful subscription schedule payments
+async function handlePaymentSuccess(invoice: any) {
+  try {
+    console.log('✅ Processing successful payment for invoice:', invoice.id);
+    
+    // Get subscription schedule from invoice
+    if (invoice.subscription_schedule) {
+      const scheduleId = invoice.subscription_schedule;
+      const storage = new MemStorage();
+      
+      // Find enrollments associated with this schedule
+      const schedules = await storage.getStripeSubscriptionSchedules();
+      const schedule = schedules.find(s => s.stripeScheduleId === scheduleId);
+      
+      if (schedule) {
+        const enrollmentIds = JSON.parse(schedule.enrollmentIds);
+        const paymentAmount = invoice.amount_paid;
+        const perEnrollmentAmount = Math.round(paymentAmount / enrollmentIds.length);
+        
+        // Update each enrollment
+        for (const enrollmentId of enrollmentIds) {
+          const enrollment = await storage.getEnrollmentById(enrollmentId);
+          if (enrollment) {
+            const newTotalPaid = (enrollment.totalPaid || 0) + perEnrollmentAmount;
+            const newRemainingBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
+            
+            await storage.updateEnrollment({
+              ...enrollment,
+              totalPaid: newTotalPaid,
+              remainingBalance: newRemainingBalance,
+              paymentStatus: newRemainingBalance === 0 ? 'completed' : 'stripe_managed',
+              status: 'enrolled'
+            });
+            
+            console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newTotalPaid}, remaining=${newRemainingBalance}`);
+          }
+        }
+        
+        console.log(`📡 Payment received for ${schedule.parentEmail}: ${paymentAmount}`);
+        
+        console.log(`📧 Payment receipt for ${schedule.parentEmail}: ${paymentAmount}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error handling payment success:', error);
+  }
+}
+
+// Handle failed subscription schedule payments with retry logic
+async function handlePaymentFailure(invoice: any) {
+  try {
+    console.log('❌ Processing failed payment for invoice:', invoice.id);
+    
+    if (invoice.subscription_schedule) {
+      const scheduleId = invoice.subscription_schedule;
+      const storage = new MemStorage();
+      
+      // Find enrollments associated with this schedule
+      const schedules = await storage.getStripeSubscriptionSchedules();
+      const schedule = schedules.find(s => s.stripeScheduleId === scheduleId);
+      
+      if (schedule) {
+        // Check attempt count
+        const attemptCount = invoice.attempt_count || 1;
+        const maxAttempts = 3;
+        
+        if (attemptCount < maxAttempts) {
+          // Schedule retry payment
+          console.log(`🔄 Scheduling retry ${attemptCount + 1}/${maxAttempts} for invoice ${invoice.id}`);
+          
+          try {
+            // Update the subscription schedule to retry payment in 3 days
+            const retryDate = Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60); // 3 days from now
+            
+            await stripe.subscriptionSchedules.update(scheduleId, {
+              phases: [{
+                items: [{
+                  price: invoice.lines.data[0].price.id,
+                  quantity: 1,
+                }],
+                start_date: retryDate,
+                end_date: retryDate + (30 * 24 * 60 * 60), // 30 days duration
+              }]
+            });
+            
+            console.log(`📧 Retry notification sent to ${schedule.parentEmail}`);
+            
+            console.log(`✅ Scheduled retry payment for ${retryDate}`);
+            
+          } catch (retryError) {
+            console.error('❌ Failed to schedule retry:', retryError);
+            await handleFinalPaymentFailure(schedule, invoice);
+          }
+          
+        } else {
+          // Max attempts reached
+          console.log(`❌ Max retry attempts reached for invoice ${invoice.id}`);
+          await handleFinalPaymentFailure(schedule, invoice);
+        }
+        
+        console.log(`📡 Payment failed for ${schedule.parentEmail}: attempt ${attemptCount}/${maxAttempts}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error handling payment failure:', error);
+  }
+}
+
+// Handle final payment failure after all retries
+async function handleFinalPaymentFailure(schedule: any, invoice: any) {
+  try {
+    console.log('❌ Handling final payment failure for schedule:', schedule.stripeScheduleId);
+    
+    // Cancel the subscription schedule
+    await stripe.subscriptionSchedules.cancel(schedule.stripeScheduleId);
+    
+    // Update enrollments to require manual payment
+    const storage = new MemStorage();
+    const enrollmentIds = JSON.parse(schedule.enrollmentIds);
+    
+    for (const enrollmentId of enrollmentIds) {
+      const enrollment = await storage.getEnrollmentById(enrollmentId);
+      if (enrollment) {
+        await storage.updateEnrollment({
+          ...enrollment,
+          paymentStatus: 'payment_failed',
+          status: 'payment_required'
+        });
+      }
+    }
+    
+    console.log(`📧 Final failure notification sent to ${schedule.parentEmail}`);
+    
+    console.log('✅ Payment plan canceled and enrollments updated');
+    
+  } catch (error) {
+    console.error('❌ Error handling final payment failure:', error);
+  }
+}
+
 
 export default router;

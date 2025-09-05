@@ -24,5 +24,48 @@
     "totalPaid": 60000,
     "remainingBalance": 0,
     "paymentStatus": "completed"
+  },
+  {
+    "id": 1757076462387,
+    "classId": 14,
+    "childId": 3,
+    "childName": "Silvie Puccia",
+    "className": "Macaroni Single Day",
+    "enrollmentDate": "2025-09-05T12:47:42.387Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 3000,
+    "totalCost": 30000,
+    "remainingBalance": 30000
+  },
+  {
+    "programId": 13,
+    "parentId": 0,
+    "parentEmail": "kpdinvestors@gmail.com",
+    "childId": 3,
+    "childName": "Silvie Puccia",
+    "className": "Test Class",
+    "totalCost": 50000,
+    "remainingBalance": 50000,
+    "paymentStatus": "stripe_managed",
+    "paymentSystemVersion": "v2_stripe",
+    "status": "enrolled",
+    "createdAt": "2025-09-05T12:50:37.140Z",
+    "updatedAt": "2025-09-05T12:50:37.140Z"
+  },
+  {
+    "programId": 12,
+    "parentId": 0,
+    "parentEmail": "kpdinvestors@gmail.com",
+    "childId": 4,
+    "childName": "Sebastian Puccia",
+    "className": "Test Monthly Plan",
+    "totalCost": 60000,
+    "remainingBalance": 60000,
+    "paymentStatus": "stripe_managed",
+    "paymentSystemVersion": "v2_stripe",
+    "status": "enrolled",
+    "createdAt": "2025-09-05T12:51:51.222Z",
+    "updatedAt": "2025-09-05T12:51:51.222Z"
   }
 ]

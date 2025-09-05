@@ -94,12 +94,165 @@ interface PaymentHistoryItem {
   enrollmentIds: number[];
   paymentPlan: string | null;
   nextPaymentDate: string | null;
+  stripeSubscriptionScheduleId?: string;
   enrollmentDetails: Array<{
     childName: string;
     className: string;
     price: number;
     amountPaid: number;
   }>;
+}
+
+interface StripeSubscriptionSchedule {
+  id: string;
+  status: 'not_started' | 'active' | 'completed' | 'canceled';
+  phases: Array<{
+    start_date: number;
+    end_date: number;
+    items: Array<{
+      price: {
+        id: string;
+        unit_amount: number;
+        currency: string;
+      };
+      quantity: number;
+    }>;
+  }>;
+  current_phase: {
+    start_date: number;
+    end_date: number;
+  } | null;
+  next_invoice: {
+    date: number;
+    amount_due: number;
+  } | null;
+  metadata: {
+    parentEmail: string;
+    enrollmentIds: string;
+    totalAmount: string;
+    paymentPlan: string;
+  };
+}
+
+// Stripe Subscription Schedules Tab
+function SubscriptionSchedulesTab() {
+  const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
+    queryKey: ['stripe-subscription-schedules'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/stripe/subscription-schedules');
+      if (!response.ok) {
+        throw new Error('Failed to fetch subscription schedules');
+      }
+      const data = await response.json();
+      return data.success ? data.schedules : [];
+    },
+  });
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
+  };
+
+  const formatCurrency = (amount: number) => {
+    return (amount / 100).toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      'not_started': 'outline',
+      'active': 'default',
+      'completed': 'secondary',
+      'canceled': 'destructive'
+    };
+    return variants[status] || 'outline';
+  };
+
+  if (schedulesLoading) {
+    return (
+      <div className="flex justify-center items-center h-48">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (schedules.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No payment plans found</h3>
+        <p className="text-gray-500">Stripe-managed payment plans will appear here when you enroll with a payment plan option.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold">Payment Plans</h2>
+        <p className="text-muted-foreground">Stripe-managed payment schedules and installments</p>
+      </div>
+
+      <div className="space-y-4">
+        {schedules.map((schedule: any) => (
+          <Card key={schedule.id} className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <h3 className="font-medium">Payment Plan #{schedule.id}</h3>
+                  <Badge variant={getStatusBadge(schedule.stripeStatus)}>
+                    {schedule.stripeStatus}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Plan: {schedule.paymentPlan} | Total: {formatCurrency(schedule.totalAmount)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Created: {formatDate(new Date(schedule.createdAt).getTime() / 1000)}
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-semibold">
+                  {schedule.nextInvoice ? formatCurrency(schedule.nextInvoice.amount_due) : 'N/A'}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {schedule.nextInvoice ? `Due: ${formatDate(schedule.nextInvoice.period_start)}` : 'No upcoming payment'}
+                </p>
+              </div>
+            </div>
+
+            {schedule.phases && schedule.phases.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <h4 className="font-medium mb-2">Payment Schedule</h4>
+                <div className="space-y-2">
+                  {schedule.phases.map((phase: any, index: number) => (
+                    <div key={index} className="flex justify-between text-sm">
+                      <span>
+                        Phase {index + 1}: {formatDate(phase.start_date)} - {formatDate(phase.end_date)}
+                      </span>
+                      <span>
+                        {phase.items[0] ? formatCurrency(phase.items[0].price.unit_amount) : 'N/A'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {schedule.error && (
+              <Alert className="mt-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {schedule.error}
+                </AlertDescription>
+              </Alert>
+            )}
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function PaymentHistoryTab() {
@@ -174,6 +327,11 @@ function PaymentHistoryTab() {
                 <p className="text-sm text-muted-foreground">
                   Transaction ID: {payment.stripePaymentIntentId}
                 </p>
+                {payment.stripeSubscriptionScheduleId && (
+                  <p className="text-sm text-muted-foreground">
+                    Payment Plan: {payment.stripeSubscriptionScheduleId}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <div className="text-lg font-semibold">
@@ -1036,9 +1194,10 @@ export default function BillingPage() {
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="history">All Payments</TabsTrigger>
+            <TabsTrigger value="plans">Payment Plans</TabsTrigger>
             <TabsTrigger value="upcoming">Upcoming Payments</TabsTrigger>
           </TabsList>
           
@@ -1364,6 +1523,10 @@ export default function BillingPage() {
 
           <TabsContent value="history" className="space-y-6">
             <PaymentHistoryTab />
+          </TabsContent>
+
+          <TabsContent value="plans" className="space-y-6">
+            <SubscriptionSchedulesTab />
           </TabsContent>
 
           <TabsContent value="upcoming" className="space-y-6">

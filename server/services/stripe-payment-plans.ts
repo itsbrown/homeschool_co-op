@@ -42,7 +42,7 @@ export class StripePaymentPlanService {
     console.log('👤 Customer ready:', customer.id);
 
     // Build payment phases based on plan type
-    const phases = this.buildPaymentPhases(data.paymentPlan, data.totalAmount);
+    const phases = await this.buildPaymentPhases(data.paymentPlan, data.totalAmount);
     console.log('📅 Built phases:', phases.length);
 
     // Create subscription schedule
@@ -120,7 +120,7 @@ export class StripePaymentPlanService {
   /**
    * Build payment phases based on payment plan type
    */
-  private buildPaymentPhases(plan: string, totalAmount: number): StripePhase[] {
+   private async buildPaymentPhases(plan: string, totalAmount: number): Promise<StripePhase[]> {
     console.log('🏗️ Building payment phases for plan:', plan, 'amount:', CurrencyUtils.toDisplay(totalAmount));
 
     switch (plan) {
@@ -128,13 +128,15 @@ export class StripePaymentPlanService {
         // 10% deposit now, 90% in 30 days
         const depositAmount = Math.round(totalAmount * 0.1);
         const balanceAmount = totalAmount - depositAmount;
+        const depositPriceId = await this.createOneTimePrice(depositAmount, 'Deposit Payment');
+        const balancePriceId = await this.createOneTimePrice(balanceAmount, 'Balance Payment');
         return [
           {
-            items: [{ price: this.createOneTimePrice(depositAmount, 'Deposit Payment') }],
+            items: [{ price: depositPriceId }],
             iterations: 1
           },
           {
-            items: [{ price: this.createOneTimePrice(balanceAmount, 'Balance Payment') }],
+            items: [{ price: balancePriceId }],
             iterations: 1,
             start_date: this.addDays(new Date(), 30).getTime() / 1000
           }
@@ -144,13 +146,15 @@ export class StripePaymentPlanService {
         // 50% now, 50% in 30 days
         const firstHalf = Math.round(totalAmount * 0.5);
         const secondHalf = totalAmount - firstHalf;
+        const firstPriceId = await this.createOneTimePrice(firstHalf, 'First Payment');
+        const secondPriceId = await this.createOneTimePrice(secondHalf, 'Second Payment');
         return [
           {
-            items: [{ price: this.createOneTimePrice(firstHalf, 'First Payment') }],
+            items: [{ price: firstPriceId }],
             iterations: 1
           },
           {
-            items: [{ price: this.createOneTimePrice(secondHalf, 'Second Payment') }],
+            items: [{ price: secondPriceId }],
             iterations: 1,
             start_date: this.addDays(new Date(), 30).getTime() / 1000
           }
@@ -160,18 +164,21 @@ export class StripePaymentPlanService {
         // 3 monthly payments
         const monthlyAmount = Math.round(totalAmount / 3);
         const lastMonthAmount = totalAmount - (monthlyAmount * 2); // Handle rounding
+        const month1PriceId = await this.createOneTimePrice(monthlyAmount, 'Month 1 Payment');
+        const month2PriceId = await this.createOneTimePrice(monthlyAmount, 'Month 2 Payment');
+        const month3PriceId = await this.createOneTimePrice(lastMonthAmount, 'Month 3 Payment');
         return [
           {
-            items: [{ price: this.createOneTimePrice(monthlyAmount, 'Month 1 Payment') }],
+            items: [{ price: month1PriceId }],
             iterations: 1
           },
           {
-            items: [{ price: this.createOneTimePrice(monthlyAmount, 'Month 2 Payment') }],
+            items: [{ price: month2PriceId }],
             iterations: 1,
             start_date: this.addDays(new Date(), 30).getTime() / 1000
           },
           {
-            items: [{ price: this.createOneTimePrice(lastMonthAmount, 'Month 3 Payment') }],
+            items: [{ price: month3PriceId }],
             iterations: 1,
             start_date: this.addDays(new Date(), 60).getTime() / 1000
           }
@@ -179,9 +186,10 @@ export class StripePaymentPlanService {
 
       case 'full':
         // Full payment now
+        const fullPriceId = await this.createOneTimePrice(totalAmount, 'Full Payment');
         return [
           {
-            items: [{ price: this.createOneTimePrice(totalAmount, 'Full Payment') }],
+            items: [{ price: fullPriceId }],
             iterations: 1
           }
         ];
