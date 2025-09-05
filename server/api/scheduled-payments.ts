@@ -16,9 +16,12 @@ const router = Router();
 // Get upcoming scheduled payments for a user
 router.get('/upcoming', async (req, res) => {
   try {
+    console.log('🚀 Upcoming payments API called');
     // Extract user email from Supabase token (same as billing summary)
     const authHeader = req.headers.authorization;
+    console.log('🔑 Auth header present:', !!authHeader, authHeader ? 'Bearer token provided' : 'No auth header');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ Missing or invalid authorization header');
       return res.status(401).json({
         success: false,
         error: 'Authorization header missing'

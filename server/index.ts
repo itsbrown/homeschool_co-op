@@ -90,6 +90,7 @@ app.use('/api/school-admin/marketing-links', marketingLinksRouter);
 app.use('/api/payments', paymentHistoryRouter);
 app.use('/api/stripe', stripeRoutes);
 app.use("/api/billing", billingRouter);
+app.use("/api/scheduled-payments", scheduledPaymentsRouter);
 app.use("/api/ai-pricing", aiPricingRouter);
 app.use("/api/payment-import", paymentImport);
 app.use("/api/account-import", accountImport);
