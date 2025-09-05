@@ -331,7 +331,7 @@
   {
     "id": 18,
     "createdAt": "2025-09-05T01:30:53.164Z",
-    "updatedAt": "2025-09-05T01:30:53.164Z",
+    "updatedAt": "2025-09-05T01:30:53.350Z",
     "stripePaymentIntentId": "pi_3S3oU1RFKXbVXRE30Jt1ZKb4",
     "parentEmail": "kpdinvestors@gmail.com",
     "childName": "Silvie Puccia",
@@ -346,6 +346,39 @@
         1756700810624
       ],
       "paymentDate": "2025-09-05T01:30:53.164Z"
+    }
+  },
+  {
+    "id": 19,
+    "createdAt": "2025-09-05T01:43:44.438Z",
+    "updatedAt": "2025-09-05T01:43:44.438Z",
+    "status": "pending",
+    "parentEmail": "kpdinvestors@gmail.com",
+    "stripePaymentIntentId": "pi_3S3ogmRFKXbVXRE31Ceb2SGC",
+    "amount": 1400,
+    "currency": "usd",
+    "childName": "Multiple Children",
+    "className": "Multiple Classes",
+    "description": "Payment for 3 enrollment(s)",
+    "metadata": {
+      "enrollmentDetails": [
+        {
+          "enrollmentId": 1756697143228,
+          "childName": "Silvie Puccia",
+          "className": "Macaroni Single Day"
+        },
+        {
+          "enrollmentId": 1756700788788,
+          "childName": "Sebastian Puccia",
+          "className": "Tycoons | Half Day"
+        },
+        {
+          "enrollmentId": 1756700810624,
+          "childName": "Salena Puccia",
+          "className": "Tycoons | Half Day"
+        }
+      ],
+      "clientSecret": "pi_3S3ogmRFKXbVXRE31Ceb2SGC_secret_NoejEeXK1K1tQz4Ts1xXSl51n"
     }
   }
 ]
