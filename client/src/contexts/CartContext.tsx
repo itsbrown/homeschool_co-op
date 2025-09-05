@@ -465,6 +465,7 @@ interface CartContextType {
   removeItem: (id: string) => void;
   updateItem: (id: string, updates: Partial<CartItem>) => void;
   clearCart: () => void;
+  forceRefreshCart: () => void;
   openCart: () => void;
   closeCart: () => void;
   getItemCount: () => number;
@@ -579,26 +580,32 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Check if there's a fully paid enrollment (enrolled with no balance)
         const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
-          e.status === 'enrolled' && (e.remainingBalance === 0 || e.remainingBalance === null)
+          (e.status === 'enrolled' && (e.remainingBalance === 0 || e.remainingBalance === null)) ||
+          (e.paymentStatus === 'completed' && (e.remainingBalance === 0 || e.remainingBalance === null))
         );
+
+        // Check if latest enrollment is fully paid
+        const latestIsPaid = (latestEnrollment.status === 'enrolled' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null)) ||
+                           (latestEnrollment.paymentStatus === 'completed' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null));
 
         console.log(`🔍 Group ${key}:`, {
           latestEnrollmentId: latestEnrollment.id,
           latestStatus: latestEnrollment.status,
+          latestPaymentStatus: latestEnrollment.paymentStatus,
           latestBalance: latestEnrollment.remainingBalance,
           hasBalance,
           hasFullyPaidEnrollment,
+          latestIsPaid,
           allEnrollments: sortedEnrollments.map(e => ({
             id: e.id,
             status: e.status,
-            balance: e.remainingBalance,
-            paymentStatus: e.paymentStatus
+            paymentStatus: e.paymentStatus,
+            balance: e.remainingBalance
           }))
         });
 
-        // Skip items where there's a fully paid enrollment OR latest enrollment is enrolled with no balance
-        const shouldSkip = hasFullyPaidEnrollment || 
-                          (latestEnrollment.status === 'enrolled' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null));
+        // Skip items where there's a fully paid enrollment OR latest enrollment is paid
+        const shouldSkip = hasFullyPaidEnrollment || latestIsPaid;
 
         if (shouldSkip) {
           console.log(`🔍 ✅ SKIPPING group ${key} - fully paid or enrolled with no balance`);
@@ -899,7 +906,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🧹 CLEARING CART - Current items:', state.cart.items.length);
     dispatch({ type: 'CLEAR_CART' });
     localStorage.removeItem('asa_cart');
+    localStorage.removeItem('asa_cart_items');
     localStorage.removeItem('cart'); // Also remove any other cart storage
+    localStorage.removeItem('selectedPaymentPlan');
     // Set a flag to prevent immediate reload after payment
     localStorage.setItem('asa_cart_cleared', Date.now().toString());
     console.log('🧹 CART CLEARED - Flag set at:', Date.now());
@@ -907,6 +916,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       title: "Cart Cleared",
       description: "All items removed from cart",
     });
+  };
+
+  // Force refresh cart by reloading unpaid enrollments
+  const forceRefreshCart = () => {
+    console.log('🛒 Force refreshing cart...');
+    
+    // Clear current cart first
+    dispatch({ type: 'CLEAR_CART' });
+    
+    // Clear any stale cart cleared flag that might prevent loading
+    localStorage.removeItem('asa_cart_cleared');
+    
+    // Reload unpaid enrollments after a short delay
+    setTimeout(() => {
+      loadUnpaidEnrollments();
+    }, 500);
   };
 
   const openCart = () => dispatch({ type: 'OPEN_CART' });
@@ -930,6 +955,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     removeItem,
     updateItem,
     clearCart,
+    forceRefreshCart,
     openCart,
     closeCart,
     getItemCount,
