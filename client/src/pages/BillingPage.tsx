@@ -12,6 +12,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
+import { useLocation } from 'wouter';
 import { useCart } from '@/contexts/CartContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -381,22 +382,20 @@ function UpcomingPaymentsTab() {
                 <SimplePaymentForm 
                   onSuccess={() => {
                     console.log('✅ Scheduled payment completed');
-                    toast({
-                      title: "Payment Successful!",
-                      description: "Your scheduled payment has been processed successfully.",
-                      variant: "default",
-                    });
                     
                     // Hide the payment form
                     setShowPayment(false);
                     setClientSecret('');
                     
-                    // Invalidate cache and refetch data
-                    setTimeout(() => {
-                      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-                      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-                      queryClient.invalidateQueries({ queryKey: ['payment-history'] });
-                    }, 1000);
+                    // Navigate to payment success page
+                    const successParams = new URLSearchParams({
+                      payment_intent: `scheduled_${Date.now()}`,
+                      amount: '0', // Will be updated from API
+                      date: new Date().toISOString(),
+                      enrollments: JSON.stringify([])
+                    });
+                    
+                    navigate(`/payment-success?${successParams.toString()}`);
                   }}
                   onError={(error: string) => {
                     console.error('❌ Scheduled payment failed:', error);
@@ -562,21 +561,19 @@ function PaymentForm({
           paymentDate: new Date().toISOString(),
         });
         
-        // Show success toast
-        toast({
-          title: "Payment Successful!",
-          description: "Your balance has been paid successfully.",
-        });
-        
         // Clear cart immediately to prevent refilling
         console.log('🛒 Clearing cart after successful payment');
         clearCart();
 
-        // Refresh data in the background
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-          queryClient.invalidateQueries({ queryKey: ['payment-history'] });
-        }, 1000);
+        // Navigate to payment success page with details
+        const successParams = new URLSearchParams({
+          payment_intent: paymentIntent.id,
+          amount: totalAmount.toString(),
+          date: new Date().toISOString(),
+          enrollments: JSON.stringify(enrollmentIds)
+        });
+        
+        navigate(`/payment-success?${successParams.toString()}`);
       } else {
         console.warn('⚠️ Unexpected payment result:', paymentIntent);
         toast({
@@ -677,18 +674,13 @@ export default function BillingPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const { clearCart } = useCart();
+  const [, navigate] = useLocation();
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<{[enrollmentId: number]: number}>({});
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('deposit_all');
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [isPending, startTransition] = useTransition();
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [successDetails, setSuccessDetails] = useState<{
-    paymentIntentId?: string;
-    amount?: number;
-    paymentDate?: string;
-  }>({});
 
   // Debug logging for state changes
   React.useEffect(() => {
@@ -983,71 +975,6 @@ export default function BillingPage() {
     );
   }
 
-  // Show payment success confirmation
-  if (paymentSuccess) {
-    return (
-      <ParentAppShell>
-        <div className="container mx-auto px-4 py-8 max-w-4xl">
-          <div className="flex flex-col items-center justify-center min-h-[50vh]">
-            <Card className="w-full max-w-md border-green-200 bg-green-50/30">
-              <CardHeader className="text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="rounded-full bg-green-100 p-3">
-                    <CheckCircle className="h-8 w-8 text-green-600" />
-                  </div>
-                </div>
-                <CardTitle className="text-green-700">Payment Successful!</CardTitle>
-                <CardDescription className="text-green-600">
-                  Your payment has been processed successfully
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-center space-y-4">
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Payment Amount</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(successDetails.amount || 0)}
-                  </p>
-                </div>
-                {successDetails.paymentIntentId && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Transaction ID</p>
-                    <p className="text-sm font-mono bg-gray-100 p-2 rounded">
-                      {successDetails.paymentIntentId}
-                    </p>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Payment Date</p>
-                  <p className="text-sm">
-                    {formatDate(successDetails.paymentDate || new Date().toISOString())}
-                  </p>
-                </div>
-                <div className="pt-4 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    Your account will be automatically updated. Thank you for your payment!
-                  </p>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-center">
-                <Button 
-                  onClick={async () => {
-                    setPaymentSuccess(false);
-                    setShowPayment(false);
-                    queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-                    queryClient.invalidateQueries({ queryKey: ['payment-history'] });
-                    await refetch();
-                  }}
-                  className="w-full"
-                >
-                  View Updated Billing
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
-      </ParentAppShell>
-    );
-  }
 
   return (
     <ParentAppShell>
@@ -1370,10 +1297,6 @@ export default function BillingPage() {
                           // Clear cart immediately
                           console.log('🛒 Clearing cart after successful payment');
                           clearCart();
-                          
-                          // Update success state
-                          setSuccessDetails(details);
-                          setPaymentSuccess(true);
                           
                           // Clear the payment form
                           setShowPayment(false);

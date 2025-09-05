@@ -73,6 +73,7 @@ import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
 import AcceptEducatorInvitationPage from "./pages/AcceptEducatorInvitationPage";
 import BillingPage from "@/pages/BillingPage";
+import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentHistoryPage from "@/pages/PaymentHistoryPage";
 import PlatformSubscriptionPlans from "@/pages/PaymentPlans";
 import ClassPaymentPlans from "@/pages/ClassPaymentPlans";
@@ -407,6 +408,13 @@ function Router() {
           <Route path="/cart/checkout">
             {isAuthenticated ? (
               <CartCheckout />
+            ) : (
+              <Redirect to="/login" />
+            )}
+          </Route>
+          <Route path="/payment-success">
+            {isAuthenticated ? (
+              <PaymentSuccess />
             ) : (
               <Redirect to="/login" />
             )}
