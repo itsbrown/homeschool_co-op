@@ -86,7 +86,7 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
         confirmParams: {
           return_url: `${window.location.origin}/cart/success`,
         },
-        redirect: 'if_required',
+        redirect: 'always', // Force redirect to success page
       });
 
       if (error) {
