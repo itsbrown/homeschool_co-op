@@ -60,7 +60,7 @@
   {
     "id": 4,
     "createdAt": "2025-09-05T11:31:13.658Z",
-    "updatedAt": "2025-09-05T11:31:13.658Z",
+    "updatedAt": "2025-09-05T11:31:13.711Z",
     "stripePaymentIntentId": "pi_3S3xr5RFKXbVXRE31uomxcND",
     "parentEmail": "kpdinvestors@gmail.com",
     "childName": "Sebastian Puccia",
@@ -75,6 +75,30 @@
         1756700810624
       ],
       "paymentDate": "2025-09-05T11:31:13.658Z",
+      "paymentPlan": "full_payment",
+      "installmentNumber": 1,
+      "totalInstallments": 1,
+      "isFirstInstallment": true
+    }
+  },
+  {
+    "id": 5,
+    "createdAt": "2025-09-05T11:36:45.891Z",
+    "updatedAt": "2025-09-05T11:36:45.891Z",
+    "stripePaymentIntentId": "pi_3S3xwTRFKXbVXRE30RmqZu0x",
+    "parentEmail": "kpdinvestors@gmail.com",
+    "childName": "Sebastian Puccia",
+    "className": "Multiple Classes",
+    "amount": 2333400,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "enrollmentIds": [
+        1756697143228,
+        1756700788788,
+        1756700810624
+      ],
+      "paymentDate": "2025-09-05T11:36:45.890Z",
       "paymentPlan": "full_payment",
       "installmentNumber": 1,
       "totalInstallments": 1,
