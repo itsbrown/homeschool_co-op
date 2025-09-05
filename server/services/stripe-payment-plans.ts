@@ -50,7 +50,11 @@ export class StripePaymentPlanService {
       customer: customer.id,
       start_date: 'now',
       end_behavior: 'cancel',
-      phases,
+      phases: phases.map((phase, index) => ({
+        items: phase.items,
+        iterations: phase.iterations,
+        ...(index > 0 && { start_date: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60 * index) })
+      })),
       metadata: {
         enrollmentIds: JSON.stringify(data.enrollmentIds),
         parentEmail: data.parentEmail,
@@ -137,8 +141,7 @@ export class StripePaymentPlanService {
           },
           {
             items: [{ price: balancePriceId }],
-            iterations: 1,
-            start_date: this.addDays(new Date(), 30).getTime() / 1000
+            iterations: 1
           }
         ];
 
@@ -155,8 +158,7 @@ export class StripePaymentPlanService {
           },
           {
             items: [{ price: secondPriceId }],
-            iterations: 1,
-            start_date: this.addDays(new Date(), 30).getTime() / 1000
+            iterations: 1
           }
         ];
 
@@ -174,13 +176,11 @@ export class StripePaymentPlanService {
           },
           {
             items: [{ price: month2PriceId }],
-            iterations: 1,
-            start_date: this.addDays(new Date(), 30).getTime() / 1000
+            iterations: 1
           },
           {
             items: [{ price: month3PriceId }],
-            iterations: 1,
-            start_date: this.addDays(new Date(), 60).getTime() / 1000
+            iterations: 1
           }
         ];
 
