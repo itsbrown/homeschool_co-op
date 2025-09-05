@@ -1027,11 +1027,31 @@ router.post('/process-payment/:paymentIntentId', async (req, res) => {
     const updatedEnrollments = [];
     for (const item of items) {
       try {
-        // Find enrollment by child and class
+        // Find enrollment by child and class - try multiple lookup methods
         const allEnrollments = await storage.getAllEnrollments();
-        const enrollment = allEnrollments.find(e => 
+        console.log(`🔍 Looking for enrollment: childId=${item.childId}, classId=${item.classId}`);
+        
+        let enrollment = allEnrollments.find(e => 
           e.childId === item.childId && e.classId === item.classId
         ) as any;
+        
+        // If not found, try with programId instead of classId
+        if (!enrollment) {
+          enrollment = allEnrollments.find(e => 
+            e.childId === item.childId && e.programId === item.classId
+          ) as any;
+        }
+        
+        // If still not found, try with status pending_payment
+        if (!enrollment) {
+          enrollment = allEnrollments.find(e => 
+            e.childId === item.childId && 
+            (e.classId === item.classId || e.programId === item.classId) &&
+            e.status === 'pending_payment'
+          ) as any;
+        }
+        
+        console.log(`🔍 Enrollment found:`, !!enrollment);
         
         if (enrollment) {
           const currentAmount = enrollment.amount || 0;
