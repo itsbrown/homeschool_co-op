@@ -22,17 +22,12 @@ export default function CartDrawer() {
     }).format(amountInCents / 100);
   };
 
-  const handleCheckout = (e?: React.MouseEvent) => {
+  const handleCheckout = (e: React.MouseEvent) => {
     console.log('🛒 🚨 CHECKOUT BUTTON CLICKED - EVENT RECEIVED!');
-    console.log('🛒 Event details:', e);
-    console.log('🛒 Event type:', e?.type);
-    console.log('🛒 Event target:', e?.target);
     
-    e?.preventDefault();
-    e?.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     
-    console.log('🛒 After preventDefault/stopPropagation');
-    console.log('🛒 Cart items before checkout:', cart.items);
     console.log('🛒 Cart items length:', cart.items.length);
     
     if (cart.items.length === 0) {
@@ -45,17 +40,18 @@ export default function CartDrawer() {
       return;
     }
 
-    console.log('🛒 About to close cart...');
-    closeCart();
-    
-    console.log('🛒 Cart closed, setting timeout for navigation...');
-    // Use a slight delay to ensure cart drawer closes before navigation
-    setTimeout(() => {
-      console.log('🛒 🚀 EXECUTING NAVIGATION TO /cart/checkout');
-      console.log('🛒 Current location before navigation:', window.location.pathname);
-      setLocation('/cart/checkout');
-      console.log('🛒 setLocation called with /cart/checkout');
-    }, 100);
+    console.log('🛒 Attempting direct navigation...');
+    // Try direct navigation first
+    try {
+      window.location.href = '/cart/checkout';
+      console.log('🛒 Direct navigation attempted');
+    } catch (error) {
+      console.log('🛒 Direct navigation failed, trying setLocation');
+      closeCart();
+      setTimeout(() => {
+        setLocation('/cart/checkout');
+      }, 100);
+    }
   };
 
   const getUniqueChildrenCount = () => {
@@ -222,8 +218,9 @@ export default function CartDrawer() {
                 <Button
                   type="button"
                   onClick={handleCheckout}
-                  className="flex-1"
+                  className="flex-1 relative z-50"
                   disabled={cart.items.length === 0}
+                  style={{ pointerEvents: 'auto' }}
                 >
                   <CreditCard className="h-4 w-4 mr-2" />
                   Checkout
