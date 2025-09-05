@@ -768,8 +768,6 @@ export default function BillingPage() {
     enabled: !!isAuthenticated && !!user,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    staleTime: 0,
-    refetchOnWindowFocus: false,
     notifyOnChangeProps: ['data', 'error', 'isLoading'],
   });
 
@@ -804,19 +802,11 @@ export default function BillingPage() {
 
   const getSelectedTotal = () => {
     if (!billingSummary) return 0;
-    // If specific enrollments are selected, use their balance
-    if (selectedEnrollments.length > 0) {
-      const selectedTotal = billingSummary.enrollmentDetails
-        .filter(detail => selectedEnrollments.includes(detail.enrollmentId))
-        .reduce((total, detail) => total + detail.balance, 0);
-      console.log('🧮 Selected enrollments total:', selectedTotal, 'for enrollments:', selectedEnrollments);
-      return selectedTotal;
-    }
-    // Otherwise use the actual total of all enrollment balances
-    const allTotal = billingSummary.enrollmentDetails
-      .reduce((total, detail) => total + detail.balance, 0);
-    console.log('🧮 All enrollments total:', allTotal);
-    return allTotal;
+    
+    // Always use the real-time total balance from the API
+    const realTimeTotal = billingSummary.totalBalance || 0;
+    console.log('🧮 Real-time total balance from API:', realTimeTotal);
+    return realTimeTotal;
   };
 
   const getPaymentPlanAmount = () => {
