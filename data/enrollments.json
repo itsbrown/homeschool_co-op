@@ -117,5 +117,18 @@
     "depositRequired": 9000,
     "totalCost": 90000,
     "remainingBalance": 90000
+  },
+  {
+    "id": 1757081492311,
+    "classId": 14,
+    "childId": 3,
+    "childName": "Silvie Puccia",
+    "className": "Macaroni Single Day",
+    "enrollmentDate": "2025-09-05T14:11:32.311Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 3000,
+    "totalCost": 30000,
+    "remainingBalance": 30000
   }
 ]
