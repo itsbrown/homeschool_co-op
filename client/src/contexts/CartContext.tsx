@@ -550,26 +550,26 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
         );
 
-        // Check if there's any successful enrollment for this class+child combination
-        const hasSuccessfulEnrollment = sortedEnrollments.some(e => 
+        // Find the latest enrollment and check if it has a balance due
+        const latestEnrollment = sortedEnrollments[0];
+        const hasBalance = latestEnrollment.remainingBalance > 0 && 
+                          latestEnrollment.paymentSystemVersion === 'v2_stripe';
+        
+        // Check if there's a fully paid enrollment (enrolled with no balance)
+        const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
           e.status === 'enrolled' && e.remainingBalance === 0
         );
 
-        console.log(`🔍 Group ${key}: hasSuccessfulEnrollment=${hasSuccessfulEnrollment}`);
+        console.log(`🔍 Group ${key}: latestEnrollment=${latestEnrollment.id}, hasBalance=${hasBalance}, hasFullyPaidEnrollment=${hasFullyPaidEnrollment}`);
 
-        // Only add to cart if there's no successful enrollment and there's a balance due
-        if (!hasSuccessfulEnrollment) {
-          const latestEnrollment = sortedEnrollments[0];
-          const hasBalance = latestEnrollment.remainingBalance > 0 && 
-                            latestEnrollment.paymentSystemVersion === 'v2_stripe';
-
-          console.log(`🔍 Latest enrollment ${latestEnrollment.id}: status=${latestEnrollment.status}, remainingBalance=${latestEnrollment.remainingBalance}, hasBalance=${hasBalance}`);
-
-          if (hasBalance) {
-            unpaidEnrollments.push(latestEnrollment);
-          }
+        // Add to cart if:
+        // 1. Latest enrollment has a balance due, OR
+        // 2. There's no fully paid enrollment and the latest has pending_payment status
+        if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0)) {
+          console.log(`🔍 Adding enrollment ${latestEnrollment.id} to cart - remainingBalance=${latestEnrollment.remainingBalance}`);
+          unpaidEnrollments.push(latestEnrollment);
         } else {
-          console.log(`🔍 Skipping group ${key} - already has successful enrollment`);
+          console.log(`🔍 Skipping group ${key} - no balance due or fully paid`);
         }
       }
 
