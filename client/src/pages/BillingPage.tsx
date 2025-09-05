@@ -189,6 +189,7 @@ function PaymentHistoryTab() {
 
 function UpcomingPaymentsTab() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [isPending, startTransition] = useTransition();
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
