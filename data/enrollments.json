@@ -144,7 +144,8 @@
     "paymentSystemVersion": "v2_stripe",
     "status": "enrolled",
     "createdAt": "2025-09-05T14:16:05.784Z",
-    "updatedAt": "2025-09-05T14:16:05.784Z"
+    "updatedAt": "2025-09-05T14:16:05.784Z",
+    "enrollmentDate": "2025-09-05T14:19:20.485Z"
   },
   {
     "classId": 14,
@@ -155,5 +156,15 @@
     "totalCost": 3000000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-09-05T14:18:59.933Z"
+  },
+  {
+    "classId": 5,
+    "childId": 4,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3S40XzRFKXbVXRE30dmDqUj1",
+    "amount": 9000000,
+    "totalCost": 9000000,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-09-05T14:24:03.920Z"
   }
 ]
