@@ -222,9 +222,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   console.log('Active tab:', activeTab);
   console.log('Transformed classes data:', classesData);
 
-  // Format currency
+  // Format currency (amount is always in cents)
   const formatCurrency = (amount: number, inCents: boolean = true) => {
-    const dollars = inCents ? amount / 100 : amount;
+    // Always divide by 100 since all prices are now stored in cents
+    const dollars = amount / 100;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -327,7 +328,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       <div className="space-y-3 text-sm">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center"><DollarSign className="h-4 w-4 mr-1 opacity-70" />Price:</div>
-                          <div className="font-semibold">{formatCurrency(classItem.price, false)}</div>
+                          <div className="font-semibold">{formatCurrency(classItem.price)}</div>
                         </div>
 
                         {classItem.totalOrders > 0 && (
