@@ -190,7 +190,7 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
           <div className="flex items-center gap-2">
             <DollarSign className="h-4 w-4 opacity-70" />
             <span className="text-sm">
-              ${(program.price >= 10000 ? program.price / 100 : program.price).toFixed(2)}
+              ${(program.price / 100).toFixed(2)}
             </span>
           </div>
           
