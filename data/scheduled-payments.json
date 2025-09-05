@@ -30,11 +30,11 @@
     "currency": "usd",
     "description": "Payment 3 of 3 - Multiple Classes",
     "dueDate": "2025-11-05T05:01:33.767Z",
-    "status": "pending",
+    "status": "paid",
     "installmentNumber": 3,
     "totalInstallments": 3,
     "paymentPlan": "three_payments",
     "createdAt": "2025-09-05T05:01:33.767Z",
-    "updatedAt": "2025-09-05T05:01:33.767Z"
+    "updatedAt": "2025-09-05T11:01:02.624Z"
   }
 ]
