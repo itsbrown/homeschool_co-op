@@ -466,8 +466,8 @@ router.get('/summary', async (req, res) => {
 
       // Calculate balance based on enrollment data
       const totalAmount = enrollment.totalCost || classDetails.price || 0;
-      const totalPaid = enrollment.amount || 0;
-      // Use remainingBalance if available, otherwise calculate from totalCost - amount
+      const totalPaid = enrollment.totalPaid || enrollment.amount || 0; // Use updated totalPaid field
+      // Use remainingBalance if available, otherwise calculate from totalCost - totalPaid
       const balance = enrollment.remainingBalance !== undefined 
         ? enrollment.remainingBalance 
         : (totalAmount - totalPaid);
