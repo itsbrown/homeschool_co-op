@@ -36,6 +36,11 @@ router.post('/subscription-schedules', async (req, res) => {
         // Mark enrollments as fully paid
         break;
         
+      case 'payment_intent.succeeded':
+        console.log('💳 Payment intent succeeded:', event.data.object.id);
+        await handleDirectPaymentSuccess(event.data.object);
+        break;
+        
       default:
         console.log('ℹ️ Unhandled webhook event type:', event.type);
     }
@@ -157,6 +162,78 @@ async function handlePaymentFailure(invoice: any) {
     }
   } catch (error) {
     console.error('❌ Error handling payment failure:', error);
+  }
+}
+
+// Handle direct payment success (e.g., "Pay in Full" from billing page)
+async function handleDirectPaymentSuccess(paymentIntent: any) {
+  try {
+    console.log('💳 Processing direct payment success:', paymentIntent.id);
+    console.log('🔍 Payment metadata:', paymentIntent.metadata);
+    
+    const storage = new MemStorage();
+    const parentEmail = paymentIntent.metadata.parentEmail;
+    const enrollmentIds = paymentIntent.metadata.enrollmentIds;
+    const paymentType = paymentIntent.metadata.paymentType;
+    
+    if (!parentEmail || !enrollmentIds) {
+      console.log('⚠️ Missing required metadata for direct payment:', { parentEmail, enrollmentIds, paymentType });
+      return;
+    }
+    
+    const enrollmentIdList = JSON.parse(enrollmentIds);
+    const totalAmount = paymentIntent.amount;
+    const perEnrollmentAmount = Math.round(totalAmount / enrollmentIdList.length);
+    
+    console.log(`💰 Processing payment for ${enrollmentIdList.length} enrollments, ${perEnrollmentAmount} cents each`);
+    
+    // Update each enrollment
+    for (const enrollmentId of enrollmentIdList) {
+      try {
+        const enrollment = await storage.getEnrollmentById(enrollmentId);
+        if (enrollment) {
+          const currentPaid = enrollment.totalPaid || enrollment.amountPaid || 0;
+          const newTotalPaid = currentPaid + perEnrollmentAmount;
+          const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
+          
+          const updatedEnrollment = {
+            ...enrollment,
+            totalPaid: newTotalPaid,
+            amountPaid: newTotalPaid,
+            remainingBalance: newBalance,
+            paymentStatus: newBalance === 0 ? 'completed' : 'stripe_managed',
+            paymentSystemVersion: 'v2_stripe',
+            status: 'enrolled'
+          };
+          
+          await storage.updateEnrollment(updatedEnrollment);
+          console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newTotalPaid}, balance=${newBalance}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error updating enrollment ${enrollmentId}:`, error);
+      }
+    }
+    
+    // Create payment record
+    const payment = {
+      stripePaymentIntentId: paymentIntent.id,
+      parentEmail: parentEmail,
+      childName: enrollmentIdList.length > 1 ? 'Multiple Children' : 'Child',
+      className: enrollmentIdList.length > 1 ? `${enrollmentIdList.length} enrollments` : 'Class',
+      amount: totalAmount,
+      currency: paymentIntent.currency || 'usd',
+      status: 'completed' as const,
+      metadata: {
+        paymentType: 'direct_payment',
+        enrollmentCount: enrollmentIdList.length
+      }
+    };
+    
+    await storage.createPayment(payment);
+    console.log('✅ Payment record created for direct payment:', paymentIntent.id);
+    
+  } catch (error) {
+    console.error('❌ Error handling direct payment success:', error);
   }
 }
 
