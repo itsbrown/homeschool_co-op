@@ -42,8 +42,8 @@ export default function CartDrawer() {
     
     // Use a slight delay to ensure cart drawer closes before navigation
     setTimeout(() => {
-      console.log('🛒 Navigating to /cart-checkout');
-      setLocation('/cart-checkout');
+      console.log('🛒 Navigating to /cart/checkout');
+      setLocation('/cart/checkout');
     }, 100);
   };
 
