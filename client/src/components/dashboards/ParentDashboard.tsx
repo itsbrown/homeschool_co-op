@@ -267,8 +267,8 @@ export default function ParentDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {eventsData?.map((event: any) => (
-                      <div key={event.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                    {eventsData?.map((event: any, index: number) => (
+                      <div key={event.id || `event-${index}`} className="flex items-center gap-3 p-3 rounded-lg border">
                         <div className="flex-shrink-0">
                           <Calendar className="h-4 w-4 text-blue-600" />
                         </div>
