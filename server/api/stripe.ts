@@ -437,7 +437,10 @@ router.post('/webhook', async (req, res) => {
               console.error('❌ Failed to send scheduled payment receipt email:', emailError);
             }
             
-            // 🚀 PUSH REAL-TIME UPDATE TO FRONTEND for scheduled payments
+            // Add small delay to ensure all storage operations are committed
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // 🚀 PUSH REAL-TIME UPDATE TO FRONTEND for scheduled payments - AFTER all updates
             try {
               const { dataLayer } = await import('../services/dataLayer.js');
               
@@ -459,7 +462,7 @@ router.post('/webhook', async (req, res) => {
               });
               
               await dataLayer.refreshUserData(parentEmail);
-              console.log('📡 Pushed comprehensive real-time billing update to frontend for scheduled payment');
+              console.log('📡 Pushed comprehensive real-time billing update to frontend for scheduled payment AFTER storage commit');
             } catch (error) {
               console.error('❌ Failed to push real-time update for scheduled payment:', error);
             }
@@ -491,16 +494,8 @@ router.post('/webhook', async (req, res) => {
           
           console.log('✅ Balance payment processed for:', paymentIntent.id);
           
-          // 🚀 PUSH REAL-TIME UPDATE TO FRONTEND
-          if (parentEmail) {
-            try {
-              const { dataLayer } = await import('../services/dataLayer.js');
-              await dataLayer.refreshUserData(parentEmail);
-              console.log('📡 Pushed real-time billing update to frontend');
-            } catch (error) {
-              console.error('❌ Failed to push real-time update:', error);
-            }
-          }
+          // Note: Real-time update is already sent at the end of processBalancePayment function
+          // No need to duplicate it here
           
           // Send email receipt for balance payment
           try {

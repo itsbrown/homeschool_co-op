@@ -125,9 +125,12 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       await createScheduledInstallments(userEmail, enrollmentIds, enrollments, currentPaymentAmount, paymentPlan);
     }
     
-    // Send real-time update
+    // Add small delay to ensure all storage operations are committed
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Send real-time update AFTER all storage operations are complete
     await dataLayer.refreshUserData(userEmail);
-    console.log('📡 Real-time billing update sent');
+    console.log('📡 Real-time billing update sent after storage commit');
     
   } catch (error) {
     console.error('❌ Error processing balance payment:', error);
