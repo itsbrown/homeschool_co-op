@@ -1,0 +1,40 @@
+🛒 Is authenticated: false
+🛒 Current cart items before API call: 0
+No user email available for cart loading
+🔄 RoleContext useEffect triggered - user: kpdinvestors@gmail.com
+🔄 Role check for user: kpdinvestors@gmail.com
+🔄 hasMultipleRoles: false savedRole: parent
+🔍 Fetching role for user: kpdinvestors@gmail.com
+No school association found for user, using default school
+🛒 CartButton rendering - itemCount: 1 cart items: 
+Array [{…}]
+🛒 CartButton rendering - itemCount: 1 cart items: 
+Array [{…}]
+🛒 getItemCount called - current items: 1
+✅ Role fetched for kpdinvestors@gmail.com: parent
+🎯 Single role user - setting role: parent for kpdinvestors@gmail.com
+Warning: Each child in a list should have a unique &quot;key&quot; prop.
+
+Check the render method of `ParentDashboard`. See https://reactjs.org/link/warning-keys for more information.
+    at div
+    at ParentDashboard (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/dashboards/ParentDashboard.tsx?t=1757094309283:33:29)
+    at main
+    at div
+    at div
+    at CartProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/CartContext.tsx:323:32)
+    at ParentAppShell (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/layout/ParentAppShell.tsx:29:42)
+    at DashboardRouter (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?t=1757094309283&v=6eq2dW3w3fP-Q83kfXX2q:182:20)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=a443a619:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=a443a619:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?t=1757094309283&v=6eq2dW3w3fP-Q83kfXX2q:297:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=a443a619:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=a443a619:64:5)
+    at CartProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/CartContext.tsx:323:32)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at NotificationProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/hooks/useNotifications.tsx:20:40)
+    at RoleProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/RoleContext.tsx:30:32)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=a443a619:2805:3)
+    at App
+✅ Role fetched for kpdinvestors@gmail.com: parent
+🎯 Single role user - setting role: parent for kpdinvestors@gmail.com
