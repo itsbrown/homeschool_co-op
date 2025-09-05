@@ -22,7 +22,10 @@ export default function CartDrawer() {
     }).format(amountInCents / 100);
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
     console.log('🛒 CHECKOUT BUTTON CLICKED - CartDrawer.tsx:27');
     console.log('🛒 Cart items before checkout:', cart.items);
     console.log('🛒 Cart items length:', cart.items.length);
@@ -209,6 +212,7 @@ export default function CartDrawer() {
                   Clear
                 </Button>
                 <Button
+                  type="button"
                   onClick={handleCheckout}
                   className="flex-1"
                   disabled={cart.items.length === 0}
