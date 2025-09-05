@@ -355,21 +355,7 @@ function UpcomingPaymentsTab() {
   const [currentPayment, setCurrentPayment] = useState<any>(null);
   
   // Enable real-time updates for scheduled payments 
-  const { isConnected } = useRealTimeUpdates({
-    onBillingUpdate: (data) => {
-      console.log('🔄 Upcoming payments: Real-time billing update received:', data);
-      refetchUpcoming();
-    },
-    onPaymentComplete: (data) => {
-      console.log('💳 Upcoming payments: Real-time payment complete:', data);
-      refetchUpcoming();
-      toast({
-        title: "Payment Completed!",
-        description: "Your scheduled payment has been processed successfully.",
-        variant: "default",
-      });
-    }
-  });
+  const { isConnected } = useRealTimeUpdates();
 
   const { data: upcomingPayments, isLoading, refetch: refetchUpcoming } = useQuery({
     queryKey: ['/api/stripe/subscription-schedules'], // Now managed by Stripe
@@ -861,23 +847,7 @@ export default function BillingPage() {
   const [, navigate] = useLocation();
   
   // Enable real-time updates for billing data
-  const { isConnected } = useRealTimeUpdates({
-    onBillingUpdate: (data) => {
-      console.log('🔄 Real-time billing update received:', data);
-      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/stripe/subscription-schedules'] });
-    },
-    onPaymentComplete: (data) => {
-      console.log('💳 Real-time payment complete:', data);
-      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/stripe/subscription-schedules'] });
-      toast({
-        title: "Payment Completed!",
-        description: `Payment of ${data.amount ? (data.amount / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : 'your payment'} has been processed successfully.`,
-        variant: "default",
-      });
-    }
-  });
+  const { isConnected } = useRealTimeUpdates();
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<{[enrollmentId: number]: number}>({});
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('deposit_all');
