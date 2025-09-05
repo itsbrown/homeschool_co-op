@@ -11,13 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
-// Format currency (amount is in cents)
+// Format currency (handles both cents and dollars)
 const formatCurrency = (amount: number) => {
+  // If amount >= 10000, assume it's in cents; otherwise assume it's in dollars
+  const dollars = amount >= 10000 ? amount / 100 : amount;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2
-  }).format(amount / 100);
+  }).format(dollars);
 };
 
 export default function ClassesPage() {
