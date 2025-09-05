@@ -1287,14 +1287,20 @@ export class MemStorage implements IStorage {
 
   // Class Enrollment methods
   async createEnrollment(enrollment: any): Promise<any> {
+    // Generate a unique ID for the enrollment
+    const id = Date.now() + Math.random(); // Simple unique ID generation
+    const enrollmentWithId = {
+      ...enrollment,
+      id: Math.floor(id) // Ensure it's an integer
+    };
+
     // Save to memory array
     if (!this.classEnrollments) {
       this.classEnrollments = [];
     }
-    this.classEnrollments.push(enrollment);
-    console.log(`📝 ENROLLMENT STORED: Child ${enrollment.childId} enrolled in class ${enrollment.classId}`);
+    this.classEnrollments.push(enrollmentWithId);
+    console.log(`📝 ENROLLMENT STORED: Child ${enrollmentWithId.childId} enrolled in class ${enrollmentWithId.classId} with ID ${enrollmentWithId.id}`);
     console.log(`📝 Total enrollments in memory: ${this.classEnrollments.length}`);
-    console.log(`📝 All enrollments:`, this.classEnrollments);
 
     // Save to file for persistence
     try {
@@ -1305,7 +1311,7 @@ export class MemStorage implements IStorage {
       console.error(`❌ Error in createEnrollment save operation:`, error);
     }
 
-    return enrollment;
+    return enrollmentWithId;
   }
 
   async getEnrollmentsByChildId(childId: number): Promise<any[]> {
