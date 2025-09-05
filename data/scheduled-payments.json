@@ -7,12 +7,13 @@
     "currency": "usd",
     "description": "Payment 2 of 3 - Multiple Classes",
     "dueDate": "2025-10-05T05:01:33.767Z",
-    "status": "pending",
+    "status": "completed",
     "installmentNumber": 2,
     "totalInstallments": 3,
     "paymentPlan": "three_payments",
     "createdAt": "2025-09-05T05:01:33.767Z",
-    "updatedAt": "2025-09-05T05:01:33.767Z"
+    "updatedAt": "2025-09-05T10:32:44.000Z",
+    "stripePaymentIntentId": "pi_3S3wwBRFKXbVXRE30Wy67pl5"
   },
   {
     "id": 2,
