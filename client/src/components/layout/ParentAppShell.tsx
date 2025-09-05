@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { LogOut, Menu, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
-import BalanceIndicator from "@/components/billing/BalanceIndicator";
 
 interface ParentAppShellProps {
   children: React.ReactNode;
@@ -168,10 +167,6 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
 
           {/* Page content */}
           <main className="flex-1">
-            {/* Balance indicator - shows when there are outstanding balances */}
-            <div className="p-4">
-              <BalanceIndicator />
-            </div>
             {children}
           </main>
         </div>
