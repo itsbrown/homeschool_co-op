@@ -441,11 +441,13 @@ interface BillingSummary {
 function PaymentForm({ 
   enrollmentIds, 
   totalAmount, 
-  onPaymentSuccess 
+  onPaymentSuccess,
+  navigate
 }: { 
   enrollmentIds: number[], 
   totalAmount: number,
-  onPaymentSuccess: (details: { paymentIntentId: string; amount: number; paymentDate: string }) => void
+  onPaymentSuccess: (details: { paymentIntentId: string; amount: number; paymentDate: string }) => void,
+  navigate: (path: string) => void
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -1291,6 +1293,7 @@ export default function BillingPage() {
                       <PaymentForm 
                         enrollmentIds={selectedEnrollments.length > 0 ? selectedEnrollments : billingSummary?.enrollmentDetails.map(d => d.enrollmentId) || []} 
                         totalAmount={getPaymentPlanAmount()} 
+                        navigate={navigate}
                         onPaymentSuccess={async (details) => {
                           console.log('🎉 Payment success callback triggered:', details);
                           
