@@ -23,10 +23,15 @@ export default function CartDrawer() {
   };
 
   const handleCheckout = (e?: React.MouseEvent) => {
+    console.log('🛒 🚨 CHECKOUT BUTTON CLICKED - EVENT RECEIVED!');
+    console.log('🛒 Event details:', e);
+    console.log('🛒 Event type:', e?.type);
+    console.log('🛒 Event target:', e?.target);
+    
     e?.preventDefault();
     e?.stopPropagation();
     
-    console.log('🛒 CHECKOUT BUTTON CLICKED - CartDrawer.tsx:27');
+    console.log('🛒 After preventDefault/stopPropagation');
     console.log('🛒 Cart items before checkout:', cart.items);
     console.log('🛒 Cart items length:', cart.items.length);
     
@@ -40,13 +45,16 @@ export default function CartDrawer() {
       return;
     }
 
-    console.log('🛒 Proceeding to checkout...');
+    console.log('🛒 About to close cart...');
     closeCart();
     
+    console.log('🛒 Cart closed, setting timeout for navigation...');
     // Use a slight delay to ensure cart drawer closes before navigation
     setTimeout(() => {
-      console.log('🛒 Navigating to /cart/checkout');
+      console.log('🛒 🚀 EXECUTING NAVIGATION TO /cart/checkout');
+      console.log('🛒 Current location before navigation:', window.location.pathname);
       setLocation('/cart/checkout');
+      console.log('🛒 setLocation called with /cart/checkout');
     }, 100);
   };
 
