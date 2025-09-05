@@ -1,0 +1,188 @@
+ASA Learning Platform Payment System Debug Guide
+This document provides a comprehensive guide to debug and enhance the payment processing system in the ASA Learning Platform, addressing the issue where successful Stripe payments did not update enrollment balances or reflect in the UI. The guide includes validation steps, potential risks, suggested improvements, and a sample test for Replit implementation.
+Issue Summary
+The payment processing system failed to update enrollment balances after successful Stripe payments, causing user confusion. Root causes included premature payment intent auto-confirmation, incomplete webhook handling, missing balance update logic, and UI caching issues. Fixes were implemented, but validation and enhancements are needed to ensure reliability.
+Validation Steps
+Use these steps to confirm the fixes work as intended in Replit.
+1. Payment Intent Creation
+
+File: server/api/stripe.ts
+Action: Test the /api/billing/create-payment endpoint.
+Validation:
+Send a POST request to create a payment intent with parentEmail, enrollmentIds, and paymentType in metadata.
+Ensure the response includes a client_secret and no "missing payment method" errors in Stripe logs.
+
+
+Replit Command:curl -X POST http://localhost:3000/api/billing/create-payment -H "Content-Type: application/json" -d '{"parentEmail":"test@example.com","enrollmentIds":[1,2],"amount":10000}'
+
+
+
+2. Webhook Processing
+
+File: server/api/stripe.ts
+Action: Simulate a payment_intent.succeeded event.
+Validation:
+Use Stripe CLI to trigger the event: stripe trigger payment_intent.succeeded.
+Verify processBalancePayment is called and updates data/enrollments.json.
+
+
+Replit Command:stripe trigger payment_intent.succeeded
+
+
+
+3. Balance Update Logic
+
+File: server/api/stripe.ts (processBalancePayment)
+Action: Test payment distribution across enrollments.
+Validation:
+Create a payment intent with amount: 10000 ($100) and two enrollmentIds.
+Check data/enrollments.json for updated totalPaid and remainingBalance.
+
+
+Expected: Each enrollment reflects $50 in totalPaid.
+
+4. Real-time Updates
+
+File: server/services/dataLayer.ts
+Action: Connect to WebSocket (wss://<your-replit-domain>/ws?email=test@example.com).
+Validation:
+Trigger a balance update and confirm the client receives a billing_update message with correct totalBalance and enrollmentDetails.
+
+
+Replit Command:wscat -c wss://<your-replit-domain>/ws?email=test@example.com
+
+
+
+5. Frontend UI Refresh
+
+File: client/src/pages/BillingPage.tsx
+Action: Complete a payment via Stripe Elements.
+Validation:
+Ensure onPaymentSuccess clears the cart and invalidates TanStack Query cache (/api/billing/summary).
+Verify UI updates with new balance without manual refresh.
+
+
+
+Potential Risks
+
+Webhook Reliability: Failed webhook deliveries may skip balance updates.
+WebSocket Scalability: High connection counts may cause dropped messages.
+File-based Storage: JSON files (data/enrollments.json) risk race conditions.
+Cache Invalidation: Stale UI data if query keys are not specific.
+Error Handling: Missing handling for failed payments or invalid metadata.
+
+Suggested Improvements
+
+Error Logging:
+
+Integrate Sentry for error tracking in Replit.
+Example: Add @sentry/node to server/api/stripe.ts:import * as Sentry from '@sentry/node';
+Sentry.init({ dsn: '<your-sentry-dsn>' });
+
+
+
+
+Webhook Validation:
+
+Validate webhook signatures:const sig = request.headers['stripe-signature'];
+const event = stripe.webhooks.constructEvent(request.body, sig, '<webhook-secret>');
+
+
+
+
+File Storage Transactions:
+
+Use fs.lock for JSON writes or migrate to PostgreSQL in Replit.
+
+
+Rate Limiting:
+
+Add express-rate-limit to /api/billing/create-payment:import rateLimit from 'express-rate-limit';
+app.use('/api/billing/create-payment', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+
+
+
+
+Testing:
+
+Add Jest tests for processBalancePayment.
+Use Stripe CLI for webhook testing.
+
+
+
+Sample Test Code
+Below is a Jest test for processBalancePayment to validate balance updates.
+import { expect } from 'jest';
+import { processBalancePayment } from './stripe';
+import fs from 'fs/promises';
+
+describe('processBalancePayment', () => {
+  it('distributes payment across enrollments correctly', async () => {
+    const paymentIntent = {
+      amount: 10000, // $100
+      metadata: {
+        parentEmail: 'test@example.com',
+        enrollmentIds: JSON.stringify([1, 2]),
+        paymentType: 'balance_payment',
+      },
+    };
+
+    await processBalancePayment(paymentIntent);
+
+    const enrollments = JSON.parse(await fs.readFile('data/enrollments.json', 'utf-8'));
+    const enrollment1 = enrollments.find(e => e.id === 1);
+    const enrollment2 = enrollments.find(e => e.id === 2);
+
+    expect(enrollment1.totalPaid).toBe(5000); // $50
+    expect(enrollment2.totalPaid).toBe(5000); // $50
+    expect(enrollment1.remainingBalance).toBe(enrollment1.amount - 5000);
+  });
+});
+
+Replit Setup Instructions
+
+Install Dependencies:
+
+Update package.json with required packages:{
+  "dependencies": {
+    "express": "^4.18.2",
+    "stripe": "^14.5.0",
+    "ws": "^8.14.2",
+    "@sentry/node": "^7.80.0",
+    "express-rate-limit": "^7.1.5"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
+
+
+Run npm install in Replit’s terminal.
+
+
+Configure Stripe CLI:
+
+Install Stripe CLI in Replit: npm install -g stripe.
+Login: stripe login.
+Forward webhooks: stripe listen --forward-to http://<your-replit-domain>/api/stripe/webhook.
+
+
+Run Tests:
+
+Add the test code to server/tests/stripe.test.js.
+Run: npm test.
+
+
+Monitor Logs:
+
+Check Replit’s console for webhook and WebSocket logs.
+Integrate Sentry for real-time error tracking.
+
+
+
+Next Steps
+
+Run the validation tests in Replit to confirm fixes.
+Implement suggested improvements (e.g., webhook validation, rate limiting).
+Monitor Stripe Dashboard and Replit logs for issues.
+Contact support if specific errors arise (e.g., webhook failures).

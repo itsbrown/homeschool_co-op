@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Stripe from 'stripe';
+import rateLimit from 'express-rate-limit';
 import { storage } from '../storage';
 import { insertPaymentSchema, type InsertPayment } from '@shared/schema';
 import { sendPaymentConfirmationEmail } from '../lib/email-service';
@@ -7,6 +8,18 @@ import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer.js';
 
 const router = Router();
+
+// Rate limiting for payment endpoints
+const paymentRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 payment requests per windowMs
+  message: {
+    error: 'Too many payment requests, please try again later.',
+    retryAfter: 15 * 60 // seconds
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -70,7 +83,7 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     console.log('✅ Payment record created:', paymentRecord.stripePaymentIntentId);
     
     // Send real-time update
-    await dataLayer.pushBillingUpdate(userEmail);
+    await dataLayer.refreshUserData(userEmail);
     console.log('📡 Real-time billing update sent');
     
   } catch (error) {
@@ -80,7 +93,7 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
 }
 
 // Create payment intent
-router.post('/create-payment-intent', async (req, res) => {
+router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
   try {
     const { amount, currency = 'usd', parentEmail, enrollmentDetails } = req.body;
 
