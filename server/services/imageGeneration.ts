@@ -38,40 +38,40 @@ export async function generateColoringPageImage(
       base64: undefined
     };
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Professional AI coloring page generation failed:', error);
     
-    // Try Hugging Face as backup
-    const prompt = `Create a simple black and white coloring page suitable for ages ${ageRange}. 
-    Subject: ${subject}
-    
-    The image should include these elements: ${elements.join(', ')}
-    
-    Style requirements:
-    - Simple, clear black outlines on white background
-    - No shading or filled areas - just outlines to color
-    - Age-appropriate complexity for ${ageRange}
-    - Educational and engaging
-    - Clean lines suitable for coloring
-    - No text or words in the image
-    
-    Make it a simple line drawing that children can easily color.`;
-
-    const huggingFaceResult = await tryHuggingFaceGeneration(prompt);
-    if (huggingFaceResult.success) {
-      return huggingFaceResult;
-    }
-
-    console.log('Hugging Face image generation failed, generating fallback SVG');
-    
     try {
+      // Try Hugging Face as backup
+      const prompt = `Create a simple black and white coloring page suitable for ages ${ageRange}. 
+      Subject: ${subject}
+      
+      The image should include these elements: ${elements.join(', ')}
+      
+      Style requirements:
+      - Simple, clear black outlines on white background
+      - No shading or filled areas - just outlines to color
+      - Age-appropriate complexity for ${ageRange}
+      - Educational and engaging
+      - Clean lines suitable for coloring
+      - No text or words in the image
+      
+      Make it a simple line drawing that children can easily color.`;
+
+      const huggingFaceResult = await tryHuggingFaceGeneration(prompt);
+      if (huggingFaceResult.success) {
+        return huggingFaceResult;
+      }
+
+      console.log('Hugging Face image generation failed, generating fallback SVG');
+      
       // Import and use fallback SVG generation
       const { createEducationalSVG } = await import('./huggingfaceService');
       const fs = await import('fs');
       const path = await import('path');
       
       // Generate educational SVG based on the prompt
-      const svgContent = createEducationalSVG(prompt);
+      const svgContent = await createEducationalSVG(prompt);
       
       // Create uploads directory if it doesn't exist
       const uploadDir = path.default.join(process.cwd(), 'uploads', 'images');
@@ -94,20 +94,13 @@ export async function generateColoringPageImage(
         base64: base64
       };
       
-    } catch (fallbackError) {
-      console.error('Fallback SVG generation failed:', fallbackError);
+    } catch (fallbackError: unknown) {
+      console.error('Error generating coloring page image:', fallbackError);
       return {
         success: false,
-        error: 'Both primary and fallback image generation failed'
+        error: `Failed to generate coloring page image: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`
       };
     }
-    
-  } catch (error) {
-    console.error('Error generating coloring page image:', error);
-    return {
-      success: false,
-      error: `Failed to generate coloring page image: ${error instanceof Error ? error.message : String(error)}`
-    };
   }
 }
 

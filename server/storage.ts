@@ -639,6 +639,10 @@ export class MemStorage implements IStorage {
     return updatedCurriculum;
   }
 
+  async getAllCurricula(): Promise<Curriculum[]> {
+    return Array.from(this.curriculaStore.values());
+  }
+
   // Lesson methods
   async getLesson(id: number): Promise<Lesson | undefined> {
     return this.lessonsStore.get(id);
@@ -779,6 +783,17 @@ export class MemStorage implements IStorage {
   // Knowledge Base methods
   async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
     return this.knowledgeBaseStore.get(id);
+  }
+
+  async getKnowledgeBaseById(id: number, userId: number): Promise<KnowledgeBase | undefined> {
+    const knowledgeBase = this.knowledgeBaseStore.get(id);
+    
+    // Check if knowledge base exists and is either public, owned by the user, or user is an admin
+    if (knowledgeBase && (knowledgeBase.isPublic || knowledgeBase.authorId === userId || userId === 0)) {
+      return knowledgeBase;
+    }
+
+    return undefined;
   }
 
   async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
@@ -2039,6 +2054,10 @@ export class MemStorage implements IStorage {
     return updatedActivity;
   }
 
+  async getAllActivities(): Promise<Activity[]> {
+    return Array.from(this.activitiesStore.values());
+  }
+
   private async initializeSampleClasses() {
     // Load classes from the actual JSON file
     try {
@@ -3273,6 +3292,77 @@ export class MemStorage implements IStorage {
     this.userNotificationsStore.set(notification.id, { ...notification, createdAt: new Date() });
     return notification;
   }
+
+  // Role invitation methods (implements both interface signatures)
+  async createRoleInvitation(invitation: any): Promise<any> {
+    // For in-memory storage, just return a mock invitation
+    const id = Date.now();
+    const now = new Date();
+    return { 
+      ...invitation, 
+      id, 
+      status: 'pending', 
+      createdAt: now,
+      updatedAt: now,
+      token: `token_${id}`,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      acceptedAt: null
+    };
+  }
+
+  async getRoleInvitations(): Promise<any[]> {
+    // For in-memory storage, return empty array
+    return [];
+  }
+
+  async getActiveRoleInvitation(tokenOrEmail: string): Promise<any> {
+    // For in-memory storage, return null/undefined
+    return null;
+  }
+
+  async acceptRoleInvitation(token: string, userEmail?: string): Promise<any> {
+    // For in-memory storage, return null/undefined
+    return null;
+  }
+
+  async revokeRoleInvitation(id: number): Promise<void> {
+    // For in-memory storage, do nothing
+    return;
+  }
+
+  async getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]> {
+    // For in-memory storage, return empty array
+    return [];
+  }
+
+  // Missing methods for full interface compliance
+  async getAllScheduledPayments(): Promise<any[]> {
+    return [];
+  }
+
+  async createStripeSubscriptionSchedule(schedule: any): Promise<any> {
+    return { ...schedule, id: Date.now() };
+  }
+
+  async getStripeSubscriptionScheduleById(id: number): Promise<any> {
+    return null;
+  }
+
+  async getStripeSubscriptionScheduleByStripeId(stripeScheduleId: string): Promise<any> {
+    return null;
+  }
+
+  async getStripeSubscriptionSchedulesByParentEmail(parentEmail: string): Promise<any[]> {
+    return [];
+  }
+
+  async updateStripeSubscriptionSchedule(id: number, schedule: any): Promise<any> {
+    return null;
+  }
+
+  async addPurchaser(id: number, userId: number): Promise<any> {
+    return null;
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -3767,21 +3857,6 @@ export class MemStorage implements IStorage {
       return this.memStorage.deleteChild(id);
     }
 
-    async createRoleInvitation(invitation: any): Promise<any> {
-      return this.dbStorage.createRoleInvitation(invitation);
-    }
-
-    async getRoleInvitations(): Promise<any[]> {
-      return this.dbStorage.getRoleInvitations();
-    }
-
-    async getActiveRoleInvitation(token: string): Promise<any> {
-      return this.dbStorage.getActiveRoleInvitation(token);
-    }
-
-    async acceptRoleInvitation(token: string): Promise<void> {
-      return this.dbStorage.acceptRoleInvitation(token);
-    }
 
     async revokeRoleInvitation(id: number): Promise<void> {
       return this.dbStorage.revokeRoleInvitation(id);
