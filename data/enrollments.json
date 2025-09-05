@@ -468,5 +468,34 @@
     "depositRequired": 9000,
     "totalCost": 90000,
     "remainingBalance": 90000
+  },
+  {
+    "id": 1757091634776,
+    "classId": 4,
+    "childId": 4,
+    "childName": "Sebastian Puccia",
+    "className": "Yankee Doodle | Half Day",
+    "enrollmentDate": "2025-09-05T17:00:34.775Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
+  },
+  {
+    "programId": 4,
+    "parentId": 0,
+    "parentEmail": "kpdinvestors@gmail.com",
+    "childId": 4,
+    "childName": "Sebastian Puccia",
+    "className": "Yankee Doodle | Half Day",
+    "totalCost": 9000000,
+    "remainingBalance": 9000000,
+    "paymentStatus": "pending_payment",
+    "paymentSystemVersion": "v2_stripe",
+    "status": "pending_payment",
+    "createdAt": "2025-09-05T17:00:50.654Z",
+    "updatedAt": "2025-09-05T17:00:50.654Z",
+    "id": 1757091650654
   }
 ]
