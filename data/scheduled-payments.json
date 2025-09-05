@@ -9,9 +9,9 @@
     "totalInstallments": 3,
     "dueDate": "2025-10-05T04:29:11.570Z",
     "description": "Payment 2 of 3 for Multiple Classes",
-    "status": "pending",
+    "status": "paid",
     "createdAt": "2025-09-05T04:29:11.570Z",
-    "updatedAt": "2025-09-05T04:29:11.570Z"
+    "updatedAt": "2025-09-05T04:38:20.000Z"
   },
   {
     "id": 2,
