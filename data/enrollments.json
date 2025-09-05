@@ -145,5 +145,15 @@
     "status": "enrolled",
     "createdAt": "2025-09-05T14:16:05.784Z",
     "updatedAt": "2025-09-05T14:16:05.784Z"
+  },
+  {
+    "classId": 14,
+    "childId": 3,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3S40THRFKXbVXRE313WrK5o2",
+    "amount": 3000000,
+    "totalCost": 3000000,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-09-05T14:18:59.933Z"
   }
 ]

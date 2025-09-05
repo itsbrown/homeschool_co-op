@@ -142,7 +142,7 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
 }
 
 export default function CartCheckout() {
-  const { cart } = useCart();
+  const { cart, clearCart, loadUnpaidEnrollments } = useCart();
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [clientSecret, setClientSecret] = useState<string>('');
@@ -176,8 +176,10 @@ export default function CartCheckout() {
       return;
     }
 
-    // If cart is empty, wait longer for localStorage to load
-    console.log('🛒 Cart is empty, waiting for cart to load...');
+    // If cart is empty, try to load unpaid enrollments first
+    console.log('🛒 Cart is empty, forcing load of unpaid enrollments...');
+    loadUnpaidEnrollments();
+    
     let attempts = 0;
     const maxAttempts = 10; // Try for up to 5 seconds (10 * 500ms)
     
@@ -410,6 +412,20 @@ export default function CartCheckout() {
                 <CardDescription>
                   Review your class enrollments
                 </CardDescription>
+                {/* Add button to load outstanding balances if cart seems incomplete */}
+                {cart.items.length <= 1 && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      clearCart();
+                      setTimeout(() => loadUnpaidEnrollments(), 100);
+                    }}
+                    className="mt-2"
+                  >
+                    Load All Outstanding Balances
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 {cart.items.map((item) => (
