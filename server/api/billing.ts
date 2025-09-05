@@ -119,9 +119,10 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     await storage.createPayment(paymentRecord);
     console.log('✅ Payment record created:', paymentRecord.stripePaymentIntentId);
     
-    // For monthly plans, create scheduled payments for remaining installments
-    if (isMonthly && enrollments.length > 0) {
-      await createScheduledInstallments(userEmail, enrollmentIds, enrollments, currentPaymentAmount);
+    // For payment plans (monthly or three_payments), create scheduled payments for remaining installments
+    const needsScheduledPayments = (paymentPlan === 'monthly' || paymentPlan === 'three_payments') && enrollments.length > 0;
+    if (needsScheduledPayments) {
+      await createScheduledInstallments(userEmail, enrollmentIds, enrollments, currentPaymentAmount, paymentPlan);
     }
     
     // Send real-time update
@@ -134,12 +135,13 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
   }
 }
 
-// Create scheduled installments for monthly plans
+// Create scheduled installments for payment plans (monthly or three_payments)
 async function createScheduledInstallments(
   parentEmail: string,
   enrollmentIds: number[],
   enrollments: any[],
-  installmentAmount: number
+  installmentAmount: number,
+  paymentPlan: string = 'monthly'
 ) {
   try {
     const installments = [
@@ -155,7 +157,7 @@ async function createScheduledInstallments(
         parentEmail,
         enrollmentIds,
         amount: installmentAmount,
-        paymentPlan: 'monthly',
+        paymentPlan: paymentPlan,
         installmentNumber: installment.number,
         totalInstallments: 3,
         dueDate,
