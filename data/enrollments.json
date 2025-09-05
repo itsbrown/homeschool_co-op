@@ -32,11 +32,14 @@
     "childName": "Silvie Puccia",
     "className": "Macaroni Single Day",
     "enrollmentDate": "2025-09-05T12:47:42.387Z",
-    "status": "pending_payment",
-    "amount": 0,
+    "status": "enrolled",
+    "amount": 30000,
     "depositRequired": 3000,
     "totalCost": 30000,
-    "remainingBalance": 30000
+    "remainingBalance": 0,
+    "paymentStatus": "stripe_managed",
+    "paymentSystemVersion": "v2_stripe",
+    "updatedAt": "2025-09-05T13:37:26.753Z"
   },
   1757076462387,
   {

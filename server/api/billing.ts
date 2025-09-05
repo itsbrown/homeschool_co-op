@@ -131,13 +131,14 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
   try {
     const { amount, currency = 'usd', parentEmail, enrollmentDetails, paymentPlan = 'full' } = req.body;
 
-    // Calculate installment amount for monthly plans
+    // Calculate installment amount for monthly plans  
+    // Note: amount is already in cents, so no need to multiply by 100
     const isMonthly = paymentPlan === 'monthly';
-    const installmentAmount = isMonthly ? Math.round((amount * 100) / 3) : Math.round(amount * 100);
+    const installmentAmount = isMonthly ? Math.round(amount / 3) : amount;
     
     console.log('💳 Payment plan details:', {
       paymentPlan,
-      totalAmount: amount * 100,
+      totalAmount: amount, // amount is already in cents
       installmentAmount,
       isMonthly
     });
