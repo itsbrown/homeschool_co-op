@@ -756,6 +756,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
+    // Check if cart was recently cleared to prevent overriding the clear operation
+    const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
+    if (clearedTimestamp) {
+      const timeSinceCleared = Date.now() - parseInt(clearedTimestamp);
+      if (timeSinceCleared < 30000) { // 30 seconds
+        console.log('🛒 Cart was recently cleared, skipping localStorage save');
+        return;
+      }
+    }
+
     // Don't save empty cart if localStorage has items (prevents overriding valid cart during navigation)
     const existingCart = localStorage.getItem('asa_cart');
     if (existingCart && state.cart.items.length === 0) {
@@ -858,6 +868,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = () => {
     dispatch({ type: 'CLEAR_CART' });
     localStorage.removeItem('asa_cart');
+    localStorage.removeItem('cart'); // Also remove any other cart storage
     // Set a flag to prevent immediate reload after payment
     localStorage.setItem('asa_cart_cleared', Date.now().toString());
     toast({

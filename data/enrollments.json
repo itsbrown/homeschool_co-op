@@ -252,5 +252,25 @@
     "totalCost": 9000000,
     "remainingBalance": 0,
     "enrollmentDate": "2025-09-05T14:58:18.955Z"
+  },
+  {
+    "classId": 3,
+    "childId": 3,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3S41AIRFKXbVXRE3006gq2MF",
+    "amount": 9000000,
+    "totalCost": 9000000,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-09-05T15:03:31.018Z"
+  },
+  {
+    "classId": 5,
+    "childId": 4,
+    "status": "enrolled",
+    "paymentIntentId": "pi_3S41AIRFKXbVXRE3006gq2MF",
+    "amount": 9000000,
+    "totalCost": 9000000,
+    "remainingBalance": 0,
+    "enrollmentDate": "2025-09-05T15:03:31.019Z"
   }
 ]

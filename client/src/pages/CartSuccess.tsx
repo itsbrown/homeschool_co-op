@@ -143,8 +143,9 @@ export default function CartSuccess() {
               description: `Successfully processed payment for ${successCount} enrollment${successCount > 1 ? 's' : ''}`,
             });
 
-            // Clear cart data and invalidate billing cache
+            // Clear ALL cart data and invalidate billing cache
             localStorage.removeItem('cart');
+            localStorage.removeItem('asa_cart');
             localStorage.removeItem('selectedPaymentPlan');
             
             // Clear cart in context (this will remove items from UI)
@@ -154,6 +155,11 @@ export default function CartSuccess() {
             queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
             queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
             queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+            
+            // Force page refresh to completely reset the cart state
+            setTimeout(() => {
+              window.location.href = '/dashboard';
+            }, 2000);
           } else {
             throw new Error(`Only ${successCount} of ${cart.items.length} enrollments were processed successfully`);
           }
