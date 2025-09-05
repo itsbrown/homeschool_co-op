@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": 1,
+    "parentEmail": "kpdinvestors@gmail.com",
+    "enrollmentIds": [1756697143228, 1756700788788, 1756700810624],
+    "amount": 630000,
+    "paymentPlan": "three_payments",
+    "installmentNumber": 2,
+    "totalInstallments": 3,
+    "dueDate": "2025-10-05T12:00:00.000Z",
+    "description": "Payment 2 of 3 - Multiple Classes",
+    "status": "pending",
+    "createdAt": "2025-09-05T12:01:00.000Z",
+    "updatedAt": "2025-09-05T12:01:00.000Z"
+  },
+  {
+    "id": 2,
+    "parentEmail": "kpdinvestors@gmail.com",
+    "enrollmentIds": [1756697143228, 1756700788788, 1756700810624],
+    "amount": 630000,
+    "paymentPlan": "three_payments",
+    "installmentNumber": 3,
+    "totalInstallments": 3,
+    "dueDate": "2025-11-05T12:00:00.000Z",
+    "description": "Payment 3 of 3 - Multiple Classes",
+    "status": "pending",
+    "createdAt": "2025-09-05T12:01:00.000Z",
+    "updatedAt": "2025-09-05T12:01:00.000Z"
+  }
+]
