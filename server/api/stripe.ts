@@ -309,7 +309,7 @@ router.post('/webhook', async (req, res) => {
       
       try {
         // Check if this is a balance payment or new enrollment
-        const paymentType = paymentIntent.metadata.paymentType;
+        const paymentType = paymentIntent.metadata.paymentType || paymentIntent.metadata.type;
         console.log('🔍 Payment type:', paymentType);
         
         // Check if this payment was already processed (to avoid double processing)
