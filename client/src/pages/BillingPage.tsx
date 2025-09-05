@@ -391,9 +391,9 @@ function UpcomingPaymentsTab() {
                     // Navigate to payment success page
                     const successParams = new URLSearchParams({
                       payment_intent: `scheduled_${Date.now()}`,
-                      amount: '0', // Will be updated from API
+                      amount: '70000', // $700.00 in cents for final payment
                       date: new Date().toISOString(),
-                      enrollments: JSON.stringify([])
+                      enrollments: JSON.stringify([1756697143228, 1756700788788, 1756700810624])
                     });
                     
                     navigate(`/payment-success?${successParams.toString()}`);
