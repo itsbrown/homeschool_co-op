@@ -23,6 +23,8 @@ import paymentImport from "./api/payment-import";
 import accountImport from "./api/account-import";
 import dailyFlowsRoutes from "./api/daily-flows";
 import aiPricingRouter from "./api/ai-pricing";
+import stripeMigrationRouter from "./api/stripe-migration";
+import stripeWebhookRouter from "./api/stripe-webhook";
 import { MembershipStatusService } from "./services/membership-status-service.js";
 import { dataLayer } from "./services/dataLayer.js";
 
@@ -92,6 +94,8 @@ app.use('/api/stripe', stripeRoutes);
 app.use("/api/billing", billingRouter);
 app.use("/api/scheduled-payments", scheduledPaymentsRouter);
 app.use("/api/ai-pricing", aiPricingRouter);
+app.use("/api/stripe-migration", stripeMigrationRouter);
+app.use("/api/stripe-webhooks", stripeWebhookRouter);
 app.use("/api/payment-import", paymentImport);
 app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);

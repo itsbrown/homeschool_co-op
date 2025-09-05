@@ -1,5 +1,5 @@
 import express from 'express';
-import { MemStorage } from '../storage';
+import { storage } from '../storage';
 import { StripeEnrollmentMigration } from '../scripts/migrate-to-stripe';
 
 const router = express.Router();
@@ -11,7 +11,7 @@ const router = express.Router();
 // Get migration status
 router.get('/status', async (req, res) => {
   try {
-    const storage = req.app.get('storage') as MemStorage;
+    // Use the shared storage instance
     const migration = new StripeEnrollmentMigration(storage);
     
     const status = await migration.getMigrationStatus();
@@ -33,7 +33,7 @@ router.get('/status', async (req, res) => {
 // Run full migration
 router.post('/run', async (req, res) => {
   try {
-    const storage = req.app.get('storage') as MemStorage;
+    // Use the shared storage instance
     const migration = new StripeEnrollmentMigration(storage);
     
     console.log('🚀 Starting Stripe migration via API...');
@@ -58,7 +58,7 @@ router.post('/run', async (req, res) => {
 // Clean slate migration (reset everything)
 router.post('/clean-slate', async (req, res) => {
   try {
-    const storage = req.app.get('storage') as MemStorage;
+    // Use the shared storage instance
     const migration = new StripeEnrollmentMigration(storage);
     
     console.log('🧹 Starting clean slate migration via API...');

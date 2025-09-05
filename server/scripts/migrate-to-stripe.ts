@@ -119,7 +119,4 @@ export class StripeEnrollmentMigration {
 /**
  * Run migration if called directly
  */
-if (require.main === module) {
-  // This would be run via npm script
-  console.log('Migration script would run here when called from command line');
-}
+// Note: ES modules don't have require.main, use API endpoints instead
