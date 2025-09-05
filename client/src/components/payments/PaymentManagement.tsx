@@ -115,6 +115,31 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       return await response.json();
     },
   });
+
+  // Get scheduled payments for upcoming payments tab
+  const { data: scheduledPayments, isLoading: isLoadingScheduled } = useQuery({
+    queryKey: ["/api/scheduled-payments/upcoming", childId],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/scheduled-payments/upcoming', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch scheduled payments: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.success ? data.payments : [];
+    },
+  });
   
   // Filter payments based on search and status
   const filteredPayments = React.useMemo(() => {
@@ -573,27 +598,49 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               <CardDescription>Payments scheduled for the future</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
+              {isLoading || isLoadingScheduled ? (
                 <div className="text-center py-8">
                   <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
                   <p>Loading upcoming payments...</p>
                 </div>
-              ) : filteredPayments.filter((p: Payment) => p.status === 'pending' && p.dueDate).length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                  <p>No upcoming payments scheduled</p>
-                  <p className="text-sm mt-1">All your payments are currently up to date</p>
-                </div>
               ) : (
-                <div className="space-y-4">
-                  {filteredPayments
+                (() => {
+                  // Combine payment history items with due dates and scheduled payments
+                  const pendingPayments = filteredPayments
                     .filter((p: Payment) => p.status === 'pending' && p.dueDate)
-                    .sort((a: Payment, b: Payment) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
-                    .map((payment: Payment) => (
-                      <div key={payment.id} className="flex justify-between items-center p-4 border rounded-lg">
-                        <div className="flex items-center gap-4">
-                          <div className="h-10 w-10 rounded-full bg-yellow-100 text-yellow-700 flex items-center justify-center">
-                            <Calendar className="h-5 w-5" />
+                    .map((p: Payment) => ({
+                      ...p,
+                      source: 'payment_history'
+                    }));
+                  
+                  const scheduledPaymentItems = (scheduledPayments || [])
+                    .map((sp: any) => ({
+                      id: sp.id,
+                      description: sp.description || `${sp.className} - ${sp.childName}`,
+                      amount: sp.amount,
+                      dueDate: sp.dueDate,
+                      status: 'pending',
+                      childName: sp.childName,
+                      programName: sp.className,
+                      source: 'scheduled_payment'
+                    }));
+                  
+                  const allUpcomingPayments = [...pendingPayments, ...scheduledPaymentItems]
+                    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+                  
+                  return allUpcomingPayments.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                      <p>No upcoming payments scheduled</p>
+                      <p className="text-sm mt-1">All your payments are currently up to date</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {allUpcomingPayments.map((payment: any) => (
+                        <div key={`${payment.source}-${payment.id}`} className="flex justify-between items-center p-4 border rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 rounded-full bg-yellow-100 text-yellow-700 flex items-center justify-center">
+                              <Calendar className="h-5 w-5" />
                           </div>
                           <div>
                             <h3 className="font-medium">{payment.description}</h3>
@@ -689,8 +736,10 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                           </Dialog>
                         </div>
                       </div>
-                    ))}
-                </div>
+                      ))}
+                    </div>
+                  );
+                })()
               )}
             </CardContent>
           </Card>
