@@ -24,11 +24,16 @@
     "childName": "Silvie Puccia",
     "className": "Macaroni Single Day",
     "enrollmentDate": "2025-09-01T03:25:43.228Z",
-    "status": "pending_payment",
-    "amount": 0,
+    "status": "enrolled",
+    "amount": 7000,
+    "totalPaid": 7000,
     "depositRequired": 3000,
     "totalCost": 30000,
-    "remainingBalance": 30000
+    "remainingBalance": 23000,
+    "paymentStatus": "payment_plan_active",
+    "paymentPlanStatus": "in_progress",
+    "amountPaid": 7000,
+    "paymentIntentId": "pi_3S3y2lRFKXbVXRE31n3d46qO"
   },
   {
     "id": 1756700788788,
@@ -37,11 +42,16 @@
     "childName": "Sebastian Puccia",
     "className": "Tycoons | Half Day",
     "enrollmentDate": "2025-09-01T04:26:28.788Z",
-    "status": "pending_payment",
-    "amount": 0,
+    "status": "enrolled",
+    "amount": 70000,
+    "totalPaid": 70000,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 90000
+    "remainingBalance": 20000,
+    "paymentStatus": "payment_plan_active",
+    "paymentPlanStatus": "in_progress",
+    "amountPaid": 70000,
+    "paymentIntentId": "pi_3S3y2lRFKXbVXRE31n3d46qO"
   },
   {
     "id": 1756700810624,
@@ -50,11 +60,16 @@
     "childName": "Salena Puccia",
     "className": "Tycoons | Half Day",
     "enrollmentDate": "2025-09-01T04:26:50.624Z",
-    "status": "pending_payment",
-    "amount": 0,
+    "status": "enrolled",
+    "amount": 70000,
+    "totalPaid": 70000,
     "depositRequired": 9000,
     "totalCost": 90000,
-    "remainingBalance": 90000
+    "remainingBalance": 20000,
+    "paymentStatus": "payment_plan_active",
+    "paymentPlanStatus": "in_progress",
+    "amountPaid": 70000,
+    "paymentIntentId": "pi_3S3y2lRFKXbVXRE31n3d46qO"
   },
   {
     "id": 1756866808252,
