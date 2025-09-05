@@ -357,7 +357,7 @@ export const programEnrollments = pgTable("program_enrollments", {
     enum: ["pending", "confirmed", "waitlisted", "cancelled", "completed"] 
   }).default("pending").notNull(),
   paymentStatus: text("payment_status", { 
-    enum: ["pending", "paid", "refunded", "failed"] 
+    enum: ["pending", "paid", "refunded", "failed", "payment_plan_active", "stripe_managed"] 
   }).default("pending").notNull(),
   paymentMethod: text("payment_method", { 
     enum: ["credit_card", "paypal", "bank_transfer", "cash", "scholarship"] 
@@ -366,6 +366,15 @@ export const programEnrollments = pgTable("program_enrollments", {
   discountCode: text("discount_code"),
   discountAmount: integer("discount_amount"), // in cents
   totalPaid: integer("total_paid"), // in cents
+  totalCost: integer("total_cost"), // in cents
+  remainingBalance: integer("remaining_balance"), // in cents
+  
+  // Stripe Integration Fields
+  stripeSubscriptionScheduleId: text("stripe_subscription_schedule_id"),
+  stripeCustomerId: text("stripe_customer_id"),
+  migrationDate: timestamp("migration_date"),
+  paymentSystemVersion: text("payment_system_version").default("v1_manual"), // v2_stripe
+  
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -376,10 +385,16 @@ export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollmen
   .extend({
     // Set default values for optional fields
     status: z.enum(["pending", "confirmed", "waitlisted", "cancelled", "completed"]).default("pending"),
-    paymentStatus: z.enum(["pending", "paid", "refunded", "failed"]).default("pending"),
+    paymentStatus: z.enum(["pending", "paid", "refunded", "failed", "payment_plan_active", "stripe_managed"]).default("pending"),
     enrollmentDate: z.date().default(() => new Date()),
     notes: z.string().nullable().default(null),
-    paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "scholarship"]).nullable().default(null)
+    paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "scholarship"]).nullable().default(null),
+    totalCost: z.number().nullable().default(null),
+    remainingBalance: z.number().nullable().default(null),
+    stripeSubscriptionScheduleId: z.string().nullable().default(null),
+    stripeCustomerId: z.string().nullable().default(null),
+    migrationDate: z.date().nullable().default(null),
+    paymentSystemVersion: z.string().default("v1_manual")
   });
 export type InsertProgramEnrollment = z.infer<typeof insertProgramEnrollmentSchema>;
 export type ProgramEnrollment = typeof programEnrollments.$inferSelect;
@@ -389,6 +404,42 @@ export const programEnrollmentsRelations = relations(programEnrollments, ({ one 
   program: one(programs, { fields: [programEnrollments.programId], references: [programs.id] }),
   child: one(children, { fields: [programEnrollments.childId], references: [children.id] })
 }));
+
+// Stripe Subscription Schedules table - tracks Stripe payment plans
+export const stripeSubscriptionSchedules = pgTable("stripe_subscription_schedules", {
+  id: serial("id").primaryKey(),
+  stripeScheduleId: text("stripe_schedule_id").notNull().unique(),
+  parentEmail: text("parent_email").notNull(),
+  enrollmentIds: jsonb("enrollment_ids").notNull(), // Array of enrollment IDs
+  totalAmount: integer("total_amount").notNull(), // In cents
+  paymentPlan: text("payment_plan", { 
+    enum: ["deposit", "split", "monthly", "full"] 
+  }).notNull(),
+  status: text("status", { 
+    enum: ["active", "completed", "canceled", "paused"] 
+  }).default("active").notNull(),
+  currentPhase: integer("current_phase").default(1).notNull(),
+  totalPhases: integer("total_phases").notNull(),
+  nextPaymentDate: timestamp("next_payment_date"),
+  lastPaymentDate: timestamp("last_payment_date"),
+  completedDate: timestamp("completed_date"),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertStripeSubscriptionScheduleSchema = createInsertSchema(stripeSubscriptionSchedules)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    status: z.enum(["active", "completed", "canceled", "paused"]).default("active"),
+    currentPhase: z.number().default(1),
+    nextPaymentDate: z.date().nullable().default(null),
+    lastPaymentDate: z.date().nullable().default(null),
+    completedDate: z.date().nullable().default(null),
+    metadata: z.record(z.any()).default({})
+  });
+export type InsertStripeSubscriptionSchedule = z.infer<typeof insertStripeSubscriptionScheduleSchema>;
+export type StripeSubscriptionSchedule = typeof stripeSubscriptionSchedules.$inferSelect;
 
 // Membership enrollments table - tracks annual membership payments for parents
 export const membershipEnrollments = pgTable("membership_enrollments", {

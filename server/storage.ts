@@ -10,6 +10,7 @@ import {
   programs, type Program, type InsertProgram,
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
   membershipEnrollments, type MembershipEnrollment, type InsertMembershipEnrollment,
+  stripeSubscriptionSchedules, type StripeSubscriptionSchedule, type InsertStripeSubscriptionSchedule,
   classes, type Class, type InsertClass,
   activities, type Activity, type InsertActivity,
   roleInvitations, type RoleInvitation, type InsertRoleInvitation,
@@ -201,7 +202,19 @@ export interface IStorage {
   // Scheduled Payment methods
   createScheduledPayment(payment: any): Promise<any>;
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
+  getAllScheduledPayments(): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
+
+  // Stripe Subscription Schedule methods
+  createStripeSubscriptionSchedule(schedule: InsertStripeSubscriptionSchedule): Promise<StripeSubscriptionSchedule>;
+  getStripeSubscriptionScheduleById(id: number): Promise<StripeSubscriptionSchedule | undefined>;
+  getStripeSubscriptionScheduleByStripeId(stripeScheduleId: string): Promise<StripeSubscriptionSchedule | undefined>;
+  getStripeSubscriptionSchedulesByParentEmail(parentEmail: string): Promise<StripeSubscriptionSchedule[]>;
+  updateStripeSubscriptionSchedule(id: number, schedule: Partial<InsertStripeSubscriptionSchedule>): Promise<StripeSubscriptionSchedule | undefined>;
+
+  // Enhanced enrollment methods
+  getEnrollmentsByIds(enrollmentIds: number[]): Promise<any[]>;
+  updateEnrollment(id: number, updates: any): Promise<any>;
 
   // School Student methods
   getSchoolStudentById(id: number): Promise<SchoolStudent | undefined>;
