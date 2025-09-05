@@ -1,0 +1,88 @@
+Each dictionary in the list "icons" should contain a non-empty UTF8 string field "sizes".Understand this warning
+checkout:1 Each dictionary in the list "icons" should contain a non-empty UTF8 string field "type".Understand this warning
+controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1 [Stripe.js] You have not registered or verified the domain, so the following payment methods are not enabled in the Payment Element: 
+
+- apple_pay
+
+Please follow https://stripe.com/docs/payments/payment-methods/pmd-registration to register and verify the domain.
+warn @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+setTimeout
+r @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+(anonymous) @ elements-inner-payme…616c39d2b9fb4c.js:1
+(anonymous) @ elements-inner-payme…616c39d2b9fb4c.js:1
+(anonymous) @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+r.test._emit @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+value @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+value @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+value @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+value @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+n @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+a @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+i @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+Promise.then
+a @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+i @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+dispatch @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+n @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+a @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+i @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+Promise.then
+a @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+i @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+Promise.then
+a @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+i @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+n @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+a @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+i @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+Promise.then
+a @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+i @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd5077ea1107060212cd0.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+value @ controller-with-preconnect-465de0cbe39ecea15473ff653dc5a039.js:1
+(anonymous) @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+n @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+a @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+i @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+(anonymous) @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+c.innerAction @ shared-0fefd3354f2fd…a1107060212cd0.js:1
+r.dispatchAction @ elements-inner-payme…616c39d2b9fb4c.js:1
+(anonymous) @ elements-inner-payme…616c39d2b9fb4c.js:1
+(anonymous) @ elements-inner-payme…616c39d2b9fb4c.js:1
+la @ elements-inner-payme…616c39d2b9fb4c.js:1
+Ua @ elements-inner-payme…616c39d2b9fb4c.js:1
+n.unstable_runWithPriority @ elements-inner-payme…616c39d2b9fb4c.js:1
+Nn @ elements-inner-payme…616c39d2b9fb4c.js:1
+Va @ elements-inner-payme…616c39d2b9fb4c.js:1
+(anonymous) @ elements-inner-payme…616c39d2b9fb4c.js:1
+c @ elements-inner-payme…616c39d2b9fb4c.js:1
+P.port1.onmessage @ elements-inner-payme…616c39d2b9fb4c.js:1Understand this warning
+CartCheckout.tsx:102 ✅ Payment succeeded, Stripe will redirect to success page

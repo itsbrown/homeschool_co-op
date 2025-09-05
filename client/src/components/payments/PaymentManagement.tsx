@@ -91,6 +91,30 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       return data.success ? data.payments : [];
     },
   });
+
+  // Get outstanding balances from enrollments
+  const { data: enrollments, isLoading: isLoadingEnrollments } = useQuery({
+    queryKey: ["/api/enrollments", childId],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/enrollments', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch enrollments: ${response.status}`);
+      }
+
+      return await response.json();
+    },
+  });
   
   // Filter payments based on search and status
   const filteredPayments = React.useMemo(() => {
@@ -110,18 +134,61 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     });
   }, [payments, searchQuery, filterStatus]);
   
-  // Group payments by status for the overview tab
-  const paymentStats = React.useMemo(() => {
-    if (!payments) return { paid: 0, pending: 0, failed: 0, total: 0 };
+  // Calculate outstanding balances from enrollments
+  const outstandingBalances = React.useMemo(() => {
+    if (!enrollments) return [];
     
-    return payments.reduce((stats: any, payment: Payment) => {
-      stats[payment.status] = (stats[payment.status] || 0) + 1;
-      stats.total += 1;
-      stats.totalPaid = (stats.totalPaid || 0) + (payment.status === 'paid' ? payment.amount : 0);
-      stats.totalPending = (stats.totalPending || 0) + (payment.status === 'pending' ? payment.amount : 0);
-      return stats;
-    }, { paid: 0, pending: 0, failed: 0, refunded: 0, total: 0, totalPaid: 0, totalPending: 0 });
-  }, [payments]);
+    const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
+      const key = `${enrollment.classId}-${enrollment.childId}`;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(enrollment);
+      return acc;
+    }, {});
+
+    const unpaidEnrollments = [];
+    for (const [key, groupEnrollments] of Object.entries(enrollmentGroups)) {
+      const enrollmentList = groupEnrollments as any[];
+      const sortedEnrollments = enrollmentList.sort((a, b) => 
+        new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
+      );
+
+      const latestEnrollment = sortedEnrollments[0];
+      const hasBalance = latestEnrollment.remainingBalance > 0;
+      const hasFullyPaidEnrollment = sortedEnrollments.some((e: any) => 
+        e.status === 'enrolled' && e.remainingBalance === 0
+      );
+
+      if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0)) {
+        unpaidEnrollments.push(latestEnrollment);
+      }
+    }
+    
+    return unpaidEnrollments;
+  }, [enrollments]);
+
+  // Group payments by status for the overview tab, including outstanding balances
+  const paymentStats = React.useMemo(() => {
+    const paymentData = payments || [];
+    const outstandingData = outstandingBalances || [];
+    
+    const stats = paymentData.reduce((acc: any, payment: Payment) => {
+      acc[payment.status] = (acc[payment.status] || 0) + 1;
+      acc.total += 1;
+      acc.totalPaid = (acc.totalPaid || 0) + (payment.status === 'paid' ? payment.amount : 0);
+      acc.totalPending = (acc.totalPending || 0) + (payment.status === 'pending' ? payment.amount : 0);
+      return acc;
+    }, { paid: 0, pending: 0, failed: 0, refunded: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0 });
+    
+    // Add outstanding balances
+    stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => 
+      total + (enrollment.remainingBalance || 0), 0
+    );
+    stats.outstandingCount = outstandingData.length;
+    
+    return stats;
+  }, [payments, outstandingBalances]);
   
   // Handle making a payment
   const handlePayment = async (paymentId: string) => {
@@ -213,7 +280,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
@@ -222,6 +289,20 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                 <div className="text-2xl font-bold">{formatCurrency(paymentStats.totalPaid || 0)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {paymentStats.paid || 0} successful payments
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Outstanding Balance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {isLoadingEnrollments ? "Loading..." : formatCurrency(paymentStats.totalOutstanding || 0)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {paymentStats.outstandingCount || 0} unpaid enrollments
                 </p>
               </CardContent>
             </Card>
@@ -497,7 +578,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                   <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
                   <p>Loading upcoming payments...</p>
                 </div>
-              ) : filteredPayments.filter(p => p.status === 'pending' && p.dueDate).length === 0 ? (
+              ) : filteredPayments.filter((p: Payment) => p.status === 'pending' && p.dueDate).length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                   <p>No upcoming payments scheduled</p>
@@ -506,8 +587,8 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               ) : (
                 <div className="space-y-4">
                   {filteredPayments
-                    .filter(p => p.status === 'pending' && p.dueDate)
-                    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+                    .filter((p: Payment) => p.status === 'pending' && p.dueDate)
+                    .sort((a: Payment, b: Payment) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
                     .map((payment: Payment) => (
                       <div key={payment.id} className="flex justify-between items-center p-4 border rounded-lg">
                         <div className="flex items-center gap-4">
