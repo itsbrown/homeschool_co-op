@@ -148,6 +148,9 @@ export default function CartSuccess() {
             localStorage.removeItem('asa_cart');
             localStorage.removeItem('selectedPaymentPlan');
             
+            // Set the cleared flag FIRST to prevent cart restoration
+            localStorage.setItem('asa_cart_cleared', Date.now().toString());
+            
             // Clear cart in context (this will remove items from UI)
             clearCart();
             
@@ -156,10 +159,8 @@ export default function CartSuccess() {
             queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
             queryClient.invalidateQueries({ queryKey: ['payment-history'] });
             
-            // Force page refresh to completely reset the cart state
-            setTimeout(() => {
-              window.location.href = '/dashboard';
-            }, 2000);
+            // Navigate to dashboard immediately instead of waiting
+            window.location.href = '/dashboard';
           } else {
             throw new Error(`Only ${successCount} of ${cart.items.length} enrollments were processed successfully`);
           }
