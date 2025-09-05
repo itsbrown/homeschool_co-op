@@ -408,7 +408,7 @@
   {
     "id": 21,
     "createdAt": "2025-09-05T02:42:13.335Z",
-    "updatedAt": "2025-09-05T02:42:13.335Z",
+    "updatedAt": "2025-09-05T02:42:13.888Z",
     "stripePaymentIntentId": "pi_3S3pb5RFKXbVXRE30G92cywF",
     "parentEmail": "kpdinvestors@gmail.com",
     "childName": "Silvie Puccia",
@@ -423,6 +423,30 @@
         1756700810624
       ],
       "paymentDate": "2025-09-05T02:42:13.334Z",
+      "paymentPlan": "three_payments",
+      "installmentNumber": 1,
+      "totalInstallments": 1,
+      "isFirstInstallment": true
+    }
+  },
+  {
+    "id": 22,
+    "createdAt": "2025-09-05T02:48:09.108Z",
+    "updatedAt": "2025-09-05T02:48:09.108Z",
+    "stripePaymentIntentId": "pi_3S3pglRFKXbVXRE30uEKeFmr",
+    "parentEmail": "kpdinvestors@gmail.com",
+    "childName": "Silvie Puccia",
+    "className": "Multiple Classes",
+    "amount": 4666700,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "enrollmentIds": [
+        1756697143228,
+        1756700788788,
+        1756700810624
+      ],
+      "paymentDate": "2025-09-05T02:48:09.108Z",
       "paymentPlan": "three_payments",
       "installmentNumber": 1,
       "totalInstallments": 1,
