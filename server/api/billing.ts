@@ -31,7 +31,8 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
   try {
     const { paymentPlan = 'full' } = paymentIntent.metadata;
     const isMonthly = paymentPlan === 'monthly';
-    const currentPaymentAmount = paymentIntent.amount; // Amount being paid now
+    // Calculate the actual amount for this installment
+    const currentPaymentAmount = isMonthly ? Math.round(paymentIntent.amount / 3) : paymentIntent.amount;
     
     console.log('💰 Processing balance payment with installment support:', {
       enrollmentIds,
