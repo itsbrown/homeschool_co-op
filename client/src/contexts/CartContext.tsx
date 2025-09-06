@@ -617,6 +617,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
+      // Always clear the cart first to ensure we don't have stale items from localStorage
+      console.log('🧹 Clearing existing cart before loading fresh unpaid enrollments');
+      dispatch({ type: 'CLEAR_CART' });
+
       // Convert enrollments to cart items with enhanced status display
       const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
         const remainingBalance = enrollment.remainingBalance || enrollment.totalCost || 0;
