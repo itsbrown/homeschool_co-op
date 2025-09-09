@@ -1109,28 +1109,5 @@
     "emergencyContactPhone": null,
     "emergencyContactRelationship": null,
     "avatar": null
-  },
-  {
-    "username": "testingemail3404@testingemail08624.com",
-    "email": "testingemail3404@testingemail08624.com",
-    "password": "$2b$10$xcD37HbOvHiQ.oJnpChbgOe6fq4QyEGBkXr6T6A.PbbG4KzeYkhW6",
-    "role": "parent",
-    "name": "testing tester",
-    "schoolId": 1,
-    "phone": "2127885544",
-    "id": 68,
-    "createdAt": "2025-09-09T20:03:58.180Z",
-    "updatedAt": "2025-09-09T20:03:58.180Z",
-    "auth0Id": null,
-    "supabaseId": null,
-    "subscription": "free",
-    "permissions": {},
-    "isActive": true,
-    "lastLogin": null,
-    "emergencyContactFirstName": null,
-    "emergencyContactLastName": null,
-    "emergencyContactPhone": null,
-    "emergencyContactRelationship": null,
-    "avatar": null
   }
 ]
