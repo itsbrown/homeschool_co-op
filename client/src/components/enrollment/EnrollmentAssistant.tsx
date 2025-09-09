@@ -516,60 +516,60 @@ export default function EnrollmentAssistant() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="text-center border-b pb-4 px-4 pt-4 bg-gray-50">
+      <div className="text-center border-b pb-4 px-4 pt-4 bg-gray-50 flex-shrink-0">
         <h2 className="text-xl font-semibold">AI Enrollment Assistant</h2>
         <p className="text-muted-foreground text-sm">Get personalized help with enrollment, programs, and school information</p>
       </div>
       
       {/* Welcome Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
-      {/* Input Area */}
-      <div className="w-full max-w-2xl mx-auto">
-        <div className="relative">
-          <Input
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="What do you want to know?"
-            className="pr-12 py-6 text-base rounded-full border-muted-foreground/20"
-            disabled={isLoading}
-          />
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted"
+      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
+        {/* Input Area */}
+        <div className="w-full max-w-2xl mx-auto">
+          <div className="relative">
+            <Input
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="What do you want to know?"
+              className="pr-24 py-6 text-base rounded-full border-muted-foreground/20"
               disabled={isLoading}
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted"
-              disabled={isLoading}
-            >
-              <Brain className="h-4 w-4" />
-            </Button>
-            <Button 
-              onClick={handleSendMessage} 
-              variant="ghost"
-              size="icon" 
-              className="h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary" 
-              disabled={isLoading || !inputMessage.trim()}
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowUp className="h-4 w-4" />
-              )}
-            </Button>
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted"
+                disabled={isLoading}
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted"
+                disabled={isLoading}
+              >
+                <Brain className="h-4 w-4" />
+              </Button>
+              <Button 
+                onClick={handleSendMessage} 
+                variant="ghost"
+                size="icon" 
+                className="h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary" 
+                disabled={isLoading || !inputMessage.trim()}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-      
+        
         {/* Sample Prompts */}
-        <div className="w-full max-w-2xl mx-auto mt-8 flex flex-wrap justify-center gap-2">
+        <div className="w-full max-w-2xl mx-auto flex flex-wrap justify-center gap-2">
           {samplePrompts.map((prompt, index) => (
             <Button 
               key={index}
