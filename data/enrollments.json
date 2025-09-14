@@ -627,7 +627,8 @@
     "status": "pending_payment",
     "createdAt": "2025-09-14T15:31:50.209Z",
     "updatedAt": "2025-09-14T15:31:50.209Z",
-    "id": 1757863910209
+    "id": 1757863910209,
+    "enrollmentDate": "2025-09-14T15:36:08.721Z"
   },
   {
     "programId": 5,
@@ -643,6 +644,23 @@
     "status": "enrolled",
     "createdAt": "2025-09-14T15:31:53.394Z",
     "updatedAt": "2025-09-14T15:31:53.394Z",
-    "id": 1757863913394
+    "id": 1757863913394,
+    "enrollmentDate": "2025-09-14T15:36:08.721Z"
+  },
+  {
+    "programId": 5,
+    "parentId": 0,
+    "parentEmail": "kpdinvestors@gmail.com",
+    "childId": 4,
+    "childName": "Sebastian Puccia",
+    "className": "Tycoons | Half Day",
+    "totalCost": 90000,
+    "remainingBalance": 90000,
+    "paymentStatus": "pending_payment",
+    "paymentSystemVersion": "v2_stripe",
+    "status": "pending_payment",
+    "createdAt": "2025-09-14T15:36:42.760Z",
+    "updatedAt": "2025-09-14T15:36:42.760Z",
+    "id": 1757864202760
   }
 ]

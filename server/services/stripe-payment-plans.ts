@@ -53,7 +53,12 @@ export class StripePaymentPlanService {
       phases: phases.map((phase, index) => ({
         items: phase.items,
         iterations: phase.iterations,
-        ...(index > 0 && { start_date: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60 * index) })
+        // For phases after the first, add collection_method: 'charge_automatically'
+        // Stripe handles timing automatically based on billing intervals
+        ...(index > 0 && { 
+          collection_method: 'charge_automatically',
+          billing_cycle_anchor: 'phase_start' 
+        })
       })),
       metadata: {
         enrollmentIds: JSON.stringify(data.enrollmentIds),
