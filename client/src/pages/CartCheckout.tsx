@@ -28,7 +28,7 @@ const stripePromise = stripePublishableKey && stripePublishableKey.trim() !== ''
   ? loadStripe(stripePublishableKey) 
   : null;
 
-function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) {
+function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPaymentPlan: string; selectedPlanAmount: number }) {
   const stripe = useStripe();
   const elements = useElements();
   const { cart, clearCart } = useCart();
@@ -44,25 +44,7 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
     }).format(amountInCents / 100);
   };
 
-  const getSelectedPlanAmount = () => {
-    const depositAmount = Math.round(cart.total * 0.1);
-    const fullAmount = cart.total;
-    const splitAmount = Math.round(cart.total / 2);
-    const monthlyAmount = Math.round(cart.total / 3);
-    
-    switch (selectedPaymentPlan) {
-      case 'deposit':
-        return depositAmount;
-      case 'full':
-        return fullAmount > 500 ? fullAmount - 25 : fullAmount; // $25 discount for full payment over $500
-      case 'split':
-        return splitAmount;
-      case 'monthly':
-        return monthlyAmount;
-      default:
-        return cart.total;
-    }
-  };
+  // Use the prop instead of calculating internally
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -81,7 +63,7 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
     setProcessing(true);
 
     try {
-      const { error, paymentIntent } = await stripe.confirmPayment({
+      const result = await stripe.confirmPayment({
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/cart/success`,
@@ -89,13 +71,13 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
         redirect: 'always', // Force redirect to success page
       });
 
-      if (error) {
+      if (result.error) {
         toast({
           title: "Payment Failed",
-          description: error.message,
+          description: result.error.message,
           variant: "destructive",
         });
-      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+      } else {
         // Save payment plan to localStorage for success page processing
         localStorage.setItem('selectedPaymentPlan', selectedPaymentPlan);
         
@@ -104,10 +86,10 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
         // The CartSuccess page will process the enrollments after redirect
       }
     } catch (error: any) {
-      console.error("Payment error:", error);
+      console.error("Payment processing failed:", error);
       toast({
         title: "Payment Failed",
-        description: "There was an error processing your payment.",
+        description: error.message || "There was an error processing your payment.",
         variant: "destructive",
       });
     } finally {
@@ -133,7 +115,7 @@ function CheckoutForm({ selectedPaymentPlan }: { selectedPaymentPlan: string }) 
         ) : (
           <>
             <CreditCard className="mr-2 h-4 w-4" />
-            Pay {formatCurrency(getSelectedPlanAmount())}
+            Pay {formatCurrency(selectedPlanAmount)}
           </>
         )}
       </Button>
@@ -199,7 +181,7 @@ export default function CartCheckout() {
     }, 500);
     
     return () => clearInterval(timer);
-  }, [isAuthenticated]); // Re-create payment intent when payment plan changes
+  }, [isAuthenticated, selectedPaymentPlan, cart.total]); // Re-create payment intent when payment plan or cart total changes
 
   const createPaymentIntent = async () => {
     try {
@@ -207,7 +189,7 @@ export default function CartCheckout() {
       
       // Get the amount to charge based on selected payment plan
       const selectedPlanAmount = getSelectedPlanAmount();
-      const amountToCharge = selectedPlanAmount * 100; // Convert to cents
+      // selectedPlanAmount is already in cents, no need to multiply by 100
       
       const response = await apiRequest(
         'POST',
@@ -215,20 +197,21 @@ export default function CartCheckout() {
         {
           items: cart.items.map(item => ({
             ...item,
-            price: item.price * 100, // Convert to cents
-            totalCost: (item.totalCost || item.price) * 100, // Convert to cents
-            depositRequired: (item.depositRequired || 0) * 100, // Convert to cents
-            amountPaid: (item.amountPaid || 0) * 100, // Convert to cents
-            remainingBalance: (item.remainingBalance || 0) * 100 // Convert to cents
+            // These values are already in cents, don't multiply by 100 again
+            price: item.price,
+            totalCost: item.totalCost || item.price,
+            depositRequired: item.depositRequired || 0,
+            amountPaid: item.amountPaid || 0,
+            remainingBalance: item.remainingBalance || 0
           })),
-          subtotal: cart.subtotal * 100, // Convert to cents
+          subtotal: cart.subtotal, // Already in cents
           discounts: {
-            siblingDiscount: cart.discounts.siblingDiscount * 100, // Convert to cents
-            freeAfterThree: cart.discounts.freeAfterThree * 100, // Convert to cents
+            siblingDiscount: cart.discounts.siblingDiscount, // Already in cents
+            freeAfterThree: cart.discounts.freeAfterThree, // Already in cents
             appliedDiscounts: cart.discounts.appliedDiscounts || [],
-            totalDiscountAmount: (cart.discounts.totalDiscountAmount || 0) * 100 // Convert to cents
+            totalDiscountAmount: cart.discounts.totalDiscountAmount || 0 // Already in cents
           },
-          total: amountToCharge, // Use selected payment plan amount in cents
+          total: selectedPlanAmount, // Already in cents from getSelectedPlanAmount()
           paymentPlan: selectedPaymentPlan, // Include payment plan info
           parentEmail: user?.email,
         }
@@ -291,9 +274,9 @@ export default function CartCheckout() {
         name: 'Pay in Full',
         description: 'Complete payment now',
         amount: fullAmount,
-        discount: fullAmount > 500 ? 25 : 0, // $25 discount for full payment over $500
+        discount: fullAmount > 50000 ? 2500 : 0, // $25 discount for full payment over $500 (amounts in cents)
         features: [
-          fullAmount > 500 ? '$25 discount on total cost' : 'No additional fees',
+          fullAmount > 50000 ? '$25 discount on total cost' : 'No additional fees',
           'No future payment worries',
           'Priority class placement',
           'Full refund if cancelled 30 days before'
@@ -606,8 +589,8 @@ export default function CartCheckout() {
               </CardHeader>
               <CardContent>
                 {stripePromise ? (
-                  <Elements stripe={stripePromise} options={{ clientSecret }}>
-                    <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} />
+                  <Elements key={clientSecret} stripe={stripePromise} options={{ clientSecret }}>
+                    <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getSelectedPlanAmount()} />
                   </Elements>
                 ) : (
                   <Alert variant="destructive">
