@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { MemStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
+import { InsertScheduledPayment } from '@shared/schema';
 
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('STRIPE_SECRET_KEY environment variable is required');
@@ -17,19 +18,25 @@ export interface PaymentPlanData {
   paymentPlan: 'deposit' | 'split' | 'monthly' | 'full';
 }
 
-export interface StripePhase {
-  items: Array<{ price: string }>;
-  iterations: number;
-  start_date?: number;
+export interface PaymentPhase {
+  amount: number; // amount in cents
+  dueDate: Date;
+  installmentNumber: number;
+  description: string;
+}
+
+export interface PaymentPlanResult {
+  paymentIntent: Stripe.PaymentIntent;
+  scheduledPayments: any[]; // Future payment records
 }
 
 export class StripePaymentPlanService {
   constructor(private storage: MemStorage) {}
 
   /**
-   * Create a Stripe subscription schedule for payment plans
+   * Create immediate payment intent and scheduled payments for payment plans
    */
-  async createEducationalPaymentPlan(data: PaymentPlanData): Promise<Stripe.SubscriptionSchedule> {
+  async createEducationalPaymentPlan(data: PaymentPlanData): Promise<PaymentPlanResult> {
     console.log('🎯 Creating Stripe payment plan:', {
       parentEmail: data.parentEmail,
       enrollmentIds: data.enrollmentIds,
@@ -42,82 +49,63 @@ export class StripePaymentPlanService {
     console.log('👤 Customer ready:', customer.id);
 
     // Build payment phases based on plan type
-    const phases = await this.buildPaymentPhases(data.paymentPlan, data.totalAmount);
+    const phases = this.buildPaymentPhases(data.paymentPlan, data.totalAmount);
     console.log('📅 Built phases:', phases.length);
 
-    // For single-phase payment plans (full payment), create regular payment intent
-    if (phases.length === 1) {
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: data.totalAmount,
-        currency: 'usd',
-        customer: customer.id,
-        description: `ASA Learning Platform - ${data.paymentPlan} payment`,
-        metadata: {
-          enrollmentIds: JSON.stringify(data.enrollmentIds),
-          parentEmail: data.parentEmail,
-          paymentPlan: data.paymentPlan,
-          totalAmount: data.totalAmount.toString(),
-          createdBy: 'asa_payment_system',
-          version: 'v2_stripe'
-        }
-      });
-
-      return {
-        id: paymentIntent.id,
-        status: 'active',
-        phases: [],
-        customer: customer.id,
-        current_phase: null,
-        metadata: paymentIntent.metadata
-      } as any;
-    }
-
-    // For multi-phase payment plans, create subscription schedule with proper intervals
-    const schedule = await stripe.subscriptionSchedules.create({
+    // Create immediate PaymentIntent for the first payment
+    const firstPhase = phases[0];
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: firstPhase.amount,
+      currency: 'usd',
       customer: customer.id,
-      start_date: 'now',
-      end_behavior: 'cancel',
-      phases: phases.map((phase, index) => ({
-        items: phase.items,
-        iterations: phase.iterations,
-        // Add billing interval for subsequent phases
-        ...(index > 0 && { 
-          collection_method: 'charge_automatically'
-        })
-      })),
+      description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
       metadata: {
         enrollmentIds: JSON.stringify(data.enrollmentIds),
         parentEmail: data.parentEmail,
         paymentPlan: data.paymentPlan,
         totalAmount: data.totalAmount.toString(),
+        installmentNumber: '1',
+        totalInstallments: phases.length.toString(),
         createdBy: 'asa_payment_system',
-        version: 'v2_stripe'
+        version: 'v2_stripe_simplified'
+      },
+      automatic_payment_methods: {
+        enabled: true
       }
     });
 
-    console.log('✅ Stripe subscription schedule created:', schedule.id);
+    console.log('💳 PaymentIntent created for first payment:', paymentIntent.id, CurrencyUtils.toDisplay(firstPhase.amount));
 
-    // Store in our database
-    await this.storage.createStripeSubscriptionSchedule({
-      stripeScheduleId: schedule.id,
-      parentEmail: data.parentEmail,
-      enrollmentIds: data.enrollmentIds,
-      totalAmount: data.totalAmount,
-      paymentPlan: data.paymentPlan,
-      status: 'active',
-      currentPhase: 1,
-      totalPhases: phases.length,
-      nextPaymentDate: this.calculateNextPaymentDate(data.paymentPlan),
-      metadata: {
-        stripeCustomerId: customer.id,
-        originalPlan: data.paymentPlan
-      }
-    });
+    // Create scheduled payments for remaining phases (if any)
+    const scheduledPayments = [];
+    for (let i = 1; i < phases.length; i++) {
+      const phase = phases[i];
+      const scheduledPayment = await this.storage.createScheduledPayment({
+        parentEmail: data.parentEmail,
+        enrollmentIds: data.enrollmentIds,
+        paymentPlan: data.paymentPlan,
+        installmentNumber: phase.installmentNumber,
+        totalInstallments: phases.length,
+        amount: phase.amount,
+        currency: 'usd',
+        dueDate: phase.dueDate,
+        status: 'pending' as const,
+        originalPaymentId: null, // Will be updated after first payment succeeds
+        description: phase.description
+      });
+      scheduledPayments.push(scheduledPayment);
+      console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phase.dueDate.toLocaleDateString()}`);
+    }
 
-    // Update enrollments with Stripe references
-    await this.updateEnrollmentsWithStripe(data.enrollmentIds, schedule.id, customer.id);
+    // Update enrollments with PaymentIntent reference
+    await this.updateEnrollmentsWithPaymentIntent(data.enrollmentIds, paymentIntent.id, customer.id, data.paymentPlan);
 
-    return schedule;
+    console.log('✅ Payment plan created successfully with PaymentIntent and', scheduledPayments.length, 'scheduled payments');
+
+    return {
+      paymentIntent,
+      scheduledPayments
+    };
   }
 
   /**
@@ -154,24 +142,33 @@ export class StripePaymentPlanService {
   /**
    * Build payment phases based on payment plan type
    */
-   private async buildPaymentPhases(plan: string, totalAmount: number): Promise<StripePhase[]> {
+  private buildPaymentPhases(plan: string, totalAmount: number): PaymentPhase[] {
     console.log('🏗️ Building payment phases for plan:', plan, 'amount:', CurrencyUtils.toDisplay(totalAmount));
+
+    const now = new Date();
+    const add30Days = (date: Date) => {
+      const newDate = new Date(date);
+      newDate.setDate(newDate.getDate() + 30);
+      return newDate;
+    };
 
     switch (plan) {
       case 'deposit':
         // 10% deposit now, 90% in 30 days
         const depositAmount = Math.round(totalAmount * 0.1);
         const balanceAmount = totalAmount - depositAmount;
-        const depositPriceId = await this.createOneTimePrice(depositAmount, 'Deposit Payment');
-        const balancePriceId = await this.createOneTimePrice(balanceAmount, 'Balance Payment');
         return [
           {
-            items: [{ price: depositPriceId }],
-            iterations: 1
+            amount: depositAmount,
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'Deposit Payment (10%)'
           },
           {
-            items: [{ price: balancePriceId }],
-            iterations: 1
+            amount: balanceAmount,
+            dueDate: add30Days(now),
+            installmentNumber: 2,
+            description: 'Balance Payment (90%)'
           }
         ];
 
@@ -179,16 +176,18 @@ export class StripePaymentPlanService {
         // 50% now, 50% in 30 days
         const firstHalf = Math.round(totalAmount * 0.5);
         const secondHalf = totalAmount - firstHalf;
-        const firstPriceId = await this.createOneTimePrice(firstHalf, 'First Payment');
-        const secondPriceId = await this.createOneTimePrice(secondHalf, 'Second Payment');
         return [
           {
-            items: [{ price: firstPriceId }],
-            iterations: 1
+            amount: firstHalf,
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'First Payment (50%)'
           },
           {
-            items: [{ price: secondPriceId }],
-            iterations: 1
+            amount: secondHalf,
+            dueDate: add30Days(now),
+            installmentNumber: 2,
+            description: 'Second Payment (50%)'
           }
         ];
 
@@ -196,31 +195,35 @@ export class StripePaymentPlanService {
         // 3 monthly payments
         const monthlyAmount = Math.round(totalAmount / 3);
         const lastMonthAmount = totalAmount - (monthlyAmount * 2); // Handle rounding
-        const month1PriceId = await this.createOneTimePrice(monthlyAmount, 'Month 1 Payment');
-        const month2PriceId = await this.createOneTimePrice(monthlyAmount, 'Month 2 Payment');
-        const month3PriceId = await this.createOneTimePrice(lastMonthAmount, 'Month 3 Payment');
         return [
           {
-            items: [{ price: month1PriceId }],
-            iterations: 1
+            amount: monthlyAmount,
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'Month 1 Payment'
           },
           {
-            items: [{ price: month2PriceId }],
-            iterations: 1
+            amount: monthlyAmount,
+            dueDate: add30Days(now),
+            installmentNumber: 2,
+            description: 'Month 2 Payment'
           },
           {
-            items: [{ price: month3PriceId }],
-            iterations: 1
+            amount: lastMonthAmount,
+            dueDate: add30Days(add30Days(now)),
+            installmentNumber: 3,
+            description: 'Month 3 Payment'
           }
         ];
 
       case 'full':
         // Full payment now
-        const fullPriceId = await this.createOneTimePrice(totalAmount, 'Full Payment');
         return [
           {
-            items: [{ price: fullPriceId }],
-            iterations: 1
+            amount: totalAmount,
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'Full Payment'
           }
         ];
 
@@ -230,208 +233,87 @@ export class StripePaymentPlanService {
   }
 
   /**
-   * Create a one-time price for Stripe
+   * Update enrollments with PaymentIntent references
    */
-  private async createOneTimePrice(amount: number, description: string): Promise<string> {
-    console.log('💰 Creating Stripe price:', CurrencyUtils.toDisplay(amount), description);
-
-    const price = await stripe.prices.create({
-      unit_amount: amount,
-      currency: 'usd',
-      product_data: {
-        name: `ASA Learning Platform - ${description}`
-      },
-      metadata: {
-        service: 'asa_payment_plan',
-        type: 'one_time_payment',
-        description: description
-      }
-    });
-
-    console.log('✅ Price created:', price.id);
-    return price.id;
-  }
-
-  /**
-   * Update enrollments with Stripe subscription schedule references
-   */
-  private async updateEnrollmentsWithStripe(
+  private async updateEnrollmentsWithPaymentIntent(
     enrollmentIds: number[], 
-    scheduleId: string, 
-    customerId: string
+    paymentIntentId: string, 
+    customerId: string,
+    paymentPlan: string
   ): Promise<void> {
-    console.log('🔄 Updating enrollments with Stripe references:', enrollmentIds);
+    console.log('🔄 Updating enrollments with PaymentIntent references:', enrollmentIds);
 
     for (const enrollmentId of enrollmentIds) {
       const existingEnrollment = await this.storage.getEnrollmentById(enrollmentId);
       if (existingEnrollment) {
         await this.storage.updateEnrollment(enrollmentId, {
           ...existingEnrollment,
-          stripeSubscriptionScheduleId: scheduleId,
           stripeCustomerId: customerId,
-          paymentSystemVersion: 'v2_stripe',
-          paymentStatus: 'stripe_managed',
-          migrationDate: new Date()
+          paymentSystemVersion: 'v2_stripe_simplified',
+          paymentStatus: paymentPlan === 'full' ? 'pending_payment' : 'payment_plan_active',
+          migrationDate: new Date(),
+          // Store payment plan info in metadata
+          metadata: {
+            ...existingEnrollment.metadata,
+            paymentPlan,
+            initialPaymentIntentId: paymentIntentId,
+            stripeCustomerId: customerId
+          }
         });
       }
-      console.log(`✅ Updated enrollment ${enrollmentId} with Stripe schedule ${scheduleId}`);
+      console.log(`✅ Updated enrollment ${enrollmentId} with PaymentIntent ${paymentIntentId}`);
     }
   }
 
-  /**
-   * Calculate next payment date based on payment plan
-   */
-  private calculateNextPaymentDate(plan: string): Date | null {
-    switch (plan) {
-      case 'deposit':
-      case 'split':
-        return this.addDays(new Date(), 30);
-      case 'monthly':
-        return this.addDays(new Date(), 30);
-      case 'full':
-        return null; // No future payments
-      default:
-        return null;
-    }
-  }
 
   /**
-   * Add days to a date
+   * Handle scheduled payment completion after manual payment or webhook
    */
-  private addDays(date: Date, days: number): Date {
-    const result = new Date(date);
-    result.setDate(result.getDate() + days);
-    return result;
-  }
+  async handleScheduledPaymentCompleted(scheduledPaymentId: number, paymentIntentId: string): Promise<void> {
+    console.log('📅 Processing scheduled payment completion:', scheduledPaymentId);
 
-  /**
-   * Handle Stripe webhook events for subscription schedules
-   */
-  async handleStripeWebhook(event: Stripe.Event): Promise<void> {
-    console.log('🔔 Processing Stripe webhook:', event.type);
-
-    switch (event.type) {
-      case 'subscription_schedule.phase_started':
-        await this.handlePhaseStarted(event.data.object as Stripe.SubscriptionSchedule);
-        break;
-
-      case 'invoice.payment_succeeded':
-        const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.subscription_schedule) {
-          await this.handleSchedulePaymentSuccess(invoice);
-        }
-        break;
-
-      case 'invoice.payment_failed':
-        const failedInvoice = event.data.object as Stripe.Invoice;
-        if (failedInvoice.subscription_schedule) {
-          await this.handleSchedulePaymentFailure(failedInvoice);
-        }
-        break;
-
-      case 'subscription_schedule.completed':
-        await this.handleScheduleCompleted(event.data.object as Stripe.SubscriptionSchedule);
-        break;
-
-      default:
-        console.log('ℹ️ Unhandled webhook event type:', event.type);
-    }
-  }
-
-  /**
-   * Handle subscription schedule phase started
-   */
-  private async handlePhaseStarted(schedule: Stripe.SubscriptionSchedule): Promise<void> {
-    console.log('📅 Subscription schedule phase started:', schedule.id);
-
-    // Update our database record
-    const dbSchedule = await this.storage.getStripeSubscriptionScheduleByStripeId(schedule.id);
-    if (dbSchedule) {
-      await this.storage.updateStripeSubscriptionSchedule(dbSchedule.id, {
-        currentPhase: schedule.current_phase?.start_date ? 
-          Math.floor((Date.now() / 1000 - schedule.current_phase.start_date) / (30 * 24 * 60 * 60)) + 1 : 
-          dbSchedule.currentPhase + 1,
-        lastPaymentDate: new Date()
-      });
+    const scheduledPayments = await this.storage.getAllScheduledPayments();
+    const scheduledPayment = scheduledPayments.find(p => p.id === scheduledPaymentId);
+    
+    if (!scheduledPayment) {
+      console.error('❌ Scheduled payment not found:', scheduledPaymentId);
+      return;
     }
 
-    // Send payment reminder email (implement as needed)
-    console.log('📧 Would send payment reminder email for schedule:', schedule.id);
-  }
+    // Update scheduled payment status
+    await this.storage.updateScheduledPaymentStatus(scheduledPaymentId, 'paid');
 
-  /**
-   * Handle successful payment for subscription schedule
-   */
-  private async handleSchedulePaymentSuccess(invoice: Stripe.Invoice): Promise<void> {
-    console.log('✅ Schedule payment succeeded:', invoice.id);
+    // Update enrollment balances
+    const enrollmentIds = scheduledPayment.enrollmentIds;
+    for (const enrollmentId of enrollmentIds) {
+      const enrollment = await this.storage.getEnrollmentById(enrollmentId);
+      if (enrollment) {
+        const newPaidAmount = (enrollment.totalPaid || 0) + scheduledPayment.amount;
+        const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaidAmount);
 
-    const scheduleId = invoice.subscription_schedule as string;
-    const dbSchedule = await this.storage.getStripeSubscriptionScheduleByStripeId(scheduleId);
-
-    if (dbSchedule) {
-      // Update payment tracking
-      await this.storage.updateStripeSubscriptionSchedule(dbSchedule.id, {
-        lastPaymentDate: new Date(),
-        currentPhase: dbSchedule.currentPhase + 1
-      });
-
-      // Update enrollment balances
-      for (const enrollmentId of dbSchedule.enrollmentIds) {
-        const enrollment = await this.storage.getEnrollmentById(enrollmentId);
-        if (enrollment) {
-          const newPaidAmount = (enrollment.totalPaid || 0) + (invoice.amount_paid || 0);
-          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaidAmount);
-
-          await this.storage.updateEnrollment(enrollmentId, {
-            ...enrollment,
-            totalPaid: newPaidAmount,
-            remainingBalance: newBalance,
-            paymentStatus: newBalance === 0 ? 'paid' : 'stripe_managed'
-          });
-        }
+        await this.storage.updateEnrollment(enrollmentId, {
+          ...enrollment,
+          totalPaid: newPaidAmount,
+          remainingBalance: newBalance,
+          paymentStatus: newBalance === 0 ? 'paid' : 'payment_plan_active',
+          lastPaymentDate: new Date()
+        });
       }
-
-      console.log('✅ Updated enrollment balances for schedule:', scheduleId);
     }
+
+    console.log('✅ Scheduled payment completed and enrollments updated');
   }
 
   /**
-   * Handle failed payment for subscription schedule
+   * Get upcoming scheduled payments for a parent
    */
-  private async handleSchedulePaymentFailure(invoice: Stripe.Invoice): Promise<void> {
-    console.log('❌ Schedule payment failed:', invoice.id);
-
-    // Stripe will automatically retry failed payments
-    // We can send additional notifications here if needed
-    console.log('🔄 Stripe will handle payment retries automatically');
-  }
-
-  /**
-   * Handle completed subscription schedule
-   */
-  private async handleScheduleCompleted(schedule: Stripe.SubscriptionSchedule): Promise<void> {
-    console.log('🎉 Subscription schedule completed:', schedule.id);
-
-    const dbSchedule = await this.storage.getStripeSubscriptionScheduleByStripeId(schedule.id);
-    if (dbSchedule) {
-      await this.storage.updateStripeSubscriptionSchedule(dbSchedule.id, {
-        status: 'completed',
-        completedDate: new Date()
-      });
-
-      // Mark all enrollments as fully paid
-      for (const enrollmentId of dbSchedule.enrollmentIds) {
-        const enrollment = await this.storage.getEnrollmentById(enrollmentId);
-        if (enrollment) {
-          await this.storage.updateEnrollment(enrollmentId, {
-            ...enrollment,
-            paymentStatus: 'paid',
-            remainingBalance: 0
-          });
-        }
-      }
-
-      console.log('✅ Marked all enrollments as completed for schedule:', schedule.id);
-    }
+  async getUpcomingPayments(parentEmail: string): Promise<any[]> {
+    console.log('📅 Getting upcoming payments for:', parentEmail);
+    
+    const scheduledPayments = await this.storage.getScheduledPaymentsByParentEmail(parentEmail);
+    
+    return scheduledPayments
+      .filter(payment => payment.status === 'pending')
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }
 }

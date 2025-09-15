@@ -74,142 +74,55 @@ router.post('/create-payment-intent', async (req, res) => {
     const uniqueChildren = [...new Set(items.map((item: any) => item.childName))];
     const classNames = items.map((item: any) => item.className);
     
-    // Handle payment plans using Stripe subscription schedules
-    if (paymentPlan !== 'full') {
-      console.log('💳 Processing payment plan enrollment with Stripe subscription schedules:', paymentPlan);
-      
-      try {
-        // Create enrollments first
-        const enrollmentIds = [];
-        for (const item of items) {
-          const enrollment = await storage.createEnrollment({
-            programId: item.classId,
-            parentId: 0, // Will be updated later
-            parentEmail: userEmail,
-            childId: item.childId,
-            childName: item.childName,
-            className: item.className,
-            totalCost: item.totalCost,
-            remainingBalance: item.totalCost,
-            paymentStatus: 'stripe_managed',
-            paymentSystemVersion: 'v2_stripe',
-            status: 'enrolled',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          });
-          enrollmentIds.push(enrollment.id);
-        }
-
-        // Create Stripe subscription schedule for payment plan
-        const paymentPlanService = new StripePaymentPlanService(storage);
-        const schedule = await paymentPlanService.createEducationalPaymentPlan({
+    console.log('💳 Processing payment plan enrollment with simplified approach:', paymentPlan);
+    
+    try {
+      // Create enrollments first
+      const enrollmentIds = [];
+      for (const item of items) {
+        const enrollment = await storage.createEnrollment({
+          programId: item.classId,
+          parentId: 0, // Will be updated later
           parentEmail: userEmail,
-          enrollmentIds,
-          totalAmount: total,
-          paymentPlan: paymentPlan as 'deposit' | 'split' | 'monthly' | 'full'
-        });
-
-        return res.json({
-          success: true,
-          subscriptionScheduleId: schedule.id,
-          enrollmentIds,
-          message: `Payment plan created successfully. Stripe will handle the payment schedule.`
-        });
-
-      } catch (error) {
-        console.error('❌ Error creating subscription schedule:', error);
-        return res.status(500).json({
-          message: 'Failed to create payment plan',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    }
-    
-    // Create enrollments first to get enrollment IDs for metadata
-    const enrollmentIds = [];
-    for (const item of items) {
-      const enrollment = await storage.createEnrollment({
-        programId: item.classId,
-        parentId: 0, // Will be updated later  
-        parentEmail: userEmail,
-        childId: item.childId,
-        childName: item.childName,
-        className: item.className,
-        totalCost: item.totalCost,
-        remainingBalance: item.totalCost,
-        paymentStatus: 'pending_payment',
-        paymentSystemVersion: 'v2_stripe',
-        status: 'pending_payment',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-      enrollmentIds.push(enrollment.id);
-    }
-
-    console.log('📝 Created enrollments for full payment with IDs:', enrollmentIds);
-
-    // For full payments, use the existing payment intent flow
-    const isDepositPayment = items.some((item: any) => item.paymentType === 'deposit');
-    const paymentTypeDescription = isDepositPayment ? 'Deposit Payment' : 'Class Enrollment Payment';
-    
-    const description = `${paymentTypeDescription} for ${uniqueChildren.join(', ')}: ${classNames.join(', ')}`;
-
-    // Calculate fees (you can add processing fees here if needed)
-    const applicationFeeAmount = Math.round(total * 0.03); // 3% processing fee
-
-    console.log('💳 Payment details:', {
-      amount: total,
-      amountInCents: total + ' cents',
-      expectedInDollars: (total / 100).toFixed(2),
-      description,
-      parentEmail: userEmail,
-      itemCount: items.length,
-      childrenCount: uniqueChildren.length,
-      hasDiscounts: discounts.siblingDiscount > 0 || discounts.freeAfterThree > 0,
-      enrollmentIds,
-      rawItems: items
-    });
-
-    // Create the payment intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: total, // Amount in cents
-      currency: 'usd',
-      description,
-      metadata: {
-        parentEmail: userEmail,
-        itemCount: items.length.toString(),
-        childrenCount: uniqueChildren.length.toString(),
-        subtotal: subtotal.toString(),
-        siblingDiscount: discounts.siblingDiscount.toString(),
-        freeAfterThreeDiscount: discounts.freeAfterThree.toString(),
-        appliedDiscountsCount: discounts.appliedDiscounts?.length.toString() || '0',
-        totalDiscountAmount: discounts.totalDiscountAmount?.toString() || '0',
-        appliedDiscountsJson: JSON.stringify(discounts.appliedDiscounts || []),
-        paymentType: isDepositPayment ? 'deposit' : 'full_payment',
-        enrollmentIdsJson: JSON.stringify(enrollmentIds), // Add enrollment IDs to metadata
-        itemsJson: JSON.stringify(items.map((item: any, index: number) => ({
-          classId: item.classId,
-          className: item.className,
           childId: item.childId,
           childName: item.childName,
-          price: item.price,
-          paymentType: item.paymentType || 'deposit',
-          depositRequired: item.depositRequired,
+          className: item.className,
           totalCost: item.totalCost,
-          enrollmentId: enrollmentIds[index] // Add enrollment ID to each item
-        })))
-      },
-      automatic_payment_methods: {
-        enabled: true,
-      },
-    });
+          remainingBalance: item.totalCost,
+          paymentStatus: paymentPlan === 'full' ? 'pending_payment' : 'payment_plan_active',
+          paymentSystemVersion: 'v2_stripe_simplified',
+          status: 'pending_payment',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        enrollmentIds.push(enrollment.id);
+      }
 
-    console.log('✅ Payment intent created:', paymentIntent.id);
+      console.log('📝 Created enrollments with IDs:', enrollmentIds);
 
-    res.json({
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
-    });
+      // Use payment plan service for ALL payment plans
+      const paymentPlanService = new StripePaymentPlanService(storage);
+      const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
+        parentEmail: userEmail,
+        enrollmentIds,
+        totalAmount: total,
+        paymentPlan: paymentPlan as 'deposit' | 'split' | 'monthly' | 'full'
+      });
+
+      console.log('✅ Payment plan created successfully:', {
+        paymentIntentId: paymentPlanResult.paymentIntent.id,
+        scheduledPaymentsCount: paymentPlanResult.scheduledPayments.length,
+        paymentPlan
+      });
+
+      // All payment plans now return clientSecret 🎉
+      res.json({
+        clientSecret: paymentPlanResult.paymentIntent.client_secret,
+        paymentIntentId: paymentPlanResult.paymentIntent.id,
+        enrollmentIds,
+        scheduledPayments: paymentPlanResult.scheduledPayments,
+        paymentPlan
+      });
 
   } catch (error: any) {
     console.error('❌ Error creating payment intent:', error);
@@ -327,8 +240,8 @@ router.post('/webhook', async (req, res) => {
               // Find enrollment by child and class
               const allEnrollments = await storage.getAllEnrollments();
               const enrollment = allEnrollments.find(e => 
-                e.childId === item.childId && e.classId === item.classId
-              ) as any;
+                e.childId === item.childId && (e as any).classId === item.classId
+              );
               
               if (enrollment) {
                 const currentAmount = enrollment.amount || 0;
