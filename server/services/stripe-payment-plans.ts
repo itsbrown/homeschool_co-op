@@ -45,7 +45,34 @@ export class StripePaymentPlanService {
     const phases = await this.buildPaymentPhases(data.paymentPlan, data.totalAmount);
     console.log('📅 Built phases:', phases.length);
 
-    // Create subscription schedule
+    // For single-phase payment plans (full payment), create regular payment intent
+    if (phases.length === 1) {
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: data.totalAmount,
+        currency: 'usd',
+        customer: customer.id,
+        description: `ASA Learning Platform - ${data.paymentPlan} payment`,
+        metadata: {
+          enrollmentIds: JSON.stringify(data.enrollmentIds),
+          parentEmail: data.parentEmail,
+          paymentPlan: data.paymentPlan,
+          totalAmount: data.totalAmount.toString(),
+          createdBy: 'asa_payment_system',
+          version: 'v2_stripe'
+        }
+      });
+
+      return {
+        id: paymentIntent.id,
+        status: 'active',
+        phases: [],
+        customer: customer.id,
+        current_phase: null,
+        metadata: paymentIntent.metadata
+      } as any;
+    }
+
+    // For multi-phase payment plans, create subscription schedule with proper intervals
     const schedule = await stripe.subscriptionSchedules.create({
       customer: customer.id,
       start_date: 'now',
@@ -53,11 +80,9 @@ export class StripePaymentPlanService {
       phases: phases.map((phase, index) => ({
         items: phase.items,
         iterations: phase.iterations,
-        // For phases after the first, add collection_method: 'charge_automatically'
-        // Stripe handles timing automatically based on billing intervals
+        // Add billing interval for subsequent phases
         ...(index > 0 && { 
-          collection_method: 'charge_automatically',
-          billing_cycle_anchor: 'phase_start' 
+          collection_method: 'charge_automatically'
         })
       })),
       metadata: {
@@ -238,13 +263,17 @@ export class StripePaymentPlanService {
     console.log('🔄 Updating enrollments with Stripe references:', enrollmentIds);
 
     for (const enrollmentId of enrollmentIds) {
-      await this.storage.updateEnrollment(enrollmentId, {
-        stripeSubscriptionScheduleId: scheduleId,
-        stripeCustomerId: customerId,
-        paymentSystemVersion: 'v2_stripe',
-        paymentStatus: 'stripe_managed',
-        migrationDate: new Date()
-      });
+      const existingEnrollment = await this.storage.getEnrollmentById(enrollmentId);
+      if (existingEnrollment) {
+        await this.storage.updateEnrollment(enrollmentId, {
+          ...existingEnrollment,
+          stripeSubscriptionScheduleId: scheduleId,
+          stripeCustomerId: customerId,
+          paymentSystemVersion: 'v2_stripe',
+          paymentStatus: 'stripe_managed',
+          migrationDate: new Date()
+        });
+      }
       console.log(`✅ Updated enrollment ${enrollmentId} with Stripe schedule ${scheduleId}`);
     }
   }
@@ -347,16 +376,19 @@ export class StripePaymentPlanService {
       });
 
       // Update enrollment balances
-      const enrollments = await this.storage.getEnrollmentsByIds(dbSchedule.enrollmentIds);
-      for (const enrollment of enrollments) {
-        const newPaidAmount = (enrollment.totalPaid || 0) + (invoice.amount_paid || 0);
-        const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaidAmount);
+      for (const enrollmentId of dbSchedule.enrollmentIds) {
+        const enrollment = await this.storage.getEnrollmentById(enrollmentId);
+        if (enrollment) {
+          const newPaidAmount = (enrollment.totalPaid || 0) + (invoice.amount_paid || 0);
+          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaidAmount);
 
-        await this.storage.updateEnrollment(enrollment.id, {
-          totalPaid: newPaidAmount,
-          remainingBalance: newBalance,
-          paymentStatus: newBalance === 0 ? 'paid' : 'stripe_managed'
-        });
+          await this.storage.updateEnrollment(enrollmentId, {
+            ...enrollment,
+            totalPaid: newPaidAmount,
+            remainingBalance: newBalance,
+            paymentStatus: newBalance === 0 ? 'paid' : 'stripe_managed'
+          });
+        }
       }
 
       console.log('✅ Updated enrollment balances for schedule:', scheduleId);
@@ -388,12 +420,15 @@ export class StripePaymentPlanService {
       });
 
       // Mark all enrollments as fully paid
-      const enrollments = await this.storage.getEnrollmentsByIds(dbSchedule.enrollmentIds);
-      for (const enrollment of enrollments) {
-        await this.storage.updateEnrollment(enrollment.id, {
-          paymentStatus: 'paid',
-          remainingBalance: 0
-        });
+      for (const enrollmentId of dbSchedule.enrollmentIds) {
+        const enrollment = await this.storage.getEnrollmentById(enrollmentId);
+        if (enrollment) {
+          await this.storage.updateEnrollment(enrollmentId, {
+            ...enrollment,
+            paymentStatus: 'paid',
+            remainingBalance: 0
+          });
+        }
       }
 
       console.log('✅ Marked all enrollments as completed for schedule:', schedule.id);
