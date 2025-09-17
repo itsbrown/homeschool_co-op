@@ -247,17 +247,17 @@ router.post('/webhook', async (req, res) => {
               // Find enrollment by child and class
               const allEnrollments = await storage.getAllEnrollments();
               const enrollment = allEnrollments.find(e => 
-                e.childId === item.childId && (e as any).classId === item.classId
+                e.childId === item.childId && e.programId === item.classId
               );
               
               if (enrollment) {
-                const currentAmount = enrollment.amount || 0;
+                const currentAmount = enrollment.totalPaid || 0;
                 const newAmount = currentAmount + amountPerItem;
                 const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
                 
                 const updatedEnrollment = {
                   ...enrollment,
-                  amount: newAmount,
+                  totalPaid: newAmount,
                   remainingBalance: remainingBalance,
                   status: 'enrolled' as const,
                   paymentIntentId: paymentIntent.id
@@ -400,7 +400,7 @@ router.post('/webhook', async (req, res) => {
             try {
               const parentUser = await storage.getUserByEmail(parentEmail);
               const parentName = parentUser ? 
-                `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() : 
+                parentUser.name : 
                 parentEmail.split('@')[0];
 
               const formatCurrency = (amount: number) => {
@@ -504,7 +504,7 @@ router.post('/webhook', async (req, res) => {
             if (parentEmail) {
               const parentUser = await storage.getUserByEmail(parentEmail);
               const parentName = parentUser ? 
-                `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() : 
+                parentUser.name : 
                 parentEmail.split('@')[0];
 
               // Get first enrollment for display details
@@ -570,17 +570,17 @@ router.post('/webhook', async (req, res) => {
                 // Find enrollment by child and class
                 const allEnrollments = await storage.getAllEnrollments();
                 const enrollment = allEnrollments.find(e => 
-                  e.childId === item.childId && e.classId === item.classId
+                  e.childId === item.childId && e.programId === item.classId
                 ) as any;
                 
                 if (enrollment) {
-                  const currentAmount = enrollment.amount || 0;
+                  const currentAmount = enrollment.totalPaid || 0;
                   const newAmount = currentAmount + amountPerItem;
                   const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
                   
                   const updatedEnrollment = {
                     ...enrollment,
-                    amount: newAmount,
+                    totalPaid: newAmount,
                     remainingBalance: remainingBalance,
                     status: 'enrolled' as const,
                     paymentIntentId: paymentIntent.id
@@ -625,7 +625,7 @@ router.post('/webhook', async (req, res) => {
             try {
               const parentUser = await storage.getUserByEmail(parentEmail);
               const parentName = parentUser ? 
-                `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() : 
+                parentUser.name : 
                 parentEmail.split('@')[0];
 
               const formatCurrency = (amount: number) => {
@@ -983,7 +983,7 @@ router.post('/process-payment/:paymentIntentId', async (req, res) => {
         items = JSON.parse(itemsJson);
         // If items have enrollment IDs but we didn't get them from enrollmentIdsJson
         if (enrollmentIds.length === 0 && items.length > 0 && items[0].enrollmentId) {
-          enrollmentIds = items.map(item => item.enrollmentId);
+          enrollmentIds = items.map((item: any) => item.enrollmentId);
           console.log('💰 Got enrollment IDs from items:', enrollmentIds);
         }
       } catch (error) {
@@ -1009,13 +1009,12 @@ router.post('/process-payment/:paymentIntentId', async (req, res) => {
         const enrollment = await storage.getEnrollmentById(enrollmentId);
         
         if (enrollment) {
-          const currentAmount = enrollment.amount || enrollment.totalPaid || 0;
+          const currentAmount = enrollment.totalPaid || 0;
           const newAmount = currentAmount + amountPerEnrollment;
           const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
           
           const updatedEnrollment = {
             ...enrollment,
-            amount: newAmount,
             totalPaid: newAmount,
             remainingBalance: remainingBalance,
             paymentStatus: remainingBalance > 0 ? 'stripe_managed' : 'completed',
@@ -1095,11 +1094,11 @@ router.get('/subscription-schedules', async (req, res) => {
     }
 
     // Get subscription schedules from storage
-    const schedules = await storage.getStripeSubscriptionSchedules(userEmail);
+    const schedules = await storage.getStripeSubscriptionSchedulesByParentEmail(userEmail);
     
     // Fetch current status from Stripe for each schedule
     const enrichedSchedules = await Promise.all(
-      schedules.map(async (schedule) => {
+      schedules.map(async (schedule: any) => {
         try {
           const stripeSchedule = await stripe.subscriptionSchedules.retrieve(schedule.stripeScheduleId);
           return {
@@ -1108,9 +1107,10 @@ router.get('/subscription-schedules', async (req, res) => {
             currentPhase: stripeSchedule.current_phase,
             phases: stripeSchedule.phases,
             nextInvoice: stripeSchedule.subscription ? 
-              await stripe.invoices.retrieveUpcoming({ 
-                subscription: stripeSchedule.subscription as string 
-              }).catch(() => null) : null
+              await stripe.invoices.list({ 
+                subscription: stripeSchedule.subscription as string,
+                limit: 1
+              }).then(invoices => invoices.data[0] || null).catch(() => null) : null
           };
         } catch (error) {
           console.error('Error fetching Stripe schedule:', error);

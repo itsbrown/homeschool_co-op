@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { MemStorage } from '../storage';
+import { IStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
 
@@ -31,7 +31,7 @@ export interface PaymentPlanResult {
 }
 
 export class StripePaymentPlanService {
-  constructor(private storage: MemStorage) {}
+  constructor(private storage: IStorage) {}
 
   /**
    * Create immediate payment intent and scheduled payments for payment plans

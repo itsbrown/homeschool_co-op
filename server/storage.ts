@@ -3959,8 +3959,9 @@ export class MemStorage implements IStorage {
       return this.memStorage.getClassesBySchoolId(schoolId);
     }
 
-    async getClassById(classId: number): Promise<Class | null> {
-      return this.memStorage.getClassById(classId);
+    async getClassById(classId: number): Promise<Class | undefined> {
+      const result = await this.memStorage.getClassById(classId);
+      return result || undefined;
     }
 
     async getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]> {
@@ -3991,8 +3992,14 @@ export class MemStorage implements IStorage {
       return this.dbStorage.createRoleInvitation(invitation);
     }
 
-    async acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined> {
-      return this.dbStorage.acceptRoleInvitation(token, userEmail);
+    async acceptRoleInvitation(token: string): Promise<void>;
+    async acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined>;
+    async acceptRoleInvitation(token: string, userEmail?: string): Promise<any> {
+      if (userEmail) {
+        return this.dbStorage.acceptRoleInvitation(token, userEmail);
+      } else {
+        return this.memStorage.acceptRoleInvitation(token);
+      }
     }
 
     async getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]> {
@@ -4074,8 +4081,20 @@ export class MemStorage implements IStorage {
         return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
       }
 
-      async updatePaymentStatus(id: number, status: 'pending' | 'completed' | 'failed' | 'refunded'): Promise<Payment | undefined> {
-        return this.memStorage.updatePaymentStatus(id, status);
+      async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
+        // Map interface status values to internal implementation values
+        let internalStatus: 'pending' | 'failed' | 'succeeded' | 'canceled';
+        switch (status) {
+          case 'succeeded':
+            internalStatus = 'succeeded';
+            break;
+          case 'canceled':
+            internalStatus = 'canceled';
+            break;
+          default:
+            internalStatus = status;
+        }
+        return this.memStorage.updatePaymentStatus(id, internalStatus);
       }
 
       async removeEnrollment(enrollmentId: number): Promise<boolean> {
@@ -4303,6 +4322,42 @@ export class MemStorage implements IStorage {
 
       async deleteMembershipEnrollment(id: number): Promise<void> {
         return this.memStorage.deleteMembershipEnrollment(id);
+      }
+
+      async createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment> {
+        return this.memStorage.createOrUpdateMembershipEnrollment(parentUserId, schoolId, membershipYear);
+      }
+
+      async getRoleInvitations(): Promise<any[]> {
+        return this.memStorage.getRoleInvitations();
+      }
+
+      async getAllScheduledPayments(): Promise<any[]> {
+        return this.memStorage.getAllScheduledPayments();
+      }
+
+      async createStripeSubscriptionSchedule(schedule: InsertStripeSubscriptionSchedule): Promise<StripeSubscriptionSchedule> {
+        return this.memStorage.createStripeSubscriptionSchedule(schedule);
+      }
+
+      async getStripeSubscriptionSchedulesByParentEmail(parentEmail: string): Promise<StripeSubscriptionSchedule[]> {
+        return this.memStorage.getStripeSubscriptionSchedulesByParentEmail(parentEmail);
+      }
+
+      async getStripeSubscriptionScheduleById(id: number): Promise<StripeSubscriptionSchedule | undefined> {
+        return this.memStorage.getStripeSubscriptionScheduleById(id);
+      }
+
+      async getStripeSubscriptionScheduleByStripeId(stripeScheduleId: string): Promise<StripeSubscriptionSchedule | undefined> {
+        return this.memStorage.getStripeSubscriptionScheduleByStripeId(stripeScheduleId);
+      }
+
+      async updateStripeSubscriptionSchedule(id: number, schedule: Partial<InsertStripeSubscriptionSchedule>): Promise<StripeSubscriptionSchedule | undefined> {
+        return this.memStorage.updateStripeSubscriptionSchedule(id, schedule);
+      }
+
+      async getEnrollmentsByIds(enrollmentIds: number[]): Promise<any[]> {
+        return this.memStorage.getEnrollmentsByIds(enrollmentIds);
       }
   }
 
