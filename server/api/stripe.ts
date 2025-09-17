@@ -124,6 +124,13 @@ router.post('/create-payment-intent', async (req, res) => {
         paymentPlan
       });
 
+    } catch (error: any) {
+      console.error('❌ Error in enrollment creation or payment plan:', error);
+      res.status(500).json({
+        message: 'Failed to create enrollment or payment plan',
+        error: error.message
+      });
+    }
   } catch (error: any) {
     console.error('❌ Error creating payment intent:', error);
     res.status(500).json({
