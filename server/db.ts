@@ -10,12 +10,20 @@ let connectionWorking = false;
 
 // Function to initialize database connection
 function initializeDatabase() {
-  if (!process.env.DATABASE_URL) {
-    console.log("DATABASE_URL not set, database will not be available");
+  // Construct connection string from individual PG variables if DATABASE_URL is invalid
+  let connectionString = process.env.DATABASE_URL;
+  
+  // Check if we have individual PG variables and DATABASE_URL looks like old Supabase
+  if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE && 
+      (!connectionString || connectionString.includes('supabase.co'))) {
+    connectionString = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE}`;
+    console.log("Using constructed DATABASE_URL from PG variables");
+  }
+  
+  if (!connectionString) {
+    console.log("No database connection string available");
     return null;
   }
-
-  const connectionString = process.env.DATABASE_URL;
 
   try {
     client = postgres(connectionString, { 
@@ -24,7 +32,7 @@ function initializeDatabase() {
       ssl: { rejectUnauthorized: false }
     });
     
-    console.log("Database connection to Supabase created successfully");
+    console.log("Database connection to PostgreSQL created successfully");
     dbInstance = drizzle(client, { schema });
     return dbInstance;
   } catch (error) {
@@ -42,7 +50,7 @@ export async function getDb() {
       const db = initializeDatabase();
       if (db) {
         // Test the connection with a simple query
-        await db.execute('SELECT 1');
+        await client`SELECT 1`;
         connectionWorking = true;
         console.log("✅ Database connection test successful");
         return db;

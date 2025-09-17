@@ -1,6 +1,6 @@
 
 import { supabase } from '../lib/supabase';
-import { db } from '../db';
+import { getDb } from '../db';
 import { users } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 
@@ -13,6 +13,7 @@ export class UserSyncService {
       console.log('🔄 Syncing Auth0 user:', auth0User.email);
       
       // Check if user exists in our database by email
+      const db = await getDb();
       const [existingUser] = await db
         .select()
         .from(users)
@@ -100,6 +101,7 @@ export class UserSyncService {
    * Update user role
    */
   static async updateUserRole(auth0Id: string, role: string, schoolId?: number) {
+    const db = await getDb();
     const [updatedUser] = await db
       .update(users)
       .set({ 
@@ -118,6 +120,7 @@ export class UserSyncService {
    * Get user by Auth0 ID
    */
   static async getUserByAuth0Id(auth0Id: string) {
+    const db = await getDb();
     const [user] = await db
       .select()
       .from(users)
@@ -131,6 +134,7 @@ export class UserSyncService {
    * Get user by email
    */
   static async getUserByEmail(email: string) {
+    const db = await getDb();
     const [user] = await db
       .select()
       .from(users)
@@ -144,6 +148,7 @@ export class UserSyncService {
    * Get all users with pagination
    */
   static async getUsers(offset = 0, limit = 50) {
+    const db = await getDb();
     const allUsers = await db
       .select({
         id: users.id,
@@ -167,6 +172,7 @@ export class UserSyncService {
    * Deactivate user (soft delete)
    */
   static async deactivateUser(auth0Id: string) {
+    const db = await getDb();
     const [deactivatedUser] = await db
       .update(users)
       .set({ 

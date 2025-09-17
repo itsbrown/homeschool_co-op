@@ -1,11 +1,38 @@
-import { pool } from './pg-database';
+import { Pool } from 'pg';
 import { Class, InsertClass } from '../shared/schema';
 
 /**
  * Database functions for managing classes
  */
+// Create a proper database pool using the correct DATABASE_URL
+let pool: Pool;
+
+// Construct connection string from individual PG variables if DATABASE_URL is invalid
+let connectionString = process.env.DATABASE_URL;
+
+// Check if we have individual PG variables and DATABASE_URL looks like old Supabase
+if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE && 
+    (!connectionString || connectionString.includes('supabase.co'))) {
+  connectionString = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE}`;
+  console.log('Classes DB: Using constructed DATABASE_URL from PG variables');
+}
+
+if (connectionString) {
+  pool = new Pool({
+    connectionString: connectionString,
+    ssl: { rejectUnauthorized: false }
+  });
+  console.log('Classes DB: Using PostgreSQL database');
+} else {
+  console.log('Classes DB: No database connection string available');
+}
+
 export async function getClassById(id: number): Promise<Class | undefined> {
   try {
+    if (!pool) {
+      console.log('Database pool not available for getClassById');
+      return undefined;
+    }
     const result = await pool.query(
       'SELECT * FROM classes WHERE id = $1',
       [id]
