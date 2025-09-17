@@ -27,14 +27,16 @@ import stripeMigrationRouter from "./api/stripe-migration";
 import stripeWebhookRouter from "./api/stripe-webhook";
 import { MembershipStatusService } from "./services/membership-status-service.js";
 import { dataLayer } from "./services/dataLayer.js";
+import { webhookHandler } from "./webhook-handler";
 
 const app = express();
 
-// For Stripe webhooks, we need raw body data BEFORE other parsers
-// This MUST be first and specific to the webhook path
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }));
+// CRITICAL: Apply Stripe webhook handler BEFORE any global body parsers
+// This ensures webhook signature verification gets the raw buffer
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }), webhookHandler);
 
-// Standard body parsers for most routes
+// Standard body parsers for most routes (AFTER webhook handler)
+// These are applied to all routes EXCEPT the webhook which is handled above
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
