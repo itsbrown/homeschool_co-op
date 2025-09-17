@@ -920,7 +920,9 @@ export class MemStorage implements IStorage {
       ...childData,
       id,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      schoolId: childData.schoolId || null,
+      parentEmail: childData.parentEmail || null
     };
 
     this.childrenStore.set(id, child);
@@ -1123,7 +1125,9 @@ export class MemStorage implements IStorage {
       updatedAt: now,
       schoolId: programData.schoolId || null,
       isPublished: programData.isPublished ?? false,
-      locationId: programData.locationId || null
+      locationId: programData.locationId || null,
+      locationName: programData.locationName || null,
+      locationAddress: programData.locationAddress || null
     };
 
     this.programsStore.set(id, program);
@@ -1294,7 +1298,9 @@ export class MemStorage implements IStorage {
       status: 'pending_payment',
       dueDate: renewalDate,
       expirationDate,
-      gracePeriodEnd
+      gracePeriodEnd,
+      notes: null,
+      paymentMethod: null
     };
 
     return this.createMembershipEnrollment(enrollmentData);
@@ -1446,6 +1452,16 @@ export class MemStorage implements IStorage {
     return this.classEnrollments;
   }
 
+  async getEnrollmentsByIds(enrollmentIds: number[]): Promise<any[]> {
+    if (!this.classEnrollments) {
+      console.log(`📝 No classEnrollments array exists for enrollmentIds ${enrollmentIds}`);
+      return [];
+    }
+    const enrollments = this.classEnrollments.filter(enrollment => enrollmentIds.includes(enrollment.id));
+    console.log(`📝 ENROLLMENT QUERY: Found ${enrollments.length} enrollments for IDs ${enrollmentIds}`);
+    return enrollments;
+  }
+
   // Class methods
   async getClassById(id: number): Promise<Class | undefined> {
     return this.classesStore.get(id);
@@ -1531,7 +1547,8 @@ export class MemStorage implements IStorage {
       locationId: classData.locationId || null,
       schoolId: classData.schoolId || null,
       startDate: typeof classData.startDate === 'string' ? classData.startDate : classData.startDate?.toISOString() || null,
-      endDate: typeof classData.endDate === 'string' ? classData.endDate : classData.endDate?.toISOString() || null
+      endDate: typeof classData.endDate === 'string' ? classData.endDate : classData.endDate?.toISOString() || null,
+      status: (classData.status as "completed" | "active" | "cancelled" | "upcoming") || 'upcoming'
     };
 
     this.classesStore.set(id, newClass);
@@ -1547,7 +1564,8 @@ export class MemStorage implements IStorage {
       ...updateData,
       updatedAt: new Date(),
       startDate: updateData.startDate ? (typeof updateData.startDate === 'string' ? updateData.startDate : updateData.startDate.toISOString()) : classItem.startDate,
-      endDate: updateData.endDate ? (typeof updateData.endDate === 'string' ? updateData.endDate : updateData.endDate.toISOString()) : classItem.endDate
+      endDate: updateData.endDate ? (typeof updateData.endDate === 'string' ? updateData.endDate : updateData.endDate.toISOString()) : classItem.endDate,
+      status: (updateData.status as "completed" | "active" | "cancelled" | "upcoming") || classItem.status || 'upcoming'
     };
 
     this.classesStore.set(id, updatedClass);
@@ -1731,6 +1749,9 @@ export class MemStorage implements IStorage {
       isPublic: true,
       downloadCount: 0,
       purchasedBy: [],
+      aiProcessed: false,
+      aiInsights: null,
+      processedAt: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -1762,6 +1783,9 @@ export class MemStorage implements IStorage {
       isPublic: true,
       downloadCount: 0,
       purchasedBy: [],
+      aiProcessed: false,
+      aiInsights: null,
+      processedAt: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -1793,6 +1817,9 @@ export class MemStorage implements IStorage {
       isPublic: true,
       downloadCount: 0,
       purchasedBy: [],
+      aiProcessed: false,
+      aiInsights: null,
+      processedAt: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -1981,10 +2008,9 @@ export class MemStorage implements IStorage {
       ...activity,
       id,
       createdAt: now,
-      updatedAt: now || null,
+      updatedAt: now,
       downloadCount: 0,
-      isPublic: activity.isPublic || false,
-      pdfUrl: activity.pdfUrl || ''
+      isPublic: activity.isPublic || false
     };
 
     this.activitiesStore.set(id, newActivity);
@@ -3040,7 +3066,7 @@ export class MemStorage implements IStorage {
         entries = entries.filter(e => e.classId === filters.classId);
       }
       if (filters.startDate) {
-        entries = entries.filter(e => e.date >= filters.startDate);
+        entries = entries.filter(e => e.date >= filters.startDate!);
       }
       if (filters.endDate) {
         entries = entries.filter(e => e.date <= filters.endDate!);
@@ -3067,6 +3093,7 @@ export class MemStorage implements IStorage {
       completedAt: entry.completedAt || null,
       completedBy: entry.completedBy || null,
       lastModifiedBy: entry.lastModifiedBy || null,
+      lessonDescription: entry.lessonDescription || null,
       createdAt: now,
       updatedAt: now
     };
@@ -3357,10 +3384,6 @@ export class MemStorage implements IStorage {
   }
 
   async updateStripeSubscriptionSchedule(id: number, schedule: any): Promise<any> {
-    return null;
-  }
-
-  async addPurchaser(id: number, userId: number): Promise<any> {
     return null;
   }
 }
