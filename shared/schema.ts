@@ -189,6 +189,7 @@ export interface ClassVariant {
   startTime: string; // e.g., "9:00 AM"
   endTime: string; // e.g., "12:00 PM"
   days: string[]; // e.g., ["Monday", "Wednesday", "Friday"]
+  price: number; // Price in cents for this specific variant
 }
 
 export interface ClassSchedule {
@@ -203,6 +204,7 @@ export const classVariantSchema = z.object({
   startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
   days: z.array(z.string()).min(1, "At least one day must be selected"),
+  price: z.number().min(0, "Price must be a positive number"),
 });
 
 export const classScheduleSchema = z.object({

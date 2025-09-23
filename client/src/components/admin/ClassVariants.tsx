@@ -31,6 +31,7 @@ export function ClassVariants({ variants, onChange }: ClassVariantsProps) {
       startTime: "9:00 AM",
       endTime: "12:00 PM",
       days: ["Monday", "Wednesday"],
+      price: 5000, // Default price in cents ($50.00)
     };
     onChange([...variants, newVariant]);
   };
@@ -113,7 +114,7 @@ export function ClassVariants({ variants, onChange }: ClassVariantsProps) {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label className="text-sm">Start Time</Label>
                   <TimePicker
@@ -131,6 +132,28 @@ export function ClassVariants({ variants, onChange }: ClassVariantsProps) {
                     placeholder="Select end time"
                     className="mt-1"
                   />
+                </div>
+                <div>
+                  <Label htmlFor={`variant-price-${variant.id}`} className="text-sm">
+                    Price
+                  </Label>
+                  <div className="relative mt-1">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <Input
+                      id={`variant-price-${variant.id}`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={(variant.price / 100).toFixed(2)}
+                      onChange={(e) => {
+                        const dollarAmount = parseFloat(e.target.value) || 0;
+                        const centsAmount = Math.round(dollarAmount * 100);
+                        updateVariant(variant.id, { price: centsAmount });
+                      }}
+                      placeholder="0.00"
+                      className="pl-8"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -161,7 +184,7 @@ export function ClassVariants({ variants, onChange }: ClassVariantsProps) {
 
       {variants.length > 1 && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
-          <strong>Preview:</strong> {variants.map((v, i) => `${v.name} (${v.startTime}-${v.endTime})`).join(" OR ")}
+          <strong>Preview:</strong> {variants.map((v, i) => `${v.name} (${v.startTime}-${v.endTime}) - $${(v.price / 100).toFixed(2)}`).join(" OR ")}
         </div>
       )}
     </div>

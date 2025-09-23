@@ -133,8 +133,9 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * Format class schedule with support for variants
  * @param schedule Either a string (legacy) or an object with variants
+ * @param includePricing Whether to include pricing information in the display
  */
-export function formatClassSchedule(schedule: any): string {
+export function formatClassSchedule(schedule: any, includePricing: boolean = false): string {
   // Handle both old string format and new variants format
   if (typeof schedule === 'string') {
     return schedule;
@@ -153,7 +154,9 @@ export function formatClassSchedule(schedule: any): string {
   if (variants.length === 1) {
     const variant = variants[0];
     const daysStr = variant.days?.join(', ') || '';
-    return `${daysStr} ${variant.startTime}-${variant.endTime}`;
+    const timeStr = `${variant.startTime}-${variant.endTime}`;
+    const priceStr = includePricing && variant.price ? ` - $${(variant.price / 100).toFixed(2)}` : '';
+    return `${daysStr} ${timeStr}${priceStr}`;
   }
   
   // Multiple variants: format as "Option 1 OR Option 2"
@@ -161,7 +164,9 @@ export function formatClassSchedule(schedule: any): string {
     .map((variant, index) => {
       const daysStr = variant.days?.join(', ') || '';
       const timeStr = `${variant.startTime}-${variant.endTime}`;
-      return variant.name ? `${variant.name} (${timeStr})` : `${daysStr} ${timeStr}`;
+      const priceStr = includePricing && variant.price ? ` - $${(variant.price / 100).toFixed(2)}` : '';
+      const label = variant.name ? `${variant.name} (${timeStr})` : `${daysStr} ${timeStr}`;
+      return `${label}${priceStr}`;
     })
     .join(' OR ');
 }
