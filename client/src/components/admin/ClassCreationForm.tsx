@@ -47,7 +47,8 @@ const classFormSchema = z.object({
     name: z.string().min(1, "Variant name is required"),
     startTime: z.string().min(1, "Start time is required"),
     endTime: z.string().min(1, "End time is required"),
-    days: z.array(z.string()).min(1, "At least one day must be selected")
+    days: z.array(z.string()).min(1, "At least one day must be selected"),
+    price: z.number().min(0, "Price must be a positive number")
   })).min(1, "At least one time option is required"),
   location: z.string().optional(),
   price: z.string().transform(val => {
@@ -133,18 +134,23 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     endDate: initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "",
     // When editing, use stored variants or create default variant from legacy schedule
     variants: initialData.variants || initialData.schedule ? 
-      (initialData.variants || [{
+      ((initialData.variants || []).map((v: any) => ({
+        ...v,
+        price: v.price || 5000 // Add default price if missing
+      })) || [{
         id: 'default-variant',
         name: 'Main Session',
         startTime: '9:00 AM',
         endTime: '12:00 PM',
-        days: ['Monday', 'Wednesday']
+        days: ['Monday', 'Wednesday'],
+        price: 5000
       }]) : [{
         id: 'default-variant',
         name: 'Main Session', 
         startTime: '9:00 AM',
         endTime: '12:00 PM',
-        days: ['Monday', 'Wednesday']
+        days: ['Monday', 'Wednesday'],
+        price: 5000
       }],
     location: initialData.location || "",
     // Fix price display - convert to string with proper formatting
@@ -185,7 +191,8 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       name: 'Main Session',
       startTime: '9:00 AM', 
       endTime: '12:00 PM',
-      days: ['Monday', 'Wednesday']
+      days: ['Monday', 'Wednesday'],
+      price: 5000
     }],
     location: "",
     price: "0",
