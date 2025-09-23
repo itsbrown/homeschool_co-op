@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { parse as parseCSV } from 'csv-parse';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { sendAccountInviteEmail, sendPasswordResetEmail } from '../lib/sendgrid-service';
+import { sendAccountInviteEmail, sendPasswordResetEmail, sendStaffInvitationEmail } from '../lib/email-service';
 
 const router = Router();
 
@@ -205,95 +205,6 @@ If you have any questions, please contact us at support@americanseekersacademy.c
 function generateInvitationToken(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
-
-// Send staff invitation email using SendGrid
-async function sendStaffInvitationEmail(email: string, firstName: string, lastName: string, role: string, department: string, token: string, message?: string): Promise<boolean> {
-  try {
-    // Use SendGrid instead of Brevo to avoid IP authorization issues
-    const sgMail = await import('@sendgrid/mail');
-    
-    if (!process.env.SENDGRID_API_KEY) {
-      console.log('📧 SendGrid not configured, skipping email send');
-      return false;
-    }
-    
-    sgMail.default.setApiKey(process.env.SENDGRID_API_KEY);
-
-    const invitationUrl = `${process.env.CLIENT_URL || 'https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev'}/accept-invitation?token=${token}`;
-
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
-          <h1 style="color: white; margin: 0;">Staff Invitation</h1>
-          <p style="color: #E0E7FF; margin: 8px 0 0 0;">American Seekers Academy</p>
-        </div>
-
-        <div style="padding: 24px;">
-          <h2 style="color: #1F2937;">Welcome to Our Team!</h2>
-
-          <p>Dear ${firstName} ${lastName},</p>
-
-          <p>You've been invited to join American Seekers Academy as a <strong>${role}</strong> in the <strong>${department}</strong> department.</p>
-
-          ${message ? `<div style="background-color: #F3F4F6; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin: 0 0 12px 0;">Personal Message:</h3>
-            <p style="margin: 0; font-style: italic;">${message}</p>
-          </div>` : ''}
-
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${invitationUrl}" 
-               style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-              Accept Invitation
-            </a>
-          </div>
-
-          <p>Please click the button above to accept your invitation and complete your registration.</p>
-
-          <p style="color: #666; font-size: 14px; margin-top: 30px;">
-            If you have any questions, please contact us at support@americanseekersacademy.com
-          </p>
-        </div>
-      </div>
-    `;
-
-    const textContent = `
-Welcome to American Seekers Academy!
-
-Dear ${firstName} ${lastName},
-
-You've been invited to join American Seekers Academy as a ${role} in the ${department} department.
-
-${message ? `Personal Message: ${message}` : ''}
-
-Please visit the following link to accept your invitation:
-${invitationUrl}
-
-If you have any questions, please contact us at support@americanseekersacademy.com
-    `;
-
-    const mailOptions = {
-      to: email,
-      from: {
-        email: 'support@americanseekersacademy.com',
-        name: 'American Seekers Academy'
-      },
-      subject: `Staff Invitation - ${role} Position at American Seekers Academy`,
-      text: textContent,
-      html: htmlContent
-    };
-
-    const result = await sgMail.default.send(mailOptions);
-
-    console.log('✅ Staff invitation email sent successfully via SendGrid to:', email);
-    console.log('📧 SendGrid Response:', result[0]?.statusCode);
-    return true;
-  } catch (error) {
-    console.error('❌ Failed to send staff invitation email:', error);
-    return false;
-  }
-}
-
-
 
 // Test route to verify router is working
 router.get("/test", (req, res) => {
