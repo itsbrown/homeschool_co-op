@@ -29,6 +29,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
+import { ClassVariants } from "@/components/admin/ClassVariants";
+import { ClassVariant, classScheduleSchema } from "@shared/schema";
 
 // Define the form schema
 const classFormSchema = z.object({
@@ -40,7 +42,13 @@ const classFormSchema = z.object({
   ageRange: z.string().min(1, "Age range is required"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
-  schedule: z.string().min(1, "Schedule is required"),
+  variants: z.array(z.object({
+    id: z.string(),
+    name: z.string().min(1, "Variant name is required"),
+    startTime: z.string().min(1, "Start time is required"),
+    endTime: z.string().min(1, "End time is required"),
+    days: z.array(z.string()).min(1, "At least one day must be selected")
+  })).min(1, "At least one time option is required"),
   location: z.string().optional(),
   price: z.string().transform(val => {
     // Convert to float, and round to 2 decimal places to avoid precision issues
@@ -123,8 +131,21 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     ageRange: initialData.ageRange || "6-10 years",
     startDate: initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "",
     endDate: initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "",
-    // When editing, use stored schedule or fallback if not found
-    schedule: initialData.schedule || "Mondays and Wednesdays, 3-4pm",
+    // When editing, use stored variants or create default variant from legacy schedule
+    variants: initialData.variants || initialData.schedule ? 
+      (initialData.variants || [{
+        id: 'default-variant',
+        name: 'Main Session',
+        startTime: '9:00 AM',
+        endTime: '12:00 PM',
+        days: ['Monday', 'Wednesday']
+      }]) : [{
+        id: 'default-variant',
+        name: 'Main Session', 
+        startTime: '9:00 AM',
+        endTime: '12:00 PM',
+        days: ['Monday', 'Wednesday']
+      }],
     location: initialData.location || "",
     // Fix price display - convert to string with proper formatting
     price: initialData.price ? (parseFloat(initialData.price.toString()) / 100).toFixed(2) : "0.00",
@@ -150,7 +171,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
   console.log("ProcessedInitialData:", processedInitialData);
 
   // Default values based on initialData or set defaults
-  const defaultValues: Partial<ClassFormValues> = processedInitialData as Partial<ClassFormValues> || {
+  const defaultValues: Partial<ClassFormValues> = (processedInitialData as Partial<ClassFormValues>) || {
     title: "",
     description: "",
     subject: "",
@@ -159,7 +180,13 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     ageRange: "",
     startDate: "",
     endDate: "",
-    schedule: "",
+    variants: [{
+      id: 'default-variant',
+      name: 'Main Session',
+      startTime: '9:00 AM', 
+      endTime: '12:00 PM',
+      days: ['Monday', 'Wednesday']
+    }],
     location: "",
     price: "0",
     capacity: "20",
@@ -201,7 +228,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       
       // Convert the input price to a number (as dollars, not cents)
       // The server will handle the conversion to cents
-      const inputPrice = parseFloat(data.price || "0");
+      const inputPrice = parseFloat(data.price.toString() || "0");
       
       console.log('Price submitted from form (in dollars):', inputPrice);
       
@@ -214,7 +241,13 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         category: data.category,
         gradeLevel: data.gradeLevel || "",
         ageRange: data.ageRange || "",
-        schedule: data.schedule || "",
+        // Convert variants to schedule JSON structure
+        schedule: {
+          variants: data.variants || [],
+          description: data.variants && data.variants.length > 1 ? 
+            data.variants.map(v => `${v.name} (${v.startTime}-${v.endTime})`).join(' OR ') :
+            data.variants?.[0] ? `${data.variants[0].startTime}-${data.variants[0].endTime}` : ''
+        },
         // Send price in dollars - server will convert to cents
         price: inputPrice.toString(),
         capacity: parseInt(data.capacity.toString(), 10),
@@ -438,15 +471,18 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         {/* Schedule */}
         <FormField
           control={form.control}
-          name="schedule"
+          name="variants"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Schedule</FormLabel>
+              <FormLabel>Class Schedule</FormLabel>
               <FormControl>
-                <Input placeholder="e.g. Mondays and Wednesdays, 4-5pm" {...field} />
+                <ClassVariants
+                  variants={field.value || []}
+                  onChange={field.onChange}
+                />
               </FormControl>
               <FormDescription>
-                When the class will be held
+                Set up one or more time options for this class. Multiple options allow flexible scheduling.
               </FormDescription>
               <FormMessage />
             </FormItem>
