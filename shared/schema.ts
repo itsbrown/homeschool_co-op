@@ -158,7 +158,8 @@ export const schoolClasses = pgTable("school_classes", {
   teacherId: integer("teacher_id").references(() => users.id),
   academicYear: text("academic_year").notNull(), // e.g., "2024-2025"
   semester: text("semester"), // Fall, Spring, etc.
-  schedule: jsonb("schedule").notNull(), // JSON object with schedule details
+  schedule: jsonb("schedule").notNull(), // JSON object with schedule details - supports variants
+  // schedule structure: { variants: [{ name: string, startTime: string, endTime: string, days: string[] }] }
   location: text("location"),
   maxEnrollment: integer("max_enrollment").notNull(),
   currentEnrollment: integer("current_enrollment").default(0).notNull(),
@@ -180,6 +181,34 @@ export const insertSchoolClassSchema = createInsertSchema(schoolClasses)
   });
 export type InsertSchoolClass = z.infer<typeof insertSchoolClassSchema>;
 export type SchoolClass = typeof schoolClasses.$inferSelect;
+
+// Class Variant types for the schedule JSON structure
+export interface ClassVariant {
+  id: string;
+  name: string; // e.g., "Morning Session", "Afternoon Session"
+  startTime: string; // e.g., "9:00 AM"
+  endTime: string; // e.g., "12:00 PM"
+  days: string[]; // e.g., ["Monday", "Wednesday", "Friday"]
+}
+
+export interface ClassSchedule {
+  variants: ClassVariant[];
+  description?: string; // Optional legacy description field
+}
+
+// Validation schema for class variants
+export const classVariantSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Variant name is required"),
+  startTime: z.string().min(1, "Start time is required"),
+  endTime: z.string().min(1, "End time is required"),
+  days: z.array(z.string()).min(1, "At least one day must be selected"),
+});
+
+export const classScheduleSchema = z.object({
+  variants: z.array(classVariantSchema).min(1, "At least one variant is required"),
+  description: z.string().optional(),
+});
 
 // Class enrollments for school classes
 export const schoolClassEnrollments = pgTable("school_class_enrollments", {
