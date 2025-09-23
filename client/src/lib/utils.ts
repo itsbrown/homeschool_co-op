@@ -129,3 +129,39 @@ export function debounce<T extends (...args: any[]) => any>(
     timeout = setTimeout(later, wait);
   };
 }
+
+/**
+ * Format class schedule with support for variants
+ * @param schedule Either a string (legacy) or an object with variants
+ */
+export function formatClassSchedule(schedule: any): string {
+  // Handle both old string format and new variants format
+  if (typeof schedule === 'string') {
+    return schedule;
+  }
+  
+  if (!schedule || !schedule.variants || !Array.isArray(schedule.variants)) {
+    return '';
+  }
+  
+  const { variants } = schedule;
+  
+  if (variants.length === 0) {
+    return '';
+  }
+  
+  if (variants.length === 1) {
+    const variant = variants[0];
+    const daysStr = variant.days?.join(', ') || '';
+    return `${daysStr} ${variant.startTime}-${variant.endTime}`;
+  }
+  
+  // Multiple variants: format as "Option 1 OR Option 2"
+  return variants
+    .map((variant, index) => {
+      const daysStr = variant.days?.join(', ') || '';
+      const timeStr = `${variant.startTime}-${variant.endTime}`;
+      return variant.name ? `${variant.name} (${timeStr})` : `${daysStr} ${timeStr}`;
+    })
+    .join(' OR ');
+}

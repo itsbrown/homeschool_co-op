@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth0";
 import { useSupabaseAuth } from "@/components/SupabaseProvider";
-import { formatDate, formatTime } from "@/lib/utils";
+import { formatDate, formatTime, formatClassSchedule } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole"; // Assuming useRole hook is available
 
 export default function EducatorDashboard() {
@@ -204,7 +204,7 @@ export default function EducatorDashboard() {
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {classItem.schedule || 'Schedule TBD'}
+                              {formatClassSchedule(classItem.schedule) || 'Schedule TBD'}
                             </div>
                           </TableCell>
                           <TableCell>

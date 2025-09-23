@@ -743,7 +743,8 @@ export const classes = pgTable("classes", {
   sessionLengthMinutes: integer("session_length_minutes"),
   startTime: text("start_time"), // HH:MM format
   endTime: text("end_time"), // HH:MM format
-  schedule: text("schedule"), // Text description like "Monday, Wednesday, Friday 9am-2pm"
+  schedule: jsonb("schedule"), // JSON object with schedule details - supports variants
+  // schedule structure: { variants: [{ id: string, name: string, startTime: string, endTime: string, days: string[] }], description?: string }
   status: text("status", { enum: ["upcoming", "active", "completed", "cancelled"] }).default("upcoming").notNull(),
   gradeLevels: text("grade_levels").array(),
   capacity: integer("capacity"),

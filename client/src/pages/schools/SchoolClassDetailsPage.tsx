@@ -21,7 +21,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatClassSchedule } from "@/lib/utils";
 
 export default function SchoolClassDetailsPage() {
   const [, navigate] = useLocation();
@@ -284,7 +284,7 @@ export default function SchoolClassDetailsPage() {
 
                   <div>
                     <label className="text-sm font-medium text-gray-500">Schedule</label>
-                    <p className="mt-1 text-sm text-gray-900">{classData.schedule || 'Not specified'}</p>
+                    <p className="mt-1 text-sm text-gray-900">{formatClassSchedule(classData.schedule) || 'Not specified'}</p>
                   </div>
 
                   <div>
@@ -367,7 +367,7 @@ export default function SchoolClassDetailsPage() {
                       Schedule Details
                     </label>
                     <p className="mt-1 text-sm text-gray-900">
-                      {classData.schedule || 'Schedule not specified'}
+                      {formatClassSchedule(classData.schedule) || 'Schedule not specified'}
                     </p>
                   </div>
                   
