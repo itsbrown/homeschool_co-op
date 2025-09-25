@@ -52,7 +52,30 @@ function loadClasses(): Class[] {
       classIdCounter = maxId + 1;
     }
     
-    return classes;
+    // Parse variants from schedule field for each class
+    return classes.map(classItem => {
+      let variants = [];
+      
+      // Try to parse variants from schedule field
+      if (classItem.schedule) {
+        try {
+          const scheduleData = typeof classItem.schedule === 'string' 
+            ? JSON.parse(classItem.schedule) 
+            : classItem.schedule;
+          
+          if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
+            variants = scheduleData.variants;
+          }
+        } catch (parseError) {
+          console.warn(`Failed to parse schedule for class ${classItem.id}:`, parseError);
+        }
+      }
+      
+      return {
+        ...classItem,
+        variants: variants
+      };
+    });
   } catch (error) {
     console.error('Error loading classes:', error);
     return [];
@@ -121,7 +144,30 @@ function getClasses({
 // Get a class by ID
 function getClassById(id: number): Class | undefined {
   const classes = loadClasses();
-  return classes.find(c => c.id === id);
+  const classItem = classes.find(c => c.id === id);
+  
+  if (!classItem) return undefined;
+  
+  // Parse variants from schedule field
+  let variants = [];
+  if (classItem.schedule) {
+    try {
+      const scheduleData = typeof classItem.schedule === 'string' 
+        ? JSON.parse(classItem.schedule) 
+        : classItem.schedule;
+      
+      if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
+        variants = scheduleData.variants;
+      }
+    } catch (parseError) {
+      console.warn(`Failed to parse schedule for class ${id}:`, parseError);
+    }
+  }
+  
+  return {
+    ...classItem,
+    variants: variants
+  };
 }
 
 // Create a new class
