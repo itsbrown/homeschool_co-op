@@ -729,6 +729,20 @@
     "status": "pending_payment",
     "createdAt": "2025-09-15T00:59:01.959Z",
     "updatedAt": "2025-09-15T00:59:01.959Z",
-    "id": 1757897941959
+    "id": 1757897941959,
+    "enrollmentDate": "2025-09-25T15:53:08.460Z"
+  },
+  {
+    "id": 1758820545000,
+    "classId": 15,
+    "childId": 3,
+    "childName": "Silvie Puccia",
+    "className": "Seekers",
+    "enrollmentDate": "2025-09-25T17:15:45.000Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
   }
 ]
