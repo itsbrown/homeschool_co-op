@@ -744,5 +744,18 @@
     "depositRequired": 9000,
     "totalCost": 90000,
     "remainingBalance": 90000
+  },
+  {
+    "id": 1758824915410,
+    "classId": 15,
+    "childId": 4,
+    "childName": "Sebastian Puccia",
+    "className": "Seekers",
+    "enrollmentDate": "2025-09-25T18:28:35.410Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
   }
 ]

@@ -25,9 +25,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; classId?: number; classTitle?: string }>({ open: false });
+  const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; classId?: number; classTitle?: string; classData?: ClassData }>({ open: false });
   const [viewDetailsDialog, setViewDetailsDialog] = useState<{ open: boolean; classData?: any }>({ open: false });
   const [selectedChildId, setSelectedChildId] = useState<string>("");
+  const [selectedVariantId, setSelectedVariantId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
@@ -63,8 +64,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   // Enrollment mutation
   const enrollmentMutation = useMutation({
-    mutationFn: async ({ classId, childId }: { classId: number; childId: string }) => {
-      const response = await apiRequest('POST', `/api/classes/${classId}/enroll`, { childId: parseInt(childId) });
+    mutationFn: async ({ classId, childId, variantId }: { classId: number; childId: string; variantId?: string }) => {
+      const response = await apiRequest('POST', `/api/classes/${classId}/enroll`, { 
+        childId: parseInt(childId),
+        variantId: variantId 
+      });
       console.log('🎯 Raw API response:', response);
       
       // Parse the response as JSON if it's a Response object
@@ -91,22 +95,31 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       console.log('🎯 Enrollment from API:', data.enrollment);
 
       if (selectedClass && selectedChild && data.enrollment) {
+        // Get the selected variant or use default pricing
+        const selectedVariant = variables.variantId ? 
+          selectedClass.variants?.find(v => v.id === variables.variantId) : 
+          selectedClass.variants?.[0];
+        
+        const finalPrice = selectedVariant ? selectedVariant.price : selectedClass.price;
+
         // Add item to cart immediately for visual feedback, skip validation since we just created the enrollment
         const cartItem = {
           classId: variables.classId,
           className: selectedClass.title,
           childId: parseInt(variables.childId),
           childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
-          price: selectedClass.price, // Price is in dollars
+          price: finalPrice, // Price is in dollars
           description: selectedClass.description,
           startDate: selectedClass.startDate,
           endDate: selectedClass.endDate,
           status: 'pending_payment',
           statusText: 'Payment Required',
           enrollmentId: data.enrollment.id,
-          totalCost: selectedClass.price,
+          totalCost: finalPrice,
           amountPaid: 0,
-          remainingBalance: selectedClass.price
+          remainingBalance: finalPrice,
+          variantId: variables.variantId,
+          variantName: selectedVariant?.name
         };
 
         console.log('🛒 Adding enrollment to cart:', cartItem);
@@ -131,10 +144,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           enrollmentId: data.enrollment.id,
           className: selectedClass.title,
           childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
-          totalCost: selectedClass.price,
-          depositRequired: Math.round(selectedClass.price * 0.1),
+          totalCost: finalPrice,
+          depositRequired: Math.round(finalPrice * 0.1),
           amountPaid: 0,
-          remainingBalance: selectedClass.price
+          remainingBalance: finalPrice
         };
         sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
       } else {
@@ -146,6 +159,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
       setEnrollmentDialog({ open: false });
       setSelectedChildId("");
+      setSelectedVariantId("");
       // Invalidate all enrollment-related queries
       queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
@@ -176,6 +190,14 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     numSessions?: number;
     totalOrders: number;
     totalWaitlisted: number;
+    variants?: {
+      id: string;
+      name: string;
+      startTime: string;
+      endTime: string;
+      days: string[];
+      price: number;
+    }[];
   }
 
   interface ClassesResponse {
@@ -195,7 +217,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   // Transform school admin classes data to match expected format
   const classesData: ClassesResponse = {
-    classes: schoolClassesResponse?.items?.map((item: any) => ({
+    classes: ((schoolClassesResponse as any)?.items || []).map((item: any) => ({
       id: item.id,
       title: item.title,
       description: item.description,
@@ -206,12 +228,13 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       endDate: item.endDate,
       numSessions: item.numSessions,
       totalOrders: item.enrollmentCount || 0,
-      totalWaitlisted: 0
-    })) || [],
+      totalWaitlisted: 0,
+      variants: item.variants || []
+    })),
     pagination: {
-      currentPage: schoolClassesResponse?.page || 1,
-      totalPages: schoolClassesResponse?.totalPages || 1,
-      totalItems: schoolClassesResponse?.total || 0
+      currentPage: (schoolClassesResponse as any)?.page || 1,
+      totalPages: (schoolClassesResponse as any)?.totalPages || 1,
+      totalItems: (schoolClassesResponse as any)?.total || 0
     }
   };
 
@@ -362,7 +385,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       <Button 
                         onClick={() => {
                           console.log('🎯 Enroll Now clicked for class:', classItem);
-                          setEnrollmentDialog({ open: true, classId: classItem.id, classTitle: classItem.title });
+                          setEnrollmentDialog({ open: true, classId: classItem.id, classTitle: classItem.title, classData: classItem });
                         }}
                         className="flex-1"
                       >
@@ -487,6 +510,31 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 </div>
               )}
             </div>
+
+            {/* Variant Selection - Show if multiple variants exist */}
+            {enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1 && (
+              <div>
+                <Label htmlFor="variant-select">Time Option</Label>
+                <div className="text-xs text-muted-foreground mb-2">
+                  Choose your preferred time option with individual pricing
+                </div>
+                <select 
+                  className="w-full p-2 border border-input bg-background rounded-md"
+                  value={selectedVariantId} 
+                  onChange={(e) => {
+                    console.log("🎯 Variant select value changed:", e.target.value);
+                    setSelectedVariantId(e.target.value);
+                  }}
+                >
+                  <option value="">Choose a time option</option>
+                  {enrollmentDialog.classData.variants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.name} - {variant.days.join(', ')} • {variant.startTime} - {variant.endTime} • ${(variant.price / 100).toFixed(2)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -495,6 +543,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               onClick={() => {
                 setEnrollmentDialog({ open: false });
                 setSelectedChildId("");
+                setSelectedVariantId("");
               }}
             >
               Cancel
@@ -503,19 +552,32 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               onClick={() => {
                 console.log('🎯 Enroll button clicked in dialog');
                 console.log('🎯 Selected child ID:', selectedChildId);
+                console.log('🎯 Selected variant ID:', selectedVariantId);
                 console.log('🎯 Class ID:', enrollmentDialog.classId);
+                
+                // Check if variants exist and one is selected
+                const hasVariants = enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1;
+                if (hasVariants && !selectedVariantId) {
+                  toast({
+                    title: "Error",
+                    description: "Please select a time option",
+                    variant: "destructive",
+                  });
+                  return;
+                }
                 
                 if (selectedChildId && enrollmentDialog.classId) {
                   console.log('🎯 Starting enrollment mutation...');
                   enrollmentMutation.mutate({
                     classId: enrollmentDialog.classId,
-                    childId: selectedChildId
+                    childId: selectedChildId,
+                    variantId: selectedVariantId
                   });
                 } else {
                   console.log('❌ Missing data for enrollment:', { selectedChildId, classId: enrollmentDialog.classId });
                 }
               }}
-              disabled={!selectedChildId || enrollmentMutation.isPending || childrenLoading}
+              disabled={!selectedChildId || enrollmentMutation.isPending || childrenLoading || (enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1 && !selectedVariantId)}
             >
               {enrollmentMutation.isPending ? "Enrolling..." : "Enroll"}
             </Button>

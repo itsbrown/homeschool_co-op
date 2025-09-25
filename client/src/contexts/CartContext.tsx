@@ -22,6 +22,8 @@ export interface CartItem {
   amountPaid?: number;
   remainingBalance?: number;
   totalCost?: number;
+  variantId?: string;
+  variantName?: string;
 }
 
 export interface Cart {
