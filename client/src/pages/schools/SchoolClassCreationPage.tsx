@@ -17,6 +17,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDes
 import { Switch } from "@/components/ui/switch";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Loader2 } from "lucide-react";
+import { ClassVariants } from "@/components/admin/ClassVariants";
 
 // Form schema for class creation
 const classFormSchema = z.object({
@@ -26,13 +27,17 @@ const classFormSchema = z.object({
   gradeLevels: z.array(z.string()).min(1, "Please select at least one grade level"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
-  schedule: z.string().min(1, "Schedule information is required"),
-  startTime: z.string().optional(),
-  endTime: z.string().optional(),
+  variants: z.array(z.object({
+    id: z.string(),
+    name: z.string().min(1, "Variant name is required"),
+    startTime: z.string().min(1, "Start time is required"),
+    endTime: z.string().min(1, "End time is required"),
+    days: z.array(z.string()).min(1, "At least one day must be selected"),
+    price: z.number().min(0, "Price must be a positive number")
+  })).min(1, "At least one time option is required"),
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1"),
   location: z.string().min(1, "Location is required"),
   instructorName: z.string().min(1, "Instructor name is required"),
-  price: z.coerce.number().min(0, "Price cannot be negative"),
   status: z.string().min(1, "Please select a status"),
   isAdminOnly: z.boolean().default(false),
 });
@@ -60,13 +65,17 @@ export default function SchoolClassCreationPage() {
       gradeLevels: [],
       startDate: "",
       endDate: "",
-      schedule: "",
-      startTime: "",
-      endTime: "",
+      variants: [{
+        id: 'default-variant',
+        name: 'Main Session',
+        startTime: '9:00 AM',
+        endTime: '12:00 PM',
+        days: ['Monday', 'Wednesday'],
+        price: 5000
+      }],
       capacity: 10,
       location: "",
       instructorName: "",
-      price: 0,
       status: "upcoming",
       isAdminOnly: false,
     },
@@ -185,13 +194,17 @@ export default function SchoolClassCreationPage() {
         gradeLevels: classData.gradeLevels || classData.gradeLevel ? [classData.gradeLevel] : [],
         startDate,
         endDate,
-        schedule: classData.schedule || "",
-        startTime,
-        endTime,
+        variants: classData.variants || [{
+          id: 'default-variant',
+          name: 'Main Session',
+          startTime: startTime || '9:00 AM',
+          endTime: endTime || '12:00 PM',
+          days: ['Monday', 'Wednesday'],
+          price: classData.price ? classData.price * 100 : 5000
+        }],
         capacity: classData.capacity || 10,
         location: classData.location || "",
         instructorName: instructor ? instructor.id.toString() : "",
-        price: classData.price || 0,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
       });
@@ -465,17 +478,21 @@ export default function SchoolClassCreationPage() {
                   />
                 </div>
 
+                {/* Class Time Options / Variants */}
                 <FormField
                   control={form.control}
-                  name="schedule"
+                  name="variants"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Schedule*</FormLabel>
+                      <FormLabel>Class Time Options*</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Mondays and Wednesdays, 3:00 PM - 4:30 PM" />
+                        <ClassVariants
+                          variants={field.value}
+                          onChange={field.onChange}
+                        />
                       </FormControl>
                       <FormDescription>
-                        Specify the days and times when this class will meet
+                        Add different scheduling options with individual pricing (e.g., "Half Day 9-12pm ($50) OR Full Day 9-3pm ($85)")
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -485,70 +502,12 @@ export default function SchoolClassCreationPage() {
                 <div className="grid gap-6 sm:grid-cols-2">
                   <FormField
                     control={form.control}
-                    name="startTime"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Start Time</FormLabel>
-                        <FormControl>
-                          <TimePicker
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Select start time"
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          What time does the class start?
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="endTime"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>End Time</FormLabel>
-                        <FormControl>
-                          <TimePicker
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Select end time"
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          What time does the class end?
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid gap-6 sm:grid-cols-3">
-                  <FormField
-                    control={form.control}
                     name="capacity"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Capacity*</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} min={1} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Price ($)*</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} min={0} step=".01" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
