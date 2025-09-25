@@ -177,7 +177,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
   console.log("ProcessedInitialData:", processedInitialData);
 
   // Default values based on initialData or set defaults
-  const defaultValues: Partial<ClassFormValues> = (processedInitialData as Partial<ClassFormValues>) || {
+  const defaultValues: Partial<ClassFormValues> = processedInitialData || {
     title: "",
     description: "",
     subject: "",
@@ -593,7 +593,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {locations.map((location) => (
+                  {locations.map((location: any) => (
                     <SelectItem key={location.id} value={location.name}>
                       {location.name}
                     </SelectItem>
