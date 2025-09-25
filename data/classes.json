@@ -261,5 +261,24 @@
     "instructorId": 1,
     "createdAt": "2025-08-30T22:36:41.346Z",
     "updatedAt": "2025-08-30T22:36:41.346Z"
+  },
+  {
+    "id": 15,
+    "schoolId": 1,
+    "title": "Seekers",
+    "description": "A meaningful, human connection with a teacher is an invaluable benefit to a child. We believe mentors are a necessary attribute of the traditional school model that homeschoolers can greatly benefit from. The Seekers class (grades 3–5) goes deeper into liberal arts, sharpening their reading and writing skills while pushing them intellectually throughout a 3 hour period, 3 days a week with structured curricula that covers all common subjects and highlights America’s founding principles. In a positive and social environment, the ASA model emphasizes self-governance, critical thinking and entrepreneurship. With day to day consistency and rhythm, your child will benefit from a well rounded routine created with exceptional educational activities and quality arts & crafts. Designed for homeschooling families, this program balances learning and living, inspiring children for a lifelong love of discovery.",
+    "category": "Lower Elementary",
+    "status": "active",
+    "startDate": "2025-09-08",
+    "endDate": "2025-11-14",
+    "capacity": 15,
+    "maxStudents": 15,
+    "enrollmentCount": 0,
+    "location": "Brighton",
+    "price": 0,
+    "instructorName": "Chelsey Frasier",
+    "instructorId": 5,
+    "createdAt": "2025-09-25T17:13:34.774Z",
+    "updatedAt": "2025-09-25T17:13:34.774Z"
   }
 ]
