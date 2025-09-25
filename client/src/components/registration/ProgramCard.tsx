@@ -56,6 +56,14 @@ interface Program {
   instructorName: string;
   imageUrl?: string;
   isPublished: boolean;
+  variants?: {
+    id: string;
+    name: string;
+    startTime: string;
+    endTime: string;
+    days: string[];
+    price: number;
+  }[];
 }
 
 // Define interface for child data (simplified for selection)
@@ -75,6 +83,7 @@ interface ProgramCardProps {
 export function ProgramCard({ program, children = [], isAdmin = false }: ProgramCardProps) {
   const [isEnrollDialogOpen, setIsEnrollDialogOpen] = useState(false);
   const [selectedChild, setSelectedChild] = useState<string>("");
+  const [selectedVariant, setSelectedVariant] = useState<string>("");
   const [isEnrolling, setIsEnrolling] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -101,6 +110,17 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
       return;
     }
 
+    // Check if variants exist and one is selected
+    const hasVariants = program.variants && program.variants.length > 1;
+    if (hasVariants && !selectedVariant) {
+      toast({
+        title: "Error",
+        description: "Please select a time option",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Find the selected child info
     const child = children.find(c => c.id === parseInt(selectedChild));
     if (!child) {
@@ -112,11 +132,19 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
       return;
     }
 
+    // Get the selected variant or default to first variant
+    const variant = hasVariants ? 
+      program.variants?.find(v => v.id === selectedVariant) : 
+      program.variants?.[0];
+    
+    const finalPrice = variant ? variant.price : program.price;
+
     setIsEnrolling(true);
     try {
       const response = await apiRequest("POST", "/api/program-enrollments", {
         programId: program.id,
         childId: parseInt(selectedChild),
+        variantId: selectedVariant,
         status: "pending",
         paymentStatus: "pending"
       });
@@ -132,12 +160,14 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
         className: program.title,
         childId: child.id,
         childName: `${child.firstName} ${child.lastName}`,
-        price: program.price,
+        price: finalPrice,
         description: program.description,
         startDate: program.startDate,
         endDate: program.endDate,
         status: "pending_payment",
-        statusText: "Payment Required"
+        statusText: "Payment Required",
+        variantId: selectedVariant,
+        variantName: variant?.name
       });
 
       // Invalidate relevant queries
@@ -190,7 +220,11 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
           <div className="flex items-center gap-2">
             <DollarSign className="h-4 w-4 opacity-70" />
             <span className="text-sm">
-              ${(program.price / 100).toFixed(2)}
+              {program.variants && program.variants.length > 1 ? (
+                `$${(Math.min(...program.variants.map(v => v.price)) / 100).toFixed(2)} - $${(Math.max(...program.variants.map(v => v.price)) / 100).toFixed(2)}`
+              ) : (
+                `$${(program.price / 100).toFixed(2)}`
+              )}
             </span>
           </div>
           
@@ -230,36 +264,74 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
                 <DialogHeader>
                   <DialogTitle>Enroll in {program.title}</DialogTitle>
                   <DialogDescription>
-                    Select which child you would like to enroll in this program.
+                    Select which child you would like to enroll in "{program.title}".
                   </DialogDescription>
                 </DialogHeader>
                 
-                <div className="py-4">
-                  <Label htmlFor="child">Child</Label>
-                  <Select 
-                    value={selectedChild} 
-                    onValueChange={setSelectedChild}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a child" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {children.map((child) => (
-                        <SelectItem 
-                          key={child.id} 
-                          value={child.id.toString()}
-                        >
-                          {child.firstName} {child.lastName} ({child.gradeLevel})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="py-4 space-y-4">
+                  <div>
+                    <Label htmlFor="child">Select Child</Label>
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Debug: Children: {children.length} | Auth: Yes | Loading: No | User: {children.length > 0 ? 'kpdinvestors@gmail.com' : 'unknown'}
+                    </div>
+                    <Select 
+                      value={selectedChild} 
+                      onValueChange={setSelectedChild}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a child" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {children.map((child) => (
+                          <SelectItem 
+                            key={child.id} 
+                            value={child.id.toString()}
+                          >
+                            {child.firstName} {child.lastName} ({child.gradeLevel})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Show variant selection if multiple variants exist */}
+                  {program.variants && program.variants.length > 1 && (
+                    <div>
+                      <Label htmlFor="variant">Time Option</Label>
+                      <Select 
+                        value={selectedVariant} 
+                        onValueChange={setSelectedVariant}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a time option" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {program.variants.map((variant) => (
+                            <SelectItem 
+                              key={variant.id} 
+                              value={variant.id}
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-medium">{variant.name}</span>
+                                <span className="text-sm text-muted-foreground">
+                                  {variant.days.join(', ')} • {variant.startTime} - {variant.endTime} • ${(variant.price / 100).toFixed(2)}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
                 
                 <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsEnrollDialogOpen(false)}>
+                    Cancel
+                  </Button>
                   <Button 
                     onClick={handleEnrollment} 
-                    disabled={isEnrolling || !selectedChild}
+                    disabled={isEnrolling || !selectedChild || (program.variants && program.variants.length > 1 && !selectedVariant)}
                   >
                     {isEnrolling ? "Processing..." : "Enroll"}
                   </Button>
