@@ -217,21 +217,28 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   });
 
   // Transform school admin classes data to match expected format
+  // Filter out parent classes that have variants - parents should only see the individual variant classes
   const classesData: ClassesResponse = {
-    classes: ((schoolClassesResponse as any)?.items || []).map((item: any) => ({
-      id: item.id,
-      title: item.title,
-      description: item.description,
-      price: item.price, // Keep price in dollars for cart compatibility
-      category: 'academic', // Set all school admin classes as academic for now
-      categoryName: item.category || 'Academic',
-      startDate: item.startDate,
-      endDate: item.endDate,
-      numSessions: item.numSessions,
-      totalOrders: item.enrollmentCount || 0,
-      totalWaitlisted: 0,
-      variants: item.variants || []
-    })),
+    classes: ((schoolClassesResponse as any)?.items || [])
+      .filter((item: any) => {
+        // Hide classes that have variants - these are parent classes
+        // Parents should only see the individual variant classes like "Seekers | Half Day"
+        return !item.variants || item.variants.length === 0;
+      })
+      .map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        price: item.price, // Keep price in dollars for cart compatibility
+        category: 'academic', // Set all school admin classes as academic for now
+        categoryName: item.category || 'Academic',
+        startDate: item.startDate,
+        endDate: item.endDate,
+        numSessions: item.numSessions,
+        totalOrders: item.enrollmentCount || 0,
+        totalWaitlisted: 0,
+        variants: item.variants || []
+      })),
     pagination: {
       currentPage: (schoolClassesResponse as any)?.page || 1,
       totalPages: (schoolClassesResponse as any)?.totalPages || 1,
