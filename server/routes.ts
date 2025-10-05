@@ -2281,6 +2281,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       allClasses[classIndex] = updatedClass;
 
+      // If this class has variants, update the corresponding child classes
+      if (req.body.variants && Array.isArray(req.body.variants)) {
+        console.log('🔄 Updating child classes for variants...');
+        const baseTitle = updatedClass.title;
+        
+        req.body.variants.forEach((variant: any) => {
+          // Find child class with matching title pattern "BaseTitle | VariantName"
+          const childTitle = `${baseTitle} | ${variant.name}`;
+          const childIndex = allClasses.findIndex((cls: any) => cls.title === childTitle);
+          
+          if (childIndex !== -1) {
+            console.log(`  ✅ Updating child class: ${childTitle} with price ${variant.price}`);
+            allClasses[childIndex] = {
+              ...allClasses[childIndex],
+              price: variant.price,
+              location: updatedClass.location,
+              instructorName: updatedClass.instructorName,
+              instructorId: updatedClass.instructorId,
+              capacity: updatedClass.capacity,
+              startDate: updatedClass.startDate,
+              endDate: updatedClass.endDate,
+              description: updatedClass.description,
+              category: updatedClass.category,
+              status: updatedClass.status,
+              gradeLevel: updatedClass.gradeLevel,
+              updatedAt: new Date().toISOString()
+            };
+          } else {
+            console.log(`  ⚠️ Child class not found: ${childTitle}`);
+          }
+        });
+      }
+
       // Write back to file
       fs.writeFileSync(filePath, JSON.stringify(allClasses, null, 2));
 
