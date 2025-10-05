@@ -2244,21 +2244,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Class not found' });
       }
 
+      // Handle variants - convert to JSON schedule format
+      let schedule = req.body.schedule || allClasses[classIndex].schedule;
+      if (req.body.variants && Array.isArray(req.body.variants)) {
+        schedule = JSON.stringify({ variants: req.body.variants });
+        console.log('✅ Converting variants to schedule JSON:', schedule);
+      }
+
+      // Handle gradeLevels array - convert to single gradeLevel
+      let gradeLevel = allClasses[classIndex].gradeLevel;
+      if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels) && req.body.gradeLevels.length > 0) {
+        gradeLevel = req.body.gradeLevels[0];
+      } else if (req.body.gradeLevel) {
+        gradeLevel = req.body.gradeLevel;
+      }
+
       // Update the class with new data
       const updatedClass = {
         ...allClasses[classIndex],
         title: req.body.title || allClasses[classIndex].title,
         description: req.body.description || allClasses[classIndex].description,
         category: req.body.category || allClasses[classIndex].category,
-        gradeLevel: req.body.gradeLevel || allClasses[classIndex].gradeLevel,
+        gradeLevel: gradeLevel,
         status: req.body.status || allClasses[classIndex].status,
         startDate: req.body.startDate || allClasses[classIndex].startDate,
         endDate: req.body.endDate || allClasses[classIndex].endDate,
-        schedule: req.body.schedule || allClasses[classIndex].schedule,
-        capacity: req.body.capacity || allClasses[classIndex].capacity,
+        schedule: schedule,
+        capacity: req.body.capacity !== undefined ? req.body.capacity : allClasses[classIndex].capacity,
         location: req.body.location || allClasses[classIndex].location,
         instructorName: req.body.instructorName || allClasses[classIndex].instructorName,
-        price: req.body.price || allClasses[classIndex].price,
+        instructorId: req.body.instructorId || allClasses[classIndex].instructorId,
+        price: req.body.price !== undefined ? req.body.price : allClasses[classIndex].price,
+        isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : allClasses[classIndex].isAdminOnly,
         updatedAt: new Date().toISOString()
       };
 
@@ -2268,6 +2285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       fs.writeFileSync(filePath, JSON.stringify(allClasses, null, 2));
 
       console.log('✅ Class updated successfully:', updatedClass.title);
+      console.log('📊 Saved schedule:', updatedClass.schedule);
       res.json(updatedClass);
     } catch (error) {
       console.error('❌ Error updating class:', error);
