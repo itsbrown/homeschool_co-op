@@ -2191,14 +2191,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fileData = fs.readFileSync(filePath, 'utf-8');
       const allClasses = JSON.parse(fileData);
 
-      const classData = allClasses.find((cls: any) => cls.id === classId);
+      let classData = allClasses.find((cls: any) => cls.id === classId);
 
       if (!classData) {
         console.log('❌ Class not found with ID:', classId);
         return res.status(404).json({ message: 'Class not found' });
       }
 
+      // Parse variants from schedule field if they exist
+      if (classData.schedule && typeof classData.schedule === 'string') {
+        try {
+          const scheduleData = JSON.parse(classData.schedule);
+          if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
+            console.log('✅ Parsed variants from schedule field:', scheduleData.variants);
+            classData = { ...classData, variants: scheduleData.variants };
+          }
+        } catch (e) {
+          // Not JSON, keep schedule as-is
+          console.log('📝 Schedule is not JSON, keeping as string');
+        }
+      }
+
       console.log('✅ Class found:', classData.title);
+      console.log('📊 Returning class with variants:', classData.variants ? classData.variants.length : 0);
       res.json(classData);
     } catch (error) {
       console.error('❌ Error loading class:', error);
