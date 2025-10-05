@@ -132,15 +132,28 @@ export function debounce<T extends (...args: any[]) => any>(
 
 /**
  * Format class schedule with support for variants
- * @param schedule Either a string (legacy) or an object with variants
+ * @param schedule Either a string (legacy), a JSON string with variants, or an object with variants
  * @param includePricing Whether to include pricing information in the display
  */
 export function formatClassSchedule(schedule: any, includePricing: boolean = false): string {
-  // Handle both old string format and new variants format
+  // If schedule is a string, try to parse it as JSON first
   if (typeof schedule === 'string') {
-    return schedule;
+    try {
+      const parsed = JSON.parse(schedule);
+      // If successfully parsed and has variants, use the parsed object
+      if (parsed && parsed.variants && Array.isArray(parsed.variants)) {
+        schedule = parsed;
+      } else {
+        // Otherwise return the string as-is (legacy format)
+        return schedule;
+      }
+    } catch (e) {
+      // Not JSON, return the string as-is (legacy format)
+      return schedule;
+    }
   }
   
+  // Now handle the object format with variants
   if (!schedule || !schedule.variants || !Array.isArray(schedule.variants)) {
     return '';
   }

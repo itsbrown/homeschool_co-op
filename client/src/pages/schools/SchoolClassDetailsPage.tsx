@@ -284,7 +284,7 @@ export default function SchoolClassDetailsPage() {
 
                   <div>
                     <label className="text-sm font-medium text-gray-500">Schedule</label>
-                    <p className="mt-1 text-sm text-gray-900">{formatClassSchedule(classData.schedule) || 'Not specified'}</p>
+                    <p className="mt-1 text-sm text-gray-900">{formatClassSchedule(classData.schedule, true) || 'Not specified'}</p>
                   </div>
 
                   <div>
@@ -360,16 +360,61 @@ export default function SchoolClassDetailsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      <Calendar className="inline mr-1 h-4 w-4" />
-                      Schedule Details
-                    </label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {formatClassSchedule(classData.schedule) || 'Schedule not specified'}
-                    </p>
-                  </div>
+                {/* Check if schedule has variants */}
+                {(() => {
+                  let scheduleData = classData.schedule;
+                  
+                  // Parse JSON string if needed
+                  if (typeof scheduleData === 'string') {
+                    try {
+                      scheduleData = JSON.parse(scheduleData);
+                    } catch (e) {
+                      // Not JSON, keep as string
+                    }
+                  }
+                  
+                  // If has variants, show them in a list
+                  if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants) && scheduleData.variants.length > 0) {
+                    return (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">
+                          <Calendar className="inline mr-1 h-4 w-4" />
+                          Time Options ({scheduleData.variants.length} {scheduleData.variants.length === 1 ? 'option' : 'options'})
+                        </label>
+                        <div className="mt-2 space-y-2">
+                          {scheduleData.variants.map((variant: any, index: number) => (
+                            <div key={index} className="p-3 border rounded-lg bg-gray-50">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-medium text-sm">{variant.name}</p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    {variant.days?.join(', ')} • {variant.startTime} - {variant.endTime}
+                                  </p>
+                                </div>
+                                <p className="text-sm font-semibold text-green-600">
+                                  ${(variant.price / 100).toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  // Otherwise show standard schedule format
+                  return (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">
+                        <Calendar className="inline mr-1 h-4 w-4" />
+                        Schedule Details
+                      </label>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {formatClassSchedule(classData.schedule) || 'Schedule not specified'}
+                      </p>
+                    </div>
+                  );
+                })()}
                   
                   <div>
                     <label className="text-sm font-medium text-gray-500">

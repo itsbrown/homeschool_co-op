@@ -757,5 +757,18 @@
     "depositRequired": 9000,
     "totalCost": 90000,
     "remainingBalance": 90000
+  },
+  {
+    "id": 1759636594891,
+    "classId": 15,
+    "childId": 5,
+    "childName": "Salena Puccia",
+    "className": "Seekers",
+    "enrollmentDate": "2025-10-05T03:56:34.890Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
   }
 ]
