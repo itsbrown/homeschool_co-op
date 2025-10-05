@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import { formatClassSchedule } from "@/lib/utils";
 
 // Separate component for Programs content to avoid hooks issues
 function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
@@ -622,17 +623,62 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 </p>
               </div>
 
-              {/* Schedule and Logistics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {viewDetailsDialog.classData.schedule && (
+              {/* Time Options / Schedule */}
+              {(() => {
+                let scheduleData = viewDetailsDialog.classData.schedule;
+                
+                // Parse JSON string if needed
+                if (typeof scheduleData === 'string') {
+                  try {
+                    scheduleData = JSON.parse(scheduleData);
+                  } catch (e) {
+                    // Not JSON, keep as string
+                  }
+                }
+                
+                // If has variants, show them in a list
+                if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants) && scheduleData.variants.length > 0) {
+                  return (
+                    <div className="space-y-2">
+                      <Label className="font-semibold flex items-center">
+                        <CalendarDays className="h-4 w-4 mr-2" />
+                        Time Options ({scheduleData.variants.length} {scheduleData.variants.length === 1 ? 'option' : 'options'})
+                      </Label>
+                      <div className="space-y-2">
+                        {scheduleData.variants.map((variant: any, index: number) => (
+                          <div key={index} className="p-3 border rounded-lg bg-gray-50">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium text-sm">{variant.name}</p>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {variant.days?.join(', ')} • {variant.startTime} - {variant.endTime}
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold text-green-600">
+                                ${(variant.price / 100).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                
+                // Otherwise show standard schedule format
+                return viewDetailsDialog.classData.schedule ? (
                   <div className="space-y-2">
                     <Label className="font-semibold flex items-center">
                       <CalendarDays className="h-4 w-4 mr-2" />
                       Schedule
                     </Label>
-                    <p className="text-sm">{viewDetailsDialog.classData.schedule}</p>
+                    <p className="text-sm">{formatClassSchedule(viewDetailsDialog.classData.schedule)}</p>
                   </div>
-                )}
+                ) : null;
+              })()}
+
+              {/* Schedule and Logistics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 {viewDetailsDialog.classData.location && (
                   <div className="space-y-2">
