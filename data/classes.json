@@ -203,7 +203,7 @@
     "title": "Seekers | Half Day",
     "description": "A meaningful, human connection with a teacher is an invaluable benefit to a child. We believe mentors are a necessary attribute of the traditional school model that homeschoolers can greatly benefit from. The Seekers class (grades 3–5) goes deeper into liberal arts, sharpening their reading and writing skills while pushing them intellectually throughout a 3 hour period, 3 days a week with structured curricula that covers all common subjects and highlights America’s founding principles. In a positive and social environment, the ASA model emphasizes self-governance, critical thinking and entrepreneurship. With day to day consistency and rhythm, your child will benefit from a well rounded routine created with exceptional educational activities and quality arts & crafts. Designed for homeschooling families, this program balances learning and living, inspiring children for a lifelong love of discovery.",
     "category": "Upper Elementary",
-    "gradeLevel": "3rd-grade",
+    "gradeLevel": "grades-3-5",
     "status": "active",
     "startDate": "2025-09-08",
     "endDate": "2025-11-14",
@@ -214,9 +214,9 @@
     "location": "Brighton",
     "price": 90000,
     "instructorName": "Chelsey Frasier",
-    "instructorId": 1,
+    "instructorId": 5,
     "createdAt": "2025-08-24T11:39:10.473Z",
-    "updatedAt": "2025-09-03T12:23:39.457Z",
+    "updatedAt": "2025-10-05T05:03:34.309Z",
     "isAdminOnly": false
   },
   {
@@ -226,7 +226,7 @@
     "description": "A meaningful, human connection with a teacher is an invaluable benefit to a child. We believe mentors are a necessary attribute of the traditional school model that homeschoolers can greatly benefit from. The Seekers class (grades 3–5) goes deeper into liberal arts, sharpening their reading and writing skills while pushing them intellectually throughout a 3 hour period, 3 days a week with structured curricula that covers all common subjects and highlights America’s founding principles. In a positive and social environment, the ASA model emphasizes self-governance, critical thinking and entrepreneurship. With day to day consistency and rhythm, your child will benefit from a well rounded routine created with exceptional educational activities and quality arts & crafts. Designed for homeschooling families, this program balances learning and living, inspiring children for a lifelong love of discovery.",
     "category": "Upper Elementary",
     "gradeLevel": "grades-3-5",
-    "status": "upcoming",
+    "status": "active",
     "startDate": "2025-09-08",
     "endDate": "2025-11-14",
     "schedule": "Monday, Wednesday, Friday 9am-2pm",
@@ -234,11 +234,11 @@
     "maxStudents": 10,
     "enrollmentCount": 0,
     "location": "Brighton",
-    "price": 1300,
+    "price": 130000,
     "instructorName": "Chelsey Frasier",
-    "instructorId": 1,
+    "instructorId": 5,
     "createdAt": "2025-08-24T11:39:20.452Z",
-    "updatedAt": "2025-09-03T13:16:05.260Z",
+    "updatedAt": "2025-10-05T05:03:34.309Z",
     "isAdminOnly": false
   },
   {
@@ -279,7 +279,7 @@
     "instructorName": "Chelsey Frasier",
     "instructorId": 5,
     "createdAt": "2025-09-25T17:13:34.774Z",
-    "updatedAt": "2025-10-05T05:00:01.904Z",
+    "updatedAt": "2025-10-05T05:03:34.309Z",
     "schedule": "{\"variants\":[{\"id\":\"half-day\",\"name\":\"Half Day 9-12pm\",\"startTime\":\"09:00\",\"endTime\":\"12:00\",\"days\":[\"Monday\",\"Wednesday\",\"Friday\"],\"price\":90000},{\"id\":\"full-day\",\"name\":\"Full Day 9-3pm\",\"startTime\":\"09:00\",\"endTime\":\"02:00 PM\",\"days\":[\"Monday\",\"Wednesday\",\"Friday\"],\"price\":130000}]}",
     "gradeLevel": "grades-3-5",
     "isAdminOnly": false

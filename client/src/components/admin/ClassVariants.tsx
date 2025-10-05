@@ -141,16 +141,21 @@ export function ClassVariants({ variants, onChange }: ClassVariantsProps) {
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">$</span>
                     <Input
                       id={`variant-price-${variant.id}`}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={(variant.price / 100).toFixed(2)}
+                      type="text"
+                      inputMode="decimal"
+                      value={variant.price === 0 ? '' : String(variant.price / 100)}
                       onChange={(e) => {
-                        const dollarAmount = parseFloat(e.target.value) || 0;
+                        const value = e.target.value.replace(/[^0-9.]/g, '');
+                        const dollarAmount = parseFloat(value) || 0;
                         const centsAmount = Math.round(dollarAmount * 100);
                         updateVariant(variant.id, { price: centsAmount });
                       }}
-                      placeholder="0.00"
+                      onBlur={(e) => {
+                        // Format on blur for clean display
+                        const dollarAmount = parseFloat(e.target.value) || 0;
+                        updateVariant(variant.id, { price: Math.round(dollarAmount * 100) });
+                      }}
+                      placeholder="50"
                       className="pl-8"
                     />
                   </div>
