@@ -2288,11 +2288,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         req.body.variants.forEach((variant: any) => {
           // Find child class with matching title pattern "BaseTitle | VariantName"
-          const childTitle = `${baseTitle} | ${variant.name}`;
-          const childIndex = allClasses.findIndex((cls: any) => cls.title === childTitle);
+          // Try exact match first, then try partial match (in case variant name includes time)
+          let childTitle = `${baseTitle} | ${variant.name}`;
+          let childIndex = allClasses.findIndex((cls: any) => cls.title === childTitle);
+          
+          // If exact match fails, try to find by partial match (e.g., "Half Day" matches "Half Day 9-12pm")
+          if (childIndex === -1) {
+            // Extract first part of variant name (before any time info)
+            const variantBaseName = variant.name.split(/\d/)[0].trim(); // Split on first digit
+            childTitle = `${baseTitle} | ${variantBaseName}`;
+            childIndex = allClasses.findIndex((cls: any) => cls.title === childTitle);
+          }
           
           if (childIndex !== -1) {
-            console.log(`  ✅ Updating child class: ${childTitle} with price ${variant.price}`);
+            console.log(`  ✅ Updating child class: ${allClasses[childIndex].title} with price ${variant.price}`);
             allClasses[childIndex] = {
               ...allClasses[childIndex],
               price: variant.price,
@@ -2309,7 +2318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               updatedAt: new Date().toISOString()
             };
           } else {
-            console.log(`  ⚠️ Child class not found: ${childTitle}`);
+            console.log(`  ⚠️ Child class not found for variant: ${variant.name}`);
           }
         });
       }
