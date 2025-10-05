@@ -275,11 +275,12 @@
     "maxStudents": 15,
     "enrollmentCount": 0,
     "location": "Brighton",
-    "price": 0,
+    "price": 5000,
     "instructorName": "Chelsey Frasier",
     "instructorId": 5,
     "createdAt": "2025-09-25T17:13:34.774Z",
-    "updatedAt": "2025-10-05T03:59:09.297Z",
-    "schedule": "{\"variants\":[{\"id\":\"half-day\",\"name\":\"Half Day 9-12pm\",\"startTime\":\"09:00\",\"endTime\":\"12:00\",\"days\":[\"Monday\",\"Wednesday\",\"Friday\"],\"price\":5000},{\"id\":\"full-day\",\"name\":\"Full Day 9-3pm\",\"startTime\":\"09:00\",\"endTime\":\"15:00\",\"days\":[\"Monday\",\"Wednesday\",\"Friday\"],\"price\":8500}]}"
+    "updatedAt": "2025-10-05T04:39:05.777Z",
+    "schedule": "{\"variants\":[{\"id\":\"half-day\",\"name\":\"Half Day 9-12pm\",\"startTime\":\"09:00\",\"endTime\":\"12:00\",\"days\":[\"Monday\",\"Wednesday\",\"Friday\"],\"price\":5000},{\"id\":\"full-day\",\"name\":\"Full Day 9-3pm\",\"startTime\":\"09:00\",\"endTime\":\"15:00\",\"days\":[\"Monday\",\"Wednesday\",\"Friday\"],\"price\":8500}]}",
+    "gradeLevel": "grades-3-5"
   }
 ]

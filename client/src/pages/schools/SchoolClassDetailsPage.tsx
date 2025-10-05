@@ -183,10 +183,25 @@ export default function SchoolClassDetailsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatPrice(classData.price || 0)}
+                {(() => {
+                  // Check if class has variants with different prices
+                  if (classData.variants && Array.isArray(classData.variants) && classData.variants.length > 0) {
+                    const prices = classData.variants.map((v: any) => v.price).filter((p: number) => p > 0);
+                    if (prices.length > 0) {
+                      const minPrice = Math.min(...prices);
+                      const maxPrice = Math.max(...prices);
+                      if (minPrice === maxPrice) {
+                        return formatPrice(minPrice);
+                      } else {
+                        return `${formatPrice(minPrice)} - ${formatPrice(maxPrice)}`;
+                      }
+                    }
+                  }
+                  return formatPrice(classData.price || 0);
+                })()}
               </div>
               <p className="text-xs text-muted-foreground">
-                Per student
+                {classData.variants && classData.variants.length > 1 ? 'Price range' : 'Per student'}
               </p>
             </CardContent>
           </Card>
