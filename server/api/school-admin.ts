@@ -834,7 +834,7 @@ router.get("/classes", async (req, res) => {
       enrollments = JSON.parse(fs.readFileSync(ENROLLMENTS_FILE, 'utf8'));
     }
 
-    // Add enrollment counts to each class
+    // Add enrollment counts and parse variants from each class
     const classesWithEnrollment = schoolClasses.map(classItem => {
       // Count enrollments for this specific class
       const classEnrollmentCount = enrollments.filter(enrollment => 
@@ -842,13 +842,28 @@ router.get("/classes", async (req, res) => {
         ['enrolled', 'confirmed', 'completed'].includes(enrollment.status)
       ).length;
       
+      // Parse variants from schedule field if they exist
+      let variants = undefined;
+      if (classItem.schedule && typeof classItem.schedule === 'string') {
+        try {
+          const scheduleData = JSON.parse(classItem.schedule);
+          if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
+            variants = scheduleData.variants;
+          }
+        } catch (e) {
+          // Not JSON, keep schedule as-is
+        }
+      }
+      
       return {
         ...classItem,
         enrollmentCount: classEnrollmentCount,
         maxEnrollment: classItem.capacity || classItem.maxEnrollment || 20,
         capacity: classItem.capacity || 20,
         // Keep existing enrolled field but update it with actual count
-        enrolled: classEnrollmentCount
+        enrolled: classEnrollmentCount,
+        // Add parsed variants if they exist
+        ...(variants && { variants })
       };
     });
 

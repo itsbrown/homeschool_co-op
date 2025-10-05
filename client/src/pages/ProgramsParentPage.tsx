@@ -625,27 +625,37 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
               {/* Time Options / Schedule */}
               {(() => {
-                let scheduleData = viewDetailsDialog.classData.schedule;
+                // Check for variants directly from API first
+                let variants = viewDetailsDialog.classData.variants;
                 
-                // Parse JSON string if needed
-                if (typeof scheduleData === 'string') {
-                  try {
-                    scheduleData = JSON.parse(scheduleData);
-                  } catch (e) {
-                    // Not JSON, keep as string
+                // If no direct variants, try parsing from schedule field
+                if (!variants) {
+                  let scheduleData = viewDetailsDialog.classData.schedule;
+                  
+                  // Parse JSON string if needed
+                  if (typeof scheduleData === 'string') {
+                    try {
+                      scheduleData = JSON.parse(scheduleData);
+                    } catch (e) {
+                      // Not JSON, keep as string
+                    }
+                  }
+                  
+                  if (scheduleData && scheduleData.variants) {
+                    variants = scheduleData.variants;
                   }
                 }
                 
                 // If has variants, show them in a list
-                if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants) && scheduleData.variants.length > 0) {
+                if (variants && Array.isArray(variants) && variants.length > 0) {
                   return (
                     <div className="space-y-2">
                       <Label className="font-semibold flex items-center">
                         <CalendarDays className="h-4 w-4 mr-2" />
-                        Time Options ({scheduleData.variants.length} {scheduleData.variants.length === 1 ? 'option' : 'options'})
+                        Time Options ({variants.length} {variants.length === 1 ? 'option' : 'options'})
                       </Label>
                       <div className="space-y-2">
-                        {scheduleData.variants.map((variant: any, index: number) => (
+                        {variants.map((variant: any, index: number) => (
                           <div key={index} className="p-3 border rounded-lg bg-gray-50">
                             <div className="flex justify-between items-start">
                               <div>
