@@ -220,8 +220,8 @@ export default function ChildEnrollmentsPage() {
             </div>
           ) : enrollments.length > 0 ? (
             <div className="space-y-4">
-              {enrollments.map((enrollment) => (
-                <Card key={enrollment.id || `${enrollment.classId}-${enrollment.childId}`}>
+              {enrollments.map((enrollment, index) => (
+                <Card key={enrollment.id || `enrollment-${index}`}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">{getClassDetails(enrollment).className}</CardTitle>
@@ -269,8 +269,12 @@ export default function ChildEnrollmentsPage() {
                             variant="outline" 
                             size="sm"
                             onClick={() => {
-                              window.location.href = `/programs/class/${enrollment.classId}`;
+                              const classId = enrollment.classId || (enrollment as any).programId;
+                              if (classId) {
+                                window.location.href = `/programs/class/${classId}`;
+                              }
                             }}
+                            disabled={!enrollment.classId && !(enrollment as any).programId}
                           >
                             View Details
                           </Button>
