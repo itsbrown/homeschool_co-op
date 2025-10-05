@@ -174,7 +174,7 @@ export function formatClassSchedule(schedule: any, includePricing: boolean = fal
   
   // Multiple variants: format as "Option 1 OR Option 2"
   return variants
-    .map((variant, index) => {
+    .map((variant: any, index: number) => {
       const daysStr = variant.days?.join(', ') || '';
       const timeStr = `${variant.startTime}-${variant.endTime}`;
       const priceStr = includePricing && variant.price ? ` - $${(variant.price / 100).toFixed(2)}` : '';

@@ -376,59 +376,73 @@ export default function SchoolClassDetailsPage() {
                   // If has variants, show them in a list
                   if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants) && scheduleData.variants.length > 0) {
                     return (
-                      <div>
-                        <label className="text-sm font-medium text-gray-500">
-                          <Calendar className="inline mr-1 h-4 w-4" />
-                          Time Options ({scheduleData.variants.length} {scheduleData.variants.length === 1 ? 'option' : 'options'})
-                        </label>
-                        <div className="mt-2 space-y-2">
-                          {scheduleData.variants.map((variant: any, index: number) => (
-                            <div key={index} className="p-3 border rounded-lg bg-gray-50">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <p className="font-medium text-sm">{variant.name}</p>
-                                  <p className="text-xs text-gray-600 mt-1">
-                                    {variant.days?.join(', ')} • {variant.startTime} - {variant.endTime}
+                      <>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">
+                            <Calendar className="inline mr-1 h-4 w-4" />
+                            Time Options ({scheduleData.variants.length} {scheduleData.variants.length === 1 ? 'option' : 'options'})
+                          </label>
+                          <div className="mt-2 space-y-2">
+                            {scheduleData.variants.map((variant: any, index: number) => (
+                              <div key={index} className="p-3 border rounded-lg bg-gray-50">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <p className="font-medium text-sm">{variant.name}</p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                      {variant.days?.join(', ')} • {variant.startTime} - {variant.endTime}
+                                    </p>
+                                  </div>
+                                  <p className="text-sm font-semibold text-green-600">
+                                    ${(variant.price / 100).toFixed(2)}
                                   </p>
                                 </div>
-                                <p className="text-sm font-semibold text-green-600">
-                                  ${(variant.price / 100).toFixed(2)}
-                                </p>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500">
+                            <Clock className="inline mr-1 h-4 w-4" />
+                            Duration
+                          </label>
+                          <p className="mt-1 text-sm text-gray-900">
+                            {classData.startDate && classData.endDate
+                              ? `${formatDate(classData.startDate)} - ${formatDate(classData.endDate)}`
+                              : 'Duration not specified'
+                            }
+                          </p>
+                        </div>
+                      </>
                     );
                   }
                   
                   // Otherwise show standard schedule format
                   return (
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">
-                        <Calendar className="inline mr-1 h-4 w-4" />
-                        Schedule Details
-                      </label>
-                      <p className="mt-1 text-sm text-gray-900">
-                        {formatClassSchedule(classData.schedule) || 'Schedule not specified'}
-                      </p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">
+                          <Calendar className="inline mr-1 h-4 w-4" />
+                          Schedule Details
+                        </label>
+                        <p className="mt-1 text-sm text-gray-900">
+                          {formatClassSchedule(classData.schedule) || 'Schedule not specified'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">
+                          <Clock className="inline mr-1 h-4 w-4" />
+                          Duration
+                        </label>
+                        <p className="mt-1 text-sm text-gray-900">
+                          {classData.startDate && classData.endDate
+                            ? `${formatDate(classData.startDate)} - ${formatDate(classData.endDate)}`
+                            : 'Duration not specified'
+                          }
+                        </p>
+                      </div>
                     </div>
                   );
                 })()}
-                  
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      <Clock className="inline mr-1 h-4 w-4" />
-                      Duration
-                    </label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {classData.startDate && classData.endDate
-                        ? `${formatDate(classData.startDate)} - ${formatDate(classData.endDate)}`
-                        : 'Duration not specified'
-                      }
-                    </p>
-                  </div>
-                </div>
 
                 {classData.startTime && classData.endTime && (
                   <div>
