@@ -223,6 +223,8 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
 const NOTIFICATION_RECIPIENTS_FILE = path.join(DATA_DIR, 'notification-recipients.json');
 const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const USER_LOCATIONS_FILE = path.join(DATA_DIR, 'user-locations.json');
 
 interface NotificationData {
   id: number;
@@ -316,6 +318,32 @@ function loadStaff(): any[] {
     return JSON.parse(data);
   } catch (error) {
     console.error('Error loading staff:', error);
+    return [];
+  }
+}
+
+function loadUsers(): any[] {
+  if (!fs.existsSync(USERS_FILE)) {
+    return [];
+  }
+  try {
+    const data = fs.readFileSync(USERS_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error loading users:', error);
+    return [];
+  }
+}
+
+function loadUserLocations(): any[] {
+  if (!fs.existsSync(USER_LOCATIONS_FILE)) {
+    return [];
+  }
+  try {
+    const data = fs.readFileSync(USER_LOCATIONS_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error loading user locations:', error);
     return [];
   }
 }
@@ -429,37 +457,57 @@ async function processNotification(notification: NotificationData): Promise<void
 }
 
 async function resolveNotificationRecipients(notification: NotificationData): Promise<number[]> {
-  const staff = loadStaff();
+  const users = loadUsers();
+  const userLocations = loadUserLocations();
   let recipients: number[] = [];
   
   switch (notification.targetType) {
     case "individual":
+      // Direct user IDs
       recipients = notification.targetData.userIds || [];
       break;
       
     case "role":
-      const roleStaff = staff.filter(s => 
-        notification.targetData.roles?.includes(s.role) &&
-        (!notification.targetData.locationIds || notification.targetData.locationIds.includes(s.locationId))
+      // Filter users by role
+      let roleUsers = users.filter(u => 
+        notification.targetData.roles?.includes(u.role)
       );
-      recipients = roleStaff.map(s => s.userId || s.id);
+      
+      // If locationIds specified, further filter by location
+      if (notification.targetData.locationIds && notification.targetData.locationIds.length > 0) {
+        const locationUserIds = userLocations
+          .filter(ul => notification.targetData.locationIds.includes(ul.locationId))
+          .map(ul => ul.userId);
+        roleUsers = roleUsers.filter(u => locationUserIds.includes(u.id));
+      }
+      
+      recipients = roleUsers.map(u => u.id);
       break;
       
     case "location":
-      const locationStaff = staff.filter(s => 
-        notification.targetData.locationIds?.includes(s.locationId) &&
-        (!notification.targetData.roles || notification.targetData.roles.includes(s.role))
-      );
-      recipients = locationStaff.map(s => s.userId || s.id);
+      // Get users at specific locations
+      const locationUserIds = userLocations
+        .filter(ul => notification.targetData.locationIds?.includes(ul.locationId))
+        .map(ul => ul.userId);
+      
+      let locationUsers = users.filter(u => locationUserIds.includes(u.id));
+      
+      // If roles specified, further filter by role
+      if (notification.targetData.roles && notification.targetData.roles.length > 0) {
+        locationUsers = locationUsers.filter(u => notification.targetData.roles.includes(u.role));
+      }
+      
+      recipients = locationUsers.map(u => u.id);
       break;
       
     case "all":
-      recipients = staff.map(s => s.userId || s.id);
+      // All users
+      recipients = users.map(u => u.id);
       break;
   }
   
-  // Remove duplicates
-  return [...new Set(recipients)];
+  // Remove duplicates and filter out invalid IDs
+  return [...new Set(recipients)].filter(id => id && id > 0);
 }
 
 async function sendNotificationEmails(notification: NotificationData, recipientIds: number[]): Promise<void> {
