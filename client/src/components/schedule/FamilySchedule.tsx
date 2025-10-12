@@ -67,32 +67,20 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   
   // Get event data from API
-  const { data: events, isLoading } = useQuery({
-    queryKey: ["/api/schedule", childFilter, eventTypeFilter],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (childFilter !== "all") params.append("childId", childFilter);
-      if (eventTypeFilter !== "all") params.append("type", eventTypeFilter);
-      
-      const url = `/api/schedule?${params.toString()}`;
-      return fetch(url)
-        .then(res => {
-          if (!res.ok) {
-            throw new Error(`Failed to fetch schedule: ${res.status}`);
-          }
-          return res.json();
-        })
-        .catch(() => {
-          // Return empty array when API fails
-          return [];
-        });
-    },
+  const scheduleUrl = React.useMemo(() => {
+    const params = new URLSearchParams();
+    if (childFilter !== "all") params.append("childId", childFilter);
+    if (eventTypeFilter !== "all") params.append("type", eventTypeFilter);
+    return `/api/schedule${params.toString() ? `?${params.toString()}` : ''}`;
+  }, [childFilter, eventTypeFilter]);
+
+  const { data: events = [], isLoading } = useQuery<ScheduleEvent[]>({
+    queryKey: [scheduleUrl],
   });
   
   // Get children data for the filter
-  const { data: children } = useQuery({
-    queryKey: ["/api/children"],
-    queryFn: () => fetch("/api/children").then(res => res.json()).catch(() => []),
+  const { data: children = [] } = useQuery({
+    queryKey: ["/api/parent/children"],
   });
   
   // Calendar navigation functions
