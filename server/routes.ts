@@ -1850,7 +1850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return null;
           }
 
-          // Parse schedule to get times (format: "Monday, Wednesday, Friday 9am-12pm")
+          // Parse schedule to get days and times (format: "Monday, Wednesday, Friday 9am-12pm")
           const scheduleMatch = classDetails.schedule?.match(/(\d+)(am|pm)-(\d+)(am|pm)/);
           let startTime = '9:00';
           let endTime = '12:00';
@@ -1865,29 +1865,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
             endTime = `${endPeriod === 'pm' && endHour !== 12 ? endHour + 12 : endHour}:00`;
           }
 
-          // Create schedule events for each class session
-          // For now, use the start and end date of the class
-          return {
-            id: `enrollment-${enrollment.id || Math.random()}-${classDetails.id}`,
-            title: classDetails.title || enrollment.className,
-            date: classDetails.startDate || new Date().toISOString().split('T')[0],
-            startTime,
-            endTime,
-            location: classDetails.location || 'Location TBD',
-            type: 'class',
-            childId: enrollment.childId.toString(),
-            childName: enrollment.childName,
-            color: '#3b82f6',
-            description: classDetails.description || '',
-            programName: classDetails.title,
-            instructorName: classDetails.instructorName || 'TBD',
-            schedule: classDetails.schedule
-          };
+          // Parse days of week from schedule
+          const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const scheduleDays: number[] = [];
+          
+          daysOfWeek.forEach((day, index) => {
+            if (classDetails.schedule?.toLowerCase().includes(day.toLowerCase())) {
+              scheduleDays.push(index);
+            }
+          });
+
+          // Generate recurring events for the next 3 months
+          const events: any[] = [];
+          const startDateObj = new Date(classDetails.startDate || new Date());
+          const endDateObj = new Date(classDetails.endDate || new Date());
+          endDateObj.setMonth(endDateObj.getMonth() + 3); // Show 3 months ahead
+          
+          const currentDate = new Date(startDateObj);
+          
+          while (currentDate <= endDateObj) {
+            if (scheduleDays.includes(currentDate.getDay())) {
+              events.push({
+                id: `enrollment-${enrollment.id || Math.random()}-${classDetails.id}-${currentDate.toISOString()}`,
+                title: classDetails.title || enrollment.className,
+                date: currentDate.toISOString().split('T')[0],
+                startTime,
+                endTime,
+                location: classDetails.location || 'Location TBD',
+                type: 'class',
+                childId: enrollment.childId.toString(),
+                childName: enrollment.childName,
+                color: '#3b82f6',
+                description: classDetails.description || '',
+                programName: classDetails.title,
+                instructorName: classDetails.instructorName || 'TBD',
+                schedule: classDetails.schedule
+              });
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+
+          return events;
         })
       );
 
-      // Filter out null values and apply type filter
-      let validEvents = scheduleEvents.filter(Boolean);
+      // Flatten array of arrays (each enrollment returns multiple events)
+      // and filter out null values
+      let validEvents = scheduleEvents.flat().filter(Boolean);
       
       if (typeFilter && typeFilter !== 'all') {
         validEvents = validEvents.filter(e => e.type === typeFilter);
