@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth0";
 import { useSupabaseAuth } from "@/components/SupabaseProvider";
-import { formatDate, formatTime, formatClassSchedule } from "@/lib/utils";
+import { formatDate, formatClassSchedule } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole"; // Assuming useRole hook is available
 
 export default function EducatorDashboard() {
@@ -82,7 +82,7 @@ export default function EducatorDashboard() {
         <div>
           <h1 className="text-4xl font-bold text-gray-900">{getDashboardTitle()}</h1>
           <p className="text-lg text-gray-600 mt-2">{getWelcomeMessage()}</p>
-          <p className="text-sm text-gray-500">Role: {activeRole} | {user?.user_metadata?.name || user?.email}</p>
+          <p className="text-sm text-gray-500">Role: {activeRole} | {(user as any)?.user_metadata?.name || user?.email}</p>
         </div>
       </div>
 
@@ -125,7 +125,7 @@ export default function EducatorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {classesLoading ? "..." : assignedClasses?.filter(c => c.status === 'active')?.length || 0}
+              {classesLoading ? "..." : assignedClasses?.filter((c: any) => c.status === 'active')?.length || 0}
             </div>
             <p className="text-xs text-muted-foreground">
               Classes this week
@@ -140,7 +140,7 @@ export default function EducatorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {classesLoading ? "..." : assignedClasses?.filter(c => c.status === 'upcoming')?.length || 0}
+              {classesLoading ? "..." : assignedClasses?.filter((c: any) => c.status === 'upcoming')?.length || 0}
             </div>
             <p className="text-xs text-muted-foreground">
               Starting soon
@@ -186,7 +186,7 @@ export default function EducatorDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {assignedClasses.map((classItem) => (
+                      {assignedClasses.map((classItem: any) => (
                         <TableRow key={classItem.id}>
                           <TableCell className="font-medium">
                             <div>
@@ -279,7 +279,7 @@ export default function EducatorDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {studentsData.students.map((student) => (
+                      {studentsData.students.map((student: any) => (
                         <TableRow key={student.id}>
                           <TableCell className="font-medium">
                             {student.firstName} {student.lastName}
