@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 import { 
   Bell, 
   BellOff, 
@@ -129,19 +130,22 @@ export default function NotificationsPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 max-w-5xl">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading notifications...</p>
+      <ParentAppShell>
+        <div className="container mx-auto p-6 max-w-5xl">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-4 text-muted-foreground">Loading notifications...</p>
+            </div>
           </div>
         </div>
-      </div>
+      </ParentAppShell>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-5xl">
+    <ParentAppShell>
+      <div className="container mx-auto p-6 max-w-5xl">
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -307,6 +311,7 @@ export default function NotificationsPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+      </div>
+    </ParentAppShell>
   );
 }
