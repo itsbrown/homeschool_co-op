@@ -4,8 +4,9 @@
     "notificationId": 1,
     "recipientId": 1,
     "deliveryType": "email",
-    "status": "pending",
-    "createdAt": "2025-10-12T14:00:59.732Z"
+    "status": "read",
+    "createdAt": "2025-10-12T14:00:59.732Z",
+    "readAt": "2025-10-12T14:03:12.830Z"
   },
   {
     "id": 2,
