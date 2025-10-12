@@ -35,6 +35,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -53,6 +60,7 @@ interface ScheduleEvent {
   description?: string;
   programName?: string;
   instructorName?: string;
+  schedule?: string;
 }
 
 interface FamilyScheduleProps {
@@ -65,6 +73,7 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
   const [childFilter, setChildFilter] = useState<string>(childId || "all");
   const [eventTypeFilter, setEventTypeFilter] = useState("all");
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
   
   // Get event data from API
   const scheduleUrl = React.useMemo(() => {
@@ -327,8 +336,12 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedEvent(event);
+                                  }}
                                   className={cn(
-                                    "h-1.5 w-full mb-1 rounded-sm",
+                                    "h-1.5 w-full mb-1 rounded-sm cursor-pointer hover:opacity-80 transition-opacity",
                                     event.type === 'class' ? 'bg-blue-400' : 
                                     event.type === 'program' ? 'bg-green-400' : 
                                     event.type === 'field-trip' ? 'bg-purple-400' : 
@@ -505,6 +518,89 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
           </CardContent>
         </Card>
       )}
+      
+      {/* Event Details Dialog */}
+      <Dialog open={!!selectedEvent} onOpenChange={(open) => !open && setSelectedEvent(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{selectedEvent?.title}</DialogTitle>
+            <DialogDescription>
+              {selectedEvent && format(parseISO(selectedEvent.date), 'EEEE, MMMM d, yyyy')}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedEvent && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge className={getEventColor(selectedEvent.type)}>
+                  {selectedEvent.type === 'class' ? 'Class' : 
+                   selectedEvent.type === 'program' ? 'Program' : 
+                   selectedEvent.type === 'field-trip' ? 'Field Trip' : 
+                   'Event'}
+                </Badge>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">Time</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatTime(selectedEvent.startTime)} - {formatTime(selectedEvent.endTime)}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">Location</p>
+                    <p className="text-sm text-muted-foreground">{selectedEvent.location}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <User className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">Student</p>
+                    <p className="text-sm text-muted-foreground">{selectedEvent.childName}</p>
+                  </div>
+                </div>
+                
+                {selectedEvent.instructorName && (
+                  <div className="flex items-start gap-3">
+                    <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium">Instructor</p>
+                      <p className="text-sm text-muted-foreground">{selectedEvent.instructorName}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {selectedEvent.description && (
+                  <div className="flex items-start gap-3">
+                    <CalendarIcon className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium">Description</p>
+                      <p className="text-sm text-muted-foreground">{selectedEvent.description}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {selectedEvent.schedule && (
+                  <div className="flex items-start gap-3">
+                    <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium">Schedule</p>
+                      <p className="text-sm text-muted-foreground">{selectedEvent.schedule}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
