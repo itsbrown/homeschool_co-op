@@ -1786,6 +1786,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Family schedule endpoint
+  app.get("/api/schedule", jwtCheck, async (req, res) => {
+    try {
+      const userEmail = req.auth?.payload?.email;
+
+      if (!userEmail) {
+        return res.status(401).json({ message: 'User email not found in token' });
+      }
+
+      console.log(`📅 Fetching schedule for parent: ${userEmail}`);
+
+      // Get query parameters for filtering
+      const childIdFilter = req.query.childId as string;
+      const typeFilter = req.query.type as string;
+
+      // Get all children for this parent
+      const children = await storage.getChildrenByEmail(userEmail);
+      console.log(`👨‍👩‍👧‍👦 Found ${children.length} children for parent`);
+
+      if (children.length === 0) {
+        return res.json([]);
+      }
+
+      // Get enrollments for all children (or filtered child)
+      let allEnrollments: any[] = [];
+      
+      if (childIdFilter && childIdFilter !== 'all') {
+        const childId = parseInt(childIdFilter);
+        const enrollments = await storage.getEnrollmentsByChildId(childId);
+        allEnrollments = enrollments.map((e: any) => ({
+          ...e,
+          childId,
+          childName: children.find(c => c.id === childId)?.firstName + ' ' + children.find(c => c.id === childId)?.lastName
+        }));
+      } else {
+        // Get enrollments for all children
+        for (const child of children) {
+          const enrollments = await storage.getEnrollmentsByChildId(child.id);
+          allEnrollments.push(...enrollments.map((e: any) => ({
+            ...e,
+            childId: child.id,
+            childName: `${child.firstName} ${child.lastName}`
+          })));
+        }
+      }
+
+      console.log(`📋 Found ${allEnrollments.length} total enrollments`);
+
+      // Filter to only enrolled status
+      const activeEnrollments = allEnrollments.filter(e => e.status === 'enrolled');
+      console.log(`✅ ${activeEnrollments.length} active enrollments`);
+
+      // Get class details for each enrollment and format as schedule events
+      const scheduleEvents = await Promise.all(
+        activeEnrollments.map(async (enrollment) => {
+          // Get class details
+          const classId = enrollment.classId || enrollment.programId;
+          const classDetails = await storage.getClassById(classId);
+          
+          if (!classDetails) {
+            console.log(`⚠️ Class not found for enrollment:`, enrollment);
+            return null;
+          }
+
+          // Parse schedule to get times (format: "Monday, Wednesday, Friday 9am-12pm")
+          const scheduleMatch = classDetails.schedule?.match(/(\d+)(am|pm)-(\d+)(am|pm)/);
+          let startTime = '9:00';
+          let endTime = '12:00';
+          
+          if (scheduleMatch) {
+            const startHour = parseInt(scheduleMatch[1]);
+            const startPeriod = scheduleMatch[2];
+            const endHour = parseInt(scheduleMatch[3]);
+            const endPeriod = scheduleMatch[4];
+            
+            startTime = `${startPeriod === 'pm' && startHour !== 12 ? startHour + 12 : startHour}:00`;
+            endTime = `${endPeriod === 'pm' && endHour !== 12 ? endHour + 12 : endHour}:00`;
+          }
+
+          // Create schedule events for each class session
+          // For now, use the start and end date of the class
+          return {
+            id: `enrollment-${enrollment.id || Math.random()}-${classDetails.id}`,
+            title: classDetails.title || enrollment.className,
+            date: classDetails.startDate || new Date().toISOString().split('T')[0],
+            startTime,
+            endTime,
+            location: classDetails.location || 'Location TBD',
+            type: 'class',
+            childId: enrollment.childId.toString(),
+            childName: enrollment.childName,
+            color: '#3b82f6',
+            description: classDetails.description || '',
+            programName: classDetails.title,
+            instructorName: classDetails.instructorName || 'TBD',
+            schedule: classDetails.schedule
+          };
+        })
+      );
+
+      // Filter out null values and apply type filter
+      let validEvents = scheduleEvents.filter(Boolean);
+      
+      if (typeFilter && typeFilter !== 'all') {
+        validEvents = validEvents.filter(e => e.type === typeFilter);
+      }
+
+      console.log(`📅 Returning ${validEvents.length} schedule events`);
+      res.json(validEvents);
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+      res.status(500).json({ message: 'Failed to fetch schedule' });
+    }
+  });
+
   // Add individual child endpoint
   app.get("/api/children/:id", async (req, res) => {
     try {
