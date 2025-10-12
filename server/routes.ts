@@ -1802,7 +1802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const typeFilter = req.query.type as string;
 
       // Get all children for this parent
-      const children = await storage.getChildrenByEmail(userEmail);
+      const children = await storage.getChildrenByParentEmail(userEmail);
       console.log(`👨‍👩‍👧‍👦 Found ${children.length} children for parent`);
 
       if (children.length === 0) {
