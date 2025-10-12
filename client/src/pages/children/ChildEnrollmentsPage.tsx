@@ -265,19 +265,6 @@ export default function ChildEnrollmentsPage() {
                           Enrolled on {formatDate(enrollment.enrollmentDate)}
                         </p>
                         <div className="space-x-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => {
-                              const classId = enrollment.classId || (enrollment as any).programId;
-                              if (classId) {
-                                window.location.href = `/programs/class/${classId}`;
-                              }
-                            }}
-                            disabled={!enrollment.classId && !(enrollment as any).programId}
-                          >
-                            View Details
-                          </Button>
                           {enrollment.status === 'enrolled' && (
                             <Button 
                               variant="outline" 
