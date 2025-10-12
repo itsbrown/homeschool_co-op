@@ -433,6 +433,17 @@ function NotificationComposeDialog({
   const [targetType, setTargetType] = useState("individual");
   const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  
+  // Get user role for default delivery method
+  const userRole = localStorage.getItem('activeRole') || 'parent';
+  const defaultDeliveryMethod = userRole === 'school_admin' || userRole === 'platform_admin' ? 'in_app' : 'both';
+  
+  // Reset selections when changing target type
+  const handleTargetTypeChange = (newType: string) => {
+    setTargetType(newType);
+    setSelectedLocations([]);
+    setSelectedRoles([]);
+  };
 
   const handleSubmit = (formData: FormData) => {
     const baseData = {
@@ -522,7 +533,7 @@ function NotificationComposeDialog({
             <div className="grid grid-cols-3 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="type">Delivery Method</Label>
-                <Select name="type" defaultValue="both">
+                <Select name="type" defaultValue={defaultDeliveryMethod}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -563,7 +574,7 @@ function NotificationComposeDialog({
           {/* Target Selection */}
           <div className="grid gap-4">
             <Label>Target Recipients</Label>
-            <Tabs value={targetType} onValueChange={setTargetType}>
+            <Tabs value={targetType} onValueChange={handleTargetTypeChange}>
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="individual">Individual</TabsTrigger>
                 <TabsTrigger value="role">By Role</TabsTrigger>
