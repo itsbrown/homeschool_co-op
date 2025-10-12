@@ -281,7 +281,21 @@ export default function ChildEnrollmentsPage() {
                               </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button variant="outline" size="sm">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    disabled={!enrollment.id}
+                                    onClick={(e) => {
+                                      if (!enrollment.id) {
+                                        e.preventDefault();
+                                        toast({
+                                          title: "Cannot Unenroll",
+                                          description: "This enrollment cannot be removed. Please contact support for assistance.",
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }}
+                                  >
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Unenroll
                                   </Button>
@@ -296,8 +310,12 @@ export default function ChildEnrollmentsPage() {
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
-                                      onClick={() => enrollment.id && unenrollMutation.mutate(enrollment.id)}
-                                      disabled={unenrollMutation.isPending}
+                                      onClick={() => {
+                                        if (enrollment.id) {
+                                          unenrollMutation.mutate(enrollment.id);
+                                        }
+                                      }}
+                                      disabled={unenrollMutation.isPending || !enrollment.id}
                                     >
                                       {unenrollMutation.isPending ? "Unenrolling..." : "Unenroll"}
                                     </AlertDialogAction>
