@@ -74,6 +74,7 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
   const [eventTypeFilter, setEventTypeFilter] = useState("all");
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
+  const [selectedDayEvents, setSelectedDayEvents] = useState<{ date: Date; events: ScheduleEvent[] } | null>(null);
   
   // Get event data from API
   const scheduleUrl = React.useMemo(() => {
@@ -320,7 +321,12 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
                       isSelected && "border-primary",
                       isToday && "bg-muted"
                     )}
-                    onClick={() => setSelectedDate(day)}
+                    onClick={() => {
+                      if (dayEvents.length > 0) {
+                        setSelectedDayEvents({ date: day, events: dayEvents });
+                      }
+                      setSelectedDate(day);
+                    }}
                   >
                     <div className="w-full h-full flex flex-col">
                       <div className={cn(
@@ -597,6 +603,83 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Daily Events Dialog */}
+      <Dialog open={!!selectedDayEvents} onOpenChange={(open) => !open && setSelectedDayEvents(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDayEvents && format(selectedDayEvents.date, 'EEEE, MMMM d, yyyy')}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedDayEvents && `${selectedDayEvents.events.length} event${selectedDayEvents.events.length !== 1 ? 's' : ''} scheduled`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedDayEvents && (
+            <div className="space-y-3">
+              {selectedDayEvents.events
+                .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                .map((event) => (
+                  <Card key={event.id} className="overflow-hidden">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold">{event.title}</h3>
+                            <Badge variant="outline" className={getEventColor(event.type)}>
+                              {event.type === 'class' ? 'Class' : 
+                               event.type === 'program' ? 'Program' : 
+                               event.type === 'field-trip' ? 'Field Trip' : 
+                               'Event'}
+                            </Badge>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              <span>{formatTime(event.startTime)} - {formatTime(event.endTime)}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              <span>{event.location}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              <span>{event.childName}</span>
+                            </div>
+                            
+                            {event.instructorName && (
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                <span>{event.instructorName}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {event.description && (
+                            <p className="text-sm text-muted-foreground pt-2">
+                              {event.description}
+                            </p>
+                          )}
+                          
+                          {event.schedule && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
+                              <Calendar className="h-4 w-4" />
+                              <span>{event.schedule}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
             </div>
           )}
         </DialogContent>
