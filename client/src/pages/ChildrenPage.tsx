@@ -5,14 +5,55 @@ import ParentAppShell from "@/components/layout/ParentAppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
-import { UserPlus, Calendar, School, BookOpen, Plus } from "lucide-react";
+import { UserPlus, Calendar, School, Plus, GraduationCap } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 
+// Most Recent Enrollment Component for Child Card
+function MostRecentEnrollment({ childId }: { childId: number }) {
+  const { data: enrollments, isLoading } = useQuery<any[]>({
+    queryKey: [`/api/children/${childId}/enrollments`],
+    enabled: !!childId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="animate-pulse">
+        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+      </div>
+    );
+  }
+
+  // Get the most recent enrollment
+  const mostRecent = enrollments && enrollments.length > 0 
+    ? [...enrollments].sort((a: any, b: any) => 
+        new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
+      )[0]
+    : null;
+
+  if (!mostRecent) {
+    return (
+      <span className="text-sm text-muted-foreground">No recent enrollments</span>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <GraduationCap className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{mostRecent.className}</p>
+        <p className="text-xs text-muted-foreground">
+          {new Date(mostRecent.enrollmentDate).toLocaleDateString()}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // Child Enrollments Component
 function ChildEnrollments({ childId }: { childId: number }) {
-  const { data: enrollments = [], isLoading } = useQuery({
+  const { data: enrollments, isLoading } = useQuery<any[]>({
     queryKey: [`/api/children/${childId}/enrollments`],
     enabled: !!childId,
   });
@@ -127,14 +168,14 @@ export default function ChildrenPage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <div className="flex items-center">
                           <School className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>School: {child.school || "Not specified"}</span>
+                          <span className="text-sm">School: {child.school || "Not specified"}</span>
                         </div>
-                        <div className="flex items-center">
-                          <BookOpen className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>Learning Style: {child.learningStyle || "Not specified"}</span>
+                        <div>
+                          <p className="text-sm font-medium mb-2">Recent Enrollment:</p>
+                          <MostRecentEnrollment childId={child.id} />
                         </div>
                       </div>
                       <Separator className="my-4" />
