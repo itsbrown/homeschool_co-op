@@ -35,7 +35,8 @@
     "subjects": [],
     "invitedAt": "2025-05-27T20:40:17.704Z",
     "message": "Test",
-    "invitationToken": "4s557l5e0gykiupgjw2zg"
+    "invitationToken": "4s557l5e0gykiupgjw2zg",
+    "classIds": ["3", "5", "6", "7"]
   },
   {
     "id": 3,
