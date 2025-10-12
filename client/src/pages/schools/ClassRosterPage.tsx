@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, UserPlus, Mail, Phone, Calendar, GraduationCap } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -48,6 +48,7 @@ export default function ClassRosterPage() {
   const { id: classId } = useParams();
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   // Fetch class details
   const { data: classData, isLoading: classLoading } = useQuery<ClassDetails>({
@@ -225,7 +226,11 @@ export default function ClassRosterPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Button variant="outline" size="sm">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setLocation(`/schools/students/${student.id}`)}
+                            >
                               View Profile
                             </Button>
                           </TableCell>

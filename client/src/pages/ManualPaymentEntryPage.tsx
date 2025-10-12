@@ -258,7 +258,7 @@ export default function ManualPaymentEntryPage() {
                           <SelectContent>
                             {classes.map((cls: any) => (
                               <SelectItem key={cls.id} value={cls.title || cls.name}>
-                                {cls.title || cls.name} {cls.price && `- $${cls.price}`}
+                                {cls.title || cls.name} {cls.price && `- $${(cls.price / 100).toFixed(2)}`}
                               </SelectItem>
                             ))}
                             <SelectItem value="custom">Enter custom class...</SelectItem>
