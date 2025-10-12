@@ -233,24 +233,47 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
       {viewMode === 'calendar' ? (
         <Card className="border">
           <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>{format(currentDate, 'MMMM yyyy')}</CardTitle>
-                <CardDescription>
-                  {isLoading ? "Loading events..." : events?.length || 0} scheduled activities
-                </CardDescription>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>{format(currentDate, 'MMMM yyyy')}</CardTitle>
+                  <CardDescription>
+                    {isLoading ? "Loading events..." : events?.length || 0} scheduled activities
+                  </CardDescription>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={goToToday}>
+                    Today
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={goToToday}>
-                  Today
-                </Button>
-                <Button variant="outline" size="icon" onClick={goToNextMonth}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              {/* Color Legend */}
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <span className="text-muted-foreground font-medium">Legend:</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-2 rounded-sm bg-blue-400"></div>
+                  <span>Classes</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-2 rounded-sm bg-green-400"></div>
+                  <span>Programs</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-2 rounded-sm bg-purple-400"></div>
+                  <span>Field Trips</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-2 rounded-sm bg-amber-400"></div>
+                  <span>Events</span>
+                </div>
               </div>
             </div>
           </CardHeader>
