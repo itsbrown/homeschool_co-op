@@ -260,11 +260,11 @@ export default function ChildEnrollmentsPage() {
                       </div>
                     </div>
                     <div className="mt-4 pt-4 border-t">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <p className="text-sm text-muted-foreground">
                           Enrolled on {formatDate(enrollment.enrollmentDate)}
                         </p>
-                        <div className="space-x-2">
+                        <div className="flex gap-2 w-full sm:w-auto sm:mr-32">
                           {enrollment.status === 'pending_payment' && (
                             <>
                               <Button 

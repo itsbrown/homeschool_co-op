@@ -41,7 +41,9 @@
     "paymentSystemVersion": "v2_stripe",
     "updatedAt": "2025-09-05T13:37:26.753Z"
   },
-  1759675057498,
+  {
+    "enrollmentDate": "2025-10-12T03:40:46.364Z"
+  },
   {
     "programId": 12,
     "parentId": 0,
@@ -705,19 +707,6 @@
     "enrollmentDate": "2025-09-25T15:53:08.460Z"
   },
   {
-    "id": 1758820545000,
-    "classId": 15,
-    "childId": 3,
-    "childName": "Silvie Puccia",
-    "className": "Seekers",
-    "enrollmentDate": "2025-09-25T17:15:45.000Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 9000,
-    "totalCost": 90000,
-    "remainingBalance": 90000
-  },
-  {
     "id": 1758824915410,
     "classId": 15,
     "childId": 4,
@@ -744,19 +733,6 @@
     "remainingBalance": 90000
   },
   {
-    "id": 1759641101243,
-    "classId": 12,
-    "childId": 3,
-    "childName": "Silvie Puccia",
-    "className": "Seekers | Half Day",
-    "enrollmentDate": "2025-10-05T05:11:41.243Z",
-    "status": "pending_payment",
-    "amount": 0,
-    "depositRequired": 9000,
-    "totalCost": 90000,
-    "remainingBalance": 90000
-  },
-  {
     "programId": 5,
     "parentId": 0,
     "parentEmail": "kpdinvestors@gmail.com",
@@ -770,7 +746,8 @@
     "status": "pending_payment",
     "createdAt": "2025-10-05T14:37:37.461Z",
     "updatedAt": "2025-10-05T14:37:37.461Z",
-    "id": 1759675057461
+    "id": 1759675057461,
+    "enrollmentDate": "2025-10-12T03:40:46.365Z"
   },
   {
     "programId": 15,
@@ -786,7 +763,8 @@
     "status": "pending_payment",
     "createdAt": "2025-10-05T14:37:37.468Z",
     "updatedAt": "2025-10-05T14:37:37.468Z",
-    "id": 1759675057468
+    "id": 1759675057468,
+    "enrollmentDate": "2025-10-12T03:40:46.365Z"
   },
   {
     "programId": 15,
@@ -802,7 +780,8 @@
     "status": "pending_payment",
     "createdAt": "2025-10-05T14:37:37.480Z",
     "updatedAt": "2025-10-05T14:37:37.480Z",
-    "id": 1759675057480
+    "id": 1759675057480,
+    "enrollmentDate": "2025-10-12T03:40:46.365Z"
   },
   {
     "programId": 15,
@@ -818,6 +797,7 @@
     "status": "pending_payment",
     "createdAt": "2025-10-05T14:37:37.498Z",
     "updatedAt": "2025-10-05T14:37:37.498Z",
-    "id": 1759675057498
+    "id": 1759675057498,
+    "enrollmentDate": "2025-10-12T03:40:46.365Z"
   }
 ]
