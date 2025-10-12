@@ -81,7 +81,7 @@ const adminNavItems: NavItem[] = [
   },
   {
     title: 'Marketing Links',
-    href: '/marketing-links',
+    href: '/schools/marketing-links',
     icon: Link2,
   },
   {
