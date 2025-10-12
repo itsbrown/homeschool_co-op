@@ -59,23 +59,25 @@ export default function NotificationManagementPage() {
   const queryClient = useQueryClient();
 
   // Fetch notifications
-  const { data: notifications = [], isLoading } = useQuery({
+  const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
-    queryFn: () => apiRequest("/api/notifications?userId=1&role=school_admin"),
   });
 
   // Fetch locations for targeting
-  const { data: locations = [] } = useQuery({
+  const { data: locations = [] } = useQuery<Location[]>({
     queryKey: ["/api/locations", 1],
-    queryFn: () => apiRequest("/api/locations?schoolId=1"),
   });
 
   // Send individual notification mutation
   const sendIndividualMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/notifications/send-individual", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("POST", "/api/notifications/send-individual", data);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       setIsComposeDialogOpen(false);
@@ -95,10 +97,14 @@ export default function NotificationManagementPage() {
 
   // Send role-based notification mutation
   const sendRoleMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/notifications/send-by-role", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("POST", "/api/notifications/send-by-role", data);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       setIsComposeDialogOpen(false);
@@ -118,10 +124,14 @@ export default function NotificationManagementPage() {
 
   // Send location-based notification mutation
   const sendLocationMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/notifications/send-by-location", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("POST", "/api/notifications/send-by-location", data);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       setIsComposeDialogOpen(false);
@@ -141,10 +151,14 @@ export default function NotificationManagementPage() {
 
   // Send broadcast notification mutation
   const sendBroadcastMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/notifications/send-all", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("POST", "/api/notifications/send-all", data);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       setIsComposeDialogOpen(false);
@@ -178,15 +192,15 @@ export default function NotificationManagementPage() {
   };
 
   const getPriorityBadge = (priority: string) => {
-    const variants = {
+    const variants: Record<string, "default" | "destructive" | "secondary" | "outline"> = {
       low: "secondary",
       normal: "default",
-      high: "orange",
+      high: "destructive",
       urgent: "destructive",
-    } as const;
+    };
 
     return (
-      <Badge variant={variants[priority as keyof typeof variants] || "default"}>
+      <Badge variant={variants[priority] || "default"}>
         {priority}
       </Badge>
     );
@@ -498,7 +512,11 @@ function NotificationComposeDialog({
 
   return (
     <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-      <form action={handleSubmit}>
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        handleSubmit(formData);
+      }}>
         <DialogHeader>
           <DialogTitle>Compose Notification</DialogTitle>
           <DialogDescription>
