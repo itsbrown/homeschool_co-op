@@ -383,20 +383,48 @@ export default function ParentDashboard() {
                     const fullName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
                     const age = calculateAge(child.birthdate);
 
+                    // Get enrollments for this child
+                    const childEnrollments = enrollmentsData?.filter((e: any) => e.childId === child.id) || [];
+
                     return (
-                      <div key={child.id || `child-${index}`} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <User className="h-5 w-5 text-blue-600" />
+                      <div key={child.id || `child-${index}`} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                              <User className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{fullName}</p>
+                              <p className="text-sm text-muted-foreground">Age: {age} • Grade: {child.gradeLevel || 'Not specified'}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium">{fullName}</p>
-                            <p className="text-sm text-muted-foreground">Age: {age} • Grade: {child.gradeLevel || 'Not specified'}</p>
-                          </div>
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/children/${child.id}`}>View Profile</Link>
+                          </Button>
                         </div>
-                        <Button size="sm" variant="outline" asChild>
-                          <Link href={`/children/${child.id}`}>View Profile</Link>
-                        </Button>
+                        
+                        {/* Child's Enrollments */}
+                        {childEnrollments.length > 0 && (
+                          <div className="ml-14 space-y-2">
+                            <p className="text-sm font-medium text-muted-foreground">Enrollments ({childEnrollments.length})</p>
+                            <div className="space-y-2">
+                              {childEnrollments.map((enrollment: any) => (
+                                <div key={enrollment.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                  <div className="flex items-center gap-2">
+                                    <BookOpen className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm">{enrollment.className}</span>
+                                  </div>
+                                  <Badge 
+                                    variant={enrollment.status === 'enrolled' ? 'default' : 'secondary'}
+                                    className={enrollment.status === 'enrolled' ? 'bg-green-100 text-green-800' : ''}
+                                  >
+                                    {enrollment.status}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
