@@ -1,1 +1,1312 @@
-[]
+[
+  {
+    "id": 1,
+    "notificationId": 1,
+    "recipientId": 1,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:00:59.732Z"
+  },
+  {
+    "id": 2,
+    "notificationId": 1,
+    "recipientId": 1,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:00:59.733Z",
+    "createdAt": "2025-10-12T14:00:59.733Z"
+  },
+  {
+    "id": 3,
+    "notificationId": 2,
+    "recipientId": 8,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 4,
+    "notificationId": 2,
+    "recipientId": 8,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 5,
+    "notificationId": 2,
+    "recipientId": 65,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 6,
+    "notificationId": 2,
+    "recipientId": 65,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 7,
+    "notificationId": 2,
+    "recipientId": 9,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 8,
+    "notificationId": 2,
+    "recipientId": 9,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 9,
+    "notificationId": 2,
+    "recipientId": 10,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 10,
+    "notificationId": 2,
+    "recipientId": 10,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 11,
+    "notificationId": 2,
+    "recipientId": 11,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 12,
+    "notificationId": 2,
+    "recipientId": 11,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 13,
+    "notificationId": 2,
+    "recipientId": 12,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 14,
+    "notificationId": 2,
+    "recipientId": 12,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 15,
+    "notificationId": 2,
+    "recipientId": 13,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 16,
+    "notificationId": 2,
+    "recipientId": 13,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 17,
+    "notificationId": 2,
+    "recipientId": 14,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 18,
+    "notificationId": 2,
+    "recipientId": 14,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 19,
+    "notificationId": 2,
+    "recipientId": 15,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 20,
+    "notificationId": 2,
+    "recipientId": 15,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 21,
+    "notificationId": 2,
+    "recipientId": 17,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 22,
+    "notificationId": 2,
+    "recipientId": 17,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 23,
+    "notificationId": 2,
+    "recipientId": 18,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 24,
+    "notificationId": 2,
+    "recipientId": 18,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 25,
+    "notificationId": 2,
+    "recipientId": 21,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 26,
+    "notificationId": 2,
+    "recipientId": 21,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 27,
+    "notificationId": 2,
+    "recipientId": 22,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 28,
+    "notificationId": 2,
+    "recipientId": 22,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 29,
+    "notificationId": 2,
+    "recipientId": 23,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 30,
+    "notificationId": 2,
+    "recipientId": 23,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 31,
+    "notificationId": 2,
+    "recipientId": 26,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 32,
+    "notificationId": 2,
+    "recipientId": 26,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 33,
+    "notificationId": 2,
+    "recipientId": 27,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 34,
+    "notificationId": 2,
+    "recipientId": 27,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 35,
+    "notificationId": 2,
+    "recipientId": 28,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 36,
+    "notificationId": 2,
+    "recipientId": 28,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 37,
+    "notificationId": 2,
+    "recipientId": 29,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 38,
+    "notificationId": 2,
+    "recipientId": 29,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 39,
+    "notificationId": 2,
+    "recipientId": 30,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 40,
+    "notificationId": 2,
+    "recipientId": 30,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 41,
+    "notificationId": 2,
+    "recipientId": 31,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 42,
+    "notificationId": 2,
+    "recipientId": 31,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.770Z",
+    "createdAt": "2025-10-12T14:01:33.770Z"
+  },
+  {
+    "id": 43,
+    "notificationId": 2,
+    "recipientId": 32,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 44,
+    "notificationId": 2,
+    "recipientId": 32,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 45,
+    "notificationId": 2,
+    "recipientId": 33,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 46,
+    "notificationId": 2,
+    "recipientId": 33,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 47,
+    "notificationId": 2,
+    "recipientId": 34,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 48,
+    "notificationId": 2,
+    "recipientId": 34,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 49,
+    "notificationId": 2,
+    "recipientId": 35,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 50,
+    "notificationId": 2,
+    "recipientId": 35,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 51,
+    "notificationId": 2,
+    "recipientId": 37,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 52,
+    "notificationId": 2,
+    "recipientId": 37,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 53,
+    "notificationId": 2,
+    "recipientId": 39,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 54,
+    "notificationId": 2,
+    "recipientId": 39,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 55,
+    "notificationId": 2,
+    "recipientId": 40,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 56,
+    "notificationId": 2,
+    "recipientId": 40,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 57,
+    "notificationId": 2,
+    "recipientId": 41,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 58,
+    "notificationId": 2,
+    "recipientId": 41,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 59,
+    "notificationId": 2,
+    "recipientId": 42,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 60,
+    "notificationId": 2,
+    "recipientId": 42,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 61,
+    "notificationId": 2,
+    "recipientId": 44,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 62,
+    "notificationId": 2,
+    "recipientId": 44,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 63,
+    "notificationId": 2,
+    "recipientId": 45,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 64,
+    "notificationId": 2,
+    "recipientId": 45,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 65,
+    "notificationId": 2,
+    "recipientId": 46,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 66,
+    "notificationId": 2,
+    "recipientId": 46,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 67,
+    "notificationId": 2,
+    "recipientId": 47,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 68,
+    "notificationId": 2,
+    "recipientId": 47,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 69,
+    "notificationId": 2,
+    "recipientId": 48,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 70,
+    "notificationId": 2,
+    "recipientId": 48,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 71,
+    "notificationId": 2,
+    "recipientId": 52,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 72,
+    "notificationId": 2,
+    "recipientId": 52,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 73,
+    "notificationId": 2,
+    "recipientId": 53,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 74,
+    "notificationId": 2,
+    "recipientId": 53,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 75,
+    "notificationId": 2,
+    "recipientId": 54,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 76,
+    "notificationId": 2,
+    "recipientId": 54,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 77,
+    "notificationId": 2,
+    "recipientId": 55,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 78,
+    "notificationId": 2,
+    "recipientId": 55,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 79,
+    "notificationId": 2,
+    "recipientId": 56,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 80,
+    "notificationId": 2,
+    "recipientId": 56,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 81,
+    "notificationId": 2,
+    "recipientId": 57,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 82,
+    "notificationId": 2,
+    "recipientId": 57,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 83,
+    "notificationId": 2,
+    "recipientId": 58,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 84,
+    "notificationId": 2,
+    "recipientId": 58,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 85,
+    "notificationId": 2,
+    "recipientId": 59,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 86,
+    "notificationId": 2,
+    "recipientId": 59,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 87,
+    "notificationId": 2,
+    "recipientId": 60,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 88,
+    "notificationId": 2,
+    "recipientId": 60,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 89,
+    "notificationId": 2,
+    "recipientId": 61,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 90,
+    "notificationId": 2,
+    "recipientId": 61,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 91,
+    "notificationId": 2,
+    "recipientId": 62,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 92,
+    "notificationId": 2,
+    "recipientId": 62,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 93,
+    "notificationId": 2,
+    "recipientId": 66,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 94,
+    "notificationId": 2,
+    "recipientId": 66,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 95,
+    "notificationId": 2,
+    "recipientId": 67,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 96,
+    "notificationId": 2,
+    "recipientId": 67,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 97,
+    "notificationId": 2,
+    "recipientId": 68,
+    "deliveryType": "email",
+    "status": "pending",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 98,
+    "notificationId": 2,
+    "recipientId": 68,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:01:33.771Z",
+    "createdAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 99,
+    "notificationId": 3,
+    "recipientId": 1,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:02.423Z",
+    "createdAt": "2025-10-12T14:02:02.423Z"
+  },
+  {
+    "id": 100,
+    "notificationId": 4,
+    "recipientId": 1,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.634Z",
+    "createdAt": "2025-10-12T14:02:21.634Z"
+  },
+  {
+    "id": 101,
+    "notificationId": 4,
+    "recipientId": 5,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.634Z",
+    "createdAt": "2025-10-12T14:02:21.634Z"
+  },
+  {
+    "id": 102,
+    "notificationId": 4,
+    "recipientId": 6,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.634Z",
+    "createdAt": "2025-10-12T14:02:21.634Z"
+  },
+  {
+    "id": 103,
+    "notificationId": 4,
+    "recipientId": 7,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.634Z",
+    "createdAt": "2025-10-12T14:02:21.634Z"
+  },
+  {
+    "id": 104,
+    "notificationId": 4,
+    "recipientId": 8,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.634Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 105,
+    "notificationId": 4,
+    "recipientId": 65,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 106,
+    "notificationId": 4,
+    "recipientId": 9,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 107,
+    "notificationId": 4,
+    "recipientId": 10,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 108,
+    "notificationId": 4,
+    "recipientId": 11,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 109,
+    "notificationId": 4,
+    "recipientId": 12,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 110,
+    "notificationId": 4,
+    "recipientId": 13,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 111,
+    "notificationId": 4,
+    "recipientId": 14,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 112,
+    "notificationId": 4,
+    "recipientId": 15,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 113,
+    "notificationId": 4,
+    "recipientId": 17,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 114,
+    "notificationId": 4,
+    "recipientId": 18,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 115,
+    "notificationId": 4,
+    "recipientId": 21,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 116,
+    "notificationId": 4,
+    "recipientId": 22,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 117,
+    "notificationId": 4,
+    "recipientId": 23,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 118,
+    "notificationId": 4,
+    "recipientId": 26,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 119,
+    "notificationId": 4,
+    "recipientId": 27,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 120,
+    "notificationId": 4,
+    "recipientId": 28,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 121,
+    "notificationId": 4,
+    "recipientId": 29,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 122,
+    "notificationId": 4,
+    "recipientId": 30,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 123,
+    "notificationId": 4,
+    "recipientId": 31,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 124,
+    "notificationId": 4,
+    "recipientId": 32,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 125,
+    "notificationId": 4,
+    "recipientId": 33,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 126,
+    "notificationId": 4,
+    "recipientId": 34,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 127,
+    "notificationId": 4,
+    "recipientId": 35,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 128,
+    "notificationId": 4,
+    "recipientId": 37,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 129,
+    "notificationId": 4,
+    "recipientId": 39,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 130,
+    "notificationId": 4,
+    "recipientId": 40,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 131,
+    "notificationId": 4,
+    "recipientId": 41,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 132,
+    "notificationId": 4,
+    "recipientId": 42,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 133,
+    "notificationId": 4,
+    "recipientId": 44,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 134,
+    "notificationId": 4,
+    "recipientId": 45,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 135,
+    "notificationId": 4,
+    "recipientId": 46,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 136,
+    "notificationId": 4,
+    "recipientId": 47,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 137,
+    "notificationId": 4,
+    "recipientId": 48,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 138,
+    "notificationId": 4,
+    "recipientId": 52,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 139,
+    "notificationId": 4,
+    "recipientId": 53,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 140,
+    "notificationId": 4,
+    "recipientId": 54,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 141,
+    "notificationId": 4,
+    "recipientId": 55,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 142,
+    "notificationId": 4,
+    "recipientId": 56,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 143,
+    "notificationId": 4,
+    "recipientId": 57,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 144,
+    "notificationId": 4,
+    "recipientId": 58,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 145,
+    "notificationId": 4,
+    "recipientId": 59,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 146,
+    "notificationId": 4,
+    "recipientId": 60,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 147,
+    "notificationId": 4,
+    "recipientId": 61,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 148,
+    "notificationId": 4,
+    "recipientId": 62,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 149,
+    "notificationId": 4,
+    "recipientId": 66,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 150,
+    "notificationId": 4,
+    "recipientId": 67,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  },
+  {
+    "id": 151,
+    "notificationId": 4,
+    "recipientId": 68,
+    "deliveryType": "in_app",
+    "status": "delivered",
+    "deliveredAt": "2025-10-12T14:02:21.637Z",
+    "createdAt": "2025-10-12T14:02:21.637Z"
+  }
+]

@@ -1,1 +1,94 @@
-[]
+[
+  {
+    "id": 1,
+    "senderId": 1,
+    "type": "both",
+    "priority": "normal",
+    "subject": "Test Individual Notification",
+    "content": "This is a test notification sent to user ID 1",
+    "targetType": "individual",
+    "targetData": {
+      "userIds": [
+        1
+      ]
+    },
+    "scheduledFor": null,
+    "status": "sent",
+    "deliveryStats": {
+      "totalRecipients": 1,
+      "emailRecipients": 1,
+      "inAppRecipients": 1
+    },
+    "createdAt": "2025-10-12T14:00:59.729Z",
+    "updatedAt": "2025-10-12T14:00:59.729Z",
+    "sentAt": "2025-10-12T14:00:59.733Z"
+  },
+  {
+    "id": 2,
+    "senderId": 1,
+    "type": "both",
+    "priority": "normal",
+    "subject": "Test Role-Based Notification",
+    "content": "This is a test notification sent to all parents",
+    "targetType": "role",
+    "targetData": {
+      "roles": [
+        "parent"
+      ]
+    },
+    "scheduledFor": null,
+    "status": "sent",
+    "deliveryStats": {
+      "totalRecipients": 48,
+      "emailRecipients": 48,
+      "inAppRecipients": 48
+    },
+    "createdAt": "2025-10-12T14:01:33.768Z",
+    "updatedAt": "2025-10-12T14:01:33.768Z",
+    "sentAt": "2025-10-12T14:01:33.771Z"
+  },
+  {
+    "id": 3,
+    "senderId": 1,
+    "type": "in_app",
+    "priority": "normal",
+    "subject": "Test Location-Based Notification",
+    "content": "This is a test notification sent to all users at location 1",
+    "targetType": "location",
+    "targetData": {
+      "locationIds": [
+        1
+      ]
+    },
+    "scheduledFor": null,
+    "status": "sent",
+    "deliveryStats": {
+      "totalRecipients": 1,
+      "emailRecipients": 0,
+      "inAppRecipients": 1
+    },
+    "createdAt": "2025-10-12T14:02:02.420Z",
+    "updatedAt": "2025-10-12T14:02:02.420Z",
+    "sentAt": "2025-10-12T14:02:02.424Z"
+  },
+  {
+    "id": 4,
+    "senderId": 1,
+    "type": "in_app",
+    "priority": "high",
+    "subject": "Test Broadcast Notification",
+    "content": "This is a test notification sent to all users",
+    "targetType": "all",
+    "targetData": {},
+    "scheduledFor": null,
+    "status": "sent",
+    "deliveryStats": {
+      "totalRecipients": 52,
+      "emailRecipients": 0,
+      "inAppRecipients": 52
+    },
+    "createdAt": "2025-10-12T14:02:21.633Z",
+    "updatedAt": "2025-10-12T14:02:21.633Z",
+    "sentAt": "2025-10-12T14:02:21.638Z"
+  }
+]
