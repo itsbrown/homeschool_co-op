@@ -6,9 +6,11 @@ import ParentSidebar from "./ParentSidebar";
 import CartDrawer from "@/components/cart/CartDrawer";
 import CartButton from "@/components/cart/CartButton";
 import { Button } from "@/components/ui/button";
-import { LogOut, Menu, User } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { LogOut, Menu, User, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 interface ParentAppShellProps {
   children: React.ReactNode;
@@ -19,6 +21,13 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
   const { activeRole } = useRole();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  // TODO: Replace with actual notification API call
+  useEffect(() => {
+    // Mock: Set to 3 unread notifications for demonstration
+    setUnreadNotifications(3);
+  }, []);
 
   const handleLogout = async () => {
     console.log('🚪 ParentAppShell logout clicked');
@@ -115,6 +124,21 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Notification Bell */}
+                <Link href="/notifications">
+                  <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications-mobile">
+                    <Bell className="h-5 w-5" />
+                    {unreadNotifications > 0 && (
+                      <Badge 
+                        variant="destructive" 
+                        className="absolute -top-1 -right-1 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px]"
+                        data-testid="badge-notification-count-mobile"
+                      >
+                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
                 {/* Cart Button - Force re-render by adding key */}
                 <CartButton key="cart-button" />
                 {isAuthenticated && user && (
@@ -139,6 +163,21 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
           <div className="hidden lg:block">
             <div className="flex items-center justify-end bg-white px-6 py-3 shadow-sm border-b">
               <div className="flex items-center gap-4">
+                {/* Notification Bell */}
+                <Link href="/notifications">
+                  <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications-desktop">
+                    <Bell className="h-5 w-5" />
+                    {unreadNotifications > 0 && (
+                      <Badge 
+                        variant="destructive" 
+                        className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                        data-testid="badge-notification-count-desktop"
+                      >
+                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
                 {/* Cart Button - Force re-render by adding key */}
                 <CartButton key="cart-button" />
                 {isAuthenticated && user && (
