@@ -265,17 +265,6 @@ export default function ChildEnrollmentsPage() {
                           Enrolled on {formatDate(enrollment.enrollmentDate)}
                         </p>
                         <div className="space-x-2">
-                          {enrollment.status === 'enrolled' && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => {
-                                window.location.href = `/children/${enrollment.childId}?tab=enrollments`;
-                              }}
-                            >
-                              Manage Enrollment
-                            </Button>
-                          )}
                           {enrollment.status === 'pending_payment' && (
                             <>
                               <Button 
