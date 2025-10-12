@@ -78,6 +78,7 @@ import PaymentHistoryPage from "@/pages/PaymentHistoryPage";
 import PlatformSubscriptionPlans from "@/pages/PaymentPlans";
 import ClassPaymentPlans from "@/pages/ClassPaymentPlans";
 import SettingsPage from "@/pages/SettingsPage";
+import NotificationsPage from "@/pages/NotificationsPage";
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SchoolSettings from './pages/SchoolSettings';
@@ -502,6 +503,7 @@ function Router() {
         )}
       </Route>
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/notifications" component={NotificationsPage} />
       <Route path="/school-settings" component={SchoolSettings} />
       <Route path="/enrollment-assistant" component={EnrollmentAssistantPage} />
       <Route path="/ai-insights" component={AIInsightsDashboard} />

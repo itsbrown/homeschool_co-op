@@ -11,9 +11,15 @@ import { LogOut, Menu, User, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 
 interface ParentAppShellProps {
   children: React.ReactNode;
+}
+
+interface Notification {
+  id: number;
+  recipientStatus?: string;
 }
 
 export default function ParentAppShell({ children }: ParentAppShellProps) {
@@ -21,13 +27,16 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
   const { activeRole } = useRole();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-  // TODO: Replace with actual notification API call
-  useEffect(() => {
-    // Mock: Set to 3 unread notifications for demonstration
-    setUnreadNotifications(3);
-  }, []);
+  // Fetch notifications to get unread count
+  const userRole = localStorage.getItem('activeRole') || 'parent';
+  const notificationsUrl = `/api/notifications?userId=${user?.id}&role=${userRole}`;
+  const { data: notifications = [] } = useQuery<Notification[]>({
+    queryKey: [notificationsUrl],
+    enabled: !!user?.id,
+  });
+  
+  const unreadNotifications = notifications.filter(n => n.recipientStatus !== "read").length;
 
   const handleLogout = async () => {
     console.log('🚪 ParentAppShell logout clicked');

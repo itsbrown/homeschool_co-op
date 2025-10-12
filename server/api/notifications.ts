@@ -200,6 +200,23 @@ router.post("/:id/read", async (req, res) => {
   }
 });
 
+// Mark all notifications as read for a user
+router.post("/mark-all-read", async (req, res) => {
+  try {
+    const userId = parseInt(req.body.userId);
+    
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    await markAllNotificationsAsRead(userId);
+    res.json({ message: "All notifications marked as read" });
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
+    res.status(500).json({ message: "Failed to mark all notifications as read" });
+  }
+});
+
 // **FILE-BASED STORAGE IMPLEMENTATION**
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -492,6 +509,20 @@ async function markNotificationAsRead(notificationId: number, userId: number): P
     recipients[recipientIndex].readAt = new Date().toISOString();
     saveNotificationRecipients(recipients);
   }
+}
+
+async function markAllNotificationsAsRead(userId: number): Promise<void> {
+  const recipients = loadNotificationRecipients();
+  const now = new Date().toISOString();
+  
+  recipients.forEach(recipient => {
+    if (recipient.recipientId === userId && recipient.status !== "read") {
+      recipient.status = "read";
+      recipient.readAt = now;
+    }
+  });
+  
+  saveNotificationRecipients(recipients);
 }
 
 export default router;
