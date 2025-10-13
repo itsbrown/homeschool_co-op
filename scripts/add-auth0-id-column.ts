@@ -1,10 +1,12 @@
 
-import { db } from '../server/db';
+import { getDb } from '../server/db';
 import { sql } from 'drizzle-orm';
 
 async function addAuth0IdColumn() {
   try {
     console.log('🔄 Adding auth0_id column to users table...');
+    
+    const db = await getDb();
     
     // Add the auth0_id column
     await db.execute(sql`
@@ -37,17 +39,15 @@ async function addAuth0IdColumn() {
   }
 }
 
-// Run the migration if called directly
-if (require.main === module) {
-  addAuth0IdColumn()
-    .then(() => {
-      console.log('✅ Migration completed successfully');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('❌ Migration failed:', error);
-      process.exit(1);
-    });
-}
+// Run the migration
+addAuth0IdColumn()
+  .then(() => {
+    console.log('✅ Migration completed successfully');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('❌ Migration failed:', error);
+    process.exit(1);
+  });
 
 export { addAuth0IdColumn };

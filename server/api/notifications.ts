@@ -3,6 +3,7 @@ import { z } from "zod";
 import { insertNotificationSchema } from "@shared/schema";
 import fs from 'fs';
 import path from 'path';
+import { sendSMS, isTwilioConfigured } from '../services/twilio.js';
 
 const router = express.Router();
 
@@ -229,7 +230,7 @@ const USER_LOCATIONS_FILE = path.join(DATA_DIR, 'user-locations.json');
 interface NotificationData {
   id: number;
   senderId: number;
-  type: "email" | "in_app" | "both";
+  type: "email" | "in_app" | "sms" | "both" | "all";
   priority: "low" | "normal" | "high" | "urgent";
   subject: string;
   content: string;
@@ -247,7 +248,7 @@ interface NotificationRecipientData {
   id: number;
   notificationId: number;
   recipientId: number;
-  deliveryType: "email" | "in_app";
+  deliveryType: "email" | "in_app" | "sms";
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   sentAt?: string;
   deliveredAt?: string;
@@ -398,7 +399,8 @@ async function processNotification(notification: NotificationData): Promise<void
     const existingRecipients = loadNotificationRecipients();
     
     for (const recipientId of recipients) {
-      if (notification.type === "email" || notification.type === "both") {
+      // Handle email delivery
+      if (notification.type === "email" || notification.type === "both" || notification.type === "all") {
         recipientRecords.push({
           id: recipientIdCounter++,
           notificationId: notification.id,
@@ -409,7 +411,8 @@ async function processNotification(notification: NotificationData): Promise<void
         });
       }
       
-      if (notification.type === "in_app" || notification.type === "both") {
+      // Handle in-app delivery
+      if (notification.type === "in_app" || notification.type === "both" || notification.type === "all") {
         recipientRecords.push({
           id: recipientIdCounter++,
           notificationId: notification.id,
@@ -417,6 +420,18 @@ async function processNotification(notification: NotificationData): Promise<void
           deliveryType: "in_app" as const,
           status: "delivered" as const, // In-app notifications are immediately "delivered"
           deliveredAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+        });
+      }
+      
+      // Handle SMS delivery
+      if (notification.type === "sms" || notification.type === "all") {
+        recipientRecords.push({
+          id: recipientIdCounter++,
+          notificationId: notification.id,
+          recipientId,
+          deliveryType: "sms" as const,
+          status: "pending" as const,
           createdAt: new Date().toISOString(),
         });
       }
@@ -435,13 +450,24 @@ async function processNotification(notification: NotificationData): Promise<void
         totalRecipients: recipients.length,
         emailRecipients: recipientRecords.filter(r => r.deliveryType === "email").length,
         inAppRecipients: recipientRecords.filter(r => r.deliveryType === "in_app").length,
+        smsRecipients: recipientRecords.filter(r => r.deliveryType === "sms").length,
       };
       saveNotifications(notifications);
     }
     
-    // Send emails using Brevo (simplified for now)
-    if (notification.type === "email" || notification.type === "both") {
+    // Send emails using Brevo
+    if (notification.type === "email" || notification.type === "both" || notification.type === "all") {
       await sendNotificationEmails(notification, recipients);
+    }
+    
+    // Send SMS using Twilio (if configured)
+    if (notification.type === "sms" || notification.type === "all") {
+      const twilioConfigured = await isTwilioConfigured();
+      if (twilioConfigured) {
+        await sendNotificationSMS(notification, recipients);
+      } else {
+        console.log('⚠️ Twilio not configured. Skipping SMS delivery for notification:', notification.id);
+      }
     }
     
   } catch (error) {
@@ -519,6 +545,50 @@ async function sendNotificationEmails(notification: NotificationData, recipientI
   // from server/api/school-admin.ts or server/lib/emailService.ts
 }
 
+async function sendNotificationSMS(notification: NotificationData, recipientIds: number[]): Promise<void> {
+  // Note: Twilio configuration is already checked by the caller
+  const users = loadUsers();
+  const recipientRecords = loadNotificationRecipients();
+  
+  for (const recipientId of recipientIds) {
+    const user = users.find(u => u.id === recipientId);
+    if (!user || !user.phoneNumber) {
+      console.log(`⚠️ No phone number for user ${recipientId}, skipping SMS`);
+      continue;
+    }
+    
+    try {
+      // Send SMS using Twilio
+      const smsMessage = `${notification.subject}\n\n${notification.content}`;
+      await sendSMS(user.phoneNumber, smsMessage);
+      
+      // Update recipient status to sent
+      const recipientIndex = recipientRecords.findIndex(
+        r => r.notificationId === notification.id && r.recipientId === recipientId && r.deliveryType === "sms"
+      );
+      if (recipientIndex !== -1) {
+        recipientRecords[recipientIndex].status = "sent";
+        recipientRecords[recipientIndex].sentAt = new Date().toISOString();
+        saveNotificationRecipients(recipientRecords);
+      }
+      
+      console.log(`📱 SMS sent to ${user.phoneNumber} for notification: ${notification.subject}`);
+    } catch (error) {
+      console.error(`❌ Failed to send SMS to user ${recipientId}:`, error);
+      
+      // Update recipient status to failed
+      const recipientIndex = recipientRecords.findIndex(
+        r => r.notificationId === notification.id && r.recipientId === recipientId && r.deliveryType === "sms"
+      );
+      if (recipientIndex !== -1) {
+        recipientRecords[recipientIndex].status = "failed";
+        recipientRecords[recipientIndex].errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        saveNotificationRecipients(recipientRecords);
+      }
+    }
+  }
+}
+
 async function getNotificationStats(notificationId: number): Promise<any> {
   const notifications = loadNotifications();
   const recipients = loadNotificationRecipients();
@@ -540,6 +610,8 @@ async function getNotificationStats(notificationId: number): Promise<any> {
     emailsDelivered: notificationRecipients.filter(r => r.deliveryType === "email" && r.status === "delivered").length,
     emailsFailed: notificationRecipients.filter(r => r.deliveryType === "email" && r.status === "failed").length,
     inAppDelivered: notificationRecipients.filter(r => r.deliveryType === "in_app" && r.status === "delivered").length,
+    smsSent: notificationRecipients.filter(r => r.deliveryType === "sms" && r.status === "sent").length,
+    smsFailed: notificationRecipients.filter(r => r.deliveryType === "sms" && r.status === "failed").length,
     totalRead: notificationRecipients.filter(r => r.status === "read").length,
   };
   
