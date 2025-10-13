@@ -12,6 +12,7 @@ import { History, Loader2, RefreshCw, DollarSign } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
+import { formatCurrency, centsToDollars } from "@/utils/currency";
 
 interface PaymentHistoryItem {
   id: number;
@@ -125,15 +126,8 @@ export default function PaymentHistoryPage() {
 
   const openRefundDialog = (payment: PaymentHistoryItem) => {
     setRefundDialog({ open: true, payment });
-    setRefundAmount((Math.abs(payment.amount) / 100).toString()); // Pre-fill with full amount
+    setRefundAmount(centsToDollars(Math.abs(payment.amount)).toString()); // Pre-fill with full amount
     setRefundReason('');
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount / 100);
   };
 
   const formatDate = (dateString: string) => {

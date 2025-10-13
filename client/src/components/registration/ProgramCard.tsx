@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/contexts/CartContext";
+import { formatCurrency, formatDollars } from "@/utils/currency";
 
 import { 
   Card, 
@@ -221,7 +222,7 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
             <DollarSign className="h-4 w-4 opacity-70" />
             <span className="text-sm">
               {program.variants && program.variants.length > 1 ? (
-                `$${(Math.min(...program.variants.map(v => v.price)) / 100).toFixed(2)} - $${(Math.max(...program.variants.map(v => v.price)) / 100).toFixed(2)}`
+                `${formatCurrency(Math.min(...program.variants.map(v => v.price)))} - ${formatCurrency(Math.max(...program.variants.map(v => v.price)))}`
               ) : (
                 `$${(program.price / 100).toFixed(2)}`
               )}

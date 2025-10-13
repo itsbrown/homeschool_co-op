@@ -9,18 +9,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, ShoppingCart, CreditCard, Percent, Gift, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/utils/currency';
 
 export default function CartDrawer() {
   const { cart, isOpen, closeCart, removeItem, clearCart, getItemCount } = useCart();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-
-  const formatCurrency = (amountInCents: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amountInCents / 100);
-  };
 
   const handleCheckout = (e: React.MouseEvent) => {
     console.log('🛒 🚨 CHECKOUT BUTTON CLICKED - EVENT RECEIVED!');

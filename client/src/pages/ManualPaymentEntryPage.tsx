@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Calendar, DollarSign, User, FileText, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatCurrency, centsToDollars } from '@/utils/currency';
 
 const manualPaymentSchema = z.object({
   parentEmail: z.string().email('Please enter a valid email address'),
@@ -93,7 +94,7 @@ export default function ManualPaymentEntryPage() {
     onSuccess: (data) => {
       toast({
         title: 'Payment Created Successfully',
-        description: `Manual payment of $${(data.payment.amount / 100).toFixed(2)} has been recorded for ${data.payment.childName}.`,
+        description: `Manual payment of ${formatCurrency(data.payment.amount)} has been recorded for ${data.payment.childName}.`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
       form.reset();

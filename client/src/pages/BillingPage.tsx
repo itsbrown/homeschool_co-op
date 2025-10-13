@@ -16,6 +16,7 @@ import { useLocation } from 'wouter';
 import { useCart } from '@/contexts/CartContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
+import { formatCurrency } from '@/utils/currency';
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
@@ -150,13 +151,6 @@ function SubscriptionSchedulesTab() {
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString();
-  };
-
-  const formatCurrency = (amount: number) => {
-    return (amount / 100).toLocaleString('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    });
   };
 
   const getStatusBadge = (status: string) => {

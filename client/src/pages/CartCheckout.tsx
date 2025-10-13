@@ -15,6 +15,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { apiRequest } from '@/lib/queryClient';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
+import { formatCurrency } from '@/utils/currency';
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
@@ -36,13 +37,6 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [processing, setProcessing] = useState(false);
-
-  const formatCurrency = (amountInCents: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amountInCents / 100);
-  };
 
   // Use the prop instead of calculating internally
 
