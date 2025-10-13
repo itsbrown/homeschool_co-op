@@ -224,7 +224,7 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
               {program.variants && program.variants.length > 1 ? (
                 `${formatCurrency(Math.min(...program.variants.map(v => v.price)))} - ${formatCurrency(Math.max(...program.variants.map(v => v.price)))}`
               ) : (
-                `$${(program.price / 100).toFixed(2)}`
+                formatCurrency(program.price)
               )}
             </span>
           </div>

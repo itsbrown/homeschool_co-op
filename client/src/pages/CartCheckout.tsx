@@ -226,13 +226,6 @@ export default function CartCheckout() {
     }
   };
 
-  const formatCurrency = (amountInCents: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amountInCents / 100);
-  };
-
   const getUniqueChildrenCount = () => {
     const uniqueChildren = new Set(cart.items.map(item => item.childId));
     return uniqueChildren.size;

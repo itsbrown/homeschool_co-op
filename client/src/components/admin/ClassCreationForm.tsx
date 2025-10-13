@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth0";
 import { useQuery } from "@tanstack/react-query";
+import { formatDollars, dollarsToCents, centsToDollars } from "@/utils/currency";
 
 import {
   Form,
@@ -154,7 +155,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       }],
     location: initialData.location || "",
     // Fix price display - convert to string with proper formatting
-    price: initialData.price ? (parseFloat(initialData.price.toString()) / 100).toFixed(2) : "0.00",
+    price: initialData.price ? formatDollars(parseFloat(initialData.price.toString())) : "0.00",
     capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
     isPublished: initialData.isPublished || initialData.status === "published" || false,
     isAdminOnly: initialData.isAdminOnly || false,

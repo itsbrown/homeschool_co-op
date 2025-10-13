@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Trash2, Plus } from "lucide-react";
 import { ClassVariant } from "@shared/schema";
+import { formatDollars, formatCurrency, dollarsToCents, centsToDollars } from "@/utils/currency";
 
 interface ClassVariantsProps {
   variants: ClassVariant[];
@@ -143,17 +144,17 @@ export function ClassVariants({ variants, onChange }: ClassVariantsProps) {
                       id={`variant-price-${variant.id}`}
                       type="text"
                       inputMode="decimal"
-                      value={variant.price === 0 ? '' : String(variant.price / 100)}
+                      value={variant.price === 0 ? '' : String(centsToDollars(variant.price))}
                       onChange={(e) => {
                         const value = e.target.value.replace(/[^0-9.]/g, '');
                         const dollarAmount = parseFloat(value) || 0;
-                        const centsAmount = Math.round(dollarAmount * 100);
+                        const centsAmount = dollarsToCents(dollarAmount);
                         updateVariant(variant.id, { price: centsAmount });
                       }}
                       onBlur={(e) => {
                         // Format on blur for clean display
                         const dollarAmount = parseFloat(e.target.value) || 0;
-                        updateVariant(variant.id, { price: Math.round(dollarAmount * 100) });
+                        updateVariant(variant.id, { price: dollarsToCents(dollarAmount) });
                       }}
                       placeholder="50"
                       className="pl-8"
@@ -189,7 +190,7 @@ export function ClassVariants({ variants, onChange }: ClassVariantsProps) {
 
       {variants.length > 1 && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
-          <strong>Preview:</strong> {variants.map((v, i) => `${v.name} (${v.startTime}-${v.endTime}) - $${(v.price / 100).toFixed(2)}`).join(" OR ")}
+          <strong>Preview:</strong> {variants.map((v, i) => `${v.name} (${v.startTime}-${v.endTime}) - ${formatCurrency(v.price)}`).join(" OR ")}
         </div>
       )}
     </div>

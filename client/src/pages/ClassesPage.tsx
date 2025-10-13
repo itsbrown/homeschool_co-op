@@ -10,15 +10,7 @@ import { Calendar as CalendarIcon, DollarSign, Book, Users, Filter } from "lucid
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-
-// Format currency (amount is in cents)
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2
-  }).format(amount / 100);
-};
+import { formatCurrency } from "@/utils/currency";
 
 export default function ClassesPage() {
   const { toast } = useToast();
