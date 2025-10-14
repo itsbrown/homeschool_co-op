@@ -104,6 +104,50 @@ A tiered subscription system for schools to monetize premium features:
 
 **Feature Access Matrix documented in:** `docs/SCHOOL_SUBSCRIPTION_TIERS.md` (to be created during implementation)
 
+### Role Naming Convention Standardization (Technical Debt)
+Standardize role naming throughout the application to eliminate snake_case/camelCase inconsistencies:
+
+**Current Issue:**
+- Mixed use of `school_admin` (snake_case) and `schoolAdmin` (camelCase) across the codebase
+- Creates confusion, potential bugs, and requires defensive dual-format checks in ~40+ files
+- Affects: database queries, TypeScript interfaces, frontend components, authentication middleware
+
+**Proposed Solution:**
+Standardize on **camelCase** (`schoolAdmin`) throughout the application with automatic database mapping
+
+**Implementation Plan:**
+
+1. **Database Layer (Phase 1)**
+   - Create mapping layer in storage service to convert between snake_case and camelCase
+   - Update all Drizzle schema definitions to automatically map database columns (e.g., `admin_id` → `adminId`)
+   - Test all database read/write operations with mapping layer
+
+2. **Backend Cleanup (Phase 2)**
+   - Update all middleware to use `schoolAdmin` format exclusively
+   - Remove dual-format checks (`school_admin || schoolAdmin`)
+   - Update JWT/Auth0 token handling to normalize roles to camelCase
+   - Update all API route role checks to use standardized format
+
+3. **Frontend Cleanup (Phase 3)**
+   - Update RoleContext to use only `schoolAdmin`
+   - Update all role-based conditional rendering
+   - Update navigation components (Sidebar, AppShell, etc.)
+
+4. **Testing & Validation (Phase 4)**
+   - Comprehensive role-based access testing for all user types (parent, educator, school_admin, superAdmin)
+   - Verify database queries work correctly with mapping
+   - Test all authentication and authorization flows
+   - Verify no regressions in existing functionality
+
+5. **Documentation Update (Phase 5)**
+   - Update developer documentation with role naming standards
+   - Add code comments explaining role format conventions
+   - Update TypeScript type definitions and interfaces
+
+**Estimated Effort:** 4-6 hours  
+**Risk Level:** Medium (requires careful testing of authentication/permissions)  
+**Benefits:** Cleaner codebase, fewer bugs, easier maintenance, improved developer experience
+
 ## External Dependencies
 - **Auth0**: Primary authentication provider.
 - **Anthropic Claude API**: For AI content generation and analysis.
