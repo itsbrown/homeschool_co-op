@@ -198,10 +198,8 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
   };
 
   const signInWithGoogle = async () => {
-    // Use production domain for OAuth redirects
-    const redirectUrl = import.meta.env.PROD
-      ? `https://${import.meta.env.VITE_REPLIT_DOMAIN || "e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev"}`
-      : `${window.location.origin}`;
+    // Always use current domain for OAuth redirects
+    const redirectUrl = window.location.origin;
 
     const { data, error } = await supabaseClient.auth.signInWithOAuth({
       provider: "google",
