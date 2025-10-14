@@ -2496,7 +2496,7 @@ router.patch("/my-school/membership", async (req, res) => {
     const { data: schools, error: schoolError } = await supabaseAdmin
       .from('schools')
       .select('id')
-      .eq('adminId', adminUser.id)
+      .eq('admin_id', adminUser.id)
       .single();
 
     if (schoolError || !schools) {
