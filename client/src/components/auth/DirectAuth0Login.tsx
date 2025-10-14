@@ -64,7 +64,7 @@ export default function DirectAuth0Login() {
             Welcome Back
           </h2>
           <p className="text-gray-600 text-sm mb-6">
-            Sign in to your Adaptive Learning Platform account
+            Sign in to your American Seekers Academy account
           </p>
           
           {isLoading ? (

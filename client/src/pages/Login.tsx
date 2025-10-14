@@ -122,7 +122,7 @@ export default function Login() {
               Welcome Back
             </CardTitle>
             <CardDescription>
-              Sign in to your Adaptive Learning Platform account
+              Sign in to your American Seekers Academy account
             </CardDescription>
           </CardHeader>
 

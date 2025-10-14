@@ -128,7 +128,7 @@ export const SupabaseLogin: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl text-center">Learning Platform</CardTitle>
+          <CardTitle className="text-2xl text-center">American Seekers Academy</CardTitle>
           <CardDescription className="text-center">
             Sign in to your account or create a new one
           </CardDescription>

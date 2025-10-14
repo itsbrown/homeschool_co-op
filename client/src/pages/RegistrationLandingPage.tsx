@@ -164,7 +164,7 @@ export default function RegistrationLandingPage() {
               }));
               
               toast({
-                title: "Welcome to ASA Learning Platform!",
+                title: "Welcome to American Seekers Academy!",
                 description: "Registration successful! Redirecting to your dashboard...",
               });
               

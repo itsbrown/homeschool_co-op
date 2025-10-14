@@ -38,7 +38,7 @@ export default function ParentDashboard() {
         const registrationInfo = JSON.parse(newRegistrationData);
         if (registrationInfo.registrationCompleted) {
           toast({
-            title: "Welcome to the ASA Learning Platform!",
+            title: "Welcome to American Seekers Academy!",
             description: `Registration successful for ${registrationInfo.schoolName || 'your school'}. Next step: Register your children to start enrolling in classes.`,
           });
           

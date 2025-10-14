@@ -21,7 +21,7 @@ export default function BaseLayout({ children, pageTitle }: BaseLayoutProps) {
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">ASA Learning Platform</h1>
+            <h1 className="text-2xl font-bold text-foreground">American Seekers Academy</h1>
             {pageTitle && (
               <p className="text-sm text-muted-foreground mt-1">{pageTitle}</p>
             )}
