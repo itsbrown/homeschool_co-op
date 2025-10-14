@@ -84,6 +84,26 @@ Preferred communication style: Simple, everyday language.
 - **UI/UX Decisions**: Focus on a professional and intuitive user experience with clear navigation, dynamic updates, and consistent design. Examples include consolidated navigation with single "Payments" entry replacing multiple payment-related menu items (Payment Plans, Billing & Payments, Payment History), simplified page structures, robust data handling for mixed formats (interests as strings/arrays), and clear payment plan selections.
 - **Payment Plan Logic**: Any payment (even minimum 10%) immediately changes enrollment status to "enrolled", allowing students to access classes while maintaining remaining balance for payment plans. Cart filtering properly excludes fully paid enrollments while showing items with remaining balances as "Balance Due". Full payment plan functionality with accurate currency conversion - users can select payment plans (deposit, split, 3-month) and are charged the correct amount with proper email confirmations.
 
+## Planned Features
+
+### School Subscription Tiers (Implementation Planned)
+A tiered subscription system for schools to monetize premium features:
+
+**Tier Structure:**
+- **Basic (Free)**: Core features - Dashboard, Classes, Students, Staff, Knowledge Base (view), Calendar, Locations
+- **Pro ($99/month)**: Basic + Daily Flows, Marketing Links with QR codes, AI Lesson Generator, Notifications, Basic reports
+- **Enterprise ($299/month)**: Pro + Advanced AI Tools (all generators), Custom branding, Advanced analytics, Priority support, API access
+
+**Technical Implementation:**
+- Database schema additions to schools table: `subscriptionTier`, `subscriptionStatus`, `subscriptionExpiresAt`, `stripeSubscriptionId`
+- Feature gate infrastructure using `useSchoolFeatures` hook with FEATURE_GATES constant
+- Stripe subscription integration for recurring billing
+- UI components: SubscriptionPage for plan management, UpgradePrompt for locked features
+- Navigation guards to hide/show features based on tier
+- Migration strategy: 30-day trial for existing schools with grandfathering options
+
+**Feature Access Matrix documented in:** `docs/SCHOOL_SUBSCRIPTION_TIERS.md` (to be created during implementation)
+
 ## External Dependencies
 - **Auth0**: Primary authentication provider.
 - **Anthropic Claude API**: For AI content generation and analysis.
