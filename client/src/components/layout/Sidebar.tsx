@@ -256,6 +256,40 @@ const educatorNavItems: {
   },
 ];
 
+// Sidebar navigation items for parents
+const parentNavItems: {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+  subitems?: { title: string; href: string }[];
+}[] = [
+  {
+    title: 'Dashboard',
+    href: '/dashboard',
+    icon: Home,
+  },
+  {
+    title: 'My Children',
+    href: '/children',
+    icon: Users,
+  },
+  {
+    title: 'Programs',
+    href: '/programs',
+    icon: BookOpen,
+  },
+  {
+    title: 'Calendar',
+    href: '/calendar',
+    icon: Calendar,
+  },
+  {
+    title: 'Payments',
+    href: '/billing',
+    icon: Settings,
+  },
+];
+
 export default function Sidebar() {
   const [location] = useLocation();
   const { user, signOut, isAuthenticated } = useAuth();
@@ -288,8 +322,13 @@ export default function Sidebar() {
       return superAdminNavItems;
     } else if (activeRole === 'educator') {
       return educatorNavItems;
-    } else {
+    } else if (activeRole === 'parent') {
+      return parentNavItems;
+    } else if (activeRole === 'school_admin' || activeRole === 'schoolAdmin') {
       return schoolNavItems;
+    } else {
+      // Fallback for unknown roles - show minimal navigation
+      return parentNavItems;
     }
   };
   
