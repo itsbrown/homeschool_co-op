@@ -18,15 +18,15 @@
     "usageLimit": null,
     "usageLimitPerUser": null,
     "currentUsageCount": 0,
-    "validFrom": null,
-    "validUntil": null,
+    "validFrom": "",
+    "validUntil": "",
     "isActive": true,
     "priority": 5,
-    "combinableWithOthers": true,
+    "combinableWithOthers": false,
     "adminOnly": false,
     "createdBy": 1,
     "createdAt": "2025-09-03T06:28:00.000Z",
-    "updatedAt": "2025-09-03T06:28:00.000Z"
+    "updatedAt": "2025-10-14T15:21:55.541Z"
   },
   {
     "id": 2,

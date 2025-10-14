@@ -9,7 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, Save, Image as ImageIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Upload, Save, Image as ImageIcon, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/layout/AppShell';
 
@@ -26,6 +29,7 @@ interface SchoolData {
   membershipRenewalMonth?: number;
   membershipRenewalDay?: number;
   membershipGracePeriodDays?: number;
+  membershipRequired?: boolean;
 }
 
 export default function SchoolSettings() {
@@ -34,11 +38,46 @@ export default function SchoolSettings() {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [membershipDialogOpen, setMembershipDialogOpen] = useState(false);
+  const [membershipFormData, setMembershipFormData] = useState({
+    feeAmount: '',
+    renewalMonth: '',
+    renewalDay: '',
+    gracePeriod: '',
+    required: true
+  });
 
   // Fetch user's school data
   const { data: schoolData, isLoading } = useQuery<SchoolData>({
     queryKey: ['/api/school-admin/my-school'],
     enabled: !!user?.email,
+  });
+
+  // Membership update mutation
+  const membershipUpdateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('PATCH', '/api/school-admin/my-school/membership', data);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update membership configuration');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Membership configuration updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+      setMembershipDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update membership configuration",
+        variant: "destructive",
+      });
+    },
   });
 
   // Logo upload mutation  
@@ -154,6 +193,73 @@ export default function SchoolSettings() {
     
     console.log('🚀 Starting upload for school:', schoolData.id, 'file:', selectedFile.name);
     logoUploadMutation.mutate(selectedFile);
+  };
+
+  // Open membership dialog with current values
+  const handleOpenMembershipDialog = () => {
+    setMembershipFormData({
+      feeAmount: schoolData?.membershipFeeAmount ? ((schoolData.membershipFeeAmount) / 100).toString() : '0',
+      renewalMonth: schoolData?.membershipRenewalMonth?.toString() || '9',
+      renewalDay: schoolData?.membershipRenewalDay?.toString() || '1',
+      gracePeriod: schoolData?.membershipGracePeriodDays?.toString() || '30',
+      required: schoolData?.membershipRequired ?? true
+    });
+    setMembershipDialogOpen(true);
+  };
+
+  // Handle membership form submission
+  const handleMembershipSubmit = () => {
+    // Validate fee amount
+    const feeAmount = parseFloat(membershipFormData.feeAmount);
+    if (isNaN(feeAmount) || feeAmount < 0) {
+      toast({
+        title: "Invalid fee amount",
+        description: "Please enter a valid fee amount (0 or greater)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate renewal month
+    const renewalMonth = parseInt(membershipFormData.renewalMonth);
+    if (isNaN(renewalMonth) || renewalMonth < 1 || renewalMonth > 12) {
+      toast({
+        title: "Invalid renewal month",
+        description: "Please select a valid month",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate renewal day
+    const renewalDay = parseInt(membershipFormData.renewalDay);
+    if (isNaN(renewalDay) || renewalDay < 1 || renewalDay > 31) {
+      toast({
+        title: "Invalid renewal day",
+        description: "Please enter a valid day (1-31)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate grace period
+    const gracePeriod = parseInt(membershipFormData.gracePeriod);
+    if (isNaN(gracePeriod) || gracePeriod < 0) {
+      toast({
+        title: "Invalid grace period",
+        description: "Please enter a valid grace period (0 or greater)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    membershipUpdateMutation.mutate({
+      membershipFeeAmount: feeAmount,
+      membershipRenewalMonth: renewalMonth,
+      membershipRenewalDay: renewalDay,
+      membershipGracePeriodDays: gracePeriod,
+      membershipRequired: membershipFormData.required
+    });
   };
 
   if (isLoading) {
@@ -415,10 +521,148 @@ export default function SchoolSettings() {
                       </div>
 
                       <div className="mt-4">
-                        <Button variant="outline" className="w-full">
-                          Configure Membership Settings
-                          <span className="ml-2 text-xs bg-blue-100 px-2 py-1 rounded">Coming Soon</span>
-                        </Button>
+                        <Dialog open={membershipDialogOpen} onOpenChange={setMembershipDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              className="w-full"
+                              onClick={handleOpenMembershipDialog}
+                              data-testid="button-configure-membership"
+                            >
+                              <Settings className="h-4 w-4 mr-2" />
+                              Configure Membership Settings
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-[500px]">
+                            <DialogHeader>
+                              <DialogTitle>Membership Configuration</DialogTitle>
+                              <DialogDescription>
+                                Configure annual membership fees and renewal settings for parent families
+                              </DialogDescription>
+                            </DialogHeader>
+                            
+                            <div className="space-y-4 py-4">
+                              {/* Fee Amount */}
+                              <div className="space-y-2">
+                                <Label htmlFor="feeAmount">Annual Membership Fee (USD)</Label>
+                                <Input
+                                  id="feeAmount"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="50.00"
+                                  value={membershipFormData.feeAmount}
+                                  onChange={(e) => setMembershipFormData({ ...membershipFormData, feeAmount: e.target.value })}
+                                  data-testid="input-membership-fee"
+                                />
+                                <p className="text-sm text-muted-foreground">
+                                  Set to $0 to disable membership fees
+                                </p>
+                              </div>
+
+                              {/* Renewal Month */}
+                              <div className="space-y-2">
+                                <Label htmlFor="renewalMonth">Renewal Month</Label>
+                                <Select
+                                  value={membershipFormData.renewalMonth}
+                                  onValueChange={(value) => setMembershipFormData({ ...membershipFormData, renewalMonth: value })}
+                                >
+                                  <SelectTrigger id="renewalMonth" data-testid="select-renewal-month">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="1">January</SelectItem>
+                                    <SelectItem value="2">February</SelectItem>
+                                    <SelectItem value="3">March</SelectItem>
+                                    <SelectItem value="4">April</SelectItem>
+                                    <SelectItem value="5">May</SelectItem>
+                                    <SelectItem value="6">June</SelectItem>
+                                    <SelectItem value="7">July</SelectItem>
+                                    <SelectItem value="8">August</SelectItem>
+                                    <SelectItem value="9">September</SelectItem>
+                                    <SelectItem value="10">October</SelectItem>
+                                    <SelectItem value="11">November</SelectItem>
+                                    <SelectItem value="12">December</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              {/* Renewal Day */}
+                              <div className="space-y-2">
+                                <Label htmlFor="renewalDay">Renewal Day</Label>
+                                <Input
+                                  id="renewalDay"
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  value={membershipFormData.renewalDay}
+                                  onChange={(e) => setMembershipFormData({ ...membershipFormData, renewalDay: e.target.value })}
+                                  data-testid="input-renewal-day"
+                                />
+                              </div>
+
+                              {/* Grace Period */}
+                              <div className="space-y-2">
+                                <Label htmlFor="gracePeriod">Grace Period (Days)</Label>
+                                <Input
+                                  id="gracePeriod"
+                                  type="number"
+                                  min="0"
+                                  value={membershipFormData.gracePeriod}
+                                  onChange={(e) => setMembershipFormData({ ...membershipFormData, gracePeriod: e.target.value })}
+                                  data-testid="input-grace-period"
+                                />
+                                <p className="text-sm text-muted-foreground">
+                                  Number of days after expiration before membership becomes inactive
+                                </p>
+                              </div>
+
+                              {/* Membership Required */}
+                              <div className="flex items-center justify-between space-x-2">
+                                <div className="space-y-0.5">
+                                  <Label htmlFor="membershipRequired">Membership Required</Label>
+                                  <p className="text-sm text-muted-foreground">
+                                    Require families to have active membership to enroll in classes
+                                  </p>
+                                </div>
+                                <Switch
+                                  id="membershipRequired"
+                                  checked={membershipFormData.required}
+                                  onCheckedChange={(checked) => setMembershipFormData({ ...membershipFormData, required: checked })}
+                                  data-testid="switch-membership-required"
+                                />
+                              </div>
+                            </div>
+
+                            <DialogFooter>
+                              <Button 
+                                variant="outline" 
+                                onClick={() => setMembershipDialogOpen(false)}
+                                disabled={membershipUpdateMutation.isPending}
+                                data-testid="button-cancel-membership"
+                              >
+                                Cancel
+                              </Button>
+                              <Button 
+                                onClick={handleMembershipSubmit}
+                                disabled={membershipUpdateMutation.isPending}
+                                data-testid="button-save-membership"
+                              >
+                                {membershipUpdateMutation.isPending ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Saving...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="h-4 w-4 mr-2" />
+                                    Save Changes
+                                  </>
+                                )}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </div>
                     </div>
                   </CardContent>

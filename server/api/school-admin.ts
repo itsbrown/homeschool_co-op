@@ -2389,6 +2389,149 @@ router.patch("/schools/:id", async (req, res) => {
   }
 });
 
+// Update school membership configuration
+router.patch("/my-school/membership", async (req, res) => {
+  try {
+    console.log('🔧 Updating membership configuration');
+    console.log('📋 Request body:', JSON.stringify(req.body, null, 2));
+
+    // Get the authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: "No authorization header" });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+
+    // Create a new Supabase client instance with the user's access token
+    const { createClient } = await import('@supabase/supabase-js');
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      return res.status(500).json({ message: "Supabase configuration missing" });
+    }
+
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    );
+
+    // Verify the token and get user
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    console.log('✅ Authenticated user:', user.email);
+
+    // Get admin user to find their school
+    const adminUser = await storage.getUserByEmail(user.email || '');
+    if (!adminUser) {
+      return res.status(404).json({ message: "Admin user not found" });
+    }
+
+    // Use admin client to update the school
+    const { supabaseAdmin } = await import('../db/supabase');
+
+    // Validate and prepare membership data
+    const {
+      membershipFeeAmount,
+      membershipRenewalMonth,
+      membershipRenewalDay,
+      membershipGracePeriodDays,
+      membershipRequired
+    } = req.body;
+
+    // Build update data with only provided fields
+    const dbUpdateData: any = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (membershipFeeAmount !== undefined) {
+      // Convert dollars to cents if needed, or accept cents directly
+      const feeInCents = typeof membershipFeeAmount === 'number' ? 
+        Math.round(membershipFeeAmount * 100) : 0;
+      dbUpdateData.membership_fee_amount = feeInCents;
+    }
+
+    if (membershipRenewalMonth !== undefined) {
+      const month = parseInt(membershipRenewalMonth);
+      if (isNaN(month) || month < 1 || month > 12) {
+        return res.status(400).json({ message: "Invalid renewal month (must be 1-12)" });
+      }
+      dbUpdateData.membership_renewal_month = month;
+    }
+
+    if (membershipRenewalDay !== undefined) {
+      const day = parseInt(membershipRenewalDay);
+      if (isNaN(day) || day < 1 || day > 31) {
+        return res.status(400).json({ message: "Invalid renewal day (must be 1-31)" });
+      }
+      dbUpdateData.membership_renewal_day = day;
+    }
+
+    if (membershipGracePeriodDays !== undefined) {
+      const gracePeriod = parseInt(membershipGracePeriodDays);
+      if (isNaN(gracePeriod) || gracePeriod < 0) {
+        return res.status(400).json({ message: "Invalid grace period (must be 0 or greater)" });
+      }
+      dbUpdateData.membership_grace_period_days = gracePeriod;
+    }
+
+    if (membershipRequired !== undefined) {
+      dbUpdateData.membership_required = Boolean(membershipRequired);
+    }
+
+    console.log('🔄 Updating membership configuration:', dbUpdateData);
+
+    // First get the school ID for this admin
+    const { data: schools, error: schoolError } = await supabaseAdmin
+      .from('schools')
+      .select('id')
+      .eq('adminId', adminUser.id)
+      .single();
+
+    if (schoolError || !schools) {
+      console.error('❌ Error finding school:', schoolError);
+      return res.status(404).json({ message: "School not found for this admin" });
+    }
+
+    // Update the school membership configuration
+    const { data: updatedSchool, error: updateError } = await supabaseAdmin
+      .from('schools')
+      .update(dbUpdateData)
+      .eq('id', schools.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('❌ Database update error:', updateError);
+      return res.status(500).json({ 
+        message: "Failed to update membership configuration",
+        error: updateError.message
+      });
+    }
+
+    console.log('✅ Membership configuration updated successfully');
+
+    return res.json({
+      message: "Membership configuration updated successfully",
+      school: updatedSchool
+    });
+  } catch (error) {
+    console.error("Error updating membership configuration:", error);
+    return res.status(500).json({ message: "Server error while updating membership configuration" });
+  }
+});
+
 router.get("/knowledge-bases", async (req, res) => {
   try {
     // Get the school(s) administered by this user
