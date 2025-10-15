@@ -1887,21 +1887,32 @@ router.put("/staff/:id", async (req, res) => {
 // Delete staff member
 router.delete("/staff/:id", async (req, res) => {
   try {
+    const { deleteStaff, getStaffById } = await import('../services/staff-db');
     const staffId = parseInt(req.params.id, 10);
+    console.log(`🗑️ Attempting to delete staff member with ID: ${staffId}`);
+    
     if (isNaN(staffId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // In a real app, this would remove from database
-    console.log(`🗑️ Removing staff member ${staffId}`);
+    // Verify staff member exists before deletion
+    const staffMember = await getStaffById(staffId);
+    if (!staffMember) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
 
+    // Delete from database
+    await deleteStaff(staffId);
+    console.log(`✅ Successfully deleted staff member: ${staffMember.name}`);
+    
     res.json({ 
       success: true, 
-      message: "Staff member removed successfully" 
+      message: "Staff member deleted successfully",
+      deletedStaff: { id: staffId, name: staffMember.name }
     });
   } catch (error) {
-    console.error("Error removing staff member:", error);
-    res.status(500).json({ message: "Error removing staff member" });
+    console.error("Error deleting staff member:", error);
+    res.status(500).json({ message: "Error deleting staff member", error: error.message });
   }
 });
 

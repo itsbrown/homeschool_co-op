@@ -30,6 +30,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**Staff Management Database Migration (October 15, 2025)**
+- ✅ Migrated staff data from file-based storage (data/staff.json) to production database (school_staff table)
+- ✅ Updated GET /staff and GET /staff/:id endpoints to use database storage via staff-db.ts helper
+- ✅ Implemented DELETE /staff/:id endpoint for production-compatible staff removal
+- ✅ Created staff-db.ts helper module for direct database operations (bypasses storage abstraction)
+- ⚠️ **Technical Debt**: DatabaseStorage class has compilation errors; staff operations use helper instead of storage layer
+- ⚠️ **Technical Debt**: Development database missing schema tables - needs `npm run db:push --force` with local DATABASE_URL
+- ⚠️ **Technical Debt**: CombinedStorage not wired for staff operations - staff management bypasses abstraction
+- 🎯 **Production Status**: Staff CRUD operations fully functional using production Supabase database
+- 📋 **Next Steps**: Refactor to integrate staff operations into proper storage layer, fix DatabaseStorage compilation errors
+
 **Role-Based System Debugging & Enhancements (October 13, 2025)**
 - ✅ **CRITICAL FIX**: Resolved auth0_id database schema error - migrated users table to include auth0_id and supabase_id columns
 - ✅ Fixed LSP errors in EducatorDashboard.tsx (proper type annotations)
