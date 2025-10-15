@@ -13,7 +13,8 @@ import {
   Child, InsertChild, children,
   EmergencyContact, InsertEmergencyContact, emergencyContacts,
   Event, InsertEvent, events,
-  MarketplaceItem, InsertMarketplaceItem, marketplaceItems
+  MarketplaceItem, InsertMarketplaceItem, marketplaceItems,
+  SchoolStaff, InsertSchoolStaff, schoolStaff
 } from '../shared/schema';
 
 /**
@@ -654,5 +655,85 @@ export class DatabaseStorage implements IStorage {
       .where(eq(marketplaceItems.id, id))
       .returning();
     return updatedItem;
+  }
+
+  // School Staff methods
+  async getSchoolStaffById(id: number): Promise<SchoolStaff | undefined> {
+    const db = await getDb();
+    const [staff] = await db.select().from(schoolStaff).where(eq(schoolStaff.id, id));
+    return staff;
+  }
+
+  async getAllSchoolStaff(): Promise<SchoolStaff[]> {
+    const db = await getDb();
+    return await db.select().from(schoolStaff);
+  }
+
+  async getSchoolStaffBySchoolId(schoolId: number): Promise<SchoolStaff[]> {
+    const db = await getDb();
+    return await db.select().from(schoolStaff).where(eq(schoolStaff.schoolId, schoolId));
+  }
+
+  async getSchoolStaffByLocationId(locationId: number): Promise<SchoolStaff[]> {
+    const db = await getDb();
+    return await db.select().from(schoolStaff).where(eq(schoolStaff.locationId, locationId));
+  }
+
+  async getSchoolStaffByUserId(userId: number): Promise<SchoolStaff | undefined> {
+    const db = await getDb();
+    const [staff] = await db.select().from(schoolStaff).where(eq(schoolStaff.userId, userId));
+    return staff;
+  }
+
+  async getSchoolStaffByEmail(email: string): Promise<SchoolStaff | undefined> {
+    const db = await getDb();
+    const [staff] = await db
+      .select({
+        id: schoolStaff.id,
+        schoolId: schoolStaff.schoolId,
+        locationId: schoolStaff.locationId,
+        userId: schoolStaff.userId,
+        role: schoolStaff.role,
+        position: schoolStaff.position,
+        department: schoolStaff.department,
+        startDate: schoolStaff.startDate,
+        endDate: schoolStaff.endDate,
+        isActive: schoolStaff.isActive,
+        permissions: schoolStaff.permissions,
+        createdAt: schoolStaff.createdAt,
+        updatedAt: schoolStaff.updatedAt,
+      })
+      .from(schoolStaff)
+      .innerJoin(users, eq(schoolStaff.userId, users.id))
+      .where(eq(users.email, email));
+    return staff;
+  }
+
+  async createSchoolStaff(staff: InsertSchoolStaff): Promise<SchoolStaff> {
+    const db = await getDb();
+    const [newStaff] = await db.insert(schoolStaff).values({
+      ...staff,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newStaff;
+  }
+
+  async updateSchoolStaff(id: number, staff: Partial<InsertSchoolStaff>): Promise<SchoolStaff | undefined> {
+    const db = await getDb();
+    const [updatedStaff] = await db
+      .update(schoolStaff)
+      .set({
+        ...staff,
+        updatedAt: new Date()
+      })
+      .where(eq(schoolStaff.id, id))
+      .returning();
+    return updatedStaff;
+  }
+
+  async deleteSchoolStaff(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(schoolStaff).where(eq(schoolStaff.id, id));
   }
 }

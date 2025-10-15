@@ -1413,26 +1413,14 @@ router.post("/staff/invite", async (req, res) => {
 // Get staff members for the school
 router.get("/staff", async (req, res) => {
   try {
-    // For Firebase auth, directly use the hardcoded school admin connection
-    // Since schooladmin@test.com is associated with American Seekers Academy (ID: 1)
+    const { getAllStaffForSchool } = await import('../services/staff-db');
     const schoolId = 1; // American Seekers Academy
 
-    console.log(`👥 Loading staff for school ID: ${schoolId} (American Seekers Academy)`);
+    console.log(`👥 Loading staff for school ID: ${schoolId} from database`);
 
-    // Get staff directly from the file system to ensure we get the latest data
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    const allStaff = await getAllStaffForSchool(schoolId);
+    console.log(`Found ${allStaff.length} staff members in database`);
 
-    if (!fs.existsSync(STAFF_FILE)) {
-      console.log('No staff file found, returning empty array');
-      return res.json([]);
-    }
-
-    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-
-    console.log(`Found ${allStaff.length} staff members (direct access)`);
-
-    // Return the staff list
     res.json(allStaff);
   } catch (error) {
     console.error("Error fetching school staff:", error);
@@ -1443,33 +1431,21 @@ router.get("/staff", async (req, res) => {
 // Get single staff member by ID
 router.get("/staff/:id", async (req, res) => {
   try {
+    const { getStaffById } = await import('../services/staff-db');
     const staffId = parseInt(req.params.id, 10);
-    console.log(`🔍 Looking for staff member with ID: ${staffId}`);
+    console.log(`🔍 Looking for staff member with ID: ${staffId} in database`);
     
     if (isNaN(staffId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get staff data from the file system
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-
-    if (!fs.existsSync(STAFF_FILE)) {
-      console.log(`❌ Staff file not found: ${STAFF_FILE}`);
-      return res.status(404).json({ message: "Staff member not found" });
-    }
-
-    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-    console.log(`📋 Found ${allStaff.length} total staff members`);
-    console.log(`🔍 Available IDs: ${allStaff.map(s => s.id).join(', ')}`);
-    
-    const staffMember = allStaff.find(s => s.id === staffId);
-    console.log(`👤 Staff member found:`, staffMember ? 'YES' : 'NO');
+    const staffMember = await getStaffById(staffId);
     
     if (!staffMember) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
+    console.log(`✅ Found staff member: ${staffMember.name}`);
     res.json(staffMember);
   } catch (error) {
     console.error("Error fetching staff member:", error);

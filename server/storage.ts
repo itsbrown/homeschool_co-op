@@ -20,6 +20,7 @@ import {
   scheduledPayments, type ScheduledPayment, type InsertScheduledPayment,
   schools, type School, type InsertSchool,
   schoolStudents, type SchoolStudent, type InsertSchoolStudent,
+  schoolStaff, type SchoolStaff, type InsertSchoolStaff,
   userLocations, type UserLocation, type InsertUserLocation,
   locations, type Location, type InsertLocation,
   dailyFlowTemplates, type DailyFlowTemplate, type InsertDailyFlowTemplate,
@@ -225,6 +226,17 @@ export interface IStorage {
   createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent>;
   updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined>;
   deleteSchoolStudent(id: number): Promise<void>;
+
+  // School Staff methods
+  getSchoolStaffById(id: number): Promise<SchoolStaff | undefined>;
+  getAllSchoolStaff(): Promise<SchoolStaff[]>;
+  getSchoolStaffBySchoolId(schoolId: number): Promise<SchoolStaff[]>;
+  getSchoolStaffByLocationId(locationId: number): Promise<SchoolStaff[]>;
+  getSchoolStaffByUserId(userId: number): Promise<SchoolStaff | undefined>;
+  getSchoolStaffByEmail(email: string): Promise<SchoolStaff | undefined>;
+  createSchoolStaff(schoolStaff: InsertSchoolStaff): Promise<SchoolStaff>;
+  updateSchoolStaff(id: number, schoolStaff: Partial<InsertSchoolStaff>): Promise<SchoolStaff | undefined>;
+  deleteSchoolStaff(id: number): Promise<void>;
 
   // User Location methods  
   getUserLocationById(id: number): Promise<UserLocation | undefined>;
