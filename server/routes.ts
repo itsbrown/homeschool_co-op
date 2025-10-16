@@ -52,6 +52,7 @@ import parentProfileRouter from "./api/parent-profile";
 import accountImportRouter from "./api/account-import";
 import paymentCleanupRouter from "./api/payment-cleanup";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
+import customFormsRouter from "./api/custom-forms";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2536,6 +2537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/educator", educatorRouter);
   app.use("/api/parent", parentRouter);
+  app.use("/api/custom-forms", customFormsRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
   // Delete child as school admin

@@ -1205,3 +1205,162 @@ export type InsertDailyFlowEntry = z.infer<typeof insertDailyFlowEntrySchema>;
 export type DailyFlowEntry = typeof dailyFlowEntries.$inferSelect;
 export type InsertDailyFlowSchedule = z.infer<typeof insertDailyFlowScheduleSchema>;
 export type DailyFlowSchedule = typeof dailyFlowSchedules.$inferSelect;
+
+// Custom Forms - Form Builder System
+export const customForms = pgTable("custom_forms", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  slug: text("slug").notNull(), // URL-friendly identifier
+  formType: text("form_type", { 
+    enum: ["student_registration", "permission_slip", "survey", "event_registration", "product_order", "feedback", "custom"] 
+  }).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  isTemplate: boolean("is_template").default(false).notNull(), // Template for cloning
+  
+  // Access control
+  accessLevel: text("access_level", { 
+    enum: ["public", "members", "parents", "students", "staff", "custom"] 
+  }).default("members").notNull(),
+  allowedRoles: jsonb("allowed_roles").default([]).notNull(), // Array of roles for custom access
+  
+  // Form settings
+  settings: jsonb("settings").default({
+    requireAuth: true,
+    allowMultipleSubmissions: false,
+    showProgressBar: true,
+    confirmationMessage: "Thank you for your submission!",
+    redirectUrl: null,
+    notifyOnSubmission: true,
+    notificationEmails: [],
+  }).notNull(),
+  
+  // Conditional logic configuration
+  conditionalLogic: jsonb("conditional_logic").default([]).notNull(), // Rules for show/hide fields
+  
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const customFormFields = pgTable("custom_form_fields", {
+  id: serial("id").primaryKey(),
+  formId: integer("form_id").notNull().references(() => customForms.id, { onDelete: 'cascade' }),
+  fieldType: text("field_type", { 
+    enum: ["text", "textarea", "email", "phone", "number", "price", "quantity", "date", "time", "datetime", 
+           "dropdown", "radio", "checkbox", "multi_checkbox", "file_upload", "signature", "rating", "slider"] 
+  }).notNull(),
+  
+  label: text("label").notNull(),
+  placeholder: text("placeholder"),
+  helpText: text("help_text"),
+  
+  // Field properties
+  isRequired: boolean("is_required").default(false).notNull(),
+  order: integer("order").notNull(), // Display order
+  
+  // Field-specific config (options for dropdown/radio, min/max for numbers, etc.)
+  fieldConfig: jsonb("field_config").default({}).notNull(),
+  
+  // Validation rules
+  validationRules: jsonb("validation_rules").default({}).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const customFormSubmissions = pgTable("custom_form_submissions", {
+  id: serial("id").primaryKey(),
+  formId: integer("form_id").notNull().references(() => customForms.id, { onDelete: 'cascade' }),
+  submittedBy: integer("submitted_by").references(() => users.id), // Null for public submissions
+  submitterEmail: text("submitter_email"), // For public submissions
+  submitterName: text("submitter_name"), // For public submissions
+  
+  // Form response data
+  responseData: jsonb("response_data").notNull(), // Key-value pairs of field responses
+  
+  // Metadata
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  
+  status: text("status", { 
+    enum: ["pending", "approved", "rejected", "processed"] 
+  }).default("pending").notNull(),
+  
+  notes: text("notes"), // Admin notes
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Relations for custom forms
+export const customFormRelations = relations(customForms, ({ one, many }) => ({
+  school: one(schools, { fields: [customForms.schoolId], references: [schools.id] }),
+  creator: one(users, { fields: [customForms.createdBy], references: [users.id] }),
+  fields: many(customFormFields),
+  submissions: many(customFormSubmissions),
+}));
+
+export const customFormFieldRelations = relations(customFormFields, ({ one }) => ({
+  form: one(customForms, { fields: [customFormFields.formId], references: [customForms.id] }),
+}));
+
+export const customFormSubmissionRelations = relations(customFormSubmissions, ({ one }) => ({
+  form: one(customForms, { fields: [customFormSubmissions.formId], references: [customForms.id] }),
+  submitter: one(users, { fields: [customFormSubmissions.submittedBy], references: [users.id] }),
+}));
+
+// Validation schemas
+export const insertCustomFormSchema = createInsertSchema(customForms)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    description: z.string().nullable().default(null),
+    accessLevel: z.string().default("members"),
+    allowedRoles: z.array(z.string()).default([]),
+    settings: z.object({
+      requireAuth: z.boolean().default(true),
+      allowMultipleSubmissions: z.boolean().default(false),
+      showProgressBar: z.boolean().default(true),
+      confirmationMessage: z.string().default("Thank you for your submission!"),
+      redirectUrl: z.string().nullable().default(null),
+      notifyOnSubmission: z.boolean().default(true),
+      notificationEmails: z.array(z.string().email()).default([]),
+    }).default({
+      requireAuth: true,
+      allowMultipleSubmissions: false,
+      showProgressBar: true,
+      confirmationMessage: "Thank you for your submission!",
+      redirectUrl: null,
+      notifyOnSubmission: true,
+      notificationEmails: [],
+    }),
+    conditionalLogic: z.array(z.any()).default([]),
+  });
+
+export const insertCustomFormFieldSchema = createInsertSchema(customFormFields)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    placeholder: z.string().nullable().default(null),
+    helpText: z.string().nullable().default(null),
+    fieldConfig: z.record(z.any()).default({}),
+    validationRules: z.record(z.any()).default({}),
+  });
+
+export const insertCustomFormSubmissionSchema = createInsertSchema(customFormSubmissions)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    submittedBy: z.number().nullable().default(null),
+    submitterEmail: z.string().email().nullable().default(null),
+    submitterName: z.string().nullable().default(null),
+    ipAddress: z.string().nullable().default(null),
+    userAgent: z.string().nullable().default(null),
+    notes: z.string().nullable().default(null),
+  });
+
+export type InsertCustomForm = z.infer<typeof insertCustomFormSchema>;
+export type CustomForm = typeof customForms.$inferSelect;
+export type InsertCustomFormField = z.infer<typeof insertCustomFormFieldSchema>;
+export type CustomFormField = typeof customFormFields.$inferSelect;
+export type InsertCustomFormSubmission = z.infer<typeof insertCustomFormSubmissionSchema>;
+export type CustomFormSubmission = typeof customFormSubmissions.$inferSelect;
