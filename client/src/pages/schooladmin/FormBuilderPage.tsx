@@ -64,15 +64,12 @@ export default function FormBuilderPage() {
   // Create form mutation
   const createFormMutation = useMutation({
     mutationFn: async (formData: typeof newForm) => {
-      return apiRequest(`/api/custom-forms/schools/${schoolId}/forms`, {
-        method: 'POST',
-        body: JSON.stringify({
-          ...formData,
-          slug: formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-          // Note: createdBy is set on the backend from req.auth.dbUserId
-        }),
-        headers: { 'Content-Type': 'application/json' },
+      const response = await apiRequest("POST", `/api/custom-forms/schools/${schoolId}/forms`, {
+        ...formData,
+        slug: formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        // Note: createdBy is set on the backend from req.auth.dbUserId
       });
+      return response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });
@@ -89,9 +86,8 @@ export default function FormBuilderPage() {
   // Delete form mutation
   const deleteFormMutation = useMutation({
     mutationFn: async (formId: number) => {
-      return apiRequest(`/api/custom-forms/forms/${formId}`, {
-        method: 'DELETE',
-      });
+      const response = await apiRequest("DELETE", `/api/custom-forms/forms/${formId}`);
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });
@@ -105,11 +101,8 @@ export default function FormBuilderPage() {
   // Clone form mutation
   const cloneFormMutation = useMutation({
     mutationFn: async (formId: number) => {
-      return apiRequest(`/api/custom-forms/forms/${formId}/clone`, {
-        method: 'POST',
-        body: JSON.stringify({}), // createdBy is set on backend from auth
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await apiRequest("POST", `/api/custom-forms/forms/${formId}/clone`, {});
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });

@@ -300,9 +300,7 @@ router.put('/fields/:fieldId', async (req: any, res) => {
     
     // Validate and sanitize update data - prevent formId tampering
     const updateSchema = insertCustomFormFieldSchema.omit({
-      id: true,
       formId: true, // Prevent reassignment attacks
-      createdAt: true,
     }).partial();
     
     const updates = updateSchema.parse(req.body);
@@ -426,9 +424,7 @@ router.put('/submissions/:submissionId', async (req: any, res) => {
     
     // Validate and sanitize update data - prevent formId/schoolId tampering
     const updateSchema = insertCustomFormSubmissionSchema.omit({
-      id: true,
       formId: true, // Prevent reassignment attacks
-      createdAt: true,
       ipAddress: true, // Immutable metadata
       userAgent: true, // Immutable metadata
     }).partial();
