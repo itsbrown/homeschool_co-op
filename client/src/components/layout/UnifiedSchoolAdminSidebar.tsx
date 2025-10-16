@@ -22,7 +22,8 @@ import {
   Bell,
   Target,
   CreditCard,
-  UserPlus
+  UserPlus,
+  ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -63,6 +64,11 @@ const adminNavItems: NavItem[] = [
     title: 'Users',
     href: '/schools/users',
     icon: UserPlus,
+  },
+  {
+    title: 'Forms',
+    href: '/school-admin/forms',
+    icon: ClipboardList,
   },
   {
     title: 'Discounts',
@@ -206,8 +212,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         </div>
         
         {/* Navigation */}
-        <div className="flex-1 overflow-auto py-2">
-          <nav className="grid gap-1 px-2">
+        <div className="flex-1 overflow-y-auto py-2">
+          <nav className="grid gap-1 px-2" data-testid="admin-sidebar-navigation">
             {navItems.map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`);
               
