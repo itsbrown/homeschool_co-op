@@ -40,6 +40,9 @@ import { SimpleClassesPage } from "./pages/SimpleClassesPage";
 import StaffInvitePage from "./pages/schools/StaffInvitePage";
 import StaffPositionsPage from "./pages/schools/StaffPositionsPage";
 import KnowledgeBaseCreationPage from "./pages/schools/KnowledgeBaseCreationPage";
+import FormBuilderPage from "./pages/schooladmin/FormBuilderPage";
+import FormEditorPage from "./pages/schooladmin/FormEditorPage";
+import DynamicFormPage from "./pages/DynamicFormPage";
 import RolesAndPermissionsPage from "@/pages/admin/RolesAndPermissionsPage";
 import RoleManagementPage from "@/pages/admin/RoleManagementPage";
 import FeaturesOverviewPage from "@/pages/admin/FeaturesOverviewPage";
@@ -534,6 +537,9 @@ function Router() {
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
       <Route path="/school-admin/staff-positions" component={StaffPositionsPage} />
+      <Route path="/school-admin/forms" component={FormBuilderPage} />
+      <Route path="/school-admin/forms/:id/edit" component={FormEditorPage} />
+      <Route path="/forms/:slug" component={DynamicFormPage} />
       <Route path="/schools/staff/:id" component={StaffEditPage} />
       <Route path="/schools/staff/:id/edit" component={StaffEditPage} />
       <Route path="/schools/students" component={StudentsPage} />

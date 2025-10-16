@@ -26,7 +26,8 @@ import {
   MapPin,
   Bell,
   Clock,
-  Percent
+  Percent,
+  ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -63,6 +64,11 @@ const schoolNavItems: {
     title: 'Students',
     href: '/schools/students',
     icon: GraduationCap,
+  },
+  {
+    title: 'Forms',
+    href: '/school-admin/forms',
+    icon: ClipboardList,
   },
   {
     title: 'Knowledge Base',
