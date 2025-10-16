@@ -208,6 +208,6 @@ export class UserSyncService {
 
     // Check hierarchical permissions
     const userPermissions = roleHierarchy[userRole as keyof typeof roleHierarchy] || [];
-    return requiredRoles.some(role => userPermissions.includes(role));
+    return requiredRoles.some(role => userPermissions.includes(role as any));
   }
 }

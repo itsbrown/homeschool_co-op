@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../shared/schema';
+import { buildPostgresUrl } from './lib/database-url';
 
 // Lazy database connection variables
 let dbInstance: any = null;
@@ -16,8 +17,8 @@ function initializeDatabase() {
   // Check if we have individual PG variables and DATABASE_URL looks like old Supabase
   if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE && 
       (!connectionString || connectionString.includes('supabase.co'))) {
-    connectionString = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE}`;
-    console.log("Using constructed DATABASE_URL from PG variables");
+    connectionString = buildPostgresUrl() || undefined;
+    console.log("Using constructed DATABASE_URL from PG variables with URL encoding");
   }
   
   if (!connectionString) {
