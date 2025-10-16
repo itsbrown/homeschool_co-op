@@ -56,12 +56,6 @@ export function useAuth() {
       role = 'superAdmin';
       console.log('🚀 Applied superAdmin role for super admin email');
     }
-
-    // Super admin role assignment for main admin
-    if (user?.email === 'coreycreates@gmail.com') {
-      role = 'superAdmin';
-      console.log('🔑 Applied superAdmin role for main admin');
-    }
     // School admin role assignment for known admin emails
     else if (user?.email === 'contact.americanseekersacademy@gmail.com') {
       role = 'school_admin';
