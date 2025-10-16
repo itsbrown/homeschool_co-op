@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface FormField {
   id: number;
@@ -271,14 +272,17 @@ export default function FormEditorPage() {
 
   if (isLoading || !form) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-      </div>
+      <SchoolAdminLayout pageTitle="Edit Form">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      </SchoolAdminLayout>
     );
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl">
+    <SchoolAdminLayout pageTitle={`Edit Form: ${form.title}`}>
+      <div className="container mx-auto py-8 px-4 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate('/school-admin/forms')}>
@@ -393,6 +397,7 @@ export default function FormEditorPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </SchoolAdminLayout>
   );
 }

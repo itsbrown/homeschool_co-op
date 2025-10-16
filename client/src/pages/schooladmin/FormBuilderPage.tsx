@@ -8,6 +8,7 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth0';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import {
   Dialog,
   DialogContent,
@@ -150,14 +151,17 @@ export default function FormBuilderPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-      </div>
+      <SchoolAdminLayout pageTitle="Forms">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      </SchoolAdminLayout>
     );
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <SchoolAdminLayout pageTitle="Forms">
+      <div className="container mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold">Form Builder</h1>
@@ -345,6 +349,7 @@ export default function FormBuilderPage() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </SchoolAdminLayout>
   );
 }
