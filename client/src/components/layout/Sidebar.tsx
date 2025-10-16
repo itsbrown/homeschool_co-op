@@ -364,8 +364,8 @@ export default function Sidebar() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto py-2">
-          <nav className="grid gap-1 px-2">
+        <div className="flex-1 overflow-y-auto py-2">
+          <nav className="grid gap-1 px-2" data-testid="sidebar-navigation">
             {navItems.map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`) ||
                 (item.subitems && item.subitems.some(sub => location === sub.href || location.startsWith(`${sub.href}/`)));
