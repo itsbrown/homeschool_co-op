@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'wouter';
+import { useLocation } from 'wouter';
 import {
   Dialog,
   DialogContent,
@@ -39,7 +39,7 @@ interface CustomForm {
 }
 
 export default function FormBuilderPage() {
-  const [, navigate] = useNavigate();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newForm, setNewForm] = useState({
@@ -72,7 +72,7 @@ export default function FormBuilderPage() {
       toast({ title: 'Success', description: 'Form created successfully' });
       setIsCreateDialogOpen(false);
       setNewForm({ title: '', description: '', formType: 'custom', accessLevel: 'members' });
-      navigate(`/school-admin/forms/${data.id}/edit`);
+      setLocation(`/school-admin/forms/${data.id}/edit`);
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to create form', variant: 'destructive' });
@@ -290,7 +290,7 @@ export default function FormBuilderPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate(`/school-admin/forms/${form.id}/edit`)}
+                    onClick={() => setLocation(`/school-admin/forms/${form.id}/edit`)}
                     data-testid={`button-edit-form-${form.id}`}
                   >
                     <Edit className="h-4 w-4" />
@@ -298,7 +298,7 @@ export default function FormBuilderPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate(`/school-admin/forms/${form.id}/submissions`)}
+                    onClick={() => setLocation(`/school-admin/forms/${form.id}/submissions`)}
                     data-testid={`button-view-submissions-${form.id}`}
                   >
                     <BarChart3 className="h-4 w-4" />
@@ -306,7 +306,7 @@ export default function FormBuilderPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate(`/forms/${form.slug}`)}
+                    onClick={() => setLocation(`/forms/${form.slug}`)}
                     data-testid={`button-preview-form-${form.id}`}
                   >
                     <Eye className="h-4 w-4" />

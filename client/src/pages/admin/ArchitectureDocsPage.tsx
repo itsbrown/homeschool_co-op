@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'wouter';
+import { useLocation } from 'wouter';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -641,7 +641,7 @@ Common HTTP status codes:
 `;
 
 const ArchitectureDocsPage = () => {
-  const [, navigate] = useState();
+  const [, setLocation] = useLocation();
   const [currentDoc, setCurrentDoc] = useState('architecture');
 
   // Render markdown content to HTML
@@ -728,7 +728,7 @@ const ArchitectureDocsPage = () => {
                   <Button 
                     variant="outline" 
                     className="w-full justify-start mt-6"
-                    onClick={() => navigate('/admin/architecture')}
+                    onClick={() => setLocation('/admin/architecture')}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     View Architecture Diagrams
