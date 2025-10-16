@@ -1,12 +1,15 @@
 # ASA Learning Platform
 
 ## Overview
-The ASA Learning Platform is an adaptive learning application for American Seekers Academy, serving parents, educators, school administrators, and students. It integrates full-stack web architecture with AI-powered content generation and educational assessment tools. The platform aims to provide a comprehensive and engaging educational experience.
+The ASA Learning Platform is an adaptive learning application for American Seekers Academy, designed to serve parents, educators, school administrators, and students. It integrates full-stack web architecture with AI-powered content generation and educational assessment tools to provide a comprehensive and engaging educational experience. The platform aims to offer robust educational support, personalized learning paths, and efficient administrative tools for various user roles.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
+### Core Design Principles
+The platform follows a modern web application architecture, emphasizing scalability, security, and a rich user experience. It incorporates role-based access control, AI-driven content generation, and a comprehensive payment system.
+
 ### Frontend
 - **Framework**: React with TypeScript
 - **Build Tool**: Vite
@@ -14,6 +17,7 @@ Preferred communication style: Simple, everyday language.
 - **Styling**: Tailwind CSS
 - **State Management**: React hooks and context
 - **Authentication**: Auth0 integration
+- **UI/UX Decisions**: Focus on a professional and intuitive user experience with clear navigation, dynamic updates, and consistent design. Features include consolidated navigation, simplified page structures, robust data handling, and clear payment plan selections.
 
 ### Backend
 - **Runtime**: Node.js with Express
@@ -22,142 +26,27 @@ Preferred communication style: Simple, everyday language.
 - **File Handling**: Multer
 - **Authentication Middleware**: Auth0 JWT validation
 
-### Data Storage Solutions
+### Data Storage
 - **Primary Database**: Supabase (PostgreSQL-based) for user, school, and content data
-- **File Storage**: Local filesystem for general files
-- **Knowledge Base Storage**: File-based system
-- **Image Processing**: SVG generation for educational content
-
-## Recent Changes
-
-**Staff Management Database Migration (October 15, 2025)**
-- ✅ Migrated staff data from file-based storage (data/staff.json) to production database (school_staff table)
-- ✅ Updated GET /staff and GET /staff/:id endpoints to use database storage via staff-db.ts helper
-- ✅ Implemented DELETE /staff/:id endpoint for production-compatible staff removal
-- ✅ Created staff-db.ts helper module for direct database operations (bypasses storage abstraction)
-- ⚠️ **Technical Debt**: DatabaseStorage class has compilation errors; staff operations use helper instead of storage layer
-- ⚠️ **Technical Debt**: Development database missing schema tables - needs `npm run db:push --force` with local DATABASE_URL
-- ⚠️ **Technical Debt**: CombinedStorage not wired for staff operations - staff management bypasses abstraction
-- 🎯 **Production Status**: Staff CRUD operations fully functional using production Supabase database
-- 📋 **Next Steps**: Refactor to integrate staff operations into proper storage layer, fix DatabaseStorage compilation errors
-
-**Role-Based System Debugging & Enhancements (October 13, 2025)**
-- ✅ **CRITICAL FIX**: Resolved auth0_id database schema error - migrated users table to include auth0_id and supabase_id columns
-- ✅ Fixed LSP errors in EducatorDashboard.tsx (proper type annotations)
-- ✅ Enhanced Parent dashboard children tab to display enrollments per child with status badges
-- ✅ Fixed "View Profile" navigation across all role dashboards
-- ✅ Created comprehensive Twilio SMS service module (server/services/twilio.ts)
-- ✅ **Fully integrated Twilio SMS into notification system** - supports email, in-app, SMS, and "all" delivery types
-- ✅ Fixed async/await handling in notification processing for proper Twilio configuration checks
-- ✅ Created currency formatting utilities for consistent price displays (server/utils/currency.ts)
-- ✅ Created comprehensive role testing guide (ROLE_TESTING_GUIDE.md)
-- ✅ Educator account setup complete (jocimarie@gmail.com) with 4 assigned classes
-- ⏳ Currency utilities created, ready for UI integration
-- 📋 Testing Guide: Complete procedures for Parent, Educator, School Admin, Super Admin roles
-- 🎯 **System Status**: All critical errors resolved, platform running cleanly with SMS notification support
-
-**Completed Stripe-Only Payment System Migration (September 5, 2025)**
-- ✅ Enhanced schema with Stripe integration fields for programEnrollments table
-- ✅ Added stripeSubscriptionSchedules table for tracking Stripe payment plans
-- ✅ Created comprehensive Stripe payment plan service with subscription schedules
-- ✅ Built migration scripts for moving from manual scheduling to Stripe native
-- ✅ Implemented webhook handling for Stripe subscription schedule events
-- ✅ Added API endpoints for migration management and status tracking
-- ✅ Cleaned payment history and scheduled payments for fresh start
-- ✅ Updated storage interface to support Stripe subscription schedules
-- ✅ Removed legacy payment system endpoints and manual scheduling functions
-- ✅ Updated frontend components to only use Stripe-managed payment statuses
-- ✅ Migrated all enrollments to use 'stripe_managed' payment system version v2
-- 🎯 System now runs entirely on Stripe's native payment infrastructure with no legacy payment code
-
-**Fixed Class Creation and Enrollment Issues (August 22, 2025)**
-- Fixed storage system synchronization between file-based and memory storage
-- Class creation now properly adds classes to both storage systems 
-- Time picker component updated with improved selection logic
-- All 4 classes now load correctly into memory storage
-- Class enrollment API working for all existing and newly created classes
-- Created production setup guide and test data cleanup script
+- **File Storage**: Local filesystem for general files, file-based system for knowledge bases.
 
 ### Key Features and Implementations
-- **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation.
-- **Enhanced Payment System**: Comprehensive payment status management supporting multiple states (pending_payment, partially_paid, payment_plan_active, enrolled with balance_due). Smart cart system that prevents duplicate enrollments by checking for successful payments, properly filtering out superseded pending enrollments. Fully functional Stripe webhook integration with proper currency conversion handling.
-- **Complete Registration Flow**: Fixed incomplete parent registration system by adding password fields to school-specific registration page (/register/SCHOOLCODE). System now creates accounts automatically with user-provided passwords, handles existing account scenarios with clear messaging, and provides seamless auto-login to dashboard after registration.
-- **AI Enrollment Assistant**: Personalized AI assistant that greets users by their actual account name (extracted from authentication metadata) and provides enrollment guidance.
-- **Staff Invitation System**: Complete automated staff onboarding with secure token-based invitations (7-day expiration), automatic Supabase account creation, temporary password generation, professional email notifications, and seamless resend functionality for individual and bulk operations.
-- **Staff Management**: Dynamic staff position management with school-specific roles, comprehensive staff editing with data persistence, and role synchronization between invitation and edit forms.
-- **Password Reset System**: Fully functional password reset via email with persistent token storage, Brevo email integration, Supabase password updates, and secure token cleanup. Supports both existing users and new account creation scenarios.
-- **User Account Management**: School administrators can send account invites and password reset emails to any user through the user management interface. Account invites generate temporary passwords and send professional welcome emails with login credentials. Password reset functionality creates secure 24-hour tokens and sends reset links via email.
-- **Email Service**: Dual email service integration with both Brevo SMTP service for existing functionality and SendGrid for new account management features. Professional email templates for payment confirmations, staff invitations, password resets, and account invitations. Configured with verified sender email and working API integration.
-- **Content Management System**: Creation and management of knowledge bases, file upload/processing, AI-powered content analysis and generation (e.g., coloring pages, worksheets).
+- **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation. Includes custom form builder security hardening with ownership and cross-tenant checks.
+- **Enhanced Payment System**: Comprehensive Stripe-only payment system with subscription schedules, webhook integration, and smart cart logic to manage enrollments and prevent duplicates. Supports various payment statuses and plans.
+- **Complete Registration Flow**: Automated account creation with user-provided passwords, handling of existing accounts, and seamless auto-login.
+- **AI Enrollment Assistant**: Personalized AI assistant providing enrollment guidance based on user authentication metadata.
+- **Staff Management & Invitation System**: Automated staff onboarding with secure token-based invitations, Supabase account creation, temporary passwords, and professional email notifications. Dynamic staff position management and comprehensive editing with data persistence. Staff data is migrated to the production database.
+- **User Account Management**: School administrators can send account invites and password reset emails to users.
+- **Password Reset System**: Fully functional email-based password reset with persistent token storage and secure updates.
+- **Email Service**: Dual email service integration (Brevo SMTP and SendGrid) for various notifications and account management features, utilizing professional email templates.
+- **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis and generation (coloring pages, worksheets, lesson plans).
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis and curriculum generation, Stability AI for image generation, and Hugging Face for text processing.
 - **Educational Tools**: Generators for professional coloring pages and various educational activities, curriculum/lesson plan creation, and student work analysis.
-- **Data Flow**: Secure user authentication via Auth0, AI-driven content processing post-upload, activity generation, role-based content access, and persistence in Supabase.
-- **UI/UX Decisions**: Focus on a professional and intuitive user experience with clear navigation, dynamic updates, and consistent design. Examples include consolidated navigation with single "Payments" entry replacing multiple payment-related menu items (Payment Plans, Billing & Payments, Payment History), simplified page structures, robust data handling for mixed formats (interests as strings/arrays), and clear payment plan selections.
-- **Payment Plan Logic**: Any payment (even minimum 10%) immediately changes enrollment status to "enrolled", allowing students to access classes while maintaining remaining balance for payment plans. Cart filtering properly excludes fully paid enrollments while showing items with remaining balances as "Balance Due". Full payment plan functionality with accurate currency conversion - users can select payment plans (deposit, split, 3-month) and are charged the correct amount with proper email confirmations.
+- **Data Flow**: Secure user authentication, AI-driven content processing post-upload, activity generation, role-based content access, and persistence in Supabase.
 
-## Planned Features
-
-### School Subscription Tiers (Implementation Planned)
-A tiered subscription system for schools to monetize premium features:
-
-**Tier Structure:**
-- **Basic (Free)**: Core features - Dashboard, Classes, Students, Staff, Knowledge Base (view), Calendar, Locations
-- **Pro ($99/month)**: Basic + Daily Flows, Marketing Links with QR codes, AI Lesson Generator, Notifications, Basic reports
-- **Enterprise ($299/month)**: Pro + Advanced AI Tools (all generators), Custom branding, Advanced analytics, Priority support, API access
-
-**Technical Implementation:**
-- Database schema additions to schools table: `subscriptionTier`, `subscriptionStatus`, `subscriptionExpiresAt`, `stripeSubscriptionId`
-- Feature gate infrastructure using `useSchoolFeatures` hook with FEATURE_GATES constant
-- Stripe subscription integration for recurring billing
-- UI components: SubscriptionPage for plan management, UpgradePrompt for locked features
-- Navigation guards to hide/show features based on tier
-- Migration strategy: 30-day trial for existing schools with grandfathering options
-
-**Feature Access Matrix documented in:** `docs/SCHOOL_SUBSCRIPTION_TIERS.md` (to be created during implementation)
-
-### Role Naming Convention Standardization (Technical Debt)
-Standardize role naming throughout the application to eliminate snake_case/camelCase inconsistencies:
-
-**Current Issue:**
-- Mixed use of `school_admin` (snake_case) and `schoolAdmin` (camelCase) across the codebase
-- Creates confusion, potential bugs, and requires defensive dual-format checks in ~40+ files
-- Affects: database queries, TypeScript interfaces, frontend components, authentication middleware
-
-**Proposed Solution:**
-Standardize on **camelCase** (`schoolAdmin`) throughout the application with automatic database mapping
-
-**Implementation Plan:**
-
-1. **Database Layer (Phase 1)**
-   - Create mapping layer in storage service to convert between snake_case and camelCase
-   - Update all Drizzle schema definitions to automatically map database columns (e.g., `admin_id` → `adminId`)
-   - Test all database read/write operations with mapping layer
-
-2. **Backend Cleanup (Phase 2)**
-   - Update all middleware to use `schoolAdmin` format exclusively
-   - Remove dual-format checks (`school_admin || schoolAdmin`)
-   - Update JWT/Auth0 token handling to normalize roles to camelCase
-   - Update all API route role checks to use standardized format
-
-3. **Frontend Cleanup (Phase 3)**
-   - Update RoleContext to use only `schoolAdmin`
-   - Update all role-based conditional rendering
-   - Update navigation components (Sidebar, AppShell, etc.)
-
-4. **Testing & Validation (Phase 4)**
-   - Comprehensive role-based access testing for all user types (parent, educator, school_admin, superAdmin)
-   - Verify database queries work correctly with mapping
-   - Test all authentication and authorization flows
-   - Verify no regressions in existing functionality
-
-5. **Documentation Update (Phase 5)**
-   - Update developer documentation with role naming standards
-   - Add code comments explaining role format conventions
-   - Update TypeScript type definitions and interfaces
-
-**Estimated Effort:** 4-6 hours  
-**Risk Level:** Medium (requires careful testing of authentication/permissions)  
-**Benefits:** Cleaner codebase, fewer bugs, easier maintenance, improved developer experience
+### Planned Features
+- **School Subscription Tiers**: A tiered subscription system for schools (Basic, Pro, Enterprise) for premium features, implemented with database schema additions, feature gate infrastructure, and Stripe integration.
+- **Role Naming Convention Standardization**: Standardize all role names to camelCase (`schoolAdmin`) across the application, involving database mapping, backend and frontend cleanup, and comprehensive testing.
 
 ## External Dependencies
 - **Auth0**: Primary authentication provider.
@@ -165,7 +54,10 @@ Standardize on **camelCase** (`schoolAdmin`) throughout the application with aut
 - **Stability AI**: For image generation.
 - **Hugging Face Inference API**: For text processing and analysis.
 - **Supabase**: PostgreSQL database with real-time capabilities.
-- **Shadcn/ui**: React component library.
+- **Shadcn/ui**: React component library for UI.
 - **Tailwind CSS**: Utility-first CSS framework.
 - **Vite**: Build tool and development server.
-```
+- **Stripe**: Payment processing for subscriptions and enrollments.
+- **Brevo SMTP**: Email service for notifications.
+- **SendGrid**: Email service for account management features.
+- **Twilio**: SMS service for notifications.

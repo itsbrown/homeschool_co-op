@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
+import { useAuth } from '@/hooks/useAuth0';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,7 @@ interface CustomForm {
 export default function FormBuilderPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newForm, setNewForm] = useState({
     title: '',
@@ -49,26 +51,30 @@ export default function FormBuilderPage() {
     accessLevel: 'members',
   });
 
+  // TODO: Get schoolId from user's school context once multi-tenant support is fully implemented
+  // For now, using hardcoded schoolId like other pages in the app
+  const schoolId = 1; // This should come from user.school_id or similar
+
   // Fetch all forms for the school
   const { data: forms = [], isLoading } = useQuery<CustomForm[]>({
-    queryKey: ['/api/custom-forms/schools/1/forms'],
+    queryKey: ['/api/custom-forms/schools', schoolId, 'forms'],
   });
 
   // Create form mutation
   const createFormMutation = useMutation({
     mutationFn: async (formData: typeof newForm) => {
-      return apiRequest('/api/custom-forms/schools/1/forms', {
+      return apiRequest(`/api/custom-forms/schools/${schoolId}/forms`, {
         method: 'POST',
         body: JSON.stringify({
           ...formData,
           slug: formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-          createdBy: 1, // TODO: Get from auth context
+          // Note: createdBy is set on the backend from req.auth.dbUserId
         }),
         headers: { 'Content-Type': 'application/json' },
       });
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools/1/forms'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });
       toast({ title: 'Success', description: 'Form created successfully' });
       setIsCreateDialogOpen(false);
       setNewForm({ title: '', description: '', formType: 'custom', accessLevel: 'members' });
@@ -87,7 +93,7 @@ export default function FormBuilderPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools/1/forms'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });
       toast({ title: 'Success', description: 'Form deleted successfully' });
     },
     onError: () => {
@@ -100,12 +106,12 @@ export default function FormBuilderPage() {
     mutationFn: async (formId: number) => {
       return apiRequest(`/api/custom-forms/forms/${formId}/clone`, {
         method: 'POST',
-        body: JSON.stringify({ createdBy: 1 }),
+        body: JSON.stringify({}), // createdBy is set on backend from auth
         headers: { 'Content-Type': 'application/json' },
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools/1/forms'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });
       toast({ title: 'Success', description: 'Form cloned successfully' });
     },
     onError: () => {
