@@ -164,13 +164,13 @@ export const requireSchoolAccess = (req: any, res: Response, next: NextFunction)
   }
 
   // School admin and staff can only access their own school
-  if (['schoolAdmin', 'teacher'].includes(role)) {
+  if (['schoolAdmin', 'school_admin', 'teacher'].includes(role)) {
     if (schoolId && schoolId.toString() === requestedSchoolId?.toString()) {
       return next();
     }
   }
 
-  console.log('🚫 School access denied');
+  console.log('🚫 School access denied. Role:', role, 'SchoolId:', schoolId, 'RequestedSchoolId:', requestedSchoolId);
   res.status(403).json({ message: 'School access denied' });
 };
 
