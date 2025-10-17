@@ -34,7 +34,19 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
       console.log('✅ User synced with database:', dbUser.email, 'Role:', dbUser.role);
     } catch (syncError) {
       console.error('❌ Failed to sync user with database:', syncError);
-      // Continue with Auth0 data if database sync fails
+      // Fallback to memory storage
+      if (user.email) {
+        try {
+          const { storage } = await import('../storage');
+          const memUser = await storage.getUserByEmail(user.email);
+          if (memUser) {
+            dbUser = memUser;
+            console.log('✅ Loaded user from memory storage:', memUser.email, 'Role:', memUser.role);
+          }
+        } catch (memError) {
+          console.error('❌ Failed to load from memory storage:', memError);
+        }
+      }
     }
 
     // Check for role override from role switcher
