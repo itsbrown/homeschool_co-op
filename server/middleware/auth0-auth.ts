@@ -41,7 +41,7 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
           const memUser = await storage.getUserByEmail(user.email);
           if (memUser) {
             dbUser = memUser;
-            console.log('✅ Loaded user from memory storage:', memUser.email, 'Role:', memUser.role);
+            console.log('✅ Loaded user from memory storage:', memUser.email, 'Role:', memUser.role, 'SchoolId:', memUser.schoolId);
           }
         } catch (memError) {
           console.error('❌ Failed to load from memory storage:', memError);
