@@ -309,7 +309,7 @@ export default function FormBuilderPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setLocation(`/forms/${form.slug}`)}
+                    onClick={() => setLocation(`/school-admin/forms/${form.id}/preview`)}
                     data-testid={`button-preview-form-${form.id}`}
                   >
                     <Eye className="h-4 w-4" />
