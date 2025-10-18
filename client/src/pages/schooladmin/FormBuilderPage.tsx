@@ -58,7 +58,7 @@ export default function FormBuilderPage() {
 
   // Fetch all forms for the school
   const { data: forms = [], isLoading } = useQuery<CustomForm[]>({
-    queryKey: ['/api/custom-forms/schools', schoolId, 'forms'],
+    queryKey: [`/api/custom-forms/schools/${schoolId}/forms`],
   });
 
   // Create form mutation
@@ -72,7 +72,7 @@ export default function FormBuilderPage() {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/${schoolId}/forms`] });
       toast({ title: 'Success', description: 'Form created successfully' });
       setIsCreateDialogOpen(false);
       setNewForm({ title: '', description: '', formType: 'custom', accessLevel: 'members' });
@@ -90,7 +90,7 @@ export default function FormBuilderPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/${schoolId}/forms`] });
       toast({ title: 'Success', description: 'Form deleted successfully' });
     },
     onError: () => {
@@ -105,7 +105,7 @@ export default function FormBuilderPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms/schools', schoolId, 'forms'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/${schoolId}/forms`] });
       toast({ title: 'Success', description: 'Form cloned successfully' });
     },
     onError: () => {

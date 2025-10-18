@@ -173,20 +173,17 @@ export default function FormEditorPage() {
   const addFieldMutation = useMutation({
     mutationFn: async () => {
       const maxOrder = fields.length > 0 ? Math.max(...fields.map(f => f.order)) : -1;
-      return apiRequest(`/api/custom-forms/forms/${formId}/fields`, {
-        method: 'POST',
-        body: JSON.stringify({
-          fieldType: 'text',
-          label: 'New Field',
-          placeholder: '',
-          helpText: '',
-          isRequired: false,
-          order: maxOrder + 1,
-          fieldConfig: {},
-          validationRules: {},
-        }),
-        headers: { 'Content-Type': 'application/json' },
+      const response = await apiRequest("POST", `/api/custom-forms/forms/${formId}/fields`, {
+        fieldType: 'text',
+        label: 'New Field',
+        placeholder: '',
+        helpText: '',
+        isRequired: false,
+        order: maxOrder + 1,
+        fieldConfig: {},
+        validationRules: {},
       });
+      return response.json();
     },
     onSuccess: (newField) => {
       setFields([...fields, newField]);
@@ -197,11 +194,8 @@ export default function FormEditorPage() {
   // Update field mutation
   const updateFieldMutation = useMutation({
     mutationFn: async ({ fieldId, updates }: { fieldId: number; updates: Partial<FormField> }) => {
-      return apiRequest(`/api/custom-forms/fields/${fieldId}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await apiRequest("PUT", `/api/custom-forms/fields/${fieldId}`, updates);
+      return response.json();
     },
     onSuccess: () => {
       toast({ title: 'Success', description: 'Field updated' });
@@ -211,9 +205,8 @@ export default function FormEditorPage() {
   // Delete field mutation
   const deleteFieldMutation = useMutation({
     mutationFn: async (fieldId: number) => {
-      return apiRequest(`/api/custom-forms/fields/${fieldId}`, {
-        method: 'DELETE',
-      });
+      const response = await apiRequest("DELETE", `/api/custom-forms/fields/${fieldId}`);
+      return response.json();
     },
     onSuccess: (_, fieldId) => {
       setFields(fields.filter(f => f.id !== fieldId));
@@ -224,11 +217,8 @@ export default function FormEditorPage() {
   // Update form mutation
   const updateFormMutation = useMutation({
     mutationFn: async (updates: any) => {
-      return apiRequest(`/api/custom-forms/forms/${formId}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await apiRequest("PUT", `/api/custom-forms/forms/${formId}`, updates);
+      return response.json();
     },
     onSuccess: () => {
       toast({ title: 'Success', description: 'Form saved successfully' });
@@ -239,11 +229,8 @@ export default function FormEditorPage() {
   // Reorder fields mutation
   const reorderFieldsMutation = useMutation({
     mutationFn: async (fieldOrders: { id: number; order: number }[]) => {
-      return apiRequest(`/api/custom-forms/forms/${formId}/fields/reorder`, {
-        method: 'PUT',
-        body: JSON.stringify({ fieldOrders }),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await apiRequest("PUT", `/api/custom-forms/forms/${formId}/fields/reorder`, { fieldOrders });
+      return response.json();
     },
   });
 
