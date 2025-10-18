@@ -6,6 +6,15 @@ The ASA Learning Platform is an adaptive learning application for American Seeke
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Testing Requirements (CRITICAL)
+**MANDATORY: Always test the UI before marking any task complete.**
+- Backend API testing alone is insufficient
+- All user-facing features must be verified through the actual UI
+- Use the `run_test` tool for automated e2e testing when applicable
+- Manual UI verification is required when automated testing isn't possible
+- Testing only the backend and assuming the UI works is not acceptable
+- Schema changes must be verified across the entire database, not just specific tables
+
 ## System Architecture
 ### Core Design Principles
 The platform follows a modern web application architecture, emphasizing scalability, security, and a rich user experience. It incorporates role-based access control, AI-driven content generation, and a comprehensive payment system.
