@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Plus, Edit, Copy, Trash2, Eye, FileText, BarChart3 } from 'lucide-react';
+import { Plus, Edit, Copy, Trash2, Eye, FileText, BarChart3, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -140,6 +140,57 @@ export default function FormBuilderPage() {
         {level}
       </Badge>
     );
+  };
+
+  const copyShareLink = async (form: CustomForm) => {
+    const baseUrl = window.location.origin;
+    const shareUrl = `${baseUrl}/forms/${form.slug}`;
+    
+    try {
+      let copySuccess = false;
+      
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        copySuccess = true;
+      } else {
+        // Fallback for browsers without clipboard API
+        const textArea = document.createElement('textarea');
+        textArea.value = shareUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        copySuccess = document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      
+      // Only show success if copy actually worked
+      if (!copySuccess) {
+        throw new Error('Copy command failed');
+      }
+      
+      // Show success message
+      if (form.accessLevel === 'public') {
+        toast({
+          title: 'Link Copied!',
+          description: 'Public form link copied to clipboard',
+        });
+      } else {
+        toast({
+          title: 'Link Copied',
+          description: `Note: This form requires "${form.accessLevel}" access. Change to "public" in settings to allow unauthenticated access.`,
+          variant: 'default',
+        });
+      }
+    } catch (error) {
+      // Handle error - show URL so user can copy manually
+      toast({
+        title: 'Copy Failed',
+        description: 'Could not copy link to clipboard. Please copy manually: ' + shareUrl,
+        variant: 'destructive',
+      });
+    }
   };
 
   if (isLoading) {
@@ -311,8 +362,18 @@ export default function FormBuilderPage() {
                     size="sm"
                     onClick={() => setLocation(`/school-admin/forms/${form.id}/preview`)}
                     data-testid={`button-preview-form-${form.id}`}
+                    title="Preview form"
                   >
                     <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyShareLink(form)}
+                    data-testid={`button-share-form-${form.id}`}
+                    title="Copy share link"
+                  >
+                    <Link2 className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
@@ -320,6 +381,7 @@ export default function FormBuilderPage() {
                     onClick={() => cloneFormMutation.mutate(form.id)}
                     disabled={cloneFormMutation.isPending}
                     data-testid={`button-clone-form-${form.id}`}
+                    title="Clone form"
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
