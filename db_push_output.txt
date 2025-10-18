@@ -1,0 +1,23 @@
+
+> rest-express@1.0.0 db:push
+> drizzle-kit push
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/runner/workspace/drizzle.config.ts'
+Using 'pg' driver for database querying
+[⣷] Pulling schema from database...
+TypeError: Invalid URL
+    at new URL (node:internal/url:806:29)
+    at parse (/home/runner/workspace/node_modules/pg-connection-string/index.js:29:14)
+    at new ConnectionParameters (/home/runner/workspace/node_modules/pg/lib/connection-parameters.js:56:42)
+    at new Client (/home/runner/workspace/node_modules/pg/lib/client.js:18:33)
+    at BoundPool.newClient (/home/runner/workspace/node_modules/pg-pool/index.js:227:20)
+    at BoundPool.connect (/home/runner/workspace/node_modules/pg-pool/index.js:221:10)
+    at BoundPool.query (/home/runner/workspace/node_modules/pg-pool/index.js:408:10)
+    at Object.query (/home/runner/workspace/node_modules/drizzle-kit/bin.cjs:66575:39)
+    at fromDatabase2 (/home/runner/workspace/node_modules/drizzle-kit/bin.cjs:18700:34)
+    at pgPushIntrospect (/home/runner/workspace/node_modules/drizzle-kit/bin.cjs:69374:9) {
+  code: 'ERR_INVALID_URL',
+  input: 'postgresql://postgres:SZ+)R5R4?wjEWB8@db.moivwjuglwwfrhqeewju.supabase.co:5432/postgres',
+  base: 'postgres://base'
+}
