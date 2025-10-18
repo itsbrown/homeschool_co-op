@@ -17,6 +17,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useLocation } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface FormField {
@@ -48,6 +49,7 @@ interface CustomForm {
 export default function PreviewFormPage() {
   const [, params] = useRoute('/school-admin/forms/:id/preview');
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const formId = params?.id ? parseInt(params.id) : null;
 
   // Fetch form with authentication
@@ -114,7 +116,11 @@ export default function PreviewFormPage() {
   const onSubmit = (data: any) => {
     // Preview mode - don't actually submit
     console.log('Preview form data:', data);
-    alert('This is preview mode. In the live form, this data would be submitted.');
+    toast({
+      title: 'Preview Mode',
+      description: 'Form submissions are disabled in preview mode. The form data is shown in the console.',
+      variant: 'default',
+    });
   };
 
   if (isLoading) {
