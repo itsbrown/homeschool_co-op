@@ -62,6 +62,9 @@ import ContactImportPage from "./pages/admin/ContactImportPage";
 import SchoolContactImportPage from "./pages/schools/ContactImportPage";
 import UsersPage from "./pages/schools/UsersPage";
 import ParentProfilePage from "./pages/schools/ParentProfilePage";
+import EducatorProfilePage from "./pages/schools/EducatorProfilePage";
+import StaffProfilePage from "./pages/schools/StaffProfilePage";
+import AdminProfilePage from "./pages/schools/AdminProfilePage";
 import ClassesPage from "./pages/ClassesPage";
 import CalendarPage from "./pages/CalendarPage";
 import ProgramsBrowseRedirect from "@/pages/ProgramsBrowseRedirect";
@@ -573,6 +576,9 @@ function Router() {
       <Route path="/schools/contact-import" component={SchoolContactImportPage} />
       <Route path="/schools/users" component={UsersPage} />
       <Route path="/schools/parents/:parentId" component={ParentProfilePage} />
+      <Route path="/schools/educators/:educatorId" component={EducatorProfilePage} />
+      <Route path="/schools/staff/:staffId" component={StaffProfilePage} />
+      <Route path="/schools/admins/:adminId" component={AdminProfilePage} />
       <Route path="/schools/settings" component={SchoolSettings} />
 
       {/* SuperAdmin routes */}
