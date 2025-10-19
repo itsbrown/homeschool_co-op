@@ -303,7 +303,11 @@ export default function SchoolClassCreationPage() {
                       <FormItem>
                         <FormLabel>Class Title*</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Introduction to American History" />
+                          <Input 
+                            {...field} 
+                            placeholder="Introduction to American History"
+                            data-testid="input-class-title" 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -470,7 +474,11 @@ export default function SchoolClassCreationPage() {
                       <FormItem>
                         <FormLabel>End Date*</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input 
+                            type="date" 
+                            {...field}
+                            data-testid="input-end-date" 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
