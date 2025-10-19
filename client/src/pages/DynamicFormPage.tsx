@@ -106,14 +106,18 @@ export default function DynamicFormPage() {
   // Submit form mutation
   const submitMutation = useMutation({
     mutationFn: async (data: any) => {
+      if (!form?.id) {
+        throw new Error('Form not loaded');
+      }
+      
       console.log('📤 Submitting form data:', data);
-      console.log('📤 Form ID:', form?.id);
+      console.log('📤 Form ID:', form.id);
       
       // Extract email and name from field data
-      const emailField = form?.fields.find(f => f.fieldType === 'email');
-      const nameFields = form?.fields.filter(f => 
+      const emailField = form.fields.find(f => f.fieldType === 'email');
+      const nameFields = form.fields.filter(f => 
         f.label.toLowerCase().includes('name') && f.fieldType === 'text'
-      );
+      ) || [];
       
       const submitterEmail = emailField ? data[`field_${emailField.id}`] : null;
       const submitterName = nameFields.length > 0 
@@ -129,11 +133,8 @@ export default function DynamicFormPage() {
       
       console.log('📤 Payload:', payload);
       
-      return apiRequest(`/api/custom-forms/forms/${form?.id}/submit`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await apiRequest('POST', `/api/custom-forms/forms/${form.id}/submit`, payload);
+      return response.json();
     },
     onSuccess: () => {
       setSubmitted(true);
