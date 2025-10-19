@@ -144,6 +144,7 @@ export default function FormEditorPage() {
     title: '',
     description: '',
     isActive: true,
+    accessLevel: 'members',
   });
 
   const sensors = useSensors(
@@ -165,6 +166,7 @@ export default function FormEditorPage() {
         title: form.title,
         description: form.description || '',
         isActive: form.isActive,
+        accessLevel: form.accessLevel,
       });
     }
   }, [form]);
@@ -358,6 +360,30 @@ export default function FormEditorPage() {
                   onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
                 />
                 <Label>Form is active</Label>
+              </div>
+              <div>
+                <Label>Access Level</Label>
+                <Select
+                  value={formData.accessLevel}
+                  onValueChange={(value) => setFormData({ ...formData, accessLevel: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Public - Anyone with the link</SelectItem>
+                    <SelectItem value="members">Members - All school members</SelectItem>
+                    <SelectItem value="parents">Parents Only</SelectItem>
+                    <SelectItem value="students">Students Only</SelectItem>
+                    <SelectItem value="staff">Staff Only</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.accessLevel === 'public' 
+                    ? '✓ This form can be accessed by anyone with the link (no login required)'
+                    : `⚠️ This form requires authentication and ${formData.accessLevel} role to access`
+                  }
+                </p>
               </div>
               <div>
                 <Label>Confirmation Message</Label>
