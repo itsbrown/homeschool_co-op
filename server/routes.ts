@@ -1565,7 +1565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get the school to fetch membership settings
-      const school = await storage.getSchoolById(schoolId);
+      const school = await storage.getSchool(schoolId);
       if (!school) {
         return res.status(404).json({ message: 'School not found' });
       }
