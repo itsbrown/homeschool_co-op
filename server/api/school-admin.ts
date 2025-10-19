@@ -4004,10 +4004,40 @@ router.get('/users', async (req: any, res) => {
 
     // Get all users for this school (use getAllUsers since getUsersBySchool doesn't exist)
     const allUsers = await storage.getAllUsers();
-    const users = allUsers.filter((user: any) => user.schoolId === schoolId);
-    console.log(`👥 Found ${users.length} users for school ${schoolId}`);
+    const regularUsers = allUsers.filter((user: any) => user.schoolId === schoolId);
+    console.log(`👥 Found ${regularUsers.length} regular users for school ${schoolId}`);
     
-    res.status(200).json(users);
+    // Load staff from file storage (same way as /staff endpoint)
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    
+    let staffMembers = [];
+    if (fs.existsSync(STAFF_FILE)) {
+      staffMembers = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+      console.log(`👨‍🏫 Found ${staffMembers.length} staff members from staff.json`);
+    } else {
+      console.log('📋 No staff file found');
+    }
+    
+    // Convert staff to user format for the frontend
+    const staffAsUsers = staffMembers.map((staff: any) => ({
+      id: staff.id,
+      email: staff.email,
+      firstName: staff.firstName || staff.name?.split(' ')[0] || '',
+      lastName: staff.lastName || staff.name?.split(' ')[1] || '',
+      role: 'staff', // Standardize role to 'staff'
+      phone: staff.phone || '',
+      isActive: staff.status === 'Active',
+      createdAt: staff.joinDate || staff.invitedAt,
+      department: staff.department,
+      position: staff.role // Keep original role as position
+    }));
+    
+    // Combine regular users and staff
+    const allSchoolUsers = [...regularUsers, ...staffAsUsers];
+    console.log(`✅ Total users (including staff): ${allSchoolUsers.length}`);
+    
+    res.status(200).json(allSchoolUsers);
   } catch (error) {
     console.error('❌ Error fetching school users:', error);
     res.status(500).json({ 
