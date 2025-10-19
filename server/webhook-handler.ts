@@ -567,6 +567,200 @@ export const webhookHandler = async (req: Request, res: Response) => {
       console.log('❌ Payment failed:', failedPayment.id);
       break;
 
+    case 'charge.refunded':
+      const refundEvent = event.data.object as Stripe.Charge;
+      console.log('🔄 Refund processed:', refundEvent.id);
+      
+      try {
+        // Get the payment intent ID from the charge
+        const paymentIntentId = refundEvent.payment_intent as string;
+        console.log('💳 Processing refund for payment intent:', paymentIntentId);
+        
+        // Find the original payment in our system
+        const originalPayment = await storage.getPaymentByStripeId(paymentIntentId);
+        
+        if (!originalPayment) {
+          console.log('⚠️ Original payment not found for refund:', paymentIntentId);
+          break;
+        }
+        
+        // Get refund details
+        const refunds = refundEvent.refunds?.data || [];
+        if (refunds.length === 0) {
+          console.log('⚠️ No refund data found in charge.refunded event');
+          break;
+        }
+        
+        const latestRefund = refunds[refunds.length - 1]; // Get the most recent refund
+        const refundAmountCents = latestRefund.amount;
+        
+        console.log(`🔄 Processing refund of $${refundAmountCents / 100} for payment ${originalPayment.id}`);
+        
+        // IDEMPOTENCY CHECK: Skip if this refund was already processed
+        const allPayments = await storage.getAllPayments();
+        const existingRefund = allPayments.find((p: any) => 
+          p.stripePaymentIntentId === latestRefund.id
+        );
+        
+        if (existingRefund) {
+          console.log(`✅ Refund ${latestRefund.id} already processed, skipping duplicate webhook`);
+          break;
+        }
+        
+        // Create refund payment record
+        const refundPaymentData = {
+          stripePaymentIntentId: latestRefund.id,
+          parentEmail: originalPayment.parentEmail,
+          childName: originalPayment.childName,
+          className: originalPayment.className,
+          amount: -refundAmountCents, // Negative amount for refund
+          currency: originalPayment.currency || 'usd',
+          status: 'completed' as const,
+          metadata: {
+            paymentMethod: 'refund',
+            originalPaymentId: originalPayment.id,
+            refundReason: latestRefund.reason || 'Refund processed',
+            stripeRefundId: latestRefund.id,
+            stripeRefundStatus: latestRefund.status,
+            refundType: 'stripe',
+            processedViaWebhook: true
+          }
+        };
+        
+        const refundPayment = await storage.createPayment(refundPaymentData);
+        console.log('✅ Refund payment record created via webhook:', refundPayment.id);
+        
+        // Update enrollment balances for ALL affected enrollments
+        try {
+          const allEnrollments = await storage.getAllEnrollments();
+          
+          // Find matching enrollments using enrollmentIds if available, otherwise match by details
+          let matchingEnrollments = [];
+          
+          if (originalPayment.enrollmentIds && Array.isArray(originalPayment.enrollmentIds)) {
+            // Use enrollmentIds from payment record for accurate matching
+            matchingEnrollments = allEnrollments.filter((enrollment: any) => 
+              originalPayment.enrollmentIds.includes(enrollment.id)
+            );
+            console.log(`🔍 Found ${matchingEnrollments.length} enrollments via enrollmentIds for refund`);
+          } else {
+            // Fallback: match by parent email, child name, and class name
+            matchingEnrollments = allEnrollments.filter((enrollment: any) => {
+              return enrollment.parentEmail === originalPayment.parentEmail &&
+                     enrollment.childName === originalPayment.childName &&
+                     enrollment.className === originalPayment.className;
+            });
+            console.log(`🔍 Found ${matchingEnrollments.length} enrollments via detail matching for refund`);
+          }
+          
+          if (matchingEnrollments.length > 0) {
+            // Distribute refund across all matching enrollments proportionally
+            let remainingRefund = refundAmountCents;
+            
+            for (const enrollment of matchingEnrollments) {
+              const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
+              
+              // For last enrollment, use all remaining refund to avoid rounding errors
+              const refundForThisEnrollment = matchingEnrollments.indexOf(enrollment) === matchingEnrollments.length - 1
+                ? remainingRefund
+                : Math.min(remainingRefund, currentAmountPaid);
+              
+              if (refundForThisEnrollment <= 0) continue;
+              
+              const newAmountPaid = Math.max(0, currentAmountPaid - refundForThisEnrollment);
+              const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+              
+              enrollment.amount = newAmountPaid;
+              enrollment.amountPaid = newAmountPaid;
+              enrollment.remainingBalance = remainingBalance;
+              enrollment.outstandingBalance = remainingBalance;
+              
+              // Update enrollment status based on remaining balance
+              if (remainingBalance >= enrollment.totalCost) {
+                enrollment.status = 'pending_payment'; // Full refund, back to pending
+              } else if (remainingBalance > 0) {
+                enrollment.status = 'enrolled'; // Partial refund, still enrolled with balance
+              } else {
+                enrollment.status = 'enrolled'; // Still fully paid
+              }
+              
+              await storage.updateEnrollment(enrollment);
+              console.log(`✅ Updated enrollment ${enrollment.id} via webhook: refunded=${refundForThisEnrollment/100}, paid=${newAmountPaid/100}, remaining=${remainingBalance/100}`);
+              
+              remainingRefund -= refundForThisEnrollment;
+            }
+            
+            console.log(`✅ Processed refund across ${matchingEnrollments.length} enrollments`);
+          } else {
+            console.log('⚠️ No matching enrollments found for refund - payment may be for non-enrollment item');
+          }
+        } catch (enrollmentError) {
+          console.error('❌ Failed to update enrollments for webhook refund:', enrollmentError);
+        }
+        
+        // Send refund notification email
+        try {
+          const parentUser = await storage.getUserByEmail(originalPayment.parentEmail);
+          const parentName = parentUser ? 
+            parentUser.name || originalPayment.parentEmail.split('@')[0] : 
+            originalPayment.parentEmail.split('@')[0];
+          
+          const formatCurrency = (amount: number) => {
+            return new Intl.NumberFormat('en-US', {
+              style: 'currency',
+              currency: 'USD',
+            }).format(Math.abs(amount) / 100);
+          };
+          
+          const formatDate = (date: string) => {
+            return new Intl.DateTimeFormat('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }).format(new Date(date));
+          };
+          
+          await sendPaymentReceipt({
+            parentEmail: originalPayment.parentEmail,
+            parentName,
+            receiptNumber: latestRefund.id,
+            paymentDate: formatDate(new Date().toISOString()),
+            paymentMethod: 'Refund',
+            amount: formatCurrency(refundAmountCents),
+            childName: originalPayment.childName,
+            className: originalPayment.className,
+            notes: `Refund for payment ${originalPayment.id}. ${latestRefund.reason || 'Refund processed'}`
+          });
+          
+          console.log('📧 Refund receipt email sent via webhook to:', originalPayment.parentEmail);
+        } catch (emailError) {
+          console.error('❌ Failed to send refund receipt email via webhook:', emailError);
+        }
+        
+        // Push real-time update for refund
+        try {
+          const { dataLayer } = await import('./services/dataLayer.js');
+          
+          dataLayer.broadcastBillingUpdate(originalPayment.parentEmail, {
+            type: 'refund_processed',
+            refundId: latestRefund.id,
+            amount: refundAmountCents,
+            originalPaymentId: originalPayment.id,
+            timestamp: new Date().toISOString()
+          });
+          
+          await dataLayer.refreshUserData(originalPayment.parentEmail);
+          console.log('📡 Pushed real-time refund update to frontend');
+        } catch (error) {
+          console.error('❌ Failed to push real-time refund update:', error);
+        }
+        
+        console.log('✅ Refund webhook processing complete');
+      } catch (error) {
+        console.error('❌ Error processing refund webhook:', error);
+      }
+      break;
+
       default:
         console.log('📦 Unhandled event type:', event.type, '- responding with 200 OK');
         // Return 200 OK for unhandled events to prevent retries

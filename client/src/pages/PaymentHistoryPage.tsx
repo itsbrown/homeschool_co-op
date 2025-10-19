@@ -90,9 +90,18 @@ export default function PaymentHistoryPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      const refundTypeMessage = data.refund.refundType === 'stripe' 
+        ? '✅ Stripe refund processed - funds will be returned to customer\'s payment method' 
+        : 'ℹ️ Internal refund recorded (manual payment - no Stripe charge)';
+      
       toast({
         title: "Refund Processed",
-        description: `Successfully refunded $${data.refund.amount.toFixed(2)} to ${data.refund.parentEmail}`,
+        description: (
+          <div>
+            <p>Successfully refunded ${data.refund.amount.toFixed(2)} to {data.refund.parentEmail}</p>
+            <p className="text-sm mt-1">{refundTypeMessage}</p>
+          </div>
+        ),
       });
       
       // Refresh payment history

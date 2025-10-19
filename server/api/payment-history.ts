@@ -567,48 +567,72 @@ router.post('/refund/:paymentId', async (req, res) => {
     const refundPayment = await storage.createPayment(refundPaymentData);
     console.log('✅ Refund payment record created:', refundPayment.id);
 
-    // Update enrollment balances if there are matching enrollments
+    // Update enrollment balances for ALL affected enrollments
     try {
       const allEnrollments = await storage.getAllEnrollments();
       
-      // Find matching enrollments by parent email, child name, and class name
-      const matchingEnrollments = allEnrollments.filter((enrollment: any) => {
-        return enrollment.parentEmail === originalPayment.parentEmail &&
-               enrollment.childName === originalPayment.childName &&
-               enrollment.className === originalPayment.className;
-      });
-
-      console.log(`🔍 Found ${matchingEnrollments.length} matching enrollments for refund`);
+      // Find matching enrollments using enrollmentIds if available, otherwise match by details
+      let matchingEnrollments = [];
+      
+      if (originalPayment.enrollmentIds && Array.isArray(originalPayment.enrollmentIds)) {
+        // Use enrollmentIds from payment record for accurate matching
+        matchingEnrollments = allEnrollments.filter((enrollment: any) => 
+          originalPayment.enrollmentIds.includes(enrollment.id)
+        );
+        console.log(`🔍 Found ${matchingEnrollments.length} enrollments via enrollmentIds for refund`);
+      } else {
+        // Fallback: match by parent email, child name, and class name
+        matchingEnrollments = allEnrollments.filter((enrollment: any) => {
+          return enrollment.parentEmail === originalPayment.parentEmail &&
+                 enrollment.childName === originalPayment.childName &&
+                 enrollment.className === originalPayment.className;
+        });
+        console.log(`🔍 Found ${matchingEnrollments.length} enrollments via detail matching for refund`);
+      }
 
       if (matchingEnrollments.length > 0) {
-        // Apply refund to the most recent matching enrollment
-        const enrollment = matchingEnrollments[0] as any;
+        // Distribute refund across all matching enrollments proportionally
+        let remainingRefund = refundAmountCents;
         
-        // Update enrollment by reducing amount paid
-        const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
-        const newAmountPaid = Math.max(0, currentAmountPaid - refundAmountCents);
-        const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
-        
-        enrollment.amount = newAmountPaid;
-        enrollment.amountPaid = newAmountPaid;
-        enrollment.remainingBalance = remainingBalance;
-        enrollment.outstandingBalance = remainingBalance;
-        
-        // Update enrollment status based on remaining balance
-        if (remainingBalance >= enrollment.totalCost) {
-          enrollment.status = 'pending_payment'; // Full refund, back to pending
-        } else if (remainingBalance > 0) {
-          enrollment.status = 'enrolled'; // Partial refund, still enrolled with balance
-        } else {
-          enrollment.status = 'enrolled'; // Still fully paid
+        for (const enrollment of matchingEnrollments) {
+          const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
+          
+          // For last enrollment, use all remaining refund to avoid rounding errors
+          const refundForThisEnrollment = matchingEnrollments.indexOf(enrollment) === matchingEnrollments.length - 1
+            ? remainingRefund
+            : Math.min(remainingRefund, currentAmountPaid);
+          
+          if (refundForThisEnrollment <= 0) continue;
+          
+          const newAmountPaid = Math.max(0, currentAmountPaid - refundForThisEnrollment);
+          const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+          
+          enrollment.amount = newAmountPaid;
+          enrollment.amountPaid = newAmountPaid;
+          enrollment.remainingBalance = remainingBalance;
+          enrollment.outstandingBalance = remainingBalance;
+          
+          // Update enrollment status based on remaining balance
+          if (remainingBalance >= enrollment.totalCost) {
+            enrollment.status = 'pending_payment'; // Full refund, back to pending
+          } else if (remainingBalance > 0) {
+            enrollment.status = 'enrolled'; // Partial refund, still enrolled with balance
+          } else {
+            enrollment.status = 'enrolled'; // Still fully paid
+          }
+          
+          await storage.updateEnrollment(enrollment);
+          console.log(`✅ Updated enrollment ${enrollment.id} for refund: refunded=${refundForThisEnrollment/100}, paid=${newAmountPaid/100}, remaining=${remainingBalance/100}`);
+          
+          remainingRefund -= refundForThisEnrollment;
         }
         
-        await storage.updateEnrollment(enrollment);
-        
-        console.log(`✅ Updated enrollment ${enrollment.id} for refund: paid=${newAmountPaid/100}, remaining=${remainingBalance/100}, status=${enrollment.status}`);
+        console.log(`✅ Processed refund across ${matchingEnrollments.length} enrollments`);
+      } else {
+        console.log('⚠️ No matching enrollments found for refund - payment may be for non-enrollment item');
       }
     } catch (enrollmentError) {
-      console.error('❌ Failed to update enrollment for refund:', enrollmentError);
+      console.error('❌ Failed to update enrollments for refund:', enrollmentError);
       // Don't fail the refund if enrollment update fails
     }
 
