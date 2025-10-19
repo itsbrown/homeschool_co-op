@@ -257,7 +257,7 @@ function Router() {
   // Handle redirects in useEffect to avoid state updates during render
   useEffect(() => {
     // Redirect to login if not authenticated (except for public routes)
-    if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/')) {
+    if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/') && !location.startsWith('/forms/')) {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
       setLocation('/login');
     }
