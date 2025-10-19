@@ -492,7 +492,6 @@ export default function SchoolClassCreationPage() {
                   name="variants"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Class Time Options*</FormLabel>
                       <FormControl>
                         <ClassVariants
                           variants={field.value}
