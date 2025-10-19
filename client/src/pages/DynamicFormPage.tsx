@@ -106,14 +106,32 @@ export default function DynamicFormPage() {
   // Submit form mutation
   const submitMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log('📤 Submitting form data:', data);
+      console.log('📤 Form ID:', form?.id);
+      
+      // Extract email and name from field data
+      const emailField = form?.fields.find(f => f.fieldType === 'email');
+      const nameFields = form?.fields.filter(f => 
+        f.label.toLowerCase().includes('name') && f.fieldType === 'text'
+      );
+      
+      const submitterEmail = emailField ? data[`field_${emailField.id}`] : null;
+      const submitterName = nameFields.length > 0 
+        ? nameFields.map(f => data[`field_${f.id}`]).filter(Boolean).join(' ')
+        : null;
+      
+      const payload = {
+        responseData: data,
+        submittedBy: null,
+        submitterEmail,
+        submitterName,
+      };
+      
+      console.log('📤 Payload:', payload);
+      
       return apiRequest(`/api/custom-forms/forms/${form?.id}/submit`, {
         method: 'POST',
-        body: JSON.stringify({
-          responseData: data,
-          submittedBy: null, // TODO: Get from auth context
-          submitterEmail: data.email || null,
-          submitterName: data.name || null,
-        }),
+        body: JSON.stringify(payload),
         headers: { 'Content-Type': 'application/json' },
       });
     },
@@ -121,8 +139,13 @@ export default function DynamicFormPage() {
       setSubmitted(true);
       toast({ title: 'Success', description: form?.settings?.confirmationMessage || 'Form submitted successfully' });
     },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to submit form', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('❌ Form submission error:', error);
+      toast({ 
+        title: 'Error', 
+        description: error?.message || 'Failed to submit form', 
+        variant: 'destructive' 
+      });
     },
   });
 
