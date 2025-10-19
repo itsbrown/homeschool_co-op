@@ -798,21 +798,23 @@ export default function ParentProfilePage() {
                 ) : (
                   <div className="space-y-4">
                     {profile.children.map((child) => (
-                      <Card key={child.id} className="p-4">
+                      <Card key={child.id} className="p-4 hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg">
-                              {child.firstName} {child.lastName}
-                            </h3>
-                            <div className="text-sm text-muted-foreground space-y-1 mt-2">
-                              <p>Grade: {child.grade}</p>
-                              <p>Birth Date: {child.birthDate ? new Date(child.birthDate + 'T00:00:00').toLocaleDateString() : 'No date set'}</p>
-                              {child.allergies && <p>Allergies: {child.allergies}</p>}
-                              {child.medicalConditions && <p>Medical Conditions: {child.medicalConditions}</p>}
-                              {child.additionalLanguages && <p>Languages: {child.additionalLanguages}</p>}
-                              {child.notes && <p>Notes: {child.notes}</p>}
+                          <Link href={`/children/${child.id}`} className="flex-1 cursor-pointer">
+                            <div>
+                              <h3 className="font-semibold text-lg hover:text-primary">
+                                {child.firstName} {child.lastName}
+                              </h3>
+                              <div className="text-sm text-muted-foreground space-y-1 mt-2">
+                                <p>Grade: {child.grade}</p>
+                                <p>Birth Date: {child.birthDate ? new Date(child.birthDate + 'T00:00:00').toLocaleDateString() : 'No date set'}</p>
+                                {child.allergies && <p>Allergies: {child.allergies}</p>}
+                                {child.medicalConditions && <p>Medical Conditions: {child.medicalConditions}</p>}
+                                {child.additionalLanguages && <p>Languages: {child.additionalLanguages}</p>}
+                                {child.notes && <p>Notes: {child.notes}</p>}
+                              </div>
                             </div>
-                          </div>
+                          </Link>
                           <div className="flex items-center space-x-2">
                             <Badge variant="outline">ID: {child.schoolStudentId || child.id}</Badge>
                             <Button
@@ -822,6 +824,7 @@ export default function ParentProfilePage() {
                                 setSelectedChild(child);
                                 setEditChildDialogOpen(true);
                               }}
+                              data-testid={`button-edit-child-${child.id}`}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -832,6 +835,7 @@ export default function ParentProfilePage() {
                                 setChildToDelete(child);
                                 setDeleteDialogOpen(true);
                               }}
+                              data-testid={`button-delete-child-${child.id}`}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
