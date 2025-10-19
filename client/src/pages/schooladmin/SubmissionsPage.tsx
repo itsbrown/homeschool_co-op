@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRoute, useLocation } from 'wouter';
-import { ArrowLeft, Download, Filter, Search } from 'lucide-react';
+import { ArrowLeft, Download, Filter, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useState } from 'react';
 
 interface FormSubmission {
@@ -41,6 +48,7 @@ export default function SubmissionsPage() {
   const [, params] = useRoute('/school-admin/forms/:id/submissions');
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null);
   const formId = params?.id ? parseInt(params.id) : 0;
 
   // Fetch form details
@@ -264,10 +272,7 @@ export default function SubmissionsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              // TODO: Show submission details in a dialog
-                              alert(JSON.stringify(submission.responseData, null, 2));
-                            }}
+                            onClick={() => setSelectedSubmission(submission)}
                             data-testid={`button-view-${submission.id}`}
                           >
                             View
@@ -282,6 +287,93 @@ export default function SubmissionsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Submission Details Dialog */}
+      <Dialog open={!!selectedSubmission} onOpenChange={(open) => !open && setSelectedSubmission(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Submission Details</DialogTitle>
+            <DialogDescription>
+              Submission ID: {selectedSubmission?.id} • Submitted on {selectedSubmission && formatDate(selectedSubmission.createdAt)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedSubmission && (
+            <div className="space-y-6">
+              {/* Submitter Information */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-lg">Submitter Information</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Name:</span>
+                    <p className="font-medium">{selectedSubmission.submitterName}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Email:</span>
+                    <p className="font-medium">{selectedSubmission.submitterEmail}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Status:</span>
+                    <div className="mt-1">
+                      <Badge className={getStatusColor(selectedSubmission.status)}>
+                        {selectedSubmission.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">IP Address:</span>
+                    <p className="font-medium font-mono text-xs">{selectedSubmission.ipAddress}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Responses */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-lg">Form Responses</h3>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-1/3">Field</TableHead>
+                        <TableHead>Response</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.entries(selectedSubmission.responseData || {}).map(([key, value]) => (
+                        <TableRow key={key}>
+                          <TableCell className="font-medium">{key}</TableCell>
+                          <TableCell>
+                            {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Notes (if any) */}
+              {selectedSubmission.notes && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-lg">Notes</h3>
+                  <p className="text-sm bg-muted p-3 rounded-md">{selectedSubmission.notes}</p>
+                </div>
+              )}
+
+              {/* Status Info */}
+              <div className="text-xs text-muted-foreground pt-4 border-t">
+                <p><strong>Status:</strong> "{selectedSubmission.status}" means the submission {
+                  selectedSubmission.status === 'pending' ? 'has been received and is waiting to be reviewed' :
+                  selectedSubmission.status === 'reviewed' ? 'has been reviewed by staff' :
+                  selectedSubmission.status === 'approved' ? 'has been approved' :
+                  selectedSubmission.status === 'rejected' ? 'has been rejected' :
+                  'is in an unknown state'
+                }</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </SchoolAdminLayout>
   );
 }
