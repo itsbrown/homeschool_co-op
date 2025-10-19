@@ -1413,17 +1413,24 @@ router.post("/staff/invite", async (req, res) => {
 // Get staff members for the school
 router.get("/staff", async (req, res) => {
   try {
-    const { getAllStaffForSchool } = await import('../services/staff-db');
     const schoolId = 1; // American Seekers Academy
+    console.log(`👥 Loading staff for school ID: ${schoolId} from file storage`);
 
-    console.log(`👥 Loading staff for school ID: ${schoolId} from database`);
+    // Load staff from file storage
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    
+    if (!fs.existsSync(STAFF_FILE)) {
+      console.log('📋 No staff file found, returning empty array');
+      return res.json([]);
+    }
 
-    const allStaff = await getAllStaffForSchool(schoolId);
-    console.log(`Found ${allStaff.length} staff members in database`);
+    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+    console.log(`✅ Found ${allStaff.length} staff members in file storage`);
 
     res.json(allStaff);
   } catch (error) {
-    console.error("Error fetching school staff:", error);
+    console.error("❌ Error fetching school staff:", error);
     res.status(500).json({ message: "Error fetching school staff" });
   }
 });
