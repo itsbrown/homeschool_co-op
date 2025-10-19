@@ -335,17 +335,22 @@ export default function UsersPage() {
                   </TableRow>
                 ) : (
                   filteredUsers.map((user: any) => (
-                    <TableRow key={user.id}>
+                    <TableRow key={user.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">
-                        {user.role === 'parent' ? (
-                          <Link href={`/schools/parents/${user.id}`}>
-                            <Button variant="link" className="h-auto p-0 font-medium">
-                              {user.firstName} {user.lastName}
-                            </Button>
-                          </Link>
-                        ) : (
-                          <span>{user.firstName} {user.lastName}</span>
-                        )}
+                        <Link 
+                          href={
+                            user.role === 'parent' ? `/schools/parents/${user.id}` :
+                            user.role === 'educator' ? `/schools/educators/${user.id}` :
+                            user.role === 'staff' ? `/schools/staff/${user.id}` :
+                            user.role === 'school_admin' ? `/schools/admins/${user.id}` :
+                            `/schools/users/${user.id}`
+                          }
+                          data-testid={`link-user-${user.id}`}
+                        >
+                          <Button variant="link" className="h-auto p-0 font-medium hover:underline">
+                            {user.firstName} {user.lastName}
+                          </Button>
+                        </Link>
                       </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
