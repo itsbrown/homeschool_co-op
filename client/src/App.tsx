@@ -43,6 +43,7 @@ import KnowledgeBaseCreationPage from "./pages/schools/KnowledgeBaseCreationPage
 import FormBuilderPage from "./pages/schooladmin/FormBuilderPage";
 import FormEditorPage from "./pages/schooladmin/FormEditorPage";
 import PreviewFormPage from "./pages/schooladmin/PreviewFormPage";
+import SubmissionsPage from "./pages/schooladmin/SubmissionsPage";
 import DynamicFormPage from "./pages/DynamicFormPage";
 import RolesAndPermissionsPage from "@/pages/admin/RolesAndPermissionsPage";
 import RoleManagementPage from "@/pages/admin/RoleManagementPage";
@@ -541,6 +542,7 @@ function Router() {
       <Route path="/school-admin/forms" component={FormBuilderPage} />
       <Route path="/school-admin/forms/:id/edit" component={FormEditorPage} />
       <Route path="/school-admin/forms/:id/preview" component={PreviewFormPage} />
+      <Route path="/school-admin/forms/:id/submissions" component={SubmissionsPage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />
       <Route path="/schools/staff/:id" component={StaffEditPage} />
       <Route path="/schools/staff/:id/edit" component={StaffEditPage} />
