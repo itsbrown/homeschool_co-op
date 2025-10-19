@@ -4,8 +4,14 @@ import { createClient } from '@supabase/supabase-js';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 import { MembershipService } from '../services/membership-service.js';
+import Stripe from 'stripe';
 
 const router = Router();
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2024-04-10',
+});
 
 // Get payment history for a specific user
 router.get('/history', async (req, res) => {
@@ -486,9 +492,59 @@ router.post('/refund/:paymentId', async (req, res) => {
       });
     }
 
-    // Create refund payment record
+    // Check if this is a Stripe payment or manual payment
+    const isStripePayment = originalPayment.stripePaymentIntentId && 
+                           !originalPayment.stripePaymentIntentId.startsWith('manual_') &&
+                           !originalPayment.stripePaymentIntentId.startsWith('enrollment_');
+
+    let stripeRefund = null;
+
+    // Process actual Stripe refund if this was a Stripe payment
+    if (isStripePayment) {
+      try {
+        console.log(`💳 Processing Stripe refund for payment intent: ${originalPayment.stripePaymentIntentId}`);
+        
+        stripeRefund = await stripe.refunds.create({
+          payment_intent: originalPayment.stripePaymentIntentId,
+          amount: refundAmountCents,
+          reason: 'requested_by_customer',
+          metadata: {
+            refundedBy: userEmail,
+            refundedByRole: 'schoolAdmin',
+            originalPaymentId: paymentId.toString(),
+            refundReason: reason || 'Administrative refund'
+          }
+        });
+
+        console.log(`✅ Stripe refund processed successfully: ${stripeRefund.id}`);
+      } catch (stripeError: any) {
+        console.error('❌ Stripe refund error:', stripeError);
+        
+        // Handle specific Stripe errors
+        if (stripeError.type === 'StripeCardError') {
+          return res.status(400).json({
+            success: false,
+            error: 'Card error: ' + stripeError.message
+          });
+        } else if (stripeError.code === 'charge_already_refunded') {
+          return res.status(400).json({
+            success: false,
+            error: 'This payment has already been refunded in Stripe'
+          });
+        } else {
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to process Stripe refund: ' + stripeError.message
+          });
+        }
+      }
+    } else {
+      console.log(`ℹ️ Manual payment detected - processing internal refund only (no Stripe API call)`);
+    }
+
+    // Create refund payment record in our system
     const refundPaymentData = {
-      stripePaymentIntentId: `refund_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      stripePaymentIntentId: stripeRefund ? stripeRefund.id : `refund_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       parentEmail: originalPayment.parentEmail,
       childName: originalPayment.childName,
       className: originalPayment.className,
@@ -501,12 +557,15 @@ router.post('/refund/:paymentId', async (req, res) => {
         refundReason: reason || 'Administrative refund',
         createdBy: userEmail,
         createdByRole: 'schoolAdmin',
-        isRefund: true
+        isRefund: true,
+        stripeRefundId: stripeRefund?.id || null,
+        stripeRefundStatus: stripeRefund?.status || null,
+        refundType: isStripePayment ? 'stripe' : 'manual'
       }
     };
 
     const refundPayment = await storage.createPayment(refundPaymentData);
-    console.log('✅ Refund payment created:', refundPayment.id);
+    console.log('✅ Refund payment record created:', refundPayment.id);
 
     // Update enrollment balances if there are matching enrollments
     try {
@@ -603,8 +662,14 @@ router.post('/refund/:paymentId', async (req, res) => {
         childName: originalPayment.childName,
         className: originalPayment.className,
         createdAt: refundPayment.createdAt,
-        processedBy: userEmail
-      }
+        processedBy: userEmail,
+        refundType: isStripePayment ? 'stripe' : 'manual',
+        stripeRefundId: stripeRefund?.id || null,
+        stripeRefundStatus: stripeRefund?.status || null
+      },
+      message: isStripePayment 
+        ? '✅ Refund processed successfully through Stripe. The funds will be returned to the customer\'s payment method.'
+        : '✅ Internal refund recorded. Note: This was a manual payment - no Stripe refund was processed.'
     });
 
   } catch (error) {
