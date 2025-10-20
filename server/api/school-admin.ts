@@ -344,11 +344,14 @@ router.get("/my-school", async (req, res) => {
 
     // Find the school associated with this admin
     console.log('🔍 Looking up admin user by email:', user.email);
+    console.log('🔍 User object from Supabase:', JSON.stringify(user, null, 2));
     let adminUser;
     
     // Try to get user from storage, with file storage fallback
     try {
+      console.log('🔄 Attempting storage.getUserByEmail...');
       adminUser = await storage.getUserByEmail(user.email || '');
+      console.log('✅ Storage lookup result:', adminUser ? `Found user ID ${adminUser.id}` : 'Not found');
     } catch (storageError) {
       console.log('❌ Storage error, trying file storage fallback:', storageError.message);
       
