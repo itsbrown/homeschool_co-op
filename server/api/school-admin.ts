@@ -342,35 +342,39 @@ router.get("/my-school", async (req, res) => {
       console.log('⚠️ Could not import supabaseAdmin, will use file storage only');
     }
 
-    // Find the school associated with this admin
+    // Find the school associated with this admin - query Supabase directly
     console.log('🔍 Looking up admin user by email:', user.email);
-    console.log('🔍 User object from Supabase:', JSON.stringify(user, null, 2));
     let adminUser;
     
-    // Try to get user from storage, with file storage fallback
-    try {
-      console.log('🔄 Attempting storage.getUserByEmail...');
-      adminUser = await storage.getUserByEmail(user.email || '');
-      console.log('✅ Storage lookup result:', adminUser ? `Found user ID ${adminUser.id}` : 'Not found');
-    } catch (storageError) {
-      console.log('❌ Storage error, trying file storage fallback:', storageError.message);
-      
-      // Fallback to direct file access
+    // Query Supabase database directly for user
+    if (supabaseAdmin) {
       try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const DATA_DIR = path.join(process.cwd(), 'data');
-        const USERS_FILE = path.join(DATA_DIR, 'users.json');
+        console.log('🔄 Querying Supabase users table...');
+        const { data: users, error: userError } = await supabaseAdmin
+          .from('users')
+          .select('*')
+          .eq('email', user.email)
+          .limit(1);
         
-        if (fs.existsSync(USERS_FILE)) {
-          const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
-          const users = JSON.parse(fileContent);
-          adminUser = users.find((u: any) => u.email === user.email);
-          console.log('🔄 Found admin user via file storage fallback:', adminUser ? 'Yes' : 'No');
+        if (userError) {
+          console.log('❌ Supabase user query error:', userError);
+        } else if (users && users.length > 0) {
+          // Map snake_case to camelCase
+          adminUser = {
+            id: users[0].id,
+            email: users[0].email,
+            role: users[0].role,
+            schoolId: users[0].school_id,
+            supabaseId: users[0].supabase_id,
+            name: users[0].name,
+            username: users[0].username
+          };
+          console.log('✅ Found admin user in Supabase:', { id: adminUser.id, email: adminUser.email, role: adminUser.role });
+        } else {
+          console.log('⚠️ User not found in Supabase database');
         }
-      } catch (fileError) {
-        console.log('❌ File storage fallback also failed:', fileError);
-        return res.status(500).json({ message: "Error looking up admin user" });
+      } catch (supabaseError) {
+        console.log('❌ Supabase query failed:', supabaseError);
       }
     }
 
@@ -402,18 +406,33 @@ router.get("/my-school", async (req, res) => {
     // Try Supabase first, then fallback to file storage
     if (supabaseAdmin) {
       try {
-        // Attempt to use Supabase if available
+        // Attempt to use Supabase if available (use snake_case column names)
         const { data: schools, error } = await supabaseAdmin
           .from('schools')
           .select('*')
-          .eq('adminId', adminUser.id);
+          .eq('admin_id', adminUser.id);
 
         if (!error && schools && schools.length > 0) {
           console.log('✅ Found school in Supabase:', schools[0].name);
-          return res.json(schools[0]);
+          // Return school data with camelCase properties for frontend compatibility
+          return res.json({
+            id: schools[0].id,
+            name: schools[0].name,
+            type: schools[0].type,
+            adminId: schools[0].admin_id,
+            address: schools[0].address,
+            phone: schools[0].phone,
+            email: schools[0].email,
+            website: schools[0].website,
+            description: schools[0].description,
+            logo: schools[0].logo,
+            status: schools[0].status,
+            createdAt: schools[0].created_at,
+            updatedAt: schools[0].updated_at
+          });
         }
         
-        console.log('⚠️ Supabase query failed or no results, falling back to file storage');
+        console.log('⚠️ Supabase query failed or no results:', error || 'No schools found');
       } catch (supabaseError) {
         console.log('⚠️ Supabase connection failed, using file storage fallback:', supabaseError.message);
       }
