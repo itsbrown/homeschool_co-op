@@ -38,7 +38,8 @@ The platform follows a modern web application architecture, emphasizing scalabil
 ### Data Storage
 - **Primary Database**: Supabase (PostgreSQL-based) for user, school, and content data
 - **Database Connection**: URL-encoded connection string builder (`server/lib/database-url.ts`) to properly handle special characters in credentials for both runtime and drizzle-kit operations
-- **File Storage**: Local filesystem for general files, file-based system for knowledge bases.
+- **File Storage**: Local filesystem for general files, file-based system for knowledge bases
+- **Authentication Integration**: Frontend authenticates via Supabase OAuth, backend queries Supabase database directly for user/school data (as of October 2025)
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation. Includes custom form builder security hardening with ownership and cross-tenant checks.
