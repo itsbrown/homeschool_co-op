@@ -37,12 +37,16 @@ interface StaffMember {
   email: string;
   phone: string;
   role: string;
-  locationId: string;
-  classId: string;
+  locationId: string | null;
+  department?: string;
   subjects: string[];
   status: string;
   joinDate: string;
   avatar: string;
+  firstName?: string;
+  lastName?: string;
+  userId?: number;
+  classIds?: number[];
 }
 
 export default function StaffEditPage() {
@@ -59,12 +63,13 @@ export default function StaffEditPage() {
       email: "",
       phone: "",
       role: "",
-      locationId: "",
-      classId: "",
+      locationId: null,
+      department: "",
       subjects: [],
       status: "Active",
       joinDate: "",
       avatar: "",
+      classIds: [],
     },
   });
 
@@ -424,31 +429,6 @@ export default function StaffEditPage() {
                                 {locations?.map((location: any) => (
                                   <SelectItem key={location.id} value={location.id.toString()}>
                                     {location.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="classId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Class</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value?.toString() || ""}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select class" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {allClassesList?.map((classItem: any) => (
-                                  <SelectItem key={classItem.id} value={classItem.id.toString()}>
-                                    {classItem.title || classItem.className}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
