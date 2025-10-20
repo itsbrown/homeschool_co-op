@@ -4137,8 +4137,18 @@ router.put('/users/:id', async (req: any, res) => {
 
     // Verify user belongs to this school before updating
     const existingUser = await storage.getUser(userId);
-    if (!existingUser || existingUser.schoolId !== schoolId) {
-      return res.status(404).json({ message: 'User not found or access denied' });
+    console.log('👤 Existing user:', existingUser ? { id: existingUser.id, email: existingUser.email, schoolId: existingUser.schoolId, role: existingUser.role } : 'Not found');
+    console.log('🏫 Admin school ID:', schoolId);
+    
+    if (!existingUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check schoolId (handle both camelCase and snake_case)
+    const userSchoolId = existingUser.schoolId || (existingUser as any).school_id;
+    if (userSchoolId !== schoolId) {
+      console.log(`❌ School ID mismatch: user has ${userSchoolId}, admin has ${schoolId}`);
+      return res.status(403).json({ message: 'Access denied - user belongs to different school' });
     }
 
     const userData = {
