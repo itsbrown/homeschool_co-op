@@ -14,7 +14,10 @@ import {
   EmergencyContact, InsertEmergencyContact, emergencyContacts,
   Event, InsertEvent, events,
   MarketplaceItem, InsertMarketplaceItem, marketplaceItems,
-  SchoolStaff, InsertSchoolStaff, schoolStaff
+  SchoolStaff, InsertSchoolStaff, schoolStaff,
+  Payment, InsertPayment, payments,
+  ScheduledPayment, InsertScheduledPayment, scheduledPayments,
+  Refund, InsertRefund, refunds
 } from '../shared/schema';
 
 /**
@@ -735,5 +738,203 @@ export class DatabaseStorage implements IStorage {
   async deleteSchoolStaff(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(schoolStaff).where(eq(schoolStaff.id, id));
+  }
+
+  // Payment methods
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const db = await getDb();
+    const [newPayment] = await db
+      .insert(payments)
+      .values({
+        ...payment,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newPayment;
+  }
+
+  async getPaymentById(id: number): Promise<Payment | undefined> {
+    const db = await getDb();
+    const [payment] = await db.select().from(payments).where(eq(payments.id, id));
+    return payment;
+  }
+
+  async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
+    const db = await getDb();
+    return await db.select().from(payments).where(eq(payments.parentEmail, parentEmail));
+  }
+
+  async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
+    const db = await getDb();
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.stripePaymentIntentId, stripePaymentIntentId));
+    return payment;
+  }
+
+  async getAllPayments(): Promise<Payment[]> {
+    const db = await getDb();
+    return await db.select().from(payments).orderBy(desc(payments.createdAt));
+  }
+
+  async updatePaymentStatus(
+    id: number,
+    status: 'pending' | 'succeeded' | 'failed' | 'canceled'
+  ): Promise<Payment | undefined> {
+    const db = await getDb();
+    // Map interface status values to database schema values
+    const dbStatus: 'pending' | 'completed' | 'failed' | 'cancelled' = 
+      status === 'succeeded' ? 'completed' :
+      status === 'canceled' ? 'cancelled' :
+      status;
+    
+    const [updatedPayment] = await db
+      .update(payments)
+      .set({
+        status: dbStatus,
+        updatedAt: new Date()
+      })
+      .where(eq(payments.id, id))
+      .returning();
+    return updatedPayment;
+  }
+
+  async updatePayment(id: number, payment: Partial<InsertPayment>): Promise<Payment | undefined> {
+    const db = await getDb();
+    const [updatedPayment] = await db
+      .update(payments)
+      .set({
+        ...payment,
+        updatedAt: new Date()
+      })
+      .where(eq(payments.id, id))
+      .returning();
+    return updatedPayment;
+  }
+
+  // Scheduled Payment methods
+  async createScheduledPayment(payment: InsertScheduledPayment): Promise<ScheduledPayment> {
+    const db = await getDb();
+    const [newPayment] = await db
+      .insert(scheduledPayments)
+      .values({
+        ...payment,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newPayment;
+  }
+
+  async getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined> {
+    const db = await getDb();
+    const [payment] = await db.select().from(scheduledPayments).where(eq(scheduledPayments.id, id));
+    return payment;
+  }
+
+  async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(scheduledPayments)
+      .where(eq(scheduledPayments.parentEmail, parentEmail))
+      .orderBy(asc(scheduledPayments.scheduledDate));
+  }
+
+  async getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(scheduledPayments)
+      .where(eq(scheduledPayments.enrollmentId, enrollmentId))
+      .orderBy(asc(scheduledPayments.scheduledDate));
+  }
+
+  async getAllScheduledPayments(): Promise<ScheduledPayment[]> {
+    const db = await getDb();
+    return await db.select().from(scheduledPayments).orderBy(asc(scheduledPayments.scheduledDate));
+  }
+
+  async updateScheduledPaymentStatus(
+    id: number,
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'skipped'
+  ): Promise<ScheduledPayment | undefined> {
+    const db = await getDb();
+    const [updatedPayment] = await db
+      .update(scheduledPayments)
+      .set({
+        status,
+        updatedAt: new Date()
+      })
+      .where(eq(scheduledPayments.id, id))
+      .returning();
+    return updatedPayment;
+  }
+
+  async updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined> {
+    const db = await getDb();
+    const [updatedPayment] = await db
+      .update(scheduledPayments)
+      .set({
+        ...payment,
+        updatedAt: new Date()
+      })
+      .where(eq(scheduledPayments.id, id))
+      .returning();
+    return updatedPayment;
+  }
+
+  // Refund methods
+  async createRefund(refund: InsertRefund): Promise<Refund> {
+    const db = await getDb();
+    const [newRefund] = await db
+      .insert(refunds)
+      .values({
+        ...refund,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newRefund;
+  }
+
+  async getRefundById(id: number): Promise<Refund | undefined> {
+    const db = await getDb();
+    const [refund] = await db.select().from(refunds).where(eq(refunds.id, id));
+    return refund;
+  }
+
+  async getRefundsByPaymentId(paymentId: number): Promise<Refund[]> {
+    const db = await getDb();
+    return await db.select().from(refunds).where(eq(refunds.paymentId, paymentId));
+  }
+
+  async getRefundsByEnrollmentId(enrollmentId: number): Promise<Refund[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(refunds)
+      .where(eq(refunds.enrollmentId, enrollmentId))
+      .orderBy(desc(refunds.createdAt));
+  }
+
+  async getAllRefunds(): Promise<Refund[]> {
+    const db = await getDb();
+    return await db.select().from(refunds).orderBy(desc(refunds.createdAt));
+  }
+
+  async updateRefund(id: number, refund: Partial<InsertRefund>): Promise<Refund | undefined> {
+    const db = await getDb();
+    const [updatedRefund] = await db
+      .update(refunds)
+      .set({
+        ...refund,
+        updatedAt: new Date()
+      })
+      .where(eq(refunds.id, id))
+      .returning();
+    return updatedRefund;
   }
 }
