@@ -36,7 +36,13 @@ The platform follows a modern web application architecture, emphasizing scalabil
 - **Authentication Middleware**: Auth0 JWT validation
 
 ### Data Storage
-- **Primary Database**: Supabase (PostgreSQL-based) for user, school, and content data
+- **Primary Database**: Neon PostgreSQL for all application data including enrollments, payments, and financial tracking
+- **Financial Data Migration (October 2025)**: All enrollment and payment data migrated from JSON files to PostgreSQL database with ACID transaction support
+  - **program_enrollments table**: Stores all program enrollments with payment tracking (total_cost, total_paid, remaining_balance, payment_status)
+  - **payments table**: Records all payment transactions (Stripe and manual) with schoolId, parentId, enrollmentIds, and descriptions
+  - **scheduled_payments table**: Tracks payment plans and installments
+  - **refunds table**: Records refund transactions
+  - **Legacy JSON files**: Archived in `data/archive_legacy_json/` (enrollments.json, payment-history.json, scheduled-payments.json)
 - **Database Connection**: URL-encoded connection string builder (`server/lib/database-url.ts`) to properly handle special characters in credentials for both runtime and drizzle-kit operations
 - **File Storage**: Local filesystem for general files, file-based system for knowledge bases
 - **Authentication Integration**: Frontend authenticates via Supabase OAuth, backend queries Supabase database directly for user/school data (as of October 2025)
