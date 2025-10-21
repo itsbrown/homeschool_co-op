@@ -3979,6 +3979,12 @@ export class MemStorage implements IStorage {
     }
 
     async getEnrollmentById(id: number): Promise<any> {
+      // Try database first (for program enrollments)
+      const dbEnrollment = await this.dbStorage.getProgramEnrollment(id);
+      if (dbEnrollment) {
+        return dbEnrollment;
+      }
+      // Fall back to memory storage (for legacy class enrollments)
       return this.memStorage.getEnrollmentById(id);
     }
 
