@@ -63,31 +63,50 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
     const uniqueChildren = [...new Set(items.map((item: any) => item.childName))];
     const classNames = items.map((item: any) => item.className);
     
-    console.log('💳 Processing payment plan enrollment with simplified approach:', paymentPlan);
+    console.log('💳 Processing payment plan enrollment with database storage:', paymentPlan);
+    
+    // Get parent user to get schoolId and parentId
+    const parent = await storage.getUserByEmail(userEmail);
+    if (!parent) {
+      return res.status(404).json({
+        message: 'Parent user not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
     
     try {
-      // Create enrollments first
+      // Create enrollments in database
       const enrollmentIds = [];
       for (const item of items) {
-        const enrollment = await storage.createEnrollment({
-          programId: item.classId,
-          parentId: 0, // Will be updated later
-          parentEmail: userEmail,
+        // Get the child to fetch schoolId
+        const child = children.find(c => c.id === item.childId);
+        if (!child) {
+          throw new Error(`Child ${item.childId} not found`);
+        }
+        
+        const enrollment = await storage.createProgramEnrollment({
+          schoolId: child.schoolId || parent.schoolId || 1, // Fallback to parent's school or default
+          classId: item.classId,
+          programId: item.classId, // For backward compatibility
           childId: item.childId,
           childName: item.childName,
           className: item.className,
+          parentId: parent.id,
+          parentEmail: userEmail,
           totalCost: item.totalCost,
+          totalPaid: 0,
           remainingBalance: item.totalCost,
-          paymentStatus: paymentPlan === 'full' ? 'pending_payment' : 'payment_plan_active',
-          paymentSystemVersion: 'v2_stripe_simplified',
-          status: 'pending_payment',
-          createdAt: new Date(),
-          updatedAt: new Date()
+          depositRequired: 0,
+          paymentStatus: paymentPlan === 'full' ? 'pending' : 'deposit_paid',
+          paymentPlan: paymentPlan === 'full' ? 'full_payment' : 'monthly',
+          paymentSystemVersion: 'v2_stripe',
+          status: 'enrolled',
+          enrollmentDate: new Date()
         });
         enrollmentIds.push(enrollment.id);
       }
 
-      console.log('📝 Created enrollments with IDs:', enrollmentIds);
+      console.log('✅ Created database enrollments with IDs:', enrollmentIds);
 
       // Use payment plan service for ALL payment plans
       const paymentPlanService = new StripePaymentPlanService(storage);

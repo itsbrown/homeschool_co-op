@@ -135,14 +135,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // Calculate payment per item
           const amountPerItem = Math.round(paymentIntent.amount / items.length);
           
-          // Update each enrollment
+          // Update each enrollment in database
           const updatedEnrollments = [];
           for (const item of items) {
             try {
-              // Find enrollment by child and class
+              // Get all program enrollments from database
               const allEnrollments = await storage.getAllEnrollments();
-              const enrollment = allEnrollments.find(e => 
-                e.childId === item.childId && e.programId === item.classId
+              const enrollment = allEnrollments.find((e: any) => 
+                e.childId === item.childId && (e.programId === item.classId || e.classId === item.classId)
               );
               
               if (enrollment) {
@@ -150,17 +150,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 const newAmount = currentAmount + amountPerItem;
                 const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
                 
-                const updatedEnrollment = {
-                  ...enrollment,
+                // Update program enrollment in database
+                const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
                   totalPaid: newAmount,
                   remainingBalance: remainingBalance,
-                  status: 'enrolled' as const,
-                  paymentIntentId: paymentIntent.id
-                };
+                  paymentStatus: remainingBalance <= 0 ? 'completed' : 'deposit_paid',
+                  status: 'enrolled'
+                });
                 
-                await storage.updateEnrollment(updatedEnrollment);
-                updatedEnrollments.push(updatedEnrollment);
-                console.log(`✅ Updated enrollment for ${item.childName} in ${item.className}: amount=${newAmount}, remaining=${remainingBalance}`);
+                if (updatedEnrollment) {
+                  updatedEnrollments.push(updatedEnrollment);
+                  console.log(`✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`);
+                }
               } else {
                 console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
               }
@@ -171,23 +172,31 @@ export const webhookHandler = async (req: Request, res: Response) => {
           
           console.log(`✅ Updated ${updatedEnrollments.length} enrollments for checkout session ${session.id}`);
           
-          // Create payment record
+          // Create payment record in database
+          const parentUserForSession = await storage.getUserByEmail(parentEmail);
+          const schoolIdForSession = parentUserForSession?.schoolId || updatedEnrollments[0]?.schoolId || 1;
+          
           const payment = {
-            stripePaymentIntentId: paymentIntent.id,
+            schoolId: schoolIdForSession,
+            parentId: parentUserForSession?.id,
             parentEmail: parentEmail,
             childName: items[0]?.childName || 'Unknown',
             className: items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown'),
+            description: `Checkout payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
             amount: paymentIntent.amount,
             currency: paymentIntent.currency || 'usd',
             status: 'completed' as const,
+            stripePaymentIntentId: paymentIntent.id,
+            enrollmentIds: updatedEnrollments.map((e: any) => e.id),
             metadata: {
               checkoutSessionId: session.id,
               itemCount: items.length
-            }
+            },
+            paymentDate: new Date()
           };
 
           await storage.createPayment(payment);
-          console.log('✅ Payment record created for checkout session:', session.id);
+          console.log('✅ Payment record created in database for checkout session:', session.id);
         }
         
       } catch (error) {
@@ -224,9 +233,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           const scheduledPayment = allScheduledPayments.find(p => p.id === parseInt(scheduledPaymentId));
           
           if (scheduledPayment) {
-            // Update the scheduled payment status to paid
-            await storage.updateScheduledPaymentStatus(parseInt(scheduledPaymentId), 'paid');
-            console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as paid`);
+            // Update the scheduled payment status to completed
+            await storage.updateScheduledPaymentStatus(parseInt(scheduledPaymentId), 'completed');
+            console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed`);
             
             // UPDATE ENROLLMENT BALANCES - This was missing!
             console.log('💰 Updating enrollment balances for scheduled payment...');
@@ -235,34 +244,24 @@ export const webhookHandler = async (req: Request, res: Response) => {
             
             for (const enrollmentId of enrollmentIds) {
               try {
-                // Use specific enrollment lookup instead of getting all enrollments
-                const enrollment = await storage.getEnrollmentById(enrollmentId);
+                // Get program enrollment from database
+                const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
                 
                 if (enrollment) {
-                  const currentAmountPaid = enrollment.totalPaid || enrollment.amountPaid || enrollment.amount || 0;
+                  const currentAmountPaid = enrollment.totalPaid || 0;
                   const newAmountPaid = currentAmountPaid + paymentAmountPerEnrollment;
                   const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
                   
-                  // Update enrollment with new payment and installment tracking
-                  const currentInstallmentsPaid = (enrollment.installmentsPaid || 0) + 1;
-                  const totalInstallments = enrollment.totalInstallments || scheduledPayment.totalInstallments || 3;
-                  
-                  const updatedEnrollment = {
-                    ...enrollment,
-                    amount: newAmountPaid,
-                    amountPaid: newAmountPaid,
+                  // Update program enrollment in database
+                  const updatedEnrollment = await storage.updateProgramEnrollment(enrollmentId, {
                     totalPaid: newAmountPaid,
                     remainingBalance: newBalance,
-                    paymentIntentId: paymentIntent.id,
-                    installmentsPaid: currentInstallmentsPaid,
-                    totalInstallments: totalInstallments,
-                    paymentPlanStatus: newBalance <= 0 ? 'completed' : 'in_progress',
-                    // Update payment status based on remaining balance
-                    paymentStatus: newBalance <= 0 ? 'completed' : 'payment_plan_active'
-                  };
+                    paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
+                  });
                   
-                  await storage.updateEnrollment(updatedEnrollment);
-                  console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+                  if (updatedEnrollment) {
+                    console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+                  }
                 } else {
                   console.error(`❌ Enrollment ${enrollmentId} not found for scheduled payment`);
                 }
@@ -271,21 +270,31 @@ export const webhookHandler = async (req: Request, res: Response) => {
               }
             }
             
-            // Create payment record for history
+            // Create payment record for history in database
             const description = scheduledPayment.description || 'Payment';
+            
+            // Get parent user to get schoolId
+            const parentUser = await storage.getUserByEmail(parentEmail);
+            const schoolId = scheduledPayment.schoolId || parentUser?.schoolId || 1;
+            
             const payment = {
-              stripePaymentIntentId: paymentIntent.id,
+              schoolId,
+              parentId: parentUser?.id,
               parentEmail: parentEmail,
               childName: description.includes(' - ') ? description.split(' - ')[0] : 'Child',
               className: description.includes(' - ') ? description.split(' - ')[1] : description,
+              description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`,
               amount: paymentIntent.amount,
               currency: paymentIntent.currency || 'usd',
               status: 'completed' as const,
+              stripePaymentIntentId: paymentIntent.id,
+              enrollmentIds: scheduledPayment.enrollmentIds || [],
               metadata: {
                 scheduledPaymentId: scheduledPaymentId,
                 installmentNumber: scheduledPayment.installmentNumber,
                 totalInstallments: scheduledPayment.totalInstallments
-              }
+              },
+              paymentDate: new Date()
             };
 
             await storage.createPayment(payment);
@@ -458,32 +467,33 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // Calculate payment per item
             const amountPerItem = Math.round(paymentIntent.amount / items.length);
             
-            // Update each enrollment
+            // Update each enrollment in database
             const updatedEnrollments = [];
             for (const item of items) {
               try {
-                // Find enrollment by child and class
+                // Get program enrollments from database
                 const allEnrollments = await storage.getAllEnrollments();
-                const enrollment = allEnrollments.find(e => 
-                  e.childId === item.childId && e.programId === item.classId
-                ) as any;
+                const enrollment = allEnrollments.find((e: any) => 
+                  e.childId === item.childId && (e.programId === item.classId || e.classId === item.classId)
+                );
                 
                 if (enrollment) {
                   const currentAmount = enrollment.totalPaid || 0;
                   const newAmount = currentAmount + amountPerItem;
                   const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
                   
-                  const updatedEnrollment = {
-                    ...enrollment,
+                  // Update program enrollment in database
+                  const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
                     totalPaid: newAmount,
                     remainingBalance: remainingBalance,
-                    status: 'enrolled' as const,
-                    paymentIntentId: paymentIntent.id
-                  };
+                    paymentStatus: remainingBalance <= 0 ? 'completed' : 'partial_payment',
+                    status: 'enrolled'
+                  });
                   
-                  await storage.updateEnrollment(updatedEnrollment);
-                  updatedEnrollments.push(updatedEnrollment);
-                  console.log(`✅ Updated enrollment for ${item.childName} in ${item.className}: amount=${newAmount}, remaining=${remainingBalance}`);
+                  if (updatedEnrollment) {
+                    updatedEnrollments.push(updatedEnrollment);
+                    console.log(`✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`);
+                  }
                 } else {
                   console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
                 }
@@ -492,7 +502,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               }
             }
             
-            console.log(`✅ Updated ${updatedEnrollments.length} enrollments for payment ${paymentIntent.id}`);
+            console.log(`✅ Updated ${updatedEnrollments.length} enrollments in database for payment ${paymentIntent.id}`);
             
             // Create payment record
             const payment = {
@@ -529,33 +539,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             }
           }
 
-          // Handle full payment cases (direct enrollment without payment plans)
-          if (paymentType === 'full' || paymentType === 'deposit') {
-            // Process full payment enrollments
-            const enrollmentIdsJson = paymentIntent.metadata.enrollmentIdsJson;
-            if (enrollmentIdsJson) {
-              const enrollmentIds = JSON.parse(enrollmentIdsJson);
-              console.log('🎯 Processing full payment for enrollment IDs:', enrollmentIds);
-
-              // Create enrollments for successful full payments  
-              const enrollmentPromises = items.map((item: any) => {
-                console.log('📝 Creating enrollment for full payment:', item.childName, 'in', item.className);
-                return storage.createEnrollment({
-                  classId: item.classId,
-                  childId: item.childId,
-                  status: 'enrolled',
-                  paymentIntentId: paymentIntent.id,
-                  amount: item.price,
-                  totalCost: item.totalCost,
-                  remainingBalance: 0,
-                  enrollmentDate: new Date().toISOString()
-                });
-              });
-
-              await Promise.all(enrollmentPromises);
-              console.log('✅ All full payments processed for payment:', paymentIntent.id);
-            }
-          }
+          // NOTE: Enrollments are now created BEFORE payment in stripe.ts using createProgramEnrollment()
+          // This legacy code path for creating enrollments AFTER payment has been removed to prevent
+          // database divergence. All enrollments should exist before the payment intent succeeds.
         }
       } catch (error) {
         console.error('❌ Error processing payment:', error);
@@ -658,7 +644,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             let remainingRefund = refundAmountCents;
             
             for (const enrollment of matchingEnrollments) {
-              const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
+              const currentAmountPaid = enrollment.totalPaid || enrollment.amountPaid || 0;
               
               // For last enrollment, use all remaining refund to avoid rounding errors
               const refundForThisEnrollment = matchingEnrollments.indexOf(enrollment) === matchingEnrollments.length - 1
@@ -670,22 +656,24 @@ export const webhookHandler = async (req: Request, res: Response) => {
               const newAmountPaid = Math.max(0, currentAmountPaid - refundForThisEnrollment);
               const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
               
-              enrollment.amount = newAmountPaid;
-              enrollment.amountPaid = newAmountPaid;
-              enrollment.remainingBalance = remainingBalance;
-              enrollment.outstandingBalance = remainingBalance;
-              
-              // Update enrollment status based on remaining balance
-              if (remainingBalance >= enrollment.totalCost) {
-                enrollment.status = 'pending_payment'; // Full refund, back to pending
+              // Determine payment status based on remaining balance
+              let paymentStatus: 'pending' | 'completed' | 'partial_payment' | 'refunded';
+              if (newAmountPaid === 0) {
+                paymentStatus = 'refunded'; // Full refund
               } else if (remainingBalance > 0) {
-                enrollment.status = 'enrolled'; // Partial refund, still enrolled with balance
+                paymentStatus = 'partial_payment'; // Partial refund, has balance
               } else {
-                enrollment.status = 'enrolled'; // Still fully paid
+                paymentStatus = 'completed'; // Still fully paid
               }
               
-              await storage.updateEnrollment(enrollment);
-              console.log(`✅ Updated enrollment ${enrollment.id} via webhook: refunded=${refundForThisEnrollment/100}, paid=${newAmountPaid/100}, remaining=${remainingBalance/100}`);
+              // Update program enrollment in database
+              await storage.updateProgramEnrollment(enrollment.id, {
+                totalPaid: newAmountPaid,
+                remainingBalance: remainingBalance,
+                paymentStatus: paymentStatus
+              });
+              
+              console.log(`✅ Updated enrollment ${enrollment.id} via webhook refund: refunded=$${refundForThisEnrollment/100}, paid=$${newAmountPaid/100}, remaining=$${remainingBalance/100}`);
               
               remainingRefund -= refundForThisEnrollment;
             }
