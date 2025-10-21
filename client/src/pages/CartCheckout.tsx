@@ -652,15 +652,34 @@ export default function CartCheckout() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {stripePromise ? (
+                {loading && !clientSecret ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-muted-foreground">Loading payment form...</span>
+                  </div>
+                ) : error ? (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {error}
+                    </AlertDescription>
+                  </Alert>
+                ) : !stripePromise ? (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Stripe is not properly initialized. Please check your Stripe publishable key.
+                    </AlertDescription>
+                  </Alert>
+                ) : clientSecret ? (
                   <Elements key={clientSecret} stripe={stripePromise} options={{ clientSecret }}>
                     <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getSelectedPlanAmount()} />
                   </Elements>
                 ) : (
                   <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4 mr-2" />
+                    <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      Stripe is not properly initialized. Please check your Stripe publishable key.
+                      Failed to initialize payment. Please try again or contact support.
                     </AlertDescription>
                   </Alert>
                 )}
