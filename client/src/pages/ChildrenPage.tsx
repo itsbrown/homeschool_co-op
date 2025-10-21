@@ -25,16 +25,20 @@ function MostRecentEnrollment({ childId }: { childId: number }) {
     );
   }
 
-  // Get the most recent enrollment
-  const mostRecent = enrollments && enrollments.length > 0 
-    ? [...enrollments].sort((a: any, b: any) => 
+  // Get the most recent CONFIRMED enrollment (not pending payment)
+  const confirmedEnrollments = enrollments?.filter((e: any) => 
+    e.status !== 'pending_payment' && e.status !== 'cancelled'
+  ) || [];
+  
+  const mostRecent = confirmedEnrollments.length > 0 
+    ? [...confirmedEnrollments].sort((a: any, b: any) => 
         new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
       )[0]
     : null;
 
   if (!mostRecent) {
     return (
-      <span className="text-sm text-muted-foreground">No recent enrollments</span>
+      <span className="text-sm text-muted-foreground">No active enrollments</span>
     );
   }
 
@@ -79,24 +83,47 @@ function ChildEnrollments({ childId }: { childId: number }) {
 
   return (
     <div className="space-y-3">
-      {enrollments.map((enrollment: any) => (
-        <div key={enrollment.id} className="border rounded-lg p-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <h4 className="font-medium">{enrollment.className}</h4>
-              <p className="text-sm text-muted-foreground">
-                Enrolled on {new Date(enrollment.enrollmentDate).toLocaleDateString()}
-              </p>
+      {enrollments.map((enrollment: any) => {
+        const isPendingPayment = enrollment.status === 'pending_payment';
+        const isEnrolled = enrollment.status === 'enrolled';
+        
+        return (
+          <div key={enrollment.id} className="border rounded-lg p-4">
+            <div className="flex justify-between items-start gap-3">
+              <div className="flex-1">
+                <h4 className="font-medium">{enrollment.className}</h4>
+                <p className="text-sm text-muted-foreground">
+                  {isPendingPayment ? 'Started' : 'Enrolled on'} {new Date(enrollment.enrollmentDate).toLocaleDateString()}
+                </p>
+                {isPendingPayment && (
+                  <p className="text-xs text-amber-600 mt-1 font-medium">
+                    Complete payment to confirm enrollment
+                  </p>
+                )}
+              </div>
+              <Badge 
+                variant={isEnrolled ? 'default' : isPendingPayment ? 'destructive' : 'secondary'}
+                className={
+                  isEnrolled ? 'bg-green-100 text-green-800 border-green-200' : 
+                  isPendingPayment ? 'bg-amber-100 text-amber-800 border-amber-200' : 
+                  ''
+                }
+              >
+                {isPendingPayment ? 'Payment Required' : enrollment.status}
+              </Badge>
             </div>
-            <Badge 
-              variant={enrollment.status === 'enrolled' ? 'default' : 'secondary'}
-              className={enrollment.status === 'enrolled' ? 'bg-green-100 text-green-800' : ''}
-            >
-              {enrollment.status}
-            </Badge>
+            {isPendingPayment && (
+              <div className="mt-3 pt-3 border-t">
+                <Button size="sm" variant="default" asChild className="w-full">
+                  <Link href="/cart/checkout">
+                    Complete Payment
+                  </Link>
+                </Button>
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
