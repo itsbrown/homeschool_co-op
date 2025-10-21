@@ -85,7 +85,13 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     }
     
     // Create payment record with installment details
+    // Get schoolId from enrollment or parent user
+    const parentUser = await storage.getUserByEmail(userEmail);
+    const schoolId = enrollments[0]?.schoolId || parentUser?.schoolId || 1;
+    
     const paymentRecord = {
+      schoolId,
+      parentId: parentUser?.id,
       stripePaymentIntentId: paymentIntent.id,
       parentEmail: userEmail,
       childName: enrollments[0].childName || 'Multiple Children',
@@ -93,6 +99,7 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       amount: currentPaymentAmount,
       currency: paymentIntent.currency || 'usd',
       status: 'completed' as const,
+      enrollmentIds: enrollmentIds,
       metadata: {
         enrollmentIds: enrollmentIds,
         paymentDate: new Date().toISOString(),
@@ -100,7 +107,8 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
         installmentNumber: isMonthly ? 1 : 1,
         totalInstallments: isMonthly ? 3 : 1,
         isFirstInstallment: true
-      }
+      },
+      paymentDate: new Date()
     };
     
     await storage.createPayment(paymentRecord);

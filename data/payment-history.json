@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "createdAt": "2025-10-21T21:10:34.767Z",
+    "updatedAt": "2025-10-21T21:10:34.767Z",
+    "stripePaymentIntentId": "pi_3SKmopRFKXbVXRE310m7eras",
+    "parentEmail": "corey.e.brown2025@gmail.com",
+    "childName": "Hermione Brown",
+    "className": "Seekers | Full Day",
+    "amount": 127500,
+    "currency": "usd",
+    "status": "completed",
+    "metadata": {
+      "enrollmentIds": [
+        3
+      ],
+      "paymentDate": "2025-10-21T21:10:34.675Z",
+      "paymentPlan": "full",
+      "installmentNumber": 1,
+      "totalInstallments": 1,
+      "isFirstInstallment": true
+    }
+  }
+]

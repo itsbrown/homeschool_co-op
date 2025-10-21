@@ -505,17 +505,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
             console.log(`✅ Updated ${updatedEnrollments.length} enrollments in database for payment ${paymentIntent.id}`);
             
             // Create payment record
+            // Get schoolId from enrollment or parent user
+            const parentUserForPayment = await storage.getUserByEmail(parentEmail);
+            const schoolIdForPayment = updatedEnrollments[0]?.schoolId || parentUserForPayment?.schoolId || 1;
+            
             const payment = {
+              schoolId: schoolIdForPayment,
+              parentId: parentUserForPayment?.id,
               stripePaymentIntentId: paymentIntent.id,
               parentEmail: parentEmail,
               childName: items[0]?.childName || 'Unknown',
-              className: items[0]?.className || 'Unknown',
+              className: items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown'),
+              description: `Cart payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
               amount: paymentIntent.amount,
               currency: paymentIntent.currency || 'usd',
               status: 'completed' as const,
+              enrollmentIds: updatedEnrollments.map((e: any) => e.id),
               metadata: {
                 itemCount: items.length
-              }
+              },
+              paymentDate: new Date()
             };
 
             await storage.createPayment(payment);
