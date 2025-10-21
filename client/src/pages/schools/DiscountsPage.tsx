@@ -336,31 +336,16 @@ export default function DiscountsPage() {
   return (
     <SchoolAdminLayout pageTitle="Discounts">
       <div className="space-y-6">
-        {/* Page Header */}
-        <div>
-          <h1 className="text-3xl font-bold">Discount Management</h1>
-          <p className="text-muted-foreground">Create and manage discounts for classes and enrollments. Set up automatic discounts for siblings and other special offers.</p>
-        </div>
-        {/* Header */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Discount Management
-                </CardTitle>
-                <CardDescription>
-                  Create and manage discounts for classes and enrollments. Set up automatic discounts or apply manual discounts as needed.
-                </CardDescription>
-              </div>
-              <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Discount
-                  </Button>
-                </DialogTrigger>
+        {/* Create Button Section */}
+        <div className="flex items-center justify-between">
+          <p className="text-muted-foreground">Create and manage discounts for classes and enrollments. Set up automatic discounts or apply manual discounts as needed.</p>
+          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-discount">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Discount
+              </Button>
+            </DialogTrigger>
                 <DiscountFormDialog
                   title="Create New Discount"
                   description="Set up a new discount for your school. Choose whether it applies automatically or manually."
@@ -379,10 +364,8 @@ export default function DiscountsPage() {
                     setSelectedGradeLevels([]);
                   }}
                 />
-              </Dialog>
-            </div>
-          </CardHeader>
-        </Card>
+          </Dialog>
+        </div>
 
         {/* Discounts Table */}
         <Card>

@@ -196,30 +196,29 @@ export default function UsersPage() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Users</h1>
           <p className="text-muted-foreground">
             Manage user accounts and permissions for your school
           </p>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => setShowImportDialog(true)}
+              variant="outline"
+              className="flex items-center gap-2"
+              data-testid="button-import-users"
+            >
+              <Upload className="h-4 w-4" />
+              Import Users
+            </Button>
+            <Button 
+              onClick={() => setShowCreateDialog(true)}
+              className="flex items-center gap-2"
+              data-testid="button-create-user"
+            >
+              <UserPlus className="h-4 w-4" />
+              Create User
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            onClick={() => setShowImportDialog(true)}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <Upload className="h-4 w-4" />
-            Import Users
-          </Button>
-          <Button 
-            onClick={() => setShowCreateDialog(true)}
-            className="flex items-center gap-2"
-          >
-            <UserPlus className="h-4 w-4" />
-            Create User
-          </Button>
-        </div>
-      </div>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">

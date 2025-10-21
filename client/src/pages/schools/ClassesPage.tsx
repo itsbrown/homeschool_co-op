@@ -347,12 +347,9 @@ export default function SchoolClassesPage() {
         <div className="max-w-6xl mx-auto p-6">
           <div className="flex flex-col space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
-              <div>
-                <h1 className="text-3xl font-bold">School Classes</h1>
-                <p className="text-muted-foreground">Manage your school's classes and curricula</p>
-              </div>
+              <p className="text-muted-foreground">Manage your school's classes and curricula</p>
               <Link href="/schools/classes/new">
-                <Button>
+                <Button data-testid="button-add-new-class">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Add New Class
                 </Button>

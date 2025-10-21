@@ -13,9 +13,9 @@ export default function SchoolAdminLayout({ children, pageTitle }: SchoolAdminLa
       
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Page header */}
+        {/* Page header - with padding to account for mobile hamburger menu */}
         <header className="bg-white shadow-sm z-10">
-          <div className="px-4 py-3 flex items-center">
+          <div className="px-4 md:px-4 pl-16 md:pl-4 py-3 flex items-center">
             <h1 className="text-2xl font-semibold text-gray-800">{pageTitle}</h1>
           </div>
         </header>

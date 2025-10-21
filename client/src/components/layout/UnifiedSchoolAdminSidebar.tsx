@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
@@ -148,6 +148,7 @@ interface SidebarProps {
 export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, isAuthenticated, signOut } = useAuth();
   const { activeRole } = useRole();
 
@@ -179,10 +180,37 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     setIsCollapsed(!isCollapsed);
   };
 
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   const handleLogout = async () => {
     console.log('🚪 School admin sidebar logout clicked');
     await signOut();
   };
+
+  // Auto-close mobile menu on route changes
+  useEffect(() => {
+    closeMobileMenu();
+  }, [location]);
+
+  // Close mobile menu on Esc key
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMobileMenuOpen) {
+        closeMobileMenu();
+      }
+    };
+    
+    if (isMobileMenuOpen) {
+      document.addEventListener('keydown', handleEsc);
+      return () => document.removeEventListener('keydown', handleEsc);
+    }
+  }, [isMobileMenuOpen]);
 
   return (
     <>
@@ -201,11 +229,11 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             isCollapsed ? "justify-center" : "justify-between"
           )}>
             {!isCollapsed && (
-              <Link href="/">
+              <Link href="/" data-testid="sidebar-logo-link">
                 <span className="font-bold text-xl text-gray-800">ASA Platform</span>
               </Link>
             )}
-            <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+            <Button variant="ghost" size="icon" onClick={toggleSidebar} data-testid="sidebar-toggle-button">
               {isCollapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}
             </Button>
           </div>
@@ -227,6 +255,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                         : "text-gray-700 hover:bg-gray-100",
                       isCollapsed ? "justify-center" : "justify-start"
                     )}
+                    data-testid={`nav-${item.href.replace(/\//g, '-')}`}
                   >
                     <item.icon className="h-5 w-5" />
                     {!isCollapsed && <span className="font-medium">{item.title}</span>}
@@ -277,29 +306,33 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
           variant="outline" 
           size="icon" 
           className="fixed top-4 left-4 z-50"
-          onClick={toggleSidebar}
+          onClick={toggleMobileMenu}
+          aria-expanded={isMobileMenuOpen}
+          aria-controls="mobile-navigation"
+          aria-label="Toggle navigation menu"
+          data-testid="mobile-menu-toggle"
         >
           <Menu className="h-6 w-6" />
         </Button>
         
         {/* Mobile sidebar drawer */}
-        {!isCollapsed && (
-          <div className="fixed inset-0 z-40 bg-black/50" onClick={toggleSidebar}>
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={closeMobileMenu}>
             <div 
               className="fixed inset-y-0 left-0 z-50 w-3/4 max-w-xs bg-white border-r shadow-lg" 
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex h-14 items-center border-b px-4">
-                <Link href="/">
+                <Link href="/" data-testid="mobile-sidebar-logo-link">
                   <span className="font-bold text-xl text-gray-800">ASA Platform</span>
                 </Link>
-                <Button variant="ghost" size="icon" className="ml-auto" onClick={toggleSidebar}>
+                <Button variant="ghost" size="icon" className="ml-auto" onClick={closeMobileMenu} data-testid="mobile-menu-close">
                   <X className="h-5 w-5" />
                 </Button>
               </div>
               
               <div className="py-4">
-                <nav className="grid gap-1 px-2">
+                <nav id="mobile-navigation" className="grid gap-1 px-2">
                   {navItems.map((item) => {
                     const isActive = location === item.href || location.startsWith(`${item.href}/`);
                     
@@ -312,7 +345,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                               ? "bg-blue-600 text-white" 
                               : "text-gray-700 hover:bg-gray-100"
                           )}
-                          onClick={toggleSidebar}
+                          onClick={closeMobileMenu}
+                          data-testid={`mobile-nav-${item.href.replace(/\//g, '-')}`}
                         >
                           <item.icon className="h-5 w-5" />
                           <span className="font-medium">{item.title}</span>
