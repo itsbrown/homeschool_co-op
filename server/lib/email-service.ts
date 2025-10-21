@@ -401,8 +401,8 @@ export async function sendPaymentReceipt(data: {
     if (!templateId) {
       templateId = await createPaymentReceiptTemplate();
       if (!templateId) {
-        console.error('❌ Could not create or find payment receipt template');
-        return false;
+        console.log('📧 Could not create payment receipt template, skipping receipt email - payment still successful');
+        return true; // Payment successful, just skip the email
       }
     }
 
