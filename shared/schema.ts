@@ -349,7 +349,14 @@ export const programEnrollments = pgTable("program_enrollments", {
   paymentPlan: text("payment_plan", { 
     enum: ["full_payment", "deposit_only", "monthly", "custom"] 
   }),
+  paymentFrequency: text("payment_frequency", {
+    enum: ["weekly", "biweekly", "monthly", "one_time"]
+  }).default("one_time"),
   paymentSystemVersion: text("payment_system_version").default("v2_stripe"), // Track migration versions
+  
+  // Program dates for payment calculations
+  programStartDate: date("program_start_date"), // Copied from class for payment schedule
+  programEndDate: date("program_end_date"), // Copied from class for payment schedule
   
   // Enrollment status
   status: text("status", { 
