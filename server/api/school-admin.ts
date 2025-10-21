@@ -2712,55 +2712,56 @@ router.get("/metrics/enrollment", async (req, res) => {
   try {
     console.log('📊 Calculating enrollment metrics from database');
 
-    // Read authentic student data from files
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const CHILDREN_FILE = path.join(DATA_DIR, 'children.json');
-
-    let students = [];
-    if (fs.existsSync(CHILDREN_FILE)) {
-      const fileData = fs.readFileSync(CHILDREN_FILE, 'utf-8');
-      students = JSON.parse(fileData);
-    }
+    // Get all students/children from database
+    const allChildren = await storage.getAllChildren();
+    
+    // Get program enrollments for additional metrics
+    const programEnrollments = await storage.getAllEnrollments();
 
     // Calculate authentic enrollment metrics
-    const totalStudents = students.length;
-    const activeStudents = students.filter((s: any) => s.status === 'active' || !s.status).length;
+    const totalStudents = allChildren.length;
+    const activeStudents = allChildren.filter((s: any) => 
+      s.status === 'active' || !s.status
+    ).length;
 
-    // Calculate new enrollments this month
+    // Calculate new enrollments this month (based on program enrollments)
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    const newEnrollments = students.filter((s: any) => {
-      if (!s.enrollmentDate && !s.createdAt) return false;
-      const enrollDate = new Date(s.enrollmentDate || s.createdAt);
+    const newEnrollments = programEnrollments.filter((e: any) => {
+      if (!e.enrollmentDate) return false;
+      const enrollDate = new Date(e.enrollmentDate);
       return enrollDate >= oneMonthAgo;
     }).length;
 
     // Calculate growth rate
     const twoMonthsAgo = new Date();
     twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-    const previousMonthStudents = students.filter((s: any) => {
-      if (!s.enrollmentDate && !s.createdAt) return true;
-      const enrollDate = new Date(s.enrollmentDate || s.createdAt);
-      return enrollDate < oneMonthAgo;
+    const previousMonthEnrollments = programEnrollments.filter((e: any) => {
+      if (!e.enrollmentDate) return false;
+      const enrollDate = new Date(e.enrollmentDate);
+      return enrollDate >= twoMonthsAgo && enrollDate < oneMonthAgo;
     }).length;
 
-    const enrollmentGrowth = previousMonthStudents > 0 ? 
-      ((totalStudents - previousMonthStudents) / previousMonthStudents) * 100 : 0;
+    const enrollmentGrowth = previousMonthEnrollments > 0 ? 
+      ((newEnrollments - previousMonthEnrollments) / previousMonthEnrollments) * 100 : 0;
 
-    // Calculate retention and graduation rates based on data
-    const retentionRate = totalStudents > 0 ? (activeStudents / totalStudents) * 100 : 95;
-    const graduationRate = 88; // Would be calculated from historical data
+    // Calculate retention rate (students still active vs total)
+    const retentionRate = totalStudents > 0 ? 
+      (activeStudents / totalStudents) * 100 : 100;
+    
+    // Graduation rate would need historical data
+    const graduationRate = 88;
 
     const enrollmentMetrics = {
       totalStudents,
       activeStudents,
       newEnrollments,
-      enrollmentGrowth,
+      enrollmentGrowth: Math.round(enrollmentGrowth * 100) / 100,
       graduationRate,
-      retentionRate
+      retentionRate: Math.round(retentionRate * 100) / 100
     };
 
-    console.log('✅ Enrollment metrics calculated:', enrollmentMetrics);
+    console.log('✅ Enrollment metrics calculated from database:', enrollmentMetrics);
     res.json(enrollmentMetrics);
   } catch (error) {
     console.error('❌ Error calculating enrollment metrics:', error);
@@ -2773,46 +2774,61 @@ router.get("/metrics/financial", async (req, res) => {
   try {
     console.log('💰 Calculating financial metrics from database');
 
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const CHILDREN_FILE = path.join(DATA_DIR, 'children.json');
-    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
+    // Get all enrollments and payments from database
+    const allEnrollments = await storage.getAllEnrollments();
+    const allPayments = await storage.getAllPayments();
 
-    let students = [];
-    let classes = [];
+    // Filter for completed payments (positive amounts)
+    const completedPayments = allPayments.filter((p: any) => 
+      p.amount > 0 && p.status === 'succeeded'
+    );
 
-    if (fs.existsSync(CHILDREN_FILE)) {
-      const fileData = fs.readFileSync(CHILDREN_FILE, 'utf-8');
-      students = JSON.parse(fileData);
-    }
+    // Calculate total revenue (sum of all successful payments)
+    const totalRevenue = completedPayments.reduce((sum: number, p: any) => 
+      sum + (p.amount || 0), 0
+    );
 
-    if (fs.existsSync(CLASSES_FILE)) {
-      const fileData = fs.readFileSync(CLASSES_FILE, 'utf-8');
-      classes = JSON.parse(fileData);
-    }
+    // Calculate outstanding balance (sum of remaining balances)
+    const outstandingBalance = allEnrollments.reduce((sum: number, e: any) => 
+      sum + (e.remainingBalance || 0), 0
+    );
 
-    // Calculate financial metrics based on student enrollments and class prices
-    const avgTuitionPerStudent = 450; // Average monthly tuition
-    const totalRevenue = students.length * avgTuitionPerStudent * 12; // Annual
-    const monthlyRevenue = students.length * avgTuitionPerStudent;
+    // Calculate average tuition paid per enrollment
+    const avgTuitionPaid = allEnrollments.length > 0 
+      ? allEnrollments.reduce((sum: number, e: any) => sum + (e.totalPaid || 0), 0) / allEnrollments.length
+      : 0;
 
-    // Calculate outstanding balances (10% typically have outstanding balances)
-    const unpaidAccounts = Math.floor(students.length * 0.1);
-    const outstandingBalance = unpaidAccounts * avgTuitionPerStudent * 2; // 2 months average
+    // Count accounts with unpaid balances
+    const unpaidAccounts = allEnrollments.filter((e: any) => 
+      (e.remainingBalance || 0) > 0
+    ).length;
 
-    // Collection rate calculation
-    const collectionRate = students.length > 0 ? 
-      ((students.length - unpaidAccounts) / students.length) * 100 : 90;
+    // Calculate collection rate (percentage of enrollments fully paid)
+    const fullyPaidEnrollments = allEnrollments.filter((e: any) => 
+      (e.remainingBalance || 0) === 0 && (e.totalCost || 0) > 0
+    ).length;
+    const collectionRate = allEnrollments.length > 0 
+      ? (fullyPaidEnrollments / allEnrollments.length) * 100 
+      : 0;
 
+    // Calculate monthly revenue (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const monthlyRevenue = completedPayments
+      .filter((p: any) => new Date(p.paymentDate) >= thirtyDaysAgo)
+      .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+
+    // Convert cents to dollars for display
     const financialMetrics = {
-      totalRevenue,
-      outstandingBalance,
-      collectionRate,
-      avgTuitionPaid: avgTuitionPerStudent,
-      monthlyRevenue,
+      totalRevenue: totalRevenue / 100,
+      outstandingBalance: outstandingBalance / 100,
+      collectionRate: Math.round(collectionRate * 100) / 100,
+      avgTuitionPaid: Math.round(avgTuitionPaid) / 100,
+      monthlyRevenue: monthlyRevenue / 100,
       unpaidAccounts
     };
 
-    console.log('✅ Financial metrics calculated:', financialMetrics);
+    console.log('✅ Financial metrics calculated from database (amounts in dollars):', financialMetrics);
     res.json(financialMetrics);
   } catch (error) {
     console.error('❌ Error calculating financial metrics:', error);
