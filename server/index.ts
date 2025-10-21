@@ -1,4 +1,4 @@
-// Load test environment configuration first
+// Load test environment configuration (conditionally based on NODE_ENV)
 import "./test-env-loader";
 
 import express, { type Request, Response, NextFunction } from "express";
