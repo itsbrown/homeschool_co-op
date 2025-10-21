@@ -1,0 +1,15 @@
+[
+  {
+    "id": 1761075851751,
+    "classId": 13,
+    "childId": 74,
+    "childName": "Hermione Brown",
+    "className": "Seekers | Full Day",
+    "enrollmentDate": "2025-10-21T19:44:11.751Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 13000,
+    "totalCost": 130000,
+    "remainingBalance": 130000
+  }
+]

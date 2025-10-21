@@ -71,20 +71,24 @@ export class DatabaseStorage implements IStorage {
 
   // Curriculum methods
   async getCurriculum(id: number): Promise<Curriculum | undefined> {
+    const db = await getDb();
     const [curriculum] = await db.select().from(curricula).where(eq(curricula.id, id));
     return curriculum;
   }
 
   async getCurriculaByAuthor(authorId: number): Promise<Curriculum[]> {
+    const db = await getDb();
     return await db.select().from(curricula).where(eq(curricula.authorId, authorId));
   }
 
   async createCurriculum(curriculum: InsertCurriculum): Promise<Curriculum> {
+    const db = await getDb();
     const [newCurriculum] = await db.insert(curricula).values(curriculum).returning();
     return newCurriculum;
   }
 
   async updateCurriculum(id: number, curriculum: Partial<InsertCurriculum>): Promise<Curriculum | undefined> {
+    const db = await getDb();
     const [updatedCurriculum] = await db
       .update(curricula)
       .set(curriculum)
@@ -95,11 +99,13 @@ export class DatabaseStorage implements IStorage {
 
   // Class methods
   async getClassById(id: number): Promise<Class | undefined> {
+    const db = await getDb();
     const [cls] = await db.select().from(classes).where(eq(classes.id, id));
     return cls;
   }
 
   async getClassesByInstructor(instructorId: number): Promise<Class[]> {
+    const db = await getDb();
     return await db.select().from(classes).where(eq(classes.instructorId, instructorId));
   }
 
@@ -111,6 +117,7 @@ export class DatabaseStorage implements IStorage {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }): Promise<Class[]> {
+    const db = await getDb();
     let query = db.select().from(classes);
 
     // Apply search filter
@@ -156,6 +163,7 @@ export class DatabaseStorage implements IStorage {
     search?: string;
     category?: string;
   }): Promise<number> {
+    const db = await getDb();
     let query = db.select({ count: sql`count(*)` }).from(classes);
 
     // Apply search filter
@@ -178,6 +186,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
+    const db = await getDb();
     const [newClass] = await db.insert(classes).values({
       ...classData,
       createdAt: new Date(),
@@ -187,6 +196,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
+    const db = await getDb();
     const [updatedClass] = await db
       .update(classes)
       .set({
@@ -199,10 +209,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteClass(id: number): Promise<void> {
+    const db = await getDb();
     await db.delete(classes).where(eq(classes.id, id));
   }
 
   async incrementClassEnrollment(id: number): Promise<Class | undefined> {
+    const db = await getDb();
     const [updatedClass] = await db
       .update(classes)
       .set({
@@ -216,24 +228,29 @@ export class DatabaseStorage implements IStorage {
 
   // Knowledge Base methods
   async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
+    const db = await getDb();
     const [knowledgeBase] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, id));
     return knowledgeBase;
   }
 
   async getKnowledgeBaseByTitle(title: string): Promise<KnowledgeBase | undefined> {
+    const db = await getDb();
     const [knowledgeBase] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.title, title));
     return knowledgeBase;
   }
 
   async getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]> {
+    const db = await getDb();
     return await db.select().from(knowledgeBases).where(eq(knowledgeBases.authorId, authorId));
   }
 
   async getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]> {
+    const db = await getDb();
     return await db.select().from(knowledgeBases).where(eq(knowledgeBases.subject, subject));
   }
 
   async getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]> {
+    const db = await getDb();
     let query = db.select().from(knowledgeBases).where(eq(knowledgeBases.isPublic, true));
 
     if (limit) {
@@ -244,6 +261,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
+    const db = await getDb();
     const [knowledgeBase] = await db
       .insert(knowledgeBases)
       .values({
@@ -257,6 +275,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateKnowledgeBase(id: number, updateData: Partial<InsertKnowledgeBase>): Promise<KnowledgeBase | undefined> {
+    const db = await getDb();
     const [updatedKnowledgeBase] = await db
       .update(knowledgeBases)
       .set({
@@ -269,6 +288,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined> {
+    const db = await getDb();
     const [updatedKnowledgeBase] = await db
       .update(knowledgeBases)
       .set({
@@ -324,15 +344,18 @@ export class DatabaseStorage implements IStorage {
 
   // Program methods
   async getProgram(id: number): Promise<Program | undefined> {
+    const db = await getDb();
     const [program] = await db.select().from(programs).where(eq(programs.id, id));
     return program;
   }
 
   async getProgramsByOrganizer(organizerId: number): Promise<Program[]> {
+    const db = await getDb();
     return await db.select().from(programs).where(eq(programs.organizerId, organizerId));
   }
 
   async createProgram(program: InsertProgram): Promise<Program> {
+    const db = await getDb();
     const [newProgram] = await db
       .insert(programs)
       .values({
@@ -345,6 +368,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProgram(id: number, program: Partial<InsertProgram>): Promise<Program | undefined> {
+    const db = await getDb();
     const [updatedProgram] = await db
       .update(programs)
       .set({
@@ -357,24 +381,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProgram(id: number): Promise<void> {
+    const db = await getDb();
     await db.delete(programs).where(eq(programs.id, id));
   }
 
   // Program Enrollment methods
   async getProgramEnrollment(id: number): Promise<ProgramEnrollment | undefined> {
+    const db = await getDb();
     const [enrollment] = await db.select().from(programEnrollments).where(eq(programEnrollments.id, id));
     return enrollment;
   }
 
   async getProgramEnrollmentsByParent(parentId: number): Promise<ProgramEnrollment[]> {
+    const db = await getDb();
     return await db.select().from(programEnrollments).where(eq(programEnrollments.parentId, parentId));
   }
 
   async getProgramEnrollmentsByProgram(programId: number): Promise<ProgramEnrollment[]> {
+    const db = await getDb();
     return await db.select().from(programEnrollments).where(eq(programEnrollments.programId, programId));
   }
 
   async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
+    const db = await getDb();
     const [newEnrollment] = await db
       .insert(programEnrollments)
       .values({
@@ -387,6 +416,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
+    const db = await getDb();
     const [updatedEnrollment] = await db
       .update(programEnrollments)
       .set({
@@ -399,20 +429,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProgramEnrollment(id: number): Promise<void> {
+    const db = await getDb();
     await db.delete(programEnrollments).where(eq(programEnrollments.id, id));
   }
 
   // Child methods
   async getChild(id: number): Promise<Child | undefined> {
+    const db = await getDb();
     const [child] = await db.select().from(children).where(eq(children.id, id));
     return child;
   }
 
   async getChildrenByParent(parentId: number): Promise<Child[]> {
+    const db = await getDb();
     return await db.select().from(children).where(eq(children.parentId, parentId));
   }
 
   async createChild(child: InsertChild): Promise<Child> {
+    const db = await getDb();
     const [newChild] = await db
       .insert(children)
       .values({
@@ -425,6 +459,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
+    const db = await getDb();
     const [updatedChild] = await db
       .update(children)
       .set({
@@ -437,20 +472,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteChild(id: number): Promise<void> {
+    const db = await getDb();
     await db.delete(children).where(eq(children.id, id));
   }
 
   // Emergency Contact methods
   async getEmergencyContact(id: number): Promise<EmergencyContact | undefined> {
+    const db = await getDb();
     const [contact] = await db.select().from(emergencyContacts).where(eq(emergencyContacts.id, id));
     return contact;
   }
 
   async getEmergencyContactsByParent(parentId: number): Promise<EmergencyContact[]> {
+    const db = await getDb();
     return await db.select().from(emergencyContacts).where(eq(emergencyContacts.parentId, parentId));
   }
 
   async createEmergencyContact(contact: InsertEmergencyContact): Promise<EmergencyContact> {
+    const db = await getDb();
     const [newContact] = await db
       .insert(emergencyContacts)
       .values({
@@ -463,6 +502,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEmergencyContact(id: number, contact: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
+    const db = await getDb();
     const [updatedContact] = await db
       .update(emergencyContacts)
       .set({
@@ -475,24 +515,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEmergencyContact(id: number): Promise<void> {
+    const db = await getDb();
     await db.delete(emergencyContacts).where(eq(emergencyContacts.id, id));
   }
 
   // Activity methods
   async getActivity(id: number): Promise<Activity | undefined> {
+    const db = await getDb();
     const [activity] = await db.select().from(activities).where(eq(activities.id, id));
     return activity;
   }
 
   async getActivitiesByType(activityType: string): Promise<Activity[]> {
+    const db = await getDb();
     return await db.select().from(activities).where(eq(activities.activityType, activityType));
   }
 
   async getActivitiesByAuthor(authorId: number): Promise<Activity[]> {
+    const db = await getDb();
     return await db.select().from(activities).where(eq(activities.authorId, authorId));
   }
 
   async createActivity(activity: InsertActivity): Promise<Activity> {
+    const db = await getDb();
     const [newActivity] = await db
       .insert(activities)
       .values({
@@ -505,6 +550,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateActivity(id: number, activity: Partial<InsertActivity>): Promise<Activity | undefined> {
+    const db = await getDb();
     const [updatedActivity] = await db
       .update(activities)
       .set({
@@ -517,6 +563,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateActivityDownloadCount(id: number): Promise<Activity | undefined> {
+    const db = await getDb();
     const [updatedActivity] = await db
       .update(activities)
       .set({
@@ -529,24 +576,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteActivity(id: number): Promise<void> {
+    const db = await getDb();
     await db.delete(activities).where(eq(activities.id, id));
   }
 
   // Lesson methods
   async getLesson(id: number): Promise<Lesson | undefined> {
+    const db = await getDb();
     const [lesson] = await db.select().from(lessons).where(eq(lessons.id, id));
     return lesson;
   }
 
   async getLessonsByCurriculum(curriculumId: number): Promise<Lesson[]> {
+    const db = await getDb();
     return await db.select().from(lessons).where(eq(lessons.curriculumId, curriculumId));
   }
 
   async getLessonsByAuthor(authorId: number): Promise<Lesson[]> {
+    const db = await getDb();
     return await db.select().from(lessons).where(eq(lessons.authorId, authorId));
   }
 
   async createLesson(lesson: InsertLesson): Promise<Lesson> {
+    const db = await getDb();
     const [newLesson] = await db
       .insert(lessons)
       .values({
@@ -559,6 +611,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateLesson(id: number, lesson: Partial<InsertLesson>): Promise<Lesson | undefined> {
+    const db = await getDb();
     const [updatedLesson] = await db
       .update(lessons)
       .set({
@@ -572,15 +625,18 @@ export class DatabaseStorage implements IStorage {
 
   // Event methods
   async getEvent(id: number): Promise<Event | undefined> {
+    const db = await getDb();
     const [event] = await db.select().from(events).where(eq(events.id, id));
     return event;
   }
 
   async getEventsByOrganizer(organizerId: number): Promise<Event[]> {
+    const db = await getDb();
     return await db.select().from(events).where(eq(events.organizerId, organizerId));
   }
 
   async getUpcomingEvents(userId: number): Promise<Event[]> {
+    const db = await getDb();
     const now = new Date();
     return await db
       .select()
@@ -596,6 +652,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllEvents(userId: number): Promise<Event[]> {
+    const db = await getDb();
     return await db
       .select()
       .from(events)
@@ -604,6 +661,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {
+    const db = await getDb();
     const [newEvent] = await db
       .insert(events)
       .values({
@@ -617,15 +675,18 @@ export class DatabaseStorage implements IStorage {
 
   // Marketplace Item methods
   async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
+    const db = await getDb();
     const [item] = await db.select().from(marketplaceItems).where(eq(marketplaceItems.id, id));
     return item;
   }
 
   async getMarketplaceItemsBySeller(sellerId: number): Promise<MarketplaceItem[]> {
+    const db = await getDb();
     return await db.select().from(marketplaceItems).where(eq(marketplaceItems.sellerId, sellerId));
   }
 
   async getTopSellingItems(limit: number): Promise<MarketplaceItem[]> {
+    const db = await getDb();
     return await db
       .select()
       .from(marketplaceItems)
@@ -634,6 +695,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMarketplaceItem(item: InsertMarketplaceItem): Promise<MarketplaceItem> {
+    const db = await getDb();
     const [newItem] = await db
       .insert(marketplaceItems)
       .values({
@@ -648,6 +710,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMarketplaceItemStats(id: number, sales: number, revenue: number): Promise<MarketplaceItem | undefined> {
+    const db = await getDb();
     const [updatedItem] = await db
       .update(marketplaceItems)
       .set({
