@@ -323,6 +323,240 @@ export const insertEmergencyContactSchema = createInsertSchema(emergencyContacts
 export type InsertEmergencyContact = z.infer<typeof insertEmergencyContactSchema>;
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
 
+// Program Enrollments table - for paid class enrollments with financial tracking
+export const programEnrollments = pgTable("program_enrollments", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  classId: integer("class_id").references(() => schoolClasses.id), // null for legacy enrollments
+  programId: integer("program_id"), // Legacy field for backward compatibility
+  childId: integer("child_id").notNull().references(() => children.id),
+  childName: text("child_name").notNull(), // Denormalized for reporting
+  className: text("class_name").notNull(), // Denormalized for reporting
+  variantId: text("variant_id"), // Class variant/schedule selection
+  parentId: integer("parent_id").notNull().references(() => users.id),
+  parentEmail: text("parent_email").notNull(),
+  
+  // Financial fields (all amounts in cents)
+  totalCost: integer("total_cost").notNull(),
+  totalPaid: integer("total_paid").default(0).notNull(),
+  remainingBalance: integer("remaining_balance").notNull(),
+  depositRequired: integer("deposit_required").default(0).notNull(),
+  
+  // Payment tracking
+  paymentStatus: text("payment_status", { 
+    enum: ["pending", "deposit_paid", "partial_payment", "completed", "stripe_managed", "refunded"] 
+  }).default("pending").notNull(),
+  paymentPlan: text("payment_plan", { 
+    enum: ["full_payment", "deposit_only", "monthly", "custom"] 
+  }),
+  paymentSystemVersion: text("payment_system_version").default("v2_stripe"), // Track migration versions
+  
+  // Enrollment status
+  status: text("status", { 
+    enum: ["enrolled", "completed", "withdrawn", "cancelled", "waitlist"] 
+  }).default("enrolled").notNull(),
+  enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
+  
+  // Stripe integration
+  stripeSubscriptionId: text("stripe_subscription_id"), // For subscription-based payments
+  stripeCustomerId: text("stripe_customer_id"), // Parent's Stripe customer ID
+  
+  // Metadata for additional info
+  notes: text("notes"),
+  metadata: jsonb("metadata").default({}).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    programId: z.number().nullable().default(null),
+    classId: z.number().nullable().default(null),
+    variantId: z.string().nullable().default(null),
+    depositRequired: z.number().default(0),
+    totalPaid: z.number().default(0),
+    paymentPlan: z.enum(["full_payment", "deposit_only", "monthly", "custom"]).nullable().default(null),
+    stripeSubscriptionId: z.string().nullable().default(null),
+    stripeCustomerId: z.string().nullable().default(null),
+    notes: z.string().nullable().default(null),
+    metadata: z.record(z.any()).default({}),
+  });
+export type InsertProgramEnrollment = z.infer<typeof insertProgramEnrollmentSchema>;
+export type ProgramEnrollment = typeof programEnrollments.$inferSelect;
+
+// Payments table - for tracking all payment transactions
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  
+  // Parent/payer information
+  parentId: integer("parent_id").references(() => users.id),
+  parentEmail: text("parent_email").notNull(),
+  
+  // Payment details (amounts in cents)
+  amount: integer("amount").notNull(),
+  currency: text("currency").default("usd").notNull(),
+  
+  // Transaction metadata
+  childName: text("child_name"), // For display purposes
+  className: text("class_name"), // For display purposes
+  description: text("description"),
+  
+  // Payment status
+  status: text("status", { 
+    enum: ["pending", "processing", "completed", "failed", "refunded", "cancelled"] 
+  }).default("pending").notNull(),
+  
+  // Stripe integration
+  stripePaymentIntentId: text("stripe_payment_intent_id").unique(),
+  stripeChargeId: text("stripe_charge_id"),
+  stripeRefundId: text("stripe_refund_id"), // If this payment was refunded
+  
+  // Payment type
+  paymentMethod: text("payment_method", { 
+    enum: ["stripe", "cash", "check", "bank_transfer", "other"] 
+  }).default("stripe").notNull(),
+  
+  // Related records
+  enrollmentIds: jsonb("enrollment_ids").default([]).notNull(), // Array of enrollment IDs this payment covers
+  originalPaymentId: integer("original_payment_id"), // For refunds - references payments.id
+  
+  // Metadata
+  metadata: jsonb("metadata").default({}).notNull(),
+  
+  // Timestamps
+  paymentDate: timestamp("payment_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPaymentSchema = createInsertSchema(payments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    parentId: z.number().nullable().default(null),
+    childName: z.string().nullable().default(null),
+    className: z.string().nullable().default(null),
+    description: z.string().nullable().default(null),
+    stripePaymentIntentId: z.string().nullable().default(null),
+    stripeChargeId: z.string().nullable().default(null),
+    stripeRefundId: z.string().nullable().default(null),
+    originalPaymentId: z.number().nullable().default(null),
+    paymentDate: z.date().nullable().default(null),
+    enrollmentIds: z.array(z.number()).default([]),
+    metadata: z.record(z.any()).default({}),
+  });
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;
+
+// Scheduled Payments table - for recurring payment schedules
+export const scheduledPayments = pgTable("scheduled_payments", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  
+  // Related enrollment
+  enrollmentId: integer("enrollment_id").notNull().references(() => programEnrollments.id),
+  
+  // Payer information
+  parentId: integer("parent_id").notNull().references(() => users.id),
+  parentEmail: text("parent_email").notNull(),
+  
+  // Schedule details (amounts in cents)
+  amount: integer("amount").notNull(),
+  currency: text("currency").default("usd").notNull(),
+  
+  // Payment schedule
+  scheduledDate: timestamp("scheduled_date").notNull(),
+  frequency: text("frequency", { 
+    enum: ["one_time", "weekly", "monthly", "quarterly", "annual"] 
+  }).default("one_time").notNull(),
+  installmentNumber: integer("installment_number").notNull(), // Which installment in the series
+  totalInstallments: integer("total_installments").notNull(), // Total number of installments
+  
+  // Status
+  status: text("status", { 
+    enum: ["pending", "processing", "completed", "failed", "cancelled", "skipped"] 
+  }).default("pending").notNull(),
+  
+  // Stripe integration
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  
+  // Processing details
+  processedAt: timestamp("processed_at"),
+  failureReason: text("failure_reason"),
+  retryCount: integer("retry_count").default(0).notNull(),
+  
+  // Metadata
+  metadata: jsonb("metadata").default({}).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    stripePaymentIntentId: z.string().nullable().default(null),
+    processedAt: z.date().nullable().default(null),
+    failureReason: z.string().nullable().default(null),
+    retryCount: z.number().default(0),
+    metadata: z.record(z.any()).default({}),
+  });
+export type InsertScheduledPayment = z.infer<typeof insertScheduledPaymentSchema>;
+export type ScheduledPayment = typeof scheduledPayments.$inferSelect;
+
+// Refunds table - for tracking refund transactions
+export const refunds = pgTable("refunds", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  
+  // Related payment
+  paymentId: integer("payment_id").notNull().references(() => payments.id),
+  enrollmentId: integer("enrollment_id").references(() => programEnrollments.id),
+  
+  // Refund details (amounts in cents)
+  amount: integer("amount").notNull(),
+  currency: text("currency").default("usd").notNull(),
+  
+  // Refund metadata
+  reason: text("reason").notNull(),
+  description: text("description"),
+  
+  // Status
+  status: text("status", { 
+    enum: ["pending", "processing", "completed", "failed", "cancelled"] 
+  }).default("pending").notNull(),
+  
+  // Stripe integration
+  stripeRefundId: text("stripe_refund_id").unique(),
+  
+  // Processing details
+  processedBy: integer("processed_by").references(() => users.id), // Admin who processed
+  processedAt: timestamp("processed_at"),
+  failureReason: text("failure_reason"),
+  
+  // Metadata
+  metadata: jsonb("metadata").default({}).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertRefundSchema = createInsertSchema(refunds)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    enrollmentId: z.number().nullable().default(null),
+    description: z.string().nullable().default(null),
+    stripeRefundId: z.string().nullable().default(null),
+    processedBy: z.number().nullable().default(null),
+    processedAt: z.date().nullable().default(null),
+    failureReason: z.string().nullable().default(null),
+    metadata: z.record(z.any()).default({}),
+  });
+export type InsertRefund = z.infer<typeof insertRefundSchema>;
+export type Refund = typeof refunds.$inferSelect;
+
 // Define emergency contact relations
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
   user: one(users, { fields: [emergencyContacts.userId], references: [users.id] })
@@ -371,69 +605,19 @@ export const insertProgramSchema = createInsertSchema(programs)
 export type InsertProgram = z.infer<typeof insertProgramSchema>;
 export type Program = typeof programs.$inferSelect;
 
-// Define program relations - programEnrollments will be defined later
+// Define program relations - programEnrollments is defined earlier for financial tracking
 export const programsRelations = relations(programs, ({ one, many }) => ({
   instructor: one(users, { fields: [programs.instructorId], references: [users.id] }),
-  curriculum: one(curricula, { fields: [programs.curriculumId], references: [curricula.id] })
-  // enrollments relation will be added after programEnrollments is defined
+  curriculum: one(curricula, { fields: [programs.curriculumId], references: [curricula.id] }),
+  enrollments: many(programEnrollments)
 }));
 
-// Program enrollments table
-export const programEnrollments = pgTable("program_enrollments", {
-  id: serial("id").primaryKey(),
-  programId: integer("program_id").notNull().references(() => programs.id),
-  childId: integer("child_id").notNull().references(() => children.id),
-  enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
-  status: text("status", { 
-    enum: ["pending", "confirmed", "waitlisted", "cancelled", "completed"] 
-  }).default("pending").notNull(),
-  paymentStatus: text("payment_status", { 
-    enum: ["pending", "paid", "refunded", "failed", "payment_plan_active", "stripe_managed"] 
-  }).default("pending").notNull(),
-  paymentMethod: text("payment_method", { 
-    enum: ["credit_card", "paypal", "bank_transfer", "cash", "scholarship"] 
-  }),
-  transactionId: text("transaction_id"),
-  discountCode: text("discount_code"),
-  discountAmount: integer("discount_amount"), // in cents
-  totalPaid: integer("total_paid"), // in cents
-  totalCost: integer("total_cost"), // in cents
-  remainingBalance: integer("remaining_balance"), // in cents
-  
-  // Stripe Integration Fields
-  stripeSubscriptionScheduleId: text("stripe_subscription_schedule_id"),
-  stripeCustomerId: text("stripe_customer_id"),
-  migrationDate: timestamp("migration_date"),
-  paymentSystemVersion: text("payment_system_version").default("v1_manual"), // v2_stripe
-  
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    // Set default values for optional fields
-    status: z.enum(["pending", "confirmed", "waitlisted", "cancelled", "completed"]).default("pending"),
-    paymentStatus: z.enum(["pending", "paid", "refunded", "failed", "payment_plan_active", "stripe_managed"]).default("pending"),
-    enrollmentDate: z.date().default(() => new Date()),
-    notes: z.string().nullable().default(null),
-    paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "scholarship"]).nullable().default(null),
-    totalCost: z.number().nullable().default(null),
-    remainingBalance: z.number().nullable().default(null),
-    stripeSubscriptionScheduleId: z.string().nullable().default(null),
-    stripeCustomerId: z.string().nullable().default(null),
-    migrationDate: z.date().nullable().default(null),
-    paymentSystemVersion: z.string().default("v1_manual")
-  });
-export type InsertProgramEnrollment = z.infer<typeof insertProgramEnrollmentSchema>;
-export type ProgramEnrollment = typeof programEnrollments.$inferSelect;
-
-// Define program enrollment relations
+// Define program enrollment relations (table defined earlier with financial fields)
 export const programEnrollmentsRelations = relations(programEnrollments, ({ one }) => ({
   program: one(programs, { fields: [programEnrollments.programId], references: [programs.id] }),
-  child: one(children, { fields: [programEnrollments.childId], references: [children.id] })
+  child: one(children, { fields: [programEnrollments.childId], references: [children.id] }),
+  parent: one(users, { fields: [programEnrollments.parentId], references: [users.id] }),
+  school: one(schools, { fields: [programEnrollments.schoolId], references: [schools.id] })
 }));
 
 // Stripe Subscription Schedules table - tracks Stripe payment plans
@@ -978,48 +1162,8 @@ export const notificationRecipientsRelations = relations(notificationRecipients,
   recipient: one(users, { fields: [notificationRecipients.recipientId], references: [users.id] }),
 }));
 
-// Payments table for tracking payment transactions
-export const payments = pgTable("payments", {
-  id: serial("id").primaryKey(),
-  stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
-  parentEmail: text("parent_email").notNull(),
-  childName: text("child_name").notNull(),
-  className: text("class_name").notNull(),
-  amount: integer("amount").notNull(), // in cents
-  currency: text("currency").default("usd").notNull(),
-  status: text("status", { enum: ["pending", "completed", "failed", "refunded"] }).default("pending").notNull(),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull()
-});
-
-// Scheduled payments for payment plans (3-payment plan, split payments, etc.)
-export const scheduledPayments = pgTable("scheduled_payments", {
-  id: serial("id").primaryKey(),
-  parentEmail: text("parent_email").notNull(),
-  enrollmentIds: integer("enrollment_ids").array().notNull(),
-  paymentPlan: text("payment_plan").notNull(), // "three_payments", "split", etc
-  installmentNumber: integer("installment_number").notNull(), // 1, 2, 3...
-  totalInstallments: integer("total_installments").notNull(),
-  amount: integer("amount").notNull(), // amount in cents
-  currency: text("currency").default("usd").notNull(),
-  dueDate: timestamp("due_date").notNull(),
-  status: text("status", { enum: ["pending", "paid", "overdue", "cancelled"] }).default("pending").notNull(),
-  originalPaymentId: integer("original_payment_id").references(() => payments.id),
-  description: text("description"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertPaymentSchema = createInsertSchema(payments)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertPayment = z.infer<typeof insertPaymentSchema>;
-export type Payment = typeof payments.$inferSelect;
-
-export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertScheduledPayment = z.infer<typeof insertScheduledPaymentSchema>;
-export type ScheduledPayment = typeof scheduledPayments.$inferSelect;
+// Legacy payment tables are now defined earlier in the schema with comprehensive financial tracking
+// See programEnrollments, payments, scheduledPayments, and refunds tables above
 
 // Discounts table for managing school discounts
 export const discounts = pgTable("discounts", {
