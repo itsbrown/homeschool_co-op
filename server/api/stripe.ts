@@ -30,7 +30,7 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full' } = req.body;
+    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time' } = req.body;
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -44,6 +44,15 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
       return res.status(400).json({
         message: 'Invalid total amount',
         error: 'INVALID_TOTAL'
+      });
+    }
+    
+    // Validate payment frequency
+    const validFrequencies = ['weekly', 'biweekly', 'monthly', 'one_time'];
+    if (!validFrequencies.includes(paymentFrequency)) {
+      return res.status(400).json({
+        message: 'Invalid payment frequency',
+        error: 'INVALID_FREQUENCY'
       });
     }
 
@@ -84,6 +93,12 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           throw new Error(`Child ${item.childId} not found`);
         }
         
+        // Get the class to fetch program start/end dates for payment calculations
+        const classData = await storage.getClassById(item.classId);
+        if (!classData) {
+          throw new Error(`Class ${item.classId} not found`);
+        }
+        
         const enrollment = await storage.createProgramEnrollment({
           schoolId: child.schoolId || parent.schoolId || 1, // Fallback to parent's school or default
           classId: item.classId,
@@ -91,6 +106,7 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           childId: item.childId,
           childName: item.childName,
           className: item.className,
+          variantId: null,
           parentId: parent.id,
           parentEmail: userEmail,
           totalCost: item.totalCost,
@@ -100,6 +116,13 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           paymentStatus: paymentPlan === 'full' ? 'pending' : 'deposit_paid',
           paymentPlan: paymentPlan === 'full' ? 'full_payment' : 'monthly',
           paymentSystemVersion: 'v2_stripe',
+          paymentFrequency: paymentFrequency,
+          programStartDate: classData.startDate || null, // Already in 'YYYY-MM-DD' string format
+          programEndDate: classData.endDate || null, // Already in 'YYYY-MM-DD' string format
+          stripeSubscriptionId: null,
+          stripeCustomerId: null,
+          notes: null,
+          metadata: {},
           status: 'enrolled',
           enrollmentDate: new Date()
         });
@@ -114,7 +137,8 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
         parentEmail: userEmail,
         enrollmentIds,
         totalAmount: total,
-        paymentPlan: paymentPlan as 'deposit' | 'split' | 'monthly' | 'full'
+        paymentPlan: paymentPlan as 'deposit' | 'split' | 'monthly' | 'full',
+        paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time'
       });
 
       console.log('✅ Payment plan created successfully:', {

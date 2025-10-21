@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { IStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
+import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
 
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('STRIPE_SECRET_KEY environment variable is required');
@@ -16,6 +17,7 @@ export interface PaymentPlanData {
   enrollmentIds: number[];
   totalAmount: number; // In cents
   paymentPlan: 'deposit' | 'split' | 'monthly' | 'full';
+  paymentFrequency?: PaymentFrequency; // Optional: for date-based payment schedules
 }
 
 export interface PaymentPhase {
@@ -41,15 +43,38 @@ export class StripePaymentPlanService {
       parentEmail: data.parentEmail,
       enrollmentIds: data.enrollmentIds,
       totalAmount: CurrencyUtils.toDisplay(data.totalAmount),
-      paymentPlan: data.paymentPlan
+      paymentPlan: data.paymentPlan,
+      paymentFrequency: data.paymentFrequency || 'one_time'
     });
 
     // Get or create Stripe customer
     const customer = await this.getOrCreateCustomer(data.parentEmail);
     console.log('👤 Customer ready:', customer.id);
 
-    // Build payment phases based on plan type
-    const phases = this.buildPaymentPhases(data.paymentPlan, data.totalAmount);
+    // Get enrollment data for date-based scheduling if needed
+    let programStartDate: Date | null = null;
+    let programEndDate: Date | null = null;
+    
+    if (data.paymentFrequency && data.paymentFrequency !== 'one_time' && data.enrollmentIds.length > 0) {
+      const firstEnrollment = await this.storage.getEnrollmentById(data.enrollmentIds[0]);
+      if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
+        programStartDate = new Date(firstEnrollment.programStartDate);
+        programEndDate = new Date(firstEnrollment.programEndDate);
+        console.log('📅 Using enrollment dates for payment schedule:', {
+          startDate: programStartDate.toLocaleDateString(),
+          endDate: programEndDate.toLocaleDateString()
+        });
+      }
+    }
+
+    // Build payment phases based on plan type and frequency
+    const phases = this.buildPaymentPhases(
+      data.paymentPlan, 
+      data.totalAmount, 
+      data.paymentFrequency,
+      programStartDate,
+      programEndDate
+    );
     console.log('📅 Built phases:', phases.length);
 
     // Create immediate PaymentIntent for the first payment
@@ -142,9 +167,31 @@ export class StripePaymentPlanService {
   /**
    * Build payment phases based on payment plan type
    */
-  private buildPaymentPhases(plan: string, totalAmount: number): PaymentPhase[] {
-    console.log('🏗️ Building payment phases for plan:', plan, 'amount:', CurrencyUtils.toDisplay(totalAmount));
+  private buildPaymentPhases(
+    plan: string, 
+    totalAmount: number, 
+    frequency?: PaymentFrequency,
+    startDate?: Date | null,
+    endDate?: Date | null
+  ): PaymentPhase[] {
+    console.log('🏗️ Building payment phases for plan:', plan, 'frequency:', frequency, 'amount:', CurrencyUtils.toDisplay(totalAmount));
 
+    // Use date-based calculator if frequency is provided and dates are available
+    if (frequency && frequency !== 'one_time' && startDate && endDate) {
+      console.log('📅 Using date-based payment calculator with enrollment dates');
+      const schedule = calculatePaymentSchedule(totalAmount, startDate, endDate, frequency);
+      
+      return schedule.paymentDates.map((dueDate, index) => ({
+        amount: index === schedule.paymentDates.length - 1 
+          ? schedule.finalPaymentAmount 
+          : schedule.paymentAmount,
+        dueDate,
+        installmentNumber: index + 1,
+        description: `${frequency} payment ${index + 1} of ${schedule.numberOfPayments}`
+      }));
+    }
+
+    // Fall back to legacy payment plan logic
     const now = new Date();
     const add30Days = (date: Date) => {
       const newDate = new Date(date);
