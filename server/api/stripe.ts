@@ -117,8 +117,8 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           paymentPlan: paymentPlan === 'full' ? 'full_payment' : 'monthly',
           paymentSystemVersion: 'v2_stripe',
           paymentFrequency: paymentFrequency,
-          programStartDate: classData.startDate || null, // Already in 'YYYY-MM-DD' string format
-          programEndDate: classData.endDate || null, // Already in 'YYYY-MM-DD' string format
+          programStartDate: classData.startDate ? (classData.startDate instanceof Date ? classData.startDate.toISOString().split('T')[0] : String(classData.startDate)) : null,
+          programEndDate: classData.endDate ? (classData.endDate instanceof Date ? classData.endDate.toISOString().split('T')[0] : String(classData.endDate)) : null,
           stripeSubscriptionId: null,
           stripeCustomerId: null,
           notes: null,
