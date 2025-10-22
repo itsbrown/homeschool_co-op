@@ -32,6 +32,11 @@ const mobileNavigationItems = [
     icon: Home,
   },
   {
+    href: "/notifications",
+    title: "Notifications",
+    icon: Bell,
+  },
+  {
     href: "/children",
     title: "My Children",
     icon: Users,
@@ -176,6 +181,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                         {mobileNavigationItems.map((item) => {
                           const Icon = item.icon;
                           const isActive = location === item.href;
+                          const showBadge = item.href === "/notifications" && unreadNotifications > 0;
                           
                           return (
                             <SheetClose asChild key={item.href}>
@@ -190,7 +196,15 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                                 data-testid={`nav-${item.href.replace('/', '')}`}
                               >
                                 <Icon className="h-5 w-5" />
-                                <span>{item.title}</span>
+                                <span className="flex-1">{item.title}</span>
+                                {showBadge && (
+                                  <Badge 
+                                    variant="destructive" 
+                                    className="h-5 min-w-5 rounded-full px-1.5 text-[10px]"
+                                  >
+                                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                                  </Badge>
+                                )}
                               </Link>
                             </SheetClose>
                           );

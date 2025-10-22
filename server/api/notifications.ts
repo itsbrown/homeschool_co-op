@@ -30,9 +30,10 @@ router.get("/", async (req, res) => {
     const userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
     
-    // If no userId provided, return all notifications (for admin view)
+    // If no userId provided, return all notifications (for admin view) sorted by createdAt descending
     if (!userId) {
-      const allNotifications = loadNotifications();
+      const allNotifications = loadNotifications()
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       return res.json(allNotifications);
     }
     
@@ -194,10 +195,14 @@ router.get("/:id/stats", async (req, res) => {
 router.post("/:id/read", async (req, res) => {
   try {
     const notificationId = parseInt(req.params.id);
-    const userId = parseInt(req.body.userId);
+    const userId = (req as any).auth?.dbUserId;
     
-    if (isNaN(notificationId) || isNaN(userId)) {
-      return res.status(400).json({ message: "Invalid notification ID or user ID" });
+    if (isNaN(notificationId)) {
+      return res.status(400).json({ message: "Invalid notification ID" });
+    }
+    
+    if (!userId) {
+      return res.status(401).json({ message: "User not authenticated" });
     }
 
     await markNotificationAsRead(notificationId, userId);
@@ -211,10 +216,10 @@ router.post("/:id/read", async (req, res) => {
 // Mark all notifications as read for a user
 router.post("/mark-all-read", async (req, res) => {
   try {
-    const userId = parseInt(req.body.userId);
+    const userId = (req as any).auth?.dbUserId;
     
-    if (isNaN(userId)) {
-      return res.status(400).json({ message: "Invalid user ID" });
+    if (!userId) {
+      return res.status(401).json({ message: "User not authenticated" });
     }
 
     await markAllNotificationsAsRead(userId);
@@ -368,15 +373,17 @@ async function getUserNotifications(userId: number, role: string): Promise<any[]
     userNotificationIds.includes(n.id) || (role === 'school_admin' && n.senderId === userId)
   );
   
-  // Add recipient info to notifications
-  return userNotifications.map(notification => {
-    const recipientInfo = userRecipients.find(r => r.notificationId === notification.id);
-    return {
-      ...notification,
-      recipientStatus: recipientInfo?.status,
-      readAt: recipientInfo?.readAt,
-    };
-  });
+  // Add recipient info to notifications and sort by createdAt descending (newest first)
+  return userNotifications
+    .map(notification => {
+      const recipientInfo = userRecipients.find(r => r.notificationId === notification.id);
+      return {
+        ...notification,
+        recipientStatus: recipientInfo?.status,
+        readAt: recipientInfo?.readAt,
+      };
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 async function createNotification(notificationData: any): Promise<NotificationData> {
