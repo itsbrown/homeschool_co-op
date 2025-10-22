@@ -4,6 +4,7 @@ import { insertNotificationSchema } from "@shared/schema";
 import fs from 'fs';
 import path from 'path';
 import { sendSMS, isTwilioConfigured } from '../services/twilio.js';
+import * as brevo from '@getbrevo/brevo';
 
 const router = express.Router();
 
@@ -537,12 +538,83 @@ async function resolveNotificationRecipients(notification: NotificationData): Pr
 }
 
 async function sendNotificationEmails(notification: NotificationData, recipientIds: number[]): Promise<void> {
-  // This would integrate with your existing Brevo email service
   console.log(`📧 Sending notification emails for: ${notification.subject} to ${recipientIds.length} recipients`);
   
-  // For now, just log the email sending
-  // In a real implementation, you'd integrate with the existing Brevo service
-  // from server/api/school-admin.ts or server/lib/emailService.ts
+  // Initialize Brevo API
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (!brevoApiKey) {
+    console.log('⚠️ Brevo API key not configured, skipping email delivery');
+    return;
+  }
+  
+  const brevoApiInstance = new brevo.TransactionalEmailsApi();
+  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, brevoApiKey);
+  
+  const users = loadUsers();
+  const recipientRecords = loadNotificationRecipients();
+  
+  for (const recipientId of recipientIds) {
+    const user = users.find(u => u.id === recipientId);
+    if (!user || !user.email) {
+      console.log(`⚠️ No email for user ${recipientId}, skipping email`);
+      continue;
+    }
+    
+    try {
+      // Create HTML email content
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+            <h1 style="color: white; margin: 0;">${notification.subject}</h1>
+            <p style="color: #E0E7FF; margin: 8px 0 0 0;">American Seekers Academy</p>
+          </div>
+          <div style="padding: 24px;">
+            <div style="color: #1F2937; line-height: 1.6;">
+              ${notification.content.replace(/\n/g, '<br>')}
+            </div>
+          </div>
+          <div style="background-color: #F3F4F6; padding: 16px; text-align: center; font-size: 12px; color: #6B7280;">
+            <p style="margin: 0;">American Seekers Academy - Building Tomorrow's Leaders</p>
+          </div>
+        </div>
+      `;
+      
+      const sendSmtpEmail = new brevo.SendSmtpEmail();
+      sendSmtpEmail.subject = notification.subject;
+      sendSmtpEmail.htmlContent = htmlContent;
+      sendSmtpEmail.sender = { 
+        name: "American Seekers Academy", 
+        email: "noreply@americanseekersacademy.com" 
+      };
+      sendSmtpEmail.to = [{ email: user.email, name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email }];
+      
+      await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+      
+      // Update recipient status to sent
+      const recipientIndex = recipientRecords.findIndex(
+        r => r.notificationId === notification.id && r.recipientId === recipientId && r.deliveryType === "email"
+      );
+      if (recipientIndex !== -1) {
+        recipientRecords[recipientIndex].status = "sent";
+        recipientRecords[recipientIndex].sentAt = new Date().toISOString();
+        saveNotificationRecipients(recipientRecords);
+      }
+      
+      console.log(`✅ Email sent to ${user.email} for notification: ${notification.subject}`);
+    } catch (error) {
+      console.error(`❌ Failed to send email to user ${recipientId}:`, error);
+      
+      // Update recipient status to failed
+      const recipientIndex = recipientRecords.findIndex(
+        r => r.notificationId === notification.id && r.recipientId === recipientId && r.deliveryType === "email"
+      );
+      if (recipientIndex !== -1) {
+        recipientRecords[recipientIndex].status = "failed";
+        recipientRecords[recipientIndex].errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        saveNotificationRecipients(recipientRecords);
+      }
+    }
+  }
 }
 
 async function sendNotificationSMS(notification: NotificationData, recipientIds: number[]): Promise<void> {
