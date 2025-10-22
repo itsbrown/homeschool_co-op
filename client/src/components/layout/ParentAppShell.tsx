@@ -156,25 +156,18 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                 <SheetContent side="left" className="w-[300px] p-0">
                   <div className="flex h-full flex-col">
                     {/* Mobile Menu Header */}
-                    <div className="flex items-center justify-between border-b p-4">
-                      <div className="flex items-center gap-3">
-                        {userSchool?.logo && (
-                          <img
-                            src={userSchool.logo}
-                            alt={`${userSchool.name} Logo`}
-                            className="h-10 w-10 object-contain"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        )}
-                        <h2 className="text-lg font-semibold">{userSchool?.name || 'LearnSphere'}</h2>
-                      </div>
-                      <SheetClose asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <X className="h-5 w-5" />
-                        </Button>
-                      </SheetClose>
+                    <div className="flex items-center gap-3 border-b p-4">
+                      {userSchool?.logo && (
+                        <img
+                          src={userSchool.logo}
+                          alt={`${userSchool.name} Logo`}
+                          className="h-10 w-10 object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <h2 className="text-lg font-semibold">{userSchool?.name || 'LearnSphere'}</h2>
                     </div>
 
                     {/* Mobile Menu Navigation */}
