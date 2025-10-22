@@ -387,9 +387,18 @@ export class DatabaseStorage implements IStorage {
 
   // Program Enrollment methods
   async getProgramEnrollment(id: number): Promise<ProgramEnrollment | undefined> {
-    const db = await getDb();
-    const [enrollment] = await db.select().from(programEnrollments).where(eq(programEnrollments.id, id));
-    return enrollment;
+    try {
+      const db = await getDb();
+      const [enrollment] = await db.select().from(programEnrollments).where(eq(programEnrollments.id, id));
+      return enrollment;
+    } catch (error: any) {
+      // Handle case where ID is too large for database integer type (e.g., timestamp-based IDs from file storage)
+      if (error?.code === '22003') { // PostgreSQL numeric value out of range error
+        console.log(`📝 Enrollment ID ${id} too large for database integer type, skipping database lookup`);
+        return undefined;
+      }
+      throw error;
+    }
   }
 
   async getProgramEnrollmentsByParent(parentId: number): Promise<ProgramEnrollment[]> {
