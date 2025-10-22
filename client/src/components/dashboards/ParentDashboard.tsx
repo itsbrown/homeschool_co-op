@@ -4,10 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, Bot, UserPlus, CreditCard, RefreshCw } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
-import EnrollmentAssistant from "@/components/enrollment/EnrollmentAssistant";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
@@ -18,7 +17,6 @@ export default function ParentDashboard() {
   const [, setLocation] = useLocation();
   const [userSchool, setUserSchool] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const { loadUnpaidEnrollments } = useCart();
@@ -503,37 +501,6 @@ export default function ParentDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Floating AI Assistant Button - Fixed Position */}
-      <Button
-        onClick={() => setIsAssistantModalOpen(true)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow"
-      >
-        <Bot className="h-6 w-6" />
-        <span className="sr-only">AI Enrollment Assistant</span>
-      </Button>
-
-      {/* AI Assistant Modal */}
-      {isAssistantModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] m-4 flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b bg-gray-50 rounded-t-lg">
-              <h2 className="text-xl font-semibold text-gray-800">AI Enrollment Assistant</h2>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setIsAssistantModalOpen(false)}
-                className="hover:bg-gray-200"
-              >
-                ✕
-              </Button>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <EnrollmentAssistant />
-            </div>
-          </div>
-        </div>
-      )}
       </div>
   );
 }
