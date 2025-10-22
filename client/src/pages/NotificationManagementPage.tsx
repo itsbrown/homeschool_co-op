@@ -65,7 +65,7 @@ export default function NotificationManagementPage() {
 
   // Fetch locations for targeting
   const { data: locations = [] } = useQuery<Location[]>({
-    queryKey: ["/api/locations", 1],
+    queryKey: ["/api/locations?schoolId=1"],
   });
 
   // Send individual notification mutation
