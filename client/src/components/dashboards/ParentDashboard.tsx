@@ -159,28 +159,29 @@ export default function ParentDashboard() {
     }, [user?.email]);
 
   return (
-      <div className="p-6 space-y-6">
-        <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">{userSchool ? `${userSchool.name} - Parent Dashboard` : 'Parent Dashboard'}</h1>
-          <p className="text-muted-foreground mt-1">
+      <div className="p-4 md:p-6 space-y-6">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl md:text-3xl font-bold break-words">{userSchool ? `${userSchool.name} - Parent Dashboard` : 'Parent Dashboard'}</h1>
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">
             {userSchool
               ? `Welcome back, ${user?.displayName || "Parent"}! Manage your children's education at ${userSchool.name}.`
               : `Welcome back, ${user?.displayName || "Parent"}! Manage your children's education journey.`
             }
           </p>
         </div>
-        <div className="flex space-x-2">
-          <Button asChild>
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          <Button asChild className="w-full sm:w-auto">
             <Link href="/children/register">
               <PlusCircle className="mr-2 h-4 w-4" />
               Register Child
             </Link>
           </Button>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="w-full sm:w-auto whitespace-nowrap">
             <Link href="/programs">
               <BookOpen className="mr-2 h-4 w-4" />
-              Browse Classes & Programs
+              <span className="hidden sm:inline">Browse Classes & Programs</span>
+              <span className="sm:hidden">Browse Classes</span>
             </Link>
           </Button>
         </div>
