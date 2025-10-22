@@ -5,11 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, BookOpen, Calendar, Bell, Plus, User, GraduationCap } from "lucide-react";
-import Header from "@/components/layout/Header";
-import ParentSidebar from "@/components/layout/ParentSidebar";
+import { Users, BookOpen, Calendar, Plus, User, GraduationCap } from "lucide-react";
 import { AlertCircle } from "lucide-react";
-import Link from "next/link";
+import { Link } from "wouter";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 
 interface Child {
   id: number;
@@ -52,144 +51,157 @@ export default function ParentDashboard() {
 
   // Query for enrollment data
   const { data: enrollments = [], isLoading: enrollmentsLoading } = useQuery<any[]>({
-    queryKey: ["/api/program-enrollments"],
+    queryKey: ["/api/enrollments"],
     enabled: !!user,
   });
 
   const isLoadingChildren = childrenLoading;
 
   return (
-    <div className="flex h-screen bg-background">
-      <ParentSidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header onMenuClick={() => {}} />
-        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 overflow-y-auto">
-          <div className="flex items-center justify-between space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight">Parent Portal</h2>
-            <div className="flex items-center space-x-2">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Enroll Child
-              </Button>
-            </div>
+    <ParentAppShell>
+      <div className="space-y-6 p-4 md:p-6 lg:p-8">
+        {/* Page Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Parent Dashboard</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              Welcome back, Parent! Manage your children's education journey.
+            </p>
           </div>
+          <Button asChild className="w-full sm:w-auto" data-testid="button-register-child">
+            <Link href="/children/register">
+              <Plus className="mr-2 h-4 w-4" />
+              Register Child
+            </Link>
+          </Button>
+        </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="children">My Children</TabsTrigger>
-              <TabsTrigger value="programs">Available Programs</TabsTrigger>
-              <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
-            </TabsList>
+        {/* Action Buttons - Mobile Optimized */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button asChild variant="default" size="lg" className="w-full sm:flex-1" data-testid="button-browse-classes">
+            <Link href="/programs">
+              <BookOpen className="mr-2 h-5 w-5" />
+              Browse Classes & Programs
+            </Link>
+          </Button>
+        </div>
 
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Children</CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{children.length}</div>
-                    <p className="text-xs text-muted-foreground">
-                      Registered in the system
-                    </p>
-                  </CardContent>
-                </Card>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          {/* Mobile-optimized tab list */}
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+            <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
+            <TabsTrigger value="children" className="text-xs sm:text-sm">Children</TabsTrigger>
+            <TabsTrigger value="enrollments" className="text-xs sm:text-sm">Enrollments</TabsTrigger>
+            <TabsTrigger value="schedule" className="text-xs sm:text-sm">Schedule</TabsTrigger>
+          </TabsList>
 
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Active Enrollments</CardTitle>
-                    <BookOpen className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{enrollments.length}</div>
-                    <p className="text-xs text-muted-foreground">
-                      Current program enrollments
-                    </p>
-                  </CardContent>
-                </Card>
+          <TabsContent value="overview" className="space-y-4">
+            {/* Stats Grid - Responsive */}
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">My Children</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{children.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Registered children
+                  </p>
+                </CardContent>
+              </Card>
 
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Available Programs</CardTitle>
-                    <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{programs.length}</div>
-                    <p className="text-xs text-muted-foreground">
-                      Programs available for enrollment
-                    </p>
-                  </CardContent>
-                </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Enrollments</CardTitle>
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{enrollments.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Active program enrollments
+                  </p>
+                </CardContent>
+              </Card>
 
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Notifications</CardTitle>
-                    <Bell className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">0</div>
-                    <p className="text-xs text-muted-foreground">
-                      Unread notifications
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Available Programs</CardTitle>
+                  <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{programs.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Programs to explore
+                  </p>
+                </CardContent>
+              </Card>
 
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="col-span-4">
-                  <CardHeader>
-                    <CardTitle>Recent Activity</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pl-2">
-                    <div className="space-y-8">
-                      <div className="flex items-center">
-                        <div className="ml-4 space-y-1">
-                          <p className="text-sm font-medium leading-none">
-                            Welcome to the Parent Portal
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Use this dashboard to manage your children's enrollments and track their progress.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Upcoming</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">0</div>
+                  <p className="text-xs text-muted-foreground">
+                    Classes this week
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
 
-                <Card className="col-span-3">
-                  <CardHeader>
-                    <CardTitle>Quick Actions</CardTitle>
-                    <CardDescription>
-                      Common parent tasks
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-2">
-                    <Button variant="outline" className="justify-start">
+            {/* Welcome Card - Full Width on Mobile */}
+            <div className="grid gap-4 grid-cols-1 lg:grid-cols-3">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Welcome to American Seekers Academy</CardTitle>
+                  <CardDescription>Your children's educational journey starts here</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Use this dashboard to manage your children's enrollments, track their progress, 
+                    and stay connected with their education. Browse our programs, register your children, 
+                    and view your family schedule all in one place.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button variant="outline" className="w-full justify-start" asChild>
+                    <Link href="/children/register">
                       <User className="mr-2 h-4 w-4" />
                       Add Child Profile
-                    </Button>
-                    <Button variant="outline" className="justify-start">
+                    </Link>
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" asChild>
+                    <Link href="/programs">
                       <BookOpen className="mr-2 h-4 w-4" />
                       Browse Programs
-                    </Button>
-                    <Button variant="outline" className="justify-start">
+                    </Link>
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" asChild>
+                    <Link href="/schedule">
                       <Calendar className="mr-2 h-4 w-4" />
                       View Schedule
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
 
-            <TabsContent value="children" className="space-y-6">
-            <div className="flex justify-between items-center">
+          <TabsContent value="children" className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
               <div>
-                <h2 className="text-2xl font-semibold">My Children</h2>
-                <p className="text-muted-foreground">Manage your children's profiles and information</p>
+                <h2 className="text-xl sm:text-2xl font-semibold">My Children</h2>
+                <p className="text-sm text-muted-foreground">Manage your children's profiles</p>
               </div>
-              <Button asChild>
+              <Button asChild className="w-full sm:w-auto">
                 <Link href="/children/register">
                   <Plus className="mr-2 h-4 w-4" />
                   Register New Child
@@ -207,14 +219,13 @@ export default function ParentDashboard() {
                   <div className="text-center text-red-600">
                     <AlertCircle className="h-12 w-12 mx-auto mb-4" />
                     <p>Error loading children data</p>
-                    <p className="text-sm text-muted-foreground mt-2">{childrenError.message}</p>
+                    <p className="text-sm text-muted-foreground mt-2">{String(childrenError)}</p>
                   </div>
                 </CardContent>
               </Card>
             ) : children && children.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                 {children.map((child) => {
-                  // Calculate age from birthdate if not provided
                   let age = child.age;
                   if (!age && child.birthdate) {
                     const birthDate = new Date(child.birthdate);
@@ -228,46 +239,40 @@ export default function ParentDashboard() {
 
                   return (
                     <Card key={child.id}>
-                      <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                            <User className="h-4 w-4 text-blue-600" />
+                      <CardHeader>
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <User className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-semibold truncate">{child.firstName} {child.lastName}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {age ? `Age: ${age}` : 'Age: Not specified'} • {child.gradeLevel || 'Grade not set'}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-semibold">{child.firstName} {child.lastName}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {age ? `Age: ${age}` : 'Age: Not specified'}
-                            </p>
-                          </div>
+                          <Button variant="outline" size="sm" asChild className="flex-shrink-0">
+                            <Link href={`/children/${child.id}/edit`}>
+                              View
+                            </Link>
+                          </Button>
                         </div>
-                        <Button variant="outline" size="sm" className="ml-auto" asChild>
-                          <Link href={`/children/${child.id}`}>
-                            View Profile
-                          </Link>
-                        </Button>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Grade:</span>
-                            <span>{child.gradeLevel || 'Not specified'}</span>
-                          </div>
                           {child.school && (
-                            <div className="flex justify-between">
+                            <div className="flex justify-between gap-2">
                               <span className="text-muted-foreground">School:</span>
-                              <span>{child.school}</span>
+                              <span className="truncate">{child.school}</span>
                             </div>
                           )}
                           {child.interests && child.interests.length > 0 && (
-                            <div className="flex justify-between">
+                            <div className="flex justify-between gap-2">
                               <span className="text-muted-foreground">Interests:</span>
-                              <span>{Array.isArray(child.interests) ? child.interests.join(", ") : child.interests}</span>
-                            </div>
-                          )}
-                          {child.learningStyle && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Learning Style:</span>
-                              <span>{child.learningStyle}</span>
+                              <span className="truncate">
+                                {Array.isArray(child.interests) ? child.interests.slice(0, 2).join(", ") : child.interests}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -283,7 +288,7 @@ export default function ParentDashboard() {
                     <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="text-lg font-semibold mb-2">No Children Registered</h3>
                     <p className="text-muted-foreground mb-4">
-                      Register your first child to get started with managing their education journey.
+                      Register your first child to get started.
                     </p>
                     <Button asChild>
                       <Link href="/children/register">
@@ -297,105 +302,75 @@ export default function ParentDashboard() {
             )}
           </TabsContent>
 
-            <TabsContent value="programs" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Available Programs</CardTitle>
-                  <CardDescription>
-                    Browse and enroll in educational programs
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {programsLoading ? (
-                    <div>Loading programs...</div>
-                  ) : programs.length === 0 ? (
-                    <div className="text-center py-8">
-                      <GraduationCap className="mx-auto h-12 w-12 text-muted-foreground" />
-                      <h3 className="mt-2 text-sm font-semibold text-gray-900">No programs available</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Check back later for new program offerings.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {programs.map((program: Program) => (
-                        <Card key={program.id} className="border-2">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-lg">{program.name}</CardTitle>
-                            <CardDescription>{program.description}</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-center">
-                                <Badge variant="secondary">{program.ageRange}</Badge>
-                                <span className="text-lg font-bold">${(program.price / 100).toFixed(2)}</span>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                Duration: {program.duration}
-                              </div>
-                              <Button className="w-full">
-                                Enroll Now
-                              </Button>
+          <TabsContent value="enrollments" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Program Enrollments</CardTitle>
+                <CardDescription>
+                  View and manage your children's enrollments
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {enrollmentsLoading ? (
+                  <div className="text-center py-8">Loading enrollments...</div>
+                ) : enrollments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
+                    <h3 className="mt-2 text-sm font-semibold">No active enrollments</h3>
+                    <p className="mt-1 text-sm text-muted-foreground mb-4">
+                      Enroll your children in programs to see them here.
+                    </p>
+                    <Button asChild>
+                      <Link href="/programs">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Browse Programs
+                      </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {enrollments.map((enrollment: any) => (
+                      <Card key={enrollment.id} className="border-l-4 border-l-blue-500">
+                        <CardContent className="pt-6">
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                            <div>
+                              <h3 className="font-semibold">{enrollment.className}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {enrollment.childName}
+                              </p>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                            <Badge>{enrollment.status}</Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-            <TabsContent value="enrollments" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Current Enrollments</CardTitle>
-                  <CardDescription>
-                    View and manage your children's program enrollments
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {enrollmentsLoading ? (
-                    <div>Loading enrollments...</div>
-                  ) : enrollments.length === 0 ? (
-                    <div className="text-center py-8">
-                      <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
-                      <h3 className="mt-2 text-sm font-semibold text-gray-900">No active enrollments</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Enroll your children in programs to see them here.
-                      </p>
-                      <div className="mt-6">
-                        <Button>
-                          <Plus className="mr-2 h-4 w-4" />
-                          Browse Programs
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {enrollments.map((enrollment: any, index: number) => (
-                        <Card key={index} className="border-l-4 border-l-blue-500">
-                          <CardContent className="pt-6">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h3 className="font-semibold">Program Enrollment #{index + 1}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                  Active enrollment details
-                                </p>
-                              </div>
-                              <Badge>Active</Badge>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
+          <TabsContent value="schedule" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Family Schedule</CardTitle>
+                <CardDescription>
+                  View your children's upcoming classes and events
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <Calendar className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-2 text-sm font-semibold">No upcoming events</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Your schedule will appear here once you enroll in programs.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
-    </div>
+    </ParentAppShell>
   );
 }
