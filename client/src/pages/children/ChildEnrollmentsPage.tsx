@@ -144,58 +144,63 @@ export default function ChildEnrollmentsPage() {
 
   return (
     <ParentAppShell>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" asChild>
+        <div className="space-y-3 sm:space-y-4">
+          {/* Back button - separate row on mobile */}
+          <div>
+            <Button variant="ghost" size="sm" asChild className="pl-0">
               <Link href="/children">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Children
               </Link>
             </Button>
+          </div>
+          
+          {/* Title and action button */}
+          <div className="space-y-3">
             <div>
-              <h1 className="text-2xl font-bold">
+              <h1 className="text-xl sm:text-2xl font-bold">
                 {childLoading ? (
                   <Skeleton className="h-8 w-48" />
                 ) : (
                   `${child?.firstName} ${child?.lastName}'s Enrollments`
                 )}
               </h1>
-              <p className="text-muted-foreground">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 View and manage program enrollments
               </p>
             </div>
+            <Button asChild className="w-full sm:w-auto">
+              <Link href="/programs">
+                <Plus className="h-4 w-4 mr-2" />
+                <span className="sm:inline">Enroll in </span>Program
+              </Link>
+            </Button>
           </div>
-          <Button asChild>
-            <Link href="/programs">
-              <Plus className="h-4 w-4 mr-2" />
-              Enroll in Program
-            </Link>
-          </Button>
         </div>
 
         {/* Child Info Card */}
         {childLoading ? (
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <Skeleton className="h-4 w-full" />
             </CardContent>
           </Card>
         ) : child ? (
           <Card>
-            <CardHeader>
-              <CardTitle>Child Information</CardTitle>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-lg sm:text-xl">Child Information</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Name</p>
-                  <p className="font-medium">{child.firstName} {child.lastName}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Name</p>
+                  <p className="font-medium text-sm sm:text-base">{child.firstName} {child.lastName}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Grade Level</p>
-                  <p className="font-medium">{child.gradeLevel}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Grade Level</p>
+                  <p className="font-medium text-sm sm:text-base">{child.gradeLevel}</p>
                 </div>
               </div>
             </CardContent>
@@ -222,17 +227,17 @@ export default function ChildEnrollmentsPage() {
             <div className="space-y-4">
               {enrollments.map((enrollment, index) => (
                 <Card key={enrollment.id || `enrollment-${index}`}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{getClassDetails(enrollment).className}</CardTitle>
-                      <Badge className={getStatusColor(enrollment.status)}>
-                        {enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
+                  <CardHeader className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                      <CardTitle className="text-base sm:text-lg">{getClassDetails(enrollment).className}</CardTitle>
+                      <Badge className={`${getStatusColor(enrollment.status)} self-start sm:self-auto text-xs`}>
+                        {enrollment.status.replace('_', ' ').charAt(0).toUpperCase() + enrollment.status.replace('_', ' ').slice(1)}
                       </Badge>
                     </div>
-                    <CardDescription>{getClassDetails(enrollment).description}</CardDescription>
+                    <CardDescription className="text-sm line-clamp-3 sm:line-clamp-none">{getClassDetails(enrollment).description}</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <CardContent className="p-4 sm:p-6 pt-0">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 text-sm">
                       <div className="flex items-center">
                         <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
                         <div>
@@ -259,17 +264,17 @@ export default function ChildEnrollmentsPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="mt-4 pt-4 border-t">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <p className="text-sm text-muted-foreground">
+                    <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t">
+                      <div className="flex flex-col gap-3">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                           Enrolled on {formatDate(enrollment.enrollmentDate)}
                         </p>
-                        <div className="flex gap-2 w-full sm:w-auto sm:mr-32">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full">
                           {enrollment.status === 'pending_payment' && (
                             <>
                               <Button 
                                 size="sm"
-                                className="bg-green-600 hover:bg-green-700"
+                                className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
                                 onClick={() => {
                                   // Refresh cart to load pending enrollments, then navigate to checkout
                                   refreshCart();
@@ -277,13 +282,14 @@ export default function ChildEnrollmentsPage() {
                                 }}
                               >
                                 <CreditCard className="h-4 w-4 mr-2" />
-                                Pay Now
+                                <span className="hidden sm:inline">Complete </span>Payment
                               </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button 
                                     variant="outline" 
                                     size="sm"
+                                    className="w-full sm:w-auto"
                                     disabled={!enrollment.id}
                                     onClick={(e) => {
                                       if (!enrollment.id) {
