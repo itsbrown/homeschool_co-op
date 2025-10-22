@@ -27,8 +27,14 @@ const enhancedNotificationSchema = insertNotificationSchema.extend({
 // Get notifications for a user/admin
 router.get("/", async (req, res) => {
   try {
-    const userId = parseInt(req.query.userId as string);
+    const userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
+    
+    // If no userId provided, return all notifications (for admin view)
+    if (!userId) {
+      const allNotifications = loadNotifications();
+      return res.json(allNotifications);
+    }
     
     if (isNaN(userId)) {
       return res.status(400).json({ message: "Valid user ID required" });
