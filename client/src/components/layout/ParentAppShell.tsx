@@ -231,12 +231,12 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
               </Sheet>
 
               {/* Logo - Center on Mobile */}
-              <div className="flex-1 flex items-center justify-center">
+              <div className="flex-1 flex items-center justify-center px-2">
                 {userSchool?.logo ? (
                   <img
                     src={userSchool.logo}
                     alt={`${userSchool.name} Logo`}
-                    className="h-12 w-auto object-contain"
+                    className="h-16 w-auto max-w-[200px] object-contain"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
                     }}
