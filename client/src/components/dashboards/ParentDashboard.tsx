@@ -284,17 +284,6 @@ export default function ParentDashboard() {
                 <CardDescription>Common parent tasks</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button 
-                  onClick={() => setIsAssistantModalOpen(true)}
-                  className="w-full justify-start h-auto p-4"
-                >
-                  <Bot className="mr-3 h-5 w-5" />
-                  <div className="text-left">
-                    <div className="font-medium">AI Enrollment Assistant</div>
-                    <div className="text-sm opacity-90">Register & find programs</div>
-                  </div>
-                </Button>
-
                 <Button asChild variant="outline" className="w-full justify-start h-auto p-4">
                   <Link href="/children">
                     <UserPlus className="mr-3 h-5 w-5" />
