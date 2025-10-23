@@ -280,12 +280,12 @@ export default function ParentSidebar() {
 
             <div className="border-t pt-4">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+                <div className="flex items-center min-w-0 flex-1">
+                  <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center mr-3 flex-shrink-0">
                     <User className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
-                    <p className="font-medium">{user?.email}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{user?.email}</p>
                     <p className="text-xs text-muted-foreground">
                       {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
                     </p>
@@ -344,12 +344,12 @@ export default function ParentSidebar() {
 
           <div className="border-t pt-4">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center">
-                <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+              <div className="flex items-center min-w-0 flex-1">
+                <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center mr-3 flex-shrink-0">
                   <User className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="font-medium">{user?.email}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium truncate">{user?.email}</p>
                   <p className="text-xs text-muted-foreground">
                     {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
                   </p>
