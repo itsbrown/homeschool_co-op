@@ -53,14 +53,10 @@ export default function NotificationsPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"all" | "unread">("all");
 
-  // Get user role from localStorage
-  const userRole = localStorage.getItem('activeRole') || 'parent';
-
-  // Fetch notifications from API
-  const notificationsUrl = `/api/notifications?userId=${user?.id}&role=${userRole}`;
+  // Fetch notifications from API (backend will use authenticated user's ID from middleware)
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
-    queryKey: [notificationsUrl],
-    enabled: !!user?.id,
+    queryKey: ['/api/notifications'],
+    enabled: !!user,
   });
 
   // Mark notification as read mutation
