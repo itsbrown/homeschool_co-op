@@ -141,16 +141,15 @@ export default function NotificationsPage() {
 
   return (
     <ParentAppShell>
-      <div className="container mx-auto p-4 sm:p-6 max-w-5xl">
-      <div className="flex flex-col gap-4 sm:gap-6">
+      <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
-              <Bell className="h-6 w-6 sm:h-8 sm:w-8" />
+            <h1 className="text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
+              <Bell className="h-8 w-8" />
               Notifications
             </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            <p className="text-muted-foreground mt-1">
               Stay updated with important messages and alerts
             </p>
           </div>
@@ -160,7 +159,6 @@ export default function NotificationsPage() {
               onClick={() => markAllAsReadMutation.mutate()}
               disabled={markAllAsReadMutation.isPending}
               data-testid="button-mark-all-read"
-              className="w-full sm:w-auto"
             >
               <CheckCheck className="h-4 w-4 mr-2" />
               Mark All as Read
