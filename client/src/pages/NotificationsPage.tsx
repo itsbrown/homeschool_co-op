@@ -267,11 +267,9 @@ export default function NotificationsPage() {
                               </Badge>
                             )}
                           </h4>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              {notification.priority}
-                            </Badge>
-                          </div>
+                          <Badge variant="outline" className="text-xs flex-shrink-0">
+                            {notification.priority}
+                          </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground mb-2">
                           {notification.content}
@@ -293,6 +291,7 @@ export default function NotificationsPage() {
                           onClick={() => markAsReadMutation.mutate(notification.id)}
                           disabled={markAsReadMutation.isPending}
                           data-testid={`button-mark-read-${notification.id}`}
+                          className="flex-shrink-0"
                         >
                           <Check className="h-4 w-4" />
                         </Button>
