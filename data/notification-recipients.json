@@ -874,9 +874,10 @@
     "notificationId": 4,
     "recipientId": 7,
     "deliveryType": "in_app",
-    "status": "delivered",
+    "status": "read",
     "deliveredAt": "2025-10-12T14:02:21.634Z",
-    "createdAt": "2025-10-12T14:02:21.634Z"
+    "createdAt": "2025-10-12T14:02:21.634Z",
+    "readAt": "2025-10-23T03:45:51.843Z"
   },
   {
     "id": 104,

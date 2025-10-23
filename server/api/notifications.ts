@@ -30,11 +30,24 @@ router.get("/", async (req, res) => {
     let userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
     
-    // If no userId provided in query, fall back to authenticated user's dbUserId
+    // If no userId provided in query, fall back to authenticated user
     if (!userId) {
-      const authUserId = (req as any).auth?.dbUserId;
-      if (authUserId) {
-        userId = authUserId;
+      const email = (req as any).auth?.email;
+      
+      if (email) {
+        console.log('📬 GET /api/notifications - Authenticated user email:', email);
+        
+        // Look up user by email in file storage to get the correct user ID
+        const users = loadUsers();
+        const user = users.find(u => u.email === email);
+        
+        if (!user) {
+          console.warn(`⚠️ No file-based user found for email: ${email}`);
+          return res.json([]);
+        }
+        
+        console.log('👤 File-based user found:', { id: user.id, email: user.email });
+        userId = user.id;
       } else {
         // No userId and no auth - return all notifications (for admin view) sorted by createdAt descending
         const allNotifications = loadNotifications()
@@ -201,17 +214,25 @@ router.get("/:id/stats", async (req, res) => {
 router.post("/:id/read", async (req, res) => {
   try {
     const notificationId = parseInt(req.params.id);
-    const userId = (req as any).auth?.dbUserId;
+    const email = (req as any).auth?.email;
     
     if (isNaN(notificationId)) {
       return res.status(400).json({ message: "Invalid notification ID" });
     }
     
-    if (!userId) {
+    if (!email) {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
-    await markNotificationAsRead(notificationId, userId);
+    // Look up user by email in file storage to get the correct user ID
+    const users = loadUsers();
+    const user = users.find(u => u.email === email);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await markNotificationAsRead(notificationId, user.id);
     res.json({ message: "Notification marked as read" });
   } catch (error) {
     console.error("Error marking notification as read:", error);
@@ -222,13 +243,21 @@ router.post("/:id/read", async (req, res) => {
 // Mark all notifications as read for a user
 router.post("/mark-all-read", async (req, res) => {
   try {
-    const userId = (req as any).auth?.dbUserId;
+    const email = (req as any).auth?.email;
     
-    if (!userId) {
+    if (!email) {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
-    await markAllNotificationsAsRead(userId);
+    // Look up user by email in file storage to get the correct user ID
+    const users = loadUsers();
+    const user = users.find(u => u.email === email);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await markAllNotificationsAsRead(user.id);
     res.json({ message: "All notifications marked as read" });
   } catch (error) {
     console.error("Error marking all notifications as read:", error);
@@ -371,13 +400,31 @@ async function getUserNotifications(userId: number, role: string): Promise<any[]
   const notifications = loadNotifications();
   const recipients = loadNotificationRecipients();
   
+  console.log('🔍 getUserNotifications - Looking for notifications for userId:', userId, 'role:', role);
+  console.log('📊 Total notifications:', notifications.length);
+  console.log('📊 Total recipients:', recipients.length);
+  
+  // Get file-based user ID from users.json using the database user ID
+  const users = loadUsers();
+  const user = users.find(u => u.id === userId);
+  
+  if (!user) {
+    console.warn(`⚠️ User with ID ${userId} not found in file storage`);
+  }
+  
+  console.log('👤 File-based user:', user ? { id: user.id, email: user.email } : 'NOT FOUND');
+  
   // Get notifications where user is a recipient or is the sender (if admin)
   const userRecipients = recipients.filter(r => r.recipientId === userId);
+  console.log('📬 User recipients found:', userRecipients.length);
+  
   const userNotificationIds = userRecipients.map(r => r.notificationId);
   
   let userNotifications = notifications.filter(n => 
     userNotificationIds.includes(n.id) || (role === 'school_admin' && n.senderId === userId)
   );
+  
+  console.log('📮 User notifications found:', userNotifications.length);
   
   // Add recipient info to notifications and sort by createdAt descending (newest first)
   return userNotifications
