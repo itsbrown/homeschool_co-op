@@ -242,7 +242,7 @@ export default function NotificationsPage() {
                   return (
                     <div
                       key={notification.id}
-                      className={`flex items-start gap-4 p-4 rounded-lg border transition-colors ${
+                      className={`grid grid-cols-[auto_1fr_auto] gap-4 p-4 rounded-lg border transition-colors ${
                         isUnread
                           ? "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800"
                           : "bg-background border-border"
@@ -250,24 +250,24 @@ export default function NotificationsPage() {
                       data-testid={`notification-${notification.id}`}
                     >
                       <div
-                        className={`rounded-full p-2 ${
+                        className={`rounded-full p-2 self-start ${
                           priorityColors[notification.priority as keyof typeof priorityColors]
                         }`}
                       >
                         {getPriorityIcon(notification.priority)}
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <h4 className="font-semibold text-sm flex items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <h4 className="font-semibold text-sm">
                             {notification.subject}
-                            {isUnread && (
-                              <Badge variant="default" className="ml-2">
-                                New
-                              </Badge>
-                            )}
                           </h4>
-                          <Badge variant="outline" className="text-xs flex-shrink-0">
+                          {isUnread && (
+                            <Badge variant="default">
+                              New
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="text-xs">
                             {notification.priority}
                           </Badge>
                         </div>
@@ -284,18 +284,19 @@ export default function NotificationsPage() {
                         </div>
                       </div>
 
-                      {isUnread && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => markAsReadMutation.mutate(notification.id)}
-                          disabled={markAsReadMutation.isPending}
-                          data-testid={`button-mark-read-${notification.id}`}
-                          className="flex-shrink-0"
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="self-start">
+                        {isUnread && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => markAsReadMutation.mutate(notification.id)}
+                            disabled={markAsReadMutation.isPending}
+                            data-testid={`button-mark-read-${notification.id}`}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
