@@ -81,10 +81,8 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
   const [userSchool, setUserSchool] = useState<any>(null);
 
   // Fetch notifications to get unread count
-  const userRole = localStorage.getItem('activeRole') || 'parent';
-  const notificationsUrl = `/api/notifications?userId=${user?.id}&role=${userRole}`;
   const { data: notifications = [] } = useQuery<Notification[]>({
-    queryKey: [notificationsUrl],
+    queryKey: ['/api/notifications'],
     enabled: !!user?.id,
   });
   
