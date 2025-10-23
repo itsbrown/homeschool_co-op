@@ -318,8 +318,8 @@ export function SupportAssistantTrigger() {
         className="fixed bottom-4 right-4 z-40 rounded-full shadow-lg hover:shadow-xl transition-shadow"
         size="lg"
       >
-        <MessageCircle className="mr-2 h-5 w-5" />
-        Need Help?
+        <MessageCircle className="h-5 w-5 md:mr-2" />
+        <span className="hidden md:inline">Need Help?</span>
       </Button>
 
       <AISupportAssistant 
