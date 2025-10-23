@@ -8,23 +8,10 @@ import session from "express-session";
 import { z } from "zod";
 import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema } from "@shared/schema";
 
-// Simple interface for authenticated requests
+// Type for authenticated requests with our auth structure
 interface AuthenticatedRequest extends Request {
-  auth?: {
-    userId: string;
-    supabaseId: string;
-    email: string;
-    role: string;
-    isActive: boolean;
-    schoolId?: number;
-    dbUserId?: number;
-    payload: {
-      email: string;
-      role: string;
-    };
-  };
-  user?: any; // From Supabase auth middleware
-  session?: any; // For session-based endpoints still in use
+  user?: any;
+  session?: any;
 }
 // Removed session-based children router - using Auth0 endpoints instead
 import * as emergencyContactsApi from "./api/emergency-contacts";
