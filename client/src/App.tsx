@@ -550,10 +550,10 @@ function Router() {
       <Route path="/schools/staff/:id" component={StaffEditPage} />
       <Route path="/schools/staff/:id/edit" component={StaffEditPage} />
       <Route path="/schools/students" component={StudentsPage} />
+      <Route path="/schools/students/register" component={StudentRegistrationPage} />
       <Route path="/schools/students/:id" component={StudentDetailPage} />
       <Route path="/schools/students/:id/edit" component={StudentRegistrationPage} />
       <Route path="/schools/students/:id/classes" component={StudentClassesPage} />
-      <Route path="/schools/students/register" component={StudentRegistrationPage} />
       <Route path="/schools/discounts" component={DiscountsPage} />
       <Route path="/schools/manual-payments">
         <SchoolAdminLayout pageTitle="Manual Payments">
