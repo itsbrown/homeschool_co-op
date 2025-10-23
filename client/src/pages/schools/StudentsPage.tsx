@@ -166,7 +166,7 @@ export default function StudentsPage() {
           <p className="text-muted-foreground">Manage your school's student enrollment and information</p>
           <div className="flex gap-2">
             <Button asChild data-testid="button-add-student">
-              <Link href="/schools/students/add">
+              <Link href="/schools/students/register">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Add Student
               </Link>
