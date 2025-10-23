@@ -158,7 +158,7 @@ export default function CartCheckout() {
     loadUnpaidEnrollments();
     
     let attempts = 0;
-    const maxAttempts = 10; // Try for up to 5 seconds (10 * 500ms)
+    const maxAttempts = 20; // Give more time: 10 seconds (20 * 500ms) to account for localStorage loading
     
     const timer = setInterval(() => {
       attempts++;
