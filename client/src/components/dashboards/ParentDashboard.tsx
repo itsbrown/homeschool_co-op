@@ -447,7 +447,24 @@ export default function ParentDashboard() {
               ) : (
                 <div className="space-y-4">
                   {enrollmentsData.map((enrollment: any, index: number) => (
-                    <div key={enrollment.id || `enrollment-${index}`} className="border rounded-lg p-4">
+                    <div 
+                      key={enrollment.id || `enrollment-${index}`} 
+                      className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => {
+                        // Navigate to checkout if payment is pending
+                        if (enrollment.status === 'pending_payment') {
+                          setLocation('/cart/checkout');
+                        } else {
+                          // For other statuses, could navigate to enrollment details
+                          // For now, just show a toast
+                          toast({
+                            title: "Enrollment Details",
+                            description: `${enrollment.className} for ${enrollment.childName}`,
+                          });
+                        }
+                      }}
+                      data-testid={`enrollment-card-${enrollment.id}`}
+                    >
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-medium">{enrollment.className}</h4>
