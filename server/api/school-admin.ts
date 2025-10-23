@@ -2689,6 +2689,7 @@ router.put('/students/:id', async (req, res) => {
       lastName: updateData.lastName,
       birthdate: updateData.dateOfBirth,
       gradeLevel: updateData.gradeLevel,
+      locationId: updateData.locationId !== undefined ? updateData.locationId : existingStudent.locationId, // Add location support
       parentEmail: updateData.parentEmail,
       parentPhone: updateData.parentPhone,
       emergencyContact: updateData.emergencyContact,

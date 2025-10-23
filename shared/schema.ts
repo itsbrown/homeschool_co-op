@@ -280,6 +280,8 @@ export const insertChildSchema = createInsertSchema(children)
     // Set default values for nullable fields
     gender: z.string().nullable().default(null),
     school: z.string().nullable().default(null),
+    schoolId: z.number().nullable().default(null),
+    locationId: z.number().nullable().default(null),
     learningStyle: z.string().nullable().default(null),
     specialNeeds: z.string().nullable().default(null),
     interests: z.array(z.string()).nullable().default(null),

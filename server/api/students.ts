@@ -25,9 +25,11 @@ router.post('/register', async (req, res) => {
     console.log('🚀 Student registration started');
     console.log('📝 Request body:', req.body);
 
+    // Support both public registration and school admin formats
     const {
       schoolId,
       schoolRegistrationCode,
+      // Public registration format
       parentFirstName,
       parentLastName,
       parentEmail,
@@ -42,34 +44,51 @@ router.post('/register', async (req, res) => {
       medicalNotes,
       specialNeeds,
       allergies,
-      agreesToEmails
+      agreesToEmails,
+      // School admin format
+      firstName,
+      lastName,
+      dateOfBirth,
+      gradeLevel,
+      locationId,
+      sendInvitation,
+      emergencyContact,
+      emergencyPhone
     } = req.body;
 
+    // Determine which format is being used and normalize
+    const isSchoolAdminFormat = !!firstName && !!lastName && !!dateOfBirth;
+    
+    const normalizedData = {
+      parentEmail: parentEmail,
+      parentPhone: parentPhone,
+      childFirstName: isSchoolAdminFormat ? firstName : childFirstName,
+      childLastName: isSchoolAdminFormat ? lastName : childLastName,
+      childBirthdate: isSchoolAdminFormat ? dateOfBirth : childBirthdate,
+      childGradeLevel: isSchoolAdminFormat ? gradeLevel : childGradeLevel,
+      locationId: locationId || null,
+      emergencyContactName: isSchoolAdminFormat ? emergencyContact : emergencyContactName,
+      emergencyContactPhone: isSchoolAdminFormat ? emergencyPhone : emergencyContactPhone,
+      medicalNotes: medicalNotes || '',
+      specialNeeds: specialNeeds || '',
+      sendInvitation: sendInvitation || false
+    };
+
+    console.log('✅ Normalized registration data:', normalizedData);
+
     // Validate required fields
-    if (!schoolRegistrationCode || !parentEmail || !childFirstName || !childLastName) {
+    if (!normalizedData.parentEmail || !normalizedData.childFirstName || !normalizedData.childLastName) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: school registration code, parent email, child first name, and child last name are required'
+        message: 'Missing required fields: parent email, child first name, and child last name are required'
       });
     }
 
-    // Extract form data for processing
-    const formData = {
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      dateOfBirth: req.body.dateOfBirth,
-      gradeLevel: req.body.gradeLevel,
-      parentEmail: req.body.parentEmail,
-      sendInvitation: req.body.sendInvitation
-    };
-
-    console.log('✅ Extracted form data:', formData);
-
     // Look for existing parent by email with fallback handling
-    console.log('🔍 Looking for parent with email:', parentEmail);
+    console.log('🔍 Looking for parent with email:', normalizedData.parentEmail);
     let existingParent;
     try {
-      existingParent = await storage.getUserByEmail(parentEmail);
+      existingParent = await storage.getUserByEmail(normalizedData.parentEmail);
     } catch (dbError) {
       console.log('⚠️ Database failed, using file storage fallback:', dbError.message);
       // Use file storage directly for user lookup
@@ -79,7 +98,7 @@ router.post('/register', async (req, res) => {
 
       if (fs.existsSync(usersFilePath)) {
         const usersData = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
-        existingParent = usersData.find(user => user.email === parentEmail && user.role === 'parent');
+        existingParent = usersData.find(user => user.email === normalizedData.parentEmail && user.role === 'parent');
       }
     }
 
@@ -91,10 +110,10 @@ router.post('/register', async (req, res) => {
       // Create new parent user with fallback handling
       const parentData = {
         id: Date.now(), // Generate ID for file storage
-        email: parentEmail,
-        firstName: parentFirstName,
-        lastName: parentLastName,
-        phone: parentPhone,
+        email: normalizedData.parentEmail,
+        firstName: parentFirstName || 'Parent',
+        lastName: parentLastName || 'User',
+        phone: normalizedData.parentPhone,
         role: 'parent' as const,
         isActive: true,
         createdAt: new Date(),
@@ -124,18 +143,23 @@ router.post('/register', async (req, res) => {
     }
 
     // Create child record with fallback handling
+    const emergencyContactStr = normalizedData.emergencyContactName && normalizedData.emergencyContactPhone
+      ? `${normalizedData.emergencyContactName}: ${normalizedData.emergencyContactPhone}${emergencyContactRelation ? ` (${emergencyContactRelation})` : ''}`
+      : normalizedData.emergencyContactName || '';
+      
     const childData = {
       id: Date.now() + 1, // Generate unique ID
-      firstName: childFirstName,
-      lastName: childLastName,
-      birthdate: childBirthdate,
-      gradeLevel: childGradeLevel,
+      firstName: normalizedData.childFirstName,
+      lastName: normalizedData.childLastName,
+      birthdate: normalizedData.childBirthdate,
+      gradeLevel: normalizedData.childGradeLevel,
       parentId: parentUser.id,
-      parentEmail: parentEmail,
-      specialNeeds: specialNeeds || '',
+      parentEmail: normalizedData.parentEmail,
+      locationId: normalizedData.locationId, // Add location support
+      specialNeeds: normalizedData.specialNeeds,
       interests: null,
-      notes: medicalNotes || '',
-      emergencyContact: `${emergencyContactName}: ${emergencyContactPhone} (${emergencyContactRelation})`,
+      notes: normalizedData.medicalNotes,
+      emergencyContact: emergencyContactStr,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -165,8 +189,8 @@ router.post('/register', async (req, res) => {
     // Send confirmation email (if email service is available)
     try {
       // Mock email sending
-      console.log(`📧 [MOCK EMAIL] Registration confirmation sent to: ${parentEmail}`);
-      console.log(`📧 Child: ${childFirstName} ${childLastName} registered successfully`);
+      console.log(`📧 [MOCK EMAIL] Registration confirmation sent to: ${normalizedData.parentEmail}`);
+      console.log(`📧 Child: ${normalizedData.childFirstName} ${normalizedData.childLastName} registered successfully`);
     } catch (emailError) {
       console.log('📧 Email sending failed, but continuing:', emailError);
     }
@@ -181,7 +205,8 @@ router.post('/register', async (req, res) => {
         firstName: child.firstName,
         lastName: child.lastName,
         gradeLevel: child.gradeLevel,
-        parentEmail: parentEmail
+        locationId: child.locationId,
+        parentEmail: normalizedData.parentEmail
       }
     });
 

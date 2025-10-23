@@ -10,30 +10,75 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, UserPlus, Mail, Edit } from "lucide-react";
+import { ArrowLeft, UserPlus, Mail, Edit, MapPin } from "lucide-react";
+import { useAuth } from "@/components/SupabaseProvider";
+
+interface StudentData {
+  id: number;
+  firstName: string;
+  lastName: string;
+  birthdate: string;
+  gradeLevel: string;
+  locationId?: number | null;
+  parentEmail?: string;
+  parentPhone?: string;
+  emergencyContact?: string;
+  emergencyPhone?: string;
+  medicalNotes?: string;
+  specialNeeds?: string;
+}
+
+interface SchoolData {
+  id: number;
+  name: string;
+}
+
+interface LocationData {
+  id: number;
+  name: string;
+  city: string;
+  state: string;
+}
 
 export default function StudentRegistrationPage() {
   const [, setLocation] = useLocation();
   const [match, params] = useRoute("/schools/students/:id/edit");
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sendInvitation, setSendInvitation] = useState(true);
   const [gradeLevel, setGradeLevel] = useState("");
+  const [locationId, setLocationId] = useState<string>("");
   
   // Check if we're in edit mode
   const isEditMode = !!match && !!params?.id;
   const studentId = params?.id;
 
   // Fetch student data if in edit mode
-  const { data: studentData, isLoading } = useQuery({
+  const { data: studentData, isLoading } = useQuery<StudentData>({
     queryKey: [`/api/schools/students/${studentId}`],
     enabled: isEditMode
+  });
+
+  // Fetch school info to get schoolId for locations
+  const { data: schoolData } = useQuery<SchoolData>({
+    queryKey: ['/api/school-parents/school', user?.email],
+    enabled: !!user?.email,
+  });
+
+  const schoolId = schoolData?.id;
+
+  // Fetch available locations for the school
+  const { data: locations, isLoading: locationsLoading } = useQuery<LocationData[]>({
+    queryKey: ['/api/locations', { schoolId }],
+    enabled: !!schoolId,
   });
 
   // Populate form when student data is loaded
   useEffect(() => {
     if (studentData && isEditMode) {
       setGradeLevel(studentData.gradeLevel || "");
+      setLocationId(studentData.locationId?.toString() || "");
     }
   }, [studentData, isEditMode]);
 
@@ -48,6 +93,7 @@ export default function StudentRegistrationPage() {
         lastName: formData.get('lastName'),
         dateOfBirth: formData.get('dateOfBirth'),
         gradeLevel: gradeLevel, // Use state value instead of FormData
+        locationId: locationId ? parseInt(locationId) : null, // Add location
         parentEmail: formData.get('parentEmail'),
         parentPhone: formData.get('parentPhone'),
         emergencyContact: formData.get('emergencyContact'),
@@ -202,6 +248,32 @@ export default function StudentRegistrationPage() {
                 </div>
               </div>
 
+              {/* Location Selector */}
+              {locations && locations.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="location" className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Campus/Location
+                  </Label>
+                  <Select value={locationId} onValueChange={setLocationId}>
+                    <SelectTrigger data-testid="select-location">
+                      <SelectValue placeholder="Select a location (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {locations.map((location: any) => (
+                        <SelectItem key={location.id} value={location.id.toString()}>
+                          {location.name} - {location.city}, {location.state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    Assign this student to a specific campus or location
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Parent/Guardian Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -284,7 +356,7 @@ export default function StudentRegistrationPage() {
                   <Checkbox 
                     id="sendInvitation" 
                     checked={sendInvitation}
-                    onCheckedChange={setSendInvitation}
+                    onCheckedChange={(checked) => setSendInvitation(checked === true)}
                   />
                   <Label htmlFor="sendInvitation" className="flex items-center gap-2">
                     <Mail className="h-4 w-4" />
