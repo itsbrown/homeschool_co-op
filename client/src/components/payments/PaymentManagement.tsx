@@ -297,10 +297,10 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="all-payments" className="w-full">
-        <TabsList className="w-full justify-start">
-          <TabsTrigger value="overview" className="mr-2">Overview</TabsTrigger>
-          <TabsTrigger value="all-payments" className="mr-2">All Payments</TabsTrigger>
-          <TabsTrigger value="upcoming">Upcoming Payments</TabsTrigger>
+        <TabsList className="w-full flex-col sm:flex-row justify-start h-auto">
+          <TabsTrigger value="overview" className="w-full sm:w-auto sm:mr-2">Overview</TabsTrigger>
+          <TabsTrigger value="all-payments" className="w-full sm:w-auto sm:mr-2">All Payments</TabsTrigger>
+          <TabsTrigger value="upcoming" className="w-full sm:w-auto">Upcoming Payments</TabsTrigger>
         </TabsList>
         
         {/* Overview Tab */}
