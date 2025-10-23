@@ -27,14 +27,20 @@ const enhancedNotificationSchema = insertNotificationSchema.extend({
 // Get notifications for a user/admin
 router.get("/", async (req, res) => {
   try {
-    const userId = req.query.userId ? parseInt(req.query.userId as string) : null;
+    let userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
     
-    // If no userId provided, return all notifications (for admin view) sorted by createdAt descending
+    // If no userId provided in query, fall back to authenticated user's dbUserId
     if (!userId) {
-      const allNotifications = loadNotifications()
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      return res.json(allNotifications);
+      const authUserId = (req as any).auth?.dbUserId;
+      if (authUserId) {
+        userId = authUserId;
+      } else {
+        // No userId and no auth - return all notifications (for admin view) sorted by createdAt descending
+        const allNotifications = loadNotifications()
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return res.json(allNotifications);
+      }
     }
     
     if (isNaN(userId)) {
