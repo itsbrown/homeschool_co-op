@@ -69,7 +69,8 @@ export default function NotificationsPage() {
       return apiRequest("POST", `/api/notifications/${notificationId}/read`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [notificationsUrl] });
+      // Invalidate all notification queries to update dashboard, bell icon, and notifications page
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       toast({
         title: "Marked as read",
         description: "Notification has been marked as read",
@@ -90,7 +91,8 @@ export default function NotificationsPage() {
       return apiRequest("POST", "/api/notifications/mark-all-read", {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [notificationsUrl] });
+      // Invalidate all notification queries to update dashboard, bell icon, and notifications page
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       toast({
         title: "All marked as read",
         description: "All notifications have been marked as read",
@@ -143,7 +145,7 @@ export default function NotificationsPage() {
     <ParentAppShell>
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
               <Bell className="h-8 w-8" />
@@ -159,6 +161,7 @@ export default function NotificationsPage() {
               onClick={() => markAllAsReadMutation.mutate()}
               disabled={markAllAsReadMutation.isPending}
               data-testid="button-mark-all-read"
+              className="w-full md:w-auto"
             >
               <CheckCheck className="h-4 w-4 mr-2" />
               Mark All as Read
@@ -305,7 +308,6 @@ export default function NotificationsPage() {
             )}
           </CardContent>
         </Card>
-      </div>
       </div>
     </ParentAppShell>
   );
