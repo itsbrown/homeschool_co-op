@@ -167,6 +167,7 @@ import SchoolApplicationStatusPage from './pages/SchoolApplicationStatusPage';
 import LocationManagementPage from "./pages/schools/LocationManagementPage";
 import NotificationManagementPage from "@/pages/NotificationManagementPage";
 import DailyFlowsPage from "./pages/DailyFlows/DailyFlowsPage";
+import EnrollmentsAdminPage from "./pages/schools/EnrollmentsAdminPage";
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -554,6 +555,7 @@ function Router() {
       <Route path="/schools/students/:id" component={StudentDetailPage} />
       <Route path="/schools/students/:id/edit" component={StudentRegistrationPage} />
       <Route path="/schools/students/:id/classes" component={StudentClassesPage} />
+      <Route path="/schools/enrollments" component={EnrollmentsAdminPage} />
       <Route path="/schools/discounts" component={DiscountsPage} />
       <Route path="/schools/manual-payments">
         <SchoolAdminLayout pageTitle="Manual Payments">

@@ -2628,6 +2628,51 @@ router.get("/knowledge-bases", async (req, res) => {
   }
 });
 
+// Get all enrollments for school admin
+router.get('/enrollments', async (req: any, res) => {
+  try {
+    // Verify authentication
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Verify user is a school admin
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || user.role !== 'school_admin') {
+      return res.status(403).json({ message: 'Only school administrators can view enrollments' });
+    }
+
+    console.log('📚 School admin fetching all enrollments for school:', user.schoolId);
+    const allEnrollments = await storage.getAllEnrollments();
+    
+    // Filter enrollments by school
+    const enrollments = allEnrollments.filter((e: any) => e.schoolId === user.schoolId);
+    
+    // Format enrollments for admin display
+    const formattedEnrollments = enrollments.map((enrollment: any) => ({
+      id: enrollment.id,
+      className: enrollment.className || 'Unknown Class',
+      childName: enrollment.childName || 'Unknown Student',
+      paymentPlan: enrollment.paymentPlan || 'one_time',
+      paymentFrequency: enrollment.paymentFrequency || 'one_time',
+      totalCost: enrollment.totalCost || 0,
+      totalPaid: enrollment.totalPaid || 0,
+      remainingBalance: enrollment.remainingBalance || (enrollment.totalCost - (enrollment.totalPaid || 0)),
+      paymentStatus: enrollment.paymentStatus || enrollment.status || 'pending_payment',
+      programStartDate: enrollment.programStartDate,
+      programEndDate: enrollment.programEndDate,
+      metadata: enrollment.metadata || {}
+    }));
+    
+    console.log(`📚 Found ${formattedEnrollments.length} enrollments`);
+    res.json(formattedEnrollments);
+  } catch (error) {
+    console.error('Error fetching enrollments:', error);
+    res.status(500).json({ message: 'Error fetching enrollments' });
+  }
+});
+
 // Get individual student endpoint
 router.get('/students/:id', async (req, res) => {
   try {

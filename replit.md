@@ -49,6 +49,14 @@ The platform follows a modern web application architecture, emphasizing scalabil
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation. Includes custom form builder security hardening with ownership and cross-tenant checks.
+- **Admin Payment Plan Editing (October 2025)**: School administrators can modify payment plans for existing enrollments through a dedicated admin UI. Features include:
+  - **Admin Enrollment Management Page** (`/schools/enrollments`): Table view of all enrollments with payment details, search, and filtering
+  - **Payment Plan Editor**: Interactive dialog for changing payment frequency (one_time, weekly, biweekly, monthly) with real-time preview of new schedules
+  - **Validation**: Prevents invalid changes (program ended, fully paid, insufficient time for installments)
+  - **Audit Trail**: All changes logged in enrollment metadata with admin email, timestamp, old/new frequency, and justification comment
+  - **Stripe Integration**: System records manual review flag for subscription schedule updates (Stripe API requires manual approval for phase modifications)
+  - **Security**: Role-based access (school_admin only), school-level data isolation, authentication on all endpoints
+  - **Technical Implementation**: Backend APIs (`PATCH/GET /api/admin/enrollments/:id/payment-plan`), frontend UI with TanStack Query, uses payment calculator for schedule recalculation
 - **Enhanced Payment System**: Comprehensive Stripe-only payment system with subscription schedules, webhook integration, and smart cart logic to manage enrollments and prevent duplicates. Supports various payment statuses and plans.
 - **Date-Driven Payment Plans (October 2025)**: Flexible payment frequency system that calculates installment schedules based on actual program dates rather than fixed payment counts. Parents can choose weekly, biweekly, or monthly payment frequencies for installment plans. The system automatically calculates payment amounts and dates between the program start and end dates, ensuring the final payment aligns with the program end date. Implementation includes:
   - **Database Schema**: Added `payment_frequency`, `program_start_date`, and `program_end_date` columns to `program_enrollments` table
