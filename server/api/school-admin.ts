@@ -857,7 +857,8 @@ router.get("/classes", async (req, res) => {
     }
 
     // Add enrollment counts and parse variants from each class
-    const classesWithEnrollment = schoolClasses.map(classItem => {
+    // Also expand classes with variants into individual variant class entries
+    const classesWithEnrollment = schoolClasses.flatMap(classItem => {
       // Count enrollments for this specific class
       const classEnrollmentCount = enrollments.filter(enrollment => 
         Number(enrollment.classId) === Number(classItem.id) && 
@@ -877,16 +878,40 @@ router.get("/classes", async (req, res) => {
         }
       }
       
-      return {
+      // If the class has variants, expand them into individual class entries
+      if (variants && variants.length > 0) {
+        return variants.map((variant, index) => ({
+          ...classItem,
+          id: classItem.id, // Keep numeric ID for enrollment compatibility
+          variantId: variant.id, // Add variant ID as separate field
+          variantIndex: index, // Add index to help with unique keys in frontend
+          parentClassId: classItem.id, // Reference to parent class
+          title: variant.name, // Use variant name as title
+          price: variant.price, // Use variant price
+          enrollmentCount: classEnrollmentCount,
+          maxEnrollment: classItem.capacity || classItem.maxEnrollment || 20,
+          capacity: classItem.capacity || 20,
+          enrolled: classEnrollmentCount,
+          // Store variant details in schedule for reference
+          schedule: JSON.stringify({
+            days: variant.days,
+            startTime: variant.startTime,
+            endTime: variant.endTime
+          }),
+          variants: undefined // Variant classes don't have sub-variants
+        }));
+      }
+      
+      // If no variants, return the class as-is
+      return [{
         ...classItem,
         enrollmentCount: classEnrollmentCount,
         maxEnrollment: classItem.capacity || classItem.maxEnrollment || 20,
         capacity: classItem.capacity || 20,
-        // Keep existing enrolled field but update it with actual count
         enrolled: classEnrollmentCount,
-        // Add parsed variants if they exist
+        // Add parsed variants if they exist (though shouldn't reach here if variants exist)
         ...(variants && { variants })
-      };
+      }];
     });
 
     // Apply additional filters if needed

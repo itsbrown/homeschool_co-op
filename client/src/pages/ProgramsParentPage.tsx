@@ -363,8 +363,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               </div>
             ) : classesList.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {classesList.map((classItem: ClassData) => (
-                  <Card key={classItem.id} className="flex flex-col h-full">
+                {classesList.map((classItem: ClassData, index) => (
+                  <Card key={`${classItem.id}-${(classItem as any).variantId || 'main'}-${index}`} className="flex flex-col h-full">
                     <CardHeader className="pb-3">
                       <div className="flex justify-between">
                         <CardTitle className="line-clamp-2">{classItem.title}</CardTitle>
