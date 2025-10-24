@@ -25,6 +25,7 @@ import dailyFlowsRoutes from "./api/daily-flows";
 import aiPricingRouter from "./api/ai-pricing";
 import stripeMigrationRouter from "./api/stripe-migration";
 import stripeWebhookRouter from "./api/stripe-webhook";
+import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import { MembershipStatusService } from "./services/membership-status-service.js";
 import { dataLayer } from "./services/dataLayer.js";
 import { webhookHandler } from "./webhook-handler";
@@ -141,6 +142,12 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 }
 
 (async () => {
+  // Import and apply auth middleware for admin routes
+  const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
+  
+  // Register admin enrollment payment routes with authentication
+  app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
+  
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
