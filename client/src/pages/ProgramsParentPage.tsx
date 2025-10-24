@@ -267,10 +267,29 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   // Check if there are any summer camp classes
   const summerCamps = classesData.classes.filter(c => c.category === "summer-camp");
-  const classesList = classesData.classes.filter(c => c.category === "academic" || c.category === "membership");
+  
+  // Apply search and category filters to classes
+  const classesList = classesData.classes.filter(c => {
+    // Filter by category
+    const matchesCategory = c.category === "academic" || c.category === "membership";
+    
+    // Filter by search term (search in title and description)
+    const matchesSearch = !searchTerm || 
+      c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.description && c.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    // Filter by category filter dropdown
+    const matchesCategoryFilter = !categoryFilter || 
+      categoryFilter === 'all' || 
+      c.categoryName === categoryFilter;
+    
+    return matchesCategory && matchesSearch && matchesCategoryFilter;
+  });
 
   // Debug logging for filtered lists
   console.log('All classes:', classesData.classes);
+  console.log('Search term:', searchTerm);
+  console.log('Category filter:', categoryFilter);
   console.log('Filtered classesList:', classesList);
   console.log('Summer camps:', summerCamps);
   console.log('classesLoading:', classesLoading);
