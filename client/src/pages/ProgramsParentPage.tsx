@@ -297,16 +297,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="classes" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="classes">Browse Classes</TabsTrigger>
-          <TabsTrigger value="camps">Summer Camps</TabsTrigger>
-        </TabsList>
-
-
-
-        <TabsContent value="classes">
-          <div className="space-y-6">
+      <div className="space-y-6">
             {/* Search & Filter */}
             <Card className="mb-6">
               <CardHeader className="pb-3">
@@ -431,9 +422,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 </p>
               </div>
             )}
-          </div>
-        </TabsContent>
-      </Tabs>
+      </div>
 
       {/* Enrollment Dialog */}
       <Dialog open={enrollmentDialog.open} onOpenChange={(open) => {
@@ -870,7 +859,7 @@ export default function ProgramsParentPage() {
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Classes & Programs</h2>
             <p className="text-muted-foreground">
-              Browse and enroll your children in educational classes and summer programs
+              Browse and enroll your children in educational classes
             </p>
           </div>
         </div>
