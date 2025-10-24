@@ -61,6 +61,11 @@ const adminNavItems: NavItem[] = [
     icon: GraduationCap,
   },
   {
+    title: 'Enrollments',
+    href: '/schools/enrollments',
+    icon: GraduationCap,
+  },
+  {
     title: 'Users',
     href: '/schools/users',
     icon: UserPlus,
