@@ -16,6 +16,9 @@ import {
   Bell,
   Upload,
   GraduationCap,
+  FileText,
+  Tag,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -68,6 +71,26 @@ export default function SchoolAdminSidebar({ className }: SidebarProps) {
       title: "Enrollments",
       href: "/schools/enrollments",
       icon: <GraduationCap className="h-5 w-5" />,
+    },
+    {
+      title: "Users",
+      href: "/schools/users",
+      icon: <Users className="h-5 w-5" />,
+    },
+    {
+      title: "Forms",
+      href: "/schools/forms",
+      icon: <FileText className="h-5 w-5" />,
+    },
+    {
+      title: "Discounts",
+      href: "/schools/discounts",
+      icon: <Tag className="h-5 w-5" />,
+    },
+    {
+      title: "Manual Payments",
+      href: "/schools/manual-payments",
+      icon: <CreditCard className="h-5 w-5" />,
     },
     {
       title: "Contact Import",
