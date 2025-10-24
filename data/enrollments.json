@@ -10,6 +10,8 @@
     "amount": 0,
     "depositRequired": 13000,
     "totalCost": 130000,
+    "totalPaid": 0,
+    "amountPaid": 0,
     "remainingBalance": 130000
   }
 ]
