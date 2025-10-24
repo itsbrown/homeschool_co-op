@@ -117,6 +117,101 @@ export function formatPaymentSchedule(schedule: PaymentSchedule): string {
 }
 
 /**
+ * Recalculate payment schedule for existing enrollment with partial payments
+ * Preserves already-paid amounts and recalculates future installments
+ */
+export function recalculatePaymentSchedule(
+  totalCostCents: number,
+  alreadyPaidCents: number,
+  programStartDate: Date,
+  programEndDate: Date,
+  newFrequency: PaymentFrequency,
+  currentDate: Date = new Date()
+): PaymentSchedule & { validationErrors?: string[] } {
+  const errors: string[] = [];
+  
+  // Validation: Ensure we haven't already paid everything
+  const remainingBalance = totalCostCents - alreadyPaidCents;
+  if (remainingBalance <= 0) {
+    errors.push('Enrollment is already paid in full');
+  }
+  
+  // Validation: Ensure program hasn't ended
+  if (currentDate > programEndDate) {
+    errors.push('Program has already ended');
+  }
+  
+  // Calculate remaining days from now to program end
+  const remainingDays = daysBetween(currentDate, programEndDate);
+  
+  // Validation: Check if enough time remains for the requested frequency
+  const minDaysRequired = newFrequency === 'weekly' ? 7 : newFrequency === 'biweekly' ? 14 : 30;
+  if (remainingDays < minDaysRequired && newFrequency !== 'one_time') {
+    errors.push(`Not enough time remaining (${remainingDays} days) for ${newFrequency} payments. Minimum required: ${minDaysRequired} days.`);
+  }
+  
+  // If there are validation errors, return them
+  if (errors.length > 0) {
+    return {
+      totalAmount: 0,
+      numberOfPayments: 0,
+      paymentAmount: 0,
+      finalPaymentAmount: 0,
+      paymentDates: [],
+      frequency: newFrequency,
+      startDate: currentDate,
+      endDate: programEndDate,
+      validationErrors: errors
+    };
+  }
+  
+  // Calculate schedule for the remaining balance starting from today
+  const recalculatedSchedule = calculatePaymentSchedule(
+    remainingBalance,
+    currentDate,
+    programEndDate,
+    newFrequency
+  );
+  
+  // Validation: Ensure at least 2 payments for installment plans
+  if (newFrequency !== 'one_time' && recalculatedSchedule.numberOfPayments < 2) {
+    errors.push(`Insufficient time for installment plan. Only ${recalculatedSchedule.numberOfPayments} payment(s) would be scheduled.`);
+    return {
+      ...recalculatedSchedule,
+      validationErrors: errors
+    };
+  }
+  
+  return recalculatedSchedule;
+}
+
+/**
+ * Validate if a payment frequency change is allowed
+ */
+export function validateFrequencyChange(
+  totalCostCents: number,
+  alreadyPaidCents: number,
+  programStartDate: Date,
+  programEndDate: Date,
+  newFrequency: PaymentFrequency,
+  currentDate: Date = new Date()
+): { valid: boolean; errors: string[] } {
+  const result = recalculatePaymentSchedule(
+    totalCostCents,
+    alreadyPaidCents,
+    programStartDate,
+    programEndDate,
+    newFrequency,
+    currentDate
+  );
+  
+  return {
+    valid: !result.validationErrors || result.validationErrors.length === 0,
+    errors: result.validationErrors || []
+  };
+}
+
+/**
  * Example usage with your dates (September 8 to November 14, 2025)
  */
 export function exampleCalculation() {
