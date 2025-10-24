@@ -81,15 +81,21 @@ export default function SchoolSettingsPage() {
     systemMaintenance: false,
   });
 
+  // Fetch user profile data
+  const { data: userProfile } = useQuery<UserProfile>({
+    queryKey: ['/api/users/profile'],
+    enabled: !!user?.email,
+  });
+
   // Initialize form with user data
   useEffect(() => {
-    if (user) {
-      setFirstName(user.firstName || "");
-      setLastName(user.lastName || "");
-      setPhoneNumber(user.phoneNumber || "");
-      setUsername(user.email || "");
+    if (userProfile) {
+      setFirstName(userProfile.firstName || "");
+      setLastName(userProfile.lastName || "");
+      setPhoneNumber(userProfile.phoneNumber || "");
+      setUsername(userProfile.email || "");
     }
-  }, [user]);
+  }, [userProfile]);
 
   // Update profile mutation
   const updateProfileMutation = useMutation({

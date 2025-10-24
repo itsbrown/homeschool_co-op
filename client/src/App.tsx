@@ -581,7 +581,7 @@ function Router() {
       <Route path="/schools/educators/:educatorId" component={EducatorProfilePage} />
       <Route path="/schools/staff/:staffId" component={StaffProfilePage} />
       <Route path="/schools/admins/:adminId" component={AdminProfilePage} />
-      <Route path="/schools/settings" component={SchoolSettings} />
+      <Route path="/schools/settings" component={SchoolSettingsPage} />
 
       {/* SuperAdmin routes */}
       <Route path="/superadmin/schools" component={AllSchoolsPage} />
