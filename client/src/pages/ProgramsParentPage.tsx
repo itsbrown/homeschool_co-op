@@ -189,6 +189,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     startDate?: string;
     endDate?: string;
     numSessions?: number;
+    capacity?: number;
     totalOrders: number;
     totalWaitlisted: number;
     variants?: {
@@ -235,6 +236,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         startDate: item.startDate,
         endDate: item.endDate,
         numSessions: item.numSessions,
+        capacity: item.capacity,
         totalOrders: item.enrollmentCount || 0,
         totalWaitlisted: 0,
         variants: item.variants || []
@@ -372,10 +374,28 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                           <div className="font-semibold">{formatCurrency(classItem.price)}</div>
                         </div>
 
-                        {classItem.totalOrders > 0 && (
+                        {classItem.capacity && (
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Enrolled:</div>
-                            <div className="font-medium">{classItem.totalOrders}</div>
+                            <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Capacity:</div>
+                            <div className="font-medium">
+                              <span className={classItem.totalOrders >= classItem.capacity ? "text-red-600" : "text-green-600"}>
+                                {classItem.totalOrders || 0}
+                              </span>
+                              <span className="text-muted-foreground"> / {classItem.capacity}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {classItem.capacity && (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Spots Available:</div>
+                            <div className="font-semibold">
+                              {classItem.capacity - (classItem.totalOrders || 0) > 0 ? (
+                                <span className="text-green-600">{classItem.capacity - (classItem.totalOrders || 0)}</span>
+                              ) : (
+                                <span className="text-red-600">Full</span>
+                              )}
+                            </div>
                           </div>
                         )}
 
