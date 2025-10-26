@@ -349,7 +349,7 @@ export const programEnrollments = pgTable("program_enrollments", {
     enum: ["pending", "deposit_paid", "partial_payment", "completed", "stripe_managed", "refunded"] 
   }).default("pending").notNull(),
   paymentPlan: text("payment_plan", { 
-    enum: ["full_payment", "deposit_only", "monthly", "custom"] 
+    enum: ["full_payment", "deposit_only", "biweekly", "custom"] 
   }),
   paymentFrequency: text("payment_frequency", {
     enum: ["weekly", "biweekly", "monthly", "one_time"]
@@ -386,7 +386,7 @@ export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollmen
     variantId: z.string().nullable().default(null),
     depositRequired: z.number().default(0),
     totalPaid: z.number().default(0),
-    paymentPlan: z.enum(["full_payment", "deposit_only", "monthly", "custom"]).nullable().default(null),
+    paymentPlan: z.enum(["full_payment", "deposit_only", "biweekly", "custom"]).nullable().default(null),
     stripeSubscriptionId: z.string().nullable().default(null),
     stripeCustomerId: z.string().nullable().default(null),
     notes: z.string().nullable().default(null),
@@ -637,7 +637,7 @@ export const stripeSubscriptionSchedules = pgTable("stripe_subscription_schedule
   enrollmentIds: jsonb("enrollment_ids").notNull(), // Array of enrollment IDs
   totalAmount: integer("total_amount").notNull(), // In cents
   paymentPlan: text("payment_plan", { 
-    enum: ["deposit", "split", "monthly", "full"] 
+    enum: ["deposit", "split", "biweekly", "full"] 
   }).notNull(),
   status: text("status", { 
     enum: ["active", "completed", "canceled", "paused"] 
