@@ -56,6 +56,9 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
 
     setProcessing(true);
 
+    // Save payment plan before payment for success page
+    localStorage.setItem('selectedPaymentPlan', selectedPaymentPlan);
+
     try {
       const result = await stripe.confirmPayment({
         elements,
@@ -65,29 +68,25 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
         redirect: 'always', // Force redirect to success page
       });
 
+      // Note: With redirect: 'always', Stripe redirects immediately on success
+      // This code only runs if there's an error (redirect didn't happen)
       if (result.error) {
+        setProcessing(false);
         toast({
           title: "Payment Failed",
           description: result.error.message,
           variant: "destructive",
         });
-      } else {
-        // Save payment plan to localStorage for success page processing
-        localStorage.setItem('selectedPaymentPlan', selectedPaymentPlan);
-        
-        console.log('✅ Payment succeeded, Stripe will redirect to success page');
-        // Don't process enrollments here - let Stripe redirect handle it
-        // The CartSuccess page will process the enrollments after redirect
       }
+      // No else block needed - successful payments redirect before reaching here
     } catch (error: any) {
+      setProcessing(false);
       console.error("Payment processing failed:", error);
       toast({
         title: "Payment Failed",
         description: error.message || "There was an error processing your payment.",
         variant: "destructive",
       });
-    } finally {
-      setProcessing(false);
     }
   };
 
