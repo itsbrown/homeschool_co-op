@@ -244,6 +244,56 @@ router.post('/:id/enroll', async (req, res) => {
   }
 });
 
+// Helper function to promote next waitlisted student
+async function promoteNextWaitlistedStudent(classId: number) {
+  try {
+    // Get all enrollments for this class
+    const allEnrollments = await storage.getAllEnrollments?.() || [];
+    
+    // Filter waitlisted enrollments for this class
+    const waitlistedEnrollments = allEnrollments
+      .filter((e: any) => e.classId === classId && e.status === 'waitlist')
+      .sort((a: any, b: any) => (a.waitlistPosition || 0) - (b.waitlistPosition || 0));
+    
+    if (waitlistedEnrollments.length === 0) {
+      console.log('📋 No waitlisted students to promote');
+      return null;
+    }
+    
+    // Get the first student in waitlist (lowest position number)
+    const nextStudent = waitlistedEnrollments[0];
+    
+    console.log(`🎯 Promoting student from waitlist: ${nextStudent.childName} (position ${nextStudent.waitlistPosition})`);
+    
+    // Update the enrollment status to pending_payment
+    const updatedEnrollment = {
+      ...nextStudent,
+      status: 'pending_payment',
+      waitlistPosition: null, // Remove from waitlist
+    };
+    
+    await storage.updateEnrollment(nextStudent.id, updatedEnrollment);
+    
+    // Update waitlist positions for remaining students
+    for (let i = 1; i < waitlistedEnrollments.length; i++) {
+      const student = waitlistedEnrollments[i];
+      await storage.updateEnrollment(student.id, {
+        ...student,
+        waitlistPosition: i // New position (1-indexed)
+      });
+    }
+    
+    console.log(`✅ Promoted ${nextStudent.childName} from waitlist to enrolled`);
+    
+    // TODO: Send email notification to parent
+    
+    return nextStudent;
+  } catch (error) {
+    console.error('Error promoting waitlisted student:', error);
+    return null;
+  }
+}
+
 // Unenroll a child from a class
 router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
   try {
@@ -263,7 +313,7 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
     }
 
     // Only allow unenrollment if payment is pending (not yet paid)
-    if (enrollment.status !== 'pending_payment') {
+    if (enrollment.status !== 'pending_payment' && enrollment.status !== 'waitlist') {
       return res.status(400).json({ 
         message: 'Cannot unenroll from a class that has already been paid for' 
       });
@@ -273,6 +323,15 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
     await storage.deleteEnrollment(enrollmentId);
 
     console.log(`✅ Successfully unenrolled child from class: ${enrollment.className}`);
+
+    // If this was an enrolled student (not waitlisted), try to promote next waitlisted student
+    if (enrollment.status === 'pending_payment') {
+      const promoted = await promoteNextWaitlistedStudent(classId);
+      
+      if (promoted) {
+        console.log(`🎉 Auto-promoted ${promoted.childName} from waitlist`);
+      }
+    }
 
     res.json({ 
       message: 'Unenrollment successful',
