@@ -16,7 +16,7 @@ export interface PaymentPlanData {
   parentEmail: string;
   enrollmentIds: number[];
   totalAmount: number; // In cents
-  paymentPlan: 'deposit' | 'split' | 'monthly' | 'full';
+  paymentPlan: 'deposit' | 'split' | 'biweekly' | 'full';
   paymentFrequency?: PaymentFrequency; // Optional: for date-based payment schedules
 }
 
@@ -238,28 +238,41 @@ export class StripePaymentPlanService {
           }
         ];
 
-      case 'monthly':
-        // 3 monthly payments
-        const monthlyAmount = Math.round(totalAmount / 3);
-        const lastMonthAmount = totalAmount - (monthlyAmount * 2); // Handle rounding
+      case 'biweekly':
+        // Fallback: 4 biweekly payments (8 weeks total)
+        // Note: This is only used when class dates are not available
+        // Normally, the date-based calculator handles this plan
+        const biweeklyAmount = Math.round(totalAmount / 4);
+        const lastBiweeklyAmount = totalAmount - (biweeklyAmount * 3); // Handle rounding
+        const add14Days = (date: Date) => {
+          const newDate = new Date(date);
+          newDate.setDate(newDate.getDate() + 14);
+          return newDate;
+        };
         return [
           {
-            amount: monthlyAmount,
+            amount: biweeklyAmount,
             dueDate: now,
             installmentNumber: 1,
-            description: 'Month 1 Payment'
+            description: 'Biweekly Payment 1'
           },
           {
-            amount: monthlyAmount,
-            dueDate: add30Days(now),
+            amount: biweeklyAmount,
+            dueDate: add14Days(now),
             installmentNumber: 2,
-            description: 'Month 2 Payment'
+            description: 'Biweekly Payment 2'
           },
           {
-            amount: lastMonthAmount,
-            dueDate: add30Days(add30Days(now)),
+            amount: biweeklyAmount,
+            dueDate: add14Days(add14Days(now)),
             installmentNumber: 3,
-            description: 'Month 3 Payment'
+            description: 'Biweekly Payment 3'
+          },
+          {
+            amount: lastBiweeklyAmount,
+            dueDate: add14Days(add14Days(add14Days(now))),
+            installmentNumber: 4,
+            description: 'Biweekly Payment 4'
           }
         ];
 

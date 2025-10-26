@@ -114,7 +114,7 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           remainingBalance: item.totalCost,
           depositRequired: 0,
           paymentStatus: paymentPlan === 'full' ? 'pending' : 'deposit_paid',
-          paymentPlan: paymentPlan === 'full' ? 'full_payment' : 'monthly',
+          paymentPlan: paymentPlan === 'full' ? 'full_payment' : paymentPlan,
           paymentSystemVersion: 'v2_stripe',
           paymentFrequency: paymentFrequency,
           programStartDate: classData.startDate ? (classData.startDate instanceof Date ? classData.startDate.toISOString().split('T')[0] : String(classData.startDate)) : null,
@@ -137,7 +137,7 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
         parentEmail: userEmail,
         enrollmentIds,
         totalAmount: total,
-        paymentPlan: paymentPlan as 'deposit' | 'split' | 'monthly' | 'full',
+        paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time'
       });
 

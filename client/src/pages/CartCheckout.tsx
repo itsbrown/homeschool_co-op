@@ -137,6 +137,17 @@ export default function CartCheckout() {
     total: cart.total
   });
 
+  // Automatically set payment frequency based on selected plan
+  useEffect(() => {
+    if (selectedPaymentPlan === 'biweekly') {
+      setPaymentFrequency('biweekly');
+    } else if (selectedPaymentPlan === 'full' || selectedPaymentPlan === 'deposit') {
+      setPaymentFrequency('one_time');
+    }
+    // Split plan allows user to choose frequency (weekly/biweekly/monthly)
+    // No automatic frequency change needed for split plan
+  }, [selectedPaymentPlan]);
+
   useEffect(() => {
     console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length);
     
@@ -289,20 +300,19 @@ export default function CartCheckout() {
         }
       },
       {
-        id: 'monthly',
-        name: '3-Month Payment Plan',
-        description: 'Pay in 3 monthly installments',
-        amount: monthlyAmount,
+        id: 'biweekly',
+        name: 'Biweekly Payment Plan',
+        description: 'Automatic payments every 2 weeks until class ends',
+        amount: Math.round(cart.total / 4), // Estimated amount per payment (will be calculated based on class dates)
         features: [
-          'First payment today, then monthly',
-          'Automatic monthly billing',
+          'Pay every 2 weeks based on class schedule',
+          'Payments automatically calculated from class start to end date',
           'No additional fees',
           'Cancel anytime with 30-day notice'
         ],
         installments: {
-          count: 3,
-          frequency: 'monthly',
-          amounts: [monthlyAmount, monthlyAmount, monthlyAmount]
+          frequency: 'biweekly',
+          // Count and amounts will be calculated dynamically based on class dates
         }
       }
     ];
@@ -565,8 +575,8 @@ export default function CartCheckout() {
               </CardContent>
             </Card>
 
-            {/* Payment Frequency Selector - Only show for installment plans */}
-            {['split', 'monthly'].includes(selectedPaymentPlan) && (
+            {/* Payment Frequency Selector - Only show for split payment plan */}
+            {['split'].includes(selectedPaymentPlan) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
