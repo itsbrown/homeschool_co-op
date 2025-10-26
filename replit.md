@@ -62,7 +62,12 @@ The platform follows a modern web application architecture, emphasizing scalabil
   - **Database Schema**: Added `payment_frequency`, `program_start_date`, and `program_end_date` columns to `program_enrollments` table
   - **Payment Calculator** (`server/lib/payment-calculator.ts`): Computes installment schedules based on class duration and selected frequency, enforces minimum 2 installments, handles rounding to ensure total consistency
   - **Stripe Integration**: Enrollment creation copies class dates, payment service uses date-based calculator when frequency and dates are provided, maintains legacy fallback for older enrollments
-  - **Checkout UI**: Payment frequency selector appears for Split and Monthly payment plans, offers Weekly/Biweekly/Monthly options with explanatory descriptions
+  - **Checkout UI Payment Plans**: 
+    - **Pay in Full**: Single one-time payment for the entire amount
+    - **50% Deposit**: 50% upfront deposit with remaining balance due later
+    - **Split Payment Plan**: Allows parents to choose payment frequency (Weekly/Biweekly/Monthly) with date-based installment calculation
+    - **Biweekly Payment Plan**: Fixed biweekly payment frequency with automatic date-based installment calculation (replaced Monthly Plan in October 2025)
+  - **Payment Frequency Automation**: Frontend automatically sets payment frequency based on selected plan (biweekly plan → 'biweekly', full/deposit → 'one_time', split → user choice)
 - **Automated Refund Processing**: School administrators can process full or partial refunds directly from the admin panel. The system automatically processes Stripe refunds via API for Stripe payments and creates internal refund records for manual payments. Webhook handlers (`charge.refunded`) sync Stripe refunds with internal records, with idempotency checks to prevent duplicate processing. Refunds are distributed proportionally across all affected enrollments, updating balances and statuses correctly.
 - **Complete Registration Flow**: Automated account creation with user-provided passwords, handling of existing accounts, and seamless auto-login.
 - **AI Enrollment Assistant**: Personalized AI assistant providing enrollment guidance based on user authentication metadata.
