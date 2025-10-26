@@ -1368,25 +1368,38 @@ export class MemStorage implements IStorage {
     return enrollment;
   }
 
-  async updateEnrollment(enrollment: any): Promise<any> {
+  async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
+    let enrollmentId: number;
+    let updateData: any;
+
+    if (typeof idOrEnrollment === 'number' && updates) {
+      enrollmentId = idOrEnrollment;
+      updateData = updates;
+    } else if (typeof idOrEnrollment === 'object' && idOrEnrollment.id) {
+      enrollmentId = idOrEnrollment.id;
+      updateData = idOrEnrollment;
+    } else {
+      console.log(`❌ Invalid parameters for updateEnrollment`);
+      return null;
+    }
+
     if (!this.classEnrollments) {
-      console.log(`❌ No classEnrollments array exists for enrollment ${enrollment.id}`);
+      console.log(`❌ No classEnrollments array exists for enrollment ${enrollmentId}`);
       return null;
     }
 
-    const index = this.classEnrollments.findIndex(e => e.id === enrollment.id);
+    const index = this.classEnrollments.findIndex(e => e.id === enrollmentId);
     if (index === -1) {
-      console.log(`❌ Enrollment ${enrollment.id} not found for update`);
+      console.log(`❌ Enrollment ${enrollmentId} not found for update`);
       return null;
     }
 
-    // Update the enrollment
-    this.classEnrollments[index] = enrollment;
+    const updatedEnrollment = { ...this.classEnrollments[index], ...updateData };
+    this.classEnrollments[index] = updatedEnrollment;
 
-    console.log(`✅ ENROLLMENT UPDATED: ID ${enrollment.id}, Status: ${enrollment.status}`);
-    console.log(`📝 Updated enrollment:`, enrollment);
+    console.log(`✅ ENROLLMENT UPDATED: ID ${updatedEnrollment.id}, Status: ${updatedEnrollment.status}`);
+    console.log(`📝 Updated enrollment:`, updatedEnrollment);
 
-    // Save to file for persistence
     try {
       console.log(`💾 About to save enrollments to file after update...`);
       await this.saveEnrollmentsToFile();
@@ -1395,7 +1408,7 @@ export class MemStorage implements IStorage {
       console.error(`❌ Error in updateEnrollment save operation:`, error);
     }
 
-    return enrollment;
+    return updatedEnrollment;
   }
 
   async deleteEnrollment(id: number): Promise<void> {
@@ -3988,8 +4001,8 @@ export class MemStorage implements IStorage {
       return this.memStorage.getEnrollmentById(id);
     }
 
-    async updateEnrollment(enrollment: any): Promise<any> {
-      return this.memStorage.updateEnrollment(enrollment);
+    async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
+      return this.memStorage.updateEnrollment(idOrEnrollment, updates);
     }
 
     async deleteEnrollment(id: number): Promise<void> {
