@@ -606,10 +606,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }))
         });
 
-        // Skip items where there's a fully paid enrollment OR latest enrollment is paid
-        const shouldSkip = hasFullyPaidEnrollment || latestIsPaid;
+        // Skip items where there's a fully paid enrollment OR latest enrollment is paid OR on waitlist
+        const isWaitlisted = latestEnrollment.status === 'waitlist';
+        const shouldSkip = hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
 
-        if (shouldSkip) {
+        if (isWaitlisted) {
+          console.log(`🔍 ⏸️ SKIPPING group ${key} - on waitlist (position ${latestEnrollment.waitlistPosition})`);
+        } else if (shouldSkip) {
           console.log(`🔍 ✅ SKIPPING group ${key} - fully paid or enrolled with no balance`);
         } else if (hasBalance || (latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0)) {
           console.log(`🔍 ➕ ADDING enrollment ${latestEnrollment.id} to cart - remainingBalance=${latestEnrollment.remainingBalance}`);
