@@ -650,7 +650,7 @@ export async function sendStaffInvitationEmail(
       return false;
     }
 
-    const inviteUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/staff-invitation?token=${token}`;
+    const inviteUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/accept-invitation?token=${token}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
