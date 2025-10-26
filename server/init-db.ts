@@ -1,6 +1,34 @@
 import { createClassesTable } from './classes-db';
+import { getDb } from './db';
+import { sql } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
+
+// Run database migrations
+async function runMigrations() {
+  try {
+    const db = await getDb();
+    
+    // Add waitlist_position column if it doesn't exist
+    console.log('Running migration: Adding waitlist_position column...');
+    await db.execute(sql`
+      ALTER TABLE program_enrollments 
+      ADD COLUMN IF NOT EXISTS waitlist_position INTEGER;
+    `);
+    console.log('✅ Migration completed: waitlist_position column added');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Skip migrations if database is not available (file storage mode)
+    if (errorMessage.includes('Database connection not available')) {
+      console.log('⏭️ Skipping migrations - using file storage mode');
+      return;
+    }
+    
+    console.log('Migration note:', errorMessage);
+    // Continue even if migration fails (column might already exist)
+  }
+}
 
 // Initialize database tables
 export async function initializeDatabase() {
@@ -31,6 +59,9 @@ export async function initializeDatabase() {
       console.log('Using file-based storage for classes instead of database');
       // Already falling back to file-based storage, handled in class-storage.ts
     }
+    
+    // Run database migrations
+    await runMigrations();
     
     console.log('Database/storage initialization complete.');
   } catch (error) {

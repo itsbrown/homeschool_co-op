@@ -364,6 +364,7 @@ export const programEnrollments = pgTable("program_enrollments", {
   status: text("status", { 
     enum: ["enrolled", "completed", "withdrawn", "cancelled", "waitlist"] 
   }).default("enrolled").notNull(),
+  waitlistPosition: integer("waitlist_position"), // Position in waitlist (null if not waitlisted)
   enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
   
   // Stripe integration

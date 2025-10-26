@@ -174,6 +174,26 @@ router.post('/:id/enroll', async (req, res) => {
       return res.status(404).json({ message: 'Child not found' });
     }
 
+    // Check class capacity and enrollment count
+    const capacity = classItem.capacity || 0;
+    const currentEnrollmentCount = classItem.enrollmentCount || 0;
+    const isAtCapacity = capacity > 0 && currentEnrollmentCount >= capacity;
+
+    // Calculate waitlist position if at capacity
+    let waitlistPosition = null;
+    let enrollmentStatus = 'pending_payment';
+    
+    if (isAtCapacity) {
+      // Get current waitlist count for this class
+      const waitlistCount = classItem.totalWaitlisted || 0;
+      waitlistPosition = waitlistCount + 1; // Next position in waitlist
+      enrollmentStatus = 'waitlist';
+      
+      console.log(`⚠️ Class is at capacity (${currentEnrollmentCount}/${capacity}). Adding to waitlist at position ${waitlistPosition}`);
+    } else {
+      console.log(`✅ Class has ${capacity - currentEnrollmentCount} spots available`);
+    }
+
     // Calculate deposit (10% of class price)
     const classPrice = classItem.price || 90000; // Default $900 in cents
     const depositAmount = Math.round(classPrice * 0.1); // 10% deposit
@@ -187,7 +207,8 @@ router.post('/:id/enroll', async (req, res) => {
       childName: `${child.firstName} ${child.lastName}`,
       className: classItem.title,
       enrollmentDate: new Date().toISOString(),
-      status: 'pending_payment', // Changed to pending payment
+      status: enrollmentStatus, // Either 'pending_payment' or 'waitlist'
+      waitlistPosition: waitlistPosition, // Position in waitlist, null if not waitlisted
       amount: 0, // Amount paid so far
       depositRequired: depositAmount,
       totalCost: classPrice,
@@ -203,11 +224,18 @@ router.post('/:id/enroll', async (req, res) => {
     // Note: Child enrollment tracking will be handled separately
     // For now, just create the enrollment record
 
-    console.log(`✅ Successfully enrolled ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
+    // Send appropriate message based on enrollment status
+    const message = enrollmentStatus === 'waitlist'
+      ? `Added to waitlist at position #${waitlistPosition}. You'll be notified when a spot opens up.`
+      : 'Enrollment successful';
+    
+    console.log(`✅ ${enrollmentStatus === 'waitlist' ? 'Waitlisted' : 'Enrolled'} ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
 
     res.json({ 
-      message: 'Enrollment successful',
-      enrollment: enrollment
+      message,
+      enrollment: enrollment,
+      isWaitlisted: enrollmentStatus === 'waitlist',
+      waitlistPosition: waitlistPosition
     });
 
   } catch (error) {

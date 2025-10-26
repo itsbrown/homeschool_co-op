@@ -13,5 +13,18 @@
     "totalPaid": 0,
     "amountPaid": 0,
     "remainingBalance": 130000
+  },
+  {
+    "id": 1761486820580,
+    "classId": 9,
+    "childId": 74,
+    "childName": "Hermione Brown",
+    "className": "Patriots | Full Day",
+    "enrollmentDate": "2025-10-26T13:53:40.578Z",
+    "status": "pending_payment",
+    "amount": 0,
+    "depositRequired": 13000,
+    "totalCost": 130000,
+    "remainingBalance": 130000
   }
 ]
