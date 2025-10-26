@@ -59,11 +59,15 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
     // Save payment plan before payment for success page
     localStorage.setItem('selectedPaymentPlan', selectedPaymentPlan);
 
+    // Ensure proper return URL with protocol
+    const returnUrl = `${window.location.protocol}//${window.location.host}/cart/success`;
+    console.log('💳 Stripe return URL:', returnUrl);
+
     try {
       const result = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/cart/success`,
+          return_url: returnUrl,
         },
         redirect: 'always', // Force redirect to success page
       });
