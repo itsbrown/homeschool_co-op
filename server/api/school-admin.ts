@@ -427,6 +427,7 @@ router.get("/my-school", async (req, res) => {
             description: schools[0].description,
             logo: schools[0].logo,
             status: schools[0].status,
+            registrationCode: schools[0].registration_code,
             createdAt: schools[0].created_at,
             updatedAt: schools[0].updated_at
           });
