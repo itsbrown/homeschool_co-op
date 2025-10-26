@@ -239,7 +239,20 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 opacity-70" />
             <span className="text-sm">
-              {spacesRemaining} spaces remaining
+              {isSpacesAvailable ? (
+                <>
+                  <span className={spacesRemaining <= 5 ? "text-orange-600 font-medium" : ""}>
+                    {spacesRemaining} {spacesRemaining === 1 ? "space" : "spaces"} remaining
+                  </span>
+                  {spacesRemaining <= 5 && spacesRemaining > 0 && (
+                    <Badge variant="outline" className="ml-2 text-xs">Limited</Badge>
+                  )}
+                </>
+              ) : (
+                <span className="text-red-600 font-medium">
+                  Class Full - Waitlist Available
+                </span>
+              )}
             </span>
           </div>
         </div>
@@ -256,16 +269,24 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
               <DialogTrigger asChild>
                 <Button 
                   size="sm" 
-                  disabled={!isSpacesAvailable || children.length === 0}
+                  disabled={children.length === 0}
+                  variant={!isSpacesAvailable ? "outline" : "default"}
+                  data-testid="button-enroll"
                 >
-                  {isSpacesAvailable ? "Enroll" : "Full"}
+                  {isSpacesAvailable ? "Enroll" : "Join Waitlist"}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Enroll in {program.title}</DialogTitle>
+                  <DialogTitle>
+                    {isSpacesAvailable ? "Enroll in" : "Join Waitlist for"} {program.title}
+                  </DialogTitle>
                   <DialogDescription>
-                    Select which child you would like to enroll in "{program.title}".
+                    {isSpacesAvailable ? (
+                      `Select which child you would like to enroll in "${program.title}".`
+                    ) : (
+                      `This class is currently full. Select a child to add to the waitlist. You'll be notified when a spot opens up, and no payment is required until then.`
+                    )}
                   </DialogDescription>
                 </DialogHeader>
                 

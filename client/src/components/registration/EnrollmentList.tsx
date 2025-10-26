@@ -61,9 +61,10 @@ interface Enrollment {
   childId: number;
   program: Program;
   child: Child;
-  status: "pending" | "confirmed" | "waitlisted" | "cancelled" | "completed";
+  status: "pending" | "confirmed" | "waitlisted" | "waitlist" | "cancelled" | "completed" | "pending_payment";
   paymentStatus: "pending" | "paid" | "refunded" | "failed";
   enrollmentDate: string;
+  waitlistPosition?: number | null;
 }
 
 interface EnrollmentListProps {
@@ -236,9 +237,16 @@ export function EnrollmentList({ childId, isAdmin = false }: EnrollmentListProps
                   {formatDate(enrollment.program.startDate)} - {formatDate(enrollment.program.endDate)}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={getStatusBadgeVariant(enrollment.status)}>
-                    {enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
-                  </Badge>
+                  <div className="flex flex-col gap-1">
+                    <Badge variant={getStatusBadgeVariant(enrollment.status)}>
+                      {enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
+                    </Badge>
+                    {(enrollment.status === 'waitlist' || enrollment.status === 'waitlisted') && enrollment.waitlistPosition && (
+                      <span className="text-xs text-muted-foreground">
+                        Position #{enrollment.waitlistPosition}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge variant={getPaymentStatusBadgeVariant(enrollment.paymentStatus)}>
