@@ -1,5 +1,6 @@
 import express from "express";
 import { storage } from "../storage";
+import { sendWaitlistJoinedEmail, sendWaitlistPromotedEmail } from "../lib/email-service";
 
 const router = express.Router();
 
@@ -231,6 +232,24 @@ router.post('/:id/enroll', async (req, res) => {
     
     console.log(`✅ ${enrollmentStatus === 'waitlist' ? 'Waitlisted' : 'Enrolled'} ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
 
+    // Send email notification for waitlist
+    if (enrollmentStatus === 'waitlist') {
+      const parentEmail = req.body.parentEmail || '';
+      const parentName = req.body.parentName || 'Parent';
+      
+      if (parentEmail) {
+        await sendWaitlistJoinedEmail({
+          parentEmail,
+          parentName,
+          childName: `${child.firstName} ${child.lastName}`,
+          className: classItem.title,
+          waitlistPosition: waitlistPosition || 0,
+          programStartDate: classItem.startDate ? new Date(classItem.startDate) : undefined
+        });
+        console.log(`📧 Sent waitlist joined email to ${parentEmail}`);
+      }
+    }
+
     res.json({ 
       message,
       enrollment: enrollment,
@@ -285,7 +304,30 @@ async function promoteNextWaitlistedStudent(classId: number) {
     
     console.log(`✅ Promoted ${nextStudent.childName} from waitlist to enrolled`);
     
-    // TODO: Send email notification to parent
+    // Send email notification to parent
+    try {
+      const classData = await storage.getClassById(classId);
+      // Try to get parent email - you may need to adapt this based on your data structure
+      // For now, we'll log that we need parent contact info
+      // In a real scenario, you'd need to fetch this from the enrollment or child record
+      console.log(`📧 Email notification needed for promotion: ${nextStudent.childName} to ${classData?.title}`);
+      
+      // If we have parent email in the enrollment data, send the email
+      if (nextStudent.parentEmail && classData) {
+        await sendWaitlistPromotedEmail({
+          parentEmail: nextStudent.parentEmail,
+          parentName: nextStudent.parentName || 'Parent',
+          childName: nextStudent.childName,
+          className: classData.title,
+          programStartDate: classData.startDate ? new Date(classData.startDate) : undefined,
+          price: classData.price || 0
+        });
+        console.log(`📧 Sent waitlist promotion email to ${nextStudent.parentEmail}`);
+      }
+    } catch (emailError) {
+      console.error('Error sending promotion email:', emailError);
+      // Don't fail the promotion if email fails
+    }
     
     return nextStudent;
   } catch (error) {

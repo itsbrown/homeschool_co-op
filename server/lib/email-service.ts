@@ -712,3 +712,186 @@ If you have any questions or need assistance, please contact us at support@ameri
     return false;
   }
 }
+
+interface WaitlistJoinedData {
+  parentEmail: string;
+  parentName: string;
+  childName: string;
+  className: string;
+  waitlistPosition: number;
+  programStartDate?: Date;
+}
+
+export async function sendWaitlistJoinedEmail(data: WaitlistJoinedData): Promise<boolean> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping waitlist joined email send');
+      return true;
+    }
+
+    const { parentEmail, parentName, childName, className, waitlistPosition, programStartDate } = data;
+
+    const formatDate = (date: Date) => {
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }).format(date);
+    };
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #1a1a1a; padding: 24px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">American Seekers Academy</h1>
+        </div>
+        
+        <div style="background-color: #ffffff; padding: 32px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+          <h2 style="color: #1a1a1a; margin-top: 0;">You're on the Waitlist!</h2>
+          
+          <p>Hello ${parentName},</p>
+          
+          <p>Great news! We've added <strong>${childName}</strong> to the waitlist for:</p>
+          
+          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0;"><strong>Class:</strong> ${className}</p>
+            ${programStartDate ? `<p style="margin: 0 0 8px 0;"><strong>Start Date:</strong> ${formatDate(programStartDate)}</p>` : ''}
+            <p style="margin: 0;"><strong>Waitlist Position:</strong> #${waitlistPosition}</p>
+          </div>
+          
+          <div style="background-color: #EFF6FF; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6;">
+            <p style="margin: 0; color: #1E40AF;"><strong>What happens next?</strong></p>
+            <ul style="margin: 8px 0 0 0; padding-left: 20px; color: #1E40AF;">
+              <li>We'll notify you immediately when a spot opens up</li>
+              <li>You'll have 24 hours to accept the enrollment</li>
+              <li>No payment is required until you're enrolled</li>
+            </ul>
+          </div>
+          
+          <p>We process waitlist positions on a first-come, first-served basis. We'll keep you updated on any changes to your position.</p>
+          
+          <p style="font-size: 14px; color: #6B7280;">
+            If you have any questions, please contact us at support@americanseekersacademy.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    const textContent = `
+Hello ${parentName},
+
+Great news! We've added ${childName} to the waitlist for: ${className}
+${programStartDate ? `Start Date: ${formatDate(programStartDate)}` : ''}
+Waitlist Position: #${waitlistPosition}
+
+What happens next?
+- We'll notify you immediately when a spot opens up
+- You'll have 24 hours to accept the enrollment
+- No payment is required until you're enrolled
+
+We process waitlist positions on a first-come, first-served basis. We'll keep you updated on any changes to your position.
+
+If you have any questions, please contact us at support@americanseekersacademy.com
+    `;
+
+    return await sendEmail(parentEmail, parentName, `Waitlist Confirmation - ${className}`, htmlContent, textContent);
+  } catch (error) {
+    console.error('❌ Error sending waitlist joined email:', error);
+    return false;
+  }
+}
+
+interface WaitlistPromotedData {
+  parentEmail: string;
+  parentName: string;
+  childName: string;
+  className: string;
+  programStartDate?: Date;
+  price: number;
+}
+
+export async function sendWaitlistPromotedEmail(data: WaitlistPromotedData): Promise<boolean> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping waitlist promoted email send');
+      return true;
+    }
+
+    const { parentEmail, parentName, childName, className, programStartDate, price } = data;
+
+    const formatCurrency = (amount: number) => {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(amount);
+    };
+
+    const formatDate = (date: Date) => {
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }).format(date);
+    };
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #1a1a1a; padding: 24px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">American Seekers Academy</h1>
+        </div>
+        
+        <div style="background-color: #ffffff; padding: 32px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+          <h2 style="color: #10B981; margin-top: 0;">🎉 A Spot Opened Up!</h2>
+          
+          <p>Hello ${parentName},</p>
+          
+          <p>Exciting news! <strong>${childName}</strong> has been promoted from the waitlist and now has a confirmed spot in:</p>
+          
+          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0;"><strong>Class:</strong> ${className}</p>
+            ${programStartDate ? `<p style="margin: 0 0 8px 0;"><strong>Start Date:</strong> ${formatDate(programStartDate)}</p>` : ''}
+            <p style="margin: 0;"><strong>Price:</strong> ${formatCurrency(price)}</p>
+          </div>
+          
+          <div style="background-color: #FEF3C7; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F59E0B;">
+            <p style="margin: 0; color: #92400E;"><strong>Action Required:</strong></p>
+            <p style="margin: 8px 0 0 0; color: #92400E;">
+              Please complete your payment within 24 hours to secure this enrollment. 
+              The spot will be offered to the next person on the waitlist if payment is not received.
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${process.env.VITE_APP_URL || 'https://asalearning.com'}/cart/checkout" 
+               style="display: inline-block; background-color: #10B981; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Complete Payment
+            </a>
+          </div>
+          
+          <p style="font-size: 14px; color: #6B7280;">
+            If you have any questions, please contact us at support@americanseekersacademy.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    const textContent = `
+Hello ${parentName},
+
+Exciting news! ${childName} has been promoted from the waitlist and now has a confirmed spot in: ${className}
+${programStartDate ? `Start Date: ${formatDate(programStartDate)}` : ''}
+Price: ${formatCurrency(price)}
+
+ACTION REQUIRED:
+Please complete your payment within 24 hours to secure this enrollment. The spot will be offered to the next person on the waitlist if payment is not received.
+
+Complete payment at: ${process.env.VITE_APP_URL || 'https://asalearning.com'}/cart/checkout
+
+If you have any questions, please contact us at support@americanseekersacademy.com
+    `;
+
+    return await sendEmail(parentEmail, parentName, `Spot Available - ${className}`, htmlContent, textContent);
+  } catch (error) {
+    console.error('❌ Error sending waitlist promoted email:', error);
+    return false;
+  }
+}
