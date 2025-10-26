@@ -32,6 +32,8 @@ interface Enrollment {
   totalPaid: number;
   remainingBalance: number;
   paymentStatus: string;
+  status?: string;
+  waitlistPosition?: number | null;
   programStartDate?: string;
   programEndDate?: string;
   metadata?: {
@@ -161,6 +163,35 @@ export default function EnrollmentsAdminPage() {
     setEditDialogOpen(true);
   };
 
+  const handlePromoteFromWaitlist = async (enrollment: Enrollment) => {
+    try {
+      const response = await apiRequest(
+        "PUT",
+        `/api/program-enrollments/${enrollment.id}`,
+        { status: 'pending_payment', waitlistPosition: null }
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to promote from waitlist");
+      }
+      
+      toast({
+        title: "Student Promoted",
+        description: `${enrollment.childName} has been promoted from the waitlist for ${enrollment.className}. They can now proceed with payment.`,
+      });
+      
+      // Refresh the enrollments list
+      refetch();
+    } catch (error) {
+      console.error("Failed to promote from waitlist:", error);
+      toast({
+        title: "Error",
+        description: "Failed to promote student from waitlist. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSavePaymentPlan = () => {
     if (!selectedEnrollment || !selectedFrequency) return;
     
@@ -272,20 +303,48 @@ export default function EnrollmentsAdminPage() {
                       <TableCell>{formatCurrency(enrollment.totalPaid)}</TableCell>
                       <TableCell>{formatCurrency(enrollment.remainingBalance)}</TableCell>
                       <TableCell>
-                        <Badge variant={getStatusBadgeVariant(enrollment.paymentStatus)}>
-                          {enrollment.paymentStatus}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          {enrollment.status === 'waitlist' ? (
+                            <>
+                              <Badge variant="secondary">
+                                Waitlist
+                              </Badge>
+                              {enrollment.waitlistPosition && (
+                                <span className="text-xs text-muted-foreground">
+                                  Position #{enrollment.waitlistPosition}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <Badge variant={getStatusBadgeVariant(enrollment.paymentStatus)}>
+                              {enrollment.paymentStatus}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditClick(enrollment)}
-                          data-testid={`button-edit-payment-plan-${enrollment.id}`}
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit Plan
-                        </Button>
+                        <div className="flex gap-2">
+                          {enrollment.status === 'waitlist' ? (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handlePromoteFromWaitlist(enrollment)}
+                              data-testid={`button-promote-${enrollment.id}`}
+                            >
+                              Promote
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditClick(enrollment)}
+                              data-testid={`button-edit-payment-plan-${enrollment.id}`}
+                            >
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Plan
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

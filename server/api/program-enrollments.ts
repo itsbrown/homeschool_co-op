@@ -144,8 +144,8 @@ export const createEnrollment = async (req: Request, res: Response) => {
     // Check if program has capacity
     const enrollmentCount = await storage.getEnrollmentCountForProgram(validatedData.programId);
     if (enrollmentCount >= program.capacity) {
-      // If program is full, set status to waitlisted automatically
-      validatedData.status = "waitlisted";
+      // If program is full, set status to waitlist automatically
+      validatedData.status = "waitlist";
     }
     
     const enrollment = await storage.createProgramEnrollment(validatedData);
@@ -218,7 +218,34 @@ export const updateEnrollment = async (req: Request, res: Response) => {
 
     const validatedData = insertProgramEnrollmentSchema.partial().parse(req.body);
     
+    // Check if this is a promotion from waitlist
+    const wasWaitlisted = existingEnrollment.status === 'waitlist';
+    const isBeingPromoted = wasWaitlisted && validatedData.status && validatedData.status !== 'waitlist';
+    
     const updatedEnrollment = await storage.updateProgramEnrollment(enrollmentId, validatedData);
+    
+    // If student was promoted from waitlist, recalculate positions for remaining students
+    if (isBeingPromoted) {
+      try {
+        // Get all waitlisted enrollments for this program
+        const allEnrollments = await storage.getEnrollmentsByProgramId(existingEnrollment.programId);
+        const waitlistedEnrollments = allEnrollments
+          .filter((e: any) => e.status === 'waitlist' && e.id !== enrollmentId)
+          .sort((a: any, b: any) => (a.waitlistPosition || 0) - (b.waitlistPosition || 0));
+        
+        // Update positions for remaining waitlisted students
+        for (let i = 0; i < waitlistedEnrollments.length; i++) {
+          const student = waitlistedEnrollments[i];
+          await storage.updateProgramEnrollment(student.id, { waitlistPosition: i + 1 });
+        }
+        
+        console.log(`✅ Recalculated waitlist positions after manual promotion (${waitlistedEnrollments.length} students remaining)`);
+      } catch (error) {
+        console.error('Error recalculating waitlist positions after promotion:', error);
+        // Don't fail the main update if position recalculation fails
+      }
+    }
+    
     res.json(updatedEnrollment);
   } catch (error: any) {
     if (error instanceof ZodError) {
