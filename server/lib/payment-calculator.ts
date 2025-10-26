@@ -55,9 +55,35 @@ export function calculatePaymentSchedule(
   // Determine interval in days based on frequency
   const intervalDays = frequency === 'weekly' ? 7 : frequency === 'biweekly' ? 14 : 30;
   
-  // Calculate number of payment periods
-  // We always start on the start date and try to land close to the end date
-  const rawPeriods = totalDays / intervalDays;
+  // For biweekly plans, final payment should be 2 weeks before program end
+  // But ensure we don't go before the start date for short programs
+  let effectiveEndDate: Date;
+  if (frequency === 'biweekly') {
+    const twoWeeksBeforeEnd = new Date(endDate);
+    twoWeeksBeforeEnd.setDate(endDate.getDate() - 14);
+    
+    // If the effective end would be before the start, the program is too short for biweekly
+    if (twoWeeksBeforeEnd < startDate) {
+      // For programs shorter than 14 days, fall back to one_time payment
+      return {
+        totalAmount: totalAmountCents,
+        numberOfPayments: 1,
+        paymentAmount: totalAmountCents,
+        finalPaymentAmount: totalAmountCents,
+        paymentDates: [new Date(startDate)],
+        frequency: 'one_time',
+        startDate: new Date(startDate),
+        endDate: new Date(endDate)
+      };
+    }
+    effectiveEndDate = twoWeeksBeforeEnd;
+  } else {
+    effectiveEndDate = new Date(endDate);
+  }
+  
+  // Calculate number of payment periods based on effective end date
+  const effectiveDays = daysBetween(startDate, effectiveEndDate);
+  const rawPeriods = effectiveDays / intervalDays;
   const numberOfPayments = Math.max(2, Math.ceil(rawPeriods)); // Minimum 2 payments for installment plans
   
   // Generate payment dates
@@ -69,8 +95,8 @@ export function calculatePaymentSchedule(
       // First payment on start date
       paymentDates.push(new Date(currentDate));
     } else if (i === numberOfPayments - 1) {
-      // Last payment on or close to end date
-      paymentDates.push(new Date(endDate));
+      // Last payment on effective end date (2 weeks before for biweekly)
+      paymentDates.push(new Date(effectiveEndDate));
     } else {
       // Intermediate payments at regular intervals
       const nextPaymentDate = new Date(startDate);
