@@ -146,6 +146,7 @@ import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
 import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
 import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
 import DiscountsPage from "./pages/schools/DiscountsPage";
+import MembershipManagementPage from "./pages/schools/MembershipManagementPage";
 import ManualPaymentEntryPage from "./pages/ManualPaymentEntryPage";
 import MarketingLinksPage from '@/pages/MarketingLinksPage';
 import ParentDashboard from "./components/dashboards/ParentDashboard";
@@ -556,6 +557,7 @@ function Router() {
       <Route path="/schools/students/:id/edit" component={StudentRegistrationPage} />
       <Route path="/schools/students/:id/classes" component={StudentClassesPage} />
       <Route path="/schools/enrollments" component={EnrollmentsAdminPage} />
+      <Route path="/schools/memberships" component={MembershipManagementPage} />
       <Route path="/schools/discounts" component={DiscountsPage} />
       <Route path="/schools/manual-payments">
         <SchoolAdminLayout pageTitle="Manual Payments">

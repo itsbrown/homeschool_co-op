@@ -48,7 +48,14 @@ The platform follows a modern web application architecture, emphasizing scalabil
 - **Authentication Integration**: Frontend authenticates via Supabase OAuth, backend queries Supabase database directly for user/school data (as of October 2025)
 
 ### Key Features and Implementations
-- **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, school_admin, platform_admin) and JWT validation. Includes custom form builder security hardening with ownership and cross-tenant checks.
+- **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation. Includes custom form builder security hardening with ownership and cross-tenant checks.
+- **Membership Management System (October 2025)**: Complete admin interface for managing annual membership fees ($175/year example) with enrollment validation, manual payment recording, and status tracking. Features include:
+  - **Enrollment Validation**: `MembershipCheckService` validates membership status before allowing program enrollment, blocking expired/unpaid memberships while allowing grace period enrollments
+  - **Admin API Endpoints**: Auth0 JWT-authenticated endpoints for listing memberships (`/my-school`), viewing summary stats (`/my-school/summary`), recording manual payments (cash/check/bank transfer), and updating membership status/dates
+  - **Admin UI**: Full-featured management page at `/schools/memberships` with summary cards, filterable membership table, payment recording dialog, and status update dialog - all automatically scoped to authenticated admin's school
+  - **Multi-School Support**: Endpoints dynamically use authenticated user's schoolId from database (no hard-coded IDs), supporting schoolAdmin (single school), admin, and superAdmin (all schools) roles
+  - **Payment Tracking**: Manual payment recording creates payment records in database with audit trail (recordedBy, timestamp, notes), updates membership balance/status automatically
+  - **Membership Statuses**: pending_payment, active, partial_payment, grace_period, expired, suspended with automatic status transitions based on payment completion and expiration dates
 - **Admin Payment Plan Editing (October 2025)**: School administrators can modify payment plans for existing enrollments through a dedicated admin UI. Features include:
   - **Admin Enrollment Management Page** (`/schools/enrollments`): Table view of all enrollments with payment details, search, and filtering
   - **Payment Plan Editor**: Interactive dialog for changing payment frequency (one_time, weekly, biweekly, monthly) with real-time preview of new schedules

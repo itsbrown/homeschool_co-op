@@ -4,6 +4,7 @@ import { insertProgramEnrollmentSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { formatZodError } from "../utils";
 import { MembershipService } from "../services/membership-service.js";
+import { MembershipCheckService } from "../services/membership-check-service.js";
 
 // Get all enrollments for a parent's children
 export const getMyChildrenEnrollments = async (req: any, res: Response) => {
@@ -139,6 +140,27 @@ export const createEnrollment = async (req: Request, res: Response) => {
     
     if (!program.isPublished && req.session.userId !== program.instructorId && req.session.userRole !== 'admin') {
       return res.status(403).json({ message: "Program is not available for enrollment" });
+    }
+    
+    // Check membership status before allowing enrollment (skip for admins)
+    if (program.schoolId && req.session.userRole !== 'admin') {
+      const membershipValidation = await MembershipCheckService.validateMembershipForEnrollment(
+        child.parentId,
+        program.schoolId
+      );
+      
+      if (!membershipValidation.allowed) {
+        return res.status(403).json({ 
+          message: membershipValidation.reason || "Membership validation failed",
+          requiresMembership: true,
+          membership: membershipValidation.membership
+        });
+      }
+      
+      // Log warning if membership payment due but in grace period
+      if (membershipValidation.reason) {
+        console.log(`⚠️ Enrollment allowed but membership payment due: ${membershipValidation.reason}`);
+      }
     }
     
     // Check if program has capacity
