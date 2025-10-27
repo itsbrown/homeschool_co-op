@@ -1,5 +1,5 @@
 import express from "express";
-import { db } from "../db";
+import { db, getDb } from "../db";
 import { schools, children } from "@shared/schema";
 import { insertSchoolSchema } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
@@ -24,6 +24,7 @@ async function generateRegistrationCode(): Promise<string> {
 
     // Check if this code already exists
     try {
+      const db = await getDb();
       const [existingSchool] = await db
         .select()
         .from(schools)
@@ -91,6 +92,7 @@ router.post("/", async (req, res) => {
 
     try {
       // Try database first
+      const db = await getDb();
       const [newSchool] = await db
         .insert(schools)
         .values(schoolDataWithCode)
@@ -170,6 +172,7 @@ router.post("/", async (req, res) => {
 // Get all schools
 router.get("/", async (req, res) => {
   try {
+    const db = await getDb();
     const allSchools = await db.query.schools.findMany();
     res.json(allSchools);
   } catch (error: any) {
@@ -254,6 +257,7 @@ router.get("/by-code/:code", async (req, res) => {
 
     try {
       // Try database first
+      const db = await getDb();
       const school = await db.query.schools.findFirst({
         where: eq(schools.registrationCode, code.toUpperCase())
       });
@@ -307,6 +311,7 @@ router.get("/:id", async (req, res) => {
 
     try {
       // Try database first
+      const db = await getDb();
       school = await db.query.schools.findFirst({
         where: eq(schools.id, schoolId)
       });
@@ -317,6 +322,7 @@ router.get("/:id", async (req, res) => {
           const registrationCode = await generateRegistrationCode();
           console.log('🔑 Generating registration code for existing school:', registrationCode);
           try {
+            const db = await getDb();
             const [updatedSchool] = await db
               .update(schools)
               .set({ registrationCode })
@@ -394,6 +400,7 @@ router.get("/:id/students", async (req, res) => {
       return res.status(400).json({ message: "Invalid school ID" });
     }
 
+    const db = await getDb();
     const students = await db.query.children.findMany({
       where: eq(children.schoolId, schoolId)
     });
