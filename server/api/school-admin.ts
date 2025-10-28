@@ -2395,36 +2395,62 @@ router.patch("/schools/:id", async (req, res) => {
     console.log('🔄 Updating school in database with data:', JSON.stringify(dbUpdateData, null, 2));
     console.log('🔄 Updating school ID:', schoolId);
 
-    // Update the school in the database
-    const { data: updatedSchool, error: updateError } = await supabaseAdmin
-      .from('schools')
-      .update(dbUpdateData)
-      .eq('id', schoolId)
-      .select()
-      .single();
+    // Use raw SQL to bypass Supabase schema cache
+    const postgres = (await import('postgres')).default;
+    const { PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT } = process.env;
+    
+    if (!PGHOST || !PGUSER || !PGPASSWORD || !PGDATABASE) {
+      return res.status(500).json({ message: "Database configuration missing" });
+    }
+    
+    const encodedUser = encodeURIComponent(PGUSER);
+    const encodedPassword = encodeURIComponent(PGPASSWORD);
+    const port = PGPORT || '5432';
+    const connectionString = `postgresql://${encodedUser}:${encodedPassword}@${PGHOST}:${port}/${PGDATABASE}?sslmode=require`;
+    
+    const sql = postgres(connectionString);
+    
+    try {
+      // Build dynamic UPDATE query
+      const setClause = Object.keys(dbUpdateData)
+        .map((key, index) => `${key} = $${index + 1}`)
+        .join(', ');
+      
+      const values = Object.values(dbUpdateData);
+      
+      const query = `
+        UPDATE schools 
+        SET ${setClause}
+        WHERE id = $${values.length + 1}
+        RETURNING *
+      `;
+      
+      console.log('🔍 Executing SQL:', query);
+      console.log('🔍 With values:', [...values, schoolId]);
+      
+      const result = await sql.unsafe(query, [...values, schoolId]);
+      await sql.end();
+      
+      if (!result || result.length === 0) {
+        return res.status(404).json({ message: "School not found" });
+      }
+      
+      const updatedSchool = result[0];
+      console.log('✅ School updated successfully:', updatedSchool.name);
+      console.log('✅ Updated school data:', JSON.stringify(updatedSchool, null, 2));
 
-    if (updateError) {
-      console.error('❌ Database update error:', updateError);
+      return res.json({
+        message: "School updated successfully",
+        school: updatedSchool,
+      });
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError);
+      await sql.end();
       return res.status(500).json({ 
-        message: "Failed to update school",
-        error: updateError.message
+        message: "Database update failed",
+        error: dbError instanceof Error ? dbError.message : 'Unknown error'
       });
     }
-
-    if (!updatedSchool) {
-      console.error('❌ No school data returned after update');
-      return res.status(500).json({ 
-        message: "School update failed - no data returned"
-      });
-    }
-
-    console.log('✅ School updated successfully:', updatedSchool.name);
-    console.log('✅ Updated school data:', JSON.stringify(updatedSchool, null, 2));
-
-    return res.json({
-      message: "School updated successfully",
-      school: updatedSchool,
-    });
   } catch (error) {
     console.error("Error updating school:", error);
     return res.status(500).json({ message: "Server error while updating school" });
