@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth0";
 import { Loader2 } from "lucide-react";
@@ -101,9 +101,14 @@ export default function SchoolEditPage() {
     },
   });
 
-  // Update form values when school data loads
+  // Track which school has been initialized to prevent re-initialization on refetch
+  const initializedSchoolIdRef = useRef<number | null>(null);
+
+  // Update form values when school data loads (only once per school)
   React.useEffect(() => {
-    if (school) {
+    // Only initialize once per schoolId to prevent wiping user edits on refetch
+    if (school && school.id !== initializedSchoolIdRef.current) {
+      console.log("Initializing school form for school ID:", school.id);
       form.reset({
         name: school.name,
         type: school.type,
@@ -119,6 +124,9 @@ export default function SchoolEditPage() {
         accreditation: school.accreditation || "",
         enrollmentSize: school.enrollmentSize,
       });
+      
+      // Mark this school as initialized
+      initializedSchoolIdRef.current = school.id;
     }
   }, [school, form]);
 

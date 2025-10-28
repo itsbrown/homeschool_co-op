@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -89,25 +89,57 @@ export function KnowledgeBaseEditDialog({
     },
   });
 
-  // Set form values when knowledge base data is loaded
+  // Track which knowledge base has been initialized to prevent re-initialization on refetch
+  const initializedKbIdRef = useRef<number | null>(null);
+
+  // Clear the initialized ref and file state when the dialog closes or when KB ID changes
+  useEffect(() => {
+    if (!open) {
+      // Dialog closed - clear everything so it reinitializes fresh on next open
+      initializedKbIdRef.current = null;
+      setExistingFiles([]);
+      setUploadedFiles([]);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    // KB ID changed - clear the ref and file state so it initializes with the new KB data
+    initializedKbIdRef.current = null;
+    setExistingFiles([]);
+    setUploadedFiles([]);
+  }, [knowledgeBaseId]);
+
+  // Set form values when knowledge base data is loaded (only once per KB per dialog opening)
   useEffect(() => {
     if (knowledgeBaseQuery.data) {
       const kb = knowledgeBaseQuery.data;
       
-      form.reset({
-        title: kb.title,
-        description: kb.description || "",
-        subject: kb.subject,
-        difficulty: kb.difficulty,
-        price: kb.price,
-        isPublic: kb.isPublic,
-        tags: kb.metadata?.tags?.join(", ") || "",
-        objectives: kb.metadata?.objectives?.join("\n") || "",
-      });
-      
-      // Load existing files
-      if (kb.files && kb.files.length > 0) {
-        setExistingFiles(kb.files);
+      // Only initialize once per knowledgeBaseId per dialog opening to prevent wiping user edits on refetch
+      if (kb.id !== initializedKbIdRef.current) {
+        console.log("Initializing knowledge base form for KB ID:", kb.id);
+        form.reset({
+          title: kb.title,
+          description: kb.description || "",
+          subject: kb.subject,
+          difficulty: kb.difficulty,
+          price: kb.price,
+          isPublic: kb.isPublic,
+          tags: kb.metadata?.tags?.join(", ") || "",
+          objectives: kb.metadata?.objectives?.join("\n") || "",
+        });
+        
+        // Load existing files (or clear if none)
+        if (kb.files && kb.files.length > 0) {
+          setExistingFiles(kb.files);
+        } else {
+          setExistingFiles([]);
+        }
+        
+        // Clear uploaded files on fresh initialization
+        setUploadedFiles([]);
+        
+        // Mark this KB as initialized
+        initializedKbIdRef.current = kb.id;
       }
     }
   }, [knowledgeBaseQuery.data, form]);
