@@ -41,6 +41,7 @@ async function syncSchema() {
       'state': `ADD COLUMN IF NOT EXISTS state TEXT NOT NULL DEFAULT ''`,
       'zip_code': `ADD COLUMN IF NOT EXISTS zip_code TEXT NOT NULL DEFAULT ''`,
       'phone_number': `ADD COLUMN IF NOT EXISTS phone_number TEXT`,
+      'email': `ADD COLUMN IF NOT EXISTS email TEXT`,
       'website': `ADD COLUMN IF NOT EXISTS website TEXT`,
       'founded_year': `ADD COLUMN IF NOT EXISTS founded_year INTEGER`,
       'accreditation': `ADD COLUMN IF NOT EXISTS accreditation TEXT`,
