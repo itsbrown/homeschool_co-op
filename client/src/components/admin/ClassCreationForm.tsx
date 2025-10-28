@@ -153,7 +153,10 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         days: ['Monday', 'Wednesday'],
         price: 5000
       }],
-    location: initialData.location || "",
+    // Convert locationId to location name by looking up in the locations array
+    location: initialData.locationId ? 
+      (locations.find((loc: any) => loc.id === initialData.locationId)?.name || initialData.location || "") : 
+      (initialData.location || ""),
     // Fix price display - convert to string with proper formatting
     price: initialData.price ? formatDollars(parseFloat(initialData.price.toString())) : "0.00",
     capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
@@ -162,11 +165,9 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     isOnline: initialData.isOnline || initialData.location === "Online" || false,
     hasMaterials: initialData.hasMaterials || false,
     materials: initialData.materials || "",
-    // Convert instructor ID to string - check for different potential formats
+    // Convert instructor ID to string
     instructorId: initialData.instructorId ? 
-      initialData.instructorId.toString() : 
-      initialData.instructor_id ? 
-        initialData.instructor_id.toString() : "1",
+      initialData.instructorId.toString() : "1",
   } : null;
   
   // Log the initialData for debugging when editing

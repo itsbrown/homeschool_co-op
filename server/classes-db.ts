@@ -38,7 +38,18 @@ export async function getClassById(id: number): Promise<Class | undefined> {
       [id]
     );
     
-    return result.rows[0] || undefined;
+    if (!result.rows[0]) {
+      return undefined;
+    }
+    
+    // Convert from snake_case to camelCase for JavaScript
+    const camelCaseRow: any = {};
+    Object.keys(result.rows[0]).forEach((key) => {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      camelCaseRow[camelKey] = result.rows[0][key];
+    });
+    
+    return camelCaseRow as Class;
   } catch (error) {
     console.error('Error getting class by ID:', error);
     return undefined;
