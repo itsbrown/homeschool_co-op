@@ -2368,21 +2368,20 @@ router.patch("/schools/:id", async (req, res) => {
     delete updateData.created_by;
 
     // Map frontend field names to database field names
-    // NOTE: Production DB is missing many columns - only updating basic fields
     const dbUpdateData: any = {
       name: updateData.name,
-      // type: updateData.type, // Column missing in production
-      // address: updateData.address, // Column missing in production
-      // city: updateData.city, // Column missing in production
-      // state: updateData.state, // Column missing in production
-      // zip_code: updateData.zipCode, // Column missing in production
-      // phone_number: updateData.phoneNumber, // Column missing in production
+      type: updateData.type,
+      address: updateData.address,
+      city: updateData.city,
+      state: updateData.state,
+      zip_code: updateData.zipCode,
+      phone_number: updateData.phoneNumber,
       email: updateData.email,
-      // website: updateData.website, // Column missing in production
+      website: updateData.website,
       description: updateData.description,
-      // founded_year: updateData.foundedYear, // Column missing in production
-      // accreditation: updateData.accreditation, // Column missing in production
-      // enrollment_size: updateData.enrollmentSize, // Column missing in production
+      founded_year: updateData.foundedYear,
+      accreditation: updateData.accreditation,
+      enrollment_size: updateData.enrollmentSize,
       updated_at: new Date().toISOString()
     };
 
