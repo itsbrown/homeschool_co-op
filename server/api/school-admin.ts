@@ -2380,7 +2380,7 @@ router.patch("/schools/:id", async (req, res) => {
       website: updateData.website,
       description: updateData.description,
       founded_year: updateData.foundedYear,
-      accreditation: updateData.accreditation,
+      // accreditation: updateData.accreditation, // TODO: Re-enable when column is added to production DB
       enrollment_size: updateData.enrollmentSize,
       updated_at: new Date().toISOString()
     };
