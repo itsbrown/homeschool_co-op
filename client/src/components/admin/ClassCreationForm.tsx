@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -213,6 +213,66 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
 
   // Watch for hasMaterials to conditionally show the materials field
   const hasMaterials = form.watch("hasMaterials");
+
+  // Track which class has been initialized to prevent re-initialization on refetch
+  const initializedClassIdRef = useRef<number | null>(null);
+
+  // Reset form with processed initial data once data finishes loading (only once per class)
+  useEffect(() => {
+    // Wait for data to finish loading and ensure we have initialData
+    // Only initialize once per classId to prevent wiping user edits on refetch
+    if (!isLoadingLocations && !isLoadingStaff && initialData && initialData.id !== initializedClassIdRef.current) {
+      // Convert locationId to location name if possible, otherwise use the location string
+      const locationName = initialData.locationId && locations.length > 0 ? 
+        (locations.find((loc: any) => loc.id === initialData.locationId)?.name || initialData.location || "") : 
+        (initialData.location || "");
+      
+      const formData = {
+        title: initialData.title || "",
+        description: initialData.description || "",
+        subject: initialData.subject || "mathematics",
+        category: initialData.category || "academic",
+        gradeLevel: initialData.gradeLevel || "elementary",
+        ageRange: initialData.ageRange || "6-10 years",
+        startDate: initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "",
+        endDate: initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "",
+        variants: initialData.variants || initialData.schedule ? 
+          ((initialData.variants || []).map((v: any) => ({
+            ...v,
+            price: v.price || 5000
+          })) || [{
+            id: 'default-variant',
+            name: 'Main Session',
+            startTime: '9:00 AM',
+            endTime: '12:00 PM',
+            days: ['Monday', 'Wednesday'],
+            price: 5000
+          }]) : [{
+            id: 'default-variant',
+            name: 'Main Session', 
+            startTime: '9:00 AM',
+            endTime: '12:00 PM',
+            days: ['Monday', 'Wednesday'],
+            price: 5000
+          }],
+        location: locationName,
+        price: initialData.price ? formatDollars(parseFloat(initialData.price.toString())) : "0.00",
+        capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
+        isPublished: initialData.isPublished || initialData.status === "published" || false,
+        isAdminOnly: initialData.isAdminOnly || false,
+        isOnline: initialData.isOnline || initialData.location === "Online" || false,
+        hasMaterials: initialData.hasMaterials || false,
+        materials: initialData.materials || "",
+        instructorId: initialData.instructorId ? initialData.instructorId.toString() : "1",
+      };
+      
+      console.log("Resetting form with processed data. Location:", locationName, "Instructor:", formData.instructorId);
+      form.reset(formData);
+      
+      // Mark this class as initialized
+      initializedClassIdRef.current = initialData.id;
+    }
+  }, [isLoadingLocations, isLoadingStaff, locations, initialData, form]);
 
   const handleSubmit = async (data: ClassFormValues) => {
     if (!user) {
