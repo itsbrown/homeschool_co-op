@@ -229,111 +229,34 @@ router.get("/debug-users", async (req, res) => {
 // School admin login now handled through Supabase authentication
 // Removed hardcoded authentication bypass for security
 
+import { jwtCheck } from '../middleware/auth0-auth';
+
 // Get the school associated with the logged-in school administrator
-router.get("/my-school", async (req, res) => {
+router.get("/my-school", jwtCheck, async (req: any, res) => {
   try {
     console.log('🏫 Fetching school data for admin');
-
-    // Get the authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ message: "No authorization header" });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    let user: any = null;
-
-    // In development mode, allow fallback authentication for testing
-    // Check multiple conditions for development mode
-    const isDevelopment = process.env.NODE_ENV === 'development' || 
-                         !process.env.SUPABASE_URL || 
-                         process.env.NODE_ENV !== 'production';
     
-    if (isDevelopment) {
-      console.log('🔧 Using development mode authentication fallback');
-      
-      // Try Supabase authentication first if token looks valid
-      if (token && token.length > 10 && token.includes('.')) {
-        try {
-          const { createClient } = await import('@supabase/supabase-js');
-
-          if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-            const supabase = createClient(
-              process.env.SUPABASE_URL,
-              process.env.SUPABASE_ANON_KEY,
-              {
-                global: {
-                  headers: {
-                    Authorization: `Bearer ${token}`
-                  }
-                }
-              }
-            );
-
-            const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser(token);
-            
-            if (!authError && supabaseUser) {
-              user = supabaseUser;
-              console.log('✅ Development mode: Authenticated via Supabase:', user.email);
-            }
-          }
-        } catch (supabaseError) {
-          console.log('⚠️ Supabase auth failed in development mode');
-        }
-      }
-      
-      // If Supabase auth failed or token is invalid, use development fallback
-      if (!user) {
-        console.log('🔄 Using development fallback user');
-        const allUsers = await storage.getAllUsers();
-        const adminUser = allUsers.find(u => u.role === 'schoolAdmin');
-        
-        if (adminUser) {
-          user = { 
-            email: adminUser.email,
-            id: adminUser.supabaseId || adminUser.id 
-          };
-          console.log('✅ Development mode: Using fallback admin user:', user.email);
-        } else {
-          console.log('❌ No school admin user found in storage');
-        }
-      }
-    } else {
-      // Production mode - require valid Supabase authentication
-      const { createClient } = await import('@supabase/supabase-js');
-
-      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-        return res.status(500).json({ message: "Supabase configuration missing" });
-      }
-
-      const supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_ANON_KEY,
-        {
-          global: {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        }
-      );
-
-      const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser(token);
-
-      if (authError || !supabaseUser) {
-        console.error('Auth error:', authError);
-        return res.status(401).json({ message: "Invalid token" });
-      }
-
-      user = supabaseUser;
-      console.log('✅ Authenticated user:', user.email);
-    }
-
-    if (!user) {
+    // User is already authenticated and synced by jwtCheck middleware
+    const user = req.user;
+    const dbUser = req.user?.dbUser;
+    
+    if (!user || !user.email) {
       return res.status(401).json({ message: "Authentication failed" });
     }
+    
+    console.log('✅ Authenticated user from middleware:', user.email);
 
-    // Use admin client to query the schools table with service role permissions - skip if unavailable
+    // Get admin user from middleware (already synced to database)
+    const adminUser = dbUser;
+    
+    if (!adminUser) {
+      console.log('❌ User not synced to database:', user.email);
+      return res.status(500).json({ message: "User sync failed" });
+    }
+    
+    console.log('✅ Found admin user:', { id: adminUser.id, email: adminUser.email, role: adminUser.role });
+    
+    // Use admin client to query the schools table with service role permissions
     let supabaseAdmin = null;
     try {
       const supabaseModule = await import('../db/supabase');
@@ -341,66 +264,6 @@ router.get("/my-school", async (req, res) => {
     } catch (importError) {
       console.log('⚠️ Could not import supabaseAdmin, will use file storage only');
     }
-
-    // Find the school associated with this admin - query Supabase directly
-    console.log('🔍 Looking up admin user by email:', user.email);
-    let adminUser;
-    
-    // Query Supabase database directly for user
-    if (supabaseAdmin) {
-      try {
-        console.log('🔄 Querying Supabase users table...');
-        const { data: users, error: userError } = await supabaseAdmin
-          .from('users')
-          .select('*')
-          .eq('email', user.email)
-          .limit(1);
-        
-        if (userError) {
-          console.log('❌ Supabase user query error:', userError);
-        } else if (users && users.length > 0) {
-          // Map snake_case to camelCase
-          adminUser = {
-            id: users[0].id,
-            email: users[0].email,
-            role: users[0].role,
-            schoolId: users[0].school_id,
-            supabaseId: users[0].supabase_id,
-            name: users[0].name,
-            username: users[0].username
-          };
-          console.log('✅ Found admin user in Supabase:', { id: adminUser.id, email: adminUser.email, role: adminUser.role });
-        } else {
-          console.log('⚠️ User not found in Supabase database');
-        }
-      } catch (supabaseError) {
-        console.log('❌ Supabase query failed:', supabaseError);
-      }
-    }
-
-    if (!adminUser) {
-      console.log('❌ Admin user not found for email:', user.email);
-      
-      // Debug: List all users in file storage
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const DATA_DIR = path.join(process.cwd(), 'data');
-        const USERS_FILE = path.join(DATA_DIR, 'users.json');
-        
-        if (fs.existsSync(USERS_FILE)) {
-          const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
-          const users = JSON.parse(fileContent);
-          console.log('🔍 All users in file storage:', users.map((u: any) => ({ id: u.id, email: u.email, role: u.role })));
-        }
-      } catch (debugError) {
-        console.log('❌ Error getting users for debug:', debugError);
-      }
-      
-      return res.status(404).json({ message: "Admin user not found" });
-    }
-
-    console.log('✅ Found admin user:', { id: adminUser.id, email: adminUser.email, role: adminUser.role });
     console.log('🔍 Attempting to query school storage...');
     
     // Try Supabase first, then fallback to file storage
