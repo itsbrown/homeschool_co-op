@@ -88,9 +88,11 @@ The platform follows a modern web application architecture, emphasizing scalabil
 - **Educational Tools**: Generators for professional coloring pages and various educational activities, curriculum/lesson plan creation, and student work analysis.
 - **Data Flow**: Secure user authentication, AI-driven content processing post-upload, activity generation, role-based content access, and persistence in Supabase.
 
+### Recent Implementations
+- **Role Naming Convention Standardization (October 2025)**: Completed comprehensive standardization of all role names to camelCase (`schoolAdmin`) across the entire application. All 25 files (18 frontend + 7 backend) now consistently use `'schoolAdmin'` matching the database schema, eliminating the `'school_admin'` (underscore) format that was causing authentication and authorization issues.
+
 ### Planned Features
 - **School Subscription Tiers**: A tiered subscription system for schools (Basic, Pro, Enterprise) for premium features, implemented with database schema additions, feature gate infrastructure, and Stripe integration.
-- **Role Naming Convention Standardization**: Standardize all role names to camelCase (`schoolAdmin`) across the application, involving database mapping, backend and frontend cleanup, and comprehensive testing.
 
 ## External Dependencies
 - **Auth0**: Primary authentication provider.
