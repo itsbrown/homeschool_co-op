@@ -58,8 +58,8 @@ export function useAuth() {
     }
     // School admin role assignment for known admin emails
     else if (user?.email === 'contact.americanseekersacademy@gmail.com') {
-      role = 'school_admin';
-      console.log('🏫 Applied school_admin role for known admin email');
+      role = 'schoolAdmin';
+      console.log('🏫 Applied schoolAdmin role for known admin email');
     }
 
     console.log('🔍 getUserRole - final role:', role);
