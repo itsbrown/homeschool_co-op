@@ -169,6 +169,7 @@ export interface IStorage {
   getClassById(id: number): Promise<Class | undefined>;
   getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]>;
   getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number>;
+  getAllClasses(): Promise<Class[]>;
   createClass(classData: InsertClass & { instructorId: number }): Promise<Class>;
   updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
   deleteClass(id: number): Promise<void>;
@@ -1555,6 +1556,10 @@ export class MemStorage implements IStorage {
     }
 
     return filteredClasses.length;
+  }
+
+  async getAllClasses(): Promise<Class[]> {
+    return Array.from(this.classesStore.values());
   }
 
   async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
@@ -4024,6 +4029,10 @@ export class MemStorage implements IStorage {
 
     async getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number> {
       return this.memStorage.getClassesCount(options);
+    }
+
+    async getAllClasses(): Promise<Class[]> {
+      return this.memStorage.getAllClasses();
     }
 
     async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
