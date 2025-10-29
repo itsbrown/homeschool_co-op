@@ -414,8 +414,9 @@ router.get("/my-school", async (req, res) => {
 
         if (!error && schools && schools.length > 0) {
           console.log('✅ Found school in Supabase:', schools[0].name);
-          // Return school data with camelCase properties for frontend compatibility
-          return res.json({
+          console.log('📊 RAW DATABASE DATA:', JSON.stringify(schools[0], null, 2));
+          
+          const responseData = {
             id: schools[0].id,
             name: schools[0].name,
             type: schools[0].type,
@@ -437,7 +438,14 @@ router.get("/my-school", async (req, res) => {
             registrationCode: schools[0].registration_code,
             createdAt: schools[0].created_at,
             updatedAt: schools[0].updated_at
-          });
+          };
+          
+          console.log('🚀 SENDING RESPONSE FROM DATABASE:', JSON.stringify(responseData, null, 2));
+          console.log('🔍 Description field value:', responseData.description);
+          console.log('🔍 Registration code value:', responseData.registrationCode);
+          
+          // Return school data with camelCase properties for frontend compatibility
+          return res.json(responseData);
         }
         
         console.log('⚠️ Supabase query failed or no results:', error || 'No schools found');
@@ -472,6 +480,7 @@ router.get("/my-school", async (req, res) => {
 
           if (school) {
             console.log('✅ Found existing school for admin:', school.name);
+            console.log('📊 RAW FILE STORAGE DATA:', JSON.stringify(school, null, 2));
             
             // Load locations for this school
             try {
@@ -493,13 +502,22 @@ router.get("/my-school", async (req, res) => {
               
               console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
               
-              // Return school with embedded locations
-              return res.json({
+              const responseData = {
                 ...school,
                 locations
-              });
+              };
+              
+              console.log('🚀 SENDING RESPONSE FROM FILE STORAGE:', JSON.stringify(responseData, null, 2));
+              console.log('🔍 Description field value:', responseData.description);
+              console.log('🔍 Registration code value:', responseData.registrationCode);
+              
+              // Return school with embedded locations
+              return res.json(responseData);
             } catch (locationError) {
               console.error('⚠️ Error loading locations:', locationError);
+              console.log('🚀 SENDING RESPONSE FROM FILE STORAGE (no locations):', JSON.stringify(school, null, 2));
+              console.log('🔍 Description field value:', school.description);
+              console.log('🔍 Registration code value:', school.registrationCode);
               // Return school without locations if there's an error
               return res.json(school);
             }
