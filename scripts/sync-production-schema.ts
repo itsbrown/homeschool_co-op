@@ -47,9 +47,11 @@ async function syncSchema() {
       'founded_year': `ADD COLUMN IF NOT EXISTS founded_year INTEGER`,
       'accreditation': `ADD COLUMN IF NOT EXISTS accreditation TEXT`,
       'enrollment_size': `ADD COLUMN IF NOT EXISTS enrollment_size INTEGER`,
+      'is_verified': `ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`,
       'admin_id': `ADD COLUMN IF NOT EXISTS admin_id INTEGER`,
       'status': `ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
       'logo': `ADD COLUMN IF NOT EXISTS logo TEXT`,
+      'updated_at': `ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()`,
     };
     
     // Add missing columns
