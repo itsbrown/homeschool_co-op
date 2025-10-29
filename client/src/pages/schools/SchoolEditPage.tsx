@@ -153,6 +153,9 @@ export default function SchoolEditPage() {
   });
 
   const onSubmit = (data: z.infer<typeof schoolFormSchema>) => {
+    console.log("🎯 onSubmit called - Form data:", data);
+    console.log("🎯 Form validation state:", form.formState.isValid);
+    console.log("🎯 Form errors:", form.formState.errors);
     updateSchoolMutation.mutate(data);
   };
 
@@ -206,7 +209,12 @@ export default function SchoolEditPage() {
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form onSubmit={(e) => {
+                console.log("📝 Form submit event triggered");
+                console.log("📝 Current form values:", form.getValues());
+                console.log("📝 Form validation errors:", form.formState.errors);
+                form.handleSubmit(onSubmit)(e);
+              }} className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -408,6 +416,7 @@ export default function SchoolEditPage() {
                   <Button 
                     type="submit"
                     disabled={updateSchoolMutation.isPending}
+                    onClick={() => console.log("🔘 Save Changes button clicked")}
                   >
                     {updateSchoolMutation.isPending && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
