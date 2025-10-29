@@ -242,9 +242,16 @@ function DashboardRouter() {
     );
   }
 
-  // Final fallback to school admin page
-  console.log(`🔄 Default routing to MySchoolPage for role:`, activeRole);
-  return <MySchoolPage key={`dashboard-${activeRole}`} />;
+  // If we reach here, the role is not recognized
+  console.error(`❌ Unknown role: ${activeRole}`);
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold mb-2">Role Not Recognized</h2>
+        <p className="text-gray-600">Your role "{activeRole}" is not configured. Please contact support.</p>
+      </div>
+    </div>
+  );
 }
 
 function Router() {
