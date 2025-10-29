@@ -1374,21 +1374,43 @@ router.get("/staff", async (req, res) => {
 // Get single staff member by ID
 router.get("/staff/:id", async (req, res) => {
   try {
-    const { getStaffById } = await import('../services/staff-db');
     const staffId = parseInt(req.params.id, 10);
-    console.log(`🔍 Looking for staff member with ID: ${staffId} in database`);
+    console.log(`🔍 Looking for staff member with ID: ${staffId}`);
     
     if (isNaN(staffId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    const staffMember = await getStaffById(staffId);
+    // Try database first
+    try {
+      const { getStaffById } = await import('../services/staff-db');
+      const staffMember = await getStaffById(staffId);
+      
+      if (staffMember) {
+        console.log(`✅ Found staff member in database: ${staffMember.name}`);
+        return res.json(staffMember);
+      }
+    } catch (dbError) {
+      console.log('⚠️ Database lookup failed, trying file storage:', dbError.message);
+    }
+
+    // Fallback to file storage
+    console.log('🔄 Checking file storage for staff member...');
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    
+    if (!fs.existsSync(STAFF_FILE)) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+    const staffMember = allStaff.find(s => s.id === staffId);
     
     if (!staffMember) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    console.log(`✅ Found staff member: ${staffMember.name}`);
+    console.log(`✅ Found staff member in file storage: ${staffMember.name}`);
     res.json(staffMember);
   } catch (error) {
     console.error("Error fetching staff member:", error);
@@ -1830,7 +1852,6 @@ router.put("/staff/:id", async (req, res) => {
 // Delete staff member
 router.delete("/staff/:id", async (req, res) => {
   try {
-    const { deleteStaff, getStaffById } = await import('../services/staff-db');
     const staffId = parseInt(req.params.id, 10);
     console.log(`🗑️ Attempting to delete staff member with ID: ${staffId}`);
     
@@ -1838,16 +1859,48 @@ router.delete("/staff/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Verify staff member exists before deletion
-    const staffMember = await getStaffById(staffId);
-    if (!staffMember) {
+    let staffMember = null;
+    let deletedFromDatabase = false;
+    let deletedFromFile = false;
+
+    // Try to delete from database first
+    try {
+      const { deleteStaff, getStaffById } = await import('../services/staff-db');
+      staffMember = await getStaffById(staffId);
+      
+      if (staffMember) {
+        await deleteStaff(staffId);
+        deletedFromDatabase = true;
+        console.log(`✅ Successfully deleted staff member from database: ${staffMember.name}`);
+      }
+    } catch (dbError) {
+      console.log('⚠️ Database deletion failed:', dbError.message);
+    }
+
+    // Also try to delete from file storage (to keep both in sync)
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    
+    if (fs.existsSync(STAFF_FILE)) {
+      const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
+      const staffIndex = allStaff.findIndex(s => s.id === staffId);
+      
+      if (staffIndex !== -1) {
+        if (!staffMember) {
+          staffMember = allStaff[staffIndex];
+        }
+        allStaff.splice(staffIndex, 1);
+        fs.writeFileSync(STAFF_FILE, JSON.stringify(allStaff, null, 2));
+        deletedFromFile = true;
+        console.log(`✅ Successfully deleted staff member from file storage: ${staffMember.name}`);
+      }
+    }
+
+    // If not found in either location, return 404
+    if (!deletedFromDatabase && !deletedFromFile) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    // Delete from database
-    await deleteStaff(staffId);
-    console.log(`✅ Successfully deleted staff member: ${staffMember.name}`);
-    
     res.json({ 
       success: true, 
       message: "Staff member deleted successfully",
