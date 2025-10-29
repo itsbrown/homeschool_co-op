@@ -40,7 +40,8 @@ const Auth0Wrapper: React.FC<Auth0WrapperProps> = ({ children }) => {
       authorizationParams={{
         redirect_uri: window.location.origin,
         audience: audience,
-        scope: "openid profile email"
+        scope: "openid profile email",
+        prompt: "select_account"
       }}
       useRefreshTokens={true}
       cacheLocation="localstorage"
