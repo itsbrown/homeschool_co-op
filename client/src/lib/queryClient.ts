@@ -21,21 +21,6 @@ export async function apiRequest(
   let token = localStorage.getItem('supabase_token');
   const activeRole = localStorage.getItem('activeRole');
 
-  // Debug: Show which user this token belongs to
-  if (token && url.includes('/school-admin/')) {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      console.log('🔐 API Request to school-admin endpoint:', {
-        url,
-        tokenEmail: payload.email,
-        activeRole,
-        method
-      });
-    } catch (e) {
-      console.log('🔐 Could not decode token for debugging');
-    }
-  }
-
   // Check if body is FormData to handle file uploads properly
   const isFormData = body instanceof FormData;
   

@@ -35,16 +35,14 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [showRoleSelection, setShowRoleSelection] = useState<boolean>(false);
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
 
-  // For coreycreates@gmail.com, direct routing to school_admin without role switching
-
   const availableRoles = canSwitchRoles
     ? ['parent', 'school_admin', 'superAdmin']
     : [user?.user_metadata?.role || 'parent'];
 
   // Check if user has multiple roles and handle role selection
   const checkUserRoles = (user: any) => {
-    // Only corey@americanseekersacademy.com has multiple roles
-    // coreycreates@gmail.com should go directly to school_admin role
+    // Multi-role users can switch between different roles
+    // This list should be managed in the database in the future
     const multiRoleUsers = ['corey@americanseekersacademy.com'];
     return multiRoleUsers.includes(user?.email);
   };
@@ -68,17 +66,9 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     }
   };
 
-  // Special handling for superAdmin users and school admins (with backend fallback)
-  const getSuperAdminRole = async (user: any): Promise<string> => {
-    // First check hardcoded superadmin
-    if (user?.email === 'corey@americanseekersacademy.com') {
-      return 'superAdmin';
-    }
-    if (user?.email === 'coreycreates@gmail.com') {
-      return 'school_admin';
-    }
-    
-    // If not hardcoded, fetch role from backend database
+  // Get user role from backend database
+  const getUserRole = async (user: any): Promise<string> => {
+    // Always fetch role from backend database - no hardcoded emails
     return await fetchUserRole(user?.email);
   };
 
@@ -117,33 +107,15 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         }
         setCanSwitchRoles(true); // Enable role switching for multi-role users
       } else {
-        // Special handling for specific users first (synchronous)
-        if (user.email === 'corey@americanseekersacademy.com') {
-          console.log(`🔑 Forcing superAdmin role for: ${user.email}`);
-          // Clear any cached parent role
-          localStorage.removeItem('activeRole');
-          localStorage.removeItem('selectedRole');
-          localStorage.removeItem('userRole');
-          setActiveRole('superAdmin');
-          localStorage.setItem('activeRole', 'superAdmin');
-          setCanSwitchRoles(true); // Allow role switching for superAdmin
+        // Single role user - fetch role from backend database
+        getUserRole(user).then((defaultRole) => {
+          console.log(`🎯 Single role user - setting role: ${defaultRole} for ${user.email}`);
+          setActiveRole(defaultRole);
+          localStorage.setItem('activeRole', defaultRole);
+          // Allow role switching for superAdmin
+          setCanSwitchRoles(defaultRole === 'superAdmin');
           setShowRoleSelection(false);
-        } else if (user.email === 'coreycreates@gmail.com') {
-          console.log(`🔑 Forcing school_admin role for: ${user.email}`);
-          setActiveRole('school_admin');
-          localStorage.setItem('activeRole', 'school_admin');
-          setCanSwitchRoles(false); // Direct to school admin, no role switching
-          setShowRoleSelection(false);
-        } else {
-          // Single role user - fetch role from backend asynchronously
-          getSuperAdminRole(user).then((defaultRole) => {
-            console.log(`🎯 Single role user - setting role: ${defaultRole} for ${user.email}`);
-            setActiveRole(defaultRole);
-            localStorage.setItem('activeRole', defaultRole);
-            setCanSwitchRoles(false); // Disable role switching for single-role users
-            setShowRoleSelection(false);
-          });
-        }
+        });
       }
     };
 
