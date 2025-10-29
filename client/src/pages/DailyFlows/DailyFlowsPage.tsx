@@ -13,7 +13,7 @@ import EducatorDailyFlowsPage from "./educator/EducatorDailyFlowsPage";
 export default function DailyFlowsPage() {
   const { activeRole } = useRole();
   
-  if (activeRole === 'schoolAdmin' || activeRole === 'school_admin' || activeRole === 'superAdmin') {
+  if (activeRole === 'schoolAdmin' || activeRole === 'superAdmin') {
     return (
       <Switch>
         <Route path="/schools/daily-flows/templates" component={DailyFlowTemplatesPage} />

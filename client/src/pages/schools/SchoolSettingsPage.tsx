@@ -304,7 +304,7 @@ export default function SchoolSettingsPage() {
                       <h3 className="font-semibold text-lg">{user?.email}</h3>
                       <p className="text-muted-foreground">{user?.email}</p>
                       <Badge variant="secondary">
-                        {user?.role === 'school_admin' ? 'School Administrator' : 'Staff Member'}
+                        {user?.role === 'schoolAdmin' ? 'School Administrator' : 'Staff Member'}
                       </Badge>
                     </div>
                   </div>

@@ -170,7 +170,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     switch (activeRole) {
       case 'educator':
         return 'Educator';
-      case 'school_admin':
+      case 'schoolAdmin':
         return 'School Administrator';
       case 'superAdmin':
         return 'Super Administrator';

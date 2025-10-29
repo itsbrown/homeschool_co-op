@@ -21,7 +21,7 @@ export default function ContactImportPage() {
   const [uploadResults, setUploadResults] = useState<any>(null);
 
   // Check if user is school admin
-  if (!isAuthenticated || !user || !['school_admin', 'schoolAdmin'].includes(user.role)) {
+  if (!isAuthenticated || !user || !['schoolAdmin'].includes(user.role)) {
     setLocation("/");
     return null;
   }

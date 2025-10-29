@@ -6,7 +6,7 @@ import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-
 const router = Router();
 
 // Get comprehensive parent profile data for school admin
-router.get('/:parentId', jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin', 'admin']), async (req: any, res) => {
+router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'admin']), async (req: any, res) => {
   try {
     const parentId = parseInt(req.params.parentId);
     

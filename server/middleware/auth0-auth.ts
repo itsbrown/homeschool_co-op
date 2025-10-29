@@ -64,7 +64,7 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
 
     // Allow role switching for multi-role users
     if (user.email && multiRoleUsers.includes(user.email) && activeRoleHeader) {
-      const allowedRoles = ['parent', 'school_admin', 'schoolAdmin', 'superAdmin'];
+      const allowedRoles = ['parent', 'schoolAdmin', 'superAdmin'];
       if (allowedRoles.includes(activeRoleHeader as string)) {
         effectiveRole = activeRoleHeader as string;
         console.log(`🔄 Role switched to: ${effectiveRole} for user: ${user.email}`);
@@ -164,7 +164,7 @@ export const requireSchoolAccess = (req: any, res: Response, next: NextFunction)
   }
 
   // School admin and staff can only access their own school
-  if (['schoolAdmin', 'school_admin', 'teacher'].includes(role)) {
+  if (['schoolAdmin', 'teacher'].includes(role)) {
     if (schoolId && schoolId.toString() === requestedSchoolId?.toString()) {
       return next();
     }

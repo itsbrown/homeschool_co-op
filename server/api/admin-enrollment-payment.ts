@@ -33,7 +33,7 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
 
     // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'school_admin') {
+    if (!user || user.role !== 'schoolAdmin') {
       return res.status(403).json({ error: 'Only school administrators can modify payment plans' });
     }
 
@@ -238,7 +238,7 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
 
     // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'school_admin') {
+    if (!user || user.role !== 'schoolAdmin') {
       return res.status(403).json({ error: 'Only school administrators can view payment plans' });
     }
 

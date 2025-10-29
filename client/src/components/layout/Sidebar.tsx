@@ -330,7 +330,7 @@ export default function Sidebar() {
       return educatorNavItems;
     } else if (activeRole === 'parent') {
       return parentNavItems;
-    } else if (activeRole === 'school_admin' || activeRole === 'schoolAdmin') {
+    } else if (activeRole === 'schoolAdmin') {
       return schoolNavItems;
     } else {
       // Fallback for unknown roles - show minimal navigation
@@ -452,7 +452,7 @@ export default function Sidebar() {
                        activeRole === 'superAdmin' ? 'Super Administrator' :
                        activeRole === 'admin' ? 'Administrator' :
                        activeRole === 'educator' ? 'Educator' :
-                       activeRole === 'school_admin' || activeRole === 'schoolAdmin' ? 'School Administrator' :
+                       activeRole === 'schoolAdmin' ? 'School Administrator' :
                        'User'}
                     </div>
                   </div>
@@ -538,7 +538,7 @@ export default function Sidebar() {
                          activeRole === 'superAdmin' ? 'Super Administrator' :
                          activeRole === 'admin' ? 'Administrator' :
                          activeRole === 'educator' ? 'Educator' :
-                         activeRole === 'school_admin' || activeRole === 'schoolAdmin' ? 'School Administrator' :
+                         activeRole === 'schoolAdmin' ? 'School Administrator' :
                          'User'}
                       </div>
                     </div>

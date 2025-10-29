@@ -32,7 +32,7 @@ export const SupabaseLogin: React.FC = () => {
       console.log('👤 Single-role user logged in with role:', userRole);
       
       switch (userRole) {
-        case 'school_admin':
+        case 'schoolAdmin':
           setLocation('/schools');
           break;
         case 'educator':

@@ -406,7 +406,7 @@ export default function ChildProfilePage() {
                           <div className="flex items-center gap-2">
                             <Badge variant="default">{enrollment.status}</Badge>
                             {/* Only show Remove button for school admins and only for pending_payment enrollments */}
-                            {activeRole === 'school_admin' && enrollment.status === 'pending_payment' && (
+                            {activeRole === 'schoolAdmin' && enrollment.status === 'pending_payment' && (
                               <Button
                                 variant="outline"
                                 size="sm"

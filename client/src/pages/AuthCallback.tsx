@@ -20,7 +20,7 @@ export default function AuthCallback() {
       console.log('👤 User role detected:', userRole);
       
       switch (userRole) {
-        case 'school_admin':
+        case 'schoolAdmin':
           setLocation('/schools');
           break;
         case 'educator':

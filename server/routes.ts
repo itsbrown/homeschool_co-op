@@ -111,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Validate target role
-      const allowedRoles = ['parent', 'school_admin'];
+      const allowedRoles = ['parent', 'schoolAdmin'];
       if (!allowedRoles.includes(targetRole)) {
         return res.status(400).json({ message: "Invalid target role" });
       }
@@ -1543,7 +1543,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/program-enrollments/:id', isAuthenticated, requireAdmin, programEnrollmentsApi.deleteEnrollment);
 
   // Manual membership enrollment creation for school admins
-  app.post('/api/admin/membership-enrollments', jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin', 'admin']), async (req, res) => {
+  app.post('/api/admin/membership-enrollments', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'admin']), async (req, res) => {
     try {
       const { parentUserId, schoolId, membershipYear } = req.body;
       
@@ -2528,7 +2528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
   // Delete child as school admin
-  app.delete("/api/school-admin/children/:id", jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin', 'admin']), async (req: any, res: any) => {
+  app.delete("/api/school-admin/children/:id", jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'admin']), async (req: any, res: any) => {
     try {
       const childId = parseInt(req.params.id);
       
@@ -2583,7 +2583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/school-admin/children", jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin']), async (req, res) => {
+  app.post("/api/school-admin/children", jwtCheck, requireRole(['schoolAdmin', 'superAdmin']), async (req, res) => {
     try {
       console.log('👶 School admin child creation endpoint hit');
       console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
@@ -2714,7 +2714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/school-admin/children/:id", jwtCheck, requireRole(['school_admin', 'schoolAdmin', 'superAdmin']), async (req, res) => {
+  app.patch("/api/school-admin/children/:id", jwtCheck, requireRole(['schoolAdmin', 'superAdmin']), async (req, res) => {
     try {
       const childId = parseInt(req.params.id);
       const updateData = req.body;

@@ -55,7 +55,7 @@ export default function PaymentHistoryPage() {
     },
   });
   
-  const isAdmin = userRole && ['school_admin', 'schoolAdmin', 'superAdmin', 'admin'].includes(userRole);
+  const isAdmin = userRole && ['schoolAdmin', 'superAdmin', 'admin'].includes(userRole);
   
   const { data: paymentHistory, isLoading: isLoadingHistory } = useQuery<PaymentHistoryItem[]>({
     queryKey: ['/api/payment-history'],

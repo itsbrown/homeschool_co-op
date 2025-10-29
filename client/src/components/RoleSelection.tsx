@@ -23,7 +23,7 @@ export default function RoleSelection({ onRoleSelect, userEmail }: RoleSelection
       iconColor: 'text-blue-600'
     },
     {
-      id: 'school_admin',
+      id: 'schoolAdmin',
       title: 'School Administrator',
       description: 'Manage school operations, staff, students, classes, and curriculum',
       icon: School,

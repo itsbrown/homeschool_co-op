@@ -96,7 +96,7 @@ export function registerTechnicalSupportRoutes(app: Express) {
           title: `Technical Issue: ${analysis.issueType}`,
           message: aiSupport.formatIssueForAdmin(issue),
           severity: analysis.severity,
-          targetRole: 'school_admin',
+          targetRole: 'schoolAdmin',
           createdAt: new Date(),
           read: false,
           actionRequired: true,

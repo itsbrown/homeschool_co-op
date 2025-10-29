@@ -27,7 +27,7 @@ export default function RoleSwitcher({ currentRole, onRoleChange }: RoleSwitcher
       description: 'Access your children\'s information and programs'
     },
     { 
-      id: 'school_admin', 
+      id: 'schoolAdmin', 
       label: 'School Admin', 
       icon: School,
       description: 'Manage school operations and staff'

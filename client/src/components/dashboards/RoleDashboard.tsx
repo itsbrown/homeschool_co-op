@@ -35,7 +35,6 @@ export default function RoleDashboard() {
   // Render the appropriate dashboard based on user role
   switch (userRole) {
     case 'admin':
-    case 'school_admin':
     case 'schoolAdmin':
     case 'superAdmin':
       return <EducatorDashboard />;

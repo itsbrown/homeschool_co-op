@@ -70,7 +70,7 @@ export default function UsersPage() {
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
-      case 'school_admin':
+      case 'schoolAdmin':
         return 'default';
       case 'educator':
         return 'secondary';
@@ -85,7 +85,7 @@ export default function UsersPage() {
 
   const getRoleDisplayName = (role: string) => {
     switch (role) {
-      case 'school_admin':
+      case 'schoolAdmin':
         return 'School Admin';
       case 'educator':
         return 'Educator';
@@ -305,7 +305,7 @@ export default function UsersPage() {
                 <DropdownMenuItem onClick={() => setSelectedRole('staff')}>
                   Staff
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedRole('school_admin')}>
+                <DropdownMenuItem onClick={() => setSelectedRole('schoolAdmin')}>
                   School Admins
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -341,7 +341,7 @@ export default function UsersPage() {
                             user.role === 'parent' ? `/schools/parents/${user.id}` :
                             user.role === 'educator' ? `/schools/educators/${user.id}` :
                             user.role === 'staff' ? `/schools/staff/${user.id}` :
-                            user.role === 'school_admin' ? `/schools/admins/${user.id}` :
+                            user.role === 'schoolAdmin' ? `/schools/admins/${user.id}` :
                             `/schools/users/${user.id}`
                           }
                           data-testid={`link-user-${user.id}`}

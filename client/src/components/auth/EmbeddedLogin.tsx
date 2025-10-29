@@ -184,7 +184,7 @@ export default function EmbeddedLogin() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleQuickAccess("school_admin")}
+                  onClick={() => handleQuickAccess("schoolAdmin")}
                   disabled={isLoading}
                   className="justify-start"
                 >

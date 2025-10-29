@@ -421,7 +421,7 @@ async function getUserNotifications(userId: number, role: string): Promise<any[]
   const userNotificationIds = userRecipients.map(r => r.notificationId);
   
   let userNotifications = notifications.filter(n => 
-    userNotificationIds.includes(n.id) || (role === 'school_admin' && n.senderId === userId)
+    userNotificationIds.includes(n.id) || (role === 'schoolAdmin' && n.senderId === userId)
   );
   
   console.log('📮 User notifications found:', userNotifications.length);
