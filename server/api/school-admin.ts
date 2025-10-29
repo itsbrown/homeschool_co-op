@@ -2381,8 +2381,7 @@ router.patch("/schools/:id", async (req, res) => {
       description: updateData.description,
       founded_year: updateData.foundedYear,
       accreditation: updateData.accreditation,
-      enrollment_size: updateData.enrollmentSize,
-      updated_at: new Date().toISOString()
+      enrollment_size: updateData.enrollmentSize
     };
 
     // Remove undefined fields
