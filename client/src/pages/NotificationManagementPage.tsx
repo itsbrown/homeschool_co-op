@@ -450,7 +450,7 @@ function NotificationComposeDialog({
   
   // Get user role for default delivery method
   const userRole = localStorage.getItem('activeRole') || 'parent';
-  const defaultDeliveryMethod = userRole === 'school_admin' || userRole === 'platform_admin' ? 'in_app' : 'both';
+  const defaultDeliveryMethod = userRole === 'schoolAdmin' || userRole === 'platform_admin' ? 'in_app' : 'both';
   
   // Reset selections when changing target type
   const handleTargetTypeChange = (newType: string) => {

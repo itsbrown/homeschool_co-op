@@ -36,7 +36,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
 
   const availableRoles = canSwitchRoles
-    ? ['parent', 'school_admin', 'superAdmin']
+    ? ['parent', 'schoolAdmin', 'superAdmin']
     : [user?.user_metadata?.role || 'parent'];
 
   // Check if user has multiple roles and handle role selection

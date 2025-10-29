@@ -228,7 +228,7 @@ function DashboardRouter() {
   }
 
   // For school admin - route to school admin interface
-  if (['school_admin', 'schoolAdmin'].includes(activeRole)) {
+  if (['schoolAdmin'].includes(activeRole)) {
     console.log(`🏫 Routing school admin to MySchoolPage`);
     return <MySchoolPage key={`dashboard-${activeRole}`} />;
   }
