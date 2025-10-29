@@ -286,7 +286,7 @@ router.get("/my-school", async (req, res) => {
       if (!user) {
         console.log('🔄 Using development fallback user');
         const allUsers = await storage.getAllUsers();
-        const adminUser = allUsers.find(u => u.role === 'school_admin');
+        const adminUser = allUsers.find(u => u.role === 'schoolAdmin');
         
         if (adminUser) {
           user = { 
@@ -2690,7 +2690,7 @@ router.get('/enrollments', async (req: any, res) => {
 
     // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'school_admin') {
+    if (!user || user.role !== 'schoolAdmin') {
       return res.status(403).json({ message: 'Only school administrators can view enrollments' });
     }
 
