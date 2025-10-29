@@ -65,8 +65,8 @@ export default function SchoolEditPage() {
   
   // Clear any cached data on mount to ensure fresh fetch
   React.useEffect(() => {
-    queryClient.removeQueries({ queryKey: ['/api/school-admin/my-school'] });
-    queryClient.removeQueries({ queryKey: ['/school-admin/my-school'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+    queryClient.invalidateQueries({ queryKey: ['/school-admin/my-school'] });
   }, [queryClient]);
   
   // Fetch the school information for the logged-in school admin
@@ -140,6 +140,7 @@ export default function SchoolEditPage() {
         title: "School updated",
         description: "Your school information has been updated successfully.",
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
       queryClient.invalidateQueries({ queryKey: ['/school-admin/my-school'] });
       setLocation("/schools/my-school");
     },
