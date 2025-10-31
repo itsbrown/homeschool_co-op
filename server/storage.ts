@@ -4408,23 +4408,23 @@ export class MemStorage implements IStorage {
       }
 
       async createStripeSubscriptionSchedule(schedule: InsertStripeSubscriptionSchedule): Promise<StripeSubscriptionSchedule> {
-        return this.memStorage.createStripeSubscriptionSchedule(schedule);
+        return this.dbStorage.createStripeSubscriptionSchedule(schedule);
       }
 
       async getStripeSubscriptionSchedulesByParentEmail(parentEmail: string): Promise<StripeSubscriptionSchedule[]> {
-        return this.memStorage.getStripeSubscriptionSchedulesByParentEmail(parentEmail);
+        return this.dbStorage.getStripeSubscriptionSchedulesByParentEmail(parentEmail);
       }
 
       async getStripeSubscriptionScheduleById(id: number): Promise<StripeSubscriptionSchedule | undefined> {
-        return this.memStorage.getStripeSubscriptionScheduleById(id);
+        return this.dbStorage.getStripeSubscriptionScheduleById(id);
       }
 
       async getStripeSubscriptionScheduleByStripeId(stripeScheduleId: string): Promise<StripeSubscriptionSchedule | undefined> {
-        return this.memStorage.getStripeSubscriptionScheduleByStripeId(stripeScheduleId);
+        return this.dbStorage.getStripeSubscriptionScheduleByStripeId(stripeScheduleId);
       }
 
       async updateStripeSubscriptionSchedule(id: number, schedule: Partial<InsertStripeSubscriptionSchedule>): Promise<StripeSubscriptionSchedule | undefined> {
-        return this.memStorage.updateStripeSubscriptionSchedule(id, schedule);
+        return this.dbStorage.updateStripeSubscriptionSchedule(id, schedule);
       }
 
       async getEnrollmentsByIds(enrollmentIds: number[]): Promise<any[]> {

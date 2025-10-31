@@ -11,6 +11,7 @@ import {
   Program, InsertProgram, programs,
   ProgramEnrollment, InsertProgramEnrollment, programEnrollments,
   MembershipEnrollment, InsertMembershipEnrollment, membershipEnrollments,
+  StripeSubscriptionSchedule, InsertStripeSubscriptionSchedule, stripeSubscriptionSchedules,
   Child, InsertChild, children,
   EmergencyContact, InsertEmergencyContact, emergencyContacts,
   Event, InsertEvent, events,
@@ -1165,5 +1166,59 @@ export class DatabaseStorage implements IStorage {
       .where(eq(refunds.id, id))
       .returning();
     return updatedRefund;
+  }
+
+  // Stripe Subscription Schedule methods
+  async createStripeSubscriptionSchedule(schedule: InsertStripeSubscriptionSchedule): Promise<StripeSubscriptionSchedule> {
+    const db = await getDb();
+    const [newSchedule] = await db
+      .insert(stripeSubscriptionSchedules)
+      .values({
+        ...schedule,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newSchedule;
+  }
+
+  async getStripeSubscriptionScheduleById(id: number): Promise<StripeSubscriptionSchedule | undefined> {
+    const db = await getDb();
+    const [schedule] = await db
+      .select()
+      .from(stripeSubscriptionSchedules)
+      .where(eq(stripeSubscriptionSchedules.id, id));
+    return schedule;
+  }
+
+  async getStripeSubscriptionScheduleByStripeId(stripeScheduleId: string): Promise<StripeSubscriptionSchedule | undefined> {
+    const db = await getDb();
+    const [schedule] = await db
+      .select()
+      .from(stripeSubscriptionSchedules)
+      .where(eq(stripeSubscriptionSchedules.stripeScheduleId, stripeScheduleId));
+    return schedule;
+  }
+
+  async getStripeSubscriptionSchedulesByParentEmail(parentEmail: string): Promise<StripeSubscriptionSchedule[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(stripeSubscriptionSchedules)
+      .where(eq(stripeSubscriptionSchedules.parentEmail, parentEmail))
+      .orderBy(desc(stripeSubscriptionSchedules.createdAt));
+  }
+
+  async updateStripeSubscriptionSchedule(id: number, schedule: Partial<InsertStripeSubscriptionSchedule>): Promise<StripeSubscriptionSchedule | undefined> {
+    const db = await getDb();
+    const [updatedSchedule] = await db
+      .update(stripeSubscriptionSchedules)
+      .set({
+        ...schedule,
+        updatedAt: new Date()
+      })
+      .where(eq(stripeSubscriptionSchedules.id, id))
+      .returning();
+    return updatedSchedule;
   }
 }
