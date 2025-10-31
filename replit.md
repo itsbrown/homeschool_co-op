@@ -29,6 +29,28 @@ The platform uses a modern web application architecture focused on scalability, 
 - **Database Connection**: URL-encoded connection string builder for credential handling.
 - **File Storage**: Local filesystem for general files and knowledge bases.
 - **Authentication Integration**: Frontend uses Supabase OAuth; backend queries Supabase directly for user/school data.
+- **Storage Architecture**: Hybrid storage system using CombinedStorage pattern that routes operations between database storage (dbStorage) for persistent data and in-memory storage (memStorage) for feature-specific data.
+
+### Recent Storage Migrations (October 2025)
+The following critical tables have been migrated from in-memory storage to persistent database storage to fix data loss issues after server restarts:
+
+**High-Priority Migrations (Completed)**:
+- **Classes**: All class management operations now persist to PostgreSQL database
+- **Schools**: School data including registration codes now stored in database
+- **Membership Enrollments**: Annual membership fee tracking and enrollment status now persistent
+- **Stripe Subscription Schedules**: Payment plan tracking for Stripe integration now stored in database
+
+**Feature-Specific Migrations (Completed)**:
+- **Daily Flow Templates**: Curriculum planning templates now persist across restarts
+- **Daily Flow Entries**: Individual scheduled activities and lesson tracking in database
+- **Daily Flow Schedules**: Weekly recurring schedule templates stored persistently
+- **Marketing Links**: Campaign tracking and analytics now stored in database with click counting
+
+**Implementation Details**:
+- All migrations implemented using Drizzle ORM with full CRUD operations
+- CombinedStorage routes critical data operations to dbStorage (PostgreSQL)
+- Legacy memStorage retained for non-critical feature data and caching
+- No data loss on server restarts for migrated tables
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation.
