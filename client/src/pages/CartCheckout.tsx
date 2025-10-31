@@ -37,13 +37,31 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [processing, setProcessing] = useState(false);
-
-  // Use the prop instead of calculating internally
+  const [elementsReady, setElementsReady] = useState(false);
+  
+  // Reset ready state when stripe or elements change (e.g., when clientSecret changes)
+  useEffect(() => {
+    setElementsReady(false);
+  }, [stripe, elements]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!stripe || !elements) {
+      toast({
+        title: "Payment Not Ready",
+        description: "Please wait for the payment form to load completely.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!elementsReady) {
+      toast({
+        title: "Payment Form Loading",
+        description: "Please wait a moment for the payment form to finish loading.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -97,17 +115,31 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <PaymentElement />
+      <PaymentElement 
+        onReady={() => {
+          console.log('✅ PaymentElement is ready');
+          setElementsReady(true);
+        }}
+        onLoadError={(error) => {
+          console.error('❌ PaymentElement load error:', error);
+          setElementsReady(false);
+        }}
+      />
       <Button 
         type="submit" 
         className="w-full" 
-        disabled={!stripe || processing || cart.items.length === 0}
+        disabled={!stripe || !elementsReady || processing || cart.items.length === 0}
         size="lg"
       >
         {processing ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Processing Payment...
+          </>
+        ) : !elementsReady ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Loading Payment Form...
           </>
         ) : (
           <>
@@ -151,6 +183,9 @@ export default function CartCheckout() {
     // No automatic frequency change needed for split plan
   }, [selectedPaymentPlan]);
 
+  // Track if this is the initial load
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   useEffect(() => {
     console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length);
     
@@ -160,37 +195,65 @@ export default function CartCheckout() {
       return;
     }
 
-    // If cart has items, proceed with checkout
+    // If cart has items, mark initial load as complete
     if (cart.items.length > 0) {
-      console.log('🛒 Cart has items, creating payment intent');
-      createPaymentIntent();
+      if (isInitialLoad) {
+        console.log('🛒 Cart has items, marking initial load complete');
+        setIsInitialLoad(false);
+      }
+      
+      // Create payment intent if we don't have one yet
+      if (!clientSecret) {
+        console.log('🛒 Creating initial payment intent');
+        createPaymentIntent();
+      }
       return;
     }
 
-    // If cart is empty, try to load unpaid enrollments first
-    console.log('🛒 Cart is empty, forcing load of unpaid enrollments...');
-    loadUnpaidEnrollments();
-    
-    let attempts = 0;
-    const maxAttempts = 20; // Give more time: 10 seconds (20 * 500ms) to account for localStorage loading
-    
-    const timer = setInterval(() => {
-      attempts++;
-      console.log(`🛒 Cart loading attempt ${attempts}/${maxAttempts} - items:`, cart.items.length);
+    // Only run cart loading logic on initial load and when cart is empty
+    if (isInitialLoad && cart.items.length === 0) {
+      // If cart is empty, try to load unpaid enrollments first
+      console.log('🛒 Cart is empty, forcing load of unpaid enrollments...');
+      loadUnpaidEnrollments();
       
-      if (cart.items.length > 0) {
-        console.log('🛒 Cart loaded with items:', cart.items.length);
-        clearInterval(timer);
-        createPaymentIntent();
-      } else if (attempts >= maxAttempts) {
-        console.log('🛒 CartCheckout: No items found after multiple attempts, redirecting to programs');
-        clearInterval(timer);
-        setLocation('/programs');
-      }
-    }, 500);
+      let attempts = 0;
+      const maxAttempts = 20; // Give more time: 10 seconds (20 * 500ms) to account for localStorage loading
+      
+      const timer = setInterval(() => {
+        attempts++;
+        console.log(`🛒 Cart loading attempt ${attempts}/${maxAttempts} - items:`, cart.items.length);
+        
+        if (cart.items.length > 0) {
+          console.log('🛒 Cart loaded with items:', cart.items.length);
+          clearInterval(timer);
+          // Don't call createPaymentIntent here - the effect will re-run with cart.items
+        } else if (attempts >= maxAttempts) {
+          console.log('🛒 CartCheckout: No items found after multiple attempts, redirecting to programs');
+          clearInterval(timer);
+          setLocation('/programs');
+        }
+      }, 500);
+      
+      return () => clearInterval(timer);
+    }
+  }, [isAuthenticated, cart.items.length, cart.total]); // Re-run when cart changes
+  
+  // Separate effect to handle payment plan changes with debouncing
+  useEffect(() => {
+    // Don't recreate if we haven't created the initial payment intent yet
+    if (!clientSecret || !isAuthenticated || cart.items.length === 0 || isInitialLoad) {
+      return;
+    }
     
-    return () => clearInterval(timer);
-  }, [isAuthenticated, selectedPaymentPlan, paymentFrequency, cart.total]); // Re-create payment intent when payment plan, frequency, or cart total changes
+    // Debounce payment intent recreation when payment plan changes
+    const timeoutId = setTimeout(() => {
+      console.log('💳 Payment plan changed, recreating payment intent');
+      setClientSecret(''); // Clear to show loading state
+      createPaymentIntent();
+    }, 300); // 300ms debounce to prevent rapid recreations
+    
+    return () => clearTimeout(timeoutId);
+  }, [selectedPaymentPlan, paymentFrequency])
 
   const createPaymentIntent = async () => {
     try {

@@ -84,6 +84,16 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
     }
     
     try {
+      // Map frontend payment plan values to database enum values
+      const paymentPlanMapping: Record<string, string> = {
+        'full': 'full_payment',
+        'deposit': 'deposit_only',
+        'split': 'custom',
+        'biweekly': 'biweekly'
+      };
+      
+      const dbPaymentPlan = (paymentPlanMapping[paymentPlan] || 'full_payment') as 'full_payment' | 'deposit_only' | 'biweekly' | 'custom';
+      
       // Create enrollments in database
       const enrollmentIds = [];
       for (const item of items) {
@@ -98,6 +108,14 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
         if (!classData) {
           throw new Error(`Class ${item.classId} not found`);
         }
+        
+        // Helper to safely convert date to string
+        const formatDate = (date: any): string | null => {
+          if (!date) return null;
+          if (typeof date === 'string') return date;
+          if (date instanceof Date) return date.toISOString().split('T')[0];
+          return String(date);
+        };
         
         const enrollment = await storage.createProgramEnrollment({
           schoolId: child.schoolId || parent.schoolId || 1, // Fallback to parent's school or default
@@ -114,11 +132,11 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           remainingBalance: item.totalCost,
           depositRequired: 0,
           paymentStatus: paymentPlan === 'full' ? 'pending' : 'deposit_paid',
-          paymentPlan: paymentPlan === 'full' ? 'full_payment' : paymentPlan,
+          paymentPlan: dbPaymentPlan,
           paymentSystemVersion: 'v2_stripe',
           paymentFrequency: paymentFrequency,
-          programStartDate: classData.startDate ? (classData.startDate instanceof Date ? classData.startDate.toISOString().split('T')[0] : String(classData.startDate)) : null,
-          programEndDate: classData.endDate ? (classData.endDate instanceof Date ? classData.endDate.toISOString().split('T')[0] : String(classData.endDate)) : null,
+          programStartDate: formatDate(classData.startDate),
+          programEndDate: formatDate(classData.endDate),
           stripeSubscriptionId: null,
           stripeCustomerId: null,
           notes: null,
