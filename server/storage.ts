@@ -3876,38 +3876,38 @@ export class MemStorage implements IStorage {
     }
 
     async getChildById(id: number): Promise<Child | undefined> {
-      // Use memStorage for child retrieval since it has the implementation
-      return this.memStorage.getChildById(id);
+      // Use dbStorage for child retrieval to get data from database
+      return this.dbStorage.getChildById(id);
     }
 
     async getChildrenByParentId(parentId: number): Promise<Child[]> {
-      // Use memStorage for children retrieval since it has the implementation
-      return this.memStorage.getChildrenByParentId(parentId);
+      // Use dbStorage for children retrieval to get data from database
+      return this.dbStorage.getChildrenByParentId(parentId);
     }
 
     async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
-      // In file-based storage, we use the MemStorage method
-      return this.memStorage.getChildrenByParentEmail(parentEmail);
+      // Use dbStorage to get children from database by parent email
+      return this.dbStorage.getChildrenByParentEmail(parentEmail);
     }
 
     async getAllChildren(): Promise<Child[]> {
-      // Use memStorage for children retrieval since it has the implementation
-      return this.memStorage.getAllChildren();
+      // Use dbStorage for children retrieval to get data from database
+      return this.dbStorage.getAllChildren();
     }
 
     async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
-      // Use memStorage for child creation since it has the implementation
-      return this.memStorage.createChild(child);
+      // Use dbStorage for child creation to persist to database
+      return this.dbStorage.createChild(child);
     }
 
     async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
-      // Use memStorage for child updates since it has the implementation
-      return this.memStorage.updateChild(id, child);
+      // Use dbStorage for child updates to persist changes to database
+      return this.dbStorage.updateChild(id, child);
     }
 
     async deleteChild(id: number): Promise<void> {
-      // Use memStorage for child deletion since it has the implementation
-      return this.memStorage.deleteChild(id);
+      // Use dbStorage for child deletion to remove from database
+      return this.dbStorage.deleteChild(id);
     }
 
 

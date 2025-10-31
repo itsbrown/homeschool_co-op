@@ -89,6 +89,7 @@ The platform follows a modern web application architecture, emphasizing scalabil
 - **Data Flow**: Secure user authentication, AI-driven content processing post-upload, activity generation, role-based content access, and persistence in Supabase.
 
 ### Recent Implementations
+- **Critical Bug Fix: Children Data Persistence (October 31, 2025)**: Fixed critical data loss bug where children registration data was not being saved to the database. The `CombinedStorage` class was incorrectly using `memStorage` (in-memory only) instead of `dbStorage` (PostgreSQL) for all child-related operations (`createChild`, `updateChild`, `deleteChild`, `getChildById`, `getChildrenByParentId`, `getChildrenByParentEmail`, `getAllChildren`). This caused children data to be lost when the server restarted or users logged back in, resulting in failed checkouts and missing enrollment data. All child operations now properly persist to the PostgreSQL database.
 - **Role Naming Convention Standardization (October 2025)**: Completed comprehensive standardization of all role names to camelCase (`schoolAdmin`) across the entire application. All 25 files (18 frontend + 7 backend) now consistently use `'schoolAdmin'` matching the database schema, eliminating the `'school_admin'` (underscore) format that was causing authentication and authorization issues.
 
 ### Planned Features
