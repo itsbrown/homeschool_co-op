@@ -3048,13 +3048,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parentEmail = supabaseAuth.email;
       console.log('👤 Creating child for parent:', parentEmail);
 
-      // Create child data object
+      // Get the parent user to retrieve their ID
+      const parent = await storage.getUserByEmail(parentEmail);
+      if (!parent) {
+        console.error('❌ Parent user not found for email:', parentEmail);
+        return res.status(404).json({ 
+          success: false,
+          message: 'Parent user not found' 
+        });
+      }
+
+      console.log('👤 Found parent with ID:', parent.id);
+
+      // Create child data object with parentId
       const childData = {
         firstName,
         lastName,
         birthdate,
         gradeLevel,
         parentEmail,
+        parentId: parent.id,  // 🔧 ADDED: Include parentId for database storage
         specialNeeds: specialNeeds || null,
         medicalInfo: medicalNotes || null,
         interests: interests || [],

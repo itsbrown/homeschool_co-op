@@ -89,7 +89,12 @@ The platform follows a modern web application architecture, emphasizing scalabil
 - **Data Flow**: Secure user authentication, AI-driven content processing post-upload, activity generation, role-based content access, and persistence in Supabase.
 
 ### Recent Implementations
-- **Critical Bug Fix: Children Data Persistence (October 31, 2025)**: Fixed critical data loss bug where children registration data was not being saved to the database. The `CombinedStorage` class was incorrectly using `memStorage` (in-memory only) instead of `dbStorage` (PostgreSQL) for all child-related operations (`createChild`, `updateChild`, `deleteChild`, `getChildById`, `getChildrenByParentId`, `getChildrenByParentEmail`, `getAllChildren`). This caused children data to be lost when the server restarted or users logged back in, resulting in failed checkouts and missing enrollment data. All child operations now properly persist to the PostgreSQL database.
+- **Critical Bug Fix: Children Data Persistence (October 31, 2025)**: Fixed two critical data loss bugs preventing children registration from saving to the database:
+  1. **Storage Layer Bug**: `CombinedStorage` class was incorrectly using `memStorage` (in-memory only) instead of `dbStorage` (PostgreSQL) for all child-related operations. Fixed by updating all 7 child methods (`createChild`, `updateChild`, `deleteChild`, `getChildById`, `getChildrenByParentId`, `getChildrenByParentEmail`, `getAllChildren`) to use database storage.
+  2. **Missing Parent ID Bug**: `POST /api/children` endpoint was creating children without a `parentId`, causing database insertion to fail silently. Fixed by adding parent lookup (`getUserByEmail`) and including `parentId` in the child data object.
+  - **Root Cause**: The application has two child registration endpoints (`/api/children` and `/api/parent/children`), but only one was correctly implemented. The cart persisted in localStorage while the API silently failed to save to the database.
+  - **Impact**: All parent accounts showed 0 registered children despite cart items being saved. Checkout flows failed due to missing child data.
+  - **Resolution**: All child operations now properly persist to PostgreSQL database with correct parent associations.
 - **Role Naming Convention Standardization (October 2025)**: Completed comprehensive standardization of all role names to camelCase (`schoolAdmin`) across the entire application. All 25 files (18 frontend + 7 backend) now consistently use `'schoolAdmin'` matching the database schema, eliminating the `'school_admin'` (underscore) format that was causing authentication and authorization issues.
 
 ### Planned Features
