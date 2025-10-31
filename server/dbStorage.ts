@@ -14,6 +14,7 @@ import {
   EmergencyContact, InsertEmergencyContact, emergencyContacts,
   Event, InsertEvent, events,
   MarketplaceItem, InsertMarketplaceItem, marketplaceItems,
+  School, InsertSchool, schools,
   SchoolStaff, InsertSchoolStaff, schoolStaff,
   Payment, InsertPayment, payments,
   ScheduledPayment, InsertScheduledPayment, scheduledPayments,
@@ -67,6 +68,47 @@ export class DatabaseStorage implements IStorage {
   async deleteUser(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // School methods
+  async getSchool(id: number): Promise<School | undefined> {
+    const db = await getDb();
+    const [school] = await db.select().from(schools).where(eq(schools.id, id));
+    return school;
+  }
+
+  async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
+    const db = await getDb();
+    const [school] = await db.select().from(schools).where(eq(schools.registrationCode, registrationCode));
+    return school;
+  }
+
+  async getAllSchools(): Promise<School[]> {
+    const db = await getDb();
+    return await db.select().from(schools);
+  }
+
+  async createSchool(schoolData: InsertSchool & { adminId: number }): Promise<School> {
+    const db = await getDb();
+    const [newSchool] = await db.insert(schools).values({
+      ...schoolData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newSchool;
+  }
+
+  async updateSchool(id: number, schoolData: Partial<InsertSchool>): Promise<School | undefined> {
+    const db = await getDb();
+    const [updatedSchool] = await db
+      .update(schools)
+      .set({
+        ...schoolData,
+        updatedAt: new Date()
+      })
+      .where(eq(schools.id, id))
+      .returning();
+    return updatedSchool;
   }
 
   // Curriculum methods

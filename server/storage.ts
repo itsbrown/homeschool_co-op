@@ -3730,28 +3730,25 @@ export class MemStorage implements IStorage {
       }
     }
 
-    // School methods - use file-based storage since schools aren't loaded into memory
+    // School methods - use database storage
     async getSchool(id: number): Promise<School | undefined> {
-      const { schoolStorage } = await import('./school-storage');
-      return schoolStorage.getSchoolById(id);
+      return this.dbStorage.getSchool(id);
     }
 
     async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
-      return this.memStorage.getSchoolByCode(registrationCode);
+      return this.dbStorage.getSchoolByCode(registrationCode);
     }
 
     async createSchool(school: InsertSchool): Promise<School> {
-      return this.memStorage.createSchool(school);
+      return this.dbStorage.createSchool(school);
     }
 
     async updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined> {
-      const { schoolStorage } = await import('./school-storage');
-      return schoolStorage.updateSchool(id, school);
+      return this.dbStorage.updateSchool(id, school);
     }
 
     async getAllSchools(): Promise<School[]> {
-      const { schoolStorage } = await import('./school-storage');
-      return schoolStorage.getAllSchools();
+      return this.dbStorage.getAllSchools();
     }
 
     async getCurriculum(id: number): Promise<Curriculum | undefined> {
