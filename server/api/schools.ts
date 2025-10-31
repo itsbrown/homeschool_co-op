@@ -90,79 +90,14 @@ router.post("/", async (req, res) => {
       registrationCode
     };
 
-    try {
-      // Try database first
-      const db = await getDb();
-      const [newSchool] = await db
-        .insert(schools)
-        .values(schoolDataWithCode)
-        .returning();
+    const db = await getDb();
+    const [newSchool] = await db
+      .insert(schools)
+      .values(schoolDataWithCode)
+      .returning();
 
-      console.log('✅ School created in database:', newSchool);
-      res.status(201).json(newSchool);
-    } catch (dbError) {
-      console.log('⚠️ Database failed, using file storage fallback:', dbError);
-
-      // Fallback to file storage
-      const fs = await import('fs');
-      const path = await import('path');
-
-      const DATA_DIR = path.join(process.cwd(), 'data');
-      const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
-
-      // Ensure data directory exists
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-
-      // Load existing schools or initialize empty array
-      let existingSchools = [];
-      if (fs.existsSync(SCHOOLS_FILE)) {
-        try {
-          const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
-          existingSchools = JSON.parse(fileContent);
-        } catch (error) {
-          console.log('Error reading schools file, starting with empty array:', error);
-          existingSchools = [];
-        }
-      }
-
-      // Generate new ID
-      const newId = existingSchools.length > 0 
-        ? Math.max(...existingSchools.map((s: any) => s.id)) + 1 
-        : 1;
-
-      // Create new school object for file storage
-      const newSchool = {
-        id: newId,
-        name: schoolDataWithCode.name,
-        type: schoolDataWithCode.type,
-        address: schoolDataWithCode.address,
-        city: schoolDataWithCode.city,
-        state: schoolDataWithCode.state,
-        zipCode: schoolDataWithCode.zipCode,
-        phoneNumber: schoolDataWithCode.phoneNumber,
-        email: schoolDataWithCode.email,
-        website: schoolDataWithCode.website,
-        description: schoolDataWithCode.description,
-        accreditation: schoolDataWithCode.accreditation,
-        enrollmentSize: schoolDataWithCode.enrollmentSize,
-        foundedYear: schoolDataWithCode.foundedYear,
-        registrationCode: schoolDataWithCode.registrationCode,
-        status: "active",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      // Add to schools array
-      existingSchools.push(newSchool);
-
-      // Write back to file
-      fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(existingSchools, null, 2));
-
-      console.log('✅ School created successfully in file storage:', newSchool.name);
-      res.status(201).json(newSchool);
-    }
+    console.log('✅ School created in database:', newSchool);
+    res.status(201).json(newSchool);
   } catch (error: any) {
     console.error("Error creating school:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
