@@ -12,6 +12,9 @@ import {
   ProgramEnrollment, InsertProgramEnrollment, programEnrollments,
   MembershipEnrollment, InsertMembershipEnrollment, membershipEnrollments,
   StripeSubscriptionSchedule, InsertStripeSubscriptionSchedule, stripeSubscriptionSchedules,
+  DailyFlowTemplate, InsertDailyFlowTemplate, dailyFlowTemplates,
+  DailyFlowEntry, InsertDailyFlowEntry, dailyFlowEntries,
+  DailyFlowSchedule, InsertDailyFlowSchedule, dailyFlowSchedules,
   Child, InsertChild, children,
   EmergencyContact, InsertEmergencyContact, emergencyContacts,
   Event, InsertEvent, events,
@@ -1220,5 +1223,195 @@ export class DatabaseStorage implements IStorage {
       .where(eq(stripeSubscriptionSchedules.id, id))
       .returning();
     return updatedSchedule;
+  }
+
+  // Daily Flow Template methods
+  async getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]> {
+    const db = await getDb();
+    let query = db.select().from(dailyFlowTemplates);
+    const conditions = [];
+    
+    if (filters?.schoolId) {
+      conditions.push(eq(dailyFlowTemplates.schoolId, filters.schoolId));
+    }
+    if (filters?.gradeLevel) {
+      conditions.push(eq(dailyFlowTemplates.gradeLevel, filters.gradeLevel));
+    }
+    if (filters?.subject) {
+      conditions.push(eq(dailyFlowTemplates.subject, filters.subject));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(dailyFlowTemplates.createdAt));
+  }
+
+  async getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined> {
+    const db = await getDb();
+    const [template] = await db.select().from(dailyFlowTemplates).where(eq(dailyFlowTemplates.id, id));
+    return template;
+  }
+
+  async createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate> {
+    const db = await getDb();
+    const [newTemplate] = await db
+      .insert(dailyFlowTemplates)
+      .values({
+        ...template,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newTemplate;
+  }
+
+  async updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined> {
+    const db = await getDb();
+    const [updatedTemplate] = await db
+      .update(dailyFlowTemplates)
+      .set({
+        ...template,
+        updatedAt: new Date()
+      })
+      .where(eq(dailyFlowTemplates.id, id))
+      .returning();
+    return updatedTemplate;
+  }
+
+  async deleteDailyFlowTemplate(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(dailyFlowTemplates).where(eq(dailyFlowTemplates.id, id));
+  }
+
+  // Daily Flow Entry methods
+  async getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]> {
+    const db = await getDb();
+    let query = db.select().from(dailyFlowEntries);
+    const conditions = [];
+    
+    if (filters?.classId) {
+      conditions.push(eq(dailyFlowEntries.classId, filters.classId));
+    }
+    if (filters?.startDate) {
+      conditions.push(sql`${dailyFlowEntries.date} >= ${filters.startDate}`);
+    }
+    if (filters?.endDate) {
+      conditions.push(sql`${dailyFlowEntries.date} <= ${filters.endDate}`);
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(dailyFlowEntries.date));
+  }
+
+  async getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined> {
+    const db = await getDb();
+    const [entry] = await db.select().from(dailyFlowEntries).where(eq(dailyFlowEntries.id, id));
+    return entry;
+  }
+
+  async createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry> {
+    const db = await getDb();
+    const [newEntry] = await db
+      .insert(dailyFlowEntries)
+      .values({
+        ...entry,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newEntry;
+  }
+
+  async updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined> {
+    const db = await getDb();
+    const [updatedEntry] = await db
+      .update(dailyFlowEntries)
+      .set({
+        ...entry,
+        updatedAt: new Date()
+      })
+      .where(eq(dailyFlowEntries.id, id))
+      .returning();
+    return updatedEntry;
+  }
+
+  async deleteDailyFlowEntry(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(dailyFlowEntries).where(eq(dailyFlowEntries.id, id));
+  }
+
+  // Daily Flow Schedule methods
+  async getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]> {
+    const db = await getDb();
+    let query = db.select().from(dailyFlowSchedules);
+    const conditions = [];
+    
+    if (filters?.templateId) {
+      conditions.push(eq(dailyFlowSchedules.templateId, filters.templateId));
+    }
+    if (filters?.classId) {
+      conditions.push(eq(dailyFlowSchedules.classId, filters.classId));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(asc(dailyFlowSchedules.dayOfWeek), asc(dailyFlowSchedules.startTime));
+  }
+
+  async getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined> {
+    const db = await getDb();
+    const [schedule] = await db.select().from(dailyFlowSchedules).where(eq(dailyFlowSchedules.id, id));
+    return schedule;
+  }
+
+  async createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule> {
+    const db = await getDb();
+    const [newSchedule] = await db
+      .insert(dailyFlowSchedules)
+      .values({
+        ...schedule,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newSchedule;
+  }
+
+  async updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined> {
+    const db = await getDb();
+    const [updatedSchedule] = await db
+      .update(dailyFlowSchedules)
+      .set({
+        ...schedule,
+        updatedAt: new Date()
+      })
+      .where(eq(dailyFlowSchedules.id, id))
+      .returning();
+    return updatedSchedule;
+  }
+
+  async deleteDailyFlowSchedule(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(dailyFlowSchedules).where(eq(dailyFlowSchedules.id, id));
+  }
+
+  async getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }> {
+    const entries = await this.getDailyFlowEntries(filters);
+    const totalEntries = entries.length;
+    const completedEntries = entries.filter(e => e.isCompleted).length;
+    const completionRate = totalEntries > 0 ? (completedEntries / totalEntries) * 100 : 0;
+    
+    return {
+      totalEntries,
+      completedEntries,
+      completionRate
+    };
   }
 }

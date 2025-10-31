@@ -4270,65 +4270,65 @@ export class MemStorage implements IStorage {
 
       // Daily Flow Template methods
       async getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]> {
-        return this.memStorage.getDailyFlowTemplates(filters);
+        return this.dbStorage.getDailyFlowTemplates(filters);
       }
 
       async getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined> {
-        return this.memStorage.getDailyFlowTemplateById(id);
+        return this.dbStorage.getDailyFlowTemplateById(id);
       }
 
       async createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate> {
-        return this.memStorage.createDailyFlowTemplate(template);
+        return this.dbStorage.createDailyFlowTemplate(template);
       }
 
       async updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined> {
-        return this.memStorage.updateDailyFlowTemplate(id, template);
+        return this.dbStorage.updateDailyFlowTemplate(id, template);
       }
 
       async deleteDailyFlowTemplate(id: number): Promise<void> {
-        return this.memStorage.deleteDailyFlowTemplate(id);
+        return this.dbStorage.deleteDailyFlowTemplate(id);
       }
 
       // Daily Flow Entry methods
       async getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]> {
-        return this.memStorage.getDailyFlowEntries(filters);
+        return this.dbStorage.getDailyFlowEntries(filters);
       }
 
       async getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined> {
-        return this.memStorage.getDailyFlowEntryById(id);
+        return this.dbStorage.getDailyFlowEntryById(id);
       }
 
       async createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry> {
-        return this.memStorage.createDailyFlowEntry(entry);
+        return this.dbStorage.createDailyFlowEntry(entry);
       }
 
       async updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined> {
-        return this.memStorage.updateDailyFlowEntry(id, entry);
+        return this.dbStorage.updateDailyFlowEntry(id, entry);
       }
 
       async deleteDailyFlowEntry(id: number): Promise<void> {
-        return this.memStorage.deleteDailyFlowEntry(id);
+        return this.dbStorage.deleteDailyFlowEntry(id);
       }
 
       // Daily Flow Schedule methods
       async getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]> {
-        return this.memStorage.getDailyFlowSchedules(filters);
+        return this.dbStorage.getDailyFlowSchedules(filters);
       }
 
       async getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined> {
-        return this.memStorage.getDailyFlowScheduleById(id);
+        return this.dbStorage.getDailyFlowScheduleById(id);
       }
 
       async createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule> {
-        return this.memStorage.createDailyFlowSchedule(schedule);
+        return this.dbStorage.createDailyFlowSchedule(schedule);
       }
 
       async updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined> {
-        return this.memStorage.updateDailyFlowSchedule(id, schedule);
+        return this.dbStorage.updateDailyFlowSchedule(id, schedule);
       }
 
       async deleteDailyFlowSchedule(id: number): Promise<void> {
-        return this.memStorage.deleteDailyFlowSchedule(id);
+        return this.dbStorage.deleteDailyFlowSchedule(id);
       }
 
       // Daily Flow utility methods
@@ -4337,7 +4337,7 @@ export class MemStorage implements IStorage {
       }
 
       async getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }> {
-        return this.memStorage.getDailyFlowStats(filters);
+        return this.dbStorage.getDailyFlowStats(filters);
       }
 
       // Technical Support methods
