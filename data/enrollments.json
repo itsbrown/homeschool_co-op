@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": 1761880009154,
+    "classId": 3,
+    "childId": 74,
+    "childName": "Hermione Brown",
+    "className": "Macaroni",
+    "enrollmentDate": "2025-10-31T03:06:49.154Z",
+    "status": "pending_payment",
+    "waitlistPosition": null,
+    "amount": 0,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
+  },
+  {
+    "id": 1761880309936,
+    "classId": 3,
+    "childId": 74,
+    "childName": "Hermione Brown",
+    "className": "Macaroni",
+    "enrollmentDate": "2025-10-31T03:11:49.935Z",
+    "status": "pending_payment",
+    "waitlistPosition": null,
+    "amount": 0,
+    "depositRequired": 9000,
+    "totalCost": 90000,
+    "remainingBalance": 90000
+  }
+]

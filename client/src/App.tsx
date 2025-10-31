@@ -423,6 +423,13 @@ function Router() {
       <Route path="/checkout" component={Checkout} />
       <Route path="/checkout/success" component={CheckoutSuccess} />
       {/* Cart routes */}
+          <Route path="/cart">
+            {isAuthenticated ? (
+              <CartCheckout />
+            ) : (
+              <Redirect to="/login" />
+            )}
+          </Route>
           <Route path="/cart/checkout">
             {isAuthenticated ? (
               <CartCheckout />
