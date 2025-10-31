@@ -4078,35 +4078,31 @@ export class MemStorage implements IStorage {
     }
 
     async createMarketingLink(link: InsertMarketingLink): Promise<MarketingLink> {
-      return this.memStorage.createMarketingLink(link);
+      return this.dbStorage.createMarketingLink(link);
     }
 
     async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
-      return this.memStorage.getMarketingLinkById(id);
+      return this.dbStorage.getMarketingLinkById(id);
     }
 
     async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
-      return this.memStorage.getMarketingLinkByCampaignId(campaignId);
+      return this.dbStorage.getMarketingLinkByCampaignId(campaignId);
     }
 
     async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
-      return this.memStorage.getMarketingLinksBySchoolId(schoolId);
+      return this.dbStorage.getMarketingLinksBySchoolId(schoolId);
     }
 
     async updateMarketingLink(id: number, link: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
-      return this.memStorage.updateMarketingLink(id, link);
+      return this.dbStorage.updateMarketingLink(id, link);
     }
 
     async deleteMarketingLink(id: number): Promise<void> {
-      const result = await this.memStorage.deleteMarketingLink(id);
-      return;
+      return this.dbStorage.deleteMarketingLink(id);
     }
 
     async incrementLinkClick(campaignId: string): Promise<void> {
-      const link = await this.memStorage.getMarketingLinkByCampaignId(campaignId);
-      if (link) {
-        await this.memStorage.incrementLinkClick(link.id);
-      }
+      return this.dbStorage.incrementLinkClick(campaignId);
     }
 
     async incrementLinkConversion(campaignId: string): Promise<void> {

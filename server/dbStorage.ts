@@ -15,6 +15,7 @@ import {
   DailyFlowTemplate, InsertDailyFlowTemplate, dailyFlowTemplates,
   DailyFlowEntry, InsertDailyFlowEntry, dailyFlowEntries,
   DailyFlowSchedule, InsertDailyFlowSchedule, dailyFlowSchedules,
+  MarketingLink, InsertMarketingLink, marketingLinks,
   Child, InsertChild, children,
   EmergencyContact, InsertEmergencyContact, emergencyContacts,
   Event, InsertEvent, events,
@@ -1413,5 +1414,72 @@ export class DatabaseStorage implements IStorage {
       completedEntries,
       completionRate
     };
+  }
+
+  // Marketing Link methods
+  async getMarketingLinkById(id: number): Promise<MarketingLink | undefined> {
+    const db = await getDb();
+    const [link] = await db.select().from(marketingLinks).where(eq(marketingLinks.id, id));
+    return link;
+  }
+
+  async getMarketingLinkByCampaignId(campaignId: string): Promise<MarketingLink | undefined> {
+    const db = await getDb();
+    const [link] = await db.select().from(marketingLinks).where(eq(marketingLinks.campaignId, campaignId));
+    return link;
+  }
+
+  async getMarketingLinksBySchoolId(schoolId: number): Promise<MarketingLink[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(marketingLinks)
+      .where(eq(marketingLinks.schoolId, schoolId))
+      .orderBy(desc(marketingLinks.createdAt));
+  }
+
+  async createMarketingLink(link: InsertMarketingLink): Promise<MarketingLink> {
+    const db = await getDb();
+    const [newLink] = await db
+      .insert(marketingLinks)
+      .values({
+        ...link,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newLink;
+  }
+
+  async updateMarketingLink(id: number, link: Partial<InsertMarketingLink>): Promise<MarketingLink | undefined> {
+    const db = await getDb();
+    const [updatedLink] = await db
+      .update(marketingLinks)
+      .set({
+        ...link,
+        updatedAt: new Date()
+      })
+      .where(eq(marketingLinks.id, id))
+      .returning();
+    return updatedLink;
+  }
+
+  async deleteMarketingLink(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(marketingLinks).where(eq(marketingLinks.id, id));
+  }
+
+  async incrementLinkClick(campaignId: string): Promise<void> {
+    const db = await getDb();
+    const link = await this.getMarketingLinkByCampaignId(campaignId);
+    if (!link) return;
+    
+    await db
+      .update(marketingLinks)
+      .set({
+        clickCount: sql`${marketingLinks.clickCount} + 1`,
+        updatedAt: new Date()
+      })
+      .where(eq(marketingLinks.campaignId, campaignId));
   }
 }
