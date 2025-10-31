@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { getDb } from './db';
 import { locations, userLocations } from '../shared/schema';
+import { eq } from 'drizzle-orm';
 
 async function migrateLocationsAndUserLocations() {
   console.log('🚀 Starting locations and user_locations migration...');
@@ -15,7 +16,7 @@ async function migrateLocationsAndUserLocations() {
     // Insert locations
     for (const location of locationsData) {
       const { id, ...locationWithoutId } = location;
-      const existingLocation = await db.select().from(locations).where({ id });
+      const existingLocation = await db.select().from(locations).where(eq(locations.id, id));
       
       if (existingLocation.length === 0) {
         await db.insert(locations).values({
@@ -34,10 +35,24 @@ async function migrateLocationsAndUserLocations() {
     const userLocationsData = JSON.parse(readFileSync('data/user-locations.json', 'utf-8'));
     console.log(`👤 Found ${userLocationsData.length} user locations to migrate`);
 
-    // Insert user locations
+    // Get all valid location IDs from database
+    const validLocations = await db.select().from(locations);
+    const validLocationIds = new Set(validLocations.map(loc => loc.id));
+    console.log(`📍 Valid location IDs in database: ${Array.from(validLocationIds).join(', ')}`);
+
+    // Insert user locations (skip if references invalid location ID)
+    let skippedCount = 0;
     for (const userLocation of userLocationsData) {
       const { id, ...userLocationWithoutId } = userLocation;
-      const existingUserLocation = await db.select().from(userLocations).where({ id });
+      
+      // Check if location ID exists
+      if (!validLocationIds.has(userLocation.locationId)) {
+        console.log(`⚠️  Skipping user_location ${id}: references non-existent locationId=${userLocation.locationId}`);
+        skippedCount++;
+        continue;
+      }
+      
+      const existingUserLocation = await db.select().from(userLocations).where(eq(userLocations.id, id));
       
       if (existingUserLocation.length === 0) {
         await db.insert(userLocations).values({
@@ -51,6 +66,10 @@ async function migrateLocationsAndUserLocations() {
       } else {
         console.log(`⏭️  User location ${id} already exists, skipping`);
       }
+    }
+    
+    if (skippedCount > 0) {
+      console.log(`⚠️  Skipped ${skippedCount} user_location records with invalid location references`);
     }
 
     console.log('✨ Migration completed successfully!');

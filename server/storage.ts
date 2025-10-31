@@ -4227,48 +4227,48 @@ export class MemStorage implements IStorage {
       }
 
       async getUserLocationsByUserId(userId: number): Promise<UserLocation[]> {
-        return this.memStorage.getUserLocationsByUserId(userId);
+        return this.dbStorage.getUserLocationsByUserId(userId);
       }
 
       async getUserLocationsByLocationId(locationId: number): Promise<UserLocation[]> {
-        return this.memStorage.getUserLocationsByLocationId(locationId);
+        return this.dbStorage.getUserLocationsByLocationId(locationId);
       }
 
       async createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation> {
-        return this.memStorage.createUserLocation(userLocation);
+        return this.dbStorage.createUserLocation(userLocation);
       }
 
       async updateUserLocation(id: number, userLocation: Partial<InsertUserLocation>): Promise<UserLocation | undefined> {
-        return this.memStorage.updateUserLocation(id, userLocation);
+        return this.dbStorage.updateUserLocation(id, userLocation);
       }
 
       async deleteUserLocation(id: number): Promise<void> {
-        return this.memStorage.deleteUserLocation(id);
+        return this.dbStorage.deleteUserLocation(id);
       }
 
       // Location methods
       async getLocationById(id: number): Promise<Location | undefined> {
-        return this.memStorage.getLocationById(id);
+        return this.dbStorage.getLocation(id);
       }
 
       async getLocations(): Promise<Location[]> {
-        return this.memStorage.getLocations();
+        return this.dbStorage.getAllLocations();
       }
 
       async getLocationsBySchoolId(schoolId: number): Promise<Location[]> {
-        return this.memStorage.getLocationsBySchoolId(schoolId);
+        return this.dbStorage.getLocationsBySchoolId(schoolId);
       }
 
       async createLocation(location: InsertLocation): Promise<Location> {
-        return this.memStorage.createLocation(location);
+        return this.dbStorage.createLocation(location);
       }
 
       async updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined> {
-        return this.memStorage.updateLocation(id, location);
+        return this.dbStorage.updateLocation(id, location);
       }
 
       async deleteLocation(id: number): Promise<void> {
-        return this.memStorage.deleteLocation(id);
+        return this.dbStorage.deleteLocation(id);
       }
 
       // Daily Flow Template methods
