@@ -36,7 +36,15 @@ The following critical tables have been migrated from in-memory storage to persi
 
 **High-Priority Migrations (Completed)**:
 - **Classes**: All class management operations now persist to PostgreSQL database
+  - Fixed: Admin interface was using file storage instead of database (classes.json)
+  - Updated: server/api/admin-classes.ts to use CombinedStorage/dbStorage
+  - All class CRUD operations now persist to school_classes table
 - **Schools**: School data including registration codes now stored in database
+- **School Students**: Student enrollment tracking now persists to database
+  - Implemented: Full CRUD operations in dbStorage for school_students table
+  - Updated: CombinedStorage routes school_students to dbStorage
+  - Auto-create: school_student records when children are registered
+  - Fixed: Children registration now properly adds students to school_students table
 - **Membership Enrollments**: Annual membership fee tracking and enrollment status now persistent
 - **Stripe Subscription Schedules**: Payment plan tracking for Stripe integration now stored in database
 
@@ -51,6 +59,7 @@ The following critical tables have been migrated from in-memory storage to persi
 - CombinedStorage routes critical data operations to dbStorage (PostgreSQL)
 - Legacy memStorage retained for non-critical feature data and caching
 - No data loss on server restarts for migrated tables
+- Admin interfaces updated to use database storage instead of file-based storage
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation.

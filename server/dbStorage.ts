@@ -21,6 +21,7 @@ import {
   Event, InsertEvent, events,
   MarketplaceItem, InsertMarketplaceItem, marketplaceItems,
   School, InsertSchool, schools,
+  SchoolStudent, InsertSchoolStudent, schoolStudents,
   SchoolStaff, InsertSchoolStaff, schoolStaff,
   Payment, InsertPayment, payments,
   ScheduledPayment, InsertScheduledPayment, scheduledPayments,
@@ -115,6 +116,45 @@ export class DatabaseStorage implements IStorage {
       .where(eq(schools.id, id))
       .returning();
     return updatedSchool;
+  }
+
+  // School Student methods
+  async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
+    const db = await getDb();
+    const [newSchoolStudent] = await db.insert(schoolStudents).values({
+      ...schoolStudent,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newSchoolStudent;
+  }
+
+  async updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined> {
+    const db = await getDb();
+    const [updatedSchoolStudent] = await db
+      .update(schoolStudents)
+      .set({
+        ...schoolStudent,
+        updatedAt: new Date()
+      })
+      .where(eq(schoolStudents.id, id))
+      .returning();
+    return updatedSchoolStudent;
+  }
+
+  async deleteSchoolStudent(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(schoolStudents).where(eq(schoolStudents.id, id));
+  }
+
+  async getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]> {
+    const db = await getDb();
+    return await db.select().from(schoolStudents).where(eq(schoolStudents.schoolId, schoolId));
+  }
+
+  async getSchoolStudentsByChildId(childId: number): Promise<SchoolStudent[]> {
+    const db = await getDb();
+    return await db.select().from(schoolStudents).where(eq(schoolStudents.childId, childId));
   }
 
   // Curriculum methods

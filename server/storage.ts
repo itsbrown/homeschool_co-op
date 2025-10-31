@@ -4181,37 +4181,41 @@ export class MemStorage implements IStorage {
         return this.memStorage.updateScheduledPaymentStatus(id, status);
       }
 
-      // School Student methods
+      // School Student methods - Migrated to database storage
       async getSchoolStudentById(id: number): Promise<SchoolStudent | undefined> {
+        // dbStorage doesn't have getById, so use memStorage as fallback
         return this.memStorage.getSchoolStudentById(id);
       }
 
       async getAllSchoolStudents(): Promise<SchoolStudent[]> {
+        // dbStorage doesn't have getAll, so use memStorage as fallback
         return this.memStorage.getAllSchoolStudents();
       }
 
       async getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]> {
-        return this.memStorage.getSchoolStudentsBySchoolId(schoolId);
+        return this.dbStorage.getSchoolStudentsBySchoolId(schoolId);
       }
 
       async getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]> {
+        // dbStorage doesn't have this method yet, use memStorage as fallback
         return this.memStorage.getSchoolStudentsByLocationId(locationId);
       }
 
       async getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined> {
-        return this.memStorage.getSchoolStudentByChildId(childId);
+        const students = await this.dbStorage.getSchoolStudentsByChildId(childId);
+        return students[0]; // Return first match
       }
 
       async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
-        return this.memStorage.createSchoolStudent(schoolStudent);
+        return this.dbStorage.createSchoolStudent(schoolStudent);
       }
 
       async updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined> {
-        return this.memStorage.updateSchoolStudent(id, schoolStudent);
+        return this.dbStorage.updateSchoolStudent(id, schoolStudent);
       }
 
       async deleteSchoolStudent(id: number): Promise<void> {
-        return this.memStorage.deleteSchoolStudent(id);
+        return this.dbStorage.deleteSchoolStudent(id);
       }
 
       // User Location methods

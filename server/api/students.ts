@@ -1,23 +1,8 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import { storage } from '../storage';
 const router = express.Router();
-
-// Mock storage object (replace with your actual storage implementation)
-const storage = {
-  getUserByEmail: async (email) => {
-    // Mock implementation: returns null for demonstration purposes
-    return null;
-  },
-  createUser: async (userData) => {
-    // Mock implementation: returns user data with a generated ID
-    return { id: Date.now(), ...userData };
-  },
-  createChild: async (childData) => {
-    // Mock implementation: returns child data with a generated ID
-    return { id: Date.now(), ...childData };
-  }
-};
 
 // Student registration endpoint
 router.post('/register', async (req, res) => {
@@ -184,6 +169,27 @@ router.post('/register', async (req, res) => {
       fs.writeFileSync(childrenFilePath, JSON.stringify(childrenData, null, 2));
       child = childData;
       console.log('✅ Created child via file storage:', child.id);
+    }
+
+    // Create school_student record if child has a schoolId
+    if (child && (schoolId || parentUser.schoolId)) {
+      const studentSchoolId = schoolId || parentUser.schoolId;
+      try {
+        console.log('📚 Creating school_student record for child:', child.id, 'at school:', studentSchoolId);
+        const schoolStudent = await storage.createSchoolStudent({
+          schoolId: studentSchoolId,
+          childId: child.id,
+          grade: normalizedData.childGradeLevel,
+          status: 'active',
+          locationId: normalizedData.locationId || null,
+          studentId: null,
+          notes: null
+        });
+        console.log('✅ School student record created:', schoolStudent);
+      } catch (schoolStudentError) {
+        console.error('⚠️ Failed to create school_student record:', schoolStudentError);
+        // Don't fail the entire registration if this fails - child is already created
+      }
     }
 
     // Send confirmation email (if email service is available)

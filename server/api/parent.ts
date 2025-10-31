@@ -198,6 +198,26 @@ router.post('/children', jwtCheck, async (req: any, res) => {
 
     console.log('✅ Child registered successfully:', savedChild);
 
+    // Create school_student record if child has a schoolId
+    if (savedChild.schoolId && parent.schoolId) {
+      try {
+        console.log('📚 Creating school_student record for child:', savedChild.id);
+        const schoolStudent = await storage.createSchoolStudent({
+          schoolId: parent.schoolId,
+          childId: savedChild.id,
+          grade: gradeLevel,
+          status: 'active',
+          locationId: parentLocationId || null,
+          studentId: null,
+          notes: null
+        });
+        console.log('✅ School student record created:', schoolStudent);
+      } catch (schoolStudentError) {
+        console.error('⚠️ Failed to create school_student record:', schoolStudentError);
+        // Don't fail the entire registration if this fails - child is already created
+      }
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Child registered successfully',

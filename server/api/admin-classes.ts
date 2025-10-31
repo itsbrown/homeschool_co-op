@@ -2,28 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
-// import { isAdmin, isAuthenticated } from "../middleware/auth"; // Removed unused imports
-// Import both storage options for classes
-import { classStorage } from "../class-storage";
-import * as classesDb from "../classes-db";
-import { verifyAuth0Token, requireAdmin } from '../middleware/auth0-auth'; // Import Auth0 middleware
-// Flag to track which storage system we're using
-let useFileStorage = true;
-
-// Function to determine which storage to use
-const getStorage = async () => {
-  try {
-    // Always use file storage for now to ensure stability
-    console.log('Using file-based storage for classes');
-    useFileStorage = true;
-    return { useFileStorage };
-  } catch (err) {
-    // If error, use file storage
-    console.log('Error checking database, using file storage:', err);
-    useFileStorage = true;
-    return { useFileStorage };
-  }
-};
+import { verifyAuth0Token, requireAdmin } from '../middleware/auth0-auth';
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
@@ -48,7 +27,7 @@ router.get("/educators", verifyAuth0Token, requireAdmin, async (req, res) => {
   }
 });
 
-// Get a specific class by ID
+// Get a specific class by ID (first instance)
 router.get("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -56,14 +35,7 @@ router.get("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid class ID" });
     }
 
-    await getStorage();
-
-    let classData;
-    if (useFileStorage) {
-      classData = classStorage.getClassById(id);
-    } else {
-      classData = await classesDb.getClassById(id);
-    }
+    const classData = await storage.getClassById(id);
 
     if (!classData) {
       return res.status(404).json({ message: "Class not found" });
@@ -85,60 +57,18 @@ router.get("/classes", verifyAuth0Token, requireAdmin, async (req, res) => {
     const category = (req.query.category as string) || "";
     const status = (req.query.status as string) || "";
 
-    // Determine which storage system to use
-    await getStorage();
-
-    let classes = [];
-    let totalCount = 0;
-    let totalPages = 0;
-
-    if (useFileStorage) {
-      // Use the dedicated file-based class storage implementation
-      console.log("Using file-based storage for classes");
-      const result = classStorage.getClasses({
-        page,
-        limit,
-        search,
-        category,
-        status
-      });
-
-      classes = result.classes;
-      totalCount = result.totalCount;
-      totalPages = result.totalPages;
-    } else {
-      // Use database storage if available
-      console.log("Using database storage for classes");
-      try {
-        classes = await classesDb.getClasses({
-          page,
-          limit,
-          search,
-          category,
-          status,
-        });
-        totalCount = await classesDb.getClassesCount({ search, category, status });
-        totalPages = Math.ceil(totalCount / limit);
-      } catch (dbError) {
-        console.error("Database operation failed, falling back to file storage:", dbError);
-
-        // Fall back to file storage if database operation fails
-        const result = classStorage.getClasses({
-          page,
-          limit,
-          search,
-          category,
-          status
-        });
-
-        classes = result.classes;
-        totalCount = result.totalCount;
-        totalPages = result.totalPages;
-      }
-    }
+    console.log("Using database storage for classes");
+    const classes = await storage.getClasses({
+      page,
+      limit,
+      search,
+      category,
+      status,
+    });
+    const totalCount = await storage.getClassesCount({ search, category, status });
+    const totalPages = Math.ceil(totalCount / limit);
 
     console.log("FETCHED CLASSES:", JSON.stringify(classes));
-
     console.log("SENDING RESPONSE:", {
       classes: classes.length,
       totalCount,
@@ -158,47 +88,6 @@ router.get("/classes", verifyAuth0Token, requireAdmin, async (req, res) => {
   }
 });
 
-// Get a specific class by ID
-router.get("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid class ID" });
-    }
-
-    // Determine which storage system to use
-    await getStorage();
-
-    let classItem;
-
-    if (useFileStorage) {
-      // Use file-based storage
-      console.log("Using file-based storage to get class by ID");
-      classItem = classStorage.getClassById(id);
-    } else {
-      // Try to use database storage
-      console.log("Using database storage to get class by ID");
-      try {
-        classItem = await classesDb.getClassById(id);
-      } catch (dbError) {
-        console.error("Database operation failed, falling back to file storage:", dbError);
-
-        // Fall back to file storage
-        classItem = classStorage.getClassById(id);
-      }
-    }
-
-    if (!classItem) {
-      return res.status(404).json({ message: "Class not found" });
-    }
-
-    return res.status(200).json(classItem);
-  } catch (error) {
-    console.error("Error fetching class:", error);
-    return res.status(500).json({ message: "Error fetching class", error: String(error) });
-  }
-});
-
 // Create a new class
 router.post("/classes", verifyAuth0Token, requireAdmin, async (req, res) => {
   try {
@@ -207,49 +96,15 @@ router.post("/classes", verifyAuth0Token, requireAdmin, async (req, res) => {
 
     console.log("Creating class with data:", JSON.stringify(validatedData));
 
-    // Determine which storage system to use
-    await getStorage();
-
-    let classItem;
     const instructorId = req.session.userId || 1;
-
-    if (useFileStorage) {
-      // Create class using direct file storage
-      console.log("Using file-based storage to create class");
-      classItem = classStorage.createClass({
-        ...validatedData,
-        instructorId,
-      });
-    } else {
-      // Try to use database storage
-      console.log("Using database storage to create class");
-      try {
-        classItem = await classesDb.createClass({
-          ...validatedData,
-          instructorId,
-        });
-      } catch (dbError) {
-        console.error("Database operation failed, falling back to file storage:", dbError);
-
-        // Fall back to file storage
-        classItem = classStorage.createClass({
-          ...validatedData,
-          instructorId,
-        });
-      }
-    }
+    
+    console.log("Using database storage to create class");
+    const classItem = await storage.createClass({
+      ...validatedData,
+      instructorId,
+    });
 
     console.log("Class created successfully:", JSON.stringify(classItem));
-
-    // Log current classes in storage for debugging
-    const { classes } = classStorage.getClasses({
-      page: 1,
-      limit: 100,
-      search: "",
-      category: "",
-      status: ""
-    });
-    console.log("All classes after creation:", JSON.stringify(classes));
 
     return res.status(201).json(classItem);
   } catch (error) {
@@ -273,25 +128,22 @@ router.patch("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) =>
       return res.status(400).json({ message: "Invalid class ID" });
     }
 
-    // Get existing class using the file-based storage
-    const existingClass = classStorage.getClassById(id);
+    // Get existing class using database storage
+    const existingClass = await storage.getClassById(id);
     if (!existingClass) {
       return res.status(404).json({ message: "Class not found" });
     }
 
     // For admin users, allow updating any class regardless of instructor
-    // This is needed for the admin to assign different educators to classes
     const userRole = req.session.userRole;
     if (userRole !== 'admin') {
-      // Check if user is authorized to update this class (only for non-admin users)
       const userId = req.session.userId || 1;
       if (existingClass.instructorId !== userId) {
         return res.status(403).json({ message: "Not authorized to update this class" });
       }
     }
 
-    // Extract all fields from the request body, not just the ones in the schema
-    // This allows us to pass through custom fields that aren't part of the database schema
+    // Extract all fields from the request body
     const { 
       subject, 
       gradeLevel, 
@@ -303,45 +155,25 @@ router.patch("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) =>
     // Partial validation of standard fields (allow partial updates)
     const validatedData = insertClassSchema.partial().parse(standardFields);
 
-    // Get the existing class data to compare prices
-    let existingClassData = null;
-    if (useFileStorage) {
-      existingClassData = classStorage.getClassById(id);
-    } else {
-      try {
-        existingClassData = await classesDb.getClassById(id);
-      } catch (error) {
-        console.error("Error fetching existing class for price comparison:", error);
-      }
-    }
-
     // Always respect the price entered in the form
-    // The form should be the source of truth, not the database
     if (validatedData.price !== undefined) {
-      // Price from the form is in dollars, convert to cents for storage
       console.log("Form provided price (dollars):", validatedData.price);
-
-      // If price is already a very large number (indicating it's already in cents)
-      // leave it as is, otherwise multiply by 100 to convert to cents
+      // Convert to cents if not already
       if (validatedData.price < 10000) {
         console.log("Converting price to cents:", validatedData.price * 100);
         validatedData.price = validatedData.price * 100;
       }
     }
 
-    // For dates, we'll use the exact string values from the form without any conversion
-    // This prevents timezone issues entirely by avoiding Date object conversions
+    // Keep dates as strings to prevent timezone issues
     if (validatedData.startDate) {
-      // Keep the date exactly as it was entered in the form
       validatedData.startDate = String(validatedData.startDate);
     }
-
     if (validatedData.endDate) {
-      // Keep the date exactly as it was entered in the form
       validatedData.endDate = String(validatedData.endDate);
     }
 
-    // Add the custom fields back to the validated data object
+    // Add custom fields back
     const updateData = {
       ...validatedData,
       subject,
@@ -350,38 +182,17 @@ router.patch("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) =>
       schedule
     };
 
-    // Determine which storage system to use
-    await getStorage();
-
     // Ensure instructorId is a number if provided
     if (updateData.instructorId) {
       updateData.instructorId = parseInt(updateData.instructorId.toString(), 10);
       console.log("Instructor ID assigned:", updateData.instructorId);
     }
 
-    // Log the update data for debugging
     console.log("Updating class with data:", JSON.stringify(updateData, null, 2));
 
-    let updatedClass;
+    console.log("Using database storage to update class");
+    const updatedClass = await storage.updateClass(id, updateData);
 
-    if (useFileStorage) {
-      // Update class using file-based storage
-      console.log("Using file-based storage to update class");
-      updatedClass = classStorage.updateClass(id, updateData);
-    } else {
-      // Try to use database storage
-      console.log("Using database storage to update class");
-      try {
-        updatedClass = await classesDb.updateClass(id, updateData);
-      } catch (dbError) {
-        console.error("Database operation failed, falling back to file storage:", dbError);
-
-        // Fall back to file storage
-        updatedClass = classStorage.updateClass(id, updateData);
-      }
-    }
-
-    // Log the result
     console.log("Class updated successfully:", JSON.stringify(updatedClass, null, 2));
 
     return res.status(200).json(updatedClass);
@@ -406,52 +217,15 @@ router.delete("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) =
       return res.status(400).json({ message: "Invalid class ID" });
     }
 
-    // Determine which storage system to use
-    await getStorage();
-
-    let existingClass;
-
-    if (useFileStorage) {
-      // Get existing class using file-based storage
-      console.log("Using file-based storage to get class for deletion");
-      existingClass = classStorage.getClassById(id);
-    } else {
-      // Try to use database storage
-      console.log("Using database storage to get class for deletion");
-      try {
-        existingClass = await classesDb.getClassById(id);
-      } catch (dbError) {
-        console.error("Database operation failed, falling back to file storage:", dbError);
-
-        // Fall back to file storage
-        existingClass = classStorage.getClassById(id);
-      }
-    }
+    const existingClass = await storage.getClassById(id);
     if (!existingClass) {
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // For admin users, allow deletion of any class
-    // In a production system, you might want more granular permissions
     console.log("Admin user deleting class:", id);
 
-    // Delete class using the appropriate storage method
-    if (useFileStorage) {
-      // Delete using file-based storage
-      console.log("Using file-based storage to delete class");
-      classStorage.deleteClass(id);
-    } else {
-      // Try to use database storage
-      console.log("Using database storage to delete class");
-      try {
-        await classesDb.deleteClass(id);
-      } catch (dbError) {
-        console.error("Database operation failed, falling back to file storage:", dbError);
-
-        // Fall back to file storage
-        classStorage.deleteClass(id);
-      }
-    }
+    console.log("Using database storage to delete class");
+    await storage.deleteClass(id);
 
     return res.status(200).json({ message: "Class deleted successfully" });
   } catch (error) {
@@ -532,27 +306,9 @@ router.post("/classes/upload", verifyAuth0Token, requireAdmin, async (req, res) 
         continue; // Skip this row
       }
 
-      // Determine which storage system to use
-      await getStorage();
-
-      let newClass;
-
-      if (useFileStorage) {
-        // Create class using file-based storage
-        console.log("Using file-based storage to create class from CSV");
-        newClass = classStorage.createClass(classData);
-      } else {
-        // Try to use database storage
-        console.log("Using database storage to create class from CSV");
-        try {
-          newClass = await classesDb.createClass(classData);
-        } catch (dbError) {
-          console.error("Database operation failed, falling back to file storage:", dbError);
-
-          // Fall back to file storage
-          newClass = classStorage.createClass(classData);
-        }
-      }
+      // Create class using database storage
+      console.log("Using database storage to create class from CSV");
+      const newClass = await storage.createClass(classData);
       importedClasses.push(newClass);
     }
 
