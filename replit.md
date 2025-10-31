@@ -71,12 +71,30 @@ The following critical tables have been migrated from in-memory storage to persi
 - **Daily Flow Schedules**: Weekly recurring schedule templates stored persistently
 - **Marketing Links**: Campaign tracking and analytics now stored in database with click counting
 
+**Completed Migrations (October 31, 2025)**:
+- **Locations**: 2 locations migrated to database (IDs: 4, 5)
+  - Added full CRUD operations in dbStorage
+  - CombinedStorage routes location operations to database
+  - JSON file archived to backups
+- **User Locations**: Table created, 4 stale records skipped (referenced deleted locations)
+  - Added full CRUD operations in dbStorage
+  - CombinedStorage routes user_location operations to database
+  - JSON file archived to backups
+- **Marketplace Class Enrollments**: New `marketplaceClassEnrollments` table created
+  - Separate from programEnrollments and schoolClassEnrollments
+  - Added full CRUD operations in dbStorage with typed methods
+  - CombinedStorage routes enrollment operations to database
+  - 2 stale test enrollments skipped (referenced deleted child)
+  - Architect-recommended approach for clean data model separation
+  - JSON file archived to backups
+
 **Implementation Details**:
 - All migrations implemented using Drizzle ORM with full CRUD operations
 - CombinedStorage routes critical data operations to dbStorage (PostgreSQL)
 - Legacy memStorage retained for non-critical feature data and caching
 - No data loss on server restarts for migrated tables
 - Admin interfaces updated to use database storage instead of file-based storage
+- Marketplace class enrollments use auto-generated IDs instead of timestamp-based IDs
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation.

@@ -235,6 +235,36 @@ export const insertSchoolClassEnrollmentSchema = createInsertSchema(schoolClassE
 export type InsertSchoolClassEnrollment = z.infer<typeof insertSchoolClassEnrollmentSchema>;
 export type SchoolClassEnrollment = typeof schoolClassEnrollments.$inferSelect;
 
+// Marketplace Class Enrollments (for marketplace classes from the classes table)
+export const marketplaceClassEnrollments = pgTable("marketplace_class_enrollments", {
+  id: serial("id").primaryKey(), // Will use generated IDs instead of timestamp-based IDs from JSON
+  classId: integer("class_id").notNull().references(() => classes.id),
+  childId: integer("child_id").notNull().references(() => children.id),
+  childName: text("child_name"), // Denormalized for convenience
+  className: text("class_name"), // Denormalized for convenience
+  enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
+  status: text("status", { enum: ["pending_payment", "enrolled", "completed", "withdrawn", "waitlist"] }).default("pending_payment").notNull(),
+  waitlistPosition: integer("waitlist_position"),
+  amount: integer("amount").default(0).notNull(), // Amount paid so far in cents
+  depositRequired: integer("deposit_required").default(0).notNull(), // Required deposit in cents
+  totalCost: integer("total_cost").notNull(), // Total cost in cents
+  remainingBalance: integer("remaining_balance").notNull(), // Remaining balance in cents
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketplaceClassEnrollmentSchema = createInsertSchema(marketplaceClassEnrollments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    childName: z.string().nullable().default(null),
+    className: z.string().nullable().default(null),
+    waitlistPosition: z.number().nullable().default(null),
+    notes: z.string().nullable().default(null),
+  });
+export type InsertMarketplaceClassEnrollment = z.infer<typeof insertMarketplaceClassEnrollmentSchema>;
+export type MarketplaceClassEnrollment = typeof marketplaceClassEnrollments.$inferSelect;
+
 // Update user relations to include schools
 export const usersRelations = relations(users, ({ many, one }) => ({
   curricula: many(curricula),

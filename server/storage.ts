@@ -4002,11 +4002,13 @@ export class MemStorage implements IStorage {
     }
 
     async createEnrollment(enrollment: any): Promise<any> {
-      return this.memStorage.createEnrollment(enrollment);
+      // Route marketplace class enrollments to database
+      return this.dbStorage.createMarketplaceEnrollment(enrollment);
     }
 
     async getEnrollmentsByChildId(childId: number): Promise<any[]> {
-      return this.memStorage.getEnrollmentsByChildId(childId);
+      // Get marketplace class enrollments from database
+      return this.dbStorage.getMarketplaceEnrollmentsByChildId(childId);
     }
 
     async getEnrollmentById(id: number): Promise<any> {
@@ -4015,16 +4017,19 @@ export class MemStorage implements IStorage {
       if (dbEnrollment) {
         return dbEnrollment;
       }
-      // Fall back to memory storage (for legacy class enrollments)
-      return this.memStorage.getEnrollmentById(id);
+      // Try marketplace class enrollments
+      return this.dbStorage.getMarketplaceEnrollmentById(id);
     }
 
     async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
-      return this.memStorage.updateEnrollment(idOrEnrollment, updates);
+      // Handle both calling signatures
+      const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
+      const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
+      return this.dbStorage.updateMarketplaceEnrollment(id, data);
     }
 
     async deleteEnrollment(id: number): Promise<void> {
-      return this.memStorage.deleteEnrollment(id);
+      return this.dbStorage.deleteMarketplaceEnrollment(id);
     }
 
     async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
