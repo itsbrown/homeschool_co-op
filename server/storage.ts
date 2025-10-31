@@ -401,10 +401,12 @@ export class MemStorage implements IStorage {
     this.initializeKnowledgeBases().catch(console.error);
     // Classes are now in database - no longer loading from JSON file
     // this.initializeSampleClasses().catch(console.error);
-    this.initializeChildren().catch(console.error);
+    // Children are now in database - no longer loading from JSON file
+    // this.initializeChildren().catch(console.error);
     this.initializeScheduledPayments().catch(console.error);
     this.initializePayments().catch(console.error);
-    this.initializeSchoolStudents().catch(console.error);
+    // School students are now in database - no longer loading from JSON file
+    // this.initializeSchoolStudents().catch(console.error);
     this.initializeUserLocations().catch(console.error);
     this.initializeLocations().catch(console.error);
     this.initializeDailyFlowTemplates().catch(console.error);

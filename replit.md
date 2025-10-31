@@ -48,11 +48,20 @@ The following critical tables have been migrated from in-memory storage to persi
   - Updated: server/api/schools.ts to query database only for all endpoints (GET /:id, GET /by-code/:code, POST /)
   - Removed: File storage checks from generateRegistrationCode function
   - Result: Admin UI now displays correct registration codes from database instead of stale JSON file data
+- **Children**: Child profile data now persists exclusively to PostgreSQL database
+  - Migrated: 75 children from children.json to database (October 31, 2025)
+  - Removed: Startup code that loaded children from JSON into memory storage
+  - Fixed: Dual storage issue where database creates were ignored in favor of stale JSON data
+  - Updated: CombinedStorage routes all child operations to dbStorage
+  - Result: Database is the single source of truth for children data - no data loss on restarts
 - **School Students**: Student enrollment tracking now persists to database
+  - Migrated: 72 school_students from school-students.json to database (October 31, 2025)
+  - Removed: Startup code that loaded school_students from JSON into memory storage
+  - Fixed: Dual storage issue causing stale data to override database records
   - Implemented: Full CRUD operations in dbStorage for school_students table
   - Updated: CombinedStorage routes school_students to dbStorage
   - Auto-create: school_student records when children are registered
-  - Fixed: Children registration now properly adds students to school_students table
+  - Result: Database is the single source of truth for school_students - no data loss on restarts
 - **Membership Enrollments**: Annual membership fee tracking and enrollment status now persistent
 - **Stripe Subscription Schedules**: Payment plan tracking for Stripe integration now stored in database
 
