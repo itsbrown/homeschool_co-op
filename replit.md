@@ -38,8 +38,12 @@ The following critical tables have been migrated from in-memory storage to persi
 - **Classes**: All class management operations now persist to PostgreSQL database
   - Fixed: Admin interface was using file storage instead of database (classes.json)
   - Updated: server/api/admin-classes.ts to use CombinedStorage/dbStorage
-  - All class CRUD operations now persist to school_classes table
+  - All class CRUD operations now persist to classes table (marketplace offerings)
 - **Schools**: School data including registration codes now stored in database
+  - Fixed: Schools API file storage fallback removed (was causing registration code mismatch)
+  - Updated: server/api/schools.ts to query database only for all endpoints (GET /:id, GET /by-code/:code, POST /)
+  - Removed: File storage checks from generateRegistrationCode function
+  - Result: Admin UI now displays correct registration codes from database instead of stale JSON file data
 - **School Students**: Student enrollment tracking now persists to database
   - Implemented: Full CRUD operations in dbStorage for school_students table
   - Updated: CombinedStorage routes school_students to dbStorage
