@@ -1,9 +1,13 @@
 // Conditionally load test environment configuration
-// Only applies test keys in development/test environments
-// In production, uses the actual environment secrets
+// Only applies test keys if LIVE keys are not configured
+// Checks for live keys first, falls back to test keys
 
-if (process.env.NODE_ENV === 'production') {
-  console.log('🚀 Production mode detected - using environment secrets');
+const hasLiveStripeKeys = 
+  process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_') && 
+  process.env.VITE_STRIPE_PUBLIC_KEY?.startsWith('pk_live_');
+
+if (hasLiveStripeKeys || process.env.NODE_ENV === 'production') {
+  console.log('🚀 Live mode detected - using configured Stripe keys');
   console.log('🔑 STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY?.substring(0, 7) + '...' + 
     (process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_') ? ' ✅ (LIVE MODE)' : 
      process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_') ? ' ⚠️  (TEST MODE - WARNING!)' : 
