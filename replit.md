@@ -36,9 +36,13 @@ The following critical tables have been migrated from in-memory storage to persi
 
 **High-Priority Migrations (Completed)**:
 - **Classes**: All class management operations now persist to PostgreSQL database
-  - Fixed: Admin interface was using file storage instead of database (classes.json)
+  - Migrated: 13 classes from classes.json to database (October 31, 2025)
+  - Updated: Database schema to include all missing columns (school_id, location_id, schedule, etc.)
+  - Removed: Startup code that loaded classes from JSON into memory storage
+  - Fixed: Admin interface now exclusively uses database storage (no file storage fallback)
   - Updated: server/api/admin-classes.ts to use CombinedStorage/dbStorage
   - All class CRUD operations now persist to classes table (marketplace offerings)
+  - Result: Database is the single source of truth for classes data - no data loss on restarts
 - **Schools**: School data including registration codes now stored in database
   - Fixed: Schools API file storage fallback removed (was causing registration code mismatch)
   - Updated: server/api/schools.ts to query database only for all endpoints (GET /:id, GET /by-code/:code, POST /)
