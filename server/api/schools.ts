@@ -3,8 +3,6 @@ import { db, getDb } from "../db";
 import { schools, children } from "@shared/schema";
 import { insertSchoolSchema } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import fs from 'fs';
-import path from 'path';
 import uploadLogoRouter from './schools/upload-logo';
 
 const router = express.Router();
@@ -171,45 +169,19 @@ router.get("/by-code/:code", async (req, res) => {
       return res.status(400).json({ message: "Registration code is required" });
     }
 
-    try {
-      // Try database first
-      const db = await getDb();
-      const school = await db.query.schools.findFirst({
-        where: eq(schools.registrationCode, code.toUpperCase())
-      });
+    const db = await getDb();
+    const school = await db.query.schools.findFirst({
+      where: eq(schools.registrationCode, code.toUpperCase())
+    });
 
-      if (school) {
-        return res.json(school);
-      }
-    } catch (dbError) {
-      console.log('⚠️ Database failed, using file storage fallback:', dbError);
+    if (!school) {
+      return res.status(404).json({ message: "School not found with this registration code" });
     }
 
-    // Fallback to file storage
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-
-      const DATA_DIR = path.join(process.cwd(), 'data');
-      const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
-
-      if (fs.existsSync(SCHOOLS_FILE)) {
-        const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
-        const schools = JSON.parse(fileContent);
-        const school = schools.find((s: any) => s.registrationCode === code.toUpperCase());
-
-        if (school) {
-          return res.json(school);
-        }
-      }
-    } catch (fileError) {
-      console.error('File storage also failed:', fileError);
-    }
-
-    return res.status(404).json({ message: "School not found with this registration code" });
+    res.json(school);
   } catch (error: any) {
     console.error("Error fetching school by registration code:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 });
 
