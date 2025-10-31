@@ -170,6 +170,7 @@ export interface IStorage {
   getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]>;
   getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number>;
   getAllClasses(): Promise<Class[]>;
+  getClassesBySchoolId(schoolId: string): Promise<Class[]>;
   createClass(classData: InsertClass & { instructorId: number }): Promise<Class>;
   updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
   deleteClass(id: number): Promise<void>;
@@ -1560,6 +1561,16 @@ export class MemStorage implements IStorage {
 
   async getAllClasses(): Promise<Class[]> {
     return Array.from(this.classesStore.values());
+  }
+
+  async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
+    const schoolIdNum = parseInt(schoolId, 10);
+    if (isNaN(schoolIdNum)) {
+      return [];
+    }
+    return Array.from(this.classesStore.values()).filter(
+      classItem => classItem.schoolId === schoolIdNum
+    );
   }
 
   async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
@@ -4015,36 +4026,36 @@ export class MemStorage implements IStorage {
     }
 
     async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
-      return this.memStorage.getClassesBySchoolId(schoolId);
+      return this.dbStorage.getClassesBySchoolId(schoolId);
     }
 
     async getClassById(classId: number): Promise<Class | undefined> {
-      const result = await this.memStorage.getClassById(classId);
+      const result = await this.dbStorage.getClassById(classId);
       return result || undefined;
     }
 
     async getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]> {
-      return this.memStorage.getClasses(options);
+      return this.dbStorage.getClasses(options);
     }
 
     async getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number> {
-      return this.memStorage.getClassesCount(options);
+      return this.dbStorage.getClassesCount(options);
     }
 
     async getAllClasses(): Promise<Class[]> {
-      return this.memStorage.getAllClasses();
+      return this.dbStorage.getAllClasses();
     }
 
     async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
-      return this.memStorage.createClass(classData);
+      return this.dbStorage.createClass(classData);
     }
 
     async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
-      return this.memStorage.updateClass(id, classData);
+      return this.dbStorage.updateClass(id, classData);
     }
 
     async deleteClass(id: number): Promise<void> {
-      return this.memStorage.deleteClass(id);
+      return this.dbStorage.deleteClass(id);
     }
 
     async getActiveRoleInvitation(email: string): Promise<RoleInvitation | undefined> {

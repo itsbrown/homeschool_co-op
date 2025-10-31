@@ -226,6 +226,20 @@ export class DatabaseStorage implements IStorage {
     return updatedClass;
   }
 
+  async getAllClasses(): Promise<Class[]> {
+    const db = await getDb();
+    return await db.select().from(classes);
+  }
+
+  async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
+    const db = await getDb();
+    const schoolIdNum = parseInt(schoolId, 10);
+    if (isNaN(schoolIdNum)) {
+      return [];
+    }
+    return await db.select().from(classes).where(eq(classes.schoolId, schoolIdNum));
+  }
+
   // Knowledge Base methods
   async getKnowledgeBase(id: number): Promise<KnowledgeBase | undefined> {
     const db = await getDb();
