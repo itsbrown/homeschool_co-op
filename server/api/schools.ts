@@ -22,35 +22,16 @@ async function generateRegistrationCode(): Promise<string> {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
 
-    // Check if this code already exists
-    try {
-      const db = await getDb();
-      const [existingSchool] = await db
-        .select()
-        .from(schools)
-        .where(eq(schools.registrationCode, result))
-        .limit(1);
+    // Check if this code already exists in database
+    const db = await getDb();
+    const [existingSchool] = await db
+      .select()
+      .from(schools)
+      .where(eq(schools.registrationCode, result))
+      .limit(1);
 
-      if (!existingSchool) {
-        // Also check file storage for uniqueness
-        const fs = await import('fs');
-        const path = await import('path');
-        const SCHOOLS_FILE = path.join(process.cwd(), 'data', 'schools.json');
-
-        if (fs.existsSync(SCHOOLS_FILE)) {
-          const schoolsData = JSON.parse(fs.readFileSync(SCHOOLS_FILE, 'utf8'));
-          const duplicate = schoolsData.find((s: any) => s.registrationCode === result);
-          if (!duplicate) {
-            console.log('✅ Generated unique registration code:', result);
-            return result;
-          }
-        } else {
-          console.log('✅ Generated unique registration code:', result);
-          return result;
-        }
-      }
-    } catch (error) {
-      console.log('⚠️ Error checking registration code uniqueness, proceeding:', error);
+    if (!existingSchool) {
+      console.log('✅ Generated unique registration code:', result);
       return result;
     }
 
