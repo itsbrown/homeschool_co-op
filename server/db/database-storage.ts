@@ -320,6 +320,19 @@ export class DatabaseStorage implements IStorage {
     await db.delete(children).where(eq(children.id, id));
   }
 
+  async getAllChildren(): Promise<Child[]> {
+    return await db.select().from(children);
+  }
+
+  async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
+    // First, find the parent user by email
+    const [parent] = await db.select().from(users).where(eq(users.email, parentEmail));
+    if (!parent) return [];
+    
+    // Then get children by parent ID
+    return await db.select().from(children).where(eq(children.parentId, parent.id));
+  }
+
   // Emergency Contact methods
   async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
     const [contact] = await db.select().from(emergencyContacts).where(eq(emergencyContacts.id, id));
