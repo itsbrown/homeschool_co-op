@@ -25,7 +25,9 @@ import {
   SchoolStaff, InsertSchoolStaff, schoolStaff,
   Payment, InsertPayment, payments,
   ScheduledPayment, InsertScheduledPayment, scheduledPayments,
-  Refund, InsertRefund, refunds
+  Refund, InsertRefund, refunds,
+  Location, InsertLocation, locations,
+  UserLocation, InsertUserLocation, userLocations
 } from '../shared/schema';
 
 /**
@@ -1521,5 +1523,114 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(marketingLinks.campaignId, campaignId));
+  }
+
+  // Location methods
+  async getLocation(id: number): Promise<Location | undefined> {
+    const db = await getDb();
+    const [location] = await db.select().from(locations).where(eq(locations.id, id));
+    return location;
+  }
+
+  async getLocationsBySchoolId(schoolId: number): Promise<Location[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(locations)
+      .where(and(eq(locations.schoolId, schoolId), eq(locations.isActive, true)))
+      .orderBy(asc(locations.name));
+  }
+
+  async getAllLocations(): Promise<Location[]> {
+    const db = await getDb();
+    return await db.select().from(locations).where(eq(locations.isActive, true));
+  }
+
+  async createLocation(location: InsertLocation): Promise<Location> {
+    const db = await getDb();
+    const [newLocation] = await db
+      .insert(locations)
+      .values({
+        ...location,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newLocation;
+  }
+
+  async updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined> {
+    const db = await getDb();
+    const [updatedLocation] = await db
+      .update(locations)
+      .set({
+        ...location,
+        updatedAt: new Date()
+      })
+      .where(eq(locations.id, id))
+      .returning();
+    return updatedLocation;
+  }
+
+  async deleteLocation(id: number): Promise<void> {
+    const db = await getDb();
+    await db
+      .update(locations)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(locations.id, id));
+  }
+
+  // User Location methods
+  async getUserLocationsByUserId(userId: number): Promise<UserLocation[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(userLocations)
+      .where(and(eq(userLocations.userId, userId), eq(userLocations.isActive, true)))
+      .orderBy(asc(userLocations.assignedAt));
+  }
+
+  async getUserLocationsByLocationId(locationId: number): Promise<UserLocation[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(userLocations)
+      .where(and(eq(userLocations.locationId, locationId), eq(userLocations.isActive, true)))
+      .orderBy(asc(userLocations.assignedAt));
+  }
+
+  async createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation> {
+    const db = await getDb();
+    const [newUserLocation] = await db
+      .insert(userLocations)
+      .values({
+        ...userLocation,
+        assignedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newUserLocation;
+  }
+
+  async updateUserLocation(id: number, userLocation: Partial<InsertUserLocation>): Promise<UserLocation | undefined> {
+    const db = await getDb();
+    const [updatedUserLocation] = await db
+      .update(userLocations)
+      .set({
+        ...userLocation,
+        updatedAt: new Date()
+      })
+      .where(eq(userLocations.id, id))
+      .returning();
+    return updatedUserLocation;
+  }
+
+  async deleteUserLocation(id: number): Promise<void> {
+    const db = await getDb();
+    await db
+      .update(userLocations)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(userLocations.id, id));
   }
 }
