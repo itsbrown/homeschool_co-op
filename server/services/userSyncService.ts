@@ -22,17 +22,26 @@ export class UserSyncService {
 
       if (existingUser) {
         // Update existing user with Auth0 data
+        // Preserve existing schoolId if not provided in additionalData
+        const updateData: any = {
+          name: auth0User.name || auth0User.nickname || existingUser.name,
+          lastLogin: new Date(),
+          updatedAt: new Date(),
+          auth0Id: auth0User.sub,
+          avatar: auth0User.picture,
+          isActive: true,
+          ...additionalData
+        };
+        
+        // Never overwrite existing schoolId with null/undefined
+        if (existingUser.schoolId && !updateData.schoolId) {
+          updateData.schoolId = existingUser.schoolId;
+          console.log('🏫 Preserving existing schoolId:', existingUser.schoolId, 'for user:', existingUser.email);
+        }
+        
         const [updatedUser] = await db
           .update(users)
-          .set({
-            name: auth0User.name || auth0User.nickname || existingUser.name,
-            lastLogin: new Date(),
-            updatedAt: new Date(),
-            auth0Id: auth0User.sub,
-            avatar: auth0User.picture,
-            isActive: true,
-            ...additionalData
-          })
+          .set(updateData)
           .where(eq(users.email, auth0User.email))
           .returning();
         

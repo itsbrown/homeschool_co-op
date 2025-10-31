@@ -30,8 +30,15 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     // Sync user with database
     let dbUser;
     try {
-      dbUser = await UserSyncService.syncAuth0User(user);
-      console.log('✅ User synced with database:', dbUser.email, 'Role:', dbUser.role);
+      // Extract school ID from user metadata if available
+      const additionalData: any = {};
+      if (user.user_metadata?.schoolId) {
+        additionalData.schoolId = user.user_metadata.schoolId;
+        console.log('🏫 Preserving schoolId from metadata:', user.user_metadata.schoolId);
+      }
+      
+      dbUser = await UserSyncService.syncAuth0User(user, Object.keys(additionalData).length > 0 ? additionalData : undefined);
+      console.log('✅ User synced with database:', dbUser.email, 'Role:', dbUser.role, 'SchoolId:', dbUser.schoolId);
     } catch (syncError) {
       console.error('❌ Failed to sync user with database:', syncError);
       // Fallback to memory storage
