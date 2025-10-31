@@ -10,6 +10,7 @@ import {
   Lesson, InsertLesson, lessons,
   Program, InsertProgram, programs,
   ProgramEnrollment, InsertProgramEnrollment, programEnrollments,
+  MembershipEnrollment, InsertMembershipEnrollment, membershipEnrollments,
   Child, InsertChild, children,
   EmergencyContact, InsertEmergencyContact, emergencyContacts,
   Event, InsertEvent, events,
@@ -496,6 +497,91 @@ export class DatabaseStorage implements IStorage {
   async deleteProgramEnrollment(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(programEnrollments).where(eq(programEnrollments.id, id));
+  }
+
+  // Membership Enrollment methods
+  async getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined> {
+    const db = await getDb();
+    const [enrollment] = await db.select().from(membershipEnrollments).where(eq(membershipEnrollments.id, id));
+    return enrollment;
+  }
+
+  async getMembershipEnrollmentsByParentId(parentUserId: number): Promise<MembershipEnrollment[]> {
+    const db = await getDb();
+    return await db.select().from(membershipEnrollments).where(eq(membershipEnrollments.parentUserId, parentUserId));
+  }
+
+  async getMembershipEnrollmentsBySchoolId(schoolId: number): Promise<MembershipEnrollment[]> {
+    const db = await getDb();
+    return await db.select().from(membershipEnrollments).where(eq(membershipEnrollments.schoolId, schoolId));
+  }
+
+  async getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment | undefined> {
+    const db = await getDb();
+    const [enrollment] = await db
+      .select()
+      .from(membershipEnrollments)
+      .where(
+        and(
+          eq(membershipEnrollments.parentUserId, parentUserId),
+          eq(membershipEnrollments.schoolId, schoolId),
+          eq(membershipEnrollments.membershipYear, membershipYear)
+        )
+      );
+    return enrollment;
+  }
+
+  async createMembershipEnrollment(enrollmentData: InsertMembershipEnrollment): Promise<MembershipEnrollment> {
+    const db = await getDb();
+    const [newEnrollment] = await db
+      .insert(membershipEnrollments)
+      .values({
+        ...enrollmentData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newEnrollment;
+  }
+
+  async updateMembershipEnrollment(id: number, updateData: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined> {
+    const db = await getDb();
+    const [updatedEnrollment] = await db
+      .update(membershipEnrollments)
+      .set({
+        ...updateData,
+        updatedAt: new Date()
+      })
+      .where(eq(membershipEnrollments.id, id))
+      .returning();
+    return updatedEnrollment;
+  }
+
+  async deleteMembershipEnrollment(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(membershipEnrollments).where(eq(membershipEnrollments.id, id));
+  }
+
+  async createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment> {
+    const existing = await this.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+    
+    if (existing) {
+      return existing;
+    }
+
+    const enrollmentData: InsertMembershipEnrollment = {
+      schoolId,
+      parentUserId,
+      membershipYear,
+      amount: 6000, // $60 in cents
+      amountPaid: 0,
+      remainingBalance: 6000,
+      status: 'pending_payment',
+      dueDate: new Date(),
+      expirationDate: new Date(membershipYear, 11, 31)
+    };
+
+    return this.createMembershipEnrollment(enrollmentData);
   }
 
   // Child methods

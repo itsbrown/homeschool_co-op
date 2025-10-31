@@ -4368,35 +4368,35 @@ export class MemStorage implements IStorage {
 
       // Membership Enrollment methods
       async getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined> {
-        return this.memStorage.getMembershipEnrollmentById(id);
+        return this.dbStorage.getMembershipEnrollmentById(id);
       }
 
       async getMembershipEnrollmentsByParentId(parentUserId: number): Promise<MembershipEnrollment[]> {
-        return this.memStorage.getMembershipEnrollmentsByParentId(parentUserId);
+        return this.dbStorage.getMembershipEnrollmentsByParentId(parentUserId);
       }
 
       async getMembershipEnrollmentsBySchoolId(schoolId: number): Promise<MembershipEnrollment[]> {
-        return this.memStorage.getMembershipEnrollmentsBySchoolId(schoolId);
+        return this.dbStorage.getMembershipEnrollmentsBySchoolId(schoolId);
       }
 
       async getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment | undefined> {
-        return this.memStorage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+        return this.dbStorage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
       }
 
       async createMembershipEnrollment(enrollment: InsertMembershipEnrollment): Promise<MembershipEnrollment> {
-        return this.memStorage.createMembershipEnrollment(enrollment);
+        return this.dbStorage.createMembershipEnrollment(enrollment);
       }
 
       async updateMembershipEnrollment(id: number, enrollment: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined> {
-        return this.memStorage.updateMembershipEnrollment(id, enrollment);
+        return this.dbStorage.updateMembershipEnrollment(id, enrollment);
       }
 
       async deleteMembershipEnrollment(id: number): Promise<void> {
-        return this.memStorage.deleteMembershipEnrollment(id);
+        return this.dbStorage.deleteMembershipEnrollment(id);
       }
 
       async createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment> {
-        return this.memStorage.createOrUpdateMembershipEnrollment(parentUserId, schoolId, membershipYear);
+        return this.dbStorage.createOrUpdateMembershipEnrollment(parentUserId, schoolId, membershipYear);
       }
 
       async getRoleInvitations(): Promise<any[]> {
