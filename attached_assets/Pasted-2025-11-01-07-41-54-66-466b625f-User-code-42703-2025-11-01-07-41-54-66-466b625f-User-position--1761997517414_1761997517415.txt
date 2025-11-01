@@ -1,0 +1,156 @@
+2025-11-01 07:41:54.66
+466b625f
+User
+code: '42703',
+2025-11-01 07:41:54.66
+466b625f
+User
+position: '90',
+2025-11-01 07:41:54.66
+466b625f
+User
+file: 'parse_relation.c',
+2025-11-01 07:41:54.66
+466b625f
+User
+line: '3722',
+2025-11-01 07:41:54.66
+466b625f
+User
+routine: 'errorMissingColumn'
+2025-11-01 07:41:54.66
+466b625f
+User
+}
+2025-11-01 07:41:54.66
+466b625f
+User
+❌ Failed to sync user with database: PostgresError: column "first_name" does not exist
+2025-11-01 07:41:54.66
+466b625f
+User
+at ErrorResponse (file:///home/runner/workspace/node_modules/postgres/src/connection.js:794:26)
+2025-11-01 07:41:54.66
+466b625f
+User
+at handle (file:///home/runner/workspace/node_modules/postgres/src/connection.js:480:6)
+2025-11-01 07:41:54.66
+466b625f
+User
+at TLSSocket.data (file:///home/runner/workspace/node_modules/postgres/src/connection.js:315:9)
+2025-11-01 07:41:54.66
+466b625f
+User
+at TLSSocket.emit (node:events:524:28)
+2025-11-01 07:41:54.66
+466b625f
+User
+at addChunk (node:internal/streams/readable:561:12)
+2025-11-01 07:41:54.66
+466b625f
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2025-11-01 07:41:54.66
+466b625f
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2025-11-01 07:41:54.66
+466b625f
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+2025-11-01 07:41:54.66
+466b625f
+User
+severity_local: 'ERROR',
+2025-11-01 07:41:54.66
+466b625f
+User
+severity: 'ERROR',
+2025-11-01 07:41:54.66
+466b625f
+User
+code: '42703',
+2025-11-01 07:41:54.66
+466b625f
+User
+position: '90',
+2025-11-01 07:41:54.66
+466b625f
+User
+file: 'parse_relation.c',
+2025-11-01 07:41:54.66
+466b625f
+User
+line: '3722',
+2025-11-01 07:41:54.66
+466b625f
+User
+}
+2025-11-01 07:41:54.67
+466b625f
+User
+❌ Error syncing Auth0 user: PostgresError: column "first_name" does not exist
+2025-11-01 07:41:54.67
+466b625f
+User
+at ErrorResponse (file:///home/runner/workspace/node_modules/postgres/src/connection.js:794:26)
+2025-11-01 07:41:54.67
+466b625f
+User
+at handle (file:///home/runner/workspace/node_modules/postgres/src/connection.js:480:6)
+2025-11-01 07:41:54.67
+466b625f
+User
+at TLSSocket.data (file:///home/runner/workspace/node_modules/postgres/src/connection.js:315:9)
+2025-11-01 07:41:54.67
+466b625f
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2025-11-01 07:41:54.67
+466b625f
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2025-11-01 07:41:54.67
+466b625f
+User
+severity_local: 'ERROR',
+2025-11-01 07:41:54.67
+466b625f
+User
+severity: 'ERROR',
+2025-11-01 07:41:54.67
+466b625f
+User
+code: '42703',
+2025-11-01 07:41:54.67
+466b625f
+User
+position: '90',
+2025-11-01 07:41:54.67
+466b625f
+User
+file: 'parse_relation.c',
+2025-11-01 07:41:54.67
+466b625f
+User
+line: '3722',
+2025-11-01 07:41:54.67
+466b625f
+User
+routine: 'errorMissingColumn'
+2025-11-01 07:41:54.67
+466b625f
+User
+at ErrorResponse (file:///home/runner/workspace/node_modules/postgres/src/connection.js:794:26)
+2025-11-01 07:41:54.67
+466b625f
+User
+at addChunk (node:internal/streams/readable:561:12)
+2025-11-01 07:41:54.67
+466b625f
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2025-11-01 07:41:54.67
+466b625f
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
