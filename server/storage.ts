@@ -4302,6 +4302,43 @@ export class MemStorage implements IStorage {
         return this.dbStorage.deleteSchoolStudent(id);
       }
 
+      // School Staff methods - Database storage
+      async getSchoolStaffById(id: number): Promise<SchoolStaff | undefined> {
+        return this.dbStorage.getSchoolStaffById(id);
+      }
+
+      async getAllSchoolStaff(): Promise<SchoolStaff[]> {
+        return this.dbStorage.getAllSchoolStaff();
+      }
+
+      async getSchoolStaffBySchoolId(schoolId: number): Promise<SchoolStaff[]> {
+        return this.dbStorage.getSchoolStaffBySchoolId(schoolId);
+      }
+
+      async getSchoolStaffByLocationId(locationId: number): Promise<SchoolStaff[]> {
+        return this.dbStorage.getSchoolStaffByLocationId(locationId);
+      }
+
+      async getSchoolStaffByUserId(userId: number): Promise<SchoolStaff | undefined> {
+        return this.dbStorage.getSchoolStaffByUserId(userId);
+      }
+
+      async getSchoolStaffByEmail(email: string): Promise<SchoolStaff | undefined> {
+        return this.dbStorage.getSchoolStaffByEmail(email);
+      }
+
+      async createSchoolStaff(schoolStaff: InsertSchoolStaff): Promise<SchoolStaff> {
+        return this.dbStorage.createSchoolStaff(schoolStaff);
+      }
+
+      async updateSchoolStaff(id: number, schoolStaff: Partial<InsertSchoolStaff>): Promise<SchoolStaff | undefined> {
+        return this.dbStorage.updateSchoolStaff(id, schoolStaff);
+      }
+
+      async deleteSchoolStaff(id: number): Promise<void> {
+        return this.dbStorage.deleteSchoolStaff(id);
+      }
+
       // User Location methods
       async getUserLocationById(id: number): Promise<UserLocation | undefined> {
         return this.memStorage.getUserLocationById(id);

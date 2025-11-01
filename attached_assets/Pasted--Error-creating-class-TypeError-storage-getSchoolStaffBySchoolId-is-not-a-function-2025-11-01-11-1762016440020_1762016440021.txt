@@ -1,0 +1,66 @@
+❌ Error creating class: TypeError: storage.getSchoolStaffBySchoolId is not a function
+
+2025-11-01 11:17:05.52
+b365b787
+User
+at file:///home/runner/workspace/dist/index.js:22143:38
+2025-11-01 11:17:05.52
+b365b787
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-01 11:17:05.52
+b365b787
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+2025-11-01 11:17:05.52
+b365b787
+User
+at Route.dispatch (/home/runner/workspace/node_modules/express/lib/router/route.js:119:3)
+2025-11-01 11:17:05.52
+b365b787
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-01 11:17:05.52
+b365b787
+User
+at /home/runner/workspace/node_modules/express/lib/router/index.js:284:15
+2025-11-01 11:17:05.52
+b365b787
+User
+at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+2025-11-01 11:17:05.52
+b365b787
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+2025-11-01 11:17:05.52
+b365b787
+User
+at Function.handle (/home/runner/workspace/node_modules/express/lib/router/index.js:175:3)
+2025-11-01 11:17:05.52
+b365b787
+User
+at router (/home/runner/workspace/node_modules/express/lib/router/index.js:47:12)
+2025-11-01 11:17:05.52
+b365b787
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-01 11:17:05.52
+b365b787
+User
+at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+2025-11-01 11:17:05.52
+b365b787
+User
+at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+2025-11-01 11:17:05.52
+b365b787
+User
+at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+2025-11-01 11:17:05.52
+b365b787
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+2025-11-01 11:17:05.52
+b365b787
+User
+at file:///home/runner/workspace/dist/index.js:33050:3
