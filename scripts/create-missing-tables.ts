@@ -490,7 +490,45 @@ async function createMissingTables() {
     `);
     console.log('✅ membership_enrollments table created');
 
-    console.log('\n✅ All missing tables created successfully!\n');
+    // 23. Staff positions table
+    console.log('Creating staff_positions table...');
+    await sql.unsafe(`
+      CREATE TABLE IF NOT EXISTS staff_positions (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        school_id INTEGER REFERENCES schools(id),
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    console.log('✅ staff_positions table created');
+
+    // 24. Password reset tokens table
+    console.log('Creating password_reset_tokens table...');
+    await sql.unsafe(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        token TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    console.log('✅ password_reset_tokens table created');
+
+    // Add first_name and last_name to users table if missing
+    console.log('Adding first_name and last_name columns to users table...');
+    await sql.unsafe(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT
+    `);
+    await sql.unsafe(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT
+    `);
+    console.log('✅ users table columns added');
+
+    console.log('\n✅ All missing tables and columns created successfully!\n');
     
     await sql.end();
     process.exit(0);
