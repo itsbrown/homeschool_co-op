@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, isNull } from 'drizzle-orm';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -32,7 +32,10 @@ import {
   Notification, InsertNotification, notifications,
   NotificationRecipient, InsertNotificationRecipient, notificationRecipients,
   Discount, InsertDiscount, discounts,
-  DiscountApplication, InsertDiscountApplication, discountApplications
+  DiscountApplication, InsertDiscountApplication, discountApplications,
+  StaffPosition, InsertStaffPosition, staffPositions,
+  StaffInvitation, InsertStaffInvitation, staffInvitations,
+  PasswordResetToken, InsertPasswordResetToken, passwordResetTokens
 } from '../shared/schema';
 
 /**
@@ -1914,5 +1917,136 @@ export class DatabaseStorage implements IStorage {
       .where(eq(discountApplications.id, id))
       .returning();
     return updatedApplication;
+  }
+
+  // ============================================
+  // Staff Position Methods
+  // ============================================
+
+  async getAllStaffPositions(): Promise<StaffPosition[]> {
+    const db = await getDb();
+    return await db.select().from(staffPositions);
+  }
+
+  async getStaffPositionById(id: number): Promise<StaffPosition | undefined> {
+    const db = await getDb();
+    const [position] = await db.select().from(staffPositions).where(eq(staffPositions.id, id));
+    return position;
+  }
+
+  async getStaffPositionsBySchoolId(schoolId: number | null): Promise<StaffPosition[]> {
+    const db = await getDb();
+    if (schoolId === null) {
+      return await db.select().from(staffPositions).where(isNull(staffPositions.schoolId));
+    }
+    return await db.select().from(staffPositions).where(eq(staffPositions.schoolId, schoolId));
+  }
+
+  async createStaffPosition(position: InsertStaffPosition): Promise<StaffPosition> {
+    const db = await getDb();
+    const [newPosition] = await db.insert(staffPositions).values(position).returning();
+    return newPosition;
+  }
+
+  async updateStaffPosition(id: number, position: Partial<InsertStaffPosition>): Promise<StaffPosition | undefined> {
+    const db = await getDb();
+    const [updatedPosition] = await db
+      .update(staffPositions)
+      .set(position)
+      .where(eq(staffPositions.id, id))
+      .returning();
+    return updatedPosition;
+  }
+
+  async deleteStaffPosition(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(staffPositions).where(eq(staffPositions.id, id));
+  }
+
+  // ============================================
+  // Staff Invitation Methods
+  // ============================================
+
+  async getAllStaffInvitations(): Promise<StaffInvitation[]> {
+    const db = await getDb();
+    return await db.select().from(staffInvitations);
+  }
+
+  async getStaffInvitationById(id: number): Promise<StaffInvitation | undefined> {
+    const db = await getDb();
+    const [invitation] = await db.select().from(staffInvitations).where(eq(staffInvitations.id, id));
+    return invitation;
+  }
+
+  async getStaffInvitationByToken(token: string): Promise<StaffInvitation | undefined> {
+    const db = await getDb();
+    const [invitation] = await db.select().from(staffInvitations).where(eq(staffInvitations.token, token));
+    return invitation;
+  }
+
+  async getStaffInvitationsBySchoolId(schoolId: number): Promise<StaffInvitation[]> {
+    const db = await getDb();
+    return await db.select().from(staffInvitations).where(eq(staffInvitations.schoolId, schoolId));
+  }
+
+  async getStaffInvitationsByEmail(email: string): Promise<StaffInvitation[]> {
+    const db = await getDb();
+    return await db.select().from(staffInvitations).where(eq(staffInvitations.email, email));
+  }
+
+  async createStaffInvitation(invitation: InsertStaffInvitation): Promise<StaffInvitation> {
+    const db = await getDb();
+    const [newInvitation] = await db.insert(staffInvitations).values(invitation).returning();
+    return newInvitation;
+  }
+
+  async updateStaffInvitation(id: number, invitation: Partial<InsertStaffInvitation>): Promise<StaffInvitation | undefined> {
+    const db = await getDb();
+    const [updatedInvitation] = await db
+      .update(staffInvitations)
+      .set(invitation)
+      .where(eq(staffInvitations.id, id))
+      .returning();
+    return updatedInvitation;
+  }
+
+  async deleteStaffInvitation(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(staffInvitations).where(eq(staffInvitations.id, id));
+  }
+
+  // ============================================
+  // Password Reset Token Methods
+  // ============================================
+
+  async getPasswordResetTokenByToken(token: string): Promise<PasswordResetToken | undefined> {
+    const db = await getDb();
+    const [resetToken] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, token));
+    return resetToken;
+  }
+
+  async createPasswordResetToken(tokenData: InsertPasswordResetToken): Promise<PasswordResetToken> {
+    const db = await getDb();
+    const [newToken] = await db.insert(passwordResetTokens).values(tokenData).returning();
+    return newToken;
+  }
+
+  async markPasswordResetTokenAsUsed(token: string): Promise<void> {
+    const db = await getDb();
+    await db
+      .update(passwordResetTokens)
+      .set({ used: true })
+      .where(eq(passwordResetTokens.token, token));
+  }
+
+  async deleteExpiredPasswordResetTokens(): Promise<void> {
+    const db = await getDb();
+    const now = new Date();
+    await db.delete(passwordResetTokens).where(
+      and(
+        eq(passwordResetTokens.used, false),
+        lt(passwordResetTokens.expiresAt, now)
+      )
+    );
   }
 }

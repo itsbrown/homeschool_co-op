@@ -321,6 +321,30 @@ export interface IStorage {
   // Daily Flow utility methods
   generateDailyFlowEntriesFromTemplate(params: { templateId: number; classId: number; startDate: string; endDate: string; createdBy: string }): Promise<DailyFlowEntry[]>;
   getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }>;
+
+  // Staff Position methods
+  getAllStaffPositions(): Promise<StaffPosition[]>;
+  getStaffPositionById(id: number): Promise<StaffPosition | undefined>;
+  getStaffPositionsBySchoolId(schoolId: number | null): Promise<StaffPosition[]>;
+  createStaffPosition(position: InsertStaffPosition): Promise<StaffPosition>;
+  updateStaffPosition(id: number, position: Partial<InsertStaffPosition>): Promise<StaffPosition | undefined>;
+  deleteStaffPosition(id: number): Promise<void>;
+
+  // Staff Invitation methods
+  getAllStaffInvitations(): Promise<StaffInvitation[]>;
+  getStaffInvitationById(id: number): Promise<StaffInvitation | undefined>;
+  getStaffInvitationByToken(token: string): Promise<StaffInvitation | undefined>;
+  getStaffInvitationsBySchoolId(schoolId: number): Promise<StaffInvitation[]>;
+  getStaffInvitationsByEmail(email: string): Promise<StaffInvitation[]>;
+  createStaffInvitation(invitation: InsertStaffInvitation): Promise<StaffInvitation>;
+  updateStaffInvitation(id: number, invitation: Partial<InsertStaffInvitation>): Promise<StaffInvitation | undefined>;
+  deleteStaffInvitation(id: number): Promise<void>;
+
+  // Password Reset Token methods
+  getPasswordResetTokenByToken(token: string): Promise<PasswordResetToken | undefined>;
+  createPasswordResetToken(tokenData: InsertPasswordResetToken): Promise<PasswordResetToken>;
+  markPasswordResetTokenAsUsed(token: string): Promise<void>;
+  deleteExpiredPasswordResetTokens(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
