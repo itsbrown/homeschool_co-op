@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
+import { useSchoolAdmin } from '@/hooks/useSchoolAdmin'
 import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit, Power } from 'lucide-react'
 
 interface LocationOverview {
@@ -49,18 +50,8 @@ export default function LocationManagementPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  // Fetch current user's profile to get their schoolId
-  const { data: userProfile } = useQuery({
-    queryKey: ['/api/users/profile'],
-    queryFn: () => fetch('/api/users/profile', {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
-      }
-    }).then(res => {
-      if (!res.ok) throw new Error('Failed to fetch profile')
-      return res.json()
-    })
-  })
+  // Get authenticated user's schoolId
+  const { schoolId, hasSchool } = useSchoolAdmin()
 
   // Fetch location overview data
   const { data: locationData, isLoading: isLoadingLocations, error: locationsError } = useQuery({
@@ -132,10 +123,7 @@ export default function LocationManagementPage() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     
-    // Get schoolId from authenticated user's profile
-    const schoolId = userProfile?.schoolId
-    
-    if (!schoolId) {
+    if (!hasSchool || !schoolId) {
       toast({
         title: "Error",
         description: "Unable to determine your school. Please ensure you're logged in as a school administrator.",

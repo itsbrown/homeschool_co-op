@@ -63,23 +63,47 @@ router.get("/accessible", async (req, res) => {
 });
 
 // Create a new location
-router.post("/", async (req, res) => {
+router.post("/", async (req: any, res) => {
   try {
-    const validatedData = insertLocationSchema.parse(req.body);
+    // Get authenticated user's email from auth middleware
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
     
-    // Validate that the school exists before creating the location
-    const school = await storage.getSchool(validatedData.schoolId);
-    if (!school) {
-      console.error(`❌ Cannot create location: School ID ${validatedData.schoolId} does not exist`);
-      return res.status(404).json({ 
-        message: `School with ID ${validatedData.schoolId} not found. Please select a valid school.` 
+    // Fetch user from database to get their schoolId
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Verify user has a school assignment
+    if (!user.schoolId) {
+      return res.status(403).json({ 
+        message: "You are not associated with a school. Please contact support." 
       });
     }
     
-    console.log(`✅ School ${school.name} (ID: ${school.id}) verified, creating location...`);
+    // SECURITY: Use the authenticated user's schoolId, ignoring client-provided value
+    const validatedData = insertLocationSchema.parse(req.body);
+    const locationData = {
+      ...validatedData,
+      schoolId: user.schoolId  // Override with authenticated user's school
+    };
     
-    // Use the storage system that the overview endpoint uses
-    const location = await storage.createLocation(validatedData);
+    // Validate that the school exists (should always pass since user is linked to it)
+    const school = await storage.getSchool(locationData.schoolId);
+    if (!school) {
+      console.error(`❌ Integrity error: User ${user.id} linked to non-existent school ${user.schoolId}`);
+      return res.status(500).json({ 
+        message: "School configuration error. Please contact support." 
+      });
+    }
+    
+    console.log(`✅ User ${userEmail} creating location for school ${school.name} (ID: ${school.id})`);
+    
+    // Create location using authenticated school
+    const location = await storage.createLocation(locationData);
     
     res.status(201).json(location);
   } catch (error) {
