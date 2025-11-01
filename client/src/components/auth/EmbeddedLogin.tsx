@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/components/SupabaseProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { useLocation } from "wouter";
 
 export default function EmbeddedLogin() {
   const [, setLocation] = useLocation();
-  const { loginWithRedirect, isLoading: authLoading } = useAuth0();
+  const { signIn, signInWithGoogle, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -20,18 +20,24 @@ export default function EmbeddedLogin() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !password) {
+      setError("Email and password are required");
+      return;
+    }
+    
     setIsLoading(true);
     setError("");
 
     try {
-      await loginWithRedirect({
-        authorizationParams: {
-          login_hint: email,
-          screen_hint: "login"
-        }
-      });
+      const result = await signIn(email, password);
+      if (result.error) {
+        setError(result.error.message);
+      } else {
+        setLocation('/dashboard');
+      }
     } catch (err) {
       setError("Login failed. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -41,50 +47,74 @@ export default function EmbeddedLogin() {
     setError("");
 
     try {
-      await loginWithRedirect({
-        authorizationParams: {
-          connection: "google-oauth2"
-        }
-      });
+      const result = await signInWithGoogle();
+      if (result.error) {
+        setError(result.error.message);
+      } else {
+        setLocation('/dashboard');
+      }
     } catch (err) {
       setError("Google login failed. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
 
   const handleGeneralLogin = async () => {
+    if (!email || !password) {
+      setError("Please enter email and password");
+      return;
+    }
+    
     setIsLoading(true);
     setError("");
 
     try {
-      await loginWithRedirect();
+      const result = await signIn(email, password);
+      if (result.error) {
+        setError(result.error.message);
+      } else {
+        setLocation('/dashboard');
+      }
     } catch (err) {
       setError("Login failed. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
 
   const handleSignup = async () => {
-    // Redirect to the customized Auth0 signup page
-    await loginWithRedirect({
-      authorizationParams: {
-        redirect_uri: window.location.origin,
-        screen_hint: "signup"
-      }
-    });
+    setLocation('/register');
   };
 
-  const handleQuickAccess = (role: string) => {
+  const handleQuickAccess = async (role: string) => {
     const testAccounts = {
-      parent: { email: "parent@test.com", password: "demo123" },
-      educator: { email: "educator@test.com", password: "demo123" },
-      school_admin: { email: "schooladmin@test.com", password: "demo123" }
+      parent: { email: "parent@test.com", password: "password" },
+      educator: { email: "educator@test.com", password: "password" },
+      school_admin: { email: "schooladmin@test.com", password: "password" }
     };
 
     const account = testAccounts[role as keyof typeof testAccounts];
     if (account) {
       setEmail(account.email);
       setPassword(account.password);
+      
+      // Automatically log in with the test account
+      setIsLoading(true);
+      setError("");
+      
+      try {
+        const result = await signIn(account.email, account.password);
+        if (result.error) {
+          setError(result.error.message);
+        } else {
+          setLocation('/dashboard');
+        }
+      } catch (err) {
+        setError("Login failed. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
