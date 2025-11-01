@@ -4592,6 +4592,81 @@ export class MemStorage implements IStorage {
       async getEnrollmentsByIds(enrollmentIds: number[]): Promise<any[]> {
         return this.memStorage.getEnrollmentsByIds(enrollmentIds);
       }
+
+      // Staff Position methods
+      async getAllStaffPositions(): Promise<StaffPosition[]> {
+        return this.dbStorage.getAllStaffPositions();
+      }
+
+      async getStaffPositionById(id: number): Promise<StaffPosition | undefined> {
+        return this.dbStorage.getStaffPositionById(id);
+      }
+
+      async getStaffPositionsBySchoolId(schoolId: number | null): Promise<StaffPosition[]> {
+        return this.dbStorage.getStaffPositionsBySchoolId(schoolId);
+      }
+
+      async createStaffPosition(position: InsertStaffPosition): Promise<StaffPosition> {
+        return this.dbStorage.createStaffPosition(position);
+      }
+
+      async updateStaffPosition(id: number, position: Partial<InsertStaffPosition>): Promise<StaffPosition | undefined> {
+        return this.dbStorage.updateStaffPosition(id, position);
+      }
+
+      async deleteStaffPosition(id: number): Promise<void> {
+        return this.dbStorage.deleteStaffPosition(id);
+      }
+
+      // Staff Invitation methods
+      async getAllStaffInvitations(): Promise<StaffInvitation[]> {
+        return this.dbStorage.getAllStaffInvitations();
+      }
+
+      async getStaffInvitationById(id: number): Promise<StaffInvitation | undefined> {
+        return this.dbStorage.getStaffInvitationById(id);
+      }
+
+      async getStaffInvitationByToken(token: string): Promise<StaffInvitation | undefined> {
+        return this.dbStorage.getStaffInvitationByToken(token);
+      }
+
+      async getStaffInvitationsBySchoolId(schoolId: number): Promise<StaffInvitation[]> {
+        return this.dbStorage.getStaffInvitationsBySchoolId(schoolId);
+      }
+
+      async getStaffInvitationsByEmail(email: string): Promise<StaffInvitation[]> {
+        return this.dbStorage.getStaffInvitationsByEmail(email);
+      }
+
+      async createStaffInvitation(invitation: InsertStaffInvitation): Promise<StaffInvitation> {
+        return this.dbStorage.createStaffInvitation(invitation);
+      }
+
+      async updateStaffInvitation(id: number, invitation: Partial<InsertStaffInvitation>): Promise<StaffInvitation | undefined> {
+        return this.dbStorage.updateStaffInvitation(id, invitation);
+      }
+
+      async deleteStaffInvitation(id: number): Promise<void> {
+        return this.dbStorage.deleteStaffInvitation(id);
+      }
+
+      // Password Reset Token methods
+      async getPasswordResetTokenByToken(token: string): Promise<PasswordResetToken | undefined> {
+        return this.dbStorage.getPasswordResetTokenByToken(token);
+      }
+
+      async createPasswordResetToken(tokenData: InsertPasswordResetToken): Promise<PasswordResetToken> {
+        return this.dbStorage.createPasswordResetToken(tokenData);
+      }
+
+      async markPasswordResetTokenAsUsed(token: string): Promise<void> {
+        return this.dbStorage.markPasswordResetTokenAsUsed(token);
+      }
+
+      async deleteExpiredPasswordResetTokens(): Promise<void> {
+        return this.dbStorage.deleteExpiredPasswordResetTokens();
+      }
   }
 
   // Use the MemStorage implementation for classes functionality
