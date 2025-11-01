@@ -26,11 +26,9 @@ interface RoleProviderProps {
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  // Initialize from localStorage to persist role across page reloads
-  const [activeRole, setActiveRole] = useState<string>(() => {
-    const savedRole = localStorage.getItem('activeRole');
-    return savedRole || '';
-  });
+  // Start with empty role - always fetch from database as source of truth
+  // localStorage is only used as a cache after database confirms the role
+  const [activeRole, setActiveRole] = useState<string>('');
 
   const [showRoleSelection, setShowRoleSelection] = useState<boolean>(false);
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
@@ -83,39 +81,47 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         setCanSwitchRoles(false);
         setShowRoleSelection(false);
 
-        // Clear role-related localStorage on logout
+        // Clear ALL role-related localStorage on logout
         localStorage.removeItem('selectedRole');
         localStorage.removeItem('userRole');
+        localStorage.removeItem('activeRole');
         return;
       }
 
       console.log('🔄 Role check for user:', user.email);
       const hasMultipleRoles = checkUserRoles(user);
       const savedRole = localStorage.getItem('activeRole');
-      console.log(`🔄 hasMultipleRoles:`, hasMultipleRoles, 'savedRole:', savedRole);
+      
+      // Always fetch the role from database first (source of truth)
+      const databaseRole = await getUserRole(user);
+      console.log(`🔄 Database role for ${user.email}: ${databaseRole}, localStorage role: ${savedRole || 'none'}`);
+      
+      // Validate localStorage against database
+      if (savedRole && savedRole !== databaseRole) {
+        console.warn(`⚠️ Role mismatch detected! localStorage: ${savedRole}, database: ${databaseRole}. Using database value.`);
+        localStorage.setItem('activeRole', databaseRole);
+      }
 
       if (hasMultipleRoles) {
         console.log(`🎯 Multi-role user detected:`, user.email);
-        if (!savedRole) {
-          console.log(`🎯 No saved role - showing role selection`);
+        if (!savedRole || savedRole !== databaseRole) {
+          console.log(`🎯 No saved role or mismatch - showing role selection`);
           setShowRoleSelection(true);
           setActiveRole('');
         } else {
-          console.log(`🎯 Found saved role: ${savedRole}`);
+          console.log(`🎯 Found valid saved role: ${savedRole}`);
           setActiveRole(savedRole);
           setShowRoleSelection(false);
         }
         setCanSwitchRoles(true); // Enable role switching for multi-role users
       } else {
-        // Single role user - fetch role from backend database
-        getUserRole(user).then((defaultRole) => {
-          console.log(`🎯 Single role user - setting role: ${defaultRole} for ${user.email}`);
-          setActiveRole(defaultRole);
-          localStorage.setItem('activeRole', defaultRole);
-          // Allow role switching for superAdmin
-          setCanSwitchRoles(defaultRole === 'superAdmin');
-          setShowRoleSelection(false);
-        });
+        // Single role user - use database role (already fetched)
+        console.log(`🎯 Single role user - setting role: ${databaseRole} for ${user.email}`);
+        setActiveRole(databaseRole);
+        localStorage.setItem('activeRole', databaseRole);
+        // Allow role switching for superAdmin
+        setCanSwitchRoles(databaseRole === 'superAdmin');
+        setShowRoleSelection(false);
       }
     };
 
