@@ -32,7 +32,9 @@ router.get("/profile", async (req: any, res) => {
       lastName: user.lastName || "",
       phoneNumber: user.phone || "",
       avatar: authUser?.user_metadata?.avatar_url || "",
-      subscription: "free"
+      subscription: "free",
+      role: user.role,
+      schoolId: user.schoolId || null
     };
     
     console.log("📋 Profile returned:", userProfile);

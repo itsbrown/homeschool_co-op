@@ -49,6 +49,19 @@ export default function LocationManagementPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
+  // Fetch current user's profile to get their schoolId
+  const { data: userProfile } = useQuery({
+    queryKey: ['/api/users/profile'],
+    queryFn: () => fetch('/api/users/profile', {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+      }
+    }).then(res => {
+      if (!res.ok) throw new Error('Failed to fetch profile')
+      return res.json()
+    })
+  })
+
   // Fetch location overview data
   const { data: locationData, isLoading: isLoadingLocations, error: locationsError } = useQuery({
     queryKey: ['/api/school-admin/locations/overview'],
@@ -119,8 +132,20 @@ export default function LocationManagementPage() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     
+    // Get schoolId from authenticated user's profile
+    const schoolId = userProfile?.schoolId
+    
+    if (!schoolId) {
+      toast({
+        title: "Error",
+        description: "Unable to determine your school. Please ensure you're logged in as a school administrator.",
+        variant: "destructive",
+      })
+      return
+    }
+    
     const locationData = {
-      schoolId: 1, // Default school ID for now
+      schoolId: schoolId,
       name: formData.get('name') as string,
       code: formData.get('code') as string,
       address: formData.get('address') as string,
