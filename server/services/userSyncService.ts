@@ -23,6 +23,16 @@ export class UserSyncService {
       if (existingUser) {
         // Update existing user with Auth0 data
         // Preserve existing schoolId if not provided in additionalData
+        // Filter out fields that don't exist in database
+        const filteredData: any = {};
+        if (additionalData) {
+          Object.keys(additionalData).forEach(key => {
+            if (key !== 'firstName' && key !== 'lastName') {
+              filteredData[key] = additionalData[key as keyof typeof additionalData];
+            }
+          });
+        }
+        
         const updateData: any = {
           name: auth0User.name || auth0User.nickname || existingUser.name,
           lastLogin: new Date(),
@@ -30,7 +40,7 @@ export class UserSyncService {
           auth0Id: auth0User.sub,
           avatar: auth0User.picture,
           isActive: true,
-          ...additionalData
+          ...filteredData
         };
         
         // Never overwrite existing schoolId with null/undefined
@@ -51,6 +61,16 @@ export class UserSyncService {
         // Create new user from Auth0 data
         const defaultRole = this.determineDefaultRole(auth0User.email);
         
+        // Filter out fields that don't exist in database
+        const filteredData: any = {};
+        if (additionalData) {
+          Object.keys(additionalData).forEach(key => {
+            if (key !== 'firstName' && key !== 'lastName') {
+              filteredData[key] = additionalData[key as keyof typeof additionalData];
+            }
+          });
+        }
+        
         const [newUser] = await db
           .insert(users)
           .values({
@@ -65,7 +85,7 @@ export class UserSyncService {
             isActive: true,
             createdAt: new Date(),
             updatedAt: new Date(),
-            ...additionalData
+            ...filteredData
           })
           .returning();
 
