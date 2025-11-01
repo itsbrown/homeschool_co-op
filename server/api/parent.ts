@@ -147,28 +147,38 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       age--;
     }
 
-    // Get parent's location data to inherit
+    // Validate and get parent's school and location data
+    let validSchoolId = null;
     let parentLocationId = null;
+    
     if (parent.schoolId) {
-      // Get the primary location for the parent's school
+      // Verify the school exists in the database
       try {
-        const locations = await storage.getLocationsBySchoolId(parent.schoolId);
-        if (locations && locations.length > 0) {
-          // Use the first location as default, or you could implement logic to choose a specific one
-          parentLocationId = locations[0].id;
+        const school = await storage.getSchool(parent.schoolId);
+        if (school) {
+          validSchoolId = parent.schoolId;
+          console.log('✅ Validated school exists:', school.name);
+          
+          // Get the primary location for the parent's school
+          const locations = await storage.getLocationsBySchoolId(parent.schoolId);
+          if (locations && locations.length > 0) {
+            parentLocationId = locations[0].id;
+          }
+        } else {
+          console.log('⚠️ Parent has invalid schoolId, will create child without school assignment');
         }
       } catch (error) {
-        console.log('⚠️ Could not fetch parent location, child will inherit school only');
+        console.log('⚠️ Could not validate parent school, child will be created without school assignment:', error);
       }
     }
 
     console.log('🏠 Parent location inheritance:', {
-      parentSchoolId: parent.schoolId,
+      parentSchoolId: validSchoolId,
       parentLocationId,
       parentEmail: userEmail
     });
 
-    // Create the new child object with inherited location
+    // Create the new child object with validated school/location
     const newChild = {
       firstName,
       lastName,
@@ -181,8 +191,8 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       allergies: allergies || null,
       medicalInfo: medicalInfo || null,
       school: school || null,
-      schoolId: parent.schoolId || null, // Inherit parent's school
-      locationId: parentLocationId, // Inherit parent's primary location
+      schoolId: validSchoolId, // Only set if school exists in database
+      locationId: parentLocationId, // Only set if school exists and has locations
       profileImage: profileImage || null,
       emergencyContact: emergencyContact || null,
       additionalLanguages: additionalLanguages || null,
@@ -198,12 +208,12 @@ router.post('/children', jwtCheck, async (req: any, res) => {
 
     console.log('✅ Child registered successfully:', savedChild);
 
-    // Create school_student record if child has a schoolId
-    if (savedChild.schoolId && parent.schoolId) {
+    // Create school_student record if child has a valid schoolId
+    if (savedChild.schoolId && validSchoolId) {
       try {
         console.log('📚 Creating school_student record for child:', savedChild.id);
         const schoolStudent = await storage.createSchoolStudent({
-          schoolId: parent.schoolId,
+          schoolId: validSchoolId,
           childId: savedChild.id,
           grade: gradeLevel,
           status: 'active',

@@ -727,27 +727,27 @@ router.get("/classes", async (req, res) => {
 
     console.log(`🏫 Loading classes for school ID: ${schoolId} (American Seekers Academy)`);
 
-    // Get raw classes from storage 
-    // Read directly from the file system to ensure we get the latest data
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
-    const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
+    // Get classes from database storage
+    const allClasses = await storage.getClassesBySchoolId(String(schoolId));
+    
+    console.log(`Found ${allClasses.length} classes for school ID ${schoolId} from database`);
 
-    // Filter to only include classes for this school
-    const schoolClasses = allClasses.filter(cls => Number(cls.schoolId) === Number(schoolId));
-
-    console.log(`Found ${schoolClasses.length} classes for school ID ${schoolId} (direct access)`);
-
-    // Get enrollments to calculate enrollment counts
-    const ENROLLMENTS_FILE = path.join(DATA_DIR, 'enrollments.json');
+    // Get enrollments from database to calculate enrollment counts
     let enrollments = [];
-    if (fs.existsSync(ENROLLMENTS_FILE)) {
-      enrollments = JSON.parse(fs.readFileSync(ENROLLMENTS_FILE, 'utf8'));
+    try {
+      // Get all marketplace class enrollments
+      const allEnrollments = await storage.getAllChildren();
+      for (const child of allEnrollments) {
+        const childEnrollments = await storage.getEnrollmentsByChildId(child.id);
+        enrollments.push(...childEnrollments);
+      }
+    } catch (error) {
+      console.log('⚠️ Could not fetch enrollments:', error);
     }
 
     // Add enrollment counts and parse variants from each class
     // Also expand classes with variants into individual variant class entries
-    const classesWithEnrollment = schoolClasses.flatMap(classItem => {
+    const classesWithEnrollment = allClasses.flatMap(classItem => {
       // Count enrollments for this specific class
       const classEnrollmentCount = enrollments.filter(enrollment => 
         Number(enrollment.classId) === Number(classItem.id) && 
@@ -826,7 +826,7 @@ router.get("/classes", async (req, res) => {
       items: filteredClasses,
       total: filteredClasses.length,
       page: 1,
-      limit: schoolClasses.length,
+      limit: allClasses.length,
       totalPages: 1
     });
   } catch (error) {
