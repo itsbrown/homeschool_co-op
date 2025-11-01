@@ -2749,7 +2749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Multi-location support routes
   const locationsRouter = (await import("./api/locations")).default;
-  app.use("/api/locations", locationsRouter);
+  app.use("/api/locations", jwtCheck, locationsRouter);
   
   const notificationsRouter = (await import("./api/notifications")).default;
   app.use("/api/notifications", jwtCheck, notificationsRouter);
