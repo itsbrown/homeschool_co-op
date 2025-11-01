@@ -324,19 +324,21 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         {isMobileMenuOpen && (
           <div className="fixed inset-0 z-40 bg-black/50" onClick={closeMobileMenu}>
             <div 
-              className="fixed inset-y-0 left-0 z-50 w-3/4 max-w-xs bg-white border-r shadow-lg" 
+              className="fixed inset-y-0 left-0 z-50 w-3/4 max-w-xs bg-white border-r shadow-lg flex flex-col" 
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex h-14 items-center border-b px-4">
+              {/* Header */}
+              <div className="flex h-14 items-center border-b px-4 flex-shrink-0">
                 <Link href="/" data-testid="mobile-sidebar-logo-link">
-                  <span className="font-bold text-xl text-gray-800">ASA Platform</span>
+                  <span className="font-bold text-xl text-gray-800">Platform</span>
                 </Link>
                 <Button variant="ghost" size="icon" className="ml-auto" onClick={closeMobileMenu} data-testid="mobile-menu-close">
                   <X className="h-5 w-5" />
                 </Button>
               </div>
               
-              <div className="py-4">
+              {/* Navigation - Scrollable */}
+              <div className="flex-1 overflow-y-auto py-4">
                 <nav id="mobile-navigation" className="grid gap-1 px-2">
                   {navItems.map((item) => {
                     const isActive = location === item.href || location.startsWith(`${item.href}/`);
@@ -362,7 +364,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                 </nav>
               </div>
               
-              <div className="border-t p-4 mt-auto">
+              {/* Footer - User Profile & Logout */}
+              <div className="border-t p-4 flex-shrink-0">
                 {isAuthenticated && user && (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -380,6 +383,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                       size="sm" 
                       onClick={handleLogout}
                       className="ml-auto text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      data-testid="mobile-logout-button"
                     >
                       <LogOut className="h-4 w-4" />
                       <span className="ml-1">Logout</span>
