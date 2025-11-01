@@ -3965,25 +3965,14 @@ router.post('/users/:userId/send-password-reset', async (req, res) => {
     const resetToken = uuidv4();
     const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
 
-    // Store reset token (using simple file storage for now)
-    const tokensFile = path.join(process.cwd(), 'data', 'password-reset-tokens.json');
-    let tokens = {};
-    try {
-      if (fs.existsSync(tokensFile)) {
-        tokens = JSON.parse(fs.readFileSync(tokensFile, 'utf8'));
-      }
-    } catch (err) {
-      console.log('Creating new password reset tokens file');
-    }
-
-    tokens[resetToken] = {
-      userId: userId,
+    // Store reset token in database
+    await storage.createPasswordResetToken({
+      token: resetToken,
       email: user.email,
-      expiry: tokenExpiry.toISOString(),
+      userId: userId.toString(),
+      expiresAt: tokenExpiry,
       used: false
-    };
-
-    fs.writeFileSync(tokensFile, JSON.stringify(tokens, null, 2));
+    });
 
     // Send password reset email
     const emailSuccess = await sendPasswordResetEmail({
