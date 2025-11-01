@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
-import { verifyAuth0Token, requireAdmin } from '../middleware/auth0-auth';
+import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireAdmin } from '../middleware/auth0-auth';
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
@@ -10,7 +11,7 @@ import { parse } from "csv-parse";
 const router = Router();
 
 // Get educators (for assigning to classes)
-router.get("/educators", verifyAuth0Token, requireAdmin, async (req, res) => {
+router.get("/educators", supabaseAuth, requireAdmin, async (req, res) => {
   try {
     // For now, we'll use the test users since we're working without a database
     const educators = [
@@ -28,7 +29,7 @@ router.get("/educators", verifyAuth0Token, requireAdmin, async (req, res) => {
 });
 
 // Get a specific class by ID (first instance)
-router.get("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) => {
+router.get("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -49,7 +50,7 @@ router.get("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) => {
 });
 
 // Get all classes (with pagination and filters)
-router.get("/classes", verifyAuth0Token, requireAdmin, async (req, res) => {
+router.get("/classes", supabaseAuth, requireAdmin, async (req, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -89,14 +90,16 @@ router.get("/classes", verifyAuth0Token, requireAdmin, async (req, res) => {
 });
 
 // Create a new class
-router.post("/classes", verifyAuth0Token, requireAdmin, async (req, res) => {
+router.post("/classes", supabaseAuth, requireAdmin, async (req: any, res) => {
   try {
     // Validate request body
     const validatedData = insertClassSchema.parse(req.body);
 
     console.log("Creating class with data:", JSON.stringify(validatedData));
 
-    const instructorId = req.session.userId || 1;
+    // Get authenticated user's ID
+    const user = await storage.getUserByEmail(req.user.email);
+    const instructorId = user?.id || 1;
     
     console.log("Using database storage to create class");
     const classItem = await storage.createClass({
@@ -121,7 +124,7 @@ router.post("/classes", verifyAuth0Token, requireAdmin, async (req, res) => {
 });
 
 // Update a class
-router.patch("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) => {
+router.patch("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -210,7 +213,7 @@ router.patch("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) =>
 });
 
 // Delete a class
-router.delete("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) => {
+router.delete("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -235,7 +238,7 @@ router.delete("/classes/:id", verifyAuth0Token, requireAdmin, async (req, res) =
 });
 
 // Handle CSV file upload for classes
-router.post("/classes/upload", verifyAuth0Token, requireAdmin, async (req, res) => {
+router.post("/classes/upload", supabaseAuth, requireAdmin, async (req, res) => {
   try {
     if (!req.files || !req.files.file) {
       return res.status(400).json({ message: "No file uploaded" });
