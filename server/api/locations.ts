@@ -67,20 +67,27 @@ router.post("/", async (req: any, res) => {
   try {
     // Get authenticated user's email from auth middleware
     const userEmail = req.user?.email;
+    console.log('🔐 Location creation - authenticated user email:', userEmail);
+    console.log('🔐 Request user object:', JSON.stringify(req.user, null, 2));
+    console.log('🔐 Request auth object:', JSON.stringify(req.auth, null, 2));
+    
     if (!userEmail) {
       return res.status(401).json({ message: "Authentication required" });
     }
     
     // Fetch user from database to get their schoolId
     const user = await storage.getUserByEmail(userEmail);
+    console.log('👤 Database user lookup result:', user ? { id: user.id, email: user.email, schoolId: user.schoolId, role: user.role } : 'NOT FOUND');
+    
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: "User not found in database. Please complete registration." });
     }
     
     // Verify user has a school assignment
     if (!user.schoolId) {
+      console.error(`❌ User ${userEmail} exists but has no schoolId assigned`);
       return res.status(403).json({ 
-        message: "You are not associated with a school. Please contact support." 
+        message: "Unable to determine your school. Please contact support." 
       });
     }
     
