@@ -89,6 +89,28 @@ The following critical tables have been migrated from in-memory storage to persi
   - Architect-recommended approach for clean data model separation
   - JSON file archived to backups
 
+**Auxiliary Systems Migrations (November 1, 2025)**:
+- **Staff Positions**: Dynamic position management now database-backed
+  - Removed: All file operations from school-admin.ts (loadStaffPositions/saveStaffPositions)
+  - Added: staffPositions table with full CRUD operations in dbStorage
+  - Updated: All endpoints (GET, POST, PATCH, DELETE) use database storage exclusively
+  - CombinedStorage routes staff position operations to database
+  - Result: Position definitions persist across server restarts
+- **Staff Invitations**: Secure token-based invitations now stored in database
+  - Removed: All file operations from school-admin.ts (loadStaffInvitations/saveStaffInvitations)
+  - Updated: Invitation validation and acceptance endpoints use roleInvitations table
+  - All invitation flows use database-backed roleInvitations (no file storage)
+  - CombinedStorage routes invitation operations to database
+  - Result: Invitation tokens and status persist across server restarts
+- **Password Reset Tokens**: Secure password reset flow now database-backed
+  - Removed: All file operations from auth.ts and school-admin.ts
+  - Added: passwordResetTokens table with expiry and usage tracking
+  - Updated: Both /forgot-password and /reset-password endpoints use database storage
+  - Updated: School admin password reset endpoint (/users/:userId/send-password-reset) uses database
+  - Added: Automatic cleanup of expired tokens via deleteExpiredPasswordResetTokens
+  - CombinedStorage routes password reset token operations to database
+  - Result: Reset tokens persist across server restarts with proper expiry handling
+
 **Implementation Details**:
 - All migrations implemented using Drizzle ORM with full CRUD operations
 - CombinedStorage routes critical data operations to dbStorage (PostgreSQL)
