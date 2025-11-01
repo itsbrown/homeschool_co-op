@@ -110,7 +110,7 @@ export default function Login() {
 
   const handleTestLogin = (email: string) => {
     form.setValue("email", email);
-    form.setValue("password", "testpassword");
+    form.setValue("password", "password");
   };
 
   return (

@@ -91,8 +91,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const { initializeDatabase } = await import('./init-db');
   await initializeDatabase();
 
-  // Import Supabase token-based authentication middleware
-  const { jwtCheck, requireRole, requireAdmin, requireEducator } = await import("./middleware/auth0-auth");
+  // Import Supabase authentication middleware
+  const { supabaseAuth } = await import("./middleware/supabase-auth");
+  
+  // Create alias for compatibility with existing code
+  const jwtCheck = supabaseAuth;
+  const isAuthenticated = supabaseAuth;
+  
+  // Import role-based middleware (keeping for compatibility)
+  const { requireRole, requireAdmin, requireEducator } = await import("./middleware/auth0-auth");
 
   // Role switching API endpoint for multi-role users
   app.post("/api/switch-role", jwtCheck, async (req, res) => {
@@ -249,8 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Supabase token-based authentication middleware
-  const isAuthenticated = jwtCheck;
+  // Aliases already defined at top of registerRoutes function
 
   // Role-based authorization middleware using Auth0 tokens
   const hasRole = (roles: string[]) => {
