@@ -898,33 +898,7 @@ router.get("/classes/:id/roster", async (req, res) => {
   }
 });
 
-// Staff invitations file (still used for invitations tracking)
-const STAFF_INVITATIONS_FILE = path.join(process.cwd(), 'data', 'staff-invitations.json');
-
-function loadStaffInvitations() {
-  try {
-    if (fs.existsSync(STAFF_INVITATIONS_FILE)) {
-      const data = fs.readFileSync(STAFF_INVITATIONS_FILE, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.log('Error loading staff invitations:', error);
-  }
-  return [];
-}
-
-function saveStaffInvitations(invitations: any[]) {
-  try {
-    const dataDir = path.dirname(STAFF_INVITATIONS_FILE);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    fs.writeFileSync(STAFF_INVITATIONS_FILE, JSON.stringify(invitations, null, 2));
-    console.log('Staff invitations saved successfully');
-  } catch (error) {
-    console.error('Error saving staff invitations:', error);
-  }
-}
+// Staff invitations now use database storage via roleInvitations table
 
 // Invite staff member (POST endpoint)
 router.post("/staff/invite", async (req, res) => {
@@ -1525,54 +1499,11 @@ router.delete("/staff/:id", async (req, res) => {
   }
 });
 
-// Initialize staff positions storage with file persistence
-const STAFF_POSITIONS_FILE = path.join(process.cwd(), 'data', 'staff-positions.json');
-
-// Load positions from file
-function loadStaffPositions() {
-  try {
-    if (fs.existsSync(STAFF_POSITIONS_FILE)) {
-      const data = fs.readFileSync(STAFF_POSITIONS_FILE, 'utf8');
-      const positions = JSON.parse(data);
-      console.log('Loaded staff positions from file:', positions.map(p => p.title));
-      return positions;
-    }
-  } catch (error) {
-    console.log('Error loading staff positions:', error);
-  }
-  // Fallback to defaults if file doesn't exist
-  return [
-    { id: 1, title: "Teacher", description: "Classroom instructor", isDefault: true },
-    { id: 2, title: "Teacher Assistant", description: "Supports classroom instruction", isDefault: true },
-    { id: 3, title: "Administrator", description: "School administration", isDefault: true },
-    { id: 4, title: "Support Staff", description: "General support roles", isDefault: false },
-    { id: 5, title: "Volunteer", description: "Volunteer position", isDefault: false },
-    { id: 6, title: "Substitute Teacher", description: "Temporary classroom instructor", isDefault: false },
-    { id: 7, title: "Counselor", description: "Student guidance and support", isDefault: false },
-    { id: 8, title: "Librarian", description: "Library management", isDefault: false },
-  ];
-}
-
-// Save positions to file
-function saveStaffPositions(positions: any[]) {
-  try {
-    const dataDir = path.dirname(STAFF_POSITIONS_FILE);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    fs.writeFileSync(STAFF_POSITIONS_FILE, JSON.stringify(positions, null, 2));
-    console.log('Staff positions saved to file successfully');
-  } catch (error) {
-    console.error('Error saving staff positions:', error);
-  }
-}
-
-let staffPositions = loadStaffPositions();
-
 // Get staff positions/roles for dropdown
 router.get("/staff-positions", async (req, res) => {
   try {
-    res.json(staffPositions);
+    const positions = await storage.getAllStaffPositions();
+    res.json(positions);
   } catch (error) {
     console.error("Error fetching staff positions:", error);
     res.status(500).json({ message: "Error fetching staff positions" });
@@ -1582,23 +1513,20 @@ router.get("/staff-positions", async (req, res) => {
 // Create new staff position
 router.post("/staff-positions", async (req, res) => {
   try {
-    const { title, description, isDefault } = req.body;
+    const { title, description, isDefault, schoolId } = req.body;
 
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
     }
 
-    const newPosition = {
-      id: Math.max(...staffPositions.map(p => p.id)) + 1,
+    const newPosition = await storage.createStaffPosition({
       title,
-      description: description || "",
-      isDefault: isDefault || false
-    };
+      description: description || null,
+      isDefault: isDefault || false,
+      schoolId: schoolId || null
+    });
 
-    staffPositions.push(newPosition);
-    saveStaffPositions(staffPositions);
     console.log("Created new staff position:", newPosition);
-
     res.json(newPosition);
   } catch (error) {
     console.error("Error creating staff position:", error);
@@ -1616,29 +1544,20 @@ router.patch("/staff-positions/:id", async (req, res) => {
     const { title, description, isDefault } = req.body;
 
     console.log("🔧 PATCH /staff-positions/" + positionId + " received:", { title, description, isDefault });
-    console.log("📋 Current staffPositions before update:", staffPositions);
 
-    const positionIndex = staffPositions.findIndex(p => p.id === positionId);
+    const updateData: any = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (isDefault !== undefined) updateData.isDefault = isDefault;
 
-    if (positionIndex === -1) {
+    const updatedPosition = await storage.updateStaffPosition(positionId, updateData);
+
+    if (!updatedPosition) {
       console.log("❌ Position not found for ID:", positionId);
       return res.status(404).json({ message: "Staff position not found" });
     }
 
-    // Update the position
-    const updatedPosition = {
-      ...staffPositions[positionIndex],
-      title: title || staffPositions[positionIndex].title,
-      description: description !== undefined ? description : staffPositions[positionIndex].description,
-      isDefault: isDefault !== undefined ? isDefault : staffPositions[positionIndex].isDefault
-    };
-
-    staffPositions[positionIndex] = updatedPosition;
-    saveStaffPositions(staffPositions);
-
     console.log("✅ Successfully updated staff position:", updatedPosition);
-    console.log("📋 Full staffPositions after update:", staffPositions);
-
     res.json(updatedPosition);
   } catch (error) {
     console.error("❌ Error updating staff position:", error);
@@ -1650,15 +1569,14 @@ router.patch("/staff-positions/:id", async (req, res) => {
 router.delete("/staff-positions/:id", async (req, res) => {
   try {
     const positionId = parseInt(req.params.id);
-    const positionIndex = staffPositions.findIndex(p => p.id === positionId);
+    const position = await storage.getStaffPositionById(positionId);
 
-    if (positionIndex === -1) {
+    if (!position) {
       return res.status(404).json({ message: "Staff position not found" });
     }
 
-    const deletedPosition = staffPositions.splice(positionIndex, 1)[0];
-    saveStaffPositions(staffPositions);
-    console.log("Deleted staff position:", deletedPosition);
+    await storage.deleteStaffPosition(positionId);
+    console.log("Deleted staff position:", position);
 
     res.json({ message: "Staff position deleted successfully" });
   } catch (error) {
@@ -2554,15 +2472,10 @@ router.get("/staff-invitations/validate", async (req, res) => {
       });
     }
 
-    const invitations = loadStaffInvitations();
-    const invitation = invitations.find(inv => 
-      inv.token === token && 
-      inv.isActive && 
-      !inv.acceptedAt &&
-      new Date(inv.expiresAt) > new Date()
-    );
+    // Find invitation using roleInvitations (database-backed)
+    const roleInvitation = await storage.getActiveRoleInvitation(token);
 
-    if (!invitation) {
+    if (!roleInvitation) {
       return res.status(404).json({ 
         valid: false, 
         message: "Invalid or expired invitation token" 
@@ -2572,13 +2485,13 @@ router.get("/staff-invitations/validate", async (req, res) => {
     res.json({
       valid: true,
       invitation: {
-        email: invitation.email,
-        firstName: invitation.firstName,
-        lastName: invitation.lastName,
-        role: invitation.role,
-        department: invitation.department,
-        message: invitation.message,
-        createdAt: invitation.createdAt
+        email: roleInvitation.email,
+        firstName: roleInvitation.firstName || '',
+        lastName: roleInvitation.lastName || '',
+        role: roleInvitation.role,
+        department: roleInvitation.role, // Use role as department for compatibility
+        message: '',
+        createdAt: roleInvitation.createdAt
       }
     });
   } catch (error) {
@@ -2599,37 +2512,31 @@ router.post("/staff-invitations/accept", async (req, res) => {
       return res.status(400).json({ message: "Token is required" });
     }
 
-    const invitations = loadStaffInvitations();
-    const invitationIndex = invitations.findIndex(inv => 
-      inv.token === token && 
-      inv.isActive && 
-      !inv.acceptedAt &&
-      new Date(inv.expiresAt) > new Date()
-    );
+    // Find invitation using roleInvitations (database-backed)
+    const roleInvitation = await storage.getActiveRoleInvitation(token);
 
-    if (invitationIndex === -1) {
+    if (!roleInvitation) {
       return res.status(404).json({ message: "Invalid or expired invitation token" });
     }
 
-    const invitation = invitations[invitationIndex];
-    console.log(`📝 Processing invitation acceptance for: ${invitation.email}`);
+    console.log(`📝 Processing invitation acceptance for: ${roleInvitation.email}`);
     
     // Create Supabase account for the staff member
     const accountResult = await createStaffAccount(
-      invitation.email, 
-      invitation.firstName, 
-      invitation.lastName, 
-      invitation.role, 
-      invitation.department
+      roleInvitation.email, 
+      roleInvitation.firstName || '', 
+      roleInvitation.lastName || '', 
+      roleInvitation.role, 
+      roleInvitation.role // Use role as department for compatibility
     );
 
     if (!accountResult.success) {
       // Check if user already exists
       if (accountResult.userExists || accountResult.error?.includes('already registered') || accountResult.error?.includes('email_exists')) {
-        console.log(`⚠️ User ${invitation.email} already has an account, proceeding with invitation acceptance`);
+        console.log(`⚠️ User ${roleInvitation.email} already has an account, proceeding with invitation acceptance`);
         // Continue with invitation acceptance even if account already exists
       } else {
-        console.error(`❌ Failed to create account for ${invitation.email}:`, accountResult.error);
+        console.error(`❌ Failed to create account for ${roleInvitation.email}:`, accountResult.error);
         return res.status(500).json({ 
           message: "Failed to create account. Please contact support.",
           error: accountResult.error 
@@ -2637,10 +2544,8 @@ router.post("/staff-invitations/accept", async (req, res) => {
       }
     }
     
-    // Mark invitation as accepted
-    invitations[invitationIndex].acceptedAt = new Date().toISOString();
-    invitations[invitationIndex].isActive = false;
-    saveStaffInvitations(invitations);
+    // Mark invitation as accepted using the database
+    await storage.acceptRoleInvitation(token, roleInvitation.email);
 
     // Update staff member status in database
     const schoolId = 1; // American Seekers Academy
@@ -2648,7 +2553,7 @@ router.post("/staff-invitations/accept", async (req, res) => {
     
     for (const staffRecord of allStaff) {
       const user = await storage.getUser(staffRecord.userId);
-      if (user && user.email === invitation.email) {
+      if (user && user.email === roleInvitation.email) {
         // Activate the staff member
         await storage.updateSchoolStaff(staffRecord.id, { isActive: true });
         console.log(`✅ Activated staff member in database: ${user.email}`);
@@ -2659,17 +2564,17 @@ router.post("/staff-invitations/accept", async (req, res) => {
     // Send account credentials email if account was created successfully
     if (accountResult.success && accountResult.temporaryPassword) {
       const credentialsEmailSent = await sendAccountCredentialsEmail(
-        invitation.email,
-        invitation.firstName,
-        invitation.lastName,
+        roleInvitation.email,
+        roleInvitation.firstName || '',
+        roleInvitation.lastName || '',
         accountResult.temporaryPassword,
-        invitation.role
+        roleInvitation.role
       );
       
       if (credentialsEmailSent) {
-        console.log(`✅ Account created and credentials sent to: ${invitation.email}`);
+        console.log(`✅ Account created and credentials sent to: ${roleInvitation.email}`);
       } else {
-        console.log(`⚠️ Account created but credentials email failed for: ${invitation.email}`);
+        console.log(`⚠️ Account created but credentials email failed for: ${roleInvitation.email}`);
       }
     }
 

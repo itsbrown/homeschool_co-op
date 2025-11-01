@@ -615,42 +615,6 @@ router.post("/accept-invitation", async (req, res) => {
   }
 });
 
-// File-based storage for password reset tokens
-const passwordResetTokensFile = path.join(process.cwd(), 'data', 'password-reset-tokens.json');
-
-interface PasswordResetToken {
-  email: string;
-  userId: string;
-  expiresAt: string;
-}
-
-// Load password reset tokens from file
-function loadPasswordResetTokens(): Map<string, PasswordResetToken> {
-  try {
-    if (fs.existsSync(passwordResetTokensFile)) {
-      const data = fs.readFileSync(passwordResetTokensFile, 'utf8');
-      const tokens = JSON.parse(data);
-      return new Map(Object.entries(tokens));
-    }
-  } catch (error) {
-    console.error('Error loading password reset tokens:', error);
-  }
-  return new Map();
-}
-
-// Save password reset tokens to file
-function savePasswordResetTokens(tokens: Map<string, PasswordResetToken>) {
-  try {
-    const tokenObject = Object.fromEntries(tokens);
-    fs.writeFileSync(passwordResetTokensFile, JSON.stringify(tokenObject, null, 2));
-  } catch (error) {
-    console.error('Error saving password reset tokens:', error);
-  }
-}
-
-// Initialize password reset tokens
-let passwordResetTokens = loadPasswordResetTokens();
-
 // Password reset request
 router.post("/forgot-password", async (req, res) => {
   try {
@@ -660,7 +624,7 @@ router.post("/forgot-password", async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    // Check if user exists in Supabase first, fallback to file storage
+    // Check if user exists in Supabase first, fallback to storage
     let user = null;
     
     try {
@@ -677,15 +641,15 @@ router.post("/forgot-password", async (req, res) => {
         }
       }
     } catch (supabaseError) {
-      console.log('Supabase user lookup failed, trying file storage...');
+      console.log('Supabase user lookup failed, trying storage...');
     }
     
-    // Fallback to file storage if not found in Supabase
+    // Fallback to storage if not found in Supabase
     if (!user) {
       try {
         user = await storage.getUserByEmail(email);
       } catch (storageError) {
-        console.log('File storage lookup also failed');
+        console.log('Storage lookup also failed');
       }
     }
     
@@ -700,22 +664,17 @@ router.post("/forgot-password", async (req, res) => {
     const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Store the reset token
-    passwordResetTokens.set(resetToken, {
+    // Store the reset token in database
+    await storage.createPasswordResetToken({
+      token: resetToken,
       email: user.email,
-      userId: user.id,
-      expiresAt: expiresAt.toISOString()
+      userId: user.id.toString(),
+      expiresAt,
+      used: false
     });
 
     // Clean up expired tokens
-    for (const [token, data] of passwordResetTokens.entries()) {
-      if (new Date() > new Date(data.expiresAt)) {
-        passwordResetTokens.delete(token);
-      }
-    }
-
-    // Save tokens to file
-    savePasswordResetTokens(passwordResetTokens);
+    await storage.deleteExpiredPasswordResetTokens();
 
     const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
 
@@ -750,15 +709,13 @@ router.post("/reset-password", async (req, res) => {
       return res.status(400).json({ message: "Password must be at least 6 characters long" });
     }
 
-    // Check if token exists and is valid
-    const tokenData = passwordResetTokens.get(token);
-    if (!tokenData) {
+    // Check if token exists and is valid in database
+    const tokenData = await storage.getPasswordResetTokenByToken(token);
+    if (!tokenData || tokenData.used) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
 
     if (new Date() > new Date(tokenData.expiresAt)) {
-      passwordResetTokens.delete(token);
-      savePasswordResetTokens(passwordResetTokens);
       return res.status(400).json({ message: "Reset token has expired" });
     }
 
@@ -779,9 +736,8 @@ router.post("/reset-password", async (req, res) => {
 
       console.log(`✅ Password updated successfully for user ${tokenData.userId} (${tokenData.email})`);
       
-      // Remove the used token
-      passwordResetTokens.delete(token);
-      savePasswordResetTokens(passwordResetTokens);
+      // Mark the token as used
+      await storage.markPasswordResetTokenAsUsed(token);
 
       res.status(200).json({ 
         message: "Password reset successfully. You can now log in with your new password." 
