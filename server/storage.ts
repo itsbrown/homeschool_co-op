@@ -3663,7 +3663,13 @@ export class MemStorage implements IStorage {
         // Try database storage first
         return await this.dbStorage.getUserByEmail(email);
       } catch (error) {
-        console.log('💾 Database unavailable, checking memory storage for email lookup');
+        console.error('❌ Database error in getUserByEmail:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          email: email
+        });
+        console.log('💾 Database query failed, checking memory storage for email lookup');
         
         // Try memory storage first as it's most up-to-date
         try {
