@@ -67,6 +67,17 @@ router.post("/", async (req, res) => {
   try {
     const validatedData = insertLocationSchema.parse(req.body);
     
+    // Validate that the school exists before creating the location
+    const school = await storage.getSchool(validatedData.schoolId);
+    if (!school) {
+      console.error(`❌ Cannot create location: School ID ${validatedData.schoolId} does not exist`);
+      return res.status(404).json({ 
+        message: `School with ID ${validatedData.schoolId} not found. Please select a valid school.` 
+      });
+    }
+    
+    console.log(`✅ School ${school.name} (ID: ${school.id}) verified, creating location...`);
+    
     // Use the storage system that the overview endpoint uses
     const location = await storage.createLocation(validatedData);
     
