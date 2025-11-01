@@ -218,6 +218,70 @@ export const insertSchoolStaffSchema = createInsertSchema(schoolStaff)
 export type InsertSchoolStaff = z.infer<typeof insertSchoolStaffSchema>;
 export type SchoolStaff = typeof schoolStaff.$inferSelect;
 
+// Staff Positions (job titles/roles available at a school)
+export const staffPositions = pgTable("staff_positions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  isDefault: boolean("is_default").default(false).notNull(),
+  schoolId: integer("school_id").references(() => schools.id), // null for global positions
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertStaffPositionSchema = createInsertSchema(staffPositions)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    description: z.string().nullable().default(null),
+    schoolId: z.number().nullable().default(null),
+  });
+export type InsertStaffPosition = z.infer<typeof insertStaffPositionSchema>;
+export type StaffPosition = typeof staffPositions.$inferSelect;
+
+// Staff Invitations (pending staff member invitations)
+export const staffInvitations = pgTable("staff_invitations", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  email: text("email").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  role: text("role", { enum: ["teacher", "administrator", "staff", "other"] }).notNull(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  locationId: integer("location_id").references(() => locations.id),
+  classId: integer("class_id"),
+  message: text("message"),
+  status: text("status", { enum: ["pending", "accepted", "expired", "cancelled"] }).default("pending").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertStaffInvitationSchema = createInsertSchema(staffInvitations)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    locationId: z.number().nullable().default(null),
+    classId: z.number().nullable().default(null),
+    message: z.string().nullable().default(null),
+  });
+export type InsertStaffInvitation = z.infer<typeof insertStaffInvitationSchema>;
+export type StaffInvitation = typeof staffInvitations.$inferSelect;
+
+// Password Reset Tokens
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  email: text("email").notNull(),
+  userId: text("user_id").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens)
+  .omit({ id: true, createdAt: true });
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
 // School classes specifically created for a school
 export const schoolClasses = pgTable("school_classes", {
   id: serial("id").primaryKey(),
