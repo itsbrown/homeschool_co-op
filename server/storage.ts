@@ -19,13 +19,18 @@ import {
   payments, type Payment, type InsertPayment,
   scheduledPayments, type ScheduledPayment, type InsertScheduledPayment,
   schools, type School, type InsertSchool,
+  schoolApplications, type SchoolApplication, type InsertSchoolApplication,
   schoolStudents, type SchoolStudent, type InsertSchoolStudent,
   schoolStaff, type SchoolStaff, type InsertSchoolStaff,
   userLocations, type UserLocation, type InsertUserLocation,
   locations, type Location, type InsertLocation,
   dailyFlowTemplates, type DailyFlowTemplate, type InsertDailyFlowTemplate,
   dailyFlowEntries, type DailyFlowEntry, type InsertDailyFlowEntry,
-  dailyFlowSchedules, type DailyFlowSchedule, type InsertDailyFlowSchedule
+  dailyFlowSchedules, type DailyFlowSchedule, type InsertDailyFlowSchedule,
+  notifications, type Notification, type InsertNotification,
+  notificationRecipients, type NotificationRecipient, type InsertNotificationRecipient,
+  discounts, type Discount, type InsertDiscount,
+  discountApplications, type DiscountApplication, type InsertDiscountApplication
 } from "@shared/schema";
 
 export interface IStorage {
@@ -51,6 +56,14 @@ export interface IStorage {
   createSchool(school: InsertSchool): Promise<School>;
   updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined>;
   getAllSchools(): Promise<School[]>;
+
+  // School Application methods
+  getSchoolApplicationById(id: number): Promise<SchoolApplication | undefined>;
+  getSchoolApplicationByEmail(email: string): Promise<SchoolApplication | undefined>;
+  getAllSchoolApplications(): Promise<SchoolApplication[]>;
+  getSchoolApplicationsByStatus(status: 'pending' | 'under_review' | 'approved' | 'declined'): Promise<SchoolApplication[]>;
+  createSchoolApplication(application: InsertSchoolApplication & { token: string }): Promise<SchoolApplication>;
+  updateSchoolApplicationStatus(id: number, status: 'pending' | 'under_review' | 'approved' | 'declined', reviewedBy?: string, reviewNotes?: string): Promise<SchoolApplication | undefined>;
 
   // Curriculum methods
   getCurriculum(id: number): Promise<Curriculum | undefined>;
@@ -97,8 +110,20 @@ export interface IStorage {
   updateTechnicalIssue(id: string, updates: any): Promise<any>;
   
   // Notification methods
-  createAdminNotification(notification: any): Promise<any>;
-  createUserNotification(notification: any): Promise<any>;
+  getNotificationById(id: number): Promise<Notification | undefined>;
+  getAllNotifications(): Promise<Notification[]>;
+  getNotificationsByUserId(userId: number, role?: string): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification | undefined>;
+  deleteNotification(id: number): Promise<void>;
+  
+  // Notification recipient methods
+  getNotificationRecipientById(id: number): Promise<NotificationRecipient | undefined>;
+  getNotificationRecipientsByNotificationId(notificationId: number): Promise<NotificationRecipient[]>;
+  getNotificationRecipientsByUserId(userId: number): Promise<NotificationRecipient[]>;
+  createNotificationRecipient(recipient: InsertNotificationRecipient): Promise<NotificationRecipient>;
+  updateNotificationRecipient(id: number, recipient: Partial<InsertNotificationRecipient>): Promise<NotificationRecipient | undefined>;
+  
   getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]>;
   getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
   getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;
@@ -255,6 +280,22 @@ export interface IStorage {
   createLocation(location: InsertLocation): Promise<Location>;
   updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined>;
   deleteLocation(id: number): Promise<void>;
+
+  // Discount methods
+  getDiscountById(id: number): Promise<Discount | undefined>;
+  getAllDiscounts(): Promise<Discount[]>;
+  getDiscountsBySchoolId(schoolId: number): Promise<Discount[]>;
+  createDiscount(discount: InsertDiscount): Promise<Discount>;
+  updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined>;
+  deleteDiscount(id: number): Promise<void>;
+
+  // Discount Application methods
+  getDiscountApplicationById(id: number): Promise<DiscountApplication | undefined>;
+  getAllDiscountApplications(): Promise<DiscountApplication[]>;
+  getDiscountApplicationsBySchoolId(schoolId: number): Promise<DiscountApplication[]>;
+  getDiscountApplicationsByDiscountId(discountId: number): Promise<DiscountApplication[]>;
+  createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication>;
+  updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined>;
 
   // Daily Flow Template methods
   getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]>;
@@ -4368,12 +4409,99 @@ export class MemStorage implements IStorage {
       }
 
       // Notification methods
-      async createAdminNotification(notification: any): Promise<any> {
-        return this.memStorage.createAdminNotification(notification);
+      async getNotificationById(id: number): Promise<Notification | undefined> {
+        return this.dbStorage.getNotificationById(id);
       }
 
-      async createUserNotification(notification: any): Promise<any> {
-        return this.memStorage.createUserNotification(notification);
+      async getAllNotifications(): Promise<Notification[]> {
+        return this.dbStorage.getAllNotifications();
+      }
+
+      async getNotificationsByUserId(userId: number, role?: string): Promise<Notification[]> {
+        return this.dbStorage.getNotificationsByUserId(userId, role);
+      }
+
+      async createNotification(notification: InsertNotification): Promise<Notification> {
+        return this.dbStorage.createNotification(notification);
+      }
+
+      async updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification | undefined> {
+        return this.dbStorage.updateNotification(id, notification);
+      }
+
+      async deleteNotification(id: number): Promise<void> {
+        return this.dbStorage.deleteNotification(id);
+      }
+
+      // Notification recipient methods
+      async getNotificationRecipientById(id: number): Promise<NotificationRecipient | undefined> {
+        return this.dbStorage.getNotificationRecipientById(id);
+      }
+
+      async getNotificationRecipientsByNotificationId(notificationId: number): Promise<NotificationRecipient[]> {
+        return this.dbStorage.getNotificationRecipientsByNotificationId(notificationId);
+      }
+
+      async getNotificationRecipientsByUserId(userId: number): Promise<NotificationRecipient[]> {
+        return this.dbStorage.getNotificationRecipientsByUserId(userId);
+      }
+
+      async createNotificationRecipient(recipient: InsertNotificationRecipient): Promise<NotificationRecipient> {
+        return this.dbStorage.createNotificationRecipient(recipient);
+      }
+
+      async updateNotificationRecipient(id: number, recipient: Partial<InsertNotificationRecipient>): Promise<NotificationRecipient | undefined> {
+        return this.dbStorage.updateNotificationRecipient(id, recipient);
+      }
+
+      // Discount methods
+      async getDiscountById(id: number): Promise<Discount | undefined> {
+        return this.dbStorage.getDiscountById(id);
+      }
+
+      async getAllDiscounts(): Promise<Discount[]> {
+        return this.dbStorage.getAllDiscounts();
+      }
+
+      async getDiscountsBySchoolId(schoolId: number): Promise<Discount[]> {
+        return this.dbStorage.getDiscountsBySchoolId(schoolId);
+      }
+
+      async createDiscount(discount: InsertDiscount): Promise<Discount> {
+        return this.dbStorage.createDiscount(discount);
+      }
+
+      async updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined> {
+        return this.dbStorage.updateDiscount(id, discount);
+      }
+
+      async deleteDiscount(id: number): Promise<void> {
+        return this.dbStorage.deleteDiscount(id);
+      }
+
+      // Discount Application methods
+      async getDiscountApplicationById(id: number): Promise<DiscountApplication | undefined> {
+        return this.dbStorage.getDiscountApplicationById(id);
+      }
+
+      async getAllDiscountApplications(): Promise<DiscountApplication[]> {
+        return this.dbStorage.getAllDiscountApplications();
+      }
+
+      async getDiscountApplicationsBySchoolId(schoolId: number): Promise<DiscountApplication[]> {
+        return this.dbStorage.getDiscountApplicationsBySchoolId(schoolId);
+      }
+
+      async getDiscountApplicationsByDiscountId(discountId: number): Promise<DiscountApplication[]> {
+        return this.dbStorage.getDiscountApplicationsByDiscountId(discountId);
+      }
+
+      async createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication> {
+        return this.dbStorage.createDiscountApplication(application);
+      }
+
+      async updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined> {
+        return this.dbStorage.updateDiscountApplication(id, application);
       }
 
       // Membership Enrollment methods

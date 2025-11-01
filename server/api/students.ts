@@ -1,6 +1,4 @@
 import express from 'express';
-import fs from 'fs';
-import path from 'path';
 import { storage } from '../storage';
 const router = express.Router();
 
@@ -69,107 +67,50 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Look for existing parent by email with fallback handling
+    // Look for existing parent by email
     console.log('🔍 Looking for parent with email:', normalizedData.parentEmail);
-    let existingParent;
-    try {
-      existingParent = await storage.getUserByEmail(normalizedData.parentEmail);
-    } catch (dbError) {
-      console.log('⚠️ Database failed, using file storage fallback:', dbError.message);
-      // Use file storage directly for user lookup
-      const fs = require('fs');
-      const path = require('path');
-      const usersFilePath = path.join(process.cwd(), 'data', 'users.json');
-
-      if (fs.existsSync(usersFilePath)) {
-        const usersData = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
-        existingParent = usersData.find(user => user.email === normalizedData.parentEmail && user.role === 'parent');
-      }
-    }
+    const existingParent = await storage.getUserByEmail(normalizedData.parentEmail);
 
     let parentUser;
     if (existingParent && existingParent.role === 'parent') {
       parentUser = existingParent;
       console.log('✅ Found existing parent:', parentUser.id);
     } else {
-      // Create new parent user with fallback handling
+      // Create new parent user
       const parentData = {
-        id: Date.now(), // Generate ID for file storage
         email: normalizedData.parentEmail,
         firstName: parentFirstName || 'Parent',
         lastName: parentLastName || 'User',
         phone: normalizedData.parentPhone,
         role: 'parent' as const,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        isActive: true
       };
 
-      try {
-        parentUser = await storage.createUser(parentData);
-        console.log('✅ Created new parent user via storage:', parentUser.id);
-      } catch (dbError) {
-        console.log('⚠️ Database failed, using file storage fallback for user creation');
-        // Use file storage directly
-        const fs = require('fs');
-        const path = require('path');
-        const usersFilePath = path.join(process.cwd(), 'data', 'users.json');
-
-        let usersData = [];
-        if (fs.existsSync(usersFilePath)) {
-          usersData = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
-        }
-
-        usersData.push(parentData);
-        fs.writeFileSync(usersFilePath, JSON.stringify(usersData, null, 2));
-        parentUser = parentData;
-        console.log('✅ Created new parent user via file storage:', parentUser.id);
-      }
+      parentUser = await storage.createUser(parentData);
+      console.log('✅ Created new parent user:', parentUser.id);
     }
 
-    // Create child record with fallback handling
+    // Create child record
     const emergencyContactStr = normalizedData.emergencyContactName && normalizedData.emergencyContactPhone
       ? `${normalizedData.emergencyContactName}: ${normalizedData.emergencyContactPhone}${emergencyContactRelation ? ` (${emergencyContactRelation})` : ''}`
       : normalizedData.emergencyContactName || '';
       
     const childData = {
-      id: Date.now() + 1, // Generate unique ID
       firstName: normalizedData.childFirstName,
       lastName: normalizedData.childLastName,
       birthdate: normalizedData.childBirthdate,
       gradeLevel: normalizedData.childGradeLevel,
       parentId: parentUser.id,
       parentEmail: normalizedData.parentEmail,
-      locationId: normalizedData.locationId, // Add location support
+      locationId: normalizedData.locationId,
       specialNeeds: normalizedData.specialNeeds,
       interests: null,
       notes: normalizedData.medicalNotes,
-      emergencyContact: emergencyContactStr,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      emergencyContact: emergencyContactStr
     };
 
-    let child;
-    try {
-      child = await storage.createChild(childData);
-      console.log('✅ Created child via storage:', child.id);
-    } catch (dbError) {
-      console.log('⚠️ Database failed, using file storage fallback for child creation');
-      // Use file storage directly
-      const fs = require('fs');
-      const path = require('path');
-      const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
-
-      let childrenData = [];
-      if (fs.existsSync(childrenFilePath)) {
-        childrenData = JSON.parse(fs.readFileSync(childrenFilePath, 'utf8'));
-      }
-
-      childrenData.push(childData);
-      fs.writeFileSync(childrenFilePath, JSON.stringify(childrenData, null, 2));
-      child = childData;
-      console.log('✅ Created child via file storage:', child.id);
-    }
+    const child = await storage.createChild(childData);
+    console.log('✅ Created child:', child.id);
 
     // Create school_student record if child has a schoolId
     if (child && (schoolId || parentUser.schoolId)) {

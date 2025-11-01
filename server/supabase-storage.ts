@@ -210,7 +210,7 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getSchoolsByAdminId(adminId: number): Promise<any[]> {
-    const { data, error } = await supabase
+    const { data, error} = await supabase
       .from('schools.schools')
       .select('*')
       .eq('created_by', adminId);
@@ -221,6 +221,108 @@ export class SupabaseStorage implements IStorage {
     }
     
     return data || [];
+  }
+
+  // School Application management methods
+  async getSchoolApplicationById(id: number): Promise<any | undefined> {
+    const { data, error } = await supabase
+      .from('school_applications')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching school application:', error);
+      return undefined;
+    }
+    
+    return data;
+  }
+
+  async getSchoolApplicationByEmail(email: string): Promise<any | undefined> {
+    const { data, error } = await supabase
+      .from('school_applications')
+      .select('*')
+      .eq('admin_email', email)
+      .order('submitted_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching school application by email:', error);
+      return undefined;
+    }
+    
+    return data;
+  }
+
+  async getAllSchoolApplications(): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('school_applications')
+      .select('*')
+      .order('submitted_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching school applications:', error);
+      return [];
+    }
+    
+    return data || [];
+  }
+
+  async getSchoolApplicationsByStatus(status: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('school_applications')
+      .select('*')
+      .eq('status', status)
+      .order('submitted_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching school applications by status:', error);
+      return [];
+    }
+    
+    return data || [];
+  }
+
+  async createSchoolApplication(applicationData: any): Promise<any> {
+    const { data, error } = await supabase
+      .from('school_applications')
+      .insert(applicationData)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating school application:', error);
+      throw error;
+    }
+    
+    return data;
+  }
+
+  async updateSchoolApplicationStatus(id: number, status: string, reviewedBy?: string, reviewNotes?: string): Promise<any | undefined> {
+    const updateData: any = {
+      status,
+      reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    if (reviewedBy) updateData.reviewed_by = reviewedBy;
+    if (reviewNotes) updateData.review_notes = reviewNotes;
+    
+    const { data, error } = await supabase
+      .from('school_applications')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating school application status:', error);
+      return undefined;
+    }
+    
+    return data;
   }
 
   // Child management methods

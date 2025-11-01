@@ -16,6 +16,8 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   role: roleEnum("role").default("student").notNull(),
   name: text("name").notNull(),
+  firstName: text("first_name"), // User's first name
+  lastName: text("last_name"), // User's last name
   avatar: text("avatar"),
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),
   permissions: jsonb("permissions").default({}).notNull(), // Custom permissions
@@ -93,6 +95,76 @@ export const insertSchoolSchema = createInsertSchema(schools)
   });
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
 export type School = typeof schools.$inferSelect;
+
+// School Applications table - for schools applying to join the platform
+export const schoolApplications = pgTable("school_applications", {
+  id: serial("id").primaryKey(),
+  
+  // School Information
+  schoolName: text("school_name").notNull(),
+  schoolType: text("school_type", { enum: ["public", "private", "charter", "homeschool_coop", "other"] }).notNull(),
+  schoolTypeOther: text("school_type_other"),
+  
+  // Contact Information
+  adminFirstName: text("admin_first_name").notNull(),
+  adminLastName: text("admin_last_name").notNull(),
+  adminEmail: text("admin_email").notNull(),
+  adminPhone: text("admin_phone").notNull(),
+  
+  // School Details
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  zipCode: text("zip_code").notNull(),
+  website: text("website"),
+  
+  // School Stats
+  currentStudentCount: integer("current_student_count").notNull(),
+  gradeLevelsServed: text("grade_levels_served").array().notNull(),
+  establishedYear: integer("established_year").notNull(),
+  
+  // Platform Interest
+  reasonForJoining: text("reason_for_joining").notNull(),
+  currentChallenges: text("current_challenges").notNull(),
+  expectedStudentGrowth: integer("expected_student_growth").notNull(),
+  
+  // References
+  reference1Name: text("reference1_name").notNull(),
+  reference1Email: text("reference1_email").notNull(),
+  reference1Relationship: text("reference1_relationship").notNull(),
+  reference2Name: text("reference2_name"),
+  reference2Email: text("reference2_email"),
+  reference2Relationship: text("reference2_relationship"),
+  
+  // Agreement
+  agreesToTerms: boolean("agrees_to_terms").notNull(),
+  agreesToDataSharing: boolean("agrees_to_data_sharing").notNull(),
+  
+  // Application status
+  status: text("status", { enum: ["pending", "under_review", "approved", "declined"] }).default("pending").notNull(),
+  submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: text("reviewed_by"),
+  reviewNotes: text("review_notes"),
+  
+  // Security token for application verification
+  token: text("token").notNull().unique(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSchoolApplicationSchema = createInsertSchema(schoolApplications)
+  .omit({ id: true, createdAt: true, updatedAt: true, submittedAt: true, reviewedAt: true, reviewedBy: true, reviewNotes: true, token: true, status: true })
+  .extend({
+    schoolTypeOther: z.string().optional(),
+    website: z.string().optional(),
+    reference2Name: z.string().optional(),
+    reference2Email: z.string().optional(),
+    reference2Relationship: z.string().optional(),
+  });
+export type InsertSchoolApplication = z.infer<typeof insertSchoolApplicationSchema>;
+export type SchoolApplication = typeof schoolApplications.$inferSelect;
 
 // School-Student relationship table (for students affiliated with a school)
 export const schoolStudents = pgTable("school_students", {
@@ -1128,7 +1200,7 @@ export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   senderId: integer("sender_id").notNull().references(() => users.id),
   type: text("type", { 
-    enum: ["email", "in_app", "both"] 
+    enum: ["email", "in_app", "sms", "both", "all"] 
   }).notNull().default("both"),
   priority: text("priority", { 
     enum: ["low", "normal", "high", "urgent"] 
@@ -1162,7 +1234,7 @@ export const notificationRecipients = pgTable("notification_recipients", {
   id: serial("id").primaryKey(),
   notificationId: integer("notification_id").notNull().references(() => notifications.id),
   recipientId: integer("recipient_id").notNull().references(() => users.id),
-  deliveryType: text("delivery_type", { enum: ["email", "in_app"] }).notNull(),
+  deliveryType: text("delivery_type", { enum: ["email", "in_app", "sms"] }).notNull(),
   status: text("status", { 
     enum: ["pending", "sent", "delivered", "read", "failed"] 
   }).default("pending").notNull(),

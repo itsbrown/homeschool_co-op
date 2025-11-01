@@ -206,6 +206,44 @@ function generateInvitationToken(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
+// Helper function to map position/role to database schema role enum
+// Maps: "Support Staff"/"Aide"/"Volunteer" -> "staff", "Mentor" -> "teacher", "Administrator" -> "administrator"
+function mapPositionToRole(position: string): "teacher" | "administrator" | "staff" | "other" {
+  const positionLower = position.toLowerCase();
+  
+  if (positionLower.includes('teacher') || positionLower.includes('mentor') || positionLower.includes('instructor')) {
+    return 'teacher';
+  }
+  if (positionLower.includes('admin')) {
+    return 'administrator';
+  }
+  if (positionLower.includes('support') || positionLower.includes('aide') || positionLower.includes('volunteer')) {
+    return 'staff';
+  }
+  
+  return 'other';
+}
+
+// Helper function to transform database school_staff + user to frontend format
+function transformStaffToFrontend(schoolStaff: any, user: any, classes: any[] = []) {
+  return {
+    id: schoolStaff.id,
+    email: user.email,
+    firstName: user.name?.split(' ')[0] || '',
+    lastName: user.name?.split(' ').slice(1).join(' ') || '',
+    name: user.name,
+    role: schoolStaff.position, // Use position as role for frontend
+    department: schoolStaff.department || '',
+    status: schoolStaff.isActive ? 'Active' : 'Inactive',
+    joinDate: schoolStaff.startDate ? new Date(schoolStaff.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    avatar: '',
+    phone: user.phone || '',
+    subjects: [],
+    classIds: classes.map(c => c.id.toString()),
+    locationId: schoolStaff.locationId || null
+  };
+}
+
 // Test route to verify router is working
 router.get("/test", (req, res) => {
   console.log("🚨 TEST ROUTE HIT!");
@@ -256,197 +294,70 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
     
     console.log('✅ Found admin user:', { id: adminUser.id, email: adminUser.email, role: adminUser.role });
     
-    // Use admin client to query the schools table with service role permissions
-    let supabaseAdmin = null;
-    try {
-      const supabaseModule = await import('../db/supabase');
-      supabaseAdmin = supabaseModule.supabaseAdmin;
-    } catch (importError) {
-      console.log('⚠️ Could not import supabaseAdmin, will use file storage only');
-    }
-    console.log('🔍 Attempting to query school storage...');
+    console.log('🔍 Fetching schools from database...');
     
-    // Try Supabase first, then fallback to file storage
-    if (supabaseAdmin) {
-      try {
-        // Attempt to use Supabase if available (use snake_case column names)
-        const { data: schools, error } = await supabaseAdmin
-          .from('schools')
-          .select('*')
-          .eq('admin_id', adminUser.id);
+    // Get all schools from database
+    const allSchools = await storage.getAllSchools();
+    console.log('📋 Found schools in database:', allSchools.length);
+    console.log('🔍 All schools:', allSchools.map((s: any) => ({ id: s.id, name: s.name, adminId: s.adminId })));
 
-        if (!error && schools && schools.length > 0) {
-          console.log('✅ Found school in Supabase:', schools[0].name);
-          console.log('📊 RAW DATABASE DATA:', JSON.stringify(schools[0], null, 2));
-          
-          const responseData = {
-            id: schools[0].id,
-            name: schools[0].name,
-            type: schools[0].type,
-            adminId: schools[0].admin_id,
-            address: schools[0].address,
-            city: schools[0].city,
-            state: schools[0].state,
-            zipCode: schools[0].zip_code,
-            phoneNumber: schools[0].phone_number,
-            email: schools[0].email,
-            website: schools[0].website,
-            description: schools[0].description,
-            foundedYear: schools[0].founded_year,
-            accreditation: schools[0].accreditation,
-            enrollmentSize: schools[0].enrollment_size,
-            logo: schools[0].logo,
-            status: schools[0].status,
-            isVerified: schools[0].is_verified,
-            registrationCode: schools[0].registration_code,
-            createdAt: schools[0].created_at,
-            updatedAt: schools[0].updated_at
-          };
-          
-          console.log('🚀 SENDING RESPONSE FROM DATABASE:', JSON.stringify(responseData, null, 2));
-          console.log('🔍 Description field value:', responseData.description);
-          console.log('🔍 Registration code value:', responseData.registrationCode);
-          
-          // Return school data with camelCase properties for frontend compatibility
-          return res.json(responseData);
-        }
-        
-        console.log('⚠️ Supabase query failed or no results:', error || 'No schools found');
-      } catch (supabaseError) {
-        console.log('⚠️ Supabase connection failed, using file storage fallback:', supabaseError.message);
-      }
-    } else {
-      console.log('⚠️ Supabase not available, using file storage only');
+    // First, try to find a school already associated with this admin user
+    let school = allSchools.find((s: any) => 
+      s.adminId === adminUser.id
+    );
+
+    if (school) {
+      console.log('✅ Found existing school for admin:', school.name);
+      console.log('📊 RAW DATABASE DATA:', JSON.stringify(school, null, 2));
+      
+      // Load locations for this school
+      const locations = await storage.getLocationsBySchoolId(school.id);
+      console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
+      
+      const responseData = {
+        ...school,
+        locations
+      };
+      
+      console.log('🚀 SENDING RESPONSE FROM DATABASE:', JSON.stringify(responseData, null, 2));
+      console.log('🔍 Description field value:', responseData.description);
+      console.log('🔍 Registration code value:', responseData.registrationCode);
+      
+      // Return school with embedded locations
+      return res.json(responseData);
     }
 
-    // Fallback to file storage
-    try {
-        console.log('🔄 Using file storage for school data...');
+    // If no associated school found, try to find an unassociated "American Seekers Academy" school
+    const unassociatedSchool = allSchools.find((s: any) => 
+      s.name === 'American Seekers Academy' && 
+      (!s.adminId || s.adminId === null)
+    );
 
-        const fs = await import('fs');
-        const path = await import('path');
-
-        const DATA_DIR = path.join(process.cwd(), 'data');
-        const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
-
-        if (fs.existsSync(SCHOOLS_FILE)) {
-          const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
-          const schools = JSON.parse(fileContent);
-          console.log('📋 Found schools in file storage:', schools.length);
-          console.log('🔍 All schools:', schools.map((s: any) => ({ id: s.id, name: s.name, adminId: s.adminId, created_by: s.created_by })));
-
-          // First, try to find a school already associated with this admin user
-          let school = schools.find((s: any) => 
-            s.name === 'American Seekers Academy' && 
-            (s.adminId === adminUser.id || s.created_by === adminUser.id)
-          );
-
-          if (school) {
-            console.log('✅ Found existing school for admin:', school.name);
-            console.log('📊 RAW FILE STORAGE DATA:', JSON.stringify(school, null, 2));
-            
-            // Load locations for this school
-            try {
-              const locationsResponse = await import('./locations');
-              const fs = await import('fs');
-              const path = await import('path');
-              
-              const DATA_DIR = path.join(process.cwd(), 'data');
-              const LOCATIONS_FILE = path.join(DATA_DIR, 'locations.json');
-              
-              let locations = [];
-              if (fs.existsSync(LOCATIONS_FILE)) {
-                const locationData = fs.readFileSync(LOCATIONS_FILE, 'utf8');
-                const allLocations = JSON.parse(locationData);
-                locations = allLocations.filter((loc: any) => 
-                  loc.schoolId === school.id && loc.isActive !== false
-                );
-              }
-              
-              console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
-              
-              const responseData = {
-                ...school,
-                locations
-              };
-              
-              console.log('🚀 SENDING RESPONSE FROM FILE STORAGE:', JSON.stringify(responseData, null, 2));
-              console.log('🔍 Description field value:', responseData.description);
-              console.log('🔍 Registration code value:', responseData.registrationCode);
-              
-              // Return school with embedded locations
-              return res.json(responseData);
-            } catch (locationError) {
-              console.error('⚠️ Error loading locations:', locationError);
-              console.log('🚀 SENDING RESPONSE FROM FILE STORAGE (no locations):', JSON.stringify(school, null, 2));
-              console.log('🔍 Description field value:', school.description);
-              console.log('🔍 Registration code value:', school.registrationCode);
-              // Return school without locations if there's an error
-              return res.json(school);
-            }
-          }
-
-          // If no associated school found, associate the first "American Seekers Academy" school
-          const unassociatedSchool = schools.find((s: any) => 
-            s.name === 'American Seekers Academy' && 
-            (!s.adminId || s.adminId === null)
-          );
-
-          if (unassociatedSchool) {
-            console.log('🔗 Associating school with admin user:', unassociatedSchool.name);
-            
-            // Update the school to associate it with this admin
-            const schoolIndex = schools.findIndex((s: any) => s.id === unassociatedSchool.id);
-            schools[schoolIndex].adminId = adminUser.id;
-            schools[schoolIndex].created_by = adminUser.id;
-            schools[schoolIndex].updatedAt = new Date().toISOString();
-
-            // Write back to file
-            fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(schools, null, 2));
-            
-            console.log('✅ School associated successfully');
-            
-            // Load locations for the newly associated school
-            try {
-              const fs = await import('fs');
-              const path = await import('path');
-              
-              const DATA_DIR = path.join(process.cwd(), 'data');
-              const LOCATIONS_FILE = path.join(DATA_DIR, 'locations.json');
-              
-              let locations = [];
-              if (fs.existsSync(LOCATIONS_FILE)) {
-                const locationData = fs.readFileSync(LOCATIONS_FILE, 'utf8');
-                const allLocations = JSON.parse(locationData);
-                locations = allLocations.filter((loc: any) => 
-                  loc.schoolId === schools[schoolIndex].id && loc.isActive !== false
-                );
-              }
-              
-              console.log(`🏢 Found ${locations.length} locations for school ${schools[schoolIndex].name}`);
-              
-              // Return school with embedded locations
-              return res.json({
-                ...schools[schoolIndex],
-                locations
-              });
-            } catch (locationError) {
-              console.error('⚠️ Error loading locations:', locationError);
-              // Return school without locations if there's an error
-              return res.json(schools[schoolIndex]);
-            }
-          }
-
-          console.log('❌ No American Seekers Academy school found to associate');
-        } else {
-          console.log('❌ Schools file not found');
-        }
-
-        return res.status(404).json({ message: "No school found for this admin" });
-      } catch (fileError) {
-        console.error('❌ File storage error:', fileError);
-        return res.status(500).json({ message: "Error accessing school data" });
+    if (unassociatedSchool) {
+      console.log('🔗 Associating school with admin user:', unassociatedSchool.name);
+      
+      // Update the school to associate it with this admin
+      const updatedSchool = await storage.updateSchool(unassociatedSchool.id, {
+        adminId: adminUser.id
+      });
+      
+      if (updatedSchool) {
+        console.log('✅ School associated successfully');
+        
+        // Load locations for the newly associated school
+        const locations = await storage.getLocationsBySchoolId(updatedSchool.id);
+        console.log(`🏢 Found ${locations.length} locations for school ${updatedSchool.name}`);
+        
+        // Return school with embedded locations
+        return res.json({
+          ...updatedSchool,
+          locations
+        });
       }
+    }
+
+    console.log('❌ No school found to associate with this admin');
+    return res.status(404).json({ message: "No school found for this admin" });
   } catch (error) {
     console.error("Error fetching school information:", error);
     console.error("Error stack:", error.stack);
@@ -561,88 +472,23 @@ async function setupSchool(req: any, res: any) {
 
       console.log('📋 Creating school with data:', schoolData);
 
-      try {
-        const { data: newSchool, error: schoolError } = await supabaseAdmin
-          .from('schools')
-          .insert(schoolData)
-          .select()
-          .single();
+      const { data: newSchool, error: schoolError } = await supabaseAdmin
+        .from('schools')
+        .insert(schoolData)
+        .select()
+        .single();
 
-        if (schoolError) {
-          console.error('❌ Database error creating school:', schoolError);
-          throw new Error(`Database error: ${schoolError.message}`);
-        }
-
-        console.log('🚀 Created school successfully in database:', newSchool);
-        return res.json(newSchool);
-      } catch (dbError: any) {
-        console.log('⚠️ Database failed, using file storage fallback for school setup');
-        // Fall through to file storage below
+      if (schoolError) {
+        console.error('❌ Database error creating school:', schoolError);
+        return res.status(500).json({ message: `Database error: ${schoolError.message}` });
       }
+
+      console.log('🚀 Created school successfully in database:', newSchool);
+      return res.json(newSchool);
 
     } catch (dbError) {
-      console.log('⚠️ Database failed, using file storage fallback:', dbError);
-
-      // Fallback to file storage
-      const DATA_DIR = path.join(process.cwd(), 'data');
-      const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json');
-
-      // Ensure data directory exists
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-
-      // Load existing schools or initialize empty array
-      let existingSchools = [];
-      if (fs.existsSync(SCHOOLS_FILE)) {
-        try {
-          const fileContent = fs.readFileSync(SCHOOLS_FILE, 'utf8');
-          existingSchools = JSON.parse(fileContent);
-        } catch (error) {
-          console.log('Error reading schools file, starting with empty array:', error);
-          existingSchools = [];
-        }
-      }
-
-      // Generate new ID
-      const newId = existingSchools.length > 0 
-        ? Math.max(...existingSchools.map((s: any) => s.id)) + 1 
-        : 1;
-
-      // Create new school object for file storage
-      const newSchool = {
-        id: newId,
-        name,
-        type,
-        address,
-        city,
-        state,
-        zipCode,
-        phoneNumber,
-        email,
-        website,
-        description,
-        accreditation,
-        enrollmentSize: enrollmentSize ? parseInt(enrollmentSize) : null,
-        foundedYear: foundedYear ? parseInt(foundedYear) : null,
-        adminId: 1, // Default admin ID for file storage
-        status: "active",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      // Add to schools array
-      existingSchools.push(newSchool);
-
-      // Write back to file
-      fs.writeFileSync(SCHOOLS_FILE, JSON.stringify(existingSchools, null, 2));
-
-      console.log('✅ School created successfully in file storage:', newSchool.name);
-      return res.json({
-        message: "School registered successfully",
-        school: newSchool,
-        method: "file_storage"
-      });
+      console.error('⚠️ Database error in school setup:', dbError);
+      return res.status(500).json({ message: "Database error during school setup" });
     }
 
   } catch (error: any) {
@@ -841,16 +687,8 @@ router.get("/classes/:id", async (req, res) => {
     const classId = parseInt(req.params.id);
     console.log('🔍 Fetching class with ID:', classId);
 
-    // Read directly from the classes file
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
-
-    if (!fs.existsSync(CLASSES_FILE)) {
-      return res.status(404).json({ message: 'Class not found' });
-    }
-
-    const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
-    const classData = allClasses.find((cls: any) => cls.id === classId);
+    // Get class from database
+    const classData = await storage.getClassById(classId);
 
     if (!classData) {
       console.log('❌ Class not found with ID:', classId);
@@ -872,82 +710,75 @@ router.put("/classes/:id", async (req, res) => {
     console.log('📝 Updating class with ID:', classId);
     console.log('📄 Update data:', JSON.stringify(req.body, null, 2));
 
-    // Read classes file
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
-
-    if (!fs.existsSync(CLASSES_FILE)) {
-      return res.status(404).json({ message: 'Class not found' });
-    }
-
-    const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
-    const classIndex = allClasses.findIndex((cls: any) => cls.id === classId);
-
-    if (classIndex === -1) {
+    // Get existing class from database
+    const existingClass = await storage.getClassById(classId);
+    if (!existingClass) {
       console.log('❌ Class not found with ID:', classId);
       return res.status(404).json({ message: 'Class not found' });
     }
 
     // Handle variants - convert to JSON schedule format
-    let schedule = req.body.schedule || allClasses[classIndex].schedule;
+    let schedule = req.body.schedule || existingClass.schedule;
     if (req.body.variants && Array.isArray(req.body.variants)) {
       schedule = JSON.stringify({ variants: req.body.variants });
     }
 
     // Handle gradeLevels array - convert to single gradeLevel
-    let gradeLevel = allClasses[classIndex].gradeLevel;
+    let gradeLevel = existingClass.gradeLevel;
     if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels) && req.body.gradeLevels.length > 0) {
       gradeLevel = req.body.gradeLevels[0];
     } else if (req.body.gradeLevel) {
       gradeLevel = req.body.gradeLevel;
     }
 
-    // Update the class with new data
-    const updatedClass = {
-      ...allClasses[classIndex],
-      title: req.body.title || allClasses[classIndex].title,
-      description: req.body.description || allClasses[classIndex].description,
-      category: req.body.category || allClasses[classIndex].category,
+    // Prepare update data
+    const updateData: any = {
+      title: req.body.title || existingClass.title,
+      description: req.body.description || existingClass.description,
+      category: req.body.category || existingClass.category,
       gradeLevel: gradeLevel,
-      status: req.body.status || allClasses[classIndex].status,
-      startDate: req.body.startDate || allClasses[classIndex].startDate,
-      endDate: req.body.endDate || allClasses[classIndex].endDate,
+      status: req.body.status || existingClass.status,
+      startDate: req.body.startDate || existingClass.startDate,
+      endDate: req.body.endDate || existingClass.endDate,
       schedule: schedule,
-      capacity: req.body.capacity !== undefined ? req.body.capacity : allClasses[classIndex].capacity,
-      maxStudents: req.body.maxStudents !== undefined ? req.body.maxStudents : allClasses[classIndex].maxStudents,
-      location: req.body.location || allClasses[classIndex].location,
-      instructorName: req.body.instructorName || allClasses[classIndex].instructorName,
-      instructorId: req.body.instructorId || allClasses[classIndex].instructorId,
-      price: req.body.price !== undefined ? req.body.price : allClasses[classIndex].price,
-      isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : allClasses[classIndex].isAdminOnly,
-      updatedAt: new Date().toISOString()
+      capacity: req.body.capacity !== undefined ? req.body.capacity : existingClass.capacity,
+      maxStudents: req.body.maxStudents !== undefined ? req.body.maxStudents : existingClass.maxStudents,
+      location: req.body.location || existingClass.location,
+      instructorName: req.body.instructorName || existingClass.instructorName,
+      instructorId: req.body.instructorId || existingClass.instructorId,
+      price: req.body.price !== undefined ? req.body.price : existingClass.price,
+      isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly
     };
 
-    allClasses[classIndex] = updatedClass;
+    // Update the main class in database
+    const updatedClass = await storage.updateClass(classId, updateData);
+    
+    if (!updatedClass) {
+      console.log('❌ Failed to update class with ID:', classId);
+      return res.status(500).json({ message: 'Failed to update class' });
+    }
 
     // If this class has variants, update the corresponding child classes
     if (req.body.variants && Array.isArray(req.body.variants)) {
       console.log('🔄 Updating child classes for variants...');
       const baseTitle = updatedClass.title;
+      const allClasses = await storage.getAllClasses();
       
-      req.body.variants.forEach((variant: any) => {
+      for (const variant of req.body.variants) {
         // Find child class with matching title pattern "BaseTitle | VariantName"
-        // Try exact match first, then try partial match (in case variant name includes time)
         let childTitle = `${baseTitle} | ${variant.name}`;
-        let childIndex = allClasses.findIndex((cls: any) => cls.title === childTitle);
+        let childClass = allClasses.find((cls: any) => cls.title === childTitle);
         
         // If exact match fails, try to find by partial match (e.g., "Half Day" matches "Half Day 9-12pm")
-        if (childIndex === -1) {
-          // Extract first part of variant name (before any time info)
-          const variantBaseName = variant.name.split(/\d/)[0].trim(); // Split on first digit
+        if (!childClass) {
+          const variantBaseName = variant.name.split(/\d/)[0].trim();
           childTitle = `${baseTitle} | ${variantBaseName}`;
-          childIndex = allClasses.findIndex((cls: any) => cls.title === childTitle);
+          childClass = allClasses.find((cls: any) => cls.title === childTitle);
         }
         
-        if (childIndex !== -1) {
-          console.log(`  ✅ Updating child class: ${allClasses[childIndex].title} with price ${variant.price}`);
-          allClasses[childIndex] = {
-            ...allClasses[childIndex],
+        if (childClass) {
+          console.log(`  ✅ Updating child class: ${childClass.title} with price ${variant.price}`);
+          await storage.updateClass(childClass.id, {
             price: variant.price,
             location: updatedClass.location,
             instructorName: updatedClass.instructorName,
@@ -958,17 +789,13 @@ router.put("/classes/:id", async (req, res) => {
             description: updatedClass.description,
             category: updatedClass.category,
             status: updatedClass.status,
-            gradeLevel: updatedClass.gradeLevel,
-            updatedAt: new Date().toISOString()
-          };
+            gradeLevel: updatedClass.gradeLevel
+          });
         } else {
           console.log(`  ⚠️ Child class not found for variant: ${variant.name}`);
         }
-      });
+      }
     }
-
-    // Write back to file
-    fs.writeFileSync(CLASSES_FILE, JSON.stringify(allClasses, null, 2));
 
     console.log('✅ Class updated successfully:', updatedClass.title);
     res.json(updatedClass);
@@ -988,30 +815,19 @@ router.delete("/classes/:id", async (req, res) => {
 
     console.log(`🗑️ Deleting class with ID: ${classId}`);
 
-    // Read classes from file
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
+    // Get class from database before deleting
+    const classToDelete = await storage.getClassById(classId);
     
-    if (!fs.existsSync(CLASSES_FILE)) {
-      return res.status(404).json({ message: 'Classes file not found' });
-    }
-
-    const allClasses = JSON.parse(fs.readFileSync(CLASSES_FILE, 'utf8'));
-    const classIndex = allClasses.findIndex((cls: any) => cls.id === classId);
-
-    if (classIndex === -1) {
+    if (!classToDelete) {
       console.log('❌ Class not found with ID:', classId);
       return res.status(404).json({ message: 'Class not found' });
     }
 
-    // Remove the class from the array
-    const deletedClass = allClasses.splice(classIndex, 1)[0];
+    // Delete the class from database
+    await storage.deleteClass(classId);
 
-    // Write back to file
-    fs.writeFileSync(CLASSES_FILE, JSON.stringify(allClasses, null, 2));
-
-    console.log('✅ Class deleted successfully:', deletedClass.title);
-    res.json({ message: 'Class deleted successfully', deletedClass });
+    console.log('✅ Class deleted successfully:', classToDelete.title);
+    res.json({ message: 'Class deleted successfully', deletedClass: classToDelete });
   } catch (error) {
     console.error('❌ Error deleting class:', error);
     res.status(500).json({ message: 'Error deleting class' });
@@ -1028,21 +844,9 @@ router.get("/classes/:id/roster", async (req, res) => {
 
     console.log(`📚 Fetching roster for class ID: ${classId}`);
 
-    // Read enrollment data
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const ENROLLMENTS_FILE = path.join(DATA_DIR, 'enrollments.json');
-    const CHILDREN_FILE = path.join(DATA_DIR, 'children.json');
-
-    let enrollments = [];
-    let children = [];
-
-    if (fs.existsSync(ENROLLMENTS_FILE)) {
-      enrollments = JSON.parse(fs.readFileSync(ENROLLMENTS_FILE, 'utf8'));
-    }
-
-    if (fs.existsSync(CHILDREN_FILE)) {
-      children = JSON.parse(fs.readFileSync(CHILDREN_FILE, 'utf8'));
-    }
+    // Get enrollment and children data from database
+    const enrollments = await storage.getMarketplaceEnrollmentsByClassId(classId);
+    const children = await storage.getAllChildren();
 
     // Get enrollments for this specific class
     const classEnrollments = enrollments.filter(enrollment => 
@@ -1094,21 +898,8 @@ router.get("/classes/:id/roster", async (req, res) => {
   }
 });
 
-// Staff file management functions
-const STAFF_FILE = path.join(process.cwd(), 'data', 'staff.json');
+// Staff invitations file (still used for invitations tracking)
 const STAFF_INVITATIONS_FILE = path.join(process.cwd(), 'data', 'staff-invitations.json');
-
-function loadStaffMembers() {
-  try {
-    if (fs.existsSync(STAFF_FILE)) {
-      const data = fs.readFileSync(STAFF_FILE, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.log('Error loading staff members:', error);
-  }
-  return [];
-}
 
 function loadStaffInvitations() {
   try {
@@ -1135,30 +926,11 @@ function saveStaffInvitations(invitations: any[]) {
   }
 }
 
-function saveStaffMembers(staff: any[]) {
-  try {
-    const dataDir = path.dirname(STAFF_FILE);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    fs.writeFileSync(STAFF_FILE, JSON.stringify(staff, null, 2));
-    console.log('✅ Staff members saved successfully');
-  } catch (error) {
-    console.error('❌ Error saving staff members:', error);
-  }
-}
-
-// Invite staff member (POST endpoint) - bypassing auth for now
+// Invite staff member (POST endpoint)
 router.post("/staff/invite", async (req, res) => {
-  // Skip authentication for staff invitation to fix the HTML redirect issue
-  console.log("🚨 DEBUG: Staff invitation endpoint hit!");
-  console.log("🚨 DEBUG: Request method:", req.method);
-  console.log("🚨 DEBUG: Request URL:", req.url);
-  console.log("🚨 DEBUG: Request body:", req.body);
-  console.log("🚨 DEBUG: Request headers:", req.headers);
+  console.log("📧 Staff invitation request received:", req.body);
 
   try {
-    console.log("📧 Staff invitation request received:", req.body);
     const { email, firstName, lastName, role, locationId, classId, message } = req.body;
 
     if (!email || !firstName || !lastName || !role) {
@@ -1166,183 +938,87 @@ router.post("/staff/invite", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Use role as department for compatibility
-    const department = role;
+    const schoolId = 1; // American Seekers Academy
+    const department = role; // Use role as department for compatibility
 
-    const staffMembers = loadStaffMembers();
-    console.log("📋 Current staff members count:", staffMembers.length);
-
-    // Check if staff member already exists
-    const existingStaff = staffMembers.find(s => s.email === email);
-    if (existingStaff) {
+    // Check if staff member already exists for this school
+    const existingStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+    const staffEmails = await Promise.all(
+      existingStaff.map(async (staff) => {
+        const user = await storage.getUser(staff.userId);
+        return user?.email;
+      })
+    );
+    
+    if (staffEmails.includes(email)) {
       console.log("❌ Staff member already exists:", email);
       return res.status(400).json({ message: "Staff member with this email already exists" });
     }
 
-    // Try to save to database first, fallback to file storage
-    try {
-      // Get authorization header for Supabase
-      const authHeader = req.headers.authorization;
-      if (authHeader) {
-        const token = authHeader.replace('Bearer ', '');
+    // Check if user exists, if not create one
+    const existingUsers = await storage.getAllUsers();
+    let user = existingUsers.find(u => u.email === email);
+    
+    if (!user) {
+      console.log("📝 Creating new user for:", email);
+      user = await storage.createUser({
+        email,
+        name: `${firstName} ${lastName}`,
+        phone: "",
+        role: "teacher"
+      });
+    }
 
-        // Create Supabase client with user's access token
-        const { createClient } = await import('@supabase/supabase-js');
+    if (!user) {
+      throw new Error("Failed to create user");
+    }
 
-        if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-          const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_ANON_KEY,
-            {
-              global: {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              },
-            }
-          );
+    // Create school_staff record
+    const staffRecord = await storage.createSchoolStaff({
+      schoolId,
+      userId: user.id,
+      role: mapPositionToRole(role),
+      position: role,
+      department,
+      startDate: new Date().toISOString(),
+      isActive: false,
+      locationId: locationId || null
+    });
 
-          // Insert into database
-          const { data: dbStaff, error: dbError } = await supabase
-            .from('school_staff')
-            .insert({
-              school_id: 1,
-              first_name: firstName,
-              last_name: lastName,
-              email: email,
-              position: role,
-              department: department,
-              is_active: true,
-              permissions: {},
-              start_date: new Date().toISOString(),
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (!dbError && dbStaff) {
-            console.log("✅ Staff member saved to database:", dbStaff);
-
-            // Transform to match frontend format
-            const responseStaff = {
-              id: dbStaff.id,
-              email: dbStaff.email,
-              firstName: dbStaff.first_name,
-              lastName: dbStaff.last_name,
-              name: `${dbStaff.first_name} ${dbStaff.last_name}`,
-              role: dbStaff.position,
-              department: dbStaff.department,
-              status: "Active",
-              joinDate: dbStaff.start_date?.split('T')[0] || new Date().toISOString().split('T')[0],
-              avatar: "",
-              phone: "",
-              subjects: [],
-              invitedAt: dbStaff.created_at,
-              message: message || ""
-            };
-
-            // Generate invitation token
-            const dbInvitationToken = generateInvitationToken();
-            
-            // Store invitation for validation
-            const dbInvitations = loadStaffInvitations();
-            const dbNewInvitation = {
-              id: Math.max(0, ...dbInvitations.map(i => i.id || 0)) + 1,
-              token: dbInvitationToken,
-              email,
-              firstName,
-              lastName,
-              role,
-              department,
-              message: message || "",
-              isActive: true,
-              createdAt: new Date().toISOString(),
-              expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-              acceptedAt: null
-            };
-            
-            dbInvitations.push(dbNewInvitation);
-            saveStaffInvitations(dbInvitations);
-
-            // Send invitation email with token
-            const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, dbInvitationToken, message);
-
-            return res.json({ 
-              success: true, 
-              message: emailSent ? "Staff member invited successfully and invitation email sent" : "Staff member invited successfully (email not sent)",
-              staff: responseStaff,
-              emailSent 
-            });
-          } else {
-            console.log("Database insert failed, using file storage fallback:", dbError?.message);
-          }
-        }
-      }
-    } catch (dbError) {
-      console.log("Database operation failed, using file storage fallback:", dbError);
+    if (!staffRecord) {
+      throw new Error("Failed to create staff record");
     }
 
     // Generate invitation token
     const invitationToken = generateInvitationToken();
     
-    // Store invitation for validation
-    const invitations = loadStaffInvitations();
-    const newInvitation = {
-      id: Math.max(0, ...invitations.map(i => i.id || 0)) + 1,
+    // Create role invitation record
+    const roleInvitation = await storage.createRoleInvitation({
+      email,
       token: invitationToken,
-      email,
-      firstName,
-      lastName,
-      role,
-      department,
-      message: message || "",
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-      acceptedAt: null
-    };
+      role: mapPositionToRole(role),
+      schoolId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      isActive: true
+    });
+
+    console.log("✅ Staff member invited successfully:", { id: staffRecord.id, email });
+
+    // Transform to frontend format
+    const responseStaff = transformStaffToFrontend(staffRecord, user, []);
     
-    invitations.push(newInvitation);
-    saveStaffInvitations(invitations);
-
-    // Fallback to file storage
-    const newStaffMember = {
-      id: Math.max(0, ...staffMembers.map(s => s.id || 0)) + 1,
-      email,
-      firstName,
-      lastName,
-      name: `${firstName} ${lastName}`,
-      role,
-      department,
-      status: "Pending",
-      joinDate: new Date().toISOString().split('T')[0],
-      avatar: "",
-      phone: "",
-      subjects: [],
-      invitedAt: new Date().toISOString(),
-      message: message || "",
-      invitationToken: invitationToken
-    };
-
-    staffMembers.push(newStaffMember);
-    saveStaffMembers(staffMembers);
-
-    console.log("✅ New staff member invited successfully (file storage):", newStaffMember);
-    console.log("📋 Updated staff members count:", staffMembers.length);
-
     // Send invitation email with token
     const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message);
 
     res.json({ 
       success: true, 
       message: emailSent ? "Staff member invited successfully and invitation email sent" : "Staff member invited successfully (email not sent)",
-      staff: newStaffMember,
+      staff: responseStaff,
       emailSent 
     });
   } catch (error) {
     console.error("❌ Error inviting staff member:", error);
-    res.status(500).json({ message: "Error inviting staff member", error: error.message });
+    res.status(500).json({ message: "Error inviting staff member", error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -1350,21 +1026,35 @@ router.post("/staff/invite", async (req, res) => {
 router.get("/staff", async (req, res) => {
   try {
     const schoolId = 1; // American Seekers Academy
-    console.log(`👥 Loading staff for school ID: ${schoolId} from file storage`);
+    console.log(`👥 Loading staff for school ID: ${schoolId} from database`);
 
-    // Load staff from file storage
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    // Get all school staff from database
+    const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+    console.log(`✅ Found ${schoolStaffRecords.length} staff members in database`);
+
+    // Fetch user details and classes for each staff member
+    const staffWithDetails = await Promise.all(
+      schoolStaffRecords.map(async (staffRecord) => {
+        const user = await storage.getUser(staffRecord.userId);
+        if (!user) {
+          console.warn(`⚠️ User not found for staff record ${staffRecord.id}`);
+          return null;
+        }
+        
+        // Get classes assigned to this staff member
+        const allClasses = await storage.getAllClasses();
+        const assignedClasses = allClasses.filter(cls => 
+          cls.instructorId === user.id || cls.teacherId === user.id
+        );
+        
+        return transformStaffToFrontend(staffRecord, user, assignedClasses);
+      })
+    );
+
+    // Filter out null entries (users not found)
+    const validStaff = staffWithDetails.filter(s => s !== null);
     
-    if (!fs.existsSync(STAFF_FILE)) {
-      console.log('📋 No staff file found, returning empty array');
-      return res.json([]);
-    }
-
-    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-    console.log(`✅ Found ${allStaff.length} staff members in file storage`);
-
-    res.json(allStaff);
+    res.json(validStaff);
   } catch (error) {
     console.error("❌ Error fetching school staff:", error);
     res.status(500).json({ message: "Error fetching school staff" });
@@ -1381,36 +1071,29 @@ router.get("/staff/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Try database first
-    try {
-      const { getStaffById } = await import('../services/staff-db');
-      const staffMember = await getStaffById(staffId);
-      
-      if (staffMember) {
-        console.log(`✅ Found staff member in database: ${staffMember.name}`);
-        return res.json(staffMember);
-      }
-    } catch (dbError) {
-      console.log('⚠️ Database lookup failed, trying file storage:', dbError.message);
-    }
-
-    // Fallback to file storage
-    console.log('🔄 Checking file storage for staff member...');
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
+    // Get staff record from database
+    const staffRecord = await storage.getSchoolStaffById(staffId);
     
-    if (!fs.existsSync(STAFF_FILE)) {
+    if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-    const staffMember = allStaff.find(s => s.id === staffId);
-    
-    if (!staffMember) {
-      return res.status(404).json({ message: "Staff member not found" });
+    // Get user details
+    const user = await storage.getUser(staffRecord.userId);
+    if (!user) {
+      console.error(`❌ User not found for staff record ${staffId}`);
+      return res.status(404).json({ message: "User details not found for staff member" });
     }
 
-    console.log(`✅ Found staff member in file storage: ${staffMember.name}`);
+    // Get classes assigned to this staff member
+    const allClasses = await storage.getAllClasses();
+    const assignedClasses = allClasses.filter(cls => 
+      cls.instructorId === user.id || cls.teacherId === user.id
+    );
+
+    const staffMember = transformStaffToFrontend(staffRecord, user, assignedClasses);
+    
+    console.log(`✅ Found staff member in database: ${staffMember.name}`);
     res.json(staffMember);
   } catch (error) {
     console.error("Error fetching staff member:", error);
@@ -1428,42 +1111,25 @@ router.get("/staff/:id/classes", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get staff member to verify they exist and get their name
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-    
-    if (!fs.existsSync(STAFF_FILE)) {
+    // Get staff record from database
+    const staffRecord = await storage.getSchoolStaffById(staffId);
+    if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-    const staffMember = allStaff.find(s => s.id === staffId);
-    
-    if (!staffMember) {
-      return res.status(404).json({ message: "Staff member not found" });
+    // Get user details to use userId for class lookup
+    const user = await storage.getUser(staffRecord.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User details not found" });
     }
 
-    // Get all classes and filter by classIds array or legacy assignment methods
-    const classes = await storage.getAllClasses();
-    let assignedClasses = [];
-    
-    if (staffMember.classIds && Array.isArray(staffMember.classIds)) {
-      // Use the staff member's classIds array for multiple class assignments
-      assignedClasses = classes.filter(cls => 
-        staffMember.classIds.includes(cls.id.toString())
-      );
-      console.log(`📚 Found ${assignedClasses.length} classes using classIds array:`, staffMember.classIds);
-    } else {
-      // Fallback to legacy single class assignment methods
-      assignedClasses = classes.filter(cls => 
-        cls.instructorName === staffMember.name || 
-        cls.teacherId === staffId ||
-        cls.instructorId === staffId
-      );
-      console.log(`📚 Found ${assignedClasses.length} classes using legacy method`);
-    }
+    // Get all classes and filter by instructorId or teacherId
+    const allClasses = await storage.getAllClasses();
+    const assignedClasses = allClasses.filter(cls => 
+      cls.instructorId === user.id || cls.teacherId === user.id
+    );
 
-    console.log(`✅ Found ${assignedClasses.length} classes for ${staffMember.name}`);
+    console.log(`✅ Found ${assignedClasses.length} classes for ${user.name}`);
     res.json(assignedClasses);
   } catch (error) {
     console.error("Error fetching staff classes:", error);
@@ -1483,54 +1149,37 @@ router.post("/staff/:id/assign-class", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID or class ID" });
     }
 
-    // Get staff member details
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-    
-    if (!fs.existsSync(STAFF_FILE)) {
+    // Get staff record from database
+    const staffRecord = await storage.getSchoolStaffById(staffId);
+    if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-    const staffMember = allStaff.find(s => s.id === staffId);
-    
-    if (!staffMember) {
-      return res.status(404).json({ message: "Staff member not found" });
-    }
-
-    // Update staff member's class assignments
-    if (!staffMember.classIds) {
-      staffMember.classIds = [];
-    }
-    
-    // Add class if not already assigned
-    if (!staffMember.classIds.includes(classId.toString())) {
-      staffMember.classIds.push(classId.toString());
-      
-      // Save updated staff data
-      fs.writeFileSync(STAFF_FILE, JSON.stringify(allStaff, null, 2));
+    // Get user details
+    const user = await storage.getUser(staffRecord.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User details not found" });
     }
 
     // Update the class to assign this instructor
     const updatedClass = await storage.updateClass(classId, {
-      instructorName: staffMember.name,
-      instructorId: staffId,
-      teacherId: staffId
+      instructorName: user.name,
+      instructorId: user.id,
+      teacherId: user.id
     });
 
     if (!updatedClass) {
       return res.status(404).json({ message: "Class not found" });
     }
 
-    console.log(`✅ Successfully assigned ${staffMember.name} to class ${classId}`);
+    console.log(`✅ Successfully assigned ${user.name} to class ${classId}`);
     res.json({ 
       success: true, 
-      message: `${staffMember.name} assigned to class successfully`,
+      message: `${user.name} assigned to class successfully`,
       class: updatedClass,
       staffMember: {
-        id: staffMember.id,
-        name: staffMember.name,
-        classIds: staffMember.classIds
+        id: staffId,
+        name: user.name
       }
     });
   } catch (error) {
@@ -1551,21 +1200,10 @@ router.delete("/staff/:id/unassign-class/:classId", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID or class ID" });
     }
 
-    // Get staff member details and update their class assignments
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-    
-    if (fs.existsSync(STAFF_FILE)) {
-      const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-      const staffMember = allStaff.find(s => s.id === staffId);
-      
-      if (staffMember && staffMember.classIds) {
-        // Remove class from staff member's assignments
-        staffMember.classIds = staffMember.classIds.filter(id => id !== classId.toString());
-        
-        // Save updated staff data
-        fs.writeFileSync(STAFF_FILE, JSON.stringify(allStaff, null, 2));
-      }
+    // Verify staff member exists in database
+    const staffRecord = await storage.getSchoolStaffById(staffId);
+    if (!staffRecord) {
+      return res.status(404).json({ message: "Staff member not found" });
     }
 
     // Update the class to remove instructor assignment
@@ -1599,66 +1237,63 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get staff member details from existing staff data
-    const allStaff = loadStaffMembers();
-    const staff = allStaff.find(s => s.id === staffId);
-    if (!staff) {
+    // Get staff member from database
+    const staffRecord = await storage.getSchoolStaffById(staffId);
+    if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    if (staff.status !== "Pending") {
+    // Get user details
+    const user = await storage.getUser(staffRecord.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User details not found" });
+    }
+
+    // Check if staff member is inactive (pending invitation)
+    if (staffRecord.isActive) {
       return res.status(400).json({ message: "Can only resend invites to pending staff members" });
     }
 
-    // Always generate a new invitation token when resending
+    // Generate new invitation token
     const invitationToken = generateInvitationToken();
     
-    // Update staff member with token
-    const staffIndex = allStaff.findIndex(s => s.id === staffId);
-    if (staffIndex !== -1) {
-      allStaff[staffIndex].invitationToken = invitationToken;
-      saveStaffMembers(allStaff);
-    }
-    
-    // Also save/update the invitation
-    const invitations = loadStaffInvitations();
-    const existingInvitationIndex = invitations.findIndex(i => i.email === staff.email);
-    
-    const invitationData = {
-      id: existingInvitationIndex >= 0 ? invitations[existingInvitationIndex].id : Math.max(0, ...invitations.map(i => i.id || 0)) + 1,
-      token: invitationToken,
-      email: staff.email,
-      firstName: staff.firstName || staff.name?.split(' ')[0] || '',
-      lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
-      role: staff.role,
-      department: staff.department,
-      message: staff.message || "",
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-      acceptedAt: null
-    };
-    
-    if (existingInvitationIndex >= 0) {
-      invitations[existingInvitationIndex] = invitationData;
-    } else {
-      invitations.push(invitationData);
-    }
-    
-    saveStaffInvitations(invitations);
+    // Check if invitation exists and update it, or create new one
+    const allInvitations = await storage.getAllRoleInvitations();
+    const existingInvitation = allInvitations.find(inv => 
+      inv.email === user.email && inv.schoolId === staffRecord.schoolId
+    );
 
-    // Resend the invitation email with token
-    const firstName = staff.firstName || staff.name?.split(' ')[0] || '';
-    const lastName = staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '';
-    const message = staff.message || `Your invitation to join our school staff has been resent. Please check your email for details.`;
+    if (existingInvitation) {
+      // Update existing invitation
+      await storage.updateRoleInvitation(existingInvitation.id, {
+        token: invitationToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        isActive: true
+      });
+    } else {
+      // Create new invitation
+      await storage.createRoleInvitation({
+        email: user.email,
+        token: invitationToken,
+        role: staffRecord.role,
+        schoolId: staffRecord.schoolId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        isActive: true
+      });
+    }
+
+    // Resend the invitation email
+    const firstName = user.name.split(' ')[0] || '';
+    const lastName = user.name.split(' ').slice(1).join(' ') || '';
+    const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
 
     try {
       const emailSent = await sendStaffInvitationEmail(
-        staff.email,
+        user.email,
         firstName,
         lastName,
-        staff.role,
-        staff.department,
+        staffRecord.position || mapRoleToPosition(staffRecord.role),
+        staffRecord.department || '',
         invitationToken,
         message
       );
@@ -1667,7 +1302,7 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
         res.json({ 
           message: "Invitation resent successfully",
           staffId: staffId,
-          email: staff.email 
+          email: user.email 
         });
       } else {
         res.status(500).json({ message: "Failed to send invitation email" });
@@ -1685,9 +1320,11 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
 // Resend all pending invites
 router.post("/staff/resend-all-invites", async (req, res) => {
   try {
-    // Get all pending staff members
-    const allStaff = loadStaffMembers();
-    const pendingStaff = allStaff.filter((member: any) => member.status === "Pending");
+    const schoolId = 1; // American Seekers Academy
+    
+    // Get all inactive (pending) staff members from database
+    const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+    const pendingStaff = allStaff.filter(staff => !staff.isActive);
 
     if (pendingStaff.length === 0) {
       return res.json({ 
@@ -1699,56 +1336,54 @@ router.post("/staff/resend-all-invites", async (req, res) => {
     let successCount = 0;
     let failureCount = 0;
 
-    const invitations = loadStaffInvitations();
-
     // Resend invites to all pending staff members
-    for (const staff of pendingStaff) {
+    for (const staffRecord of pendingStaff) {
       try {
-        // Generate or reuse invitation token
-        let invitationToken = staff.invitationToken;
-        if (!invitationToken) {
-          invitationToken = generateInvitationToken();
-          
-          // Update staff member with token
-          const staffIndex = allStaff.findIndex(s => s.id === staff.id);
-          if (staffIndex !== -1) {
-            allStaff[staffIndex].invitationToken = invitationToken;
-          }
-          
-          // Update or create invitation
-          const existingInvitationIndex = invitations.findIndex(i => i.email === staff.email);
-          const invitationData = {
-            id: existingInvitationIndex >= 0 ? invitations[existingInvitationIndex].id : Math.max(0, ...invitations.map(i => i.id || 0)) + 1,
-            token: invitationToken,
-            email: staff.email,
-            firstName: staff.firstName || staff.name?.split(' ')[0] || '',
-            lastName: staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '',
-            role: staff.role,
-            department: staff.department,
-            message: staff.message || "",
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-            acceptedAt: null
-          };
-          
-          if (existingInvitationIndex >= 0) {
-            invitations[existingInvitationIndex] = invitationData;
-          } else {
-            invitations.push(invitationData);
-          }
+        // Get user details
+        const user = await storage.getUser(staffRecord.userId);
+        if (!user) {
+          console.warn(`User not found for staff ${staffRecord.id}`);
+          failureCount++;
+          continue;
         }
 
-        const firstName = staff.firstName || staff.name?.split(' ')[0] || '';
-        const lastName = staff.lastName || staff.name?.split(' ').slice(1).join(' ') || '';
-        const message = staff.message || `Your invitation to join our school staff has been resent. Please check your email for details.`;
+        // Generate new invitation token
+        const invitationToken = generateInvitationToken();
+        
+        // Check if invitation exists and update it, or create new one
+        const allInvitations = await storage.getAllRoleInvitations();
+        const existingInvitation = allInvitations.find(inv => 
+          inv.email === user.email && inv.schoolId === staffRecord.schoolId
+        );
+
+        if (existingInvitation) {
+          await storage.updateRoleInvitation(existingInvitation.id, {
+            token: invitationToken,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            isActive: true
+          });
+        } else {
+          await storage.createRoleInvitation({
+            email: user.email,
+            token: invitationToken,
+            role: staffRecord.role,
+            schoolId: staffRecord.schoolId,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            isActive: true
+          });
+        }
+
+        // Send invitation email
+        const firstName = user.name.split(' ')[0] || '';
+        const lastName = user.name.split(' ').slice(1).join(' ') || '';
+        const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
 
         const emailSent = await sendStaffInvitationEmail(
-          staff.email,
+          user.email,
           firstName,
           lastName,
-          staff.role,
-          staff.department,
+          staffRecord.position || mapRoleToPosition(staffRecord.role),
+          staffRecord.department || '',
           invitationToken,
           message
         );
@@ -1759,14 +1394,10 @@ router.post("/staff/resend-all-invites", async (req, res) => {
           failureCount++;
         }
       } catch (emailError) {
-        console.error(`Error resending invitation to ${staff.email}:`, emailError);
+        console.error(`Error resending invitation:`, emailError);
         failureCount++;
       }
     }
-
-    // Save all changes to files
-    saveStaffMembers(allStaff);
-    saveStaffInvitations(invitations);
 
     res.json({ 
       message: `Resent ${successCount} invitations successfully`,
@@ -1788,54 +1419,63 @@ router.put("/staff/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    const { name, email, phone, role, department, locationId, classId, status } = req.body;
+    const { name, email, phone, role, department, locationId, status } = req.body;
 
-    console.log(`🔄 Updating staff member ${staffId}:`, { name, email, role, department, locationId, classId, status });
+    console.log(`🔄 Updating staff member ${staffId}:`, { name, email, role, department, locationId, status });
 
-    // Get current staff data from file
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-
-    if (!fs.existsSync(STAFF_FILE)) {
+    // Get current staff record from database
+    const staffRecord = await storage.getSchoolStaffById(staffId);
+    if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-    const staffIndex = allStaff.findIndex(s => s.id === staffId);
+    // Get user details
+    const user = await storage.getUser(staffRecord.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User details not found" });
+    }
+
+    // Update user record if name, email, or phone changed
+    if (name || email || phone) {
+      await storage.updateUser(user.id, {
+        name: name || user.name,
+        email: email || user.email,
+        phone: phone || user.phone
+      });
+    }
+
+    // Map role to database enum and update school_staff record
+    const staffUpdate: any = {};
+    if (role) {
+      staffUpdate.position = role;
+      staffUpdate.role = mapPositionToRole(role);
+    }
+    if (department) {
+      staffUpdate.department = department;
+    }
+    if (locationId !== undefined) {
+      staffUpdate.locationId = locationId;
+    }
+    if (status !== undefined) {
+      staffUpdate.isActive = status === 'Active';
+    }
+
+    const updatedStaffRecord = await storage.updateSchoolStaff(staffId, staffUpdate);
+    if (!updatedStaffRecord) {
+      return res.status(500).json({ message: "Failed to update staff member" });
+    }
+
+    // Get updated user details
+    const updatedUser = await storage.getUser(staffRecord.userId);
     
-    if (staffIndex === -1) {
-      return res.status(404).json({ message: "Staff member not found" });
-    }
+    // Get classes assigned to this staff member
+    const allClasses = await storage.getAllClasses();
+    const assignedClasses = allClasses.filter(cls => 
+      cls.instructorId === updatedUser!.id || cls.teacherId === updatedUser!.id
+    );
 
-    // Update the staff member data
-    const existingStaff = allStaff[staffIndex];
-    const updatedStaff = {
-      ...existingStaff,
-      name,
-      email,
-      phone: phone || existingStaff.phone,
-      role,
-      department: department || existingStaff.department,
-      locationId: locationId || existingStaff.locationId,
-      classId: classId || existingStaff.classId,
-      status,
-      // Preserve existing fields
-      id: staffId,
-      firstName: existingStaff.firstName,
-      lastName: existingStaff.lastName,
-      subjects: existingStaff.subjects || [],
-      joinDate: existingStaff.joinDate,
-      avatar: existingStaff.avatar || "",
-      invitedAt: existingStaff.invitedAt,
-      message: existingStaff.message,
-      invitationToken: existingStaff.invitationToken
-    };
-
-    // Update the staff member in the array
-    allStaff[staffIndex] = updatedStaff;
-
-    // Save back to file using the utility function
-    saveStaffMembers(allStaff);
+    const updatedStaff = transformStaffToFrontend(updatedStaffRecord, updatedUser!, assignedClasses);
+    
     console.log(`✅ Successfully updated staff member ${staffId}`);
 
     res.json({ 
@@ -1859,56 +1499,29 @@ router.delete("/staff/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    let staffMember = null;
-    let deletedFromDatabase = false;
-    let deletedFromFile = false;
-
-    // Try to delete from database first
-    try {
-      const { deleteStaff, getStaffById } = await import('../services/staff-db');
-      staffMember = await getStaffById(staffId);
-      
-      if (staffMember) {
-        await deleteStaff(staffId);
-        deletedFromDatabase = true;
-        console.log(`✅ Successfully deleted staff member from database: ${staffMember.name}`);
-      }
-    } catch (dbError) {
-      console.log('⚠️ Database deletion failed:', dbError.message);
-    }
-
-    // Also try to delete from file storage (to keep both in sync)
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-    
-    if (fs.existsSync(STAFF_FILE)) {
-      const allStaff = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-      const staffIndex = allStaff.findIndex(s => s.id === staffId);
-      
-      if (staffIndex !== -1) {
-        if (!staffMember) {
-          staffMember = allStaff[staffIndex];
-        }
-        allStaff.splice(staffIndex, 1);
-        fs.writeFileSync(STAFF_FILE, JSON.stringify(allStaff, null, 2));
-        deletedFromFile = true;
-        console.log(`✅ Successfully deleted staff member from file storage: ${staffMember.name}`);
-      }
-    }
-
-    // If not found in either location, return 404
-    if (!deletedFromDatabase && !deletedFromFile) {
+    // Get staff record from database before deleting
+    const staffRecord = await storage.getSchoolStaffById(staffId);
+    if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
     }
+
+    // Get user details before deleting
+    const user = await storage.getUser(staffRecord.userId);
+    const staffName = user?.name || 'Unknown';
+
+    // Delete the school_staff record
+    await storage.deleteSchoolStaff(staffId);
+    
+    console.log(`✅ Successfully deleted staff member from database: ${staffName}`);
 
     res.json({ 
       success: true, 
       message: "Staff member deleted successfully",
-      deletedStaff: { id: staffId, name: staffMember.name }
+      deletedStaff: { id: staffId, name: staffName }
     });
   } catch (error) {
     console.error("Error deleting staff member:", error);
-    res.status(500).json({ message: "Error deleting staff member", error: error.message });
+    res.status(500).json({ message: "Error deleting staff member", error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -2173,40 +1786,24 @@ router.post("/classes", async (req, res) => {
   try {
     console.log('📝 Creating new class:', JSON.stringify(req.body, null, 2));
 
-    // Read classes file
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
-
-    // Ensure data directory exists
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-
-    // Load existing classes or initialize empty array
-    let existingClasses = [];
-    if (fs.existsSync(CLASSES_FILE)) {
-      try {
-        const fileContent = fs.readFileSync(CLASSES_FILE, 'utf8');
-        existingClasses = JSON.parse(fileContent);
-      } catch (error) {
-        console.log('Error reading classes file, starting with empty array:', error);
-        existingClasses = [];
+    const schoolId = 1; // Default to American Seekers Academy
+    
+    // Find instructor details from database if instructorName is provided
+    let instructorId = 1; // Default instructor ID
+    if (req.body.instructorName) {
+      const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+      for (const staffRecord of allStaff) {
+        const user = await storage.getUser(staffRecord.userId);
+        if (user && user.name === req.body.instructorName) {
+          instructorId = user.id;
+          break;
+        }
       }
     }
 
-    // Generate new ID
-    const newId = existingClasses.length > 0 
-      ? Math.max(...existingClasses.map((c: any) => c.id)) + 1 
-      : 1;
-
-    // Find instructor details from staff
-    const staffMembers = loadStaffMembers();
-    const instructor = staffMembers.find((s: any) => s.name === req.body.instructorName);
-
     // Create new class object
-    const newClass = {
-      id: newId,
-      schoolId: 1, // Default to American Seekers Academy
+    const newClassData = {
+      schoolId,
       title: req.body.title,
       description: req.body.description,
       category: req.body.category || 'Academic',
@@ -2221,24 +1818,12 @@ router.post("/classes", async (req, res) => {
       location: req.body.location,
       price: req.body.price || 0,
       instructorName: req.body.instructorName,
-      instructorId: instructor ? instructor.id : 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      instructorId
     };
 
-    // Add to classes array
-    existingClasses.push(newClass);
-
-    // Write back to file
-    fs.writeFileSync(CLASSES_FILE, JSON.stringify(existingClasses, null, 2));
-
-    // Also add to the main storage system to ensure synchronization
-    try {
-      await storage.createClass(newClass);
-      console.log('✅ Class also added to main storage system');
-    } catch (error) {
-      console.log('⚠️ Note: Class saved to file but not to main storage:', error.message);
-    }
+    // Create class in database
+    const newClass = await storage.createClass(newClassData);
+    console.log('✅ Class created successfully in database');
 
     console.log('✅ Class created successfully:', newClass.title);
     return res.status(201).json({
@@ -2879,22 +2464,9 @@ router.get("/metrics/academic", async (req, res) => {
   try {
     console.log('📚 Calculating academic metrics from database');
 
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const CLASSES_FILE = path.join(DATA_DIR, 'classes.json');
-    const CHILDREN_FILE = path.join(DATA_DIR, 'children.json');
-
-    let classes = [];
-    let students = [];
-
-    if (fs.existsSync(CLASSES_FILE)) {
-      const fileData = fs.readFileSync(CLASSES_FILE, 'utf-8');
-      classes = JSON.parse(fileData);
-    }
-
-    if (fs.existsSync(CHILDREN_FILE)) {
-      const fileData = fs.readFileSync(CHILDREN_FILE, 'utf-8');
-      students = JSON.parse(fileData);
-    }
+    // Get data from database
+    const classes = await storage.getAllClasses();
+    const students = await storage.getAllChildren();
 
     // Calculate academic performance metrics
     const totalClasses = classes.length;
@@ -2937,20 +2509,22 @@ router.get("/metrics/staff", async (req, res) => {
   try {
     console.log('👥 Calculating staff metrics from database');
 
-    const staffMembers = loadStaffMembers();
+    const schoolId = 1; // American Seekers Academy
+    const staffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
 
     // Calculate staff metrics from actual data
-    const totalStaff = staffMembers.length;
-    const activeInstructors = staffMembers.filter((s: any) => 
-      s.status === 'active' && (s.role === 'Teacher' || s.role === 'Instructor')
+    const totalStaff = staffRecords.length;
+    
+    // Count active instructors (teachers)
+    const activeInstructors = staffRecords.filter(s => 
+      s.isActive && (s.role === 'teacher' || s.position === 'Teacher' || s.position === 'Instructor')
     ).length;
 
-    const pendingInvites = staffMembers.filter((s: any) => 
-      s.status === 'pending' || s.status === 'invited'
-    ).length;
+    // Count pending invites (inactive staff)
+    const pendingInvites = staffRecords.filter(s => !s.isActive).length;
 
     // Calculate staff utilization based on active vs total
-    const activeStaff = staffMembers.filter((s: any) => s.status === 'active').length;
+    const activeStaff = staffRecords.filter(s => s.isActive).length;
     const staffUtilization = totalStaff > 0 ? (activeStaff / totalStaff) * 100 : 0;
 
     const staffMetrics = {
@@ -3068,12 +2642,18 @@ router.post("/staff-invitations/accept", async (req, res) => {
     invitations[invitationIndex].isActive = false;
     saveStaffInvitations(invitations);
 
-    // Update staff member status
-    const staffMembers = loadStaffMembers();
-    const staffIndex = staffMembers.findIndex(s => s.email === invitation.email);
-    if (staffIndex !== -1) {
-      staffMembers[staffIndex].status = "Active";
-      saveStaffMembers(staffMembers);
+    // Update staff member status in database
+    const schoolId = 1; // American Seekers Academy
+    const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+    
+    for (const staffRecord of allStaff) {
+      const user = await storage.getUser(staffRecord.userId);
+      if (user && user.email === invitation.email) {
+        // Activate the staff member
+        await storage.updateSchoolStaff(staffRecord.id, { isActive: true });
+        console.log(`✅ Activated staff member in database: ${user.email}`);
+        break;
+      }
     }
 
     // Send account credentials email if account was created successfully
@@ -3264,86 +2844,13 @@ router.get("/user-locations/my-permissions", async (req, res) => {
 // DISCOUNT MANAGEMENT ENDPOINTS
 // ========================
 
-// Helper function to load discounts from file storage
-function loadDiscounts(): any[] {
-  try {
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const DISCOUNTS_FILE = path.join(DATA_DIR, 'discounts.json');
-    
-    if (fs.existsSync(DISCOUNTS_FILE)) {
-      const data = fs.readFileSync(DISCOUNTS_FILE, 'utf8');
-      return JSON.parse(data) || [];
-    }
-    return [];
-  } catch (error) {
-    console.error('Error loading discounts:', error);
-    return [];
-  }
-}
-
-// Helper function to save discounts to file storage
-function saveDiscounts(discounts: any[]): void {
-  try {
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const DISCOUNTS_FILE = path.join(DATA_DIR, 'discounts.json');
-    
-    // Ensure data directory exists
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    
-    fs.writeFileSync(DISCOUNTS_FILE, JSON.stringify(discounts, null, 2));
-  } catch (error) {
-    console.error('Error saving discounts:', error);
-    throw error;
-  }
-}
-
-// Helper function to load discount applications from file storage
-function loadDiscountApplications(): any[] {
-  try {
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const APPLICATIONS_FILE = path.join(DATA_DIR, 'discount-applications.json');
-    
-    if (fs.existsSync(APPLICATIONS_FILE)) {
-      const data = fs.readFileSync(APPLICATIONS_FILE, 'utf8');
-      return JSON.parse(data) || [];
-    }
-    return [];
-  } catch (error) {
-    console.error('Error loading discount applications:', error);
-    return [];
-  }
-}
-
-// Helper function to save discount applications to file storage
-function saveDiscountApplications(applications: any[]): void {
-  try {
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const APPLICATIONS_FILE = path.join(DATA_DIR, 'discount-applications.json');
-    
-    // Ensure data directory exists
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    
-    fs.writeFileSync(APPLICATIONS_FILE, JSON.stringify(applications, null, 2));
-  } catch (error) {
-    console.error('Error saving discount applications:', error);
-    throw error;
-  }
-}
-
 // Get all discounts for a school
 router.get('/discounts', async (req, res) => {
   try {
     console.log('💰 Fetching discounts for school admin');
     
-    // For now, use file storage as database connection is not available
-    const discounts = loadDiscounts();
-    
-    // TODO: When database is available, replace with:
-    // const discounts = await storage.getDiscountsBySchool(schoolId);
+    // Get all discounts from database
+    const discounts = await storage.getAllDiscounts();
     
     res.json({
       success: true,
@@ -3370,8 +2877,7 @@ router.get('/discounts/:id', async (req, res) => {
       });
     }
     
-    const discounts = loadDiscounts();
-    const discount = discounts.find(d => d.id === discountId);
+    const discount = await storage.getDiscountById(discountId);
     
     if (!discount) {
       return res.status(404).json({
@@ -3449,9 +2955,8 @@ router.post('/discounts', async (req, res) => {
     const minOrderAmountInCents = minOrderAmount ? Math.round(minOrderAmount * 100) : null;
     const maxDiscountAmountInCents = maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null;
     
-    const discounts = loadDiscounts();
-    const newDiscount = {
-      id: Math.max(0, ...discounts.map(d => d.id || 0)) + 1,
+    // Create discount using storage
+    const newDiscount = await storage.createDiscount({
       schoolId: 1, // TODO: Get from authenticated user's school
       name,
       description: description || null,
@@ -3475,13 +2980,8 @@ router.post('/discounts', async (req, res) => {
       priority: priority || 0,
       combinableWithOthers: combinableWithOthers || false,
       adminOnly: adminOnly || false,
-      createdBy: 1, // TODO: Get from authenticated user
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    discounts.push(newDiscount);
-    saveDiscounts(discounts);
+      createdBy: 1 // TODO: Get from authenticated user
+    });
     
     console.log('✅ Discount created successfully:', newDiscount);
     
@@ -3510,10 +3010,9 @@ router.put('/discounts/:id', async (req, res) => {
       });
     }
     
-    const discounts = loadDiscounts();
-    const discountIndex = discounts.findIndex(d => d.id === discountId);
+    const existingDiscount = await storage.getDiscountById(discountId);
     
-    if (discountIndex === -1) {
+    if (!existingDiscount) {
       return res.status(404).json({
         success: false,
         error: 'Discount not found'
@@ -3559,36 +3058,39 @@ router.put('/discounts/:id', async (req, res) => {
       });
     }
     
-    // Update discount
-    const existingDiscount = discounts[discountIndex];
-    const updatedDiscount = {
-      ...existingDiscount,
-      name: name !== undefined ? name : existingDiscount.name,
-      description: description !== undefined ? description : existingDiscount.description,
-      code: code !== undefined ? code : existingDiscount.code,
-      type: type !== undefined ? type : existingDiscount.type,
-      value: value !== undefined ? (type === 'percentage' ? value : Math.round(value * 100)) : existingDiscount.value,
-      applicationMethod: applicationMethod !== undefined ? applicationMethod : existingDiscount.applicationMethod,
-      minOrderAmount: minOrderAmount !== undefined ? (minOrderAmount ? Math.round(minOrderAmount * 100) : null) : existingDiscount.minOrderAmount,
-      maxDiscountAmount: maxDiscountAmount !== undefined ? (maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null) : existingDiscount.maxDiscountAmount,
-      applicableToClasses: applicableToClasses !== undefined ? applicableToClasses : existingDiscount.applicableToClasses,
-      applicableToCategories: applicableToCategories !== undefined ? applicableToCategories : existingDiscount.applicableToCategories,
-      applicableToGradeLevels: applicableToGradeLevels !== undefined ? applicableToGradeLevels : existingDiscount.applicableToGradeLevels,
-      newStudentsOnly: newStudentsOnly !== undefined ? newStudentsOnly : existingDiscount.newStudentsOnly,
-      siblingDiscount: siblingDiscount !== undefined ? siblingDiscount : existingDiscount.siblingDiscount,
-      usageLimit: usageLimit !== undefined ? usageLimit : existingDiscount.usageLimit,
-      usageLimitPerUser: usageLimitPerUser !== undefined ? usageLimitPerUser : existingDiscount.usageLimitPerUser,
-      validFrom: validFrom !== undefined ? validFrom : existingDiscount.validFrom,
-      validUntil: validUntil !== undefined ? validUntil : existingDiscount.validUntil,
-      isActive: isActive !== undefined ? isActive : existingDiscount.isActive,
-      priority: priority !== undefined ? priority : existingDiscount.priority,
-      combinableWithOthers: combinableWithOthers !== undefined ? combinableWithOthers : existingDiscount.combinableWithOthers,
-      adminOnly: adminOnly !== undefined ? adminOnly : existingDiscount.adminOnly,
-      updatedAt: new Date().toISOString()
-    };
+    // Build update object with only provided fields
+    const updates: any = {};
+    if (name !== undefined) updates.name = name;
+    if (description !== undefined) updates.description = description;
+    if (code !== undefined) updates.code = code;
+    if (type !== undefined) updates.type = type;
+    if (value !== undefined) updates.value = type === 'percentage' ? value : Math.round(value * 100);
+    if (applicationMethod !== undefined) updates.applicationMethod = applicationMethod;
+    if (minOrderAmount !== undefined) updates.minOrderAmount = minOrderAmount ? Math.round(minOrderAmount * 100) : null;
+    if (maxDiscountAmount !== undefined) updates.maxDiscountAmount = maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null;
+    if (applicableToClasses !== undefined) updates.applicableToClasses = applicableToClasses;
+    if (applicableToCategories !== undefined) updates.applicableToCategories = applicableToCategories;
+    if (applicableToGradeLevels !== undefined) updates.applicableToGradeLevels = applicableToGradeLevels;
+    if (newStudentsOnly !== undefined) updates.newStudentsOnly = newStudentsOnly;
+    if (siblingDiscount !== undefined) updates.siblingDiscount = siblingDiscount;
+    if (usageLimit !== undefined) updates.usageLimit = usageLimit;
+    if (usageLimitPerUser !== undefined) updates.usageLimitPerUser = usageLimitPerUser;
+    if (validFrom !== undefined) updates.validFrom = validFrom;
+    if (validUntil !== undefined) updates.validUntil = validUntil;
+    if (isActive !== undefined) updates.isActive = isActive;
+    if (priority !== undefined) updates.priority = priority;
+    if (combinableWithOthers !== undefined) updates.combinableWithOthers = combinableWithOthers;
+    if (adminOnly !== undefined) updates.adminOnly = adminOnly;
     
-    discounts[discountIndex] = updatedDiscount;
-    saveDiscounts(discounts);
+    // Update discount using storage
+    const updatedDiscount = await storage.updateDiscount(discountId, updates);
+    
+    if (!updatedDiscount) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update discount'
+      });
+    }
     
     console.log('✅ Discount updated successfully:', updatedDiscount);
     
@@ -3617,21 +3119,19 @@ router.delete('/discounts/:id', async (req, res) => {
       });
     }
     
-    const discounts = loadDiscounts();
-    const discountIndex = discounts.findIndex(d => d.id === discountId);
+    const discount = await storage.getDiscountById(discountId);
     
-    if (discountIndex === -1) {
+    if (!discount) {
       return res.status(404).json({
         success: false,
         error: 'Discount not found'
       });
     }
     
-    // Remove the discount
-    const deletedDiscount = discounts.splice(discountIndex, 1)[0];
-    saveDiscounts(discounts);
+    // Delete the discount
+    await storage.deleteDiscount(discountId);
     
-    console.log('✅ Discount deleted successfully:', deletedDiscount);
+    console.log('✅ Discount deleted successfully:', discount);
     
     res.json({
       success: true,
@@ -3658,8 +3158,7 @@ router.post('/discounts/:id/duplicate', async (req, res) => {
       });
     }
     
-    const discounts = loadDiscounts();
-    const originalDiscount = discounts.find(d => d.id === discountId);
+    const originalDiscount = await storage.getDiscountById(discountId);
     
     if (!originalDiscount) {
       return res.status(404).json({
@@ -3668,20 +3167,33 @@ router.post('/discounts/:id/duplicate', async (req, res) => {
       });
     }
     
-    // Create a copy of the discount with a new ID and name
-    const duplicatedDiscount = {
-      ...originalDiscount,
-      id: Math.max(0, ...discounts.map(d => d.id || 0)) + 1,
+    // Create a copy of the discount with a new name and reset usage
+    const duplicatedDiscount = await storage.createDiscount({
+      schoolId: originalDiscount.schoolId,
       name: `${originalDiscount.name} (Copy)`,
+      description: originalDiscount.description,
       code: originalDiscount.code ? `${originalDiscount.code}_COPY` : null,
+      type: originalDiscount.type,
+      value: originalDiscount.value,
+      applicationMethod: originalDiscount.applicationMethod,
+      minOrderAmount: originalDiscount.minOrderAmount,
+      maxDiscountAmount: originalDiscount.maxDiscountAmount,
+      applicableToClasses: originalDiscount.applicableToClasses,
+      applicableToCategories: originalDiscount.applicableToCategories,
+      applicableToGradeLevels: originalDiscount.applicableToGradeLevels,
+      newStudentsOnly: originalDiscount.newStudentsOnly,
+      siblingDiscount: originalDiscount.siblingDiscount,
+      usageLimit: originalDiscount.usageLimit,
+      usageLimitPerUser: originalDiscount.usageLimitPerUser,
       currentUsageCount: 0,
+      validFrom: originalDiscount.validFrom,
+      validUntil: originalDiscount.validUntil,
       isActive: false, // Start inactive so admin can review before activation
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    discounts.push(duplicatedDiscount);
-    saveDiscounts(discounts);
+      priority: originalDiscount.priority,
+      combinableWithOthers: originalDiscount.combinableWithOthers,
+      adminOnly: originalDiscount.adminOnly,
+      createdBy: originalDiscount.createdBy
+    });
     
     console.log('✅ Discount duplicated successfully:', duplicatedDiscount);
     
@@ -3718,8 +3230,7 @@ router.post('/discounts/:id/apply', async (req, res) => {
       });
     }
     
-    const discounts = loadDiscounts();
-    const discount = discounts.find(d => d.id === discountId);
+    const discount = await storage.getDiscountById(discountId);
     
     if (!discount) {
       return res.status(404).json({
@@ -3763,9 +3274,7 @@ router.post('/discounts/:id/apply', async (req, res) => {
     const finalAmount = originalAmount - discountAmount;
     
     // Create discount application record
-    const applications = loadDiscountApplications();
-    const newApplication = {
-      id: Math.max(0, ...applications.map(a => a.id || 0)) + 1,
+    const newApplication = await storage.createDiscountApplication({
       discountId,
       parentEmail,
       childId: childId || null,
@@ -3775,20 +3284,13 @@ router.post('/discounts/:id/apply', async (req, res) => {
       discountAmount,
       finalAmount,
       applicationMethod: 'manual',
-      appliedBy: 1, // TODO: Get from authenticated user
-      createdAt: new Date().toISOString()
-    };
-    
-    applications.push(newApplication);
-    saveDiscountApplications(applications);
+      appliedBy: 1 // TODO: Get from authenticated user
+    });
     
     // Update discount usage count
-    const discountIndex = discounts.findIndex(d => d.id === discountId);
-    if (discountIndex !== -1) {
-      discounts[discountIndex].currentUsageCount = (discounts[discountIndex].currentUsageCount || 0) + 1;
-      discounts[discountIndex].updatedAt = new Date().toISOString();
-      saveDiscounts(discounts);
-    }
+    await storage.updateDiscount(discountId, {
+      currentUsageCount: (discount.currentUsageCount || 0) + 1
+    });
     
     console.log('✅ Discount applied successfully:', newApplication);
     
@@ -3819,8 +3321,7 @@ router.get('/discounts/:id/applications', async (req, res) => {
       });
     }
     
-    const applications = loadDiscountApplications();
-    const discountApplications = applications.filter(app => app.discountId === discountId);
+    const discountApplications = await storage.getDiscountApplicationsByDiscountId(discountId);
     
     res.json({
       success: true,
@@ -4083,34 +3584,36 @@ router.get('/users', async (req: any, res) => {
     const regularUsers = allUsers.filter((user: any) => user.schoolId === schoolId);
     console.log(`👥 Found ${regularUsers.length} regular users for school ${schoolId}`);
     
-    // Load staff from file storage (same way as /staff endpoint)
-    const DATA_DIR = path.join(process.cwd(), 'data');
-    const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-    
-    let staffMembers = [];
-    if (fs.existsSync(STAFF_FILE)) {
-      staffMembers = JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8'));
-      console.log(`👨‍🏫 Found ${staffMembers.length} staff members from staff.json`);
-    } else {
-      console.log('📋 No staff file found');
-    }
+    // Load staff from database
+    const staffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+    console.log(`👨‍🏫 Found ${staffRecords.length} staff members from database`);
     
     // Convert staff to user format for the frontend
-    const staffAsUsers = staffMembers.map((staff: any) => ({
-      id: staff.id,
-      email: staff.email,
-      firstName: staff.firstName || staff.name?.split(' ')[0] || '',
-      lastName: staff.lastName || staff.name?.split(' ')[1] || '',
-      role: 'staff', // Standardize role to 'staff'
-      phone: staff.phone || '',
-      isActive: staff.status === 'Active',
-      createdAt: staff.joinDate || staff.invitedAt,
-      department: staff.department,
-      position: staff.role // Keep original role as position
-    }));
+    const staffAsUsers = await Promise.all(
+      staffRecords.map(async (staffRecord) => {
+        const user = await storage.getUser(staffRecord.userId);
+        if (!user) return null;
+        
+        return {
+          id: user.id,
+          email: user.email,
+          firstName: user.name.split(' ')[0] || '',
+          lastName: user.name.split(' ').slice(1).join(' ') || '',
+          role: 'staff', // Standardize role to 'staff'
+          phone: user.phone || '',
+          isActive: staffRecord.isActive,
+          createdAt: staffRecord.startDate,
+          department: staffRecord.department,
+          position: staffRecord.position || mapRoleToPosition(staffRecord.role)
+        };
+      })
+    );
+    
+    // Filter out null entries
+    const validStaffUsers = staffAsUsers.filter(user => user !== null);
     
     // Combine regular users and staff
-    const allSchoolUsers = [...regularUsers, ...staffAsUsers];
+    const allSchoolUsers = [...regularUsers, ...validStaffUsers];
     console.log(`✅ Total users (including staff): ${allSchoolUsers.length}`);
     
     res.status(200).json(allSchoolUsers);

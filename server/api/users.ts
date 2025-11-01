@@ -1,72 +1,36 @@
 import { Router } from "express";
-import fs from 'fs';
-import path from 'path';
 import { storage } from '../storage';
 
 const router = Router();
 
-// File-based storage for user profiles
-const PROFILE_FILE = path.join(process.cwd(), 'data', 'user-profiles.json');
-
-// Helper function to read profiles from file
-function readProfiles() {
-  try {
-    if (fs.existsSync(PROFILE_FILE)) {
-      const data = fs.readFileSync(PROFILE_FILE, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error("Error reading profiles:", error);
-  }
-  return {};
-}
-
-// Helper function to write profiles to file
-function writeProfiles(profiles: any) {
-  try {
-    console.log("Writing profiles to:", PROFILE_FILE);
-    // Ensure data directory exists
-    const dataDir = path.dirname(PROFILE_FILE);
-    console.log("Data directory:", dataDir);
-    if (!fs.existsSync(dataDir)) {
-      console.log("Creating data directory...");
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    console.log("Writing file content:", JSON.stringify(profiles, null, 2));
-    fs.writeFileSync(PROFILE_FILE, JSON.stringify(profiles, null, 2));
-    console.log("File written successfully");
-  } catch (error) {
-    console.error("Error writing profiles:", error);
-  }
-}
-
 // Get current user profile
 router.get("/profile", async (req: any, res) => {
   try {
-    const profiles = readProfiles();
-    
     // Get user data from the authenticated session
     const authUser = req.user;
-    let userEmail = authUser?.email || "coreycreates@gmail.com";
-    let userName = authUser?.user_metadata?.full_name || authUser?.name || "User";
+    const userEmail = authUser?.email;
     
-    console.log("🔍 Profile API - User:", authUser);
+    if (!userEmail) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
+    
     console.log("🔍 Profile API - Email:", userEmail);
-    console.log("🔍 Profile API - Name:", userName);
-    console.log("🔍 Profile API - User metadata:", authUser?.user_metadata);
     
-    // Extract first and last name from full name if available
-    const nameParts = userName.split(' ');
-    const firstName = nameParts[0] || "User";
-    const lastName = nameParts.slice(1).join(' ') || "";
+    // Fetch user from database
+    const user = await storage.getUserByEmail(userEmail);
     
-    const userProfile = profiles[userEmail] || {
-      id: authUser?.id || "1",
-      name: userName, 
-      email: userEmail,
-      firstName: firstName,
-      lastName: lastName,
-      phoneNumber: "",
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Build profile response from database user
+    const userProfile = {
+      id: user.id,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      email: user.email,
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      phoneNumber: user.phone || "",
       avatar: authUser?.user_metadata?.avatar_url || "",
       subscription: "free"
     };
@@ -87,36 +51,43 @@ router.patch("/profile", async (req: any, res) => {
     
     console.log("Updating profile with:", { firstName, lastName, phoneNumber });
     
-    const userEmail = req.user?.email || "coreycreates@gmail.com";
-    const profiles = readProfiles();
+    const userEmail = req.user?.email;
     
-    // Get existing profile or create new one
-    const existingProfile = profiles[userEmail] || {
-      id: "1",
-      email: userEmail,
-      firstName: "Corey",
-      lastName: "Creates",
-      phoneNumber: "",
-      avatar: "",
+    if (!userEmail) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
+    
+    // Get existing user from database
+    const user = await storage.getUserByEmail(userEmail);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Update user in database
+    const updatedUser = await storage.updateUser(user.id, {
+      firstName: firstName || user.firstName,
+      lastName: lastName || user.lastName,
+      phone: phoneNumber || user.phone
+    });
+    
+    if (!updatedUser) {
+      return res.status(500).json({ message: "Failed to update profile" });
+    }
+    
+    // Build profile response
+    const updatedProfile = {
+      id: updatedUser.id,
+      name: `${updatedUser.firstName || ''} ${updatedUser.lastName || ''}`.trim() || updatedUser.email,
+      email: updatedUser.email,
+      firstName: updatedUser.firstName || "",
+      lastName: updatedUser.lastName || "",
+      phoneNumber: updatedUser.phone || "",
+      avatar: req.user?.user_metadata?.avatar_url || "",
       subscription: "free"
     };
     
-    // Update profile with new data
-    const updatedProfile = {
-      ...existingProfile,
-      firstName: firstName || existingProfile.firstName,
-      lastName: lastName || existingProfile.lastName,
-      phoneNumber: phoneNumber || existingProfile.phoneNumber,
-      name: firstName && lastName ? `${firstName} ${lastName}` : 
-            firstName ? firstName : 
-            lastName ? lastName : existingProfile.name
-    };
-    
-    // Save to file
-    profiles[userEmail] = updatedProfile;
-    writeProfiles(profiles);
-    
-    console.log("Profile updated and saved successfully:", updatedProfile);
+    console.log("Profile updated successfully:", updatedProfile);
     
     res.status(200).json(updatedProfile);
   } catch (error) {

@@ -3,8 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import * as brevo from '@getbrevo/brevo';
 import { supabaseStorage } from "../supabase-storage";
-import fs from 'fs';
-import path from 'path';
+import { storage } from "../storage";
 
 const router = Router();
 
@@ -61,30 +60,7 @@ const schoolApplicationSchema = z.object({
   agreesToDataSharing: z.boolean().refine(val => val === true, "You must agree to data sharing policy")
 });
 
-// File storage for applications
-const DATA_DIR = path.join(process.cwd(), 'data');
-const APPLICATIONS_FILE = path.join(DATA_DIR, 'school-applications.json');
-
-// Helper functions
-function loadApplications() {
-  if (!fs.existsSync(APPLICATIONS_FILE)) {
-    return [];
-  }
-  try {
-    return JSON.parse(fs.readFileSync(APPLICATIONS_FILE, 'utf8'));
-  } catch (error) {
-    console.error('Error loading applications:', error);
-    return [];
-  }
-}
-
-function saveApplications(applications: any[]) {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  fs.writeFileSync(APPLICATIONS_FILE, JSON.stringify(applications, null, 2));
-}
-
+// Helper function to generate token
 function generateApplicationToken(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
@@ -215,12 +191,13 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const applications = loadApplications();
-    
     // Check if email already has a pending application
-    const existingApplication = applications.find(app => 
-      app.adminEmail === validatedData.data.adminEmail && 
-      ['pending', 'under_review'].includes(app.status)
+    const existingApplications = await storage.getSchoolApplicationsByStatus('pending');
+    const underReviewApplications = await storage.getSchoolApplicationsByStatus('under_review');
+    const allPendingApps = [...existingApplications, ...underReviewApplications];
+    
+    const existingApplication = allPendingApps.find(app => 
+      app.adminEmail === validatedData.data.adminEmail
     );
 
     if (existingApplication) {
@@ -229,34 +206,24 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const applicationId = `APP-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    
-    const newApplication = {
-      id: applicationId,
+    const newApplication = await storage.createSchoolApplication({
       ...validatedData.data,
-      status: 'pending',
-      submittedAt: new Date().toISOString(),
-      reviewedAt: null,
-      reviewedBy: null,
-      reviewNotes: null,
+      gradelevelsServed: validatedData.data.gradelevelsServed,
       token: generateApplicationToken()
-    };
-
-    applications.push(newApplication);
-    saveApplications(applications);
+    });
 
     // Send confirmation email
     const emailSent = await sendApplicationConfirmationEmail(
       validatedData.data.adminEmail, 
       validatedData.data.schoolName,
-      applicationId
+      newApplication.id.toString()
     );
 
     console.log(`📋 New school application submitted: ${validatedData.data.schoolName} by ${validatedData.data.adminEmail}`);
 
     res.status(201).json({
       message: "Application submitted successfully",
-      applicationId,
+      applicationId: newApplication.id,
       emailSent,
       status: 'pending'
     });
@@ -270,7 +237,7 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     // TODO: Add super admin authentication check here
-    const applications = loadApplications();
+    const applications = await storage.getAllSchoolApplications();
     
     // Don't expose sensitive information like tokens
     const sanitizedApplications = applications.map(app => {
@@ -288,9 +255,8 @@ router.get("/", async (req, res) => {
 // Get application by ID
 router.get("/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const applications = loadApplications();
-    const application = applications.find(app => app.id === id);
+    const id = parseInt(req.params.id);
+    const application = await storage.getSchoolApplicationById(id);
 
     if (!application) {
       return res.status(404).json({ message: "Application not found" });
@@ -309,33 +275,28 @@ router.get("/:id", async (req, res) => {
 router.patch("/:id/status", async (req, res) => {
   try {
     // TODO: Add super admin authentication check here
-    const { id } = req.params;
+    const id = parseInt(req.params.id);
     const { status, reviewNotes, reviewerEmail } = req.body;
 
     if (!['approved', 'declined', 'under_review'].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
-    const applications = loadApplications();
-    const applicationIndex = applications.findIndex(app => app.id === id);
+    const application = await storage.getSchoolApplicationById(id);
 
-    if (applicationIndex === -1) {
+    if (!application) {
       return res.status(404).json({ message: "Application not found" });
     }
 
-    const application = applications[applicationIndex];
     const previousStatus = application.status;
 
     // Update application
-    applications[applicationIndex] = {
-      ...application,
+    const updatedApplication = await storage.updateSchoolApplicationStatus(
+      id,
       status,
-      reviewedAt: new Date().toISOString(),
-      reviewedBy: reviewerEmail || 'admin',
-      reviewNotes: reviewNotes || null
-    };
-
-    saveApplications(applications);
+      reviewerEmail || 'admin',
+      reviewNotes || undefined
+    );
 
     // Send decision email if status changed to approved/declined
     if (previousStatus !== status && ['approved', 'declined'].includes(status)) {
@@ -363,7 +324,7 @@ router.patch("/:id/status", async (req, res) => {
 
     res.json({
       message: "Application status updated successfully",
-      application: applications[applicationIndex]
+      application: updatedApplication
     });
   } catch (error) {
     console.error("Error updating application status:", error);
@@ -380,8 +341,8 @@ router.post("/check-status", async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const applications = loadApplications();
-    const userApplications = applications
+    const allApplications = await storage.getAllSchoolApplications();
+    const userApplications = allApplications
       .filter(app => app.adminEmail === email)
       .map(app => {
         const { token, adminEmail, ...publicData } = app;

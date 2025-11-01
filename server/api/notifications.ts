@@ -1,14 +1,12 @@
 import express from "express";
 import { z } from "zod";
 import { insertNotificationSchema } from "@shared/schema";
-import fs from 'fs';
-import path from 'path';
+import { storage } from '../storage.js';
 import { sendSMS, isTwilioConfigured } from '../services/twilio.js';
 import * as brevo from '@getbrevo/brevo';
 
 const router = express.Router();
 
-// Enhanced notification target schema
 const notificationTargetSchema = z.object({
   type: z.enum(["individual", "role", "location", "all"]),
   recipients: z.object({
@@ -24,34 +22,28 @@ const enhancedNotificationSchema = insertNotificationSchema.extend({
   targetData: notificationTargetSchema.shape.recipients,
 });
 
-// Get notifications for a user/admin
 router.get("/", async (req, res) => {
   try {
     let userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
     
-    // If no userId provided in query, fall back to authenticated user
     if (!userId) {
       const email = (req as any).auth?.email;
       
       if (email) {
         console.log('📬 GET /api/notifications - Authenticated user email:', email);
         
-        // Look up user by email in file storage to get the correct user ID
-        const users = loadUsers();
-        const user = users.find(u => u.email === email);
+        const user = await storage.getUserByEmail(email);
         
         if (!user) {
-          console.warn(`⚠️ No file-based user found for email: ${email}`);
+          console.warn(`⚠️ No user found for email: ${email}`);
           return res.json([]);
         }
         
-        console.log('👤 File-based user found:', { id: user.id, email: user.email });
+        console.log('👤 User found:', { id: user.id, email: user.email });
         userId = user.id;
       } else {
-        // No userId and no auth - return all notifications (for admin view) sorted by createdAt descending
-        const allNotifications = loadNotifications()
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const allNotifications = await storage.getAllNotifications();
         return res.json(allNotifications);
       }
     }
@@ -60,7 +52,7 @@ router.get("/", async (req, res) => {
       return res.status(400).json({ message: "Valid user ID required" });
     }
 
-    const notifications = await getUserNotifications(userId, role);
+    const notifications = await storage.getNotificationsByUserId(userId, role);
     res.json(notifications);
   } catch (error) {
     console.error("Error fetching notifications:", error);
@@ -68,11 +60,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Send notification to individual user(s)
 router.post("/send-individual", async (req, res) => {
   try {
     const { userIds, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.body.senderId || 1; // Default to admin user
+    const senderId = req.body.senderId || 1;
 
     if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
       return res.status(400).json({ message: "User IDs are required" });
@@ -89,9 +80,8 @@ router.post("/send-individual", async (req, res) => {
       scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
     };
 
-    const notification = await createNotification(notificationData);
+    const notification = await storage.createNotification(notificationData);
     
-    // Process the notification (send emails, etc.)
     await processNotification(notification);
 
     res.status(201).json(notification);
@@ -101,7 +91,6 @@ router.post("/send-individual", async (req, res) => {
   }
 });
 
-// Send notification by role at specific location(s)
 router.post("/send-by-role", async (req, res) => {
   try {
     const { roles, locationIds, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
@@ -122,7 +111,7 @@ router.post("/send-by-role", async (req, res) => {
       scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
     };
 
-    const notification = await createNotification(notificationData);
+    const notification = await storage.createNotification(notificationData);
     await processNotification(notification);
 
     res.status(201).json(notification);
@@ -132,7 +121,6 @@ router.post("/send-by-role", async (req, res) => {
   }
 });
 
-// Send notification to entire location(s)
 router.post("/send-by-location", async (req, res) => {
   try {
     const { locationIds, includeRoles, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
@@ -153,7 +141,7 @@ router.post("/send-by-location", async (req, res) => {
       scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
     };
 
-    const notification = await createNotification(notificationData);
+    const notification = await storage.createNotification(notificationData);
     await processNotification(notification);
 
     res.status(201).json(notification);
@@ -163,7 +151,6 @@ router.post("/send-by-location", async (req, res) => {
   }
 });
 
-// Send notification to all users
 router.post("/send-all", async (req, res) => {
   try {
     const { subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
@@ -180,7 +167,7 @@ router.post("/send-all", async (req, res) => {
       scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
     };
 
-    const notification = await createNotification(notificationData);
+    const notification = await storage.createNotification(notificationData);
     await processNotification(notification);
 
     res.status(201).json(notification);
@@ -190,7 +177,6 @@ router.post("/send-all", async (req, res) => {
   }
 });
 
-// Get notification delivery stats
 router.get("/:id/stats", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -210,7 +196,6 @@ router.get("/:id/stats", async (req, res) => {
   }
 });
 
-// Mark notification as read
 router.post("/:id/read", async (req, res) => {
   try {
     const notificationId = parseInt(req.params.id);
@@ -224,9 +209,7 @@ router.post("/:id/read", async (req, res) => {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
-    // Look up user by email in file storage to get the correct user ID
-    const users = loadUsers();
-    const user = users.find(u => u.email === email);
+    const user = await storage.getUserByEmail(email);
     
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -240,7 +223,6 @@ router.post("/:id/read", async (req, res) => {
   }
 });
 
-// Mark all notifications as read for a user
 router.post("/mark-all-read", async (req, res) => {
   try {
     const email = (req as any).auth?.email;
@@ -249,9 +231,7 @@ router.post("/mark-all-read", async (req, res) => {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
-    // Look up user by email in file storage to get the correct user ID
-    const users = loadUsers();
-    const user = users.find(u => u.email === email);
+    const user = await storage.getUserByEmail(email);
     
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -265,269 +245,60 @@ router.post("/mark-all-read", async (req, res) => {
   }
 });
 
-// **FILE-BASED STORAGE IMPLEMENTATION**
-
-const DATA_DIR = path.join(process.cwd(), 'data');
-const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
-const NOTIFICATION_RECIPIENTS_FILE = path.join(DATA_DIR, 'notification-recipients.json');
-const STAFF_FILE = path.join(DATA_DIR, 'staff.json');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const USER_LOCATIONS_FILE = path.join(DATA_DIR, 'user-locations.json');
-
-interface NotificationData {
-  id: number;
-  senderId: number;
-  type: "email" | "in_app" | "sms" | "both" | "all";
-  priority: "low" | "normal" | "high" | "urgent";
-  subject: string;
-  content: string;
-  targetType: "individual" | "role" | "location" | "all";
-  targetData: any;
-  scheduledFor?: string;
-  sentAt?: string;
-  status: "draft" | "scheduled" | "sending" | "sent" | "failed";
-  deliveryStats: any;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface NotificationRecipientData {
-  id: number;
-  notificationId: number;
-  recipientId: number;
-  deliveryType: "email" | "in_app" | "sms";
-  status: "pending" | "sent" | "delivered" | "read" | "failed";
-  sentAt?: string;
-  deliveredAt?: string;
-  readAt?: string;
-  errorMessage?: string;
-  createdAt: string;
-}
-
-let notificationIdCounter = 1;
-let recipientIdCounter = 1;
-
-function loadNotifications(): NotificationData[] {
-  if (!fs.existsSync(NOTIFICATIONS_FILE)) {
-    return [];
-  }
-  try {
-    const data = fs.readFileSync(NOTIFICATIONS_FILE, 'utf8');
-    const notifications = JSON.parse(data);
-    if (notifications.length > 0) {
-      notificationIdCounter = Math.max(...notifications.map((n: any) => n.id)) + 1;
-    }
-    return notifications;
-  } catch (error) {
-    console.error('Error loading notifications:', error);
-    return [];
-  }
-}
-
-function saveNotifications(notifications: NotificationData[]): void {
-  try {
-    fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(notifications, null, 2));
-  } catch (error) {
-    console.error('Error saving notifications:', error);
-  }
-}
-
-function loadNotificationRecipients(): NotificationRecipientData[] {
-  if (!fs.existsSync(NOTIFICATION_RECIPIENTS_FILE)) {
-    return [];
-  }
-  try {
-    const data = fs.readFileSync(NOTIFICATION_RECIPIENTS_FILE, 'utf8');
-    const recipients = JSON.parse(data);
-    if (recipients.length > 0) {
-      recipientIdCounter = Math.max(...recipients.map((r: any) => r.id)) + 1;
-    }
-    return recipients;
-  } catch (error) {
-    console.error('Error loading notification recipients:', error);
-    return [];
-  }
-}
-
-function saveNotificationRecipients(recipients: NotificationRecipientData[]): void {
-  try {
-    fs.writeFileSync(NOTIFICATION_RECIPIENTS_FILE, JSON.stringify(recipients, null, 2));
-  } catch (error) {
-    console.error('Error saving notification recipients:', error);
-  }
-}
-
-function loadStaff(): any[] {
-  if (!fs.existsSync(STAFF_FILE)) {
-    return [];
-  }
-  try {
-    const data = fs.readFileSync(STAFF_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error loading staff:', error);
-    return [];
-  }
-}
-
-function loadUsers(): any[] {
-  if (!fs.existsSync(USERS_FILE)) {
-    return [];
-  }
-  try {
-    const data = fs.readFileSync(USERS_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error loading users:', error);
-    return [];
-  }
-}
-
-function loadUserLocations(): any[] {
-  if (!fs.existsSync(USER_LOCATIONS_FILE)) {
-    return [];
-  }
-  try {
-    const data = fs.readFileSync(USER_LOCATIONS_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error loading user locations:', error);
-    return [];
-  }
-}
-
-async function getUserNotifications(userId: number, role: string): Promise<any[]> {
-  const notifications = loadNotifications();
-  const recipients = loadNotificationRecipients();
-  
-  console.log('🔍 getUserNotifications - Looking for notifications for userId:', userId, 'role:', role);
-  console.log('📊 Total notifications:', notifications.length);
-  console.log('📊 Total recipients:', recipients.length);
-  
-  // Get file-based user ID from users.json using the database user ID
-  const users = loadUsers();
-  const user = users.find(u => u.id === userId);
-  
-  if (!user) {
-    console.warn(`⚠️ User with ID ${userId} not found in file storage`);
-  }
-  
-  console.log('👤 File-based user:', user ? { id: user.id, email: user.email } : 'NOT FOUND');
-  
-  // Get notifications where user is a recipient or is the sender (if admin)
-  const userRecipients = recipients.filter(r => r.recipientId === userId);
-  console.log('📬 User recipients found:', userRecipients.length);
-  
-  const userNotificationIds = userRecipients.map(r => r.notificationId);
-  
-  let userNotifications = notifications.filter(n => 
-    userNotificationIds.includes(n.id) || (role === 'schoolAdmin' && n.senderId === userId)
-  );
-  
-  console.log('📮 User notifications found:', userNotifications.length);
-  
-  // Add recipient info to notifications and sort by createdAt descending (newest first)
-  return userNotifications
-    .map(notification => {
-      const recipientInfo = userRecipients.find(r => r.notificationId === notification.id);
-      return {
-        ...notification,
-        recipientStatus: recipientInfo?.status,
-        readAt: recipientInfo?.readAt,
-      };
-    })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
-async function createNotification(notificationData: any): Promise<NotificationData> {
-  const notifications = loadNotifications();
-  
-  const newNotification: NotificationData = {
-    id: notificationIdCounter++,
-    ...notificationData,
-    status: notificationData.scheduledFor ? "scheduled" : "draft",
-    deliveryStats: {},
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  
-  notifications.push(newNotification);
-  saveNotifications(notifications);
-  
-  return newNotification;
-}
-
-async function processNotification(notification: NotificationData): Promise<void> {
+async function processNotification(notification: any): Promise<void> {
   try {
     const recipients = await resolveNotificationRecipients(notification);
     
-    // Create recipient records
     const recipientRecords = [];
-    const existingRecipients = loadNotificationRecipients();
     
     for (const recipientId of recipients) {
-      // Handle email delivery
       if (notification.type === "email" || notification.type === "both" || notification.type === "all") {
-        recipientRecords.push({
-          id: recipientIdCounter++,
+        const recipient = await storage.createNotificationRecipient({
           notificationId: notification.id,
           recipientId,
           deliveryType: "email" as const,
           status: "pending" as const,
-          createdAt: new Date().toISOString(),
         });
+        recipientRecords.push(recipient);
       }
       
-      // Handle in-app delivery
       if (notification.type === "in_app" || notification.type === "both" || notification.type === "all") {
-        recipientRecords.push({
-          id: recipientIdCounter++,
+        const recipient = await storage.createNotificationRecipient({
           notificationId: notification.id,
           recipientId,
           deliveryType: "in_app" as const,
-          status: "delivered" as const, // In-app notifications are immediately "delivered"
-          deliveredAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
+          status: "delivered" as const,
+          deliveredAt: new Date(),
         });
+        recipientRecords.push(recipient);
       }
       
-      // Handle SMS delivery
       if (notification.type === "sms" || notification.type === "all") {
-        recipientRecords.push({
-          id: recipientIdCounter++,
+        const recipient = await storage.createNotificationRecipient({
           notificationId: notification.id,
           recipientId,
           deliveryType: "sms" as const,
           status: "pending" as const,
-          createdAt: new Date().toISOString(),
         });
+        recipientRecords.push(recipient);
       }
     }
     
-    existingRecipients.push(...recipientRecords);
-    saveNotificationRecipients(existingRecipients);
-    
-    // Update notification status
-    const notifications = loadNotifications();
-    const notificationIndex = notifications.findIndex(n => n.id === notification.id);
-    if (notificationIndex !== -1) {
-      notifications[notificationIndex].status = "sent";
-      notifications[notificationIndex].sentAt = new Date().toISOString();
-      notifications[notificationIndex].deliveryStats = {
+    await storage.updateNotification(notification.id, {
+      status: "sent",
+      deliveryStats: {
         totalRecipients: recipients.length,
         emailRecipients: recipientRecords.filter(r => r.deliveryType === "email").length,
         inAppRecipients: recipientRecords.filter(r => r.deliveryType === "in_app").length,
         smsRecipients: recipientRecords.filter(r => r.deliveryType === "sms").length,
-      };
-      saveNotifications(notifications);
-    }
+      },
+      sentAt: new Date(),
+    } as any);
     
-    // Send emails using Brevo
     if (notification.type === "email" || notification.type === "both" || notification.type === "all") {
       await sendNotificationEmails(notification, recipients);
     }
     
-    // Send SMS using Twilio (if configured)
     if (notification.type === "sms" || notification.type === "all") {
       const twilioConfigured = await isTwilioConfigured();
       if (twilioConfigured) {
@@ -539,38 +310,32 @@ async function processNotification(notification: NotificationData): Promise<void
     
   } catch (error) {
     console.error("Error processing notification:", error);
-    // Update notification status to failed
-    const notifications = loadNotifications();
-    const notificationIndex = notifications.findIndex(n => n.id === notification.id);
-    if (notificationIndex !== -1) {
-      notifications[notificationIndex].status = "failed";
-      saveNotifications(notifications);
-    }
+    await storage.updateNotification(notification.id, {
+      status: "failed",
+    });
   }
 }
 
-async function resolveNotificationRecipients(notification: NotificationData): Promise<number[]> {
-  const users = loadUsers();
-  const userLocations = loadUserLocations();
+async function resolveNotificationRecipients(notification: any): Promise<number[]> {
   let recipients: number[] = [];
   
   switch (notification.targetType) {
     case "individual":
-      // Direct user IDs
       recipients = notification.targetData.userIds || [];
       break;
       
     case "role":
-      // Filter users by role
-      let roleUsers = users.filter(u => 
+      const allUsers = await storage.getAllUsers();
+      let roleUsers = allUsers.filter(u => 
         notification.targetData.roles?.includes(u.role)
       );
       
-      // If locationIds specified, further filter by location
       if (notification.targetData.locationIds && notification.targetData.locationIds.length > 0) {
-        const locationUserIds = userLocations
-          .filter(ul => notification.targetData.locationIds.includes(ul.locationId))
-          .map(ul => ul.userId);
+        const locationUserIds: number[] = [];
+        for (const locationId of notification.targetData.locationIds) {
+          const userLocations = await storage.getUserLocationsByLocationId(locationId);
+          locationUserIds.push(...userLocations.map(ul => ul.userId));
+        }
         roleUsers = roleUsers.filter(u => locationUserIds.includes(u.id));
       }
       
@@ -578,14 +343,15 @@ async function resolveNotificationRecipients(notification: NotificationData): Pr
       break;
       
     case "location":
-      // Get users at specific locations
-      const locationUserIds = userLocations
-        .filter(ul => notification.targetData.locationIds?.includes(ul.locationId))
-        .map(ul => ul.userId);
+      const locationUserIds: number[] = [];
+      for (const locationId of notification.targetData.locationIds || []) {
+        const userLocations = await storage.getUserLocationsByLocationId(locationId);
+        locationUserIds.push(...userLocations.map(ul => ul.userId));
+      }
       
-      let locationUsers = users.filter(u => locationUserIds.includes(u.id));
+      let locationUsers = await storage.getAllUsers();
+      locationUsers = locationUsers.filter(u => locationUserIds.includes(u.id));
       
-      // If roles specified, further filter by role
       if (notification.targetData.roles && notification.targetData.roles.length > 0) {
         locationUsers = locationUsers.filter(u => notification.targetData.roles.includes(u.role));
       }
@@ -594,19 +360,17 @@ async function resolveNotificationRecipients(notification: NotificationData): Pr
       break;
       
     case "all":
-      // All users
+      const users = await storage.getAllUsers();
       recipients = users.map(u => u.id);
       break;
   }
   
-  // Remove duplicates and filter out invalid IDs
   return [...new Set(recipients)].filter(id => id && id > 0);
 }
 
-async function sendNotificationEmails(notification: NotificationData, recipientIds: number[]): Promise<void> {
+async function sendNotificationEmails(notification: any, recipientIds: number[]): Promise<void> {
   console.log(`📧 Sending notification emails for: ${notification.subject} to ${recipientIds.length} recipients`);
   
-  // Initialize Brevo API
   const brevoApiKey = process.env.BREVO_API_KEY;
   if (!brevoApiKey) {
     console.log('⚠️ Brevo API key not configured, skipping email delivery');
@@ -616,18 +380,14 @@ async function sendNotificationEmails(notification: NotificationData, recipientI
   const brevoApiInstance = new brevo.TransactionalEmailsApi();
   brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, brevoApiKey);
   
-  const users = loadUsers();
-  const recipientRecords = loadNotificationRecipients();
-  
   for (const recipientId of recipientIds) {
-    const user = users.find(u => u.id === recipientId);
+    const user = await storage.getUser(recipientId);
     if (!user || !user.email) {
       console.log(`⚠️ No email for user ${recipientId}, skipping email`);
       continue;
     }
     
     try {
-      // Create HTML email content
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
@@ -652,91 +412,87 @@ async function sendNotificationEmails(notification: NotificationData, recipientI
         name: "American Seekers Academy", 
         email: "noreply@americanseekersacademy.com" 
       };
-      sendSmtpEmail.to = [{ email: user.email, name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email }];
+      sendSmtpEmail.to = [{ email: user.email, name: user.name || user.email }];
       
       await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
       
-      // Update recipient status to sent
-      const recipientIndex = recipientRecords.findIndex(
-        r => r.notificationId === notification.id && r.recipientId === recipientId && r.deliveryType === "email"
+      const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+      const recipientRecord = recipients.find(
+        r => r.recipientId === recipientId && r.deliveryType === "email"
       );
-      if (recipientIndex !== -1) {
-        recipientRecords[recipientIndex].status = "sent";
-        recipientRecords[recipientIndex].sentAt = new Date().toISOString();
-        saveNotificationRecipients(recipientRecords);
+      if (recipientRecord) {
+        await storage.updateNotificationRecipient(recipientRecord.id, {
+          status: "sent",
+          sentAt: new Date(),
+        });
       }
       
       console.log(`✅ Email sent to ${user.email} for notification: ${notification.subject}`);
     } catch (error) {
       console.error(`❌ Failed to send email to user ${recipientId}:`, error);
       
-      // Update recipient status to failed
-      const recipientIndex = recipientRecords.findIndex(
-        r => r.notificationId === notification.id && r.recipientId === recipientId && r.deliveryType === "email"
+      const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+      const recipientRecord = recipients.find(
+        r => r.recipientId === recipientId && r.deliveryType === "email"
       );
-      if (recipientIndex !== -1) {
-        recipientRecords[recipientIndex].status = "failed";
-        recipientRecords[recipientIndex].errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        saveNotificationRecipients(recipientRecords);
+      if (recipientRecord) {
+        await storage.updateNotificationRecipient(recipientRecord.id, {
+          status: "failed",
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
     }
   }
 }
 
-async function sendNotificationSMS(notification: NotificationData, recipientIds: number[]): Promise<void> {
-  // Note: Twilio configuration is already checked by the caller
-  const users = loadUsers();
-  const recipientRecords = loadNotificationRecipients();
-  
+async function sendNotificationSMS(notification: any, recipientIds: number[]): Promise<void> {
   for (const recipientId of recipientIds) {
-    const user = users.find(u => u.id === recipientId);
-    if (!user || !user.phoneNumber) {
+    const user = await storage.getUser(recipientId);
+    if (!user || !user.phone) {
       console.log(`⚠️ No phone number for user ${recipientId}, skipping SMS`);
       continue;
     }
     
     try {
-      // Send SMS using Twilio
       const smsMessage = `${notification.subject}\n\n${notification.content}`;
-      await sendSMS(user.phoneNumber, smsMessage);
+      await sendSMS(user.phone, smsMessage);
       
-      // Update recipient status to sent
-      const recipientIndex = recipientRecords.findIndex(
-        r => r.notificationId === notification.id && r.recipientId === recipientId && r.deliveryType === "sms"
+      const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+      const recipientRecord = recipients.find(
+        r => r.recipientId === recipientId && r.deliveryType === "sms"
       );
-      if (recipientIndex !== -1) {
-        recipientRecords[recipientIndex].status = "sent";
-        recipientRecords[recipientIndex].sentAt = new Date().toISOString();
-        saveNotificationRecipients(recipientRecords);
+      if (recipientRecord) {
+        await storage.updateNotificationRecipient(recipientRecord.id, {
+          status: "sent",
+          sentAt: new Date(),
+        });
       }
       
-      console.log(`📱 SMS sent to ${user.phoneNumber} for notification: ${notification.subject}`);
+      console.log(`📱 SMS sent to ${user.phone} for notification: ${notification.subject}`);
     } catch (error) {
       console.error(`❌ Failed to send SMS to user ${recipientId}:`, error);
       
-      // Update recipient status to failed
-      const recipientIndex = recipientRecords.findIndex(
-        r => r.notificationId === notification.id && r.recipientId === recipientId && r.deliveryType === "sms"
+      const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+      const recipientRecord = recipients.find(
+        r => r.recipientId === recipientId && r.deliveryType === "sms"
       );
-      if (recipientIndex !== -1) {
-        recipientRecords[recipientIndex].status = "failed";
-        recipientRecords[recipientIndex].errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        saveNotificationRecipients(recipientRecords);
+      if (recipientRecord) {
+        await storage.updateNotificationRecipient(recipientRecord.id, {
+          status: "failed",
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
     }
   }
 }
 
 async function getNotificationStats(notificationId: number): Promise<any> {
-  const notifications = loadNotifications();
-  const recipients = loadNotificationRecipients();
-  
-  const notification = notifications.find(n => n.id === notificationId);
+  const notification = await storage.getNotificationById(notificationId);
   if (!notification) {
     return null;
   }
   
-  const notificationRecipients = recipients.filter(r => r.notificationId === notificationId);
+  const notificationRecipients = await storage.getNotificationRecipientsByNotificationId(notificationId);
   
   const stats = {
     id: notification.id,
@@ -757,30 +513,29 @@ async function getNotificationStats(notificationId: number): Promise<any> {
 }
 
 async function markNotificationAsRead(notificationId: number, userId: number): Promise<void> {
-  const recipients = loadNotificationRecipients();
-  const recipientIndex = recipients.findIndex(r => 
-    r.notificationId === notificationId && r.recipientId === userId
-  );
+  const recipients = await storage.getNotificationRecipientsByNotificationId(notificationId);
+  const recipientRecord = recipients.find(r => r.recipientId === userId);
   
-  if (recipientIndex !== -1) {
-    recipients[recipientIndex].status = "read";
-    recipients[recipientIndex].readAt = new Date().toISOString();
-    saveNotificationRecipients(recipients);
+  if (recipientRecord) {
+    await storage.updateNotificationRecipient(recipientRecord.id, {
+      status: "read",
+      readAt: new Date(),
+    });
   }
 }
 
 async function markAllNotificationsAsRead(userId: number): Promise<void> {
-  const recipients = loadNotificationRecipients();
-  const now = new Date().toISOString();
+  const recipients = await storage.getNotificationRecipientsByUserId(userId);
+  const now = new Date();
   
-  recipients.forEach(recipient => {
-    if (recipient.recipientId === userId && recipient.status !== "read") {
-      recipient.status = "read";
-      recipient.readAt = now;
+  for (const recipient of recipients) {
+    if (recipient.status !== "read") {
+      await storage.updateNotificationRecipient(recipient.id, {
+        status: "read",
+        readAt: now,
+      });
     }
-  });
-  
-  saveNotificationRecipients(recipients);
+  }
 }
 
 export default router;

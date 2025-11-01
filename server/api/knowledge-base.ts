@@ -42,32 +42,8 @@ export const getKnowledgeBasesByAuthor = async (req: Request, res: Response) => 
     // If requesting own knowledge bases, use session user ID
     const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
 
-    try {
-      const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
-      res.status(200).json(knowledgeBases);
-    } catch (dbError) {
-      // Fallback to file storage when database is unavailable
-      console.log('🔄 Database unavailable for knowledge bases by author, falling back to file storage...');
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-
-        const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
-        let knowledgeBases = [];
-
-        if (fs.existsSync(kbFilePath)) {
-          const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
-          knowledgeBases = JSON.parse(fileContent);
-        }
-
-        // Filter by author
-        const authorKnowledgeBases = knowledgeBases.filter(kb => kb.authorId === targetAuthorId);
-        res.status(200).json(authorKnowledgeBases);
-      } catch (fileError) {
-        console.error('File storage fallback failed:', fileError);
-        throw dbError; // Re-throw original database error
-      }
-    }
+    const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
+    res.status(200).json(knowledgeBases);
   } catch (error) {
     console.error("Error fetching knowledge bases by author:", error);
     res.status(500).json({ message: "Error fetching knowledge bases" });
@@ -106,71 +82,12 @@ export const createKnowledgeBase = async (req: Request, res: Response) => {
   try {
     const validatedData = insertKnowledgeBaseSchema.parse(req.body);
 
-    try {
-      const knowledgeBase = await storage.createKnowledgeBase({
-        ...validatedData,
-        authorId: req.session.userId
-      });
+    const knowledgeBase = await storage.createKnowledgeBase({
+      ...validatedData,
+      authorId: req.session.userId
+    });
 
-      res.status(201).json(knowledgeBase);
-    } catch (dbError) {
-      // Fallback to file storage when database is unavailable
-      console.log('🔄 Database unavailable for knowledge base creation, falling back to file storage...');
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-
-        // Ensure data directory exists
-        const dataDir = path.join(process.cwd(), 'data');
-        if (!fs.existsSync(dataDir)) {
-          fs.mkdirSync(dataDir, { recursive: true });
-        }
-
-        // Load existing knowledge bases from file
-        const kbFilePath = path.join(dataDir, 'knowledge-bases.json');
-        let knowledgeBases = [];
-
-        if (fs.existsSync(kbFilePath)) {
-          try {
-            const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
-            knowledgeBases = JSON.parse(fileContent);
-          } catch (parseError) {
-            console.warn('Failed to parse existing knowledge bases file, starting fresh:', parseError);
-            knowledgeBases = [];
-          }
-        }
-
-        // Create new knowledge base with file storage
-        const newId = Math.max(0, ...knowledgeBases.map(kb => kb.id || 0)) + 1;
-        const knowledgeBase = {
-          id: newId,
-          ...validatedData,
-          authorId: req.session.userId,
-          downloadCount: 0,
-          purchasedBy: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-
-        knowledgeBases.push(knowledgeBase);
-
-        // Save to file with error handling
-        try {
-          fs.writeFileSync(kbFilePath, JSON.stringify(knowledgeBases, null, 2));
-          console.log(`✅ Knowledge base created in file storage with ID ${newId}`);
-          res.status(201).json(knowledgeBase);
-        } catch (writeError) {
-          console.error('Failed to write knowledge base to file:', writeError);
-          throw new Error('Failed to save knowledge base to file storage');
-        }
-      } catch (fileError) {
-        console.error('File storage fallback failed:', fileError);
-        res.status(500).json({ 
-          message: "Failed to create knowledge base", 
-          error: "Both database and file storage are unavailable" 
-        });
-      }
-    }
+    res.status(201).json(knowledgeBase);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -273,50 +190,12 @@ export const getCombinedKnowledgeBases = async (req: Request, res: Response) => 
     let publicKnowledgeBases = [];
     let userKnowledgeBases = [];
 
-    try {
-      // Get public knowledge bases
-      publicKnowledgeBases = await storage.getPublicKnowledgeBases();
-    } catch (error) {
-      console.error("Error fetching public knowledge bases:", error);
-      // Fallback to file storage for public knowledge bases
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-
-        const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
-        if (fs.existsSync(kbFilePath)) {
-          const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
-          const allKnowledgeBases = JSON.parse(fileContent);
-          publicKnowledgeBases = allKnowledgeBases.filter(kb => kb.isPublic);
-          console.log(`✅ File fallback: Found ${publicKnowledgeBases.length} public knowledge bases`);
-        }
-      } catch (fileError) {
-        console.error("File storage fallback failed for public knowledge bases:", fileError);
-      }
-    }
+    // Get public knowledge bases
+    publicKnowledgeBases = await storage.getPublicKnowledgeBases();
 
     // Get user's own knowledge bases if authenticated
     if (req.session?.userId) {
-      try {
-        userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(req.session.userId);
-      } catch (error) {
-        console.error("Error fetching user knowledge bases:", error);
-        // Fallback to file storage for user knowledge bases
-        try {
-          const fs = await import('fs');
-          const path = await import('path');
-
-          const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
-          if (fs.existsSync(kbFilePath)) {
-            const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
-            const allKnowledgeBases = JSON.parse(fileContent);
-            userKnowledgeBases = allKnowledgeBases.filter(kb => kb.authorId === req.session.userId);
-            console.log(`✅ File fallback: Found ${userKnowledgeBases.length} user knowledge bases for user ${req.session.userId}`);
-          }
-        } catch (fileError) {
-          console.error("File storage fallback failed for user knowledge bases:", fileError);
-        }
-      }
+      userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(req.session.userId);
     }
 
     // Combine both sets, removing duplicates

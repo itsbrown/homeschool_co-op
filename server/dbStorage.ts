@@ -28,7 +28,11 @@ import {
   Refund, InsertRefund, refunds,
   Location, InsertLocation, locations,
   UserLocation, InsertUserLocation, userLocations,
-  MarketplaceClassEnrollment, InsertMarketplaceClassEnrollment, marketplaceClassEnrollments
+  MarketplaceClassEnrollment, InsertMarketplaceClassEnrollment, marketplaceClassEnrollments,
+  Notification, InsertNotification, notifications,
+  NotificationRecipient, InsertNotificationRecipient, notificationRecipients,
+  Discount, InsertDiscount, discounts,
+  DiscountApplication, InsertDiscountApplication, discountApplications
 } from '../shared/schema';
 
 /**
@@ -1690,5 +1694,225 @@ export class DatabaseStorage implements IStorage {
   async deleteMarketplaceEnrollment(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(marketplaceClassEnrollments).where(eq(marketplaceClassEnrollments.id, id));
+  }
+
+  // Notification methods
+  async getNotificationById(id: number): Promise<Notification | undefined> {
+    const db = await getDb();
+    const [notification] = await db.select().from(notifications).where(eq(notifications.id, id));
+    return notification;
+  }
+
+  async getAllNotifications(): Promise<Notification[]> {
+    const db = await getDb();
+    return await db.select().from(notifications).orderBy(desc(notifications.createdAt));
+  }
+
+  async getNotificationsByUserId(userId: number, role?: string): Promise<Notification[]> {
+    const db = await getDb();
+    
+    const recipients = await db
+      .select()
+      .from(notificationRecipients)
+      .where(eq(notificationRecipients.recipientId, userId));
+    
+    const notificationIds = recipients.map(r => r.notificationId);
+    
+    if (notificationIds.length === 0 && role !== 'schoolAdmin') {
+      return [];
+    }
+    
+    let query = db.select().from(notifications);
+    
+    if (role === 'schoolAdmin') {
+      query = query.where(
+        or(
+          sql`${notifications.id} IN (${sql.join(notificationIds, sql`, `)})`,
+          eq(notifications.senderId, userId)
+        )
+      );
+    } else {
+      query = query.where(sql`${notifications.id} IN (${sql.join(notificationIds, sql`, `)})`);
+    }
+    
+    const notifs = await query.orderBy(desc(notifications.createdAt));
+    
+    return notifs.map(notification => {
+      const recipientInfo = recipients.find(r => r.notificationId === notification.id);
+      return {
+        ...notification,
+        recipientStatus: recipientInfo?.status,
+        readAt: recipientInfo?.readAt,
+      } as any;
+    });
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const db = await getDb();
+    const [newNotification] = await db
+      .insert(notifications)
+      .values({
+        ...notification,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newNotification;
+  }
+
+  async updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification | undefined> {
+    const db = await getDb();
+    const [updatedNotification] = await db
+      .update(notifications)
+      .set({
+        ...notification,
+        updatedAt: new Date()
+      })
+      .where(eq(notifications.id, id))
+      .returning();
+    return updatedNotification;
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(notifications).where(eq(notifications.id, id));
+  }
+
+  // Notification recipient methods
+  async getNotificationRecipientById(id: number): Promise<NotificationRecipient | undefined> {
+    const db = await getDb();
+    const [recipient] = await db.select().from(notificationRecipients).where(eq(notificationRecipients.id, id));
+    return recipient;
+  }
+
+  async getNotificationRecipientsByNotificationId(notificationId: number): Promise<NotificationRecipient[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(notificationRecipients)
+      .where(eq(notificationRecipients.notificationId, notificationId));
+  }
+
+  async getNotificationRecipientsByUserId(userId: number): Promise<NotificationRecipient[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(notificationRecipients)
+      .where(eq(notificationRecipients.recipientId, userId))
+      .orderBy(desc(notificationRecipients.createdAt));
+  }
+
+  async createNotificationRecipient(recipient: InsertNotificationRecipient): Promise<NotificationRecipient> {
+    const db = await getDb();
+    const [newRecipient] = await db
+      .insert(notificationRecipients)
+      .values({
+        ...recipient,
+        createdAt: new Date()
+      })
+      .returning();
+    return newRecipient;
+  }
+
+  async updateNotificationRecipient(id: number, recipient: Partial<InsertNotificationRecipient>): Promise<NotificationRecipient | undefined> {
+    const db = await getDb();
+    const [updatedRecipient] = await db
+      .update(notificationRecipients)
+      .set(recipient)
+      .where(eq(notificationRecipients.id, id))
+      .returning();
+    return updatedRecipient;
+  }
+
+  // Discount methods
+  async getDiscountById(id: number): Promise<Discount | undefined> {
+    const db = await getDb();
+    const [discount] = await db.select().from(discounts).where(eq(discounts.id, id));
+    return discount;
+  }
+
+  async getAllDiscounts(): Promise<Discount[]> {
+    const db = await getDb();
+    return await db.select().from(discounts);
+  }
+
+  async getDiscountsBySchoolId(schoolId: number): Promise<Discount[]> {
+    const db = await getDb();
+    return await db.select().from(discounts).where(eq(discounts.schoolId, schoolId));
+  }
+
+  async createDiscount(discount: InsertDiscount): Promise<Discount> {
+    const db = await getDb();
+    const [newDiscount] = await db.insert(discounts).values({
+      ...discount,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newDiscount;
+  }
+
+  async updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined> {
+    const db = await getDb();
+    const [updatedDiscount] = await db
+      .update(discounts)
+      .set({
+        ...discount,
+        updatedAt: new Date()
+      })
+      .where(eq(discounts.id, id))
+      .returning();
+    return updatedDiscount;
+  }
+
+  async deleteDiscount(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(discounts).where(eq(discounts.id, id));
+  }
+
+  // Discount Application methods
+  async getDiscountApplicationById(id: number): Promise<DiscountApplication | undefined> {
+    const db = await getDb();
+    const [application] = await db.select().from(discountApplications).where(eq(discountApplications.id, id));
+    return application;
+  }
+
+  async getAllDiscountApplications(): Promise<DiscountApplication[]> {
+    const db = await getDb();
+    return await db.select().from(discountApplications);
+  }
+
+  async getDiscountApplicationsBySchoolId(schoolId: number): Promise<DiscountApplication[]> {
+    const db = await getDb();
+    // Join with discounts table to filter by schoolId
+    return await db
+      .select()
+      .from(discountApplications)
+      .innerJoin(discounts, eq(discountApplications.discountId, discounts.id))
+      .where(eq(discounts.schoolId, schoolId))
+      .then(results => results.map(r => r.discount_applications));
+  }
+
+  async getDiscountApplicationsByDiscountId(discountId: number): Promise<DiscountApplication[]> {
+    const db = await getDb();
+    return await db.select().from(discountApplications).where(eq(discountApplications.discountId, discountId));
+  }
+
+  async createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication> {
+    const db = await getDb();
+    const [newApplication] = await db.insert(discountApplications).values({
+      ...application,
+      createdAt: new Date()
+    }).returning();
+    return newApplication;
+  }
+
+  async updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined> {
+    const db = await getDb();
+    const [updatedApplication] = await db
+      .update(discountApplications)
+      .set(application)
+      .where(eq(discountApplications.id, id))
+      .returning();
+    return updatedApplication;
   }
 }
