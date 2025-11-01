@@ -76,6 +76,7 @@ The following critical tables have been migrated from in-memory storage to persi
   - Added full CRUD operations in dbStorage
   - CombinedStorage routes location operations to database
   - JSON file archived to backups
+  - **November 1, 2025**: Updated locations API (`server/api/locations.ts`) to use database storage exclusively, removing all file-based storage code
 - **User Locations**: Table created, 4 stale records skipped (referenced deleted locations)
   - Added full CRUD operations in dbStorage
   - CombinedStorage routes user_location operations to database
