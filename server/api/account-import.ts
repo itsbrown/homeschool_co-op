@@ -132,9 +132,9 @@ router.post("/upload-accounts", supabaseAuth, async (req: any, res: Response) =>
       } else if (fileName.includes('child')) {
         await processChildren(records, results, options, schoolId);
       } else if (fileName.includes('enrollment')) {
-        await processEnrollments(records, results, options);
+        await processEnrollments(records, results, options, schoolId);
       } else if (fileName.includes('payment')) {
-        await processPayments(records, results, options);
+        await processPayments(records, results, options, schoolId);
       }
     }
     
@@ -231,21 +231,39 @@ async function processParents(records: any[], results: any, options: ImportOptio
 async function processChildren(records: any[], results: any, options: ImportOptions, schoolId: number) {
   for (const record of records) {
     try {
-      const childData = {
+      const parentEmail = record['Parent Email'] || record.parentEmail;
+      
+      // Look up parent by email to get parentId and verify school ownership
+      const parent = await storage.getUserByEmail(parentEmail);
+      if (!parent) {
+        results.children.failed++;
+        results.errors.push(`Child row: Parent not found for email ${parentEmail}`);
+        continue;
+      }
+      
+      // Verify parent belongs to this school - CRITICAL for multi-tenant security
+      if (parent.schoolId !== schoolId) {
+        results.children.failed++;
+        results.errors.push(`Child row: Parent ${parentEmail} does not belong to school ${schoolId}`);
+        continue;
+      }
+      
+      const childData: any = {
+        parentId: parent.id,
         firstName: record['First Name'] || record.firstName,
         lastName: record['Last Name'] || record.lastName,
         birthdate: record['Birth Date'] || record.birthdate,
         gradeLevel: record['Grade Level'] || record.gradeLevel,
-        parentEmail: record['Parent Email'] || record.parentEmail,
+        parentEmail,
         schoolId, // Use authenticated user's school ID
-        createdAt: record['Created Date'] ? new Date(record['Created Date']) : new Date(),
-        updatedAt: new Date()
       };
       
-      // Check for existing child by name and parent email
-      const existingChildren = await storage.getChildrenByParentEmail(childData.parentEmail);
+      // Check for existing child by name and parent email - only within this school
+      const existingChildren = await storage.getChildrenByParentEmail(parentEmail);
       const existingChild = existingChildren.find(child => 
-        child.firstName === childData.firstName && child.lastName === childData.lastName
+        child.firstName === childData.firstName && 
+        child.lastName === childData.lastName &&
+        child.schoolId === schoolId
       );
       
       if (existingChild) {
@@ -286,12 +304,42 @@ async function processChildren(records: any[], results: any, options: ImportOpti
   }
 }
 
-async function processEnrollments(records: any[], results: any, options: ImportOptions) {
+async function processEnrollments(records: any[], results: any, options: ImportOptions, schoolId: number) {
   for (const record of records) {
     try {
+      // Safely parse IDs with validation to prevent pg_strtoint32_safe errors
+      const classIdStr = record['Class ID'] || record.classId;
+      const childIdStr = record['Child ID'] || record.childId;
+      
+      const classId = classIdStr ? parseInt(classIdStr) : NaN;
+      const childId = childIdStr ? parseInt(childIdStr) : NaN;
+      
+      // Skip records with invalid IDs
+      if (isNaN(classId) || isNaN(childId)) {
+        results.enrollments.failed++;
+        results.errors.push(`Enrollment row: Invalid class ID (${classIdStr}) or child ID (${childIdStr})`);
+        continue;
+      }
+      
+      // Verify child belongs to this school
+      const child = await storage.getChildById(childId);
+      if (!child || child.schoolId !== schoolId) {
+        results.enrollments.failed++;
+        results.errors.push(`Enrollment row: Child ID ${childId} not found in school ${schoolId}`);
+        continue;
+      }
+      
+      // Verify class belongs to this school
+      const classRecord = await storage.getClassById(classId);
+      if (!classRecord || classRecord.schoolId !== schoolId) {
+        results.enrollments.failed++;
+        results.errors.push(`Enrollment row: Class ID ${classId} not found in school ${schoolId}`);
+        continue;
+      }
+      
       const enrollmentData = {
-        classId: parseInt(record['Class ID'] || record.classId),
-        childId: parseInt(record['Child ID'] || record.childId),
+        classId,
+        childId,
         childName: record['Child Name'] || record.childName,
         className: record['Class Name'] || record.className,
         status: record['Status'] || record.status || 'enrolled',
@@ -300,10 +348,12 @@ async function processEnrollments(records: any[], results: any, options: ImportO
         remainingBalance: record['Remaining Balance'] ? Math.round(parseFloat(record['Remaining Balance']) * 100) : 0
       };
       
-      // Check for existing enrollment by childId and programId (not classId)
-      const allEnrollments = await storage.getAllEnrollments();
-      const existingEnrollment = allEnrollments.find(enrollment => 
-        enrollment.childId === enrollmentData.childId
+      // Check for existing enrollment by childId and classId
+      // Note: We've already verified both child and class belong to this school,
+      // so any enrollment with these IDs must also belong to this school
+      const childEnrollments = await storage.getEnrollmentsByChildId(childId);
+      const existingEnrollment = childEnrollments.find(enrollment => 
+        enrollment.classId === classId
       );
       
       if (existingEnrollment) {
@@ -333,18 +383,42 @@ async function processEnrollments(records: any[], results: any, options: ImportO
   }
 }
 
-async function processPayments(records: any[], results: any, options: ImportOptions) {
+async function processPayments(records: any[], results: any, options: ImportOptions, schoolId: number) {
   for (const record of records) {
     try {
+      const parentEmail = record['Customer Email'] || record.parentEmail;
+      
+      // Look up parent by email to get parentId and verify school ownership
+      const parent = await storage.getUserByEmail(parentEmail);
+      if (!parent) {
+        results.payments.failed++;
+        results.errors.push(`Payment row: Parent not found for email ${parentEmail}`);
+        continue;
+      }
+      
+      // Verify parent belongs to this school
+      if (parent.schoolId !== schoolId) {
+        results.payments.failed++;
+        results.errors.push(`Payment row: Parent ${parentEmail} does not belong to school ${schoolId}`);
+        continue;
+      }
+      
       const paymentData = {
+        schoolId, // Use authenticated user's school ID
+        parentId: parent.id,
+        parentEmail,
         stripePaymentIntentId: record.id || record['Payment ID'] || `imported_${Date.now()}_${Math.random()}`,
-        parentEmail: record['Customer Email'] || record.parentEmail,
         amount: Math.round(parseFloat(record.Amount) * 100),
         currency: record.Currency || 'usd',
-        status: record.Status === 'Paid' ? 'completed' : 'pending',
+        status: (record.Status === 'Paid' ? 'completed' : 'pending') as 'completed' | 'pending',
         description: record.Description || 'Imported payment',
-        createdAt: new Date(record['Created date (UTC)'] || record.createdAt),
-        updatedAt: new Date(),
+        childName: null,
+        className: null,
+        stripeChargeId: null,
+        stripeRefundId: null,
+        originalPaymentId: null,
+        paymentDate: record['Created date (UTC)'] ? new Date(record['Created date (UTC)']) : null,
+        enrollmentIds: [],
         metadata: {
           importedAt: new Date().toISOString(),
           originalId: record.id
@@ -352,10 +426,17 @@ async function processPayments(records: any[], results: any, options: ImportOpti
       };
       
       // Check for existing payment by stripePaymentIntentId
-      const allPayments = await storage.getAllPayments();
-      const existingPayment = allPayments.find(payment => 
-        payment.stripePaymentIntentId === paymentData.stripePaymentIntentId
-      );
+      // This method is already scoped to exact match, then we verify school ownership
+      const existingPayment = await storage.getPaymentByStripeId(paymentData.stripePaymentIntentId);
+      
+      // Verify the existing payment belongs to this school if found
+      if (existingPayment && existingPayment.schoolId !== schoolId) {
+        // Payment exists but belongs to another school - treat as new for this school
+        // This prevents cross-tenant duplicate detection
+        await storage.createPayment(paymentData);
+        results.payments.successful++;
+        continue;
+      }
       
       if (existingPayment) {
         const duplicateInfo = `Payment ${paymentData.stripePaymentIntentId} for ${paymentData.parentEmail}`;
@@ -374,17 +455,7 @@ async function processPayments(records: any[], results: any, options: ImportOpti
           results.duplicatesHandled.push(`Updated: ${duplicateInfo}`);
         }
       } else {
-        const correctedPaymentData = {
-          className: paymentData.description || 'Imported payment',
-          parentEmail: paymentData.parentEmail,
-          stripePaymentIntentId: paymentData.stripePaymentIntentId,
-          childName: 'Unknown', // Would need to be derived from other data
-          amount: paymentData.amount,
-          currency: paymentData.currency,
-          status: paymentData.status as any,
-          metadata: paymentData.metadata
-        };
-        await storage.createPayment(correctedPaymentData);
+        await storage.createPayment(paymentData);
         results.payments.successful++;
       }
     } catch (error: any) {
@@ -423,13 +494,13 @@ async function processImportPreview(files: any, importMode: ImportMode, schoolId
     });
     
     if (fileName.includes('parent') || fileName.includes('user')) {
-      await analyzeParents(records, preview, importMode);
+      await analyzeParents(records, preview, importMode, schoolId);
     } else if (fileName.includes('child')) {
-      await analyzeChildren(records, preview, importMode);
+      await analyzeChildren(records, preview, importMode, schoolId);
     } else if (fileName.includes('enrollment')) {
-      await analyzeEnrollments(records, preview, importMode);
+      await analyzeEnrollments(records, preview, importMode, schoolId);
     } else if (fileName.includes('payment')) {
-      await analyzePayments(records, preview, importMode);
+      await analyzePayments(records, preview, importMode, schoolId);
     }
   }
   
@@ -447,7 +518,7 @@ async function processImportPreview(files: any, importMode: ImportMode, schoolId
   return preview;
 }
 
-async function analyzeParents(records: any[], preview: ImportPreview, importMode: ImportMode) {
+async function analyzeParents(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: number) {
   for (const record of records) {
     const parentData = {
       firstName: record['First Name'] || record.firstName,
@@ -459,7 +530,8 @@ async function analyzeParents(records: any[], preview: ImportPreview, importMode
     
     const existingUser = await storage.getUserByEmail(parentData.email);
     
-    if (existingUser) {
+    // Only consider it a duplicate if the user belongs to the same school
+    if (existingUser && existingUser.schoolId === schoolId) {
       preview.duplicates.push({
         type: 'user',
         existingRecord: existingUser,
@@ -472,7 +544,7 @@ async function analyzeParents(records: any[], preview: ImportPreview, importMode
   }
 }
 
-async function analyzeChildren(records: any[], preview: ImportPreview, importMode: ImportMode) {
+async function analyzeChildren(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: number) {
   for (const record of records) {
     const childData = {
       firstName: record['First Name'] || record.firstName,
@@ -483,8 +555,11 @@ async function analyzeChildren(records: any[], preview: ImportPreview, importMod
     };
     
     const existingChildren = await storage.getChildrenByParentEmail(childData.parentEmail);
+    // Only consider children from the same school
     const existingChild = existingChildren.find(child => 
-      child.firstName === childData.firstName && child.lastName === childData.lastName
+      child.firstName === childData.firstName && 
+      child.lastName === childData.lastName &&
+      child.schoolId === schoolId
     );
     
     if (existingChild) {
@@ -500,19 +575,48 @@ async function analyzeChildren(records: any[], preview: ImportPreview, importMod
   }
 }
 
-async function analyzeEnrollments(records: any[], preview: ImportPreview, importMode: ImportMode) {
+async function analyzeEnrollments(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: number) {
   for (const record of records) {
+    // Safely parse IDs with validation to prevent pg_strtoint32_safe errors
+    const classIdStr = record['Class ID'] || record.classId;
+    const childIdStr = record['Child ID'] || record.childId;
+    
+    const classId = classIdStr ? parseInt(classIdStr) : NaN;
+    const childId = childIdStr ? parseInt(childIdStr) : NaN;
+    
+    // Skip records with invalid IDs
+    if (isNaN(classId) || isNaN(childId)) {
+      continue;
+    }
+    
     const enrollmentData = {
-      classId: parseInt(record['Class ID'] || record.classId),
-      childId: parseInt(record['Child ID'] || record.childId),
+      classId,
+      childId,
       childName: record['Child Name'] || record.childName,
       className: record['Class Name'] || record.className,
       status: record['Status'] || record.status || 'enrolled'
     };
     
-    const allEnrollments = await storage.getAllEnrollments();
-    const existingEnrollment = allEnrollments.find(enrollment => 
-      enrollment.childId === enrollmentData.childId && enrollment.classId === enrollmentData.classId
+    // Get class to verify it belongs to this school
+    const classRecord = await storage.getClassById(classId);
+    if (!classRecord || classRecord.schoolId !== schoolId) {
+      // Skip enrollments for classes not in this school
+      continue;
+    }
+    
+    // Get child to verify it belongs to this school
+    const childRecord = await storage.getChildById(childId);
+    if (!childRecord || childRecord.schoolId !== schoolId) {
+      // Skip enrollments for children not in this school
+      continue;
+    }
+    
+    // Get enrollments for this specific child only
+    // Note: We've already verified the child belongs to this school,
+    // so all their enrollments must also belong to this school
+    const childEnrollments = await storage.getEnrollmentsByChildId(childId);
+    const existingEnrollment = childEnrollments.find(enrollment => 
+      enrollment.classId === classId
     );
     
     if (existingEnrollment) {
@@ -528,7 +632,7 @@ async function analyzeEnrollments(records: any[], preview: ImportPreview, import
   }
 }
 
-async function analyzePayments(records: any[], preview: ImportPreview, importMode: ImportMode) {
+async function analyzePayments(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: number) {
   for (const record of records) {
     const paymentData = {
       stripePaymentIntentId: record.id || record['Payment ID'] || `imported_${Date.now()}_${Math.random()}`,
@@ -539,10 +643,23 @@ async function analyzePayments(records: any[], preview: ImportPreview, importMod
       description: record.Description || 'Imported payment'
     };
     
-    const allPayments = await storage.getAllPayments();
-    const existingPayment = allPayments.find(payment => 
-      payment.stripePaymentIntentId === paymentData.stripePaymentIntentId
-    );
+    // Verify the parent belongs to this school before analyzing payment
+    const parent = await storage.getUserByEmail(paymentData.parentEmail);
+    if (!parent || parent.schoolId !== schoolId) {
+      // Skip payments for parents not in this school
+      continue;
+    }
+    
+    // Check for existing payment by exact stripe ID
+    // This method is already scoped to exact match, then we verify school ownership
+    const existingPayment = await storage.getPaymentByStripeId(paymentData.stripePaymentIntentId);
+    
+    // Only consider it a duplicate if it belongs to this school
+    if (existingPayment && existingPayment.schoolId !== schoolId) {
+      // Payment exists but belongs to another school - not a duplicate for this school
+      preview.newRecords.payments.push(paymentData);
+      continue;
+    }
     
     if (existingPayment) {
       preview.duplicates.push({
