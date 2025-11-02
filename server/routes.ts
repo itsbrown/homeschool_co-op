@@ -369,7 +369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             user_metadata: {
               role: validatedData.role,
               name: validatedData.name,
-              schoolId: validatedData.schoolId
+              school_id: validatedData.schoolId  // Use snake_case to match API expectations
             }
           });
 
@@ -2523,6 +2523,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching knowledge bases:", error);
       console.error("Error details:", error.message);
       res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+  });
+
+  // Admin endpoint to sync user metadata to Supabase (one-time migration fix)
+  app.post("/api/auth/sync-metadata", supabaseAuth, async (req: any, res) => {
+    try {
+      const userEmail = req.user?.email;
+      if (!userEmail) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+
+      // Get user from database
+      const dbUser = await storage.getUserByEmail(userEmail);
+      if (!dbUser || !dbUser.schoolId) {
+        return res.status(404).json({ message: "User not found or has no school" });
+      }
+
+      // Update Supabase user metadata
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        return res.status(500).json({ message: "Supabase configuration missing" });
+      }
+
+      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+      
+      // Get the Supabase user ID
+      const { data: { user: supabaseUser }, error: getUserError } = await supabaseAdmin.auth.getUser(req.headers.authorization?.substring(7) || '');
+      
+      if (getUserError || !supabaseUser) {
+        return res.status(404).json({ message: "Supabase user not found", error: getUserError?.message });
+      }
+
+      // Update user metadata with school_id
+      const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
+        supabaseUser.id,
+        {
+          user_metadata: {
+            ...supabaseUser.user_metadata,
+            school_id: dbUser.schoolId,
+            role: dbUser.role,
+            name: dbUser.name
+          }
+        }
+      );
+
+      if (error) {
+        console.error('❌ Failed to update Supabase metadata:', error);
+        return res.status(500).json({ message: "Failed to update metadata", error: error.message });
+      }
+
+      console.log(`✅ Successfully synced metadata for ${userEmail} with school_id=${dbUser.schoolId}`);
+      
+      res.json({ 
+        message: "Metadata synced successfully. Please log out and log back in for changes to take effect.",
+        school_id: dbUser.schoolId
+      });
+    } catch (error) {
+      console.error("Error syncing metadata:", error);
+      res.status(500).json({ message: "Error syncing metadata", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 

@@ -572,26 +572,16 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
 router.get("/classes", supabaseAuth, async (req: any, res) => {
   try {
     // Extract school_id from authenticated user's token metadata and normalize to number
-    let schoolId: number;
     const schoolIdFromToken = req.auth?.payload?.school_id;
-    
-    if (schoolIdFromToken) {
-      schoolId = Number(schoolIdFromToken);
-      if (isNaN(schoolId)) {
-        return res.status(400).json({ message: "Invalid school ID in user metadata" });
-      }
-    } else {
-      // Fallback: Get school_id from database user record if not in JWT
-      console.log('⚠️ school_id not in JWT, fetching from database for user:', req.user?.email);
-      const user = await storage.getUserByEmail(req.user?.email);
-      if (!user || !user.schoolId) {
-        return res.status(400).json({ message: "School ID not found. Please contact support." });
-      }
-      schoolId = Number(user.schoolId);
-      if (isNaN(schoolId)) {
-        return res.status(400).json({ message: "Invalid school ID in database" });
-      }
-      console.log(`✅ Retrieved school_id ${schoolId} from database for user ${req.user?.email}`);
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ 
+        message: "School ID not found in user metadata. Please log out and log back in.",
+        hint: "If this persists, contact support to update your account."
+      });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
     }
 
     console.log(`🏫 Loading classes for school ID: ${schoolId}`);
