@@ -1807,11 +1807,28 @@ router.post("/classes", supabaseAuth, async (req: any, res: any) => {
       const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
       for (const staffRecord of allStaff) {
         const user = await storage.getUser(staffRecord.userId);
-        if (user && user.name === req.body.instructorName) {
+        if (user && user.id.toString() === req.body.instructorName) {
           instructorId = user.id;
           break;
         }
       }
+    }
+
+    // Extract price from variants array - use the first variant's price as the base price
+    let price = 0;
+    let schedule = null;
+    
+    if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
+      // Store the full variants structure in the schedule field
+      schedule = {
+        variants: req.body.variants,
+        description: req.body.schedule?.description
+      };
+      // Use the first variant's price as the primary price
+      price = req.body.variants[0].price || 0;
+    } else if (req.body.price) {
+      // Fallback to direct price if no variants
+      price = req.body.price;
     }
 
     // Create new class object
@@ -1820,19 +1837,22 @@ router.post("/classes", supabaseAuth, async (req: any, res: any) => {
       title: req.body.title,
       description: req.body.description,
       category: req.body.category || 'Academic',
-      gradeLevel: req.body.gradeLevel,
+      gradeLevels: req.body.gradeLevels || [],
       status: req.body.status || 'upcoming',
       startDate: req.body.startDate,
       endDate: req.body.endDate,
-      schedule: req.body.schedule,
+      schedule: schedule,
       capacity: req.body.capacity || 10,
-      maxStudents: req.body.capacity || 10,
       enrollmentCount: 0,
       location: req.body.location,
-      price: req.body.price || 0,
+      price: price,
       instructorName: req.body.instructorName,
-      instructorId
+      instructorId,
+      isAdminOnly: req.body.isAdminOnly || false
     };
+
+    console.log('💰 Extracted price from variants:', price);
+    console.log('📅 Schedule data:', schedule);
 
     // Create class in database
     const newClass = await storage.createClass(newClassData);
