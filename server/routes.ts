@@ -2425,12 +2425,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         price = req.body.price;
       }
 
-      // Handle gradeLevels array
-      let gradeLevel = existingClass.gradeLevel;
-      if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels) && req.body.gradeLevels.length > 0) {
-        gradeLevel = req.body.gradeLevels[0];
-      } else if (req.body.gradeLevel) {
-        gradeLevel = req.body.gradeLevel;
+      // Handle gradeLevels array - database expects an array, not a single value
+      let gradeLevels = existingClass.gradeLevels || [];
+      if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels)) {
+        gradeLevels = req.body.gradeLevels;
+        console.log('📚 Updated gradeLevels:', gradeLevels);
       }
 
       // Handle instructorId - ensure it's a number
@@ -2448,7 +2447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         title: req.body.title || existingClass.title,
         description: req.body.description || existingClass.description,
         category: req.body.category || existingClass.category,
-        gradeLevel: gradeLevel,
+        gradeLevels: gradeLevels,
         status: req.body.status || existingClass.status,
         startDate: req.body.startDate || existingClass.startDate,
         endDate: req.body.endDate || existingClass.endDate,
