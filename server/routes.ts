@@ -2406,6 +2406,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: 'Access denied: Class belongs to a different school' });
       }
 
+      console.log('📋 Existing class data keys:', Object.keys(existingClass));
+      console.log('📊 Existing class gradeLevels value:', (existingClass as any).gradeLevels);
+
       // Extract price from variants array (same logic as POST endpoint)
       let price = existingClass.price;
       let schedule = existingClass.schedule;
@@ -2426,7 +2429,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Handle gradeLevels array - database expects an array, not a single value
-      let gradeLevels = existingClass.gradeLevels || [];
+      // Check both camelCase (Drizzle) and snake_case (raw DB) names for compatibility
+      let gradeLevels = (existingClass as any).gradeLevels || (existingClass as any).grade_levels || [];
       if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels)) {
         gradeLevels = req.body.gradeLevels;
         console.log('📚 Updated gradeLevels:', gradeLevels);
@@ -2458,12 +2462,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly
       };
 
+      console.log('📤 Sending gradeLevels to database:', updateData.gradeLevels);
+
       // Update in database
       const updatedClass = await storage.updateClass(classId, updateData);
 
       if (!updatedClass) {
         return res.status(500).json({ message: 'Failed to update class' });
       }
+
+      console.log('📥 Received gradeLevels from database:', (updatedClass as any).gradeLevels || (updatedClass as any).grade_levels);
 
       // Parse variants from schedule for response (match GET endpoint behavior)
       let enhancedClassData = { ...updatedClass };
@@ -2477,6 +2485,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('✅ Class updated successfully:', updatedClass.title);
       console.log('📊 Saved schedule:', updatedClass.schedule);
       console.log('💰 Saved price:', updatedClass.price);
+      console.log('📚 Saved gradeLevels:', (updatedClass as any).gradeLevels || (updatedClass as any).grade_levels);
       res.json(enhancedClassData);
     } catch (error) {
       console.error('❌ Error updating class:', error);

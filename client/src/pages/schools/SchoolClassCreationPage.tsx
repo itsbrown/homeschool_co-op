@@ -191,7 +191,9 @@ export default function SchoolClassCreationPage() {
         title: classData.title || "",
         description: classData.description || "",
         category: classData.category || "",
-        gradeLevels: classData.gradeLevels || classData.gradeLevel ? [classData.gradeLevel] : [],
+        gradeLevels: Array.isArray(classData.gradeLevels) && classData.gradeLevels.length > 0
+          ? classData.gradeLevels
+          : (classData.gradeLevel ? [classData.gradeLevel] : []),
         startDate,
         endDate,
         variants: classData.variants || [{
