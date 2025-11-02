@@ -148,9 +148,9 @@ export default function SchoolClassesPage() {
 
   // Fetch classes for the school from the API
   const { data: classes, isLoading, error, refetch } = useQuery({
-    queryKey: ['/school-admin/classes'],
+    queryKey: ['/api/school-admin/classes'],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/school-admin/classes");
+      const response = await apiRequest("GET", "/api/school-admin/classes");
       const data = await response.json();
       return data;
     },
@@ -168,11 +168,11 @@ export default function SchoolClassesPage() {
       };
       delete duplicatedClass.id;
       
-      const response = await apiRequest("POST", "/school-admin/classes", duplicatedClass);
+      const response = await apiRequest("POST", "/api/school-admin/classes", duplicatedClass);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
       toast({
         title: "Success",
         description: "Class has been duplicated successfully.",
@@ -190,13 +190,13 @@ export default function SchoolClassesPage() {
   // Mutation for unassigning instructor
   const unassignInstructorMutation = useMutation({
     mutationFn: async (classId: number) => {
-      const response = await apiRequest("PATCH", `/school-admin/classes/${classId}`, {
+      const response = await apiRequest("PATCH", `/api/school-admin/classes/${classId}`, {
         instructorName: "no-instructor"
       });
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
       toast({
         title: "Success",
         description: "Instructor has been unassigned from the class.",

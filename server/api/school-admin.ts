@@ -1624,17 +1624,31 @@ router.get("/departments", async (req, res) => {
 });
 
 // Get students for the school
-router.get("/students", async (req, res) => {
+router.get("/students", supabaseAuth, async (req: any, res) => {
   try {
-    console.log('📚 Fetching students for school admin...');
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
+    console.log(`📚 Fetching students for school admin (school_id: ${schoolId})...`);
     
     // Get all school students from storage
     const allSchoolStudents = await storage.getAllSchoolStudents();
-    console.log(`📊 Found ${allSchoolStudents.length} school students in storage`);
+    console.log(`📊 Found ${allSchoolStudents.length} total school students in storage`);
+    
+    // Filter by school ID
+    const schoolStudents = allSchoolStudents.filter((student: any) => Number(student.schoolId) === schoolId);
+    console.log(`📊 Filtered to ${schoolStudents.length} students for school ${schoolId}`);
     
     // Get children details for each school student
     const studentsWithDetails = await Promise.all(
-      allSchoolStudents.map(async (schoolStudent) => {
+      schoolStudents.map(async (schoolStudent) => {
         try {
           const child = await storage.getChildById(schoolStudent.childId);
           if (!child) {

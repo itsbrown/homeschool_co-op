@@ -2310,21 +2310,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/image-services", imageServicesRouter);
   app.use("/api/ocr-test", ocrTestRouter);
   // Class details endpoint - direct route to avoid middleware conflicts
-  app.get("/api/class-details/:id", (req, res) => {
+  app.get("/api/class-details/:id", async (req, res) => {
     const classId = parseInt(req.params.id);
     console.log('🔍 Fetching class details with ID:', classId);
 
     try {
-      const filePath = path.join(process.cwd(), 'data/classes.json');
-
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ message: 'Class not found' });
+      if (isNaN(classId)) {
+        return res.status(400).json({ message: 'Invalid class ID' });
       }
 
-      const fileData = fs.readFileSync(filePath, 'utf-8');
-      const allClasses = JSON.parse(fileData);
-
-      let classData = allClasses.find((cls: any) => cls.id === classId);
+      // Fetch class from database
+      const classData = await storage.getClassById(classId);
 
       if (!classData) {
         console.log('❌ Class not found with ID:', classId);
@@ -2332,12 +2328,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Parse variants from schedule field if they exist
+      let enhancedClassData = { ...classData };
       if (classData.schedule && typeof classData.schedule === 'string') {
         try {
           const scheduleData = JSON.parse(classData.schedule);
           if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
             console.log('✅ Parsed variants from schedule field:', scheduleData.variants);
-            classData = { ...classData, variants: scheduleData.variants };
+            enhancedClassData.variants = scheduleData.variants;
           }
         } catch (e) {
           // Not JSON, keep schedule as-is
@@ -2345,9 +2342,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log('✅ Class found:', classData.title);
-      console.log('📊 Returning class with variants:', classData.variants ? classData.variants.length : 0);
-      res.json(classData);
+      console.log('✅ Class found:', enhancedClassData.title);
+      console.log('📊 Returning class with variants:', enhancedClassData.variants ? enhancedClassData.variants.length : 0);
+      res.json(enhancedClassData);
     } catch (error) {
       console.error('❌ Error loading class:', error);
       res.status(500).json({ message: 'Error loading class' });
