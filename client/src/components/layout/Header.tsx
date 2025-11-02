@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
+import { useNotifications } from "@/hooks/useNotifications";
 import { Bell, Mail, Menu, Search } from "lucide-react";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { NotificationCenter } from "@/components/ui/notification-center";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +24,7 @@ interface HeaderProps {
 export default function Header({ onMenuClick }: HeaderProps) {
   const { user, signOut } = useAuth();
   const { activeRole, setActiveRole, canSwitchRoles } = useRole();
+  const { notifications, markAsRead, clearAll, unreadCount } = useNotifications();
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (e: React.FormEvent) => {
@@ -37,6 +41,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
         className="mr-4"
         onClick={onMenuClick}
         title="Toggle navigation menu"
+        data-testid="button-toggle-menu"
       >
         <Menu className="h-5 w-5" />
         <span className="sr-only">Toggle menu</span>
@@ -51,6 +56,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             className="w-full bg-muted pl-8 rounded-md focus:ring-primary"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            data-testid="input-search"
           />
         </form>
       </div>
@@ -60,14 +66,18 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <AIStatusBadge />
         </div>
 
+        <NotificationCenter
+          notifications={notifications}
+          onMarkAsRead={markAsRead}
+          onClearAll={clearAll}
+        />
 
-
-        <Button variant="ghost" size="icon" className="text-muted-foreground">
-          <Bell className="h-5 w-5" />
-          <span className="sr-only">Notifications</span>
-        </Button>
-
-        <Button variant="ghost" size="icon" className="text-muted-foreground">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="text-muted-foreground"
+          data-testid="button-messages"
+        >
           <Mail className="h-5 w-5" />
           <span className="sr-only">Messages</span>
         </Button>

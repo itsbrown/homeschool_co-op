@@ -75,12 +75,14 @@ export function NotificationCenter({
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
         className="relative"
+        data-testid="button-notifications"
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
           <Badge 
             variant="destructive" 
             className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+            data-testid="badge-unread-count"
           >
             {unreadCount > 9 ? '9+' : unreadCount}
           </Badge>
@@ -88,7 +90,7 @@ export function NotificationCenter({
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-96 max-h-96 overflow-y-auto z-50">
+        <div className="absolute right-0 top-full mt-2 w-96 max-h-96 overflow-y-auto z-50" data-testid="notification-panel">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -100,6 +102,7 @@ export function NotificationCenter({
                       size="sm"
                       onClick={onClearAll}
                       className="text-xs"
+                      data-testid="button-clear-all"
                     >
                       Clear all
                     </Button>
@@ -108,6 +111,7 @@ export function NotificationCenter({
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsOpen(false)}
+                    data-testid="button-close-panel"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -116,7 +120,7 @@ export function NotificationCenter({
             </CardHeader>
             <CardContent className="space-y-3 pt-0">
               {notifications.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
+                <p className="text-sm text-muted-foreground text-center py-4" data-testid="text-no-notifications">
                   No notifications yet
                 </p>
               ) : (
@@ -133,6 +137,8 @@ export function NotificationCenter({
                         onMarkAsRead(notification.id);
                       }
                     }}
+                    data-testid={`notification-item-${notification.id}`}
+                    data-read={notification.read}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 mt-0.5">
@@ -140,14 +146,14 @@ export function NotificationCenter({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium truncate">
+                          <p className="text-sm font-medium truncate" data-testid={`notification-title-${notification.id}`}>
                             {notification.title}
                           </p>
                           <span className="text-xs text-muted-foreground ml-2">
                             {formatTimeAgo(notification.timestamp)}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1" data-testid={`notification-message-${notification.id}`}>
                           {notification.message}
                         </p>
                         
@@ -162,6 +168,7 @@ export function NotificationCenter({
                                   onView(notification);
                                 }}
                                 className="text-xs h-6"
+                                data-testid={`button-view-${notification.id}`}
                               >
                                 View
                               </Button>
@@ -175,6 +182,7 @@ export function NotificationCenter({
                                   onDownload(notification);
                                 }}
                                 className="text-xs h-6"
+                                data-testid={`button-download-${notification.id}`}
                               >
                                 <Download className="h-3 w-3 mr-1" />
                                 Download
