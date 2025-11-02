@@ -226,14 +226,14 @@ export default function SchoolClassesPage() {
   // Mutation for deleting a class
   const deleteClassMutation = useMutation({
     mutationFn: async (classId: number) => {
-      const response = await apiRequest("DELETE", `/school-admin/classes/${classId}`);
+      const response = await apiRequest("DELETE", `/api/school-admin/classes/${classId}`);
       if (!response.ok) {
         throw new Error('Failed to delete class');
       }
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
       toast({
         title: "Success",
         description: "Class has been deleted successfully.",
