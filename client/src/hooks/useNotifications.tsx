@@ -109,7 +109,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const markAsRead = React.useCallback((id: string) => {
     // Optimistically mark as read for both backend and local notifications
-    setReadOverrides(prev => new Set([...prev, id]));
+    setReadOverrides(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     setLocalNotifications(prev => 
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     );
