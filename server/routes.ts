@@ -2195,7 +2195,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      // Return basic user profile information
+      // Get schoolId from JWT token metadata
+      const schoolIdFromToken = req.auth?.payload?.school_id;
+      const schoolId = schoolIdFromToken ? Number(schoolIdFromToken) : null;
+
+      console.log('👤 Profile request - userId:', userId, 'schoolId:', schoolId);
+
+      // Return basic user profile information including schoolId
       res.json({
         id: userId,
         email: req.auth?.payload?.email || '',
@@ -2203,7 +2209,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName: req.auth?.payload?.family_name || '',
         username: req.auth?.payload?.email || '',
         phoneNumber: req.auth?.payload?.phone_number || '',
-        role: req.auth?.payload?.role || 'staff'
+        role: req.auth?.payload?.role || 'staff',
+        schoolId: schoolId && !isNaN(schoolId) ? schoolId : null
       });
     } catch (error) {
       console.error("Error fetching user profile:", error);

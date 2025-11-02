@@ -65,49 +65,47 @@ router.get("/accessible", async (req, res) => {
 // Create a new location
 router.post("/", async (req: any, res) => {
   try {
-    // Get authenticated user's email from auth middleware
-    const userEmail = req.user?.email;
-    console.log('🔐 Location creation - authenticated user email:', userEmail);
-    console.log('🔐 Request user object:', JSON.stringify(req.user, null, 2));
-    console.log('🔐 Request auth object:', JSON.stringify(req.auth, null, 2));
+    // Get school_id from JWT token metadata (Auth0 or Supabase)
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    console.log('🔐 Location creation - JWT payload:', {
+      school_id: schoolIdFromToken,
+      email: req.auth?.payload?.email,
+      sub: req.auth?.payload?.sub
+    });
     
-    if (!userEmail) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-    
-    // Fetch user from database to get their schoolId
-    const user = await storage.getUserByEmail(userEmail);
-    console.log('👤 Database user lookup result:', user ? { id: user.id, email: user.email, schoolId: user.schoolId, role: user.role } : 'NOT FOUND');
-    
-    if (!user) {
-      return res.status(404).json({ message: "User not found in database. Please complete registration." });
-    }
-    
-    // Verify user has a school assignment
-    if (!user.schoolId) {
-      console.error(`❌ User ${userEmail} exists but has no schoolId assigned`);
+    if (!schoolIdFromToken) {
+      console.error('❌ No school_id found in JWT token');
       return res.status(403).json({ 
         message: "Unable to determine your school. Please contact support." 
       });
     }
-    
-    // SECURITY: Use the authenticated user's schoolId, ignoring client-provided value
-    const validatedData = insertLocationSchema.parse(req.body);
-    const locationData = {
-      ...validatedData,
-      schoolId: user.schoolId  // Override with authenticated user's school
-    };
-    
-    // Validate that the school exists (should always pass since user is linked to it)
-    const school = await storage.getSchool(locationData.schoolId);
-    if (!school) {
-      console.error(`❌ Integrity error: User ${user.id} linked to non-existent school ${user.schoolId}`);
-      return res.status(500).json({ 
-        message: "School configuration error. Please contact support." 
+
+    // Normalize and validate schoolId
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      console.error('❌ Invalid school_id in JWT token:', schoolIdFromToken);
+      return res.status(403).json({ 
+        message: "Invalid school identifier. Please contact support." 
       });
     }
     
-    console.log(`✅ User ${userEmail} creating location for school ${school.name} (ID: ${school.id})`);
+    // Validate that the school exists
+    const school = await storage.getSchool(schoolId);
+    if (!school) {
+      console.error(`❌ School not found for ID ${schoolId}`);
+      return res.status(404).json({ 
+        message: "School not found. Please contact support." 
+      });
+    }
+    
+    console.log(`✅ Creating location for school ${school.name} (ID: ${school.id})`);
+    
+    // SECURITY: Use the authenticated user's schoolId from JWT, ignoring client-provided value
+    const validatedData = insertLocationSchema.parse(req.body);
+    const locationData = {
+      ...validatedData,
+      schoolId: schoolId  // Override with JWT-authenticated school
+    };
     
     // Create location using authenticated school
     const location = await storage.createLocation(locationData);
