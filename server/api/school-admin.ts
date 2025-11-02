@@ -523,74 +523,6 @@ async function setupSchool(req: any, res: any) {
 
 router.post("/setup-school", setupSchool);
 
-// Get single class by ID
-router.get("/classes/:id", supabaseAuth, async (req: any, res: any) => {
-  try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
-    const classId = parseInt(req.params.id, 10);
-    if (isNaN(classId)) {
-      return res.status(400).json({ message: "Invalid class ID format" });
-    }
-
-    // Get the class from storage
-    const classItem = await storage.getClassById(classId);
-
-    if (!classItem) {
-      return res.status(404).json({ message: "Class not found" });
-    }
-
-    // Return the class
-    res.json(classItem);
-  } catch (error) {
-    console.error("Error fetching class:", error);
-    res.status(500).json({ message: "Error fetching class" });
-  }
-});
-
-// Update class by ID
-router.put("/classes/:id", supabaseAuth, async (req: any, res: any) => {
-  try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
-    const classId = parseInt(req.params.id, 10);
-    if (isNaN(classId)) {
-      return res.status(400).json({ message: "Invalid class ID format" });
-    }
-
-    // Get the class from storage
-    const existingClass = await storage.getClassById(classId);
-
-    if (!existingClass) {
-      return res.status(404).json({ message: "Class not found" });
-    }
-
-    // Update the class
-    const updatedClass = await storage.updateClass(classId, {
-      ...req.body,
-      schoolId: schoolId // Ensure the school ID doesn't change
-    });
-
-    if (!updatedClass) {
-      return res.status(500).json({ message: "Failed to update class" });
-    }
-
-    console.log(`Class ${classId} updated successfully for school ${schoolId}`);
-
-    // Return the updated class
-    res.json(updatedClass);
-  } catch (error) {
-    console.error("Error updating class:", error);
-    res.status(500).json({ message: "Error updating class" });
-  }
-});
-
 // Get classes for the school
 router.get("/classes", supabaseAuth, async (req: any, res: any) => {
   try {
@@ -1111,8 +1043,11 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
 });
 
 // Get single staff member by ID
-router.get("/staff/:id", async (req, res) => {
+router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const staffId = parseInt(req.params.id, 10);
     console.log(`🔍 Looking for staff member with ID: ${staffId}`);
     
@@ -1125,6 +1060,11 @@ router.get("/staff/:id", async (req, res) => {
     
     if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Verify staff member belongs to authenticated school
+    if (staffRecord.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
     // Get user details
@@ -1151,8 +1091,11 @@ router.get("/staff/:id", async (req, res) => {
 });
 
 // Get classes assigned to a specific staff member
-router.get("/staff/:id/classes", async (req, res) => {
+router.get("/staff/:id/classes", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const staffId = parseInt(req.params.id, 10);
     console.log(`🎓 Getting classes for staff member ${staffId}`);
     
@@ -1164,6 +1107,11 @@ router.get("/staff/:id/classes", async (req, res) => {
     const staffRecord = await storage.getSchoolStaffById(staffId);
     if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Verify staff member belongs to authenticated school
+    if (staffRecord.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
     // Get user details to use userId for class lookup
@@ -1187,8 +1135,11 @@ router.get("/staff/:id/classes", async (req, res) => {
 });
 
 // Assign staff member to a class
-router.post("/staff/:id/assign-class", async (req, res) => {
+router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const staffId = parseInt(req.params.id, 10);
     const { classId } = req.body;
     
@@ -1202,6 +1153,11 @@ router.post("/staff/:id/assign-class", async (req, res) => {
     const staffRecord = await storage.getSchoolStaffById(staffId);
     if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Verify staff member belongs to authenticated school
+    if (staffRecord.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
     // Get user details
@@ -1236,8 +1192,11 @@ router.post("/staff/:id/assign-class", async (req, res) => {
 });
 
 // Unassign staff member from a class
-router.delete("/staff/:id/unassign-class/:classId", async (req, res) => {
+router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const staffId = parseInt(req.params.id, 10);
     const classId = parseInt(req.params.classId, 10);
     
@@ -1251,6 +1210,11 @@ router.delete("/staff/:id/unassign-class/:classId", async (req, res) => {
     const staffRecord = await storage.getSchoolStaffById(staffId);
     if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Verify staff member belongs to authenticated school
+    if (staffRecord.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
     // Update the class to remove instructor assignment
@@ -1275,8 +1239,11 @@ router.delete("/staff/:id/unassign-class/:classId", async (req, res) => {
 });
 
 // Resend invite to individual staff member
-router.post("/staff/:id/resend-invite", async (req, res) => {
+router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const staffId = parseInt(req.params.id, 10);
     if (isNaN(staffId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
@@ -1286,6 +1253,11 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
     const staffRecord = await storage.getSchoolStaffById(staffId);
     if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Verify staff member belongs to authenticated school
+    if (staffRecord.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
     // Get user details
@@ -1451,8 +1423,11 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
 });
 
 // Update staff member
-router.put("/staff/:id", async (req, res) => {
+router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const staffId = parseInt(req.params.id, 10);
     if (isNaN(staffId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
@@ -1466,6 +1441,11 @@ router.put("/staff/:id", async (req, res) => {
     const staffRecord = await storage.getSchoolStaffById(staffId);
     if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Verify staff member belongs to authenticated school
+    if (staffRecord.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
     // Get user details
@@ -1529,8 +1509,11 @@ router.put("/staff/:id", async (req, res) => {
 });
 
 // Delete staff member
-router.delete("/staff/:id", async (req, res) => {
+router.delete("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const staffId = parseInt(req.params.id, 10);
     console.log(`🗑️ Attempting to delete staff member with ID: ${staffId}`);
     
@@ -1542,6 +1525,11 @@ router.delete("/staff/:id", async (req, res) => {
     const staffRecord = await storage.getSchoolStaffById(staffId);
     if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Verify staff member belongs to authenticated school
+    if (staffRecord.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
     // Get user details before deleting
@@ -1673,8 +1661,11 @@ router.delete("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
 });
 
 // Get departments for dropdown
-router.get("/departments", async (req, res) => {
+router.get("/departments", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     // These would come from database in real app
     const departments = [
       { id: 1, name: "Mathematics", isActive: true },
@@ -1859,52 +1850,25 @@ router.post("/classes", supabaseAuth, async (req: any, res: any) => {
 });
 
 // Update school information for a school admin
-router.patch("/schools/:id", async (req, res) => {
+router.patch("/schools/:id", supabaseAuth, async (req: any, res) => {
   console.log('🔥 PATCH request received in school-admin router');
   console.log('🔥 Request body:', JSON.stringify(req.body, null, 2));
   console.log('🔥 School ID:', req.params.id);
   try {
+    const authenticatedSchoolId = requireSchoolContext(req, res);
+    if (authenticatedSchoolId === null) return;
+
     const schoolId = parseInt(req.params.id);
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
     }
 
-    // Get the authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ message: "No authorization header" });
+    // Verify the school being updated matches the authenticated user's school
+    if (schoolId !== authenticatedSchoolId) {
+      return res.status(403).json({ message: 'Access denied to this school' });
     }
 
-    const token = authHeader.replace('Bearer ', '');
-
-    // Create a new Supabase client instance with the user's access token
-    const { createClient } = await import('@supabase/supabase-js');
-
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      return res.status(500).json({ message: "Supabase configuration missing" });
-    }
-
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      }
-    );
-
-    // Verify the token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      console.error('Auth error:', authError);
-      return res.status(401).json({ message: "Invalid token" });
-    }
-
-    console.log('✅ Authenticated user for school update:', user.email);
+    console.log('✅ Authenticated user for school update');
 
     // Use admin client to update the school
     const { supabaseAdmin } = await import('../db/supabase');
@@ -2005,56 +1969,13 @@ router.patch("/schools/:id", async (req, res) => {
 });
 
 // Update school membership configuration
-router.patch("/my-school/membership", async (req, res) => {
+router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     console.log('🔧 Updating membership configuration');
     console.log('📋 Request body:', JSON.stringify(req.body, null, 2));
-
-    // Get the authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ message: "No authorization header" });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-
-    // Create a new Supabase client instance with the user's access token
-    const { createClient } = await import('@supabase/supabase-js');
-
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      return res.status(500).json({ message: "Supabase configuration missing" });
-    }
-
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      }
-    );
-
-    // Verify the token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      console.error('Auth error:', authError);
-      return res.status(401).json({ message: "Invalid token" });
-    }
-
-    console.log('✅ Authenticated user:', user.email);
-
-    // Get admin user to find their school
-    const adminUser = await storage.getUserByEmail(user.email || '');
-    if (!adminUser) {
-      return res.status(404).json({ message: "Admin user not found" });
-    }
-
-    // Use admin client to update the school
-    const { supabaseAdmin } = await import('../db/supabase');
 
     // Validate and prepare membership data
     const {
@@ -2107,23 +2028,14 @@ router.patch("/my-school/membership", async (req, res) => {
 
     console.log('🔄 Updating membership configuration:', dbUpdateData);
 
-    // First get the school ID for this admin
-    const { data: schools, error: schoolError } = await supabaseAdmin
-      .from('schools')
-      .select('id')
-      .eq('admin_id', adminUser.id)
-      .single();
-
-    if (schoolError || !schools) {
-      console.error('❌ Error finding school:', schoolError);
-      return res.status(404).json({ message: "School not found for this admin" });
-    }
+    // Use admin client to update the school
+    const { supabaseAdmin } = await import('../db/supabase');
 
     // Update the school membership configuration
     const { data: updatedSchool, error: updateError } = await supabaseAdmin
       .from('schools')
       .update(dbUpdateData)
-      .eq('id', schools.id)
+      .eq('id', schoolId)
       .select()
       .single();
 
@@ -2147,14 +2059,10 @@ router.patch("/my-school/membership", async (req, res) => {
   }
 });
 
-router.get("/knowledge-bases", async (req, res) => {
+router.get("/knowledge-bases", supabaseAuth, async (req: any, res) => {
   try {
-    // Get the school(s) administered by this user
-    const userSchools = schoolStorage.getSchoolsByAdminId(req.session.userId);
-
-    if (userSchools.length === 0) {
-      return res.status(404).json({ message: "No schools found for this administrator" });
-    }
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
 
     // For now, return sample knowledge base data
     // In a real implementation, this would come from the database
@@ -2203,25 +2111,16 @@ router.get("/knowledge-bases", async (req, res) => {
 });
 
 // Get all enrollments for school admin
-router.get('/enrollments', async (req: any, res) => {
+router.get('/enrollments', supabaseAuth, async (req: any, res) => {
   try {
-    // Verify authentication
-    const userEmail = req.user?.email || req.auth?.email;
-    if (!userEmail) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
 
-    // Verify user is a school admin
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'schoolAdmin') {
-      return res.status(403).json({ message: 'Only school administrators can view enrollments' });
-    }
-
-    console.log('📚 School admin fetching all enrollments for school:', user.schoolId);
+    console.log('📚 School admin fetching all enrollments for school:', schoolId);
     const allEnrollments = await storage.getAllEnrollments();
     
     // Filter enrollments by school
-    const enrollments = allEnrollments.filter((e: any) => e.schoolId === user.schoolId);
+    const enrollments = allEnrollments.filter((e: any) => e.schoolId === schoolId);
     
     // Format enrollments for admin display
     const formattedEnrollments = enrollments.map((enrollment: any) => ({
@@ -2248,8 +2147,11 @@ router.get('/enrollments', async (req: any, res) => {
 });
 
 // Get individual student endpoint
-router.get('/students/:id', async (req, res) => {
+router.get('/students/:id', supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     // Handle special case for "register" route
     if (req.params.id === 'register') {
       console.log('🎓 Register route accessed - returning empty student template');
@@ -2314,8 +2216,11 @@ router.get('/students/:id', async (req, res) => {
 });
 
 // Update student endpoint
-router.put('/students/:id', async (req, res) => {
+router.put('/students/:id', supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const studentId = parseInt(req.params.id);
     const updateData = req.body;
 
@@ -2325,6 +2230,11 @@ router.put('/students/:id', async (req, res) => {
     const existingStudent = await storage.getStudentById(studentId);
     if (!existingStudent) {
       return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Verify student belongs to authenticated school
+    if (existingStudent.schoolId && existingStudent.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this student' });
     }
 
     // Update student with new data
@@ -2353,19 +2263,26 @@ router.put('/students/:id', async (req, res) => {
 // Dashboard Metrics Endpoints - Calculate authentic data from database
 
 // Enrollment Metrics
-router.get("/metrics/enrollment", async (req, res) => {
+router.get("/metrics/enrollment", supabaseAuth, async (req: any, res) => {
   try {
-    console.log('📊 Calculating enrollment metrics from database');
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
+    console.log('📊 Calculating enrollment metrics from database for school:', schoolId);
 
     // Get all students/children from database
     const allChildren = await storage.getAllChildren();
     
     // Get program enrollments for additional metrics
-    const programEnrollments = await storage.getAllEnrollments();
+    const allProgramEnrollments = await storage.getAllEnrollments();
+
+    // Filter data by school
+    const schoolChildren = allChildren.filter((c: any) => c.schoolId === schoolId);
+    const programEnrollments = allProgramEnrollments.filter((e: any) => e.schoolId === schoolId);
 
     // Calculate authentic enrollment metrics
-    const totalStudents = allChildren.length;
-    const activeStudents = allChildren.filter((s: any) => 
+    const totalStudents = schoolChildren.length;
+    const activeStudents = schoolChildren.filter((s: any) => 
       s.status === 'active' || !s.status
     ).length;
 
@@ -2415,16 +2332,23 @@ router.get("/metrics/enrollment", async (req, res) => {
 });
 
 // Financial Metrics
-router.get("/metrics/financial", async (req, res) => {
+router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
   try {
-    console.log('💰 Calculating financial metrics from database');
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
+    console.log('💰 Calculating financial metrics from database for school:', schoolId);
 
     // Get all enrollments and payments from database
     const allEnrollments = await storage.getAllEnrollments();
     const allPayments = await storage.getAllPayments();
 
+    // Filter data by school
+    const schoolEnrollments = allEnrollments.filter((e: any) => e.schoolId === schoolId);
+    const schoolPayments = allPayments.filter((p: any) => p.schoolId === schoolId);
+
     // Filter for completed payments (positive amounts)
-    const completedPayments = allPayments.filter((p: any) => 
+    const completedPayments = schoolPayments.filter((p: any) => 
       p.amount > 0 && p.status === 'succeeded'
     );
 
@@ -2434,26 +2358,26 @@ router.get("/metrics/financial", async (req, res) => {
     );
 
     // Calculate outstanding balance (sum of remaining balances)
-    const outstandingBalance = allEnrollments.reduce((sum: number, e: any) => 
+    const outstandingBalance = schoolEnrollments.reduce((sum: number, e: any) => 
       sum + (e.remainingBalance || 0), 0
     );
 
     // Calculate average tuition paid per enrollment
-    const avgTuitionPaid = allEnrollments.length > 0 
-      ? allEnrollments.reduce((sum: number, e: any) => sum + (e.totalPaid || 0), 0) / allEnrollments.length
+    const avgTuitionPaid = schoolEnrollments.length > 0 
+      ? schoolEnrollments.reduce((sum: number, e: any) => sum + (e.totalPaid || 0), 0) / schoolEnrollments.length
       : 0;
 
     // Count accounts with unpaid balances
-    const unpaidAccounts = allEnrollments.filter((e: any) => 
+    const unpaidAccounts = schoolEnrollments.filter((e: any) => 
       (e.remainingBalance || 0) > 0
     ).length;
 
     // Calculate collection rate (percentage of enrollments fully paid)
-    const fullyPaidEnrollments = allEnrollments.filter((e: any) => 
+    const fullyPaidEnrollments = schoolEnrollments.filter((e: any) => 
       (e.remainingBalance || 0) === 0 && (e.totalCost || 0) > 0
     ).length;
-    const collectionRate = allEnrollments.length > 0 
-      ? (fullyPaidEnrollments / allEnrollments.length) * 100 
+    const collectionRate = schoolEnrollments.length > 0 
+      ? (fullyPaidEnrollments / schoolEnrollments.length) * 100 
       : 0;
 
     // Calculate monthly revenue (last 30 days)
@@ -2482,13 +2406,20 @@ router.get("/metrics/financial", async (req, res) => {
 });
 
 // Academic Metrics
-router.get("/metrics/academic", async (req, res) => {
+router.get("/metrics/academic", supabaseAuth, async (req: any, res) => {
   try {
-    console.log('📚 Calculating academic metrics from database');
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
+    console.log('📚 Calculating academic metrics from database for school:', schoolId);
 
     // Get data from database
-    const classes = await storage.getAllClasses();
-    const students = await storage.getAllChildren();
+    const allClasses = await storage.getAllClasses();
+    const allStudents = await storage.getAllChildren();
+
+    // Filter data by school
+    const classes = allClasses.filter((c: any) => c.schoolId === schoolId);
+    const students = allStudents.filter((s: any) => s.schoolId === schoolId);
 
     // Calculate academic performance metrics
     const totalClasses = classes.length;
