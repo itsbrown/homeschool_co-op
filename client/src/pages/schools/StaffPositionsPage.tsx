@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Plus, Edit, Trash2, Check, X, ArrowLeft } from "lucide-react";
 
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
@@ -91,9 +92,6 @@ export default function StaffPositionsPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editIsDefault, setEditIsDefault] = useState(false);
-
-  // State to manage staff positions locally
-  const [staffPositions, setStaffPositions] = useState<Position[]>(initialPositions);
   
   // Get staff positions from API
   const { data: positions, isLoading } = useQuery({
@@ -108,7 +106,6 @@ export default function StaffPositionsPage() {
       return response.json();
     },
     enabled: true,
-    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
   });
 
   // Form for adding new position
@@ -192,11 +189,13 @@ export default function StaffPositionsPage() {
 
   // Setup mutation for deleting positions
   const deletePositionMutation = useMutation({
-    mutationFn: (id: number) => {
+    mutationFn: async (id: number) => {
       console.log("Deleting position:", id);
-      // Remove from local state directly
-      setStaffPositions(current => current.filter(pos => pos.id !== id));
-      return Promise.resolve(id);
+      const response = await apiRequest("DELETE", `/api/school-admin/staff-positions/${id}`);
+      if (!response.ok) {
+        throw new Error('Failed to delete position');
+      }
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff-positions'] });
@@ -417,7 +416,7 @@ export default function StaffPositionsPage() {
                 </TableHeader>
                 <TableBody>
                   {positions && positions.length > 0 ? (
-                    positions.map((position) => (
+                    positions.map((position: Position) => (
                       <TableRow key={position.id}>
                         <TableCell>
                           {editingPosition === position.id ? (
