@@ -646,6 +646,11 @@ export class DatabaseStorage implements IStorage {
     return child;
   }
 
+  // Alias for getChild to maintain API compatibility
+  async getChildById(id: number): Promise<Child | undefined> {
+    return this.getChild(id);
+  }
+
   async getChildrenByParent(parentId: number): Promise<Child[]> {
     const db = await getDb();
     return await db.select().from(children).where(eq(children.parentId, parentId));
