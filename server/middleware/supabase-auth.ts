@@ -60,6 +60,43 @@ export const supabaseAuth = async (
       },
     };
 
+    // Auto-fix missing school_id in JWT token by syncing from database
+    if (!user.user_metadata?.school_id && user.email) {
+      try {
+        // Import storage dynamically to avoid circular dependencies
+        const { storage } = await import('../storage.js');
+        const dbUser = await storage.getUserByEmail(user.email);
+        
+        if (dbUser?.schoolId) {
+          console.log(`⚠️ Auto-syncing school_id=${dbUser.schoolId} for user ${user.email}`);
+          
+          // Update Supabase user metadata in background (don't await)
+          supabase.auth.admin.updateUserById(user.id, {
+            user_metadata: {
+              ...user.user_metadata,
+              school_id: dbUser.schoolId,
+              role: dbUser.role,
+              name: dbUser.name
+            }
+          }).then(({ error: updateError }) => {
+            if (updateError) {
+              console.error('❌ Failed to auto-sync metadata:', updateError);
+            } else {
+              console.log(`✅ Auto-synced metadata for ${user.email}`);
+            }
+          }).catch(err => console.error('Auto-sync error:', err));
+          
+          // Add school_id to current request immediately
+          if (req.auth?.payload) {
+            req.auth.payload.school_id = dbUser.schoolId;
+            console.log(`✅ Added school_id=${dbUser.schoolId} to current request`);
+          }
+        }
+      } catch (syncError) {
+        console.error('Error during auto-sync:', syncError);
+      }
+    }
+
     next();
   } catch (error) {
     console.error('Authentication middleware error:', error);
