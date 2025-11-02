@@ -135,6 +135,12 @@ The following critical tables have been migrated from in-memory storage to persi
   - GET /api/admin/classes/:id now validates ownership (was allowing cross-tenant access)
   - CSV upload endpoint now assigns authenticated school_id to all imported records
   - Account import endpoints normalize school_id before passing to helper functions
+- **Automatic Metadata Migration**: Fixed historical naming mismatch
+  - Registration now stores `school_id` (snake_case) instead of `schoolId` in Supabase user_metadata
+  - Auth middleware auto-detects and permanently fixes existing users missing school_id
+  - Runs once per user on first authenticated request after fix deployment
+  - User metadata permanently updated in Supabase, no repeated sync needed
+  - Created migration script (server/migrations/sync-user-metadata.ts) for batch updates
 - **Result**: Production-ready multi-tenant isolation with no cross-school data leakage
 
 **Implementation Details**:

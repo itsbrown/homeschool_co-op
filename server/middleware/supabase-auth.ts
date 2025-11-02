@@ -61,6 +61,7 @@ export const supabaseAuth = async (
     };
 
     // Auto-fix missing school_id in JWT token by syncing from database
+    // This runs ONCE per user and permanently updates their Supabase metadata
     if (!user.user_metadata?.school_id && user.email) {
       try {
         // Import storage dynamically to avoid circular dependencies
@@ -68,32 +69,34 @@ export const supabaseAuth = async (
         const dbUser = await storage.getUserByEmail(user.email);
         
         if (dbUser?.schoolId) {
-          console.log(`⚠️ Auto-syncing school_id=${dbUser.schoolId} for user ${user.email}`);
+          console.log(`⚠️ Auto-fixing missing school_id for ${user.email}`);
           
-          // Update Supabase user metadata in background (don't await)
-          supabase.auth.admin.updateUserById(user.id, {
+          // Update Supabase user metadata SYNCHRONOUSLY to ensure it's permanent
+          const { data, error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
             user_metadata: {
               ...user.user_metadata,
               school_id: dbUser.schoolId,
               role: dbUser.role,
               name: dbUser.name
             }
-          }).then(({ error: updateError }) => {
-            if (updateError) {
-              console.error('❌ Failed to auto-sync metadata:', updateError);
-            } else {
-              console.log(`✅ Auto-synced metadata for ${user.email}`);
-            }
-          }).catch(err => console.error('Auto-sync error:', err));
+          });
           
-          // Add school_id to current request immediately
+          if (updateError) {
+            console.error(`❌ Failed to update metadata for ${user.email}:`, updateError.message);
+          } else {
+            console.log(`✅ Permanently fixed metadata for ${user.email} with school_id=${dbUser.schoolId}`);
+            console.log(`   User should log out and back in for changes to take full effect`);
+          }
+          
+          // Add school_id to current request immediately so it works right now
           if (req.auth?.payload) {
             req.auth.payload.school_id = dbUser.schoolId;
-            console.log(`✅ Added school_id=${dbUser.schoolId} to current request`);
+            req.auth.payload.role = dbUser.role;
+            req.auth.payload.name = dbUser.name;
           }
         }
       } catch (syncError) {
-        console.error('Error during auto-sync:', syncError);
+        console.error('Error during metadata auto-fix:', syncError);
       }
     }
 
