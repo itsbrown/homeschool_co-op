@@ -110,7 +110,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     queryFn: () => fetch('/api/locations', {
       credentials: 'include',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
       }
     }).then(res => {
       if (!res.ok) throw new Error('Failed to fetch locations');

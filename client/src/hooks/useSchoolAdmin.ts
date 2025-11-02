@@ -24,7 +24,7 @@ export function useSchoolAdmin() {
     queryKey: ['/api/users/profile'],
     queryFn: () => fetch('/api/users/profile', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
       }
     }).then(res => {
       if (!res.ok) throw new Error('Failed to fetch profile')

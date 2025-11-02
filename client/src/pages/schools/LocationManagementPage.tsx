@@ -58,7 +58,7 @@ export default function LocationManagementPage() {
     queryKey: ['/api/school-admin/locations/overview'],
     queryFn: () => fetch('/api/school-admin/locations/overview', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
       }
     }).then(res => res.json())
   })
@@ -69,7 +69,7 @@ export default function LocationManagementPage() {
     queryFn: () => selectedLocationId ? 
       fetch(`/api/school-admin/students/by-location/${selectedLocationId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
         }
       }).then(res => res.json()) : null,
     enabled: !!selectedLocationId
@@ -80,7 +80,7 @@ export default function LocationManagementPage() {
     queryKey: ['/api/school-admin/user-locations/my-permissions'],
     queryFn: () => fetch('/api/school-admin/user-locations/my-permissions', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+        'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
       }
     }).then(res => res.json())
   })
@@ -92,7 +92,7 @@ export default function LocationManagementPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
         },
         body: JSON.stringify(locationData)
       }).then(res => {
@@ -156,7 +156,7 @@ export default function LocationManagementPage() {
       fetch(`/api/locations/${locationId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
         }
       }).then(res => {
         if (!res.ok) throw new Error('Failed to delete location')
@@ -194,7 +194,7 @@ export default function LocationManagementPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
         },
         body: JSON.stringify({ isActive: newStatus })
       }).then(res => {
@@ -236,7 +236,7 @@ export default function LocationManagementPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
         },
         body: JSON.stringify(locationData)
       }).then(res => {
@@ -269,7 +269,7 @@ export default function LocationManagementPage() {
       // Fetch complete location details for editing
       const response = await fetch(`/api/locations/${location.id}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`
+          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
         }
       })
       const fullLocationData = await response.json()
