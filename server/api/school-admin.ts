@@ -571,15 +571,20 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
 // Get classes for the school
 router.get("/classes", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
       return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
     }
 
     console.log(`🏫 Loading classes for school ID: ${schoolId}`);
 
     // Get classes from database storage
-    const allClasses = await storage.getClassesBySchoolId(String(schoolId));
+    const allClasses = await storage.getClassesBySchoolId(schoolId);
     
     console.log(`Found ${allClasses.length} classes for school ID ${schoolId} from database`);
 
