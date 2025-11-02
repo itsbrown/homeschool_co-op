@@ -242,7 +242,7 @@ function SchoolAdminEnrollmentForm({ parentEmail, parentId, children, onSuccess,
           <SelectContent>
             {children.map((child) => (
               <SelectItem key={child.id} value={child.id.toString()}>
-                {child.firstName} {child.lastName} (Grade: {child.grade})
+                {child.firstName} {child.lastName} (Grade: {child.gradeLevel})
               </SelectItem>
             ))}
           </SelectContent>

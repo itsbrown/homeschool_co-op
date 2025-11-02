@@ -85,6 +85,7 @@ export function ChildForm({ defaultValues, onSuccess, childId }: ChildFormProps)
       }
       
       // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
       queryClient.invalidateQueries({ queryKey: ["/api/children"] });
       
       // Reset form if it's a new child creation
