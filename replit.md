@@ -1,21 +1,20 @@
 # ASA Learning Platform
 
 ## Overview
-The ASA Learning Platform is an adaptive learning application for American Seekers Academy. It integrates full-stack web architecture with AI-powered content generation and educational assessment tools to provide a comprehensive and engaging educational experience for parents, educators, school administrators, and students. The platform aims to offer robust educational support, personalized learning paths, and efficient administrative tools.
+The ASA Learning Platform is an adaptive learning application for American Seekers Academy, designed to provide a comprehensive and engaging educational experience. It integrates full-stack web architecture with AI-powered content generation and educational assessment tools, offering robust educational support, personalized learning paths, and efficient administrative tools for parents, educators, school administrators, and students.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 ### Core Design Principles
-The platform uses a modern web application architecture focused on scalability, security, and user experience, incorporating role-based access control, AI-driven content generation, and a comprehensive payment system.
+The platform utilizes a modern web application architecture prioritizing scalability, security, and user experience. It incorporates role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
 
 ### Frontend
-- **Framework**: React with TypeScript, using Vite for building.
-- **UI**: Shadcn/ui (built on Radix UI) and Tailwind CSS for styling.
+- **Framework**: React with TypeScript, using Vite.
+- **UI**: Shadcn/ui (built on Radix UI) and Tailwind CSS for a professional, intuitive design with consolidated navigation and simplified page structures.
 - **State Management**: React hooks and context.
 - **Authentication**: Auth0 integration.
-- **UI/UX Decisions**: Professional, intuitive design with consolidated navigation, simplified page structures, and consistent design.
 
 ### Backend
 - **Runtime**: Node.js with Express.
@@ -26,145 +25,22 @@ The platform uses a modern web application architecture focused on scalability, 
 
 ### Data Storage
 - **Primary Database**: Neon PostgreSQL for all application data, including enrollment, payment, and financial tracking.
-- **Database Connection**: URL-encoded connection string builder for credential handling.
+- **Database Connection**: URL-encoded connection string builder.
 - **File Storage**: Local filesystem for general files and knowledge bases.
-- **Authentication Integration**: Frontend uses Supabase OAuth; backend queries Supabase directly for user/school data.
-- **Storage Architecture**: Hybrid storage system using CombinedStorage pattern that routes operations between database storage (dbStorage) for persistent data and in-memory storage (memStorage) for feature-specific data.
-
-### Recent Storage Migrations (October 2025)
-The following critical tables have been migrated from in-memory storage to persistent database storage to fix data loss issues after server restarts:
-
-**High-Priority Migrations (Completed)**:
-- **Classes**: All class management operations now persist to PostgreSQL database
-  - Migrated: 13 classes from classes.json to database (October 31, 2025)
-  - Updated: Database schema to include all missing columns (school_id, location_id, schedule, etc.)
-  - Removed: Startup code that loaded classes from JSON into memory storage
-  - Fixed: Admin interface now exclusively uses database storage (no file storage fallback)
-  - Updated: server/api/admin-classes.ts to use CombinedStorage/dbStorage
-  - All class CRUD operations now persist to classes table (marketplace offerings)
-  - Result: Database is the single source of truth for classes data - no data loss on restarts
-- **Schools**: School data including registration codes now stored in database
-  - Fixed: Schools API file storage fallback removed (was causing registration code mismatch)
-  - Updated: server/api/schools.ts to query database only for all endpoints (GET /:id, GET /by-code/:code, POST /)
-  - Removed: File storage checks from generateRegistrationCode function
-  - Result: Admin UI now displays correct registration codes from database instead of stale JSON file data
-- **Children**: Child profile data now persists exclusively to PostgreSQL database
-  - Migrated: 75 children from children.json to database (October 31, 2025)
-  - Removed: Startup code that loaded children from JSON into memory storage
-  - Fixed: Dual storage issue where database creates were ignored in favor of stale JSON data
-  - Updated: CombinedStorage routes all child operations to dbStorage
-  - Result: Database is the single source of truth for children data - no data loss on restarts
-- **School Students**: Student enrollment tracking now persists to database
-  - Migrated: 72 school_students from school-students.json to database (October 31, 2025)
-  - Removed: Startup code that loaded school_students from JSON into memory storage
-  - Fixed: Dual storage issue causing stale data to override database records
-  - Implemented: Full CRUD operations in dbStorage for school_students table
-  - Updated: CombinedStorage routes school_students to dbStorage
-  - Auto-create: school_student records when children are registered
-  - Result: Database is the single source of truth for school_students - no data loss on restarts
-- **Membership Enrollments**: Annual membership fee tracking and enrollment status now persistent
-- **Stripe Subscription Schedules**: Payment plan tracking for Stripe integration now stored in database
-
-**Feature-Specific Migrations (Completed)**:
-- **Daily Flow Templates**: Curriculum planning templates now persist across restarts
-- **Daily Flow Entries**: Individual scheduled activities and lesson tracking in database
-- **Daily Flow Schedules**: Weekly recurring schedule templates stored persistently
-- **Marketing Links**: Campaign tracking and analytics now stored in database with click counting
-
-**Completed Migrations (October 31, 2025)**:
-- **Locations**: 2 locations migrated to database (IDs: 4, 5)
-  - Added full CRUD operations in dbStorage
-  - CombinedStorage routes location operations to database
-  - JSON file archived to backups
-  - **November 1, 2025**: Updated locations API (`server/api/locations.ts`) to use database storage exclusively, removing all file-based storage code
-- **User Locations**: Table created, 4 stale records skipped (referenced deleted locations)
-  - Added full CRUD operations in dbStorage
-  - CombinedStorage routes user_location operations to database
-  - JSON file archived to backups
-- **Marketplace Class Enrollments**: New `marketplaceClassEnrollments` table created
-  - Separate from programEnrollments and schoolClassEnrollments
-  - Added full CRUD operations in dbStorage with typed methods
-  - CombinedStorage routes enrollment operations to database
-  - 2 stale test enrollments skipped (referenced deleted child)
-  - Architect-recommended approach for clean data model separation
-  - JSON file archived to backups
-
-**Auxiliary Systems Migrations (November 1, 2025)**:
-- **Staff Positions**: Dynamic position management now database-backed
-  - Removed: All file operations from school-admin.ts (loadStaffPositions/saveStaffPositions)
-  - Added: staffPositions table with full CRUD operations in dbStorage
-  - Updated: All endpoints (GET, POST, PATCH, DELETE) use database storage exclusively
-  - CombinedStorage routes staff position operations to database
-  - Result: Position definitions persist across server restarts
-- **Staff Invitations**: Secure token-based invitations now stored in database
-  - Removed: All file operations from school-admin.ts (loadStaffInvitations/saveStaffInvitations)
-  - Updated: Invitation validation and acceptance endpoints use roleInvitations table
-  - All invitation flows use database-backed roleInvitations (no file storage)
-  - CombinedStorage routes invitation operations to database
-  - Result: Invitation tokens and status persist across server restarts
-- **Password Reset Tokens**: Secure password reset flow now database-backed
-  - Removed: All file operations from auth.ts and school-admin.ts
-  - Added: passwordResetTokens table with expiry and usage tracking
-  - Updated: Both /forgot-password and /reset-password endpoints use database storage
-  - Updated: School admin password reset endpoint (/users/:userId/send-password-reset) uses database
-  - Added: Automatic cleanup of expired tokens via deleteExpiredPasswordResetTokens
-  - CombinedStorage routes password reset token operations to database
-  - Result: Reset tokens persist across server restarts with proper expiry handling
-
-**Multi-Tenant Security Implementation (November 2, 2025)**:
-- **Hardcoded School ID Removal**: Eliminated ALL 32+ hardcoded `school_id = 1` instances across the entire codebase
-  - Updated 18 endpoints in server/api/school-admin.ts
-  - Updated 6 endpoints in server/api/admin-classes.ts (GET, GET/:id, POST, PATCH, DELETE, CSV upload)
-  - Updated 4 endpoints in server/api/marketing-links.ts
-  - Updated 2 endpoints in server/api/account-import.ts
-  - Updated child creation in server/routes.ts
-  - Removed hardcoded school_id from 9 frontend files
-- **Type-Safe School ID Extraction**: All backend APIs now:
-  ```typescript
-  const schoolIdFromToken = req.auth?.payload?.school_id;
-  const schoolId = Number(schoolIdFromToken); // Normalize JWT string to number
-  if (isNaN(schoolId)) return 400; // Validate conversion
-  ```
-- **School Boundary Enforcement**: Implemented comprehensive multi-tenant isolation:
-  - GET endpoints scope data by authenticated school (e.g., getClassesBySchoolId)
-  - POST endpoints assign school_id from JWT token, never from client
-  - PATCH/DELETE endpoints verify ownership before modification
-  - CSV import endpoints enforce school boundaries on all records
-- **Cross-Tenant Protection**: Fixed critical security vulnerabilities:
-  - GET /api/admin/classes now filters by school_id (was returning all schools' classes)
-  - GET /api/admin/classes/:id now validates ownership (was allowing cross-tenant access)
-  - CSV upload endpoint now assigns authenticated school_id to all imported records
-  - Account import endpoints normalize school_id before passing to helper functions
-- **Automatic Metadata Migration**: Fixed historical naming mismatch
-  - Registration now stores `school_id` (snake_case) instead of `schoolId` in Supabase user_metadata
-  - Auth middleware auto-detects and permanently fixes existing users missing school_id
-  - Runs once per user on first authenticated request after fix deployment
-  - User metadata permanently updated in Supabase, no repeated sync needed
-  - Created migration script (server/migrations/sync-user-metadata.ts) for batch updates
-- **Result**: Production-ready multi-tenant isolation with no cross-school data leakage
-
-**Implementation Details**:
-- All migrations implemented using Drizzle ORM with full CRUD operations
-- CombinedStorage routes critical data operations to dbStorage (PostgreSQL)
-- Legacy memStorage retained for non-critical feature data and caching
-- No data loss on server restarts for migrated tables
-- Admin interfaces updated to use database storage instead of file-based storage
-- Marketplace class enrollments use auto-generated IDs instead of timestamp-based IDs
-- All school-related operations use JWT-derived school_id with type-safe numeric normalization
+- **Authentication Integration**: Frontend uses Supabase OAuth; backend queries Supabase for user/school data.
+- **Storage Architecture**: Hybrid system using CombinedStorage, routing operations between database storage (dbStorage) for persistent data and in-memory storage (memStorage) for feature-specific data. All critical data, including Classes, Schools, Children, School Students, Membership Enrollments, Stripe Subscription Schedules, Locations, User Locations, Marketplace Class Enrollments, Staff Positions, Staff Invitations, and Password Reset Tokens, have been migrated to persistent PostgreSQL storage.
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation.
-- **Membership Management System**: Admin interface for managing annual membership fees, including enrollment validation, manual payment recording, and status tracking. Supports multi-school environments and various membership statuses.
-- **Admin Payment Plan Editing**: Allows school administrators to modify payment plans for existing enrollments via a dedicated UI, supporting different payment frequencies and providing an audit trail.
-- **Enhanced Payment System**: Stripe-only payment system with subscription schedules, webhook integration, and smart cart logic.
-- **Date-Driven Payment Plans**: Calculates installment schedules based on program dates (weekly, biweekly, monthly) rather than fixed counts, with specific logic for biweekly payments to ensure completion before program end.
-- **Automated Refund Processing**: Admins can process full or partial refunds via Stripe API for Stripe payments, with internal records for manual payments.
+- **Multi-Tenant Security**: Comprehensive isolation preventing cross-school data leakage, with hardcoded school IDs removed and all APIs enforcing school boundaries based on the authenticated user's `school_id` from the JWT. Account import processes also enforce strict school-scoped validation.
+- **Membership Management System**: Admin interface for managing annual membership fees, enrollment validation, and manual payment recording.
+- **Payment System**: Stripe-only payment system with subscription schedules, webhook integration, smart cart logic, date-driven payment plans, and automated refund processing.
 - **Registration Flow**: Automated account creation, handling existing accounts, and auto-login.
 - **AI Enrollment Assistant**: Personalized AI guidance for enrollment.
-- **Staff Management & Invitation System**: Automated staff onboarding, secure token-based invitations, and dynamic position management.
+- **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management.
 - **User Account Management**: School administrators can send account invites and password reset emails.
 - **Password Reset System**: Email-based password reset with secure token handling.
-- **Email Service**: Dual integration with Brevo SMTP and SendGrid for various notifications.
+- **Email Service**: Dual integration with Brevo SMTP and SendGrid.
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis, Stability AI for image generation, and Hugging Face for text processing.
 
