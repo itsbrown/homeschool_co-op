@@ -85,9 +85,13 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     }
     
     // Create payment record with installment details
-    // Get schoolId from enrollment or parent user
+    // Get schoolId from enrollment or parent user - NEVER allow hardcoded fallback
     const parentUser = await storage.getUserByEmail(userEmail);
-    const schoolId = enrollments[0]?.schoolId || parentUser?.schoolId || 1;
+    const schoolId = enrollments[0]?.schoolId || parentUser?.schoolId;
+    
+    if (!schoolId) {
+      throw new Error(`Cannot create payment record: No valid school ID found for parent ${userEmail}`);
+    }
     
     const paymentRecord = {
       schoolId,

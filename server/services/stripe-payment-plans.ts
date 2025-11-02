@@ -101,22 +101,47 @@ export class StripePaymentPlanService {
 
     console.log('💳 PaymentIntent created for first payment:', paymentIntent.id, CurrencyUtils.toDisplay(firstPhase.amount));
 
+    // Get parent user and enrollment data for scheduled payment records
+    const parentUser = await this.storage.getUserByEmail(data.parentEmail);
+    if (!parentUser) {
+      throw new Error(`Parent user not found: ${data.parentEmail}`);
+    }
+    
+    const firstEnrollmentData = await this.storage.getEnrollmentById(data.enrollmentIds[0]);
+    if (!firstEnrollmentData) {
+      throw new Error(`Enrollment not found: ${data.enrollmentIds[0]}`);
+    }
+    
+    const schoolId = firstEnrollmentData.schoolId || parentUser.schoolId;
+    if (!schoolId) {
+      throw new Error(`Cannot create scheduled payment: No valid school ID found for parent ${data.parentEmail}`);
+    }
+
     // Create scheduled payments for remaining phases (if any)
     const scheduledPayments = [];
     for (let i = 1; i < phases.length; i++) {
       const phase = phases[i];
       const scheduledPayment = await this.storage.createScheduledPayment({
+        schoolId: schoolId,
+        enrollmentId: data.enrollmentIds[0], // Use first enrollment as primary reference
+        parentId: parentUser.id,
         parentEmail: data.parentEmail,
-        enrollmentIds: data.enrollmentIds,
-        paymentPlan: data.paymentPlan,
-        installmentNumber: phase.installmentNumber,
-        totalInstallments: phases.length,
         amount: phase.amount,
         currency: 'usd',
-        dueDate: phase.dueDate,
+        scheduledDate: phase.dueDate,
+        frequency: 'one_time' as const,
+        installmentNumber: phase.installmentNumber,
+        totalInstallments: phases.length,
         status: 'pending' as const,
-        originalPaymentId: null, // Will be updated after first payment succeeds
-        description: phase.description
+        stripePaymentIntentId: null,
+        processedAt: null,
+        failureReason: null,
+        retryCount: 0,
+        metadata: {
+          enrollmentIds: data.enrollmentIds,
+          paymentPlan: data.paymentPlan,
+          description: phase.description
+        }
       });
       scheduledPayments.push(scheduledPayment);
       console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phase.dueDate.toLocaleDateString()}`);

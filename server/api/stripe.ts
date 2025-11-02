@@ -109,6 +109,12 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           throw new Error(`Class ${item.classId} not found`);
         }
         
+        // Validate schoolId - NEVER allow fallback to hardcoded values
+        const enrollmentSchoolId = child.schoolId || parent.schoolId;
+        if (!enrollmentSchoolId) {
+          throw new Error(`Cannot create enrollment: No valid school ID found for child ${item.childId} or parent ${parent.email}`);
+        }
+        
         // Helper to safely convert date to string
         const formatDate = (date: any): string | null => {
           if (!date) return null;
@@ -118,7 +124,7 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
         };
         
         const enrollment = await storage.createProgramEnrollment({
-          schoolId: child.schoolId || parent.schoolId || 1, // Fallback to parent's school or default
+          schoolId: enrollmentSchoolId,
           classId: item.classId,
           programId: item.classId, // For backward compatibility
           childId: item.childId,

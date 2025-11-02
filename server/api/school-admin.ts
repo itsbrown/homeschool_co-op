@@ -3744,7 +3744,13 @@ router.post('/import-users', async (req: any, res) => {
       return res.status(400).json({ error: "No files uploaded" });
     }
     
-    const schoolId = parseInt(req.body.schoolId) || 1;
+    // Validate schoolId - NEVER allow hardcoded fallback
+    const schoolIdRaw = parseInt(req.body.schoolId);
+    if (!schoolIdRaw || isNaN(schoolIdRaw)) {
+      console.error('❌ Invalid or missing school ID in request');
+      return res.status(400).json({ error: "Valid school ID is required for user import" });
+    }
+    const schoolId = schoolIdRaw;
     console.log(`🏫 Importing users for school ID: ${schoolId}`);
     
     const results = {
