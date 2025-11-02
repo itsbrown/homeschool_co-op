@@ -55,11 +55,11 @@ interface Child {
   id: number;
   firstName: string;
   lastName: string;
-  birthDate: string;
+  birthdate: string;
   gradeLevel: string;
   specialNeeds: string | null;
   allergies: string | null;
-  healthNotes: string | null;
+  medicalInfo: string | null;
   profileImage: string | null;
 }
 
@@ -269,7 +269,7 @@ export function ChildrenManagement() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 opacity-70" />
-                    <span className="text-sm">Born: {formatDate(child.birthDate)}</span>
+                    <span className="text-sm">Born: {formatDate(child.birthdate)}</span>
                   </div>
                   
                   {child.allergies && (
@@ -304,10 +304,10 @@ export function ChildrenManagement() {
                   </TabsContent>
                   <TabsContent value="details">
                     <div className="space-y-2 py-4">
-                      {child.healthNotes && (
+                      {child.medicalInfo && (
                         <div>
-                          <h4 className="text-sm font-medium">Health Notes:</h4>
-                          <p className="text-sm text-muted-foreground">{child.healthNotes}</p>
+                          <h4 className="text-sm font-medium">Medical Info:</h4>
+                          <p className="text-sm text-muted-foreground">{child.medicalInfo}</p>
                         </div>
                       )}
                       <div className="flex justify-end">
@@ -342,11 +342,11 @@ export function ChildrenManagement() {
               defaultValues={{
                 firstName: selectedChild.firstName,
                 lastName: selectedChild.lastName,
-                birthDate: new Date(selectedChild.birthDate).toISOString().split('T')[0],
+                birthDate: new Date(selectedChild.birthdate).toISOString().split('T')[0],
                 gradeLevel: selectedChild.gradeLevel,
                 specialNeeds: selectedChild.specialNeeds || "",
                 allergies: selectedChild.allergies || "",
-                healthNotes: selectedChild.healthNotes || "",
+                medicalInfo: selectedChild.medicalInfo || "",
               }}
               onSuccess={handleEditChildSuccess}
               childId={selectedChild.id}
