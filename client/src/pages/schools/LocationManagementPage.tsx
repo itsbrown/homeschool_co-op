@@ -695,10 +695,10 @@ export default function LocationManagementPage() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList>
-          <TabsTrigger value="overview">Location Overview</TabsTrigger>
-          <TabsTrigger value="students">Students by Location</TabsTrigger>
-          <TabsTrigger value="permissions">My Permissions</TabsTrigger>
+        <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+          <TabsTrigger value="overview" className="text-xs sm:text-sm">Location Overview</TabsTrigger>
+          <TabsTrigger value="students" className="text-xs sm:text-sm">Students by Location</TabsTrigger>
+          <TabsTrigger value="permissions" className="text-xs sm:text-sm">My Permissions</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -710,94 +710,109 @@ export default function LocationManagementPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Address</TableHead>
-                    <TableHead>Students</TableHead>
-                    <TableHead>Staff</TableHead>
-                    <TableHead>Capacity</TableHead>
-                    <TableHead>Utilization</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {locations.map((location) => (
-                    <TableRow key={location.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          {location.name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {location.address}
-                      </TableCell>
-                      <TableCell>{location.totalStudents}</TableCell>
-                      <TableCell>{location.staffCount}</TableCell>
-                      <TableCell>{location.capacity}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="text-sm font-medium">{location.utilization}%</div>
-                          <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full ${
-                                location.utilization > 80 ? 'bg-red-500' :
-                                location.utilization > 60 ? 'bg-yellow-500' : 'bg-green-500'
-                              }`}
-                              style={{ width: `${Math.min(location.utilization, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={location.status === 'Active' ? 'default' : 'secondary'}>
-                          {location.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Edit location"
-                            className="h-8 w-8 p-0"
-                            onClick={() => handleEditLocation(location)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title={location.status === 'Active' ? 'Deactivate location' : 'Activate location'}
-                            className={`h-8 w-8 p-0 ${
-                              location.status === 'Active' 
-                                ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' 
-                                : 'text-green-600 hover:text-green-700 hover:bg-green-50'
-                            }`}
-                            onClick={() => handleToggleStatus(location)}
-                            disabled={toggleStatusMutation.isPending}
-                          >
-                            <Power className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Delete location"
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => handleDeleteLocation(location)}
-                            disabled={deleteLocationMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              {locations.length > 0 ? (
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[150px]">Location</TableHead>
+                        <TableHead className="hidden md:table-cell min-w-[200px]">Address</TableHead>
+                        <TableHead className="min-w-[80px]">Students</TableHead>
+                        <TableHead className="hidden lg:table-cell min-w-[60px]">Staff</TableHead>
+                        <TableHead className="hidden lg:table-cell min-w-[80px]">Capacity</TableHead>
+                        <TableHead className="hidden xl:table-cell min-w-[120px]">Utilization</TableHead>
+                        <TableHead className="min-w-[80px]">Status</TableHead>
+                        <TableHead className="min-w-[120px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {locations.map((location) => (
+                        <TableRow key={location.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 flex-shrink-0" />
+                              <span className="whitespace-nowrap">{location.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                            <span className="line-clamp-2">{location.address}</span>
+                          </TableCell>
+                          <TableCell>{location.totalStudents}</TableCell>
+                          <TableCell className="hidden lg:table-cell">{location.staffCount}</TableCell>
+                          <TableCell className="hidden lg:table-cell">{location.capacity}</TableCell>
+                          <TableCell className="hidden xl:table-cell">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium whitespace-nowrap">{location.utilization}%</div>
+                              <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${
+                                    location.utilization > 80 ? 'bg-red-500' :
+                                    location.utilization > 60 ? 'bg-yellow-500' : 'bg-green-500'
+                                  }`}
+                                  style={{ width: `${Math.min(location.utilization, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={location.status === 'Active' ? 'default' : 'secondary'}>
+                              {location.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Edit location"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleEditLocation(location)}
+                                data-testid={`button-edit-location-${location.id}`}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title={location.status === 'Active' ? 'Deactivate location' : 'Activate location'}
+                                className={`h-8 w-8 p-0 ${
+                                  location.status === 'Active' 
+                                    ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' 
+                                    : 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                                }`}
+                                onClick={() => handleToggleStatus(location)}
+                                disabled={toggleStatusMutation.isPending}
+                                data-testid={`button-toggle-status-${location.id}`}
+                              >
+                                <Power className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Delete location"
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleDeleteLocation(location)}
+                                disabled={deleteLocationMutation.isPending}
+                                data-testid={`button-delete-location-${location.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Building2 className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
+                  <h3 className="mt-4 text-lg font-semibold">No locations found</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Get started by adding your first location using the "Add Location" button above.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -833,53 +848,60 @@ export default function LocationManagementPage() {
               </div>
 
               {selectedLocationId && (
-                <div className="border rounded-lg">
+                <div className="border rounded-lg overflow-hidden">
                   {isLoadingStudents ? (
                     <div className="p-8 text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                       <p className="text-sm text-muted-foreground mt-2">Loading students...</p>
                     </div>
                   ) : students.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Student Name</TableHead>
-                          <TableHead>Grade Level</TableHead>
-                          <TableHead>Parent Email</TableHead>
-                          <TableHead>Enrollment Date</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {students.map((student) => (
-                          <TableRow key={student.id}>
-                            <TableCell className="font-medium">
-                              {student.child ? 
-                                `${student.child.firstName} ${student.child.lastName}` :
-                                'Unknown Student'
-                              }
-                            </TableCell>
-                            <TableCell>
-                              {student.child?.gradeLevel || student.gradeLevel || 'N/A'}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {student.child?.parentEmail || 'N/A'}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {new Date(student.enrollmentDate).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={student.status === 'active' ? 'default' : 'secondary'}>
-                                {student.status}
-                              </Badge>
-                            </TableCell>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[150px]">Student Name</TableHead>
+                            <TableHead className="min-w-[100px]">Grade Level</TableHead>
+                            <TableHead className="hidden md:table-cell min-w-[200px]">Parent Email</TableHead>
+                            <TableHead className="hidden lg:table-cell min-w-[120px]">Enrollment Date</TableHead>
+                            <TableHead className="min-w-[80px]">Status</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {students.map((student) => (
+                            <TableRow key={student.id}>
+                              <TableCell className="font-medium">
+                                <span className="whitespace-nowrap">
+                                  {student.child ? 
+                                    `${student.child.firstName} ${student.child.lastName}` :
+                                    'Unknown Student'
+                                  }
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {student.child?.gradeLevel || student.gradeLevel || 'N/A'}
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell text-sm">
+                                <span className="truncate max-w-[200px] inline-block">
+                                  {student.child?.parentEmail || 'N/A'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-sm whitespace-nowrap">
+                                {new Date(student.enrollmentDate).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={student.status === 'active' ? 'default' : 'secondary'}>
+                                  {student.status}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   ) : (
                     <div className="p-8 text-center">
-                      <p className="text-muted-foreground">No students found at this location.</p>
+                      <Users className="mx-auto h-10 w-10 text-muted-foreground opacity-50" />
+                      <p className="mt-3 text-muted-foreground">No students found at this location.</p>
                     </div>
                   )}
                 </div>
