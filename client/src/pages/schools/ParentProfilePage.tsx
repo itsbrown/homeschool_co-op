@@ -60,6 +60,7 @@ import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import { useSchoolAdmin } from '@/hooks/useSchoolAdmin';
 
 interface ParentProfile {
   parent: {
@@ -78,12 +79,12 @@ interface ParentProfile {
     schoolStudentId: number | null;
     firstName: string;
     lastName: string;
-    birthDate: string;
-    grade: string;
+    birthdate: string;
+    gradeLevel: string;
     schoolId: number | null;
     parentEmail: string;
     allergies: string | null;
-    medicalConditions: string | null;
+    medicalInfo: string | null;
     emergencyContact: string | null;
     additionalLanguages: string | null;
     notes: string | null;
@@ -489,6 +490,7 @@ export default function ParentProfilePage() {
   const [createMembershipDialog, setCreateMembershipDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { schoolId } = useSchoolAdmin();
 
   const { data: profile, isLoading, error } = useQuery<ParentProfile>({
     queryKey: [`/api/parent-profile/${parentId}`],
@@ -806,10 +808,10 @@ export default function ParentProfilePage() {
                                 {child.firstName} {child.lastName}
                               </h3>
                               <div className="text-sm text-muted-foreground space-y-1 mt-2">
-                                <p>Grade: {child.grade}</p>
-                                <p>Birth Date: {child.birthDate ? new Date(child.birthDate + 'T00:00:00').toLocaleDateString() : 'No date set'}</p>
+                                <p>Grade: {child.gradeLevel}</p>
+                                <p>Birth Date: {child.birthdate ? new Date(child.birthdate + 'T00:00:00').toLocaleDateString() : 'No date set'}</p>
                                 {child.allergies && <p>Allergies: {child.allergies}</p>}
-                                {child.medicalConditions && <p>Medical Conditions: {child.medicalConditions}</p>}
+                                {child.medicalInfo && <p>Medical Info: {child.medicalInfo}</p>}
                                 {child.additionalLanguages && <p>Languages: {child.additionalLanguages}</p>}
                                 {child.notes && <p>Notes: {child.notes}</p>}
                               </div>
@@ -1326,9 +1328,10 @@ export default function ParentProfilePage() {
               </Button>
               <Button
                 onClick={() => {
-                  if (profile) {
+                  if (profile && schoolId) {
                     createMembershipMutation.mutate({
                       parentUserId: profile.parent.id,
+                      schoolId: schoolId,
                       membershipYear: new Date().getFullYear()
                     });
                   }

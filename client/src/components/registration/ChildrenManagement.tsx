@@ -342,7 +342,7 @@ export function ChildrenManagement() {
               defaultValues={{
                 firstName: selectedChild.firstName,
                 lastName: selectedChild.lastName,
-                birthDate: new Date(selectedChild.birthdate).toISOString().split('T')[0],
+                birthdate: new Date(selectedChild.birthdate).toISOString().split('T')[0],
                 gradeLevel: selectedChild.gradeLevel,
                 specialNeeds: selectedChild.specialNeeds || "",
                 allergies: selectedChild.allergies || "",
