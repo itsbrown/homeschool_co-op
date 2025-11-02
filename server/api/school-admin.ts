@@ -75,6 +75,27 @@ function generateTemporaryPassword(): string {
   return result;
 }
 
+function extractSchoolId(req: any): number | null {
+  const schoolIdFromToken = req.auth?.payload?.school_id;
+  if (!schoolIdFromToken) {
+    return null;
+  }
+  const schoolId = Number(schoolIdFromToken);
+  if (isNaN(schoolId)) {
+    return null;
+  }
+  return schoolId;
+}
+
+function requireSchoolContext(req: any, res: any): number | null {
+  const schoolId = extractSchoolId(req);
+  if (schoolId === null) {
+    res.status(400).json({ message: "School ID not found or invalid in user metadata" });
+    return null;
+  }
+  return schoolId;
+}
+
 // Create Supabase account for staff member
 async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string; userExists?: boolean }> {
   try {
@@ -695,8 +716,11 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
 });
 
 // Get individual class by ID for editing
-router.get("/classes/:id", async (req, res) => {
+router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const classId = parseInt(req.params.id);
     console.log('🔍 Fetching class with ID:', classId);
 
@@ -708,6 +732,10 @@ router.get("/classes/:id", async (req, res) => {
       return res.status(404).json({ message: 'Class not found' });
     }
 
+    if (classData.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this class' });
+    }
+
     console.log('✅ Class found:', classData.title);
     res.json(classData);
   } catch (error) {
@@ -717,8 +745,11 @@ router.get("/classes/:id", async (req, res) => {
 });
 
 // Update class by ID
-router.put("/classes/:id", async (req, res) => {
+router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const classId = parseInt(req.params.id);
     console.log('📝 Updating class with ID:', classId);
     console.log('📄 Update data:', JSON.stringify(req.body, null, 2));
@@ -728,6 +759,10 @@ router.put("/classes/:id", async (req, res) => {
     if (!existingClass) {
       console.log('❌ Class not found with ID:', classId);
       return res.status(404).json({ message: 'Class not found' });
+    }
+
+    if (existingClass.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this class' });
     }
 
     // Handle variants - convert to JSON schedule format
@@ -814,8 +849,11 @@ router.put("/classes/:id", async (req, res) => {
 });
 
 // Delete a class
-router.delete("/classes/:id", async (req, res) => {
+router.delete("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const classId = parseInt(req.params.id);
     if (isNaN(classId)) {
       return res.status(400).json({ message: 'Invalid class ID' });
@@ -831,6 +869,10 @@ router.delete("/classes/:id", async (req, res) => {
       return res.status(404).json({ message: 'Class not found' });
     }
 
+    if (classToDelete.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this class' });
+    }
+
     // Delete the class from database
     await storage.deleteClass(classId);
 
@@ -843,14 +885,25 @@ router.delete("/classes/:id", async (req, res) => {
 });
 
 // Get class roster (students enrolled in a specific class)
-router.get("/classes/:id/roster", async (req, res) => {
+router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const classId = parseInt(req.params.id);
     if (isNaN(classId)) {
       return res.status(400).json({ message: "Invalid class ID" });
     }
 
     console.log(`📚 Fetching roster for class ID: ${classId}`);
+
+    const classData = await storage.getClassById(classId);
+    if (!classData) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+    if (classData.schoolId !== schoolId) {
+      return res.status(403).json({ message: "Access denied to this class" });
+    }
 
     // Get enrollment and children data from database
     const allEnrollments = await storage.getAllEnrollments();
@@ -1512,10 +1565,14 @@ router.delete("/staff/:id", async (req, res) => {
 });
 
 // Get staff positions/roles for dropdown
-router.get("/staff-positions", async (req, res) => {
+router.get("/staff-positions", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const positions = await storage.getAllStaffPositions();
-    res.json(positions);
+    const schoolPositions = positions.filter(p => p.schoolId === schoolId || p.schoolId === null);
+    res.json(schoolPositions);
   } catch (error) {
     console.error("Error fetching staff positions:", error);
     res.status(500).json({ message: "Error fetching staff positions" });
@@ -1523,9 +1580,12 @@ router.get("/staff-positions", async (req, res) => {
 });
 
 // Create new staff position
-router.post("/staff-positions", async (req, res) => {
+router.post("/staff-positions", supabaseAuth, async (req: any, res) => {
   try {
-    const { title, description, isDefault, schoolId } = req.body;
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
+    const { title, description, isDefault } = req.body;
 
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
@@ -1535,7 +1595,7 @@ router.post("/staff-positions", async (req, res) => {
       title,
       description: description || null,
       isDefault: isDefault || false,
-      schoolId: schoolId || null
+      schoolId: schoolId
     });
 
     console.log("Created new staff position:", newPosition);
@@ -1547,15 +1607,28 @@ router.post("/staff-positions", async (req, res) => {
 });
 
 // Update staff position  
-router.patch("/staff-positions/:id", async (req, res) => {
+router.patch("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
   console.log("🚨 PATCH ENDPOINT HIT! ID:", req.params.id);
   console.log("🚨 REQUEST BODY:", req.body);
 
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const positionId = parseInt(req.params.id);
     const { title, description, isDefault } = req.body;
 
     console.log("🔧 PATCH /staff-positions/" + positionId + " received:", { title, description, isDefault });
+
+    const position = await storage.getStaffPositionById(positionId);
+    if (!position) {
+      console.log("❌ Position not found for ID:", positionId);
+      return res.status(404).json({ message: "Staff position not found" });
+    }
+
+    if (position.schoolId !== null && position.schoolId !== schoolId) {
+      return res.status(403).json({ message: "Access denied to this position" });
+    }
 
     const updateData: any = {};
     if (title !== undefined) updateData.title = title;
@@ -1563,11 +1636,6 @@ router.patch("/staff-positions/:id", async (req, res) => {
     if (isDefault !== undefined) updateData.isDefault = isDefault;
 
     const updatedPosition = await storage.updateStaffPosition(positionId, updateData);
-
-    if (!updatedPosition) {
-      console.log("❌ Position not found for ID:", positionId);
-      return res.status(404).json({ message: "Staff position not found" });
-    }
 
     console.log("✅ Successfully updated staff position:", updatedPosition);
     res.json(updatedPosition);
@@ -1578,13 +1646,20 @@ router.patch("/staff-positions/:id", async (req, res) => {
 });
 
 // Delete staff position
-router.delete("/staff-positions/:id", async (req, res) => {
+router.delete("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
     const positionId = parseInt(req.params.id);
     const position = await storage.getStaffPositionById(positionId);
 
     if (!position) {
       return res.status(404).json({ message: "Staff position not found" });
+    }
+
+    if (position.schoolId !== null && position.schoolId !== schoolId) {
+      return res.status(403).json({ message: "Access denied to this position" });
     }
 
     await storage.deleteStaffPosition(positionId);
