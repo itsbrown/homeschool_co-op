@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
 import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema } from "@shared/schema";
+import { supabaseAuth } from "./middleware/supabase-auth";
 
 // Type for authenticated requests with our auth structure
 interface AuthenticatedRequest extends Request {
@@ -83,6 +84,25 @@ const testUsers = {
     subscription: "free"
   }
 };
+
+// Helper functions for school boundary validation
+function extractSchoolId(req: any): number | null {
+  const schoolIdFromToken = req.auth?.payload?.school_id;
+  if (!schoolIdFromToken) {
+    return null;
+  }
+  const schoolId = parseInt(schoolIdFromToken, 10);
+  return isNaN(schoolId) ? null : schoolId;
+}
+
+function requireSchoolContext(req: any, res: any): number | null {
+  const schoolId = extractSchoolId(req);
+  if (schoolId === null) {
+    res.status(400).json({ message: "School ID not found or invalid in user metadata" });
+    return null;
+  }
+  return schoolId;
+}
 
 // Removed express-session declarations - using Auth0 token-based authentication
 
@@ -2358,114 +2378,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Class update endpoint
-  app.put("/api/class-details/:id", (req, res) => {
+  // Class update endpoint - migrated to PostgreSQL with authentication
+  app.put("/api/class-details/:id", supabaseAuth, async (req: any, res) => {
     const classId = parseInt(req.params.id);
     console.log('📝 Updating class with ID:', classId);
     console.log('📄 Update data:', JSON.stringify(req.body, null, 2));
 
     try {
-      const filePath = path.join(process.cwd(), 'data/classes.json');
+      // Validate school context from JWT token
+      const schoolId = requireSchoolContext(req, res);
+      if (schoolId === null) return;
 
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ message: 'Classes file not found' });
+      if (isNaN(classId)) {
+        return res.status(400).json({ message: 'Invalid class ID' });
       }
 
-      const fileData = fs.readFileSync(filePath, 'utf-8');
-      const allClasses = JSON.parse(fileData);
-
-      const classIndex = allClasses.findIndex((cls: any) => cls.id === classId);
-
-      if (classIndex === -1) {
+      // Fetch existing class from database
+      const existingClass = await storage.getClassById(classId);
+      if (!existingClass) {
         console.log('❌ Class not found with ID:', classId);
         return res.status(404).json({ message: 'Class not found' });
       }
 
-      // Handle variants - convert to JSON schedule format
-      let schedule = req.body.schedule || allClasses[classIndex].schedule;
-      if (req.body.variants && Array.isArray(req.body.variants)) {
-        schedule = JSON.stringify({ variants: req.body.variants });
-        console.log('✅ Converting variants to schedule JSON:', schedule);
+      // Enforce school boundary - prevent cross-school access
+      if (existingClass.schoolId !== schoolId) {
+        console.log(`🚨 School boundary violation - Class ${classId} belongs to school ${existingClass.schoolId}, but user is from school ${schoolId}`);
+        return res.status(403).json({ message: 'Access denied: Class belongs to a different school' });
       }
 
-      // Handle gradeLevels array - convert to single gradeLevel
-      let gradeLevel = allClasses[classIndex].gradeLevel;
+      // Extract price from variants array (same logic as POST endpoint)
+      let price = existingClass.price;
+      let schedule = existingClass.schedule;
+
+      if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
+        // Extract price from first variant
+        const firstVariant = req.body.variants[0];
+        price = firstVariant.price || 0;
+        
+        // Store full variants in schedule field
+        schedule = { variants: req.body.variants };
+        
+        console.log('💰 Extracted price from variants:', price);
+        console.log('📅 Schedule data with variants:', JSON.stringify(schedule));
+      } else if (req.body.price !== undefined) {
+        // Fallback to direct price if no variants
+        price = req.body.price;
+      }
+
+      // Handle gradeLevels array
+      let gradeLevel = existingClass.gradeLevel;
       if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels) && req.body.gradeLevels.length > 0) {
         gradeLevel = req.body.gradeLevels[0];
       } else if (req.body.gradeLevel) {
         gradeLevel = req.body.gradeLevel;
       }
 
-      // Update the class with new data
-      const updatedClass = {
-        ...allClasses[classIndex],
-        title: req.body.title || allClasses[classIndex].title,
-        description: req.body.description || allClasses[classIndex].description,
-        category: req.body.category || allClasses[classIndex].category,
-        gradeLevel: gradeLevel,
-        status: req.body.status || allClasses[classIndex].status,
-        startDate: req.body.startDate || allClasses[classIndex].startDate,
-        endDate: req.body.endDate || allClasses[classIndex].endDate,
-        schedule: schedule,
-        capacity: req.body.capacity !== undefined ? req.body.capacity : allClasses[classIndex].capacity,
-        location: req.body.location || allClasses[classIndex].location,
-        instructorName: req.body.instructorName || allClasses[classIndex].instructorName,
-        instructorId: req.body.instructorId || allClasses[classIndex].instructorId,
-        price: req.body.price !== undefined ? req.body.price : allClasses[classIndex].price,
-        isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : allClasses[classIndex].isAdminOnly,
-        updatedAt: new Date().toISOString()
-      };
-
-      allClasses[classIndex] = updatedClass;
-
-      // If this class has variants, update the corresponding child classes
-      if (req.body.variants && Array.isArray(req.body.variants)) {
-        console.log('🔄 Updating child classes for variants...');
-        const baseTitle = updatedClass.title;
-        
-        req.body.variants.forEach((variant: any) => {
-          // Find child class with matching title pattern "BaseTitle | VariantName"
-          // Try exact match first, then try partial match (in case variant name includes time)
-          let childTitle = `${baseTitle} | ${variant.name}`;
-          let childIndex = allClasses.findIndex((cls: any) => cls.title === childTitle);
-          
-          // If exact match fails, try to find by partial match (e.g., "Half Day" matches "Half Day 9-12pm")
-          if (childIndex === -1) {
-            // Extract first part of variant name (before any time info)
-            const variantBaseName = variant.name.split(/\d/)[0].trim(); // Split on first digit
-            childTitle = `${baseTitle} | ${variantBaseName}`;
-            childIndex = allClasses.findIndex((cls: any) => cls.title === childTitle);
-          }
-          
-          if (childIndex !== -1) {
-            console.log(`  ✅ Updating child class: ${allClasses[childIndex].title} with price ${variant.price}`);
-            allClasses[childIndex] = {
-              ...allClasses[childIndex],
-              price: variant.price,
-              location: updatedClass.location,
-              instructorName: updatedClass.instructorName,
-              instructorId: updatedClass.instructorId,
-              capacity: updatedClass.capacity,
-              startDate: updatedClass.startDate,
-              endDate: updatedClass.endDate,
-              description: updatedClass.description,
-              category: updatedClass.category,
-              status: updatedClass.status,
-              gradeLevel: updatedClass.gradeLevel,
-              updatedAt: new Date().toISOString()
-            };
-          } else {
-            console.log(`  ⚠️ Child class not found for variant: ${variant.name}`);
-          }
-        });
+      // Handle instructorId - ensure it's a number
+      let instructorId = existingClass.instructorId;
+      if (req.body.instructorName) {
+        const instructorIdStr = req.body.instructorName;
+        instructorId = parseInt(instructorIdStr);
+        if (isNaN(instructorId)) {
+          instructorId = existingClass.instructorId;
+        }
       }
 
-      // Write back to file
-      fs.writeFileSync(filePath, JSON.stringify(allClasses, null, 2));
+      // Build update data object
+      const updateData: any = {
+        title: req.body.title || existingClass.title,
+        description: req.body.description || existingClass.description,
+        category: req.body.category || existingClass.category,
+        gradeLevel: gradeLevel,
+        status: req.body.status || existingClass.status,
+        startDate: req.body.startDate || existingClass.startDate,
+        endDate: req.body.endDate || existingClass.endDate,
+        schedule: schedule,
+        capacity: req.body.capacity !== undefined ? req.body.capacity : existingClass.capacity,
+        instructorId: instructorId,
+        price: price,
+        isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly
+      };
+
+      // Update in database
+      const updatedClass = await storage.updateClass(classId, updateData);
+
+      if (!updatedClass) {
+        return res.status(500).json({ message: 'Failed to update class' });
+      }
+
+      // Parse variants from schedule for response (match GET endpoint behavior)
+      let enhancedClassData = { ...updatedClass };
+      if (updatedClass.schedule && typeof updatedClass.schedule === 'object') {
+        const scheduleObj = updatedClass.schedule as any;
+        if (scheduleObj.variants && Array.isArray(scheduleObj.variants)) {
+          enhancedClassData.variants = scheduleObj.variants;
+        }
+      }
 
       console.log('✅ Class updated successfully:', updatedClass.title);
       console.log('📊 Saved schedule:', updatedClass.schedule);
-      res.json(updatedClass);
+      console.log('💰 Saved price:', updatedClass.price);
+      res.json(enhancedClassData);
     } catch (error) {
       console.error('❌ Error updating class:', error);
       res.status(500).json({ message: 'Error updating class' });
