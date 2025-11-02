@@ -52,19 +52,16 @@ export default function FormBuilderPage() {
     accessLevel: 'members',
   });
 
-  // TODO: Get schoolId from user's school context once multi-tenant support is fully implemented
-  // For now, using hardcoded schoolId like other pages in the app
-  const schoolId = 1; // This should come from user.school_id or similar
-
   // Fetch all forms for the school
+  // Backend extracts school_id from authenticated user's Supabase token
   const { data: forms = [], isLoading } = useQuery<CustomForm[]>({
-    queryKey: [`/api/custom-forms/schools/${schoolId}/forms`],
+    queryKey: [`/api/custom-forms/schools/forms`],
   });
 
   // Create form mutation
   const createFormMutation = useMutation({
     mutationFn: async (formData: typeof newForm) => {
-      const response = await apiRequest("POST", `/api/custom-forms/schools/${schoolId}/forms`, {
+      const response = await apiRequest("POST", `/api/custom-forms/schools/forms`, {
         ...formData,
         slug: formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
         // Note: createdBy is set on the backend from req.auth.dbUserId
@@ -72,7 +69,7 @@ export default function FormBuilderPage() {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/${schoolId}/forms`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/forms`] });
       toast({ title: 'Success', description: 'Form created successfully' });
       setIsCreateDialogOpen(false);
       setNewForm({ title: '', description: '', formType: 'custom', accessLevel: 'members' });
@@ -90,7 +87,7 @@ export default function FormBuilderPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/${schoolId}/forms`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/forms`] });
       toast({ title: 'Success', description: 'Form deleted successfully' });
     },
     onError: () => {
@@ -105,7 +102,7 @@ export default function FormBuilderPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/${schoolId}/forms`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/schools/forms`] });
       toast({ title: 'Success', description: 'Form cloned successfully' });
     },
     onError: () => {

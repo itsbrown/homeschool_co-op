@@ -292,7 +292,6 @@ export default function LocationManagementPage() {
     const formData = new FormData(e.currentTarget)
     
     const locationData = {
-      schoolId: 1, // Default school ID for now
       name: formData.get('name') as string,
       code: formData.get('code') as string,
       address: formData.get('address') as string,

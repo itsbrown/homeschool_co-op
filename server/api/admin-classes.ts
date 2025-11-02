@@ -28,9 +28,19 @@ router.get("/educators", supabaseAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// Get a specific class by ID (first instance)
-router.get("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
+// Get a specific class by ID
+router.get("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) => {
   try {
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid class ID" });
@@ -42,6 +52,12 @@ router.get("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
       return res.status(404).json({ message: "Class not found" });
     }
 
+    // Verify class belongs to user's school (both normalized to numbers)
+    if (classData.school_id !== schoolId) {
+      console.log(`Access denied: class school_id=${classData.school_id}, user school_id=${schoolId}`);
+      return res.status(403).json({ message: "Not authorized to access classes from other schools" });
+    }
+
     res.json(classData);
   } catch (error) {
     console.error("Error fetching class details:", error);
@@ -50,24 +66,51 @@ router.get("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
 });
 
 // Get all classes (with pagination and filters)
-router.get("/classes", supabaseAuth, requireAdmin, async (req, res) => {
+router.get("/classes", supabaseAuth, requireAdmin, async (req: any, res) => {
   try {
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = (req.query.search as string) || "";
     const category = (req.query.category as string) || "";
     const status = (req.query.status as string) || "";
 
-    console.log("Using database storage for classes");
-    const classes = await storage.getClasses({
-      page,
-      limit,
-      search,
-      category,
-      status,
-    });
-    const totalCount = await storage.getClassesCount({ search, category, status });
+    console.log("Using database storage for classes, filtering by school_id:", schoolId);
+    
+    // Get all classes for this school first, then apply filters
+    // storage.getClassesBySchoolId expects string parameter
+    const allSchoolClasses = await storage.getClassesBySchoolId(String(schoolId));
+    
+    // Apply client-side filters (TODO: move to storage layer for better performance)
+    let filteredClasses = allSchoolClasses;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredClasses = filteredClasses.filter(c => 
+        c.title?.toLowerCase().includes(searchLower) ||
+        c.description?.toLowerCase().includes(searchLower)
+      );
+    }
+    if (category) {
+      filteredClasses = filteredClasses.filter(c => c.category === category);
+    }
+    if (status) {
+      filteredClasses = filteredClasses.filter(c => c.status === status);
+    }
+    
+    // Apply pagination
+    const totalCount = filteredClasses.length;
     const totalPages = Math.ceil(totalCount / limit);
+    const startIndex = (page - 1) * limit;
+    const classes = filteredClasses.slice(startIndex, startIndex + limit);
 
     console.log("FETCHED CLASSES:", JSON.stringify(classes));
     console.log("SENDING RESPONSE:", {
@@ -92,8 +135,22 @@ router.get("/classes", supabaseAuth, requireAdmin, async (req, res) => {
 // Create a new class
 router.post("/classes", supabaseAuth, requireAdmin, async (req: any, res) => {
   try {
-    // Validate request body
-    const validatedData = insertClassSchema.parse(req.body);
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
+    // Validate request body (exclude school_id from client data)
+    const { school_id: _, ...bodyWithoutSchoolId } = req.body;
+    const validatedData = insertClassSchema.parse({
+      ...bodyWithoutSchoolId,
+      school_id: schoolId, // Use authenticated user's school ID (normalized to number)
+    });
 
     console.log("Creating class with data:", JSON.stringify(validatedData));
 
@@ -124,11 +181,21 @@ router.post("/classes", supabaseAuth, requireAdmin, async (req: any, res) => {
 });
 
 // Update a class
-router.patch("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
+router.patch("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid class ID" });
+    }
+
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
     }
 
     // Get existing class using database storage
@@ -137,13 +204,10 @@ router.patch("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // For admin users, allow updating any class regardless of instructor
-    const userRole = req.session.userRole;
-    if (userRole !== 'admin') {
-      const userId = req.session.userId || 1;
-      if (existingClass.instructorId !== userId) {
-        return res.status(403).json({ message: "Not authorized to update this class" });
-      }
+    // Verify class belongs to user's school (both normalized to numbers)
+    if (existingClass.school_id !== schoolId) {
+      console.log(`Update denied: class school_id=${existingClass.school_id}, user school_id=${schoolId}`);
+      return res.status(403).json({ message: "Not authorized to update classes from other schools" });
     }
 
     // Extract all fields from the request body
@@ -213,16 +277,32 @@ router.patch("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
 });
 
 // Delete a class
-router.delete("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
+router.delete("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid class ID" });
     }
 
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
     const existingClass = await storage.getClassById(id);
     if (!existingClass) {
       return res.status(404).json({ message: "Class not found" });
+    }
+
+    // Verify class belongs to user's school (both normalized to numbers)
+    if (existingClass.school_id !== schoolId) {
+      console.log(`Delete denied: class school_id=${existingClass.school_id}, user school_id=${schoolId}`);
+      return res.status(403).json({ message: "Not authorized to delete classes from other schools" });
     }
 
     console.log("Admin user deleting class:", id);
@@ -238,8 +318,18 @@ router.delete("/classes/:id", supabaseAuth, requireAdmin, async (req, res) => {
 });
 
 // Handle CSV file upload for classes
-router.post("/classes/upload", supabaseAuth, requireAdmin, async (req, res) => {
+router.post("/classes/upload", supabaseAuth, requireAdmin, async (req: any, res) => {
   try {
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
     if (!req.files || !req.files.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
@@ -277,6 +367,10 @@ router.post("/classes/upload", supabaseAuth, requireAdmin, async (req, res) => {
       });
     });
 
+    // Get authenticated user for instructorId
+    const user = await storage.getUserByEmail(req.user.email);
+    const instructorId = user?.id || 1;
+
     // Process each row
     const importedClasses = [];
 
@@ -295,7 +389,8 @@ router.post("/classes/upload", supabaseAuth, requireAdmin, async (req, res) => {
         capacity: parseInt(row.capacity || "20"),
         location: row.location || "Virtual",
         instructorName: row.instructor || "Staff",
-        instructorId: req.session.userId!,
+        instructorId, // Use authenticated user's ID
+        school_id: schoolId, // Use authenticated user's school ID
         isPublished: true,
         status: row.status || "published",
         productId: row.productId || null,
@@ -309,8 +404,8 @@ router.post("/classes/upload", supabaseAuth, requireAdmin, async (req, res) => {
         continue; // Skip this row
       }
 
-      // Create class using database storage
-      console.log("Using database storage to create class from CSV");
+      // Create class using database storage - will be assigned to authenticated user's school
+      console.log(`Using database storage to create class from CSV for school_id=${schoolId}`);
       const newClass = await storage.createClass(classData);
       importedClasses.push(newClass);
     }

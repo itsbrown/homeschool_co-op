@@ -44,9 +44,6 @@ export default function UsersPage() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   
-  // Default school ID - in real app this would come from auth context
-  const schoolId = 1;
-  
   const queryClient = useQueryClient();
 
   // Fetch users for the school

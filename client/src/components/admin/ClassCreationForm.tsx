@@ -107,7 +107,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
   // Load locations using React Query
   const { data: locations = [], isLoading: isLoadingLocations } = useQuery({
     queryKey: ['/api/locations'],
-    queryFn: () => fetch('/api/locations?schoolId=1', {
+    queryFn: () => fetch('/api/locations', {
       credentials: 'include',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || ''}`

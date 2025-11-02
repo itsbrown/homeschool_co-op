@@ -2589,10 +2589,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/school-admin/children", jwtCheck, requireRole(['schoolAdmin', 'superAdmin']), async (req, res) => {
+  app.post("/api/school-admin/children", jwtCheck, requireRole(['schoolAdmin', 'superAdmin']), async (req: any, res) => {
     try {
       console.log('👶 School admin child creation endpoint hit');
       console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+
+      // Extract school_id from authenticated user's token metadata
+      const schoolId = req.auth?.payload?.school_id;
+      if (!schoolId) {
+        return res.status(400).json({ message: "School ID not found in user metadata" });
+      }
 
       const {
         firstName,
@@ -2667,10 +2673,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const schoolStudentData = {
           childId: newChild.id,
-          schoolId: 1, // Default school ID
+          schoolId, // Use authenticated user's school ID
           enrollmentDate: new Date().toISOString(),
           status: 'active', // Use lowercase 'active' to match existing data
-          locationId: 1 // Default location
+          locationId: null // Location can be assigned later
         };
 
         console.log('🎓 School student data:', JSON.stringify(schoolStudentData, null, 2));

@@ -8,6 +8,7 @@ import { parse as parseCSV } from 'csv-parse';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { sendAccountInviteEmail, sendPasswordResetEmail, sendStaffInvitationEmail } from '../lib/email-service';
+import { supabaseAuth } from '../middleware/supabase-auth';
 
 const router = Router();
 
@@ -500,8 +501,13 @@ async function setupSchool(req: any, res: any) {
 router.post("/setup-school", setupSchool);
 
 // Get single class by ID
-router.get("/classes/:id", async (req, res) => {
+router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     const classId = parseInt(req.params.id, 10);
     if (isNaN(classId)) {
       return res.status(400).json({ message: "Invalid class ID format" });
@@ -514,10 +520,6 @@ router.get("/classes/:id", async (req, res) => {
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // For simplification, assume access to class - in full implementation we'd check school admin permissions
-    // const userSchools = await storage.getSchoolsByAdminId(req.session.userId || 0);
-    const schoolId = 1; // American Seekers Academy - simplified for now
-
     // Return the class
     res.json(classItem);
   } catch (error) {
@@ -527,8 +529,13 @@ router.get("/classes/:id", async (req, res) => {
 });
 
 // Update class by ID
-router.put("/classes/:id", async (req, res) => {
+router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     const classId = parseInt(req.params.id, 10);
     if (isNaN(classId)) {
       return res.status(400).json({ message: "Invalid class ID format" });
@@ -540,9 +547,6 @@ router.put("/classes/:id", async (req, res) => {
     if (!existingClass) {
       return res.status(404).json({ message: "Class not found" });
     }
-
-    // For simplification, assume access to class - in full implementation we'd check school admin permissions
-    const schoolId = 1; // American Seekers Academy - simplified for now
 
     // Update the class
     const updatedClass = await storage.updateClass(classId, {
@@ -565,13 +569,14 @@ router.put("/classes/:id", async (req, res) => {
 });
 
 // Get classes for the school
-router.get("/classes", async (req, res) => {
+router.get("/classes", supabaseAuth, async (req: any, res) => {
   try {
-    // For Firebase auth, directly use the hardcoded school admin connection
-    // Since schooladmin@test.com is associated with American Seekers Academy (ID: 1)
-    const schoolId = 1; // American Seekers Academy
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
 
-    console.log(`🏫 Loading classes for school ID: ${schoolId} (American Seekers Academy)`);
+    console.log(`🏫 Loading classes for school ID: ${schoolId}`);
 
     // Get classes from database storage
     const allClasses = await storage.getClassesBySchoolId(String(schoolId));
@@ -901,10 +906,15 @@ router.get("/classes/:id/roster", async (req, res) => {
 // Staff invitations now use database storage via roleInvitations table
 
 // Invite staff member (POST endpoint)
-router.post("/staff/invite", async (req, res) => {
+router.post("/staff/invite", supabaseAuth, async (req: any, res) => {
   console.log("📧 Staff invitation request received:", req.body);
 
   try {
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     const { email, firstName, lastName, role, locationId, classId, message } = req.body;
 
     if (!email || !firstName || !lastName || !role) {
@@ -912,7 +922,6 @@ router.post("/staff/invite", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const schoolId = 1; // American Seekers Academy
     const department = role; // Use role as department for compatibility
 
     // Check if staff member already exists for this school
@@ -997,9 +1006,13 @@ router.post("/staff/invite", async (req, res) => {
 });
 
 // Get staff members for the school
-router.get("/staff", async (req, res) => {
+router.get("/staff", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = 1; // American Seekers Academy
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     console.log(`👥 Loading staff for school ID: ${schoolId} from database`);
 
     // Get all school staff from database
@@ -1292,9 +1305,12 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
 });
 
 // Resend all pending invites
-router.post("/staff/resend-all-invites", async (req, res) => {
+router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = 1; // American Seekers Academy
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
     
     // Get all inactive (pending) staff members from database
     const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
@@ -1700,11 +1716,14 @@ router.get("/students", async (req, res) => {
 });
 
 // Create a new class for a school
-router.post("/classes", async (req, res) => {
+router.post("/classes", supabaseAuth, async (req: any, res) => {
   try {
-    console.log('📝 Creating new class:', JSON.stringify(req.body, null, 2));
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
 
-    const schoolId = 1; // Default to American Seekers Academy
+    console.log('📝 Creating new class:', JSON.stringify(req.body, null, 2));
     
     // Find instructor details from database if instructorName is provided
     let instructorId = 1; // Default instructor ID
@@ -2423,11 +2442,15 @@ router.get("/metrics/academic", async (req, res) => {
 });
 
 // Staff Metrics
-router.get("/metrics/staff", async (req, res) => {
+router.get("/metrics/staff", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     console.log('👥 Calculating staff metrics from database');
 
-    const schoolId = 1; // American Seekers Academy
     const staffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
 
     // Calculate staff metrics from actual data
@@ -2547,8 +2570,8 @@ router.post("/staff-invitations/accept", async (req, res) => {
     // Mark invitation as accepted using the database
     await storage.acceptRoleInvitation(token, roleInvitation.email);
 
-    // Update staff member status in database
-    const schoolId = 1; // American Seekers Academy
+    // Update staff member status in database - use school ID from the role invitation
+    const schoolId = roleInvitation.schoolId;
     const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
     
     for (const staffRecord of allStaff) {
@@ -2805,7 +2828,7 @@ router.get('/discounts/:id', async (req, res) => {
 });
 
 // Create a new discount
-router.post('/discounts', async (req, res) => {
+router.post('/discounts', supabaseAuth, async (req: any, res) => {
   try {
     console.log('💰 Creating new discount:', req.body);
     
@@ -2860,9 +2883,18 @@ router.post('/discounts', async (req, res) => {
     const minOrderAmountInCents = minOrderAmount ? Math.round(minOrderAmount * 100) : null;
     const maxDiscountAmountInCents = maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null;
     
+    // Get school ID from authenticated user
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({
+        success: false,
+        error: 'School ID not found in user metadata'
+      });
+    }
+    
     // Create discount using storage
     const newDiscount = await storage.createDiscount({
-      schoolId: 1, // TODO: Get from authenticated user's school
+      schoolId,
       name,
       description: description || null,
       code: code || null,
@@ -3242,8 +3274,13 @@ router.get('/discounts/:id/applications', async (req, res) => {
 });
 
 // School-specific contact import endpoint using express-fileupload instead of multer
-router.post('/contact-import', async (req: any, res) => {
+router.post('/contact-import', supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     console.log('📁 School admin contact import - processing files');
     console.log('📊 Request files:', req.files);
     console.log('📊 Request body:', req.body);
@@ -3259,13 +3296,6 @@ router.post('/contact-import', async (req: any, res) => {
     // Convert express-fileupload format to array
     const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
     
-    // Get the authenticated school admin's school ID
-    console.log('🔐 Checking authentication for contact import');
-    
-    // For development, always use school ID 1 since database is offline
-    let schoolId = 1;
-    console.log(`🏫 Using development school ID: ${schoolId}`);
-
     console.log(`🏫 Processing contact import for school ID: ${schoolId}`);
 
     // Get all locations for this school to enable location matching
@@ -3466,23 +3496,14 @@ router.post('/contact-import', async (req: any, res) => {
 
 
 // Get all users for the school
-router.get('/users', async (req: any, res) => {
+router.get('/users', supabaseAuth, async (req: any, res) => {
   try {
-    console.log('📋 Fetching users for school admin...');
-    
-    // Get the authenticated school admin's school ID
-    let schoolId = null;
-    try {
-      // For development, use fallback authentication
-      schoolId = 1; // Use school ID 1 for development
-    } catch (authError) {
-      console.log('🔧 Using development fallback for school admin authentication');
-      schoolId = 1;
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
     }
 
-    if (!schoolId) {
-      return res.status(403).json({ message: 'Unable to determine school association' });
-    }
+    console.log('📋 Fetching users for school admin...');
 
     // Get all users for this school (use getAllUsers since getUsersBySchool doesn't exist)
     const allUsers = await storage.getAllUsers();
@@ -3532,23 +3553,14 @@ router.get('/users', async (req: any, res) => {
 });
 
 // Create a new user for the school
-router.post('/users', async (req: any, res) => {
+router.post('/users', supabaseAuth, async (req: any, res) => {
   try {
-    console.log('👤 Creating new user for school admin...');
-    
-    // Get the authenticated school admin's school ID
-    let schoolId = null;
-    try {
-      // For development, use fallback authentication
-      schoolId = 1; // Use school ID 1 for development
-    } catch (authError) {
-      console.log('🔧 Using development fallback for school admin authentication');
-      schoolId = 1;
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
     }
 
-    if (!schoolId) {
-      return res.status(403).json({ message: 'Unable to determine school association' });
-    }
+    console.log('👤 Creating new user for school admin...');
 
     const userData = {
       ...req.body,
@@ -3570,31 +3582,21 @@ router.post('/users', async (req: any, res) => {
 });
 
 // Update an existing user
-router.put('/users/:id', async (req: any, res) => {
+router.put('/users/:id', supabaseAuth, async (req: any, res) => {
   console.log('🚀 PUT /users/:id endpoint reached');
   console.log('📄 Request params:', req.params);
   console.log('📄 Request body:', req.body);
   try {
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     console.log('📝 Updating user for school admin...');
     
     const userId = parseInt(req.params.id);
     if (!userId) {
       return res.status(400).json({ message: 'Invalid user ID' });
-    }
-
-    // Get school ID from auth context
-    let schoolId = null;
-    
-    try {
-      // For development, use fallback authentication
-      schoolId = 1; // Use school ID 1 for development
-    } catch (authError) {
-      console.log('🔧 Using development fallback for school admin authentication');
-      schoolId = 1;
-    }
-
-    if (!schoolId) {
-      return res.status(403).json({ message: 'Unable to determine school association' });
     }
 
     // Verify user belongs to this school before updating
@@ -3690,28 +3692,18 @@ router.put('/users/:id', async (req: any, res) => {
 });
 
 // Delete a user
-router.delete('/users/:id', async (req: any, res) => {
+router.delete('/users/:id', supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     console.log('🗑️ Deleting user for school admin...');
     
     const userId = parseInt(req.params.id);
     if (!userId) {
       return res.status(400).json({ message: 'Invalid user ID' });
-    }
-
-    // Get school ID from auth context
-    let schoolId = null;
-    
-    try {
-      // For development, use fallback authentication
-      schoolId = 1; // Use school ID 1 for development
-    } catch (authError) {
-      console.log('🔧 Using development fallback for school admin authentication');
-      schoolId = 1;
-    }
-
-    if (!schoolId) {
-      return res.status(403).json({ message: 'Unable to determine school association' });
     }
 
     // Verify user belongs to this school before deleting

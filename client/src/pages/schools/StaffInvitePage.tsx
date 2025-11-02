@@ -53,7 +53,7 @@ export default function StaffInvitePage() {
   const { data: locations = [] } = useQuery({
     queryKey: ['/api/locations'],
     queryFn: async () => {
-      const response = await fetch('/api/locations?schoolId=1', {
+      const response = await fetch('/api/locations', {
         credentials: 'include',
       });
       if (!response.ok) {

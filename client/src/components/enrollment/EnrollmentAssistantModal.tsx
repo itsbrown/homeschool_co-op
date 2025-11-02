@@ -352,23 +352,18 @@ export default function EnrollmentAssistantModal({ isOpen, onClose }: Enrollment
     switch (schoolChoice) {
       case 'school_1':
         schoolName = 'American Seekers Academy';
-        schoolId = 1;
         break;
       case 'school_2':
         schoolName = 'Liberty Learning Co-op';
-        schoolId = 2;
         break;
       case 'school_3':
         schoolName = 'Heritage Homeschool Group';
-        schoolId = 3;
         break;
       case 'school_4':
         schoolName = 'Wisdom Academy';
-        schoolId = 4;
         break;
       default:
         schoolName = schoolChoice; // Custom school name entered
-        schoolId = null;
     }
     
     const updatedData = {

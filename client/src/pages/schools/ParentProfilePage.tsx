@@ -1329,7 +1329,6 @@ export default function ParentProfilePage() {
                   if (profile) {
                     createMembershipMutation.mutate({
                       parentUserId: profile.parent.id,
-                      schoolId: 1, // American Seekers Academy
                       membershipYear: new Date().getFullYear()
                     });
                   }

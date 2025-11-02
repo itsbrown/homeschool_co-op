@@ -1,6 +1,7 @@
 import express from "express";
 import { storage } from "../storage";
 import { insertMarketingLinkSchema, insertLinkAnalyticsSchema } from "@shared/schema";
+import { supabaseAuth } from '../middleware/supabase-auth';
 import crypto from "crypto";
 
 const router = express.Router();
@@ -18,10 +19,13 @@ function generateQRCodeUrl(campaignId: string, schoolId: number): string {
 }
 
 // Create marketing link
-router.post("/", async (req, res) => {
+router.post("/", supabaseAuth, async (req: any, res) => {
   try {
-    // For demo purposes, use school ID = 1
-    const schoolId = 1;
+    // Extract school_id from authenticated user's token metadata
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
 
     // Validate request data
     const validatedData = insertMarketingLinkSchema.parse({
@@ -55,10 +59,14 @@ router.post("/", async (req, res) => {
 });
 
 // Get marketing links for a school
-router.get("/", async (req, res) => {
+router.get("/", supabaseAuth, async (req: any, res) => {
   try {
-    // For demo purposes, use school ID = 1
-    const schoolId = 1;
+    // Extract school_id from authenticated user's token metadata
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    
     const links = await storage.getMarketingLinksBySchoolId(schoolId);
     
     // Add tracking URLs to each link
@@ -77,13 +85,24 @@ router.get("/", async (req, res) => {
 });
 
 // Get marketing link by ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", supabaseAuth, async (req: any, res) => {
   try {
+    // Extract school_id from authenticated user's token metadata
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     const id = parseInt(req.params.id);
     const link = await storage.getMarketingLinkById(id);
     
     if (!link) {
       return res.status(404).json({ error: "Marketing link not found" });
+    }
+
+    // Verify link belongs to user's school
+    if (link.schoolId !== schoolId) {
+      return res.status(403).json({ error: "Not authorized to access marketing links from other schools" });
     }
 
     // Add tracking URL
@@ -102,11 +121,26 @@ router.get("/:id", async (req, res) => {
 });
 
 // Update marketing link
-router.put("/:id", async (req, res) => {
+router.put("/:id", supabaseAuth, async (req: any, res) => {
   try {
+    // Extract school_id from authenticated user's token metadata
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     const id = parseInt(req.params.id);
-    const validatedData = insertMarketingLinkSchema.partial().parse(req.body);
     
+    // Verify link belongs to user's school before updating
+    const existingLink = await storage.getMarketingLinkById(id);
+    if (!existingLink) {
+      return res.status(404).json({ error: "Marketing link not found" });
+    }
+    if (existingLink.schoolId !== schoolId) {
+      return res.status(403).json({ error: "Not authorized to update marketing links from other schools" });
+    }
+
+    const validatedData = insertMarketingLinkSchema.partial().parse(req.body);
     const updatedLink = await storage.updateMarketingLink(id, validatedData);
     
     if (!updatedLink) {
@@ -129,9 +163,25 @@ router.put("/:id", async (req, res) => {
 });
 
 // Delete marketing link
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", supabaseAuth, async (req: any, res) => {
   try {
+    // Extract school_id from authenticated user's token metadata
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     const id = parseInt(req.params.id);
+    
+    // Verify link belongs to user's school before deleting
+    const existingLink = await storage.getMarketingLinkById(id);
+    if (!existingLink) {
+      return res.status(404).json({ error: "Marketing link not found" });
+    }
+    if (existingLink.schoolId !== schoolId) {
+      return res.status(403).json({ error: "Not authorized to delete marketing links from other schools" });
+    }
+
     const deleted = await storage.deleteMarketingLink(id);
     
     if (!deleted) {
@@ -174,9 +224,25 @@ router.get("/track/:campaignId", async (req, res) => {
 });
 
 // Get analytics for a marketing link
-router.get("/:id/analytics", async (req, res) => {
+router.get("/:id/analytics", supabaseAuth, async (req: any, res) => {
   try {
+    // Extract school_id from authenticated user's token metadata
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
     const id = parseInt(req.params.id);
+    
+    // Verify link belongs to user's school before showing analytics
+    const link = await storage.getMarketingLinkById(id);
+    if (!link) {
+      return res.status(404).json({ error: "Marketing link not found" });
+    }
+    if (link.schoolId !== schoolId) {
+      return res.status(403).json({ error: "Not authorized to view analytics from other schools" });
+    }
+
     const analytics = await storage.getLinkAnalytics(id);
     
     // Calculate summary statistics

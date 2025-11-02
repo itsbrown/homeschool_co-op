@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { parse } from "csv-parse/sync";
 import * as fileUpload from "express-fileupload";
 import { UploadedFile } from "express-fileupload";
+import { supabaseAuth } from '../middleware/supabase-auth';
 import path from "path";
 
 // Import handling modes
@@ -47,14 +48,24 @@ router.use(fileUpload.default({
 }));
 
 // Preview import to show duplicates and changes
-router.post("/preview-import", async (req: Request, res: Response) => {
+router.post("/preview-import", supabaseAuth, async (req: any, res: Response) => {
   try {
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ message: "No files uploaded" });
     }
     
     const importMode: ImportMode = (req.body.mode as ImportMode) || 'skip';
-    const preview = await processImportPreview(req.files, importMode);
+    const preview = await processImportPreview(req.files, importMode, schoolId);
     
     return res.status(200).json({
       success: true,
@@ -71,8 +82,18 @@ router.post("/preview-import", async (req: Request, res: Response) => {
 });
 
 // Import complete account data (parents, children, enrollments, payments)
-router.post("/upload-accounts", async (req: Request, res: Response) => {
+router.post("/upload-accounts", supabaseAuth, async (req: any, res: Response) => {
   try {
+    // Extract school_id from authenticated user's token metadata and normalize to number
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ message: "No files uploaded" });
     }
@@ -107,9 +128,9 @@ router.post("/upload-accounts", async (req: Request, res: Response) => {
       });
       
       if (fileName.includes('parent') || fileName.includes('user')) {
-        await processParents(records, results, options);
+        await processParents(records, results, options, schoolId);
       } else if (fileName.includes('child')) {
-        await processChildren(records, results, options);
+        await processChildren(records, results, options, schoolId);
       } else if (fileName.includes('enrollment')) {
         await processEnrollments(records, results, options);
       } else if (fileName.includes('payment')) {
@@ -132,7 +153,7 @@ router.post("/upload-accounts", async (req: Request, res: Response) => {
   }
 });
 
-async function processParents(records: any[], results: any, options: ImportOptions) {
+async function processParents(records: any[], results: any, options: ImportOptions, schoolId: number) {
   for (const record of records) {
     try {
       const parentData = {
@@ -141,7 +162,7 @@ async function processParents(records: any[], results: any, options: ImportOptio
         email: record['Email'] || record.email,
         phone: record['Phone'] || record.phone,
         role: 'parent' as const,
-        schoolId: 1, // TODO: get from session
+        schoolId, // Use authenticated user's school ID
         isActive: true,
         createdAt: record['Created Date'] ? new Date(record['Created Date']) : new Date(),
         updatedAt: new Date()
@@ -207,7 +228,7 @@ async function processParents(records: any[], results: any, options: ImportOptio
   }
 }
 
-async function processChildren(records: any[], results: any, options: ImportOptions) {
+async function processChildren(records: any[], results: any, options: ImportOptions, schoolId: number) {
   for (const record of records) {
     try {
       const childData = {
@@ -216,7 +237,7 @@ async function processChildren(records: any[], results: any, options: ImportOpti
         birthdate: record['Birth Date'] || record.birthdate,
         gradeLevel: record['Grade Level'] || record.gradeLevel,
         parentEmail: record['Parent Email'] || record.parentEmail,
-        schoolId: 1, // TODO: get from session
+        schoolId, // Use authenticated user's school ID
         createdAt: record['Created Date'] ? new Date(record['Created Date']) : new Date(),
         updatedAt: new Date()
       };
@@ -374,7 +395,7 @@ async function processPayments(records: any[], results: any, options: ImportOpti
 }
 
 // Process import preview to analyze duplicates
-async function processImportPreview(files: any, importMode: ImportMode): Promise<ImportPreview> {
+async function processImportPreview(files: any, importMode: ImportMode, schoolId: number): Promise<ImportPreview> {
   const preview: ImportPreview = {
     newRecords: { parents: [], children: [], enrollments: [], payments: [] },
     duplicates: [],

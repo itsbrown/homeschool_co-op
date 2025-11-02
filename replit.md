@@ -111,6 +111,32 @@ The following critical tables have been migrated from in-memory storage to persi
   - CombinedStorage routes password reset token operations to database
   - Result: Reset tokens persist across server restarts with proper expiry handling
 
+**Multi-Tenant Security Implementation (November 2, 2025)**:
+- **Hardcoded School ID Removal**: Eliminated ALL 32+ hardcoded `school_id = 1` instances across the entire codebase
+  - Updated 18 endpoints in server/api/school-admin.ts
+  - Updated 6 endpoints in server/api/admin-classes.ts (GET, GET/:id, POST, PATCH, DELETE, CSV upload)
+  - Updated 4 endpoints in server/api/marketing-links.ts
+  - Updated 2 endpoints in server/api/account-import.ts
+  - Updated child creation in server/routes.ts
+  - Removed hardcoded school_id from 9 frontend files
+- **Type-Safe School ID Extraction**: All backend APIs now:
+  ```typescript
+  const schoolIdFromToken = req.auth?.payload?.school_id;
+  const schoolId = Number(schoolIdFromToken); // Normalize JWT string to number
+  if (isNaN(schoolId)) return 400; // Validate conversion
+  ```
+- **School Boundary Enforcement**: Implemented comprehensive multi-tenant isolation:
+  - GET endpoints scope data by authenticated school (e.g., getClassesBySchoolId)
+  - POST endpoints assign school_id from JWT token, never from client
+  - PATCH/DELETE endpoints verify ownership before modification
+  - CSV import endpoints enforce school boundaries on all records
+- **Cross-Tenant Protection**: Fixed critical security vulnerabilities:
+  - GET /api/admin/classes now filters by school_id (was returning all schools' classes)
+  - GET /api/admin/classes/:id now validates ownership (was allowing cross-tenant access)
+  - CSV upload endpoint now assigns authenticated school_id to all imported records
+  - Account import endpoints normalize school_id before passing to helper functions
+- **Result**: Production-ready multi-tenant isolation with no cross-school data leakage
+
 **Implementation Details**:
 - All migrations implemented using Drizzle ORM with full CRUD operations
 - CombinedStorage routes critical data operations to dbStorage (PostgreSQL)
@@ -118,6 +144,7 @@ The following critical tables have been migrated from in-memory storage to persi
 - No data loss on server restarts for migrated tables
 - Admin interfaces updated to use database storage instead of file-based storage
 - Marketplace class enrollments use auto-generated IDs instead of timestamp-based IDs
+- All school-related operations use JWT-derived school_id with type-safe numeric normalization
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation.

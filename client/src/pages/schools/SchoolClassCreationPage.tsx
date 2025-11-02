@@ -108,7 +108,7 @@ export default function SchoolClassCreationPage() {
   const { data: locationData = [] } = useQuery({
     queryKey: ["/api/locations"],
     queryFn: async () => {
-      const response = await fetch('/api/locations?schoolId=1', {
+      const response = await fetch('/api/locations', {
         credentials: 'include'
       });
       if (!response.ok) {
