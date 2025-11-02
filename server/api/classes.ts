@@ -200,9 +200,8 @@ router.post('/:id/enroll', async (req, res) => {
     const depositAmount = Math.round(classPrice * 0.1); // 10% deposit
     const remainingBalance = classPrice - depositAmount;
 
-    // Create enrollment record
+    // Create enrollment record (database will auto-generate ID)
     const enrollment = {
-      id: Date.now(), // Simple ID generation
       classId: classId,
       childId: childId,
       childName: `${child.firstName} ${child.lastName}`,
