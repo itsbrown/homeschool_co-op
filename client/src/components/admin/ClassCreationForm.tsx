@@ -317,8 +317,8 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
             data.variants.map(v => `${v.name} (${v.startTime}-${v.endTime})`).join(' OR ') :
             data.variants?.[0] ? `${data.variants[0].startTime}-${data.variants[0].endTime}` : ''
         },
-        // Send price in dollars - server will convert to cents
-        price: inputPrice.toString(),
+        // Send price as a number in dollars - server will convert to cents
+        price: inputPrice,
         capacity: parseInt(data.capacity.toString(), 10),
         location: data.location || "",
         // Keep the date format exactly as entered in the form to prevent timezone shifts
