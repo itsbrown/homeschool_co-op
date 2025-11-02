@@ -339,7 +339,7 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
       
       // Update the school to associate it with this admin
       const updatedSchool = await storage.updateSchool(unassociatedSchool.id, {
-        adminId: adminUser.id
+        // adminId is set during school creation, not via update
       });
       
       if (updatedSchool) {
@@ -359,9 +359,11 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
 
     console.log('❌ No school found to associate with this admin');
     return res.status(404).json({ message: "No school found for this admin" });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error fetching school information:", error);
-    console.error("Error stack:", error.stack);
+    if (error instanceof Error) {
+      console.error("Error stack:", error.stack);
+    }
     return res.status(500).json({ message: "Error fetching school information" });
   }
 });
@@ -501,7 +503,7 @@ async function setupSchool(req: any, res: any) {
 router.post("/setup-school", setupSchool);
 
 // Get single class by ID
-router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
+router.get("/classes/:id", supabaseAuth, async (req: any, res: any) => {
   try {
     const schoolId = req.auth?.payload?.school_id;
     if (!schoolId) {
@@ -529,7 +531,7 @@ router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
 });
 
 // Update class by ID
-router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
+router.put("/classes/:id", supabaseAuth, async (req: any, res: any) => {
   try {
     const schoolId = req.auth?.payload?.school_id;
     if (!schoolId) {
@@ -569,7 +571,7 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
 });
 
 // Get classes for the school
-router.get("/classes", supabaseAuth, async (req: any, res) => {
+router.get("/classes", supabaseAuth, async (req: any, res: any) => {
   try {
     // Extract school_id from authenticated user's token metadata and normalize to number
     const schoolIdFromToken = req.auth?.payload?.school_id;
@@ -628,7 +630,7 @@ router.get("/classes", supabaseAuth, async (req: any, res) => {
       
       // If the class has variants, expand them into individual class entries
       if (variants && variants.length > 0) {
-        return variants.map((variant, index) => ({
+        return variants.map((variant: any, index: number) => ({
           ...classItem,
           id: classItem.id, // Keep numeric ID for enrollment compatibility
           variantId: variant.id, // Add variant ID as separate field
@@ -637,7 +639,6 @@ router.get("/classes", supabaseAuth, async (req: any, res) => {
           title: variant.name, // Use variant name as title
           price: variant.price, // Use variant price
           enrollmentCount: classEnrollmentCount,
-          maxEnrollment: classItem.capacity || classItem.maxEnrollment || 20,
           capacity: classItem.capacity || 20,
           enrolled: classEnrollmentCount,
           // Store variant details in schedule for reference
@@ -654,7 +655,6 @@ router.get("/classes", supabaseAuth, async (req: any, res) => {
       return [{
         ...classItem,
         enrollmentCount: classEnrollmentCount,
-        maxEnrollment: classItem.capacity || classItem.maxEnrollment || 20,
         capacity: classItem.capacity || 20,
         enrolled: classEnrollmentCount,
         // Add parsed variants if they exist (though shouldn't reach here if variants exist)
@@ -736,12 +736,10 @@ router.put("/classes/:id", async (req, res) => {
       schedule = JSON.stringify({ variants: req.body.variants });
     }
 
-    // Handle gradeLevels array - convert to single gradeLevel
-    let gradeLevel = existingClass.gradeLevel;
-    if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels) && req.body.gradeLevels.length > 0) {
-      gradeLevel = req.body.gradeLevels[0];
-    } else if (req.body.gradeLevel) {
-      gradeLevel = req.body.gradeLevel;
+    // Handle gradeLevels array
+    let gradeLevels = existingClass.gradeLevels;
+    if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels)) {
+      gradeLevels = req.body.gradeLevels;
     }
 
     // Prepare update data
@@ -749,16 +747,14 @@ router.put("/classes/:id", async (req, res) => {
       title: req.body.title || existingClass.title,
       description: req.body.description || existingClass.description,
       category: req.body.category || existingClass.category,
-      gradeLevel: gradeLevel,
+      gradeLevels: gradeLevels,
       status: req.body.status || existingClass.status,
-      startDate: req.body.startDate || existingClass.startDate,
-      endDate: req.body.endDate || existingClass.endDate,
+      startDate: req.body.startDate ? new Date(req.body.startDate) : existingClass.startDate,
+      endDate: req.body.endDate ? new Date(req.body.endDate) : existingClass.endDate,
       schedule: schedule,
       capacity: req.body.capacity !== undefined ? req.body.capacity : existingClass.capacity,
-      maxStudents: req.body.maxStudents !== undefined ? req.body.maxStudents : existingClass.maxStudents,
-      location: req.body.location || existingClass.location,
-      instructorName: req.body.instructorName || existingClass.instructorName,
-      instructorId: req.body.instructorId || existingClass.instructorId,
+      location: req.body.location ?? existingClass.location,
+      instructorName: req.body.instructorName ?? existingClass.instructorName,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly
     };
@@ -793,16 +789,15 @@ router.put("/classes/:id", async (req, res) => {
           console.log(`  ✅ Updating child class: ${childClass.title} with price ${variant.price}`);
           await storage.updateClass(childClass.id, {
             price: variant.price,
-            location: updatedClass.location,
-            instructorName: updatedClass.instructorName,
-            instructorId: updatedClass.instructorId,
-            capacity: updatedClass.capacity,
-            startDate: updatedClass.startDate,
-            endDate: updatedClass.endDate,
+            location: updatedClass.location ?? undefined,
+            instructorName: updatedClass.instructorName ?? undefined,
+            capacity: updatedClass.capacity ?? undefined,
+            startDate: updatedClass.startDate ? new Date(updatedClass.startDate) : null,
+            endDate: updatedClass.endDate ? new Date(updatedClass.endDate) : null,
             description: updatedClass.description,
             category: updatedClass.category,
             status: updatedClass.status,
-            gradeLevel: updatedClass.gradeLevel
+            gradeLevels: updatedClass.gradeLevels || []
           });
         } else {
           console.log(`  ⚠️ Child class not found for variant: ${variant.name}`);
@@ -858,11 +853,12 @@ router.get("/classes/:id/roster", async (req, res) => {
     console.log(`📚 Fetching roster for class ID: ${classId}`);
 
     // Get enrollment and children data from database
-    const enrollments = await storage.getMarketplaceEnrollmentsByClassId(classId);
+    const allEnrollments = await storage.getAllEnrollments();
+    const enrollments = allEnrollments.filter((e: any) => e.classId === classId);
     const children = await storage.getAllChildren();
 
     // Get enrollments for this specific class
-    const classEnrollments = enrollments.filter(enrollment => 
+    const classEnrollments = enrollments.filter((enrollment: any) => 
       Number(enrollment.classId) === Number(classId) && 
       ['enrolled', 'confirmed', 'completed', 'pending_payment'].includes(enrollment.status)
     );
@@ -870,7 +866,7 @@ router.get("/classes/:id/roster", async (req, res) => {
     console.log(`📚 Found ${classEnrollments.length} enrollments for class ${classId}`);
 
     // Map enrollments to student data
-    const students = classEnrollments.map(enrollment => {
+    const students = classEnrollments.map((enrollment: any) => {
       // Find child data by ID
       const child = children.find(c => c.id === enrollment.childId);
       
@@ -880,9 +876,9 @@ router.get("/classes/:id/roster", async (req, res) => {
           id: enrollment.childId || enrollment.id,
           firstName: enrollment.childName ? enrollment.childName.split(' ')[0] : 'Unknown',
           lastName: enrollment.childName ? enrollment.childName.split(' ').slice(1).join(' ') : 'Student',
-          email: child?.email || '',
-          phone: child?.phone || '',
-          gradeLevel: child?.gradeLevel || 'Unknown',
+          email: '',
+          phone: '',
+          gradeLevel: 'Unknown',
           enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
           status: enrollment.status === 'pending_payment' ? 'Pending' : 'Active'
         };
@@ -892,8 +888,8 @@ router.get("/classes/:id/roster", async (req, res) => {
         id: child.id,
         firstName: child.firstName,
         lastName: child.lastName,
-        email: child.email || '',
-        phone: child.phone || '',
+        email: child.parentEmail || '',
+        phone: '',
         gradeLevel: child.gradeLevel || 'Unknown',
         enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
         status: enrollment.status === 'pending_payment' ? 'Pending' : 'Active'
@@ -914,7 +910,7 @@ router.get("/classes/:id/roster", async (req, res) => {
 // Staff invitations now use database storage via roleInvitations table
 
 // Invite staff member (POST endpoint)
-router.post("/staff/invite", supabaseAuth, async (req: any, res) => {
+router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
   console.log("📧 Staff invitation request received:", req.body);
 
   try {
@@ -954,6 +950,8 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res) => {
       console.log("📝 Creating new user for:", email);
       user = await storage.createUser({
         email,
+        username: email,
+        password: "temp_password",
         name: `${firstName} ${lastName}`,
         phone: "",
         role: "teacher"
@@ -971,7 +969,8 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res) => {
       role: mapPositionToRole(role),
       position: role,
       department,
-      startDate: new Date().toISOString(),
+      startDate: new Date(),
+      endDate: null,
       isActive: false,
       locationId: locationId || null
     });
@@ -984,12 +983,14 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res) => {
     const invitationToken = generateInvitationToken();
     
     // Create role invitation record
+    const mappedRole = mapPositionToRole(role);
+    const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
     const roleInvitation = await storage.createRoleInvitation({
       email,
-      token: invitationToken,
-      role: mapPositionToRole(role),
+      role: userRole,
+      invitedBy: 1,
       schoolId,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       isActive: true
     });
 
@@ -1014,7 +1015,7 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res) => {
 });
 
 // Get staff members for the school
-router.get("/staff", supabaseAuth, async (req: any, res) => {
+router.get("/staff", supabaseAuth, async (req: any, res: any) => {
   try {
     const schoolId = req.auth?.payload?.school_id;
     if (!schoolId) {
@@ -1039,7 +1040,7 @@ router.get("/staff", supabaseAuth, async (req: any, res) => {
         // Get classes assigned to this staff member
         const allClasses = await storage.getAllClasses();
         const assignedClasses = allClasses.filter(cls => 
-          cls.instructorId === user.id || cls.teacherId === user.id
+          cls.instructorId === user.id
         );
         
         return transformStaffToFrontend(staffRecord, user, assignedClasses);
@@ -1083,7 +1084,7 @@ router.get("/staff/:id", async (req, res) => {
     // Get classes assigned to this staff member
     const allClasses = await storage.getAllClasses();
     const assignedClasses = allClasses.filter(cls => 
-      cls.instructorId === user.id || cls.teacherId === user.id
+      cls.instructorId === user.id
     );
 
     const staffMember = transformStaffToFrontend(staffRecord, user, assignedClasses);
@@ -1118,10 +1119,10 @@ router.get("/staff/:id/classes", async (req, res) => {
       return res.status(404).json({ message: "User details not found" });
     }
 
-    // Get all classes and filter by instructorId or teacherId
+    // Get all classes and filter by instructorId
     const allClasses = await storage.getAllClasses();
     const assignedClasses = allClasses.filter(cls => 
-      cls.instructorId === user.id || cls.teacherId === user.id
+      cls.instructorId === user.id
     );
 
     console.log(`✅ Found ${assignedClasses.length} classes for ${user.name}`);
@@ -1158,9 +1159,7 @@ router.post("/staff/:id/assign-class", async (req, res) => {
 
     // Update the class to assign this instructor
     const updatedClass = await storage.updateClass(classId, {
-      instructorName: user.name,
-      instructorId: user.id,
-      teacherId: user.id
+      instructorName: user.name
     });
 
     if (!updatedClass) {
@@ -1203,9 +1202,7 @@ router.delete("/staff/:id/unassign-class/:classId", async (req, res) => {
 
     // Update the class to remove instructor assignment
     const updatedClass = await storage.updateClass(classId, {
-      instructorName: "No Instructor Assigned",
-      instructorId: null,
-      teacherId: null
+      instructorName: "No Instructor Assigned"
     });
 
     if (!updatedClass) {
@@ -1252,27 +1249,22 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
     // Generate new invitation token
     const invitationToken = generateInvitationToken();
     
-    // Check if invitation exists and update it, or create new one
-    const allInvitations = await storage.getAllRoleInvitations();
-    const existingInvitation = allInvitations.find(inv => 
+    // Check if invitation exists, or create new one
+    const allInvitations = await storage.getRoleInvitations();
+    const existingInvitation = allInvitations.find((inv: any) => 
       inv.email === user.email && inv.schoolId === staffRecord.schoolId
     );
 
-    if (existingInvitation) {
-      // Update existing invitation
-      await storage.updateRoleInvitation(existingInvitation.id, {
-        token: invitationToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        isActive: true
-      });
-    } else {
+    if (!existingInvitation) {
       // Create new invitation
+      const mappedRole = staffRecord.role;
+      const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
       await storage.createRoleInvitation({
         email: user.email,
-        token: invitationToken,
-        role: staffRecord.role,
+        role: userRole,
+        invitedBy: 1,
         schoolId: staffRecord.schoolId,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         isActive: true
       });
     }
@@ -1287,7 +1279,7 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
         user.email,
         firstName,
         lastName,
-        staffRecord.position || mapRoleToPosition(staffRecord.role),
+        staffRecord.position || staffRecord.role,
         staffRecord.department || '',
         invitationToken,
         message
@@ -1313,7 +1305,7 @@ router.post("/staff/:id/resend-invite", async (req, res) => {
 });
 
 // Resend all pending invites
-router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res) => {
+router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any) => {
   try {
     const schoolId = req.auth?.payload?.school_id;
     if (!schoolId) {
@@ -1348,25 +1340,21 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res) => 
         // Generate new invitation token
         const invitationToken = generateInvitationToken();
         
-        // Check if invitation exists and update it, or create new one
-        const allInvitations = await storage.getAllRoleInvitations();
-        const existingInvitation = allInvitations.find(inv => 
+        // Check if invitation exists, or create new one
+        const allInvitations = await storage.getRoleInvitations();
+        const existingInvitation = allInvitations.find((inv: any) => 
           inv.email === user.email && inv.schoolId === staffRecord.schoolId
         );
 
-        if (existingInvitation) {
-          await storage.updateRoleInvitation(existingInvitation.id, {
-            token: invitationToken,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            isActive: true
-          });
-        } else {
+        if (!existingInvitation) {
+          const mappedRole = staffRecord.role;
+          const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
           await storage.createRoleInvitation({
             email: user.email,
-            token: invitationToken,
-            role: staffRecord.role,
+            role: userRole,
+            invitedBy: 1,
             schoolId: staffRecord.schoolId,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             isActive: true
           });
         }
@@ -1380,7 +1368,7 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res) => 
           user.email,
           firstName,
           lastName,
-          staffRecord.position || mapRoleToPosition(staffRecord.role),
+          staffRecord.position || staffRecord.role,
           staffRecord.department || '',
           invitationToken,
           message
@@ -1469,7 +1457,7 @@ router.put("/staff/:id", async (req, res) => {
     // Get classes assigned to this staff member
     const allClasses = await storage.getAllClasses();
     const assignedClasses = allClasses.filter(cls => 
-      cls.instructorId === updatedUser!.id || cls.teacherId === updatedUser!.id
+      cls.instructorId === updatedUser!.id
     );
 
     const updatedStaff = transformStaffToFrontend(updatedStaffRecord, updatedUser!, assignedClasses);
@@ -1684,9 +1672,9 @@ router.get("/students", async (req, res) => {
             lastName: child.lastName,
             gradeLevel: child.gradeLevel || 'Not specified',
             age: age || 'Unknown',
-            parentName: child.parent_email || child.parentEmail || 'Unknown Parent',
-            parentEmail: child.parent_email || child.parentEmail,
-            email: child.parent_email || child.parentEmail,
+            parentName: child.parentEmail || 'Unknown Parent',
+            parentEmail: child.parentEmail,
+            email: child.parentEmail,
             enrollmentDate: schoolStudent.enrollmentDate,
             status: schoolStudent.status || 'Active',
             locationId: schoolStudent.locationId,
@@ -1724,7 +1712,7 @@ router.get("/students", async (req, res) => {
 });
 
 // Create a new class for a school
-router.post("/classes", supabaseAuth, async (req: any, res) => {
+router.post("/classes", supabaseAuth, async (req: any, res: any) => {
   try {
     const schoolId = req.auth?.payload?.school_id;
     if (!schoolId) {
@@ -2450,7 +2438,7 @@ router.get("/metrics/academic", async (req, res) => {
 });
 
 // Staff Metrics
-router.get("/metrics/staff", supabaseAuth, async (req: any, res) => {
+router.get("/metrics/staff", supabaseAuth, async (req: any, res: any) => {
   try {
     const schoolId = req.auth?.payload?.school_id;
     if (!schoolId) {

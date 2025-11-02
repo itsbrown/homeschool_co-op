@@ -23,7 +23,7 @@ const paymentRateLimit = rateLimit({
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-04-10',
+  apiVersion: '2025-08-27.basil',
 });
 
 // Helper function to process balance payments with installment support
@@ -93,16 +93,21 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       throw new Error(`Cannot create payment record: No valid school ID found for parent ${userEmail}`);
     }
     
-    const paymentRecord = {
+    const paymentRecord: InsertPayment = {
       schoolId,
-      parentId: parentUser?.id,
+      parentId: parentUser?.id || null,
       stripePaymentIntentId: paymentIntent.id,
       parentEmail: userEmail,
       childName: enrollments[0].childName || 'Multiple Children',
       className: enrollments.length > 1 ? 'Multiple Classes' : enrollments[0].className || 'Class',
+      description: `Payment for ${enrollments.length} enrollment(s) - ${paymentPlan} plan`,
       amount: currentPaymentAmount,
       currency: paymentIntent.currency || 'usd',
       status: 'completed' as const,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
+      paymentMethod: 'stripe' as const,
       enrollmentIds: enrollmentIds,
       metadata: {
         enrollmentIds: enrollmentIds,
@@ -168,6 +173,28 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
       }
     });
 
+    // Get parent user and schoolId before creating payment record
+    const parentUser = await storage.getUserByEmail(parentEmail);
+    if (!parentUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Parent user not found'
+      });
+    }
+    
+    // Get schoolId from first enrollment or parent
+    const firstEnrollment = enrollmentDetails && enrollmentDetails.length > 0
+      ? await storage.getEnrollmentById(enrollmentDetails[0].enrollmentId)
+      : null;
+    
+    const schoolId = firstEnrollment?.schoolId || parentUser.schoolId;
+    if (!schoolId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot create payment: No valid school ID found'
+      });
+    }
+
     // Store payment in database
     const paymentData: InsertPayment = {
       status: 'pending',
@@ -178,6 +205,13 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
       childName: 'Multiple Children',
       className: 'Multiple Classes',
       description: `Payment for ${enrollmentDetails.length} enrollment(s)`,
+      schoolId: schoolId,
+      parentId: parentUser.id,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
+      paymentMethod: 'stripe' as const,
+      enrollmentIds: enrollmentDetails.map((e: any) => e.enrollmentId),
       metadata: {
         enrollmentDetails,
         clientSecret: paymentIntent.client_secret
@@ -295,9 +329,17 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
       parentEmail: enrollment.parentEmail,
       childName: enrollment.childName,
       className: enrollment.className,
+      description: `Payment for enrollment ${enrollmentId}`,
       amount: amount,
       currency: 'usd',
       status: 'completed',
+      schoolId: enrollment.schoolId || 0,
+      parentId: enrollment.parentId || null,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
+      paymentMethod: 'stripe' as const,
+      enrollmentIds: [parseInt(enrollmentId)],
       metadata: {
         enrollmentId: parseInt(enrollmentId),
         paymentType: paymentType || 'enrollment_payment',
