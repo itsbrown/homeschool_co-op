@@ -1,0 +1,81 @@
+025-11-02 19:52:15.45
+c5e62280
+User
+❌ Error in enrollment creation or payment plan: PostgresError: new row for relation "program_enrollments" violates check constraint "program_enrollments_payment_plan_check"
+
+2025-11-02 19:52:15.45
+c5e62280
+User
+at ErrorResponse (file:///home/runner/workspace/node_modules/postgres/src/connection.js:794:26)
+2025-11-02 19:52:15.45
+c5e62280
+User
+at handle (file:///home/runner/workspace/node_modules/postgres/src/connection.js:480:6)
+2025-11-02 19:52:15.45
+c5e62280
+User
+at TLSSocket.data (file:///home/runner/workspace/node_modules/postgres/src/connection.js:315:9)
+2025-11-02 19:52:15.45
+c5e62280
+User
+at TLSSocket.emit (node:events:524:28)
+2025-11-02 19:52:15.45
+c5e62280
+User
+at addChunk (node:internal/streams/readable:561:12)
+2025-11-02 19:52:15.45
+c5e62280
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2025-11-02 19:52:15.45
+c5e62280
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2025-11-02 19:52:15.45
+c5e62280
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+2025-11-02 19:52:15.45
+c5e62280
+User
+severity_local: 'ERROR',
+2025-11-02 19:52:15.45
+c5e62280
+User
+severity: 'ERROR',
+2025-11-02 19:52:15.45
+c5e62280
+User
+code: '23514',
+2025-11-02 19:52:15.45
+c5e62280
+User
+detail: 'Failing row contains (21, 2, 8, 8, 13, Hermione Brown, Macaronis, null, 9, jocimarie@gmail.com, 500, 0, 500, 0, deposit_paid, biweekly, v2_stripe, enrolled, 2025-11-03 00:52:15.387, null, null, null, {}, 2025-11-03 00:52:15.387, 2025-11-03 00:52:15.387, biweekly, 2026-01-05, 2026-03-13, null).',
+2025-11-02 19:52:15.45
+c5e62280
+User
+schema_name: 'public',
+2025-11-02 19:52:15.45
+c5e62280
+User
+table_name: 'program_enrollments',
+2025-11-02 19:52:15.45
+c5e62280
+User
+constraint_name: 'program_enrollments_payment_plan_check',
+2025-11-02 19:52:15.45
+c5e62280
+User
+file: 'execMain.c',
+2025-11-02 19:52:15.45
+c5e62280
+User
+line: '2073',
+2025-11-02 19:52:15.45
+c5e62280
+User
+routine: 'ExecConstraints'
+2025-11-02 19:52:15.45
+c5e62280
+User
+}

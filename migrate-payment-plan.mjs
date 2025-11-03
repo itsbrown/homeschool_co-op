@@ -24,14 +24,9 @@ try {
   console.log('Dropping old constraint...');
   await sql`ALTER TABLE program_enrollments DROP CONSTRAINT IF EXISTS program_enrollments_payment_plan_check`;
   
-  // Add new constraint with biweekly
-  console.log('Adding new constraint with biweekly...');
-  await sql`ALTER TABLE program_enrollments ADD CONSTRAINT program_enrollments_payment_plan_check CHECK (payment_plan IN ('full_payment', 'deposit_only', 'biweekly', 'custom'))`;
-  
-  // Update stripe_subscription_schedules too
-  console.log('Updating stripe_subscription_schedules constraint...');
-  await sql`ALTER TABLE stripe_subscription_schedules DROP CONSTRAINT IF EXISTS stripe_subscription_schedules_payment_plan_check`;
-  await sql`ALTER TABLE stripe_subscription_schedules ADD CONSTRAINT stripe_subscription_schedules_payment_plan_check CHECK (payment_plan IN ('deposit', 'split', 'biweekly', 'full'))`;
+  // Add new constraint with biweekly (allowing NULL)
+  console.log('Adding new constraint with biweekly (allowing NULL)...');
+  await sql`ALTER TABLE program_enrollments ADD CONSTRAINT program_enrollments_payment_plan_check CHECK (payment_plan IS NULL OR payment_plan IN ('full_payment', 'deposit_only', 'biweekly', 'custom'))`;
   
   console.log('✅ Migration completed successfully!');
 } catch (err) {
