@@ -12,6 +12,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2025-08-27.basil'
 });
 
+// Stripe's minimum payment amount is $0.50 USD (50 cents)
+const STRIPE_MINIMUM_AMOUNT = 50;
+
 export interface PaymentPlanData {
   parentEmail: string;
   enrollmentIds: number[];
@@ -46,6 +49,14 @@ export class StripePaymentPlanService {
       paymentPlan: data.paymentPlan,
       paymentFrequency: data.paymentFrequency || 'one_time'
     });
+
+    // Validate total amount meets Stripe's minimum
+    if (data.totalAmount < STRIPE_MINIMUM_AMOUNT) {
+      throw new Error(
+        `Payment amount ${CurrencyUtils.toDisplay(data.totalAmount)} is below Stripe's minimum of $0.50. ` +
+        `Please ensure the class price is at least $0.50 to process payments.`
+      );
+    }
 
     // Get or create Stripe customer
     const customer = await this.getOrCreateCustomer(data.parentEmail);
@@ -206,6 +217,26 @@ export class StripePaymentPlanService {
       console.log('📅 Using date-based payment calculator with enrollment dates');
       const schedule = calculatePaymentSchedule(totalAmount, startDate, endDate, frequency);
       
+      // Validate that all computed payments meet Stripe's minimum
+      const hasPaymentBelowMinimum = 
+        schedule.paymentAmount < STRIPE_MINIMUM_AMOUNT || 
+        schedule.finalPaymentAmount < STRIPE_MINIMUM_AMOUNT;
+      
+      if (hasPaymentBelowMinimum) {
+        // If any date-based payment would be below minimum, fall back to full payment
+        console.warn(
+          `⚠️ Date-based ${frequency} payment plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} ` +
+          `(${schedule.numberOfPayments} payments of ${CurrencyUtils.toDisplay(schedule.paymentAmount)} each would violate Stripe's $0.50 minimum) - ` +
+          `using full payment instead`
+        );
+        return [{
+          amount: totalAmount,
+          dueDate: new Date(),
+          installmentNumber: 1,
+          description: 'Full Payment (amount below minimum for payment plans)'
+        }];
+      }
+      
       return schedule.paymentDates.map((dueDate, index) => ({
         amount: index === schedule.paymentDates.length - 1 
           ? schedule.finalPaymentAmount 
@@ -227,27 +258,57 @@ export class StripePaymentPlanService {
     switch (plan) {
       case 'deposit':
         // 10% deposit now, 90% in 30 days
-        const depositAmount = Math.round(totalAmount * 0.1);
+        // Ensure ALL payments meet Stripe's minimum of $0.50 (50 cents)
+        const calculatedDeposit = Math.round(totalAmount * 0.1);
+        const depositAmount = Math.max(calculatedDeposit, STRIPE_MINIMUM_AMOUNT);
         const balanceAmount = totalAmount - depositAmount;
+        
+        // Check if total amount is too small for any split payment plan
+        if (totalAmount < STRIPE_MINIMUM_AMOUNT * 2 || balanceAmount < STRIPE_MINIMUM_AMOUNT || depositAmount >= totalAmount) {
+          // If total is less than $1.00 or remaining balance would be below minimum, use full payment
+          console.warn(`⚠️ Deposit plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} - using full payment instead`);
+          return [{
+            amount: totalAmount, // Use exact total, validation already ensures it's >= $0.50
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'Full Payment (amount below minimum for payment plans)'
+          }];
+        }
+        
         return [
           {
             amount: depositAmount,
             dueDate: now,
             installmentNumber: 1,
-            description: 'Deposit Payment (10%)'
+            description: `Deposit Payment (${depositAmount === calculatedDeposit ? '10%' : 'minimum $0.50'})`
           },
           {
             amount: balanceAmount,
             dueDate: add30Days(now),
             installmentNumber: 2,
-            description: 'Balance Payment (90%)'
+            description: 'Balance Payment'
           }
         ];
 
       case 'split':
         // 50% now, 50% in 30 days
-        const firstHalf = Math.round(totalAmount * 0.5);
+        // Ensure ALL payments meet Stripe's minimum
+        const calculatedFirstHalf = Math.round(totalAmount * 0.5);
+        const firstHalf = Math.max(calculatedFirstHalf, STRIPE_MINIMUM_AMOUNT);
         const secondHalf = totalAmount - firstHalf;
+        
+        // Check if total amount is too small for split payments
+        if (totalAmount < STRIPE_MINIMUM_AMOUNT * 2 || secondHalf < STRIPE_MINIMUM_AMOUNT) {
+          // If total is less than $1.00 or second payment would be below minimum, use full payment
+          console.warn(`⚠️ Split plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} - using full payment instead`);
+          return [{
+            amount: totalAmount, // Use exact total, validation already ensures it's >= $0.50
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'Full Payment (amount below minimum for payment plans)'
+          }];
+        }
+        
         return [
           {
             amount: firstHalf,
@@ -267,8 +328,23 @@ export class StripePaymentPlanService {
         // Fallback: 4 biweekly payments (8 weeks total)
         // Note: This is only used when class dates are not available
         // Normally, the date-based calculator handles this plan
-        const biweeklyAmount = Math.round(totalAmount / 4);
+        const calculatedBiweekly = Math.round(totalAmount / 4);
+        const biweeklyAmount = Math.max(calculatedBiweekly, STRIPE_MINIMUM_AMOUNT);
         const lastBiweeklyAmount = totalAmount - (biweeklyAmount * 3); // Handle rounding
+        
+        // Check if total amount is too small for 4 biweekly payments
+        // Minimum for biweekly is $2.00 (4 payments × $0.50 each)
+        if (totalAmount < STRIPE_MINIMUM_AMOUNT * 4 || lastBiweeklyAmount < STRIPE_MINIMUM_AMOUNT || biweeklyAmount * 4 > totalAmount * 1.5) {
+          // If total is less than $2.00 or any payment would be below minimum, use full payment
+          console.warn(`⚠️ Biweekly plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} - using full payment instead`);
+          return [{
+            amount: totalAmount, // Use exact total, validation already ensures it's >= $0.50
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'Full Payment (amount below minimum for payment plans)'
+          }];
+        }
+        
         const add14Days = (date: Date) => {
           const newDate = new Date(date);
           newDate.setDate(newDate.getDate() + 14);
