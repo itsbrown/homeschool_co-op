@@ -1,0 +1,81 @@
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+❌ Error in enrollment creation or payment plan: PostgresError: new row for relation "program_enrollments" violates check constraint "program_enrollments_payment_plan_check"
+
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+at ErrorResponse (file:///home/runner/workspace/node_modules/postgres/src/connection.js:794:26)
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+at handle (file:///home/runner/workspace/node_modules/postgres/src/connection.js:480:6)
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+at TLSSocket.data (file:///home/runner/workspace/node_modules/postgres/src/connection.js:315:9)
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+at TLSSocket.emit (node:events:524:28)
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+at addChunk (node:internal/streams/readable:561:12)
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+severity_local: 'ERROR',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+severity: 'ERROR',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+code: '23514',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+detail: 'Failing row contains (24, 2, 7, 7, 13, Hermione Brown, Testing classes, null, 9, jocimarie@gmail.com, 0, 0, 0, 0, deposit_paid, biweekly, v2_stripe, enrolled, 2025-11-03 02:38:23.467, null, null, null, {}, 2025-11-03 02:38:23.467, 2025-11-03 02:38:23.467, biweekly, 2025-11-14, 2026-03-21, null).',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+schema_name: 'public',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+table_name: 'program_enrollments',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+constraint_name: 'program_enrollments_payment_plan_check',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+file: 'execMain.c',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+line: '2073',
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+routine: 'ExecConstraints'
+2025-11-02 21:38:23.53
+b76c2c3c
+User
+}
