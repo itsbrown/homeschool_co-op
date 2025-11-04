@@ -1,0 +1,114 @@
+📚 Fetching enrollments for child ID: 13
+
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+Error fetching child enrollments: TypeError: this.dbStorage.getMarketplaceEnrollmentsByChildId is not a function
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at CombinedStorage.getEnrollmentsByChildId (file:///home/runner/workspace/dist/index.js:6627:31)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at file:///home/runner/workspace/dist/index.js:29374:41
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at Route.dispatch (/home/runner/workspace/node_modules/express/lib/router/route.js:119:3)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at /home/runner/workspace/node_modules/express/lib/router/index.js:284:15
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at param (/home/runner/workspace/node_modules/express/lib/router/index.js:365:14)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at param (/home/runner/workspace/node_modules/express/lib/router/index.js:376:14)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:421:3)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at file:///home/runner/workspace/dist/index.js:33741:3
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+2025-11-04 10:31:42.94
+5f6cbdd3
+User
+3:31:42 PM [express] GET /api/children/13/enrollments 500 in 1ms :: {"message":"Failed to fetch enro…
+2025-11-04 10:31:43.00
+5f6cbdd3
+User
+✅ Child found: Hermione Brown
+2025-11-04 10:31:43.00
+5f6cbdd3
+User
+3:31:43 PM [express] GET /api/children/13 304 in 65ms :: {"id":13,"parentId":9,"parentEmail":"jocima…
+2025-11-04 10:31:43.02
+5f6cbdd3
+User
+3:31:43 PM [express] GET /api/classes 304 in 98ms :: {"classes":[{"id":8,"schoolId":2,"locationId":n…
+2025-11-04 10:31:44.49
+5f6cbdd3
+User
+Error fetching child enrollments: TypeError: this.dbStorage.getMarketplaceEnrollmentsByChildId is not a function
+2025-11-04 10:31:44.49
+5f6cbdd3
+User
+at CombinedStorage.getEnrollmentsByChildId (file:///home/runner/workspace/dist/index.js:6627:31)
+2025-11-04 10:31:44.49
+5f6cbdd3
+User
+at file:///home/runner/workspace/dist/index.js:29374:41
+2025-11-04 10:31:44.49
+5f6cbdd3
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-04 10:31:44.49
+5f6cbdd3
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+2025-11-04 10:31:44.49
+5f6cbdd3
+User
+at Route.dispatch (/home/runner/workspace/node_modules/express/lib/router/route.js:119:3)
+2025-11-04 10:31:44.49
+5f6cbdd3
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)

@@ -4076,34 +4076,29 @@ export class MemStorage implements IStorage {
     }
 
     async createEnrollment(enrollment: any): Promise<any> {
-      // Route marketplace class enrollments to database
-      return this.dbStorage.createMarketplaceEnrollment(enrollment);
+      // All enrollments now stored in unified program_enrollments table
+      return this.dbStorage.createProgramEnrollment(enrollment);
     }
 
     async getEnrollmentsByChildId(childId: number): Promise<any[]> {
-      // Get marketplace class enrollments from database
-      return this.dbStorage.getMarketplaceEnrollmentsByChildId(childId);
+      // Get all enrollments for child from unified program_enrollments table
+      return this.dbStorage.getEnrollmentsByChildIds([childId]);
     }
 
     async getEnrollmentById(id: number): Promise<any> {
-      // Try database first (for program enrollments)
-      const dbEnrollment = await this.dbStorage.getProgramEnrollment(id);
-      if (dbEnrollment) {
-        return dbEnrollment;
-      }
-      // Try marketplace class enrollments
-      return this.dbStorage.getMarketplaceEnrollmentById(id);
+      // Get enrollment from unified program_enrollments table
+      return this.dbStorage.getProgramEnrollmentById(id);
     }
 
     async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
       // Handle both calling signatures
       const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
       const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
-      return this.dbStorage.updateMarketplaceEnrollment(id, data);
+      return this.dbStorage.updateProgramEnrollment(id, data);
     }
 
     async deleteEnrollment(id: number): Promise<void> {
-      return this.dbStorage.deleteMarketplaceEnrollment(id);
+      return this.dbStorage.deleteProgramEnrollment(id);
     }
 
     async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
