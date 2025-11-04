@@ -125,10 +125,15 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
     }
   }, [user?.email]);
 
-  // Return early if not authenticated
-  if (!isAuthenticated) {
-    return null;
-  }
+  // Redirect to login if not authenticated
+  const [, setLocation] = useLocation();
+  
+  useEffect(() => {
+    if (!isAuthenticated) {
+      console.log('🔒 ParentAppShell: User not authenticated, redirecting to login');
+      setLocation('/login');
+    }
+  }, [isAuthenticated, setLocation]);
 
   return (
     <CartProvider>
