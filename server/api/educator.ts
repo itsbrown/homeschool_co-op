@@ -70,20 +70,18 @@ router.get('/students', async (req, res) => {
     // Get all children for lookup
     const allChildren = await storage.getAllChildren();
 
-    // Get enrollments for all assigned classes
-    const enrollmentsByClass = await Promise.all(
-      assignedClassIds.map(classId => 
-        storage.getMarketplaceEnrollmentsByClassId(classId)
-      )
+    // Get program enrollments for all assigned classes (marketplace type)
+    const allProgramEnrollments = await storage.getAllProgramEnrollments();
+    const allEnrollments = allProgramEnrollments.filter(enrollment =>
+      enrollment.classType === 'marketplace' &&
+      enrollment.marketplaceClassId &&
+      assignedClassIds.includes(enrollment.marketplaceClassId)
     );
-
-    // Flatten enrollments array
-    const allEnrollments = enrollmentsByClass.flat();
 
     // Get student details with class information
     const studentsWithClasses = allEnrollments.map(enrollment => {
       const child = allChildren.find(c => c.id === enrollment.childId);
-      const classInfo = assignedClasses.find(c => c.id === enrollment.classId);
+      const classInfo = assignedClasses.find(c => c.id === enrollment.marketplaceClassId);
       
       if (child) {
         return {
@@ -92,7 +90,7 @@ router.get('/students', async (req, res) => {
           lastName: child.lastName,
           gradeLevel: child.gradeLevel,
           parentEmail: child.parentEmail,
-          classId: enrollment.classId,
+          classId: enrollment.marketplaceClassId,
           className: classInfo ? classInfo.title : 'Unknown Class',
           enrollmentDate: enrollment.enrollmentDate,
           enrollmentStatus: enrollment.status
@@ -150,8 +148,12 @@ router.get('/class-students/:classId', async (req, res) => {
       return res.status(403).json({ message: 'You are not authorized to view this class' });
     }
 
-    // Get enrollments for this specific class
-    const classEnrollments = await storage.getMarketplaceEnrollmentsByClassId(parseInt(classId));
+    // Get program enrollments for this specific class (marketplace type)
+    const allProgramEnrollments = await storage.getAllProgramEnrollments();
+    const classEnrollments = allProgramEnrollments.filter(enrollment =>
+      enrollment.classType === 'marketplace' &&
+      enrollment.marketplaceClassId === parseInt(classId)
+    );
 
     // Get all children for lookup
     const allChildren = await storage.getAllChildren();

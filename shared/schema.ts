@@ -502,7 +502,9 @@ export const programEnrollments = pgTable("program_enrollments", {
     enum: ["school_class", "marketplace"] 
   }).default("school_class").notNull(),
   
-  classId: integer("class_id").references(() => schoolClasses.id), // null for legacy enrollments
+  // Class references - use classId for school_classes, marketplaceClassId for marketplace classes
+  classId: integer("class_id").references(() => schoolClasses.id), // For school_class type
+  marketplaceClassId: integer("marketplace_class_id").references(() => classes.id), // For marketplace type
   programId: integer("program_id"), // Legacy field for backward compatibility
   childId: integer("child_id").notNull().references(() => children.id),
   childName: text("child_name").notNull(), // Denormalized for reporting
@@ -558,6 +560,7 @@ export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollmen
     classType: z.enum(["school_class", "marketplace"]).default("school_class"),
     programId: z.number().nullable().default(null),
     classId: z.number().nullable().default(null),
+    marketplaceClassId: z.number().nullable().default(null),
     variantId: z.string().nullable().default(null),
     depositRequired: z.number().default(0),
     totalPaid: z.number().default(0),
