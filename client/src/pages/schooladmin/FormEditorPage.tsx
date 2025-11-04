@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface FormField {
@@ -32,6 +33,7 @@ interface FormField {
 
 interface CustomForm {
   id: number;
+  schoolId: number;
   title: string;
   description: string | null;
   slug: string;
@@ -40,6 +42,16 @@ interface CustomForm {
   accessLevel: string;
   settings: any;
   fields: FormField[];
+  isAllLocations: boolean;
+  allowedLocationIds: number[] | null;
+  platformFeeType: string;
+  platformFeeAmount: number;
+}
+
+interface Location {
+  id: number;
+  name: string;
+  schoolId: number;
 }
 
 function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpdate: (updates: Partial<FormField>) => void; onDelete: () => void }) {
@@ -145,6 +157,10 @@ export default function FormEditorPage() {
     description: '',
     isActive: true,
     accessLevel: 'members',
+    isAllLocations: true,
+    allowedLocationIds: [] as number[],
+    platformFeeType: 'none' as string,
+    platformFeeAmount: 0,
   });
 
   const sensors = useSensors(
@@ -158,6 +174,12 @@ export default function FormEditorPage() {
     enabled: !!formId,
   });
 
+  // Fetch locations for this school
+  const { data: locations = [] } = useQuery<Location[]>({
+    queryKey: [`/api/locations?schoolId=${form?.schoolId || ''}`],
+    enabled: !!form?.schoolId,
+  });
+
   useEffect(() => {
     if (form) {
       setFields(form.fields || []);
@@ -167,6 +189,10 @@ export default function FormEditorPage() {
         description: form.description || '',
         isActive: form.isActive,
         accessLevel: form.accessLevel,
+        isAllLocations: form.isAllLocations ?? true,
+        allowedLocationIds: form.allowedLocationIds || [],
+        platformFeeType: form.platformFeeType || 'none',
+        platformFeeAmount: form.platformFeeAmount || 0,
       });
     }
   }, [form]);
@@ -254,9 +280,24 @@ export default function FormEditorPage() {
 
   const saveForm = () => {
     updateFormMutation.mutate({
-      ...formData,
+      title: formData.title,
+      description: formData.description,
+      isActive: formData.isActive,
+      accessLevel: formData.accessLevel,
+      isAllLocations: formData.isAllLocations,
+      allowedLocationIds: formData.isAllLocations ? null : formData.allowedLocationIds,
+      platformFeeType: formData.platformFeeType,
+      platformFeeAmount: formData.platformFeeAmount,
       settings: formSettings,
     });
+  };
+
+  const toggleLocation = (locationId: number) => {
+    const currentIds = formData.allowedLocationIds;
+    const newIds = currentIds.includes(locationId)
+      ? currentIds.filter(id => id !== locationId)
+      : [...currentIds, locationId];
+    setFormData({ ...formData, allowedLocationIds: newIds });
   };
 
   if (isLoading || !form) {
@@ -406,6 +447,98 @@ export default function FormEditorPage() {
                 />
                 <Label>Send email notifications on submission</Label>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Location Targeting</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={formData.isAllLocations}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isAllLocations: checked })}
+                  data-testid="switch-all-locations"
+                />
+                <Label>Available at all locations</Label>
+              </div>
+              
+              {!formData.isAllLocations && (
+                <div className="space-y-2">
+                  <Label>Select specific locations</Label>
+                  <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                    {locations.map((location) => (
+                      <div key={location.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`location-${location.id}`}
+                          checked={formData.allowedLocationIds.includes(location.id)}
+                          onCheckedChange={() => toggleLocation(location.id)}
+                          data-testid={`checkbox-location-${location.id}`}
+                        />
+                        <Label htmlFor={`location-${location.id}`} className="font-normal cursor-pointer">
+                          {location.name}
+                        </Label>
+                      </div>
+                    ))}
+                    {locations.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No locations found for this school.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Platform Fees (for Product Order Forms)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Fee Type</Label>
+                <Select
+                  value={formData.platformFeeType}
+                  onValueChange={(value) => setFormData({ ...formData, platformFeeType: value })}
+                >
+                  <SelectTrigger data-testid="select-platform-fee-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Platform Fee</SelectItem>
+                    <SelectItem value="flat_per_item">Flat Fee Per Item Type</SelectItem>
+                    <SelectItem value="percentage">Percentage of Total</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.platformFeeType === 'none' && 'No platform fee will be charged'}
+                  {formData.platformFeeType === 'flat_per_item' && 'A flat fee per item type (not per quantity) will be charged'}
+                  {formData.platformFeeType === 'percentage' && 'A percentage of the subtotal will be charged'}
+                </p>
+              </div>
+              
+              {formData.platformFeeType !== 'none' && (
+                <div>
+                  <Label>
+                    {formData.platformFeeType === 'flat_per_item' 
+                      ? 'Fee Amount (cents per item type)' 
+                      : 'Fee Percentage (e.g., 5 for 5%)'}
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step={formData.platformFeeType === 'percentage' ? '0.1' : '1'}
+                    value={formData.platformFeeAmount}
+                    onChange={(e) => setFormData({ ...formData, platformFeeAmount: parseFloat(e.target.value) || 0 })}
+                    data-testid="input-platform-fee-amount"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formData.platformFeeType === 'flat_per_item' 
+                      ? `Example: 50 cents per item type (if someone orders 2 candles and 3 eggs, fee = $0.50 × 2 = $1.00)`
+                      : `Example: ${formData.platformFeeAmount}% of subtotal`}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -40,7 +40,42 @@ router.get('/forms/by-slug/:slug', async (req, res) => {
   }
 });
 
-// Submit form (public access)
+// Get form by slug (authenticated - for members-only forms)
+router.get('/forms/by-slug-auth/:slug', jwtCheck, async (req: any, res) => {
+  try {
+    const slug = req.params.slug;
+    const db = await getDb();
+    
+    const [form] = await db
+      .select()
+      .from(customForms)
+      .where(and(
+        eq(customForms.slug, slug),
+        eq(customForms.isActive, true)
+      ));
+    
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found' });
+    }
+    
+    // Check if user has access based on form access level
+    // For now, authenticated users can access members-only forms
+    // TODO: Add role-based access control if needed
+    
+    const fields = await db
+      .select()
+      .from(customFormFields)
+      .where(eq(customFormFields.formId, form.id))
+      .orderBy(customFormFields.order);
+    
+    res.json({ ...form, fields });
+  } catch (error) {
+    console.error('Error fetching form by slug:', error);
+    res.status(500).json({ message: 'Error fetching form' });
+  }
+});
+
+// Submit form (public access only - for backward compatibility)
 router.post('/forms/:formId/submit', async (req, res) => {
   try {
     const formId = parseInt(req.params.formId);
@@ -54,6 +89,49 @@ router.post('/forms/:formId/submit', async (req, res) => {
         eq(customForms.id, formId),
         eq(customForms.isActive, true),
         eq(customForms.accessLevel, 'public') // Only allow submissions to public forms
+      ));
+    
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found or not public' });
+    }
+    
+    const submissionData = insertCustomFormSubmissionSchema.parse({
+      ...req.body,
+      formId,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+    
+    const [newSubmission] = await db
+      .insert(customFormSubmissions)
+      .values(submissionData)
+      .returning();
+    
+    // TODO: Send email notifications if configured
+    
+    res.status(201).json(newSubmission);
+  } catch (error) {
+    console.error('Error submitting form:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
+    res.status(500).json({ message: 'Error submitting form' });
+  }
+});
+
+// Submit form (authenticated - for members-only forms)
+router.post('/forms/:formId/submit-auth', jwtCheck, async (req: any, res) => {
+  try {
+    const formId = parseInt(req.params.formId);
+    const db = await getDb();
+    
+    // Verify form exists and is active (authenticated users can submit to any non-public form)
+    const [form] = await db
+      .select()
+      .from(customForms)
+      .where(and(
+        eq(customForms.id, formId),
+        eq(customForms.isActive, true)
       ));
     
     if (!form) {

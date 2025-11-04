@@ -36,6 +36,19 @@ interface FormSubmission {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  // Product order fields
+  subtotal?: number;
+  platformFee?: number;
+  totalAmount?: number;
+  paymentStatus?: string;
+  stripePaymentIntentId?: string | null;
+  shippingAddress?: {
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+  productImages?: string[];
 }
 
 interface CustomForm {
@@ -326,6 +339,84 @@ export default function SubmissionsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Payment Information (if product order) */}
+              {selectedSubmission.totalAmount !== undefined && selectedSubmission.totalAmount > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-lg">Payment Information</h3>
+                  <div className="border rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span className="font-medium">${(selectedSubmission.subtotal || 0) / 100}</span>
+                    </div>
+                    {selectedSubmission.platformFee && selectedSubmission.platformFee > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Platform Fee:</span>
+                        <span className="font-medium">${selectedSubmission.platformFee / 100}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold border-t pt-2">
+                      <span>Total:</span>
+                      <span>${selectedSubmission.totalAmount / 100}</span>
+                    </div>
+                    {selectedSubmission.paymentStatus && (
+                      <div className="flex items-center gap-2 text-sm mt-3">
+                        <span className="text-muted-foreground">Payment Status:</span>
+                        <Badge className={
+                          selectedSubmission.paymentStatus === 'completed' ? 'bg-green-100 text-green-800' :
+                          selectedSubmission.paymentStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          selectedSubmission.paymentStatus === 'failed' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }>
+                          {selectedSubmission.paymentStatus}
+                        </Badge>
+                      </div>
+                    )}
+                    {selectedSubmission.stripePaymentIntentId && (
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Payment ID: {selectedSubmission.stripePaymentIntentId}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Shipping Address (if product order) */}
+              {selectedSubmission.shippingAddress && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-lg">Shipping Address</h3>
+                  <div className="border rounded-lg p-4 text-sm">
+                    <p>{selectedSubmission.shippingAddress.address}</p>
+                    <p>
+                      {selectedSubmission.shippingAddress.city}, {selectedSubmission.shippingAddress.state} {selectedSubmission.shippingAddress.zipCode}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Product Images (if any) */}
+              {selectedSubmission.productImages && selectedSubmission.productImages.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-lg">Product Images</h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {selectedSubmission.productImages.map((imageUrl, index) => (
+                      <a 
+                        key={index} 
+                        href={imageUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="block"
+                      >
+                        <img
+                          src={imageUrl}
+                          alt={`Product ${index + 1}`}
+                          className="w-full h-32 object-cover rounded-lg hover:opacity-80 transition-opacity cursor-pointer"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Form Responses */}
               <div className="space-y-3">

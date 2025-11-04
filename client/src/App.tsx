@@ -45,6 +45,9 @@ import FormEditorPage from "./pages/schooladmin/FormEditorPage";
 import PreviewFormPage from "./pages/schooladmin/PreviewFormPage";
 import SubmissionsPage from "./pages/schooladmin/SubmissionsPage";
 import DynamicFormPage from "./pages/DynamicFormPage";
+import ProductOrderFormPage from "./pages/ProductOrderFormPage";
+import ProductOrderPaymentPage from "./pages/ProductOrderPaymentPage";
+import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 import RolesAndPermissionsPage from "@/pages/admin/RolesAndPermissionsPage";
 import RoleManagementPage from "@/pages/admin/RoleManagementPage";
 import FeaturesOverviewPage from "@/pages/admin/FeaturesOverviewPage";
@@ -563,6 +566,9 @@ function Router() {
       <Route path="/school-admin/forms/:id/preview" component={PreviewFormPage} />
       <Route path="/school-admin/forms/:id/submissions" component={SubmissionsPage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />
+      <Route path="/product-order/:slug" component={ProductOrderFormPage} />
+      <Route path="/payment/:submissionId" component={ProductOrderPaymentPage} />
+      <Route path="/order-confirmation/:submissionId" component={OrderConfirmationPage} />
       <Route path="/schools/staff/:id" component={StaffEditPage} />
       <Route path="/schools/staff/:id/edit" component={StaffEditPage} />
       <Route path="/schools/students" component={StudentsPage} />

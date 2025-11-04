@@ -196,6 +196,61 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
   }
 });
 
+// Create payment intent for product order
+router.post('/create-product-payment', jwtCheck, async (req: any, res) => {
+  try {
+    console.log('💳 Creating payment intent for product order');
+    
+    const userEmail = req.user?.email || req.auth?.email;
+    
+    if (!userEmail) {
+      console.log('❌ No authenticated user found');
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+
+    const { submissionId, totalAmount, description } = req.body;
+
+    if (!submissionId || !totalAmount || totalAmount <= 0) {
+      return res.status(400).json({
+        message: 'Submission ID and valid total amount are required',
+        error: 'INVALID_REQUEST'
+      });
+    }
+
+    // Create payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalAmount), // Amount in cents
+      currency: 'usd',
+      description: description || 'Product Order',
+      metadata: {
+        submissionId: submissionId.toString(),
+        userEmail,
+        type: 'product_order'
+      },
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
+
+    console.log('✅ Payment intent created:', paymentIntent.id);
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error creating product payment intent:', error);
+    res.status(500).json({
+      message: 'Failed to create payment intent',
+      error: error.message
+    });
+  }
+});
+
 // NOTE: Webhook handler has been moved to dedicated webhook-handler.ts 
 // and is applied directly in server/index.ts BEFORE any JSON parsers
 // to ensure proper raw buffer handling for signature verification.
