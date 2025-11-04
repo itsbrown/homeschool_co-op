@@ -492,9 +492,16 @@ export type InsertEmergencyContact = z.infer<typeof insertEmergencyContactSchema
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
 
 // Program Enrollments table - for paid class enrollments with financial tracking
+// Unified table for both school_classes and marketplace classes
 export const programEnrollments = pgTable("program_enrollments", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id),
+  
+  // Class type to distinguish between school-specific and marketplace classes
+  classType: text("class_type", { 
+    enum: ["school_class", "marketplace"] 
+  }).default("school_class").notNull(),
+  
   classId: integer("class_id").references(() => schoolClasses.id), // null for legacy enrollments
   programId: integer("program_id"), // Legacy field for backward compatibility
   childId: integer("child_id").notNull().references(() => children.id),
@@ -548,6 +555,7 @@ export const programEnrollments = pgTable("program_enrollments", {
 export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
+    classType: z.enum(["school_class", "marketplace"]).default("school_class"),
     programId: z.number().nullable().default(null),
     classId: z.number().nullable().default(null),
     variantId: z.string().nullable().default(null),
