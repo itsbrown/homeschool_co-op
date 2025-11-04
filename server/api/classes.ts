@@ -206,7 +206,7 @@ router.post('/:id/enroll', async (req, res) => {
       childId: childId,
       childName: `${child.firstName} ${child.lastName}`,
       className: classItem.title,
-      enrollmentDate: new Date().toISOString(),
+      enrollmentDate: new Date(),
       status: enrollmentStatus, // Either 'pending_payment' or 'waitlist'
       waitlistPosition: waitlistPosition, // Position in waitlist, null if not waitlisted
       amount: 0, // Amount paid so far

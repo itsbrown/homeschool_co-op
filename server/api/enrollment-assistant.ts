@@ -126,7 +126,7 @@ async function executeEnrollmentAction(action: any, req: Request): Promise<void>
           childName: `${child.firstName} ${child.lastName}`,
           className: program.title,
           status: 'pending_payment' as const,
-          enrollmentDate: new Date().toISOString(),
+          enrollmentDate: new Date(),
           amount: 0,
           depositRequired: Math.round(programPrice * 0.1), // 10% deposit  
           totalCost: programPrice,

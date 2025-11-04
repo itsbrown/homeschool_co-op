@@ -2744,7 +2744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const schoolStudentData = {
           childId: newChild.id,
           schoolId, // Use authenticated user's school ID
-          enrollmentDate: new Date().toISOString(),
+          enrollmentDate: new Date(),
           status: 'active', // Use lowercase 'active' to match existing data
           locationId: null // Location can be assigned later
         };

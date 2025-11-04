@@ -95,7 +95,7 @@ router.post('/complete', async (req, res) => {
       classId: data.enrollment.classId,
       childId: child.id,
       childName: `${data.child.firstName} ${data.child.lastName}`,
-      enrollmentDate: new Date().toISOString(),
+      enrollmentDate: new Date(),
       status: data.enrollment.status,
       depositPaid: data.enrollment.depositPaid,
       remainingBalance: data.enrollment.remainingBalance
