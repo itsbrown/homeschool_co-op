@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { supabase } from "@/components/SupabaseProvider";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -12,11 +13,50 @@ interface ApiRequestOptions {
   token?: string;
 }
 
+// Flag to prevent multiple simultaneous refresh attempts
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshToken(): Promise<string | null> {
+  // If already refreshing, wait for that to complete
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      console.log('🔄 Attempting to refresh expired token...');
+      const { data, error } = await supabase.auth.refreshSession();
+      
+      if (error || !data.session) {
+        console.log('❌ Token refresh failed:', error?.message);
+        localStorage.removeItem('supabase_token');
+        return null;
+      }
+
+      console.log('✅ Token refreshed successfully');
+      localStorage.setItem('supabase_token', data.session.access_token);
+      return data.session.access_token;
+    } catch (error) {
+      console.error('❌ Token refresh error:', error);
+      localStorage.removeItem('supabase_token');
+      return null;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 export async function apiRequest(
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   url: string,
   body?: unknown,
-  options?: RequestInit
+  options?: RequestInit,
+  _retryCount: number = 0
 ): Promise<Response> {
   let token = localStorage.getItem('supabase_token');
   const activeRole = localStorage.getItem('activeRole');
@@ -46,12 +86,25 @@ export async function apiRequest(
   const finalUrl = url.startsWith('/api') ? url : `/api${url}`;
   const response = await fetch(finalUrl, config);
 
-  // Handle auth errors without throwing to prevent redirect loops
-  if (response.status === 401) {
-    console.log('🔒 API 401: Authentication required - clearing token');
-    localStorage.removeItem('supabase_token');
-    // Don't throw - let components handle this gracefully
-    return response;
+  // Handle auth errors with automatic token refresh
+  if (response.status === 401 && _retryCount === 0) {
+    console.log('🔒 API 401: Token expired, attempting refresh...');
+    
+    const newToken = await refreshToken();
+    
+    if (newToken) {
+      console.log('✅ Retrying request with refreshed token');
+      // Retry the request with the new token (mark as retry to prevent infinite loop)
+      return apiRequest(method, url, body, options, 1);
+    } else {
+      console.log('❌ Token refresh failed - user needs to log in again');
+      localStorage.removeItem('supabase_token');
+      // Redirect to login page
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+      return response;
+    }
   }
 
   if (response.status === 403) {
