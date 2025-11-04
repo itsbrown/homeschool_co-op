@@ -34,6 +34,14 @@ async function runMigrations() {
       END $$;
     `);
     console.log('✅ Migration completed: class_type column added');
+    
+    // Add marketplace_class_id column if it doesn't exist
+    console.log('Running migration: Adding marketplace_class_id column...');
+    await db.execute(sql`
+      ALTER TABLE program_enrollments 
+      ADD COLUMN IF NOT EXISTS marketplace_class_id INTEGER REFERENCES classes(id);
+    `);
+    console.log('✅ Migration completed: marketplace_class_id column added');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
