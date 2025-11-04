@@ -125,7 +125,9 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
         
         const enrollment = await storage.createProgramEnrollment({
           schoolId: enrollmentSchoolId,
-          classId: item.classId,
+          classType: 'marketplace', // Enrolling in marketplace class
+          classId: null, // Not a school_class enrollment
+          marketplaceClassId: item.classId, // Reference to classes table
           programId: item.classId, // For backward compatibility
           childId: item.childId,
           childName: item.childName,
