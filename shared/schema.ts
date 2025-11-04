@@ -1545,6 +1545,16 @@ export const customForms = pgTable("custom_forms", {
   }).default("members").notNull(),
   allowedRoles: jsonb("allowed_roles").default([]).notNull(), // Array of roles for custom access
   
+  // Location targeting for multi-location schools
+  isAllLocations: boolean("is_all_locations").default(true).notNull(), // true = visible to all locations
+  allowedLocationIds: integer("allowed_location_ids").array(), // Specific location IDs if not all locations
+  
+  // Platform fee configuration for product orders
+  platformFeeType: text("platform_fee_type", {
+    enum: ["none", "flat_per_item", "percentage"]
+  }).default("none"),
+  platformFeeAmount: integer("platform_fee_amount").default(0), // In cents for flat, basis points for percentage (e.g., 500 = 5%)
+  
   // Form settings
   settings: jsonb("settings").default({
     requireAuth: true,
@@ -1600,6 +1610,21 @@ export const customFormSubmissions = pgTable("custom_form_submissions", {
   // Form response data
   responseData: jsonb("response_data").notNull(), // Key-value pairs of field responses
   
+  // Payment information for product orders
+  subtotal: integer("subtotal").default(0), // Subtotal in cents (before platform fee)
+  platformFee: integer("platform_fee").default(0), // Platform fee in cents
+  totalAmount: integer("total_amount").default(0), // Total amount in cents (subtotal + platform fee)
+  paymentStatus: text("payment_status", {
+    enum: ["pending", "processing", "completed", "failed", "refunded"]
+  }),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  
+  // Shipping information for product orders
+  shippingAddress: jsonb("shipping_address"), // { street, city, state, zipCode, country }
+  
+  // Product images for product orders
+  productImages: text("product_images").array(), // Array of image URLs
+  
   // Metadata
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
@@ -1638,6 +1663,10 @@ export const insertCustomFormSchema = createInsertSchema(customForms)
     description: z.string().nullable().default(null),
     accessLevel: z.string().default("members"),
     allowedRoles: z.array(z.string()).default([]),
+    isAllLocations: z.boolean().default(true),
+    allowedLocationIds: z.array(z.number()).nullable().default(null),
+    platformFeeType: z.enum(["none", "flat_per_item", "percentage"]).default("none"),
+    platformFeeAmount: z.number().default(0),
     settings: z.object({
       requireAuth: z.boolean().default(true),
       allowMultipleSubmissions: z.boolean().default(false),
@@ -1673,6 +1702,19 @@ export const insertCustomFormSubmissionSchema = createInsertSchema(customFormSub
     submittedBy: z.number().nullable().default(null),
     submitterEmail: z.string().email().nullable().default(null),
     submitterName: z.string().nullable().default(null),
+    subtotal: z.number().default(0),
+    platformFee: z.number().default(0),
+    totalAmount: z.number().default(0),
+    paymentStatus: z.enum(["pending", "processing", "completed", "failed", "refunded"]).nullable().default(null),
+    stripePaymentIntentId: z.string().nullable().default(null),
+    shippingAddress: z.object({
+      street: z.string(),
+      city: z.string(),
+      state: z.string(),
+      zipCode: z.string(),
+      country: z.string().default("USA"),
+    }).nullable().default(null),
+    productImages: z.array(z.string()).nullable().default(null),
     ipAddress: z.string().nullable().default(null),
     userAgent: z.string().nullable().default(null),
     notes: z.string().nullable().default(null),
