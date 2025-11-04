@@ -385,6 +385,13 @@ export default function CartCheckout() {
   };
 
   const getSelectedPlanAmount = () => {
+    // For biweekly plans, send the FULL cart total to backend
+    // The backend will calculate the payment schedule and divide it properly
+    if (selectedPaymentPlan === 'biweekly') {
+      return cart.total;
+    }
+    
+    // For other plans, return the calculated plan amount
     const plans = getPaymentPlanOptions();
     const selectedPlan = plans.find(plan => plan.id === selectedPaymentPlan);
     return selectedPlan ? selectedPlan.amount - (selectedPlan.discount || 0) : cart.total;
