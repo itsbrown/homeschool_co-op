@@ -175,6 +175,12 @@ router.post('/:id/enroll', async (req, res) => {
       return res.status(404).json({ message: 'Child not found' });
     }
 
+    // Get the parent to get parent details
+    const parent = await storage.getUserById(child.parentId);
+    if (!parent) {
+      return res.status(404).json({ message: 'Parent not found' });
+    }
+
     // Check class capacity and enrollment count
     const capacity = classItem.capacity || 0;
     const currentEnrollmentCount = classItem.enrollmentCount || 0;
@@ -182,7 +188,7 @@ router.post('/:id/enroll', async (req, res) => {
 
     // Calculate waitlist position if at capacity
     let waitlistPosition = null;
-    let enrollmentStatus = 'pending_payment';
+    let enrollmentStatus = 'enrolled';
     
     if (isAtCapacity) {
       // Get current waitlist count for this class
@@ -198,21 +204,38 @@ router.post('/:id/enroll', async (req, res) => {
     // Calculate deposit (10% of class price)
     const classPrice = classItem.price || 90000; // Default $900 in cents
     const depositAmount = Math.round(classPrice * 0.1); // 10% deposit
-    const remainingBalance = classPrice - depositAmount;
 
-    // Create enrollment record (database will auto-generate ID)
+    // Create enrollment record with ALL required fields
     const enrollment = {
-      classId: classId,
+      schoolId: classItem.schoolId || 1, // Get from class
+      classType: 'marketplace' as const, // This is a marketplace class
+      classId: null, // Not a school_class, so null
+      marketplaceClassId: classId, // This is the marketplace class ID
       childId: childId,
       childName: `${child.firstName} ${child.lastName}`,
       className: classItem.title,
-      enrollmentDate: new Date(),
-      status: enrollmentStatus, // Either 'pending_payment' or 'waitlist'
-      waitlistPosition: waitlistPosition, // Position in waitlist, null if not waitlisted
-      amount: 0, // Amount paid so far
-      depositRequired: depositAmount,
+      variantId: null,
+      parentId: child.parentId,
+      parentEmail: parent.email,
       totalCost: classPrice,
-      remainingBalance: classPrice // Full balance until deposit is paid
+      totalPaid: 0,
+      remainingBalance: classPrice,
+      depositRequired: depositAmount,
+      paymentStatus: 'pending' as const,
+      paymentPlan: 'deposit_only' as const,
+      paymentFrequency: 'one_time' as const,
+      paymentSystemVersion: 'v2_stripe',
+      programStartDate: classItem.startDate || null,
+      programEndDate: classItem.endDate || null,
+      status: enrollmentStatus as any,
+      waitlistPosition: waitlistPosition,
+      enrollmentDate: new Date(),
+      stripeSubscriptionId: null,
+      stripeSubscriptionScheduleId: null,
+      stripeCustomerId: null,
+      transactionId: null,
+      discountCode: null,
+      discountAmount: null
     };
 
     console.log(`📝 ENROLLMENT OBJECT CREATED:`, enrollment);
