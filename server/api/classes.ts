@@ -175,12 +175,6 @@ router.post('/:id/enroll', async (req, res) => {
       return res.status(404).json({ message: 'Child not found' });
     }
 
-    // Get the parent to get parent details
-    const parent = await storage.getUserById(child.parentId);
-    if (!parent) {
-      return res.status(404).json({ message: 'Parent not found' });
-    }
-
     // Check class capacity and enrollment count
     const capacity = classItem.capacity || 0;
     const currentEnrollmentCount = classItem.enrollmentCount || 0;
@@ -216,7 +210,7 @@ router.post('/:id/enroll', async (req, res) => {
       className: classItem.title,
       variantId: null,
       parentId: child.parentId,
-      parentEmail: parent.email,
+      parentEmail: child.parentEmail, // Get from child record
       totalCost: classPrice,
       totalPaid: 0,
       remainingBalance: classPrice,
