@@ -34,112 +34,101 @@ const isParent = async (req: any, res: Response, next: NextFunction) => {
 };
 
 // Get all children for the parent user
-router.get("/", isParent, (req: Request, res: Response) => {
-  // Mock data for testing since we don't have a database connection yet
-  const children = [
-    {
-      id: 1,
-      name: "John Smith",
-      age: 8,
-      gender: "Male",
-      gradeLevel: "3rd Grade",
-      parentId: req.session.userId,
-      enrollments: []
-    },
-    {
-      id: 2,
-      name: "Emily Smith",
-      age: 10, 
-      gender: "Female",
-      gradeLevel: "5th Grade",
-      parentId: req.session.userId,
-      enrollments: []
-    }
-  ];
-  
-  res.json(children);
+router.get("/", jwtCheck, isParent, async (req: any, res: Response) => {
+  try {
+    const userEmail = req.user.email;
+    console.log(`📚 Fetching children for parent: ${userEmail}`);
+    
+    // Get children from database
+    const children = await storage.getChildrenByParentEmail(userEmail);
+    
+    console.log(`✅ Found ${children.length} children for ${userEmail}`);
+    res.json(children);
+  } catch (error) {
+    console.error("Error fetching children:", error);
+    res.status(500).json({ message: "Error fetching children" });
+  }
 });
 
 // Get a specific child by ID
-router.get("/:id", isParent, (req: Request, res: Response) => {
-  const childId = parseInt(req.params.id);
-  
-  // Mock data for testing
-  const children = [
-    {
-      id: 1,
-      name: "John Smith",
-      age: 8,
-      gender: "Male",
-      gradeLevel: "3rd Grade",
-      parentId: req.session.userId,
-      enrollments: []
-    },
-    {
-      id: 2,
-      name: "Emily Smith",
-      age: 10, 
-      gender: "Female",
-      gradeLevel: "5th Grade",
-      parentId: req.session.userId,
-      enrollments: []
+router.get("/:id", jwtCheck, isParent, async (req: any, res: Response) => {
+  try {
+    const childId = parseInt(req.params.id);
+    const userEmail = req.user.email;
+    
+    console.log(`🔍 Fetching child ${childId} for parent: ${userEmail}`);
+    
+    // Get the child from database
+    const child = await storage.getChildById(childId);
+    
+    if (!child) {
+      console.log(`❌ Child ${childId} not found`);
+      return res.status(404).json({ message: "Child not found" });
     }
-  ];
-  
-  const child = children.find(c => c.id === childId);
-  
-  if (!child) {
-    return res.status(404).json({ message: "Child not found" });
+    
+    // Verify the child belongs to this parent
+    const parent = await storage.getUserByEmail(userEmail);
+    if (child.parentEmail !== userEmail && child.parentId !== parent?.id) {
+      console.log(`❌ Child ${childId} does not belong to parent ${userEmail}`);
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    console.log(`✅ Found child: ${child.firstName} ${child.lastName}`);
+    res.json(child);
+  } catch (error) {
+    console.error("Error fetching child:", error);
+    res.status(500).json({ message: "Error fetching child" });
   }
-  
-  res.json(child);
 });
 
 // Register a new child
-router.post("/", isParent, (req: Request, res: Response) => {
+router.post("/", jwtCheck, isParent, async (req: any, res: Response) => {
   try {
-    const { firstName, lastName, birthdate, gradeLevel, gender, interests, learningStyle, specialNeeds, allergies, notes } = req.body;
+    const { firstName, lastName, birthdate, gradeLevel, gender, interests, learningStyle, specialNeeds, allergies, notes, school, schoolId } = req.body;
+    const userEmail = req.user.email;
     
     // Validate required fields
     if (!firstName || !lastName || !birthdate || !gradeLevel) {
       return res.status(400).json({ message: "Missing required fields" });
     }
     
-    // For simplicity in this test implementation, we'll just generate a random ID
-    // In a real application, this would be handled by the database
-    const newChildId = Math.floor(Math.random() * 10000) + 100;
+    console.log(`👶 Registering new child for parent: ${userEmail}`);
     
-    // Calculate age from birthdate
-    const birthDate = new Date(birthdate);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
+    // Get parent user to get their ID
+    const parent = await storage.getUserByEmail(userEmail);
+    if (!parent) {
+      return res.status(404).json({ message: "Parent user not found" });
     }
     
-    // Create the new child object
-    const newChild = {
-      id: newChildId,
-      name: `${firstName} ${lastName}`,
-      age,
-      gender: gender || "Not specified",
+    // Create the new child in the database
+    const newChild = await storage.createChild({
+      parentId: parent.id,
+      parentEmail: userEmail,
+      firstName,
+      lastName,
+      birthdate,
       gradeLevel,
-      parentId: req.session.userId,
-      interests: interests || [],
-      learningStyle: learningStyle || "Not specified",
+      gender: gender || null,
+      school: school || null,
+      schoolId: schoolId || null,
+      learningStyle: learningStyle || null,
       specialNeeds: specialNeeds || null,
+      interests: interests || [],
       allergies: allergies || null,
+      medicalInfo: null,
+      profileImage: null,
+      emergencyContact: null,
+      additionalLanguages: null,
       notes: notes || null,
-      enrollments: []
-    };
+      locationId: null
+    });
     
-    // In a real application, we would save this to the database
+    console.log(`✅ Child registered successfully: ${newChild.firstName} ${newChild.lastName} (ID: ${newChild.id})`);
     
     // Return success response
     return res.status(200).json({
       message: "Child registered successfully",
-      id: newChildId,
+      id: newChild.id,
       child: newChild
     });
   } catch (error) {
