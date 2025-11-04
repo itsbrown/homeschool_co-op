@@ -28,7 +28,7 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Database Connection**: URL-encoded connection string builder.
 - **File Storage**: Local filesystem for general files and knowledge bases.
 - **Authentication Integration**: Frontend uses Supabase OAuth; backend queries Supabase for user/school data.
-- **Storage Architecture**: Hybrid system using CombinedStorage, routing operations between database storage (dbStorage) for persistent data and in-memory storage (memStorage) for feature-specific data. All critical data, including Classes, Schools, Children, School Students, Membership Enrollments, Stripe Subscription Schedules, Locations, User Locations, Marketplace Class Enrollments, Staff Positions, Staff Invitations, and Password Reset Tokens, have been migrated to persistent PostgreSQL storage.
+- **Storage Architecture**: Hybrid system using CombinedStorage, routing operations between database storage (dbStorage) for persistent data and in-memory storage (memStorage) for feature-specific data. All critical data, including Classes, Schools, Children, School Students, Membership Enrollments, Stripe Subscription Schedules, Locations, User Locations, Program Enrollments (unified for both school and marketplace classes), Staff Positions, Staff Invitations, and Password Reset Tokens, have been migrated to persistent PostgreSQL storage.
 
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation. All school-admin API endpoints protected with Supabase JWT authentication middleware.
@@ -60,6 +60,14 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Twilio**: SMS service.
 
 ## Recent Updates (November 4, 2025)
+### Enrollment Table Consolidation
+- **Unified Enrollment Table**: Consolidated `marketplace_class_enrollments` and school-based enrollments into a single `program_enrollments` table with `class_type` enum field ('school_class' | 'marketplace')
+- **Schema Changes**: Added `marketplaceClassId` field to `program_enrollments` to support marketplace class tracking alongside existing `classId` for school classes
+- **Educator API Updates**: Updated educator dashboard endpoints to filter `program_enrollments` by `class_type === 'marketplace'` for marketplace class student lists
+- **Cart Checkout**: Modified enrollment creation to set appropriate `class_type` based on cart item source (marketplace vs school)
+- **Code Cleanup**: Removed obsolete marketplace enrollment methods from dbStorage and cleaned up schema exports
+- **Architecture**: Simplified enrollment system from two separate tables to one unified table with discriminator field, reducing complexity and improving maintainability
+
 ### Product Order Form System Enhancements
 - **Product Field Type**: Extended schema with 'product' field type supporting variant configurations (name, price), descriptions, max quantity limits, and dynamic pricing
 - **Form Templates**: Created and seeded 4 pre-built templates (Candle Order Form, Farm Fresh Products, Bakery Order Form, General Product Order) into database
