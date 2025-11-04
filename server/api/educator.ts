@@ -71,15 +71,15 @@ router.get('/students', async (req, res) => {
     const allChildren = await storage.getAllChildren();
 
     // Get program enrollments for all assigned classes (marketplace type)
-    const allProgramEnrollments = await storage.getAllProgramEnrollments();
-    const allEnrollments = allProgramEnrollments.filter(enrollment =>
+    const allProgramEnrollments = await storage.getAllEnrollments();
+    const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
       enrollment.classType === 'marketplace' &&
       enrollment.marketplaceClassId &&
       assignedClassIds.includes(enrollment.marketplaceClassId)
     );
 
     // Get student details with class information
-    const studentsWithClasses = allEnrollments.map(enrollment => {
+    const studentsWithClasses = allEnrollments.map((enrollment: any) => {
       const child = allChildren.find(c => c.id === enrollment.childId);
       const classInfo = assignedClasses.find(c => c.id === enrollment.marketplaceClassId);
       
@@ -149,8 +149,8 @@ router.get('/class-students/:classId', async (req, res) => {
     }
 
     // Get program enrollments for this specific class (marketplace type)
-    const allProgramEnrollments = await storage.getAllProgramEnrollments();
-    const classEnrollments = allProgramEnrollments.filter(enrollment =>
+    const allProgramEnrollments = await storage.getAllEnrollments();
+    const classEnrollments = allProgramEnrollments.filter((enrollment: any) =>
       enrollment.classType === 'marketplace' &&
       enrollment.marketplaceClassId === parseInt(classId)
     );
@@ -159,7 +159,7 @@ router.get('/class-students/:classId', async (req, res) => {
     const allChildren = await storage.getAllChildren();
 
     // Get student details
-    const studentsInClass = classEnrollments.map(enrollment => {
+    const studentsInClass = classEnrollments.map((enrollment: any) => {
       const child = allChildren.find(c => c.id === enrollment.childId);
       
       if (child) {

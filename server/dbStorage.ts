@@ -28,7 +28,6 @@ import {
   Refund, InsertRefund, refunds,
   Location, InsertLocation, locations,
   UserLocation, InsertUserLocation, userLocations,
-  MarketplaceClassEnrollment, InsertMarketplaceClassEnrollment, marketplaceClassEnrollments,
   Notification, InsertNotification, notifications,
   NotificationRecipient, InsertNotificationRecipient, notificationRecipients,
   Discount, InsertDiscount, discounts,
@@ -1645,63 +1644,6 @@ export class DatabaseStorage implements IStorage {
       .update(userLocations)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(userLocations.id, id));
-  }
-
-  // Marketplace Class Enrollment methods
-  async getMarketplaceEnrollmentById(id: number): Promise<MarketplaceClassEnrollment | undefined> {
-    const db = await getDb();
-    const [enrollment] = await db.select().from(marketplaceClassEnrollments).where(eq(marketplaceClassEnrollments.id, id));
-    return enrollment;
-  }
-
-  async getMarketplaceEnrollmentsByChildId(childId: number): Promise<MarketplaceClassEnrollment[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(marketplaceClassEnrollments)
-      .where(eq(marketplaceClassEnrollments.childId, childId))
-      .orderBy(desc(marketplaceClassEnrollments.enrollmentDate));
-  }
-
-  async getMarketplaceEnrollmentsByClassId(classId: number): Promise<MarketplaceClassEnrollment[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(marketplaceClassEnrollments)
-      .where(eq(marketplaceClassEnrollments.classId, classId))
-      .orderBy(desc(marketplaceClassEnrollments.enrollmentDate));
-  }
-
-  async createMarketplaceEnrollment(enrollment: InsertMarketplaceClassEnrollment): Promise<MarketplaceClassEnrollment> {
-    const db = await getDb();
-    const [newEnrollment] = await db
-      .insert(marketplaceClassEnrollments)
-      .values({
-        ...enrollment,
-        enrollmentDate: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
-      .returning();
-    return newEnrollment;
-  }
-
-  async updateMarketplaceEnrollment(id: number, enrollment: Partial<InsertMarketplaceClassEnrollment>): Promise<MarketplaceClassEnrollment | undefined> {
-    const db = await getDb();
-    const [updatedEnrollment] = await db
-      .update(marketplaceClassEnrollments)
-      .set({
-        ...enrollment,
-        updatedAt: new Date()
-      })
-      .where(eq(marketplaceClassEnrollments.id, id))
-      .returning();
-    return updatedEnrollment;
-  }
-
-  async deleteMarketplaceEnrollment(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(marketplaceClassEnrollments).where(eq(marketplaceClassEnrollments.id, id));
   }
 
   // Notification methods
