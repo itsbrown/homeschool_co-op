@@ -165,7 +165,63 @@ router.post('/forms/:formId/submit-auth', jwtCheck, async (req: any, res) => {
 // AUTHENTICATED ROUTES (after jwtCheck) - require login
 router.use(jwtCheck);
 
-// Get all forms for a school
+// Get all forms for authenticated user's school (extracts schoolId from token)
+router.get('/schools/forms', async (req: any, res) => {
+  try {
+    const schoolId = req.auth.schoolId;
+    
+    if (!schoolId) {
+      return res.status(400).json({ message: 'No school associated with user' });
+    }
+    
+    const db = await getDb();
+    
+    const forms = await db
+      .select()
+      .from(customForms)
+      .where(eq(customForms.schoolId, schoolId))
+      .orderBy(desc(customForms.createdAt));
+    
+    res.json(forms);
+  } catch (error) {
+    console.error('Error fetching forms:', error);
+    res.status(500).json({ message: 'Error fetching forms' });
+  }
+});
+
+// Create form for authenticated user's school (extracts schoolId from token)
+router.post('/schools/forms', async (req: any, res) => {
+  try {
+    const schoolId = req.auth.schoolId;
+    
+    if (!schoolId) {
+      return res.status(400).json({ message: 'No school associated with user' });
+    }
+    
+    const db = await getDb();
+    
+    const formData = insertCustomFormSchema.parse({
+      ...req.body,
+      schoolId,
+      createdBy: req.auth.dbUserId,
+    });
+    
+    const [newForm] = await db
+      .insert(customForms)
+      .values(formData)
+      .returning();
+    
+    res.status(201).json(newForm);
+  } catch (error) {
+    console.error('Error creating form:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
+    res.status(500).json({ message: 'Error creating form' });
+  }
+});
+
+// Get all forms for a school (with explicit schoolId - for superAdmin)
 router.get('/schools/:schoolId/forms', requireSchoolAccess, async (req: any, res) => {
   try {
     const schoolId = parseInt(req.params.schoolId);
