@@ -197,6 +197,10 @@ router.put('/forms/:formId', async (req: any, res) => {
       accessLevel: true,
       settings: true,
       conditionalLogic: true,
+      isAllLocations: true,
+      allowedLocationIds: true,
+      platformFeeType: true,
+      platformFeeAmount: true,
     }).partial();
     
     const updates = updateSchema.parse(req.body);
