@@ -2043,39 +2043,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add individual student route first (more specific)
-  app.get("/api/schools/students/:id", (req, res) => {
+  app.get("/api/schools/students/:id", async (req, res) => {
     const requestedId = parseInt(req.params.id);
     console.log('🔍 Fetching individual student by ID:', requestedId);
 
     try {
-      // Load both children and school-students data
-      const childrenPath = path.join(process.cwd(), 'data/children.json');
-      const schoolStudentsPath = path.join(process.cwd(), 'data/school-students.json');
-      
-      if (!fs.existsSync(childrenPath)) {
-        console.log('❌ Children data file not found');
-        return res.status(404).json({ message: 'Student data not available' });
-      }
-
-      const childrenData = fs.readFileSync(childrenPath, 'utf-8');
-      const children = JSON.parse(childrenData);
-
       let targetChildId = requestedId;
 
-      // Check if the requested ID is a school student ID
-      if (fs.existsSync(schoolStudentsPath)) {
-        const schoolStudentsData = fs.readFileSync(schoolStudentsPath, 'utf-8');
-        const schoolStudents = JSON.parse(schoolStudentsData);
-        
-        const schoolStudent = schoolStudents.find((ss: any) => ss.id === requestedId);
-        if (schoolStudent) {
-          targetChildId = schoolStudent.childId;
-          console.log('🔗 Mapped school student ID', requestedId, 'to child ID', targetChildId);
-        }
+      // Check if the requested ID is a school student ID and get the mapped child ID
+      const schoolStudent = await storage.getSchoolStudent(requestedId);
+      if (schoolStudent) {
+        targetChildId = schoolStudent.childId;
+        console.log('🔗 Mapped school student ID', requestedId, 'to child ID', targetChildId);
       }
 
-      // Find the child by ID
-      const student = children.find((child: any) => child.id === targetChildId);
+      // Get the child from database
+      const student = await storage.getChildById(targetChildId);
 
       if (!student) {
         console.log('❌ Student not found with child ID:', targetChildId);
@@ -3082,29 +3065,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('No user profile data found');
       }
 
-      // Load children data
-      const childrenPath = path.join(process.cwd(), 'data', 'children.json');
+      // Get children from database
       let children = [];
 
       try {
-        const childrenData = fs.readFileSync(childrenPath, 'utf8');
-        children = JSON.parse(childrenData);
+        // Get children by parent email or parent ID
+        if (userProfile && userProfile.id) {
+          children = await storage.getChildrenByParentId(parseInt(userProfile.id));
+        }
+        
+        // Also include children matched by email if not found by ID
+        if (children.length === 0) {
+          const allChildren = await storage.getAllChildren();
+          children = allChildren.filter(child => child.parentEmail === userEmail);
+        }
       } catch (error) {
-        console.log('No children data file found, returning empty array');
+        console.log('Error fetching children from database:', error);
         return res.json([]);
       }
 
-      // Filter children that match the parent's ID or email
-      const parentChildren = children.filter(child => {
-        // Match by parentId if user profile found, otherwise match by email
-        if (userProfile && userProfile.id) {
-          return child.parentId === parseInt(userProfile.id) || 
-                 child.parentEmail === userEmail;
-        } else {
-          return child.parentEmail === userEmail;
-        }
-      }).map(child => {
-        // Calculate age from birthdate
+      // Calculate age for each child
+      const parentChildren = children.map(child => {
         const age = calculateAge(child.birthdate);
         return { ...child, age };
       });

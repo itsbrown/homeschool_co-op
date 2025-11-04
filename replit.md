@@ -60,13 +60,19 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Twilio**: SMS service.
 
 ## Recent Updates (November 4, 2025)
-### Enrollment Table Consolidation
+### Enrollment Table Consolidation & Data Migration Fixes
 - **Unified Enrollment Table**: Consolidated `marketplace_class_enrollments` and school-based enrollments into a single `program_enrollments` table with `class_type` enum field ('school_class' | 'marketplace')
 - **Schema Changes**: Added `marketplaceClassId` field to `program_enrollments` to support marketplace class tracking alongside existing `classId` for school classes
 - **Educator API Updates**: Updated educator dashboard endpoints to filter `program_enrollments` by `class_type === 'marketplace'` for marketplace class student lists
 - **Cart Checkout**: Modified enrollment creation to set appropriate `class_type` based on cart item source (marketplace vs school)
 - **Code Cleanup**: Removed obsolete marketplace enrollment methods from dbStorage and cleaned up schema exports
 - **Architecture**: Simplified enrollment system from two separate tables to one unified table with discriminator field, reducing complexity and improving maintainability
+- **Storage Layer Migration**: Updated `CombinedStorage` class to use unified `program_enrollments` methods instead of deprecated marketplace enrollment methods (fixed `getMarketplaceEnrollmentsByChildId` errors)
+- **Endpoint Database Migration**: Converted all children.json file reads to database queries:
+  - `/api/schools/students/:id` - Now uses `storage.getChildById()` instead of reading children.json
+  - `/school-admin/students/:id` - Now uses `storage.getChildById()` instead of reading children.json
+  - `/api/auth0/children` - Now uses `storage.getChildrenByParentId()` and `storage.getAllChildren()` instead of reading children.json
+- **Multi-Tenant Security Hardening**: Eliminated all hardcoded school ID 1 references from ParentAppShell, ParentSidebar, and ChildRegistrationForm - now exclusively uses school-parents API with generic "Learning Platform" fallback
 
 ### Product Order Form System Enhancements
 - **Product Field Type**: Extended schema with 'product' field type supporting variant configurations (name, price), descriptions, max quantity limits, and dynamic pricing

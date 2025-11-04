@@ -2192,11 +2192,8 @@ router.get('/students/:id', supabaseAuth, async (req: any, res) => {
     const studentId = parseInt(req.params.id);
     console.log('🎓 Fetching individual student by ID:', studentId);
 
-    // Read students from file
-    const childrenPath = path.join(process.cwd(), 'data', 'children.json');
-    const childrenData = JSON.parse(fs.readFileSync(childrenPath, 'utf8'));
-
-    const student = childrenData.find((child: any) => child.id === studentId);
+    // Get student from database
+    const student = await storage.getChildById(studentId);
 
     if (!student) {
       console.log('❌ Student not found with ID:', studentId);
