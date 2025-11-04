@@ -4051,8 +4051,8 @@ export class MemStorage implements IStorage {
     }
 
     async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
-      // Use MemStorage as the primary method since it has the implementation
-      return this.memStorage.getEnrollmentsByChildIds(childIds);
+      // Use database storage for unified program_enrollments table
+      return this.dbStorage.getEnrollmentsByChildIds(childIds);
     }
 
     async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {

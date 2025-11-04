@@ -1,0 +1,70 @@
+2025-11-04 11:35:44.79
+d24b7669
+User
+Error enrolling child in class: TypeError: value.toISOString is not a function
+
+2025-11-04 11:35:44.79
+d24b7669
+User
+at PgTimestamp.mapToDriverValue (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/columns/timestamp.js:34:18)
+2025-11-04 11:35:44.79
+d24b7669
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:131:73
+2025-11-04 11:35:44.79
+d24b7669
+User
+at Array.map ()
+2025-11-04 11:35:44.79
+d24b7669
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2025-11-04 11:35:44.79
+d24b7669
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:92:21
+2025-11-04 11:35:44.79
+d24b7669
+User
+at Array.map ()
+2025-11-04 11:35:44.79
+d24b7669
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2025-11-04 11:35:44.79
+d24b7669
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2025-11-04 11:35:44.79
+d24b7669
+User
+at Array.map ()
+2025-11-04 11:35:44.79
+d24b7669
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2025-11-04 11:35:44.79
+d24b7669
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:52:26
+2025-11-04 11:35:44.79
+d24b7669
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2025-11-04 11:35:44.79
+d24b7669
+User
+at SQL.toQuery (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:51:19)
+2025-11-04 11:35:44.79
+d24b7669
+User
+at PgDialect.sqlToQuery (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/dialect.js:418:17)
+2025-11-04 11:35:44.79
+d24b7669
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/insert.js:164:53
+2025-11-04 11:35:44.79
+d24b7669
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2025-11-04 11:35:44.80
