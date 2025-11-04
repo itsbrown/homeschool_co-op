@@ -740,7 +740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/events/upcoming", jwtCheck, async (req: any, res) => {
     try {
       // Get email from Supabase auth structure
-      const userEmail = req.auth?.email;
+      const userEmail = req.auth?.payload?.email;
 
       console.log('🎪 Events API - Supabase auth object:', JSON.stringify(req.auth, null, 2));
       console.log('🎪 Events API - Extracted email:', userEmail);
