@@ -86,6 +86,7 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                   <SelectItem value="checkbox">Checkbox</SelectItem>
                   <SelectItem value="multi_checkbox">Multi-Select Checkboxes</SelectItem>
                   <SelectItem value="file_upload">File Upload</SelectItem>
+                  <SelectItem value="product">Product (with variants)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -128,6 +129,70 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                 placeholder="Option 1&#10;Option 2&#10;Option 3"
                 className="h-20"
               />
+            </div>
+          )}
+          {field.fieldType === 'product' && (
+            <div className="space-y-3 border-t pt-3">
+              <div>
+                <Label className="text-xs">Product Description</Label>
+                <Textarea
+                  value={field.fieldConfig?.description || ''}
+                  onChange={(e) => onUpdate({
+                    fieldConfig: { ...field.fieldConfig, description: e.target.value }
+                  })}
+                  placeholder="Brief product description"
+                  className="h-16"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Base Price ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={(field.fieldConfig?.price || 0) / 100}
+                    onChange={(e) => onUpdate({
+                      fieldConfig: { ...field.fieldConfig, price: Math.round(parseFloat(e.target.value) * 100) }
+                    })}
+                    placeholder="10.00"
+                    className="h-9"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Max Quantity</Label>
+                  <Input
+                    type="number"
+                    value={field.fieldConfig?.maxQuantity || 10}
+                    onChange={(e) => onUpdate({
+                      fieldConfig: { ...field.fieldConfig, maxQuantity: parseInt(e.target.value) || 10 }
+                    })}
+                    placeholder="10"
+                    className="h-9"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Variants (name:price, one per line)</Label>
+                <Textarea
+                  value={field.fieldConfig?.variants?.map((v: any) => `${v.name}:${(v.price / 100).toFixed(2)}`).join('\n') || ''}
+                  onChange={(e) => {
+                    const variants = e.target.value.split('\n')
+                      .filter(Boolean)
+                      .map(line => {
+                        const [name, priceStr] = line.split(':');
+                        return {
+                          name: name?.trim() || 'Variant',
+                          price: Math.round((parseFloat(priceStr) || 0) * 100)
+                        };
+                      });
+                    onUpdate({
+                      fieldConfig: { ...field.fieldConfig, variants }
+                    });
+                  }}
+                  placeholder="Small:10.00&#10;Medium:15.00&#10;Large:20.00"
+                  className="h-20"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -216,6 +281,36 @@ export default function FormEditorPage() {
     onSuccess: (newField) => {
       setFields([...fields, newField]);
       toast({ title: 'Success', description: 'Field added' });
+    },
+  });
+
+  // Add new product mutation
+  const addProductMutation = useMutation({
+    mutationFn: async () => {
+      const maxOrder = fields.length > 0 ? Math.max(...fields.map(f => f.order)) : -1;
+      const response = await apiRequest("POST", `/api/custom-forms/forms/${formId}/fields`, {
+        fieldType: 'product',
+        label: 'New Product',
+        placeholder: '',
+        helpText: 'Select quantity and variant',
+        isRequired: false,
+        order: maxOrder + 1,
+        fieldConfig: {
+          price: 1000, // Default price $10.00
+          description: 'Product description',
+          variants: [
+            { name: 'Standard', price: 1000 }
+          ],
+          maxQuantity: 10,
+          imageUrl: ''
+        },
+        validationRules: {},
+      });
+      return response.json();
+    },
+    onSuccess: (newField) => {
+      setFields([...fields, newField]);
+      toast({ title: 'Success', description: 'Product added' });
     },
   });
 
@@ -347,10 +442,18 @@ export default function FormEditorPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Form Fields</CardTitle>
-                <Button onClick={() => addFieldMutation.mutate()} disabled={addFieldMutation.isPending}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Field
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => addFieldMutation.mutate()} disabled={addFieldMutation.isPending} variant="outline">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Field
+                  </Button>
+                  {form.formType === 'product_order' && (
+                    <Button onClick={() => addProductMutation.mutate()} disabled={addProductMutation.isPending}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Product
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>

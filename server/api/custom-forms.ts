@@ -165,6 +165,27 @@ router.post('/forms/:formId/submit-auth', jwtCheck, async (req: any, res) => {
 // AUTHENTICATED ROUTES (after jwtCheck) - require login
 router.use(jwtCheck);
 
+// Get all template forms (available to all authenticated users)
+router.get('/templates', async (req: any, res) => {
+  try {
+    const db = await getDb();
+    
+    const templates = await db
+      .select()
+      .from(customForms)
+      .where(and(
+        eq(customForms.isTemplate, true),
+        eq(customForms.schoolId, 1) // Templates belong to school 1
+      ))
+      .orderBy(desc(customForms.createdAt));
+    
+    res.json(templates);
+  } catch (error) {
+    console.error('Error fetching templates:', error);
+    res.status(500).json({ message: 'Error fetching templates' });
+  }
+});
+
 // Get all forms for authenticated user's school (extracts schoolId from token)
 router.get('/schools/forms', async (req: any, res) => {
   try {

@@ -58,3 +58,14 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Brevo SMTP**: Email service.
 - **SendGrid**: Email service.
 - **Twilio**: SMS service.
+
+## Recent Updates (November 4, 2025)
+### Product Order Form System Enhancements
+- **Product Field Type**: Extended schema with 'product' field type supporting variant configurations (name, price), descriptions, max quantity limits, and dynamic pricing
+- **Form Templates**: Created and seeded 4 pre-built templates (Candle Order Form, Farm Fresh Products, Bakery Order Form, General Product Order) into database
+- **Template Endpoint**: Added GET `/api/custom-forms/templates` endpoint to serve template forms to all authenticated users
+- **Form Builder UI**: Enhanced FormEditorPage with dedicated "Add Product" button (shows only for product_order forms) and product-specific configuration panel including variant editor
+- **Product Rendering**: Updated ProductOrderFormPage to render product fields with variant dropdown selectors, dynamic price display based on selected variant, quantity inputs with max limits
+- **Order Submission**: Enhanced submission payload to include both quantity data and selected variant indices for accurate fulfillment tracking
+- **Validation**: Fixed async shipping address validation to properly await form trigger before allowing submission
+- **Template Workflow**: School administrators can browse template catalog, clone templates to their school, and customize with their own products and settings

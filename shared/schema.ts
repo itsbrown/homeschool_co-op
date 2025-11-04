@@ -1579,7 +1579,7 @@ export const customFormFields = pgTable("custom_form_fields", {
   formId: integer("form_id").notNull().references(() => customForms.id, { onDelete: 'cascade' }),
   fieldType: text("field_type", { 
     enum: ["text", "textarea", "email", "phone", "number", "price", "quantity", "date", "time", "datetime", 
-           "dropdown", "radio", "checkbox", "multi_checkbox", "file_upload", "signature", "rating", "slider"] 
+           "dropdown", "radio", "checkbox", "multi_checkbox", "file_upload", "signature", "rating", "slider", "product"] 
   }).notNull(),
   
   label: text("label").notNull(),

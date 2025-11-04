@@ -58,6 +58,11 @@ export default function FormBuilderPage() {
     queryKey: [`/api/custom-forms/schools/forms`],
   });
 
+  // Fetch template forms
+  const { data: templates = [] } = useQuery<CustomForm[]>({
+    queryKey: [`/api/custom-forms/templates`],
+  });
+
   // Create form mutation
   const createFormMutation = useMutation({
     mutationFn: async (formData: typeof newForm) => {
@@ -294,6 +299,61 @@ export default function FormBuilderPage() {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+
+      {/* Template Forms Section */}
+      {templates.filter(t => t.isTemplate).length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Form Templates</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Click "Clone" to create a copy and customize it for your school
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {templates.filter(t => t.isTemplate).map((template) => (
+              <Card key={template.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg">{template.title}</CardTitle>
+                      <CardDescription className="mt-1 line-clamp-2">
+                        {template.description || 'No description'}
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="outline">{getFormTypeLabel(template.formType)}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => cloneFormMutation.mutate(template.id)}
+                      disabled={cloneFormMutation.isPending}
+                      className="flex-1"
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Clone Template
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLocation(`/forms/${template.slug}`)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* User's Forms Section */}
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold">Your Forms</h2>
       </div>
 
       {forms.length === 0 ? (

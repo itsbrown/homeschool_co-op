@@ -61,6 +61,7 @@ export default function ProductOrderFormPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [orderItems, setOrderItems] = useState<Record<number, number>>({});
+  const [selectedVariants, setSelectedVariants] = useState<Record<number, number>>({});  // fieldId -> variant index
 
   // Fetch form by slug (using authenticated endpoint for members-only forms)
   const { data: form, isLoading: formLoading } = useQuery<CustomForm>({
@@ -101,10 +102,12 @@ export default function ProductOrderFormPage() {
 
     const priceFields = form.fields.filter(f => f.fieldType === 'price');
     const quantityFields = form.fields.filter(f => f.fieldType === 'quantity');
+    const productFields = form.fields.filter(f => f.fieldType === 'product');
 
     let subtotal = 0;
     let itemCount = 0;
 
+    // Handle old-style quantity/price pairs
     priceFields.forEach(priceField => {
       const quantityField = quantityFields.find(qf => 
         qf.label.toLowerCase().includes(priceField.label.toLowerCase().split(' ')[0])
@@ -116,14 +119,27 @@ export default function ProductOrderFormPage() {
         
         if (quantity > 0) {
           subtotal += price * quantity;
-          itemCount++;
+          itemCount += quantity; // Count actual units, not just line items
         }
+      }
+    });
+
+    // Handle new product fields with variants
+    productFields.forEach(field => {
+      const quantity = orderItems[field.id] || 0;
+      if (quantity > 0) {
+        const variantIndex = selectedVariants[field.id] || 0;
+        const variant = field.fieldConfig?.variants?.[variantIndex];
+        const price = variant ? variant.price / 100 : (field.fieldConfig?.price || 0) / 100;
+        
+        subtotal += price * quantity;
+        itemCount += quantity; // Count actual units, not just line items
       }
     });
 
     let platformFee = 0;
     if (form.platformFeeType === 'flat_per_item') {
-      platformFee = (form.platformFeeAmount * itemCount) / 100; // Convert cents to dollars
+      platformFee = (form.platformFeeAmount * itemCount) / 100; // Fee per actual unit
     } else if (form.platformFeeType === 'percentage') {
       platformFee = (subtotal * form.platformFeeAmount) / 100;
     }
@@ -223,9 +239,12 @@ export default function ProductOrderFormPage() {
         imageUrls = uploadResult.images.map((img: any) => img.url);
       }
 
-      // Prepare order data
+      // Prepare order data with variant information
       const orderData = {
-        responseData: data.items,
+        responseData: {
+          items: data.items,
+          variants: data.variants || {},
+        },
         shippingAddress: data.shipping,
         productImages: imageUrls,
         subtotal: Math.round(subtotal * 100), // Convert to cents
@@ -251,11 +270,11 @@ export default function ProductOrderFormPage() {
     },
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const shippingData = shippingForm.getValues();
     
     // Validate shipping address
-    const shippingValid = shippingForm.trigger();
+    const shippingValid = await shippingForm.trigger();
     if (!shippingValid) {
       toast({
         title: 'Invalid shipping address',
@@ -277,6 +296,7 @@ export default function ProductOrderFormPage() {
 
     submitOrderMutation.mutate({
       items: orderItems,
+      variants: selectedVariants,
       shipping: shippingData,
     });
   };
@@ -291,6 +311,7 @@ export default function ProductOrderFormPage() {
 
   const quantityFields = form.fields.filter(f => f.fieldType === 'quantity');
   const priceFields = form.fields.filter(f => f.fieldType === 'price');
+  const productFields = form.fields.filter(f => f.fieldType === 'product');
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -308,6 +329,67 @@ export default function ProductOrderFormPage() {
                 Select Products
               </h3>
               <div className="grid gap-4">
+                {/* New product field type with variants */}
+                {productFields.map(field => {
+                  const variants = field.fieldConfig?.variants || [];
+                  const selectedVariantIndex = selectedVariants[field.id] || 0;
+                  const selectedVariant = variants[selectedVariantIndex];
+                  const price = selectedVariant ? selectedVariant.price / 100 : (field.fieldConfig?.price || 0) / 100;
+                  const maxQuantity = field.fieldConfig?.maxQuantity || 10;
+                  
+                  return (
+                    <div key={field.id} className="border rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-lg">{field.label}</h4>
+                          {field.fieldConfig?.description && (
+                            <p className="text-sm text-muted-foreground mt-1">{field.fieldConfig.description}</p>
+                          )}
+                        </div>
+                        <p className="text-xl font-semibold text-primary">
+                          ${price.toFixed(2)}
+                        </p>
+                      </div>
+                      
+                      {variants.length > 0 && (
+                        <div className="mb-3">
+                          <Label className="text-sm mb-2 block">Select Variant</Label>
+                          <select
+                            value={selectedVariantIndex}
+                            onChange={(e) => setSelectedVariants({ ...selectedVariants, [field.id]: parseInt(e.target.value) })}
+                            className="w-full border rounded-md p-2 text-sm"
+                            data-testid={`select-variant-${field.id}`}
+                          >
+                            {variants.map((variant: any, index: number) => (
+                              <option key={index} value={index}>
+                                {variant.name} - ${(variant.price / 100).toFixed(2)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`qty-${field.id}`} className="text-sm">Quantity:</Label>
+                        <Input
+                          id={`qty-${field.id}`}
+                          type="number"
+                          min="0"
+                          max={maxQuantity}
+                          value={orderItems[field.id] || 0}
+                          onChange={(e) => setOrderItems({ ...orderItems, [field.id]: parseInt(e.target.value) || 0 })}
+                          className="w-24"
+                          data-testid={`input-quantity-${field.id}`}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          (max: {maxQuantity})
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Legacy quantity/price fields */}
                 {quantityFields.map(field => {
                   const priceField = priceFields.find(pf => 
                     pf.label.toLowerCase().includes(field.label.toLowerCase().split(' ')[0])
