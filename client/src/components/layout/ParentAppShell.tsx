@@ -106,18 +106,18 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
               return;
             }
           }
-
-          const schoolResponse = await apiRequest("GET", "/api/schools/1");
-          if (schoolResponse.ok) {
-            const schoolData = await schoolResponse.json();
-            setUserSchool(schoolData);
-          }
-        } catch (error) {
-          console.log('No school association found for user, using default school');
+          
+          console.log('No school association found for user');
+          // Use a generic placeholder without hardcoded school ID
           setUserSchool({
-            id: 1,
-            name: "American Seekers Academy",
-            logo: "/uploads/logos/school-logo-1755810269716.png"
+            name: "Learning Platform",
+            logo: null
+          });
+        } catch (error) {
+          console.log('Error fetching school association:', error);
+          setUserSchool({
+            name: "Learning Platform",
+            logo: null
           });
         }
       };

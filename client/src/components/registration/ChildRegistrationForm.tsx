@@ -104,7 +104,7 @@ export default function ChildRegistrationForm({
     const fetchParentSchool = async () => {
       if (user?.email && !defaultValues?.school) {
         try {
-          // First try to get school association through school-parents API
+          // Get school association through school-parents API
           const response = await apiRequest('GET', `/api/school-parents/school/${user.email}`);
           if (response.ok) {
             const result = await response.json();
@@ -113,21 +113,12 @@ export default function ChildRegistrationForm({
               return;
             }
           }
-
-          // Fallback: Since most parents are associated with American Seekers Academy (ID: 1)
-          // directly fetch school data
-          const schoolResponse = await apiRequest('GET', '/api/schools/1');
-          if (schoolResponse.ok) {
-            const schoolData = await schoolResponse.json();
-            if (schoolData?.name) {
-              form.setValue('school', schoolData.name);
-              return;
-            }
-          }
+          
+          console.log('No school association found for user');
+          // Leave school field empty if no association found
         } catch (error) {
-          console.log('No school association found for user, using default school');
-          // Final fallback: use the known school data
-          form.setValue('school', 'American Seekers Academy');
+          console.log('Error fetching school association:', error);
+          // Leave school field empty on error
         }
       }
     };

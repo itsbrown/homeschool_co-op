@@ -23,6 +23,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   items: {
@@ -133,32 +134,32 @@ export default function ParentSidebar() {
 
   // Fetch user's associated school for branding
   const { data: schoolData } = useQuery({
-    queryKey: ['/api/schools/1'],
+    queryKey: [`/api/school-parents/school/${user?.email}`],
     enabled: !!user?.email,
     staleTime: 300000, // Cache for 5 minutes
     queryFn: async () => {
       try {
-        const response = await fetch('/api/schools/1');
+        const response = await apiRequest("GET", `/api/school-parents/school/${user?.email}`);
         if (response.ok) {
-          const data = await response.json();
-          return { success: true, school: data };
+          const result = await response.json();
+          if (result.success && result.school) {
+            return { success: true, school: result.school };
+          }
         }
-        // Fallback data
+        // No school association - return generic placeholder
         return {
           success: true,
           school: {
-            id: 1,
-            name: "American Seekers Academy",
-            logo: "/uploads/logos/school-logo-1755810269716.png"
+            name: "Learning Platform",
+            logo: null
           }
         };
       } catch (error) {
         return {
           success: true,
           school: {
-            id: 1,
-            name: "American Seekers Academy",
-            logo: "/uploads/logos/school-logo-1755810269716.png"
+            name: "Learning Platform",
+            logo: null
           }
         };
       }
