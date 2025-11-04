@@ -16,6 +16,24 @@ async function runMigrations() {
       ADD COLUMN IF NOT EXISTS waitlist_position INTEGER;
     `);
     console.log('✅ Migration completed: waitlist_position column added');
+    
+    // Add class_type column if it doesn't exist
+    console.log('Running migration: Adding class_type column...');
+    await db.execute(sql`
+      ALTER TABLE program_enrollments 
+      ADD COLUMN IF NOT EXISTS class_type TEXT NOT NULL DEFAULT 'school_class';
+    `);
+    // Add constraint if it doesn't exist
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TABLE program_enrollments 
+        ADD CONSTRAINT program_enrollments_class_type_check 
+        CHECK (class_type IN ('school_class', 'marketplace'));
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    console.log('✅ Migration completed: class_type column added');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
