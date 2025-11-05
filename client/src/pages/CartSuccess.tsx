@@ -35,135 +35,56 @@ export default function CartSuccess() {
         });
 
         if (paymentIntent && redirectStatus === 'succeeded') {
-          console.log('✅ Processing successful Stripe payment:', paymentIntent);
+          console.log('✅ Payment succeeded! PaymentIntent:', paymentIntent);
           
-          // Get the cart data from local storage to process enrollments
-          let cartData = localStorage.getItem('cart');
+          // Get cart data to know how many items were purchased
+          let cartData = localStorage.getItem('cart') || sessionStorage.getItem('cart_backup');
+          let itemCount = 1;
           
-          // If no cart data, try to get from backup or sessionStorage
-          if (!cartData) {
-            console.log('⚠️ No cart data in localStorage, checking sessionStorage...');
-            cartData = sessionStorage.getItem('cart_backup');
-          }
-          
-          if (!cartData) {
-            console.log('❌ No cart data found anywhere, trying to recover from payment intent');
-            // Try to process payment using backup system
+          if (cartData) {
             try {
-              console.log('🔄 Attempting backup payment processing...');
-              const response = await apiRequest('POST', `/api/stripe/process-payment/${paymentIntent}`, {});
-              if (response.ok) {
-                const result = await response.json();
-                console.log('✅ Backup payment processing successful:', result);
-                setProcessing(false);
-                toast({
-                  title: "Payment Successful!",
-                  description: `Successfully processed payment for ${result.updatedEnrollments} enrollment${result.updatedEnrollments > 1 ? 's' : ''}`,
-                  duration: 8000,
-                });
-                return;
-              } else {
-                const errorData = await response.json();
-                console.error('❌ Backup payment processing failed:', errorData);
-              }
-            } catch (error) {
-              console.error('❌ Failed to process payment via backup system:', error);
+              const cart = JSON.parse(cartData);
+              itemCount = cart.items?.length || 1;
+              console.log(`🛒 Cart had ${itemCount} items`);
+            } catch (e) {
+              console.error('Failed to parse cart data:', e);
             }
-            // Don't throw error - just show success page
-            setProcessing(false);
-            return;
           }
 
-          const cart = JSON.parse(cartData);
-          console.log('🛒 Found cart data for processing:', cart.items.length, 'items');
-
-          if (!cart.items || cart.items.length === 0) {
-            throw new Error('No items in cart to process');
-          }
-
-          // Calculate payment per item (matching cart checkout logic)
+          // Get payment plan info for display
           const selectedPaymentPlan = localStorage.getItem('selectedPaymentPlan') || 'full';
-          const paymentPlanMultipliers: Record<string, number> = {
-            'deposit': 0.10,
-            'split': 0.50,
-            '3-month': 0.33,
-            'full': 1.0
-          };
+          console.log(`💳 Payment plan: ${selectedPaymentPlan}`);
           
-          const multiplier = paymentPlanMultipliers[selectedPaymentPlan] || 1.0;
-          const totalAmount = cart.total * multiplier;
-          const amountPerItem = Math.round(totalAmount / cart.items.length);
-
-          console.log('💰 Processing payment:', {
-            selectedPaymentPlan,
-            multiplier,
-            totalAmount,
-            amountPerItem,
-            itemCount: cart.items.length
+          // The webhook will handle updating payment status in the background
+          // We just need to show success and clear the cart
+          
+          setProcessedEnrollments(itemCount);
+          
+          toast({
+            title: "Payment Successful!",
+            description: `Your payment has been processed. Enrollments are being confirmed.`,
+            duration: 5000,
           });
 
-          // Process each enrollment payment
-          let successCount = 0;
-          for (const item of cart.items) {
-            try {
-              if (!item.enrollmentId) {
-                console.error('❌ No enrollment ID for item:', item);
-                continue;
-              }
-
-              console.log(`💳 Processing payment for enrollment ${item.enrollmentId}: ${amountPerItem} cents`);
-              
-              const response = await apiRequest(
-                'POST',
-                `/api/billing/enrollments/${item.enrollmentId}/payment`,
-                {
-                  amount: amountPerItem,
-                  paymentType: selectedPaymentPlan
-                }
-              );
-
-              if (!response.ok) {
-                const errorData = await response.text();
-                console.error(`❌ Failed to process payment for ${item.className}:`, errorData);
-              } else {
-                successCount++;
-                console.log(`✅ Successfully processed payment for ${item.className}`);
-              }
-            } catch (error) {
-              console.error(`❌ Error processing payment for ${item.className}:`, error);
-            }
-          }
-
-          setProcessedEnrollments(successCount);
-
-          if (successCount === cart.items.length) {
-            console.log('🎉 All enrollments processed successfully');
-            toast({
-              title: "Payment Successful!",
-              description: `Successfully processed payment for ${successCount} enrollment${successCount > 1 ? 's' : ''}`,
-            });
-
-            // Clear ALL cart data and invalidate billing cache
-            localStorage.removeItem('cart');
-            localStorage.removeItem('asa_cart');
-            localStorage.removeItem('selectedPaymentPlan');
-            
-            // Set the cleared flag FIRST to prevent cart restoration
-            localStorage.setItem('asa_cart_cleared', Date.now().toString());
-            
-            // Clear cart in context (this will remove items from UI)
-            clearCart();
-            
-            // Invalidate billing summary to refresh data immediately
-            queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
-            queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-            queryClient.invalidateQueries({ queryKey: ['payment-history'] });
-            
-            // Navigate to dashboard immediately instead of waiting
-            window.location.href = '/dashboard';
-          } else {
-            throw new Error(`Only ${successCount} of ${cart.items.length} enrollments were processed successfully`);
-          }
+          // Clear ALL cart data
+          localStorage.removeItem('cart');
+          localStorage.removeItem('asa_cart');
+          localStorage.removeItem('selectedPaymentPlan');
+          sessionStorage.removeItem('cart_backup');
+          
+          // Set the cleared flag to prevent cart restoration
+          localStorage.setItem('asa_cart_cleared', Date.now().toString());
+          
+          // Clear cart in context
+          clearCart();
+          
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
+          queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+          queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+          
+          console.log('✅ Cart cleared and queries invalidated');
+          
         } else {
           console.log('❌ Invalid or missing Stripe redirect parameters');
           throw new Error('Invalid payment confirmation - missing required parameters');
@@ -182,7 +103,7 @@ export default function CartSuccess() {
     };
 
     processStripeRedirect();
-  }, [toast]);
+  }, [toast, clearCart]);
 
   // Show loading state while processing
   if (processing) {

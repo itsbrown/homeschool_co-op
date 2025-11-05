@@ -476,7 +476,11 @@ function UpcomingPaymentsTab() {
                     Payment {payment.installmentNumber} of {payment.totalInstallments}
                   </Badge>
                   <Badge variant="secondary">
-                    {payment.paymentPlan === 'three_payments' ? '3-Payment Plan' : payment.paymentPlan}
+                    {payment.paymentPlan === 'three_payments' ? '3-Payment Plan' : 
+                     payment.paymentPlan === 'biweekly' ? 'Biweekly Plan' :
+                     payment.paymentPlan === 'full' ? 'Pay in Full' :
+                     payment.paymentPlan === 'deposit' ? 'Deposit Only' :
+                     payment.paymentPlan || 'Payment Plan'}
                   </Badge>
                 </div>
                 
