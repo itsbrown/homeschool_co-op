@@ -325,7 +325,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAllClasses(): Promise<Class[]> {
     const db = await getDb();
-    return await db.select().from(classes);
+    const allClasses = await db.select().from(classes);
+    console.log(`📊 getAllClasses: Found ${allClasses.length} total classes`);
+    const schoolIdCounts = allClasses.reduce((acc, c) => {
+      const sid = c.schoolId ?? 'null';
+      acc[sid] = (acc[sid] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    console.log(`📊 Classes by schoolId:`, schoolIdCounts);
+    return allClasses;
   }
 
   async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
@@ -334,7 +342,17 @@ export class DatabaseStorage implements IStorage {
     if (isNaN(schoolIdNum)) {
       return [];
     }
-    return await db.select().from(classes).where(eq(classes.schoolId, schoolIdNum));
+    const allClasses = await db.select().from(classes);
+    console.log(`📊 Total classes in DB: ${allClasses.length}`);
+    const schoolIdCounts = allClasses.reduce((acc, c) => {
+      const sid = c.schoolId ?? 'null';
+      acc[sid] = (acc[sid] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    console.log(`📊 Classes by schoolId:`, schoolIdCounts);
+    const filtered = await db.select().from(classes).where(eq(classes.schoolId, schoolIdNum));
+    console.log(`📊 Filtered classes for schoolId=${schoolIdNum}: ${filtered.length}`);
+    return filtered;
   }
 
   // Knowledge Base methods

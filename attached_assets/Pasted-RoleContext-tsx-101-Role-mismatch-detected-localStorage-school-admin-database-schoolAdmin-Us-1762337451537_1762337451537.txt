@@ -1,0 +1,37 @@
+RoleContext.tsx:101 ⚠️ Role mismatch detected! localStorage: school_admin, database: schoolAdmin. Using database value.
+overrideMethod @ hook.js:608
+handleRoleAssignment @ RoleContext.tsx:101
+await in handleRoleAssignment
+(anonymous) @ RoleContext.tsx:128
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d3074f71:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d3074f71:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d3074f71:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d3074f71:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=d3074f71:19328
+workLoop @ chunk-NFC5BX5N.js?v=d3074f71:197
+flushWork @ chunk-NFC5BX5N.js?v=d3074f71:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=d3074f71:384Understand this warning
+RoleContext.tsx:119 🎯 Single role user - setting role: schoolAdmin for coreycreates@gmail.com
+RoleContext.tsx:144 🔄 RoleProvider rendering - activeRole: schoolAdmin, canSwitchRoles: false, showRoleSelection: false, user: coreycreates@gmail.com
+RoleContext.tsx:55 ✅ Role fetched for coreycreates@gmail.com: schoolAdmin
+RoleContext.tsx:97 🔄 Database role for coreycreates@gmail.com: schoolAdmin, localStorage role: school_admin
+RoleContext.tsx:101 ⚠️ Role mismatch detected! localStorage: school_admin, database: schoolAdmin. Using database value.
+overrideMethod @ hook.js:608
+handleRoleAssignment @ RoleContext.tsx:101
+await in handleRoleAssignment
+(anonymous) @ RoleContext.tsx:128
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d3074f71:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d3074f71:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d3074f71:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d3074f71:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=d3074f71:19328
+workLoop @ chunk-NFC5BX5N.js?v=d3074f71:197
+flushWork @ chunk-NFC5BX5N.js?v=d3074f71:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=d3074f71:384Understand this warning
+RoleContext.tsx:119 🎯 Single role user - setting role: schoolAdmin for coreycreates@gmail.com
