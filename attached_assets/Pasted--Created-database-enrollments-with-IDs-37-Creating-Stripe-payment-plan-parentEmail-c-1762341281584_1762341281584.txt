@@ -1,0 +1,35 @@
+✅ Created database enrollments with IDs: [ 37 ]
+🎯 Creating Stripe payment plan: {
+  parentEmail: 'corey.e.brown2025@gmail.com',
+  enrollmentIds: [ 37 ],
+  totalAmount: 875,
+  paymentPlan: 'full',
+  paymentFrequency: 'one_time'
+}
+🔍 Looking for existing Stripe customer: corey.e.brown2025@gmail.com
+✅ Found existing customer: cus_THnaYfSF2k4YSq
+👤 Customer ready: cus_THnaYfSF2k4YSq
+🏗️ Building payment phases for plan: full frequency: one_time amount: 875
+📅 Built phases: 1
+💳 PaymentIntent created for first payment: pi_3SQ4f5EzJC2fMpXV0jgKkXzM 875
+🔄 Updating enrollments with PaymentIntent references: [ 37 ]
+❌ Error in enrollment creation or payment plan: PostgresError: new row for relation "program_enrollments" violates check constraint "program_enrollments_payment_status_check"
+    at ErrorResponse (file:///home/runner/workspace/node_modules/postgres/src/connection.js:794:26)
+    at handle (file:///home/runner/workspace/node_modules/postgres/src/connection.js:480:6)
+    at TLSSocket.data (file:///home/runner/workspace/node_modules/postgres/src/connection.js:315:9)
+    at TLSSocket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '23514',
+  detail: 'Failing row contains (37, 1, null, 6, 2, joe joe, Pioneers | Half Day, null, 4, corey.e.brown2025@gmail.com, 90000, 0, 90000, 0, pending_payment, full_payment, v2_stripe_simplified, enrolled, 2025-11-05 11:13:59.113, null, cus_THnaYfSF2k4YSq, null, {"paymentPlan": "full", "stripeCustomerId": "cus_THnaYfSF2k4YSq"..., 2025-11-05 11:13:59.113, 2025-11-05 11:13:59.998, one_time, 2025-09-08, 2025-11-14, null, marketplace, 6).',
+  schema_name: 'public',
+  table_name: 'program_enrollments',
+  constraint_name: 'program_enrollments_payment_status_check',
+  file: 'execMain.c',
+  line: '2073',
+  routine: 'ExecConstraints'
+}
