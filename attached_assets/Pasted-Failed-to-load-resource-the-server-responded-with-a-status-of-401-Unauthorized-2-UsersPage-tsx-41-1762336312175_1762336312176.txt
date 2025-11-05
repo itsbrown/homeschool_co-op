@@ -1,0 +1,24 @@
+Failed to load resource: the server responded with a status of 401 (Unauthorized)
+2
+UsersPage.tsx:416 Uncaught ReferenceError: schoolId is not defined
+    at UsersPage (UsersPage.tsx:416:9)
+hook.js:608 The above error occurred in the <UsersPage> component:
+
+    at UsersPage (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/schools/UsersPage.tsx:57:39)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d3074f71:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d3074f71:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?v=byng8DP5JZrQbW_nbRgmJ:331:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…unner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d3074f71:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…rkspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=d3074f71:64:5)
+    at CartProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/CartContext.tsx:323:32)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at NotificationProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/hooks/useNotifications.tsx:23:40)
+    at RoleProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/RoleContext.tsx:30:32)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d3074f71:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+chunk-NFC5BX5N.js?v=d3074f71:9129 Uncaught ReferenceError: schoolId is not defined
+    at UsersPage (UsersPage.tsx:416:9)

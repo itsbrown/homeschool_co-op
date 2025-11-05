@@ -413,11 +413,8 @@ export class DatabaseStorage implements IStorage {
 
   async getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
     try {
-      if (!this.db) {
-        console.log("Database connection not available, returning empty knowledge bases array");
-        return [];
-      }
-      const result = await this.db.select().from(knowledgeBases);
+      const db = await getDb();
+      const result = await db.select().from(knowledgeBases);
       return result;
     } catch (error) {
       console.error("Error fetching all knowledge bases from database:", error);
@@ -427,11 +424,8 @@ export class DatabaseStorage implements IStorage {
 
   async getAllActivities(): Promise<Activity[]> {
     try {
-      if (!this.db) {
-        console.log("Database connection not available, returning empty activities array");
-        return [];
-      }
-      const result = await this.db.select().from(activities);
+      const db = await getDb();
+      const result = await db.select().from(activities);
       return result;
     } catch (error) {
       console.error("Error fetching all activities from database:", error);
@@ -441,11 +435,8 @@ export class DatabaseStorage implements IStorage {
 
   async getAllEnrollments(): Promise<ProgramEnrollment[]> {
     try {
-      if (!this.db) {
-        console.log("Database connection not available, returning empty enrollments array");
-        return [];
-      }
-      const result = await this.db.select().from(programEnrollments);
+      const db = await getDb();
+      const result = await db.select().from(programEnrollments);
       return result;
     } catch (error) {
       console.error("Error fetching all enrollments from database:", error);
@@ -460,10 +451,11 @@ export class DatabaseStorage implements IStorage {
     return program;
   }
 
-  async getProgramsByOrganizer(organizerId: number): Promise<Program[]> {
-    const db = await getDb();
-    return await db.select().from(programs).where(eq(programs.organizerId, organizerId));
-  }
+  // Note: programs table doesn't have an organizerId field, use instructorId instead
+  // async getProgramsByOrganizer(organizerId: number): Promise<Program[]> {
+  //   const db = await getDb();
+  //   return await db.select().from(programs).where(eq(programs.organizerId, organizerId));
+  // }
 
   async createProgram(program: InsertProgram): Promise<Program> {
     const db = await getDb();
@@ -641,7 +633,10 @@ export class DatabaseStorage implements IStorage {
       remainingBalance: 6000,
       status: 'pending_payment',
       dueDate: new Date(),
-      expirationDate: new Date(membershipYear, 11, 31)
+      expirationDate: new Date(membershipYear, 11, 31),
+      paymentMethod: null,
+      notes: null,
+      gracePeriodEnd: null
     };
 
     return this.createMembershipEnrollment(enrollmentData);
@@ -719,7 +714,7 @@ export class DatabaseStorage implements IStorage {
 
   async getEmergencyContactsByParent(parentId: number): Promise<EmergencyContact[]> {
     const db = await getDb();
-    return await db.select().from(emergencyContacts).where(eq(emergencyContacts.parentId, parentId));
+    return await db.select().from(emergencyContacts).where(eq(emergencyContacts.userId, parentId));
   }
 
   async createEmergencyContact(contact: InsertEmergencyContact): Promise<EmergencyContact> {
@@ -762,7 +757,7 @@ export class DatabaseStorage implements IStorage {
 
   async getActivitiesByType(activityType: string): Promise<Activity[]> {
     const db = await getDb();
-    return await db.select().from(activities).where(eq(activities.activityType, activityType));
+    return await db.select().from(activities).where(eq(activities.type, activityType));
   }
 
   async getActivitiesByAuthor(authorId: number): Promise<Activity[]> {
@@ -924,7 +919,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(marketplaceItems)
-      .orderBy(desc(marketplaceItems.salesCount))
+      .orderBy(desc(marketplaceItems.sales))
       .limit(limit);
   }
 
@@ -934,7 +929,7 @@ export class DatabaseStorage implements IStorage {
       .insert(marketplaceItems)
       .values({
         ...item,
-        salesCount: 0,
+        sales: 0,
         revenue: 0,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -948,7 +943,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedItem] = await db
       .update(marketplaceItems)
       .set({
-        salesCount: sql`${marketplaceItems.salesCount} + ${sales}`,
+        sales: sql`${marketplaceItems.sales} + ${sales}`,
         revenue: sql`${marketplaceItems.revenue} + ${revenue}`,
         updatedAt: new Date()
       })
@@ -1675,7 +1670,7 @@ export class DatabaseStorage implements IStorage {
       .from(notificationRecipients)
       .where(eq(notificationRecipients.recipientId, userId));
     
-    const notificationIds = recipients.map(r => r.notificationId);
+    const notificationIds = recipients.map((r: any) => r.notificationId);
     
     if (notificationIds.length === 0 && role !== 'schoolAdmin') {
       return [];
@@ -1696,8 +1691,8 @@ export class DatabaseStorage implements IStorage {
     
     const notifs = await query.orderBy(desc(notifications.createdAt));
     
-    return notifs.map(notification => {
-      const recipientInfo = recipients.find(r => r.notificationId === notification.id);
+    return notifs.map((notification: any) => {
+      const recipientInfo = recipients.find((r: any) => r.notificationId === notification.id);
       return {
         ...notification,
         recipientStatus: recipientInfo?.status,
@@ -1848,7 +1843,7 @@ export class DatabaseStorage implements IStorage {
       .from(discountApplications)
       .innerJoin(discounts, eq(discountApplications.discountId, discounts.id))
       .where(eq(discounts.schoolId, schoolId))
-      .then(results => results.map(r => r.discount_applications));
+      .then((results: any) => results.map((r: any) => r.discount_applications));
   }
 
   async getDiscountApplicationsByDiscountId(discountId: number): Promise<DiscountApplication[]> {
