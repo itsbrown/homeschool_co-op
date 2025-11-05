@@ -35,6 +35,8 @@ import {
   discounts, type Discount, type InsertDiscount,
   discountApplications, type DiscountApplication, type InsertDiscountApplication
 } from "@shared/schema";
+import { eq, inArray } from 'drizzle-orm';
+import { getDb } from './db';
 
 export interface IStorage {
   // Methods for backup
@@ -4086,16 +4088,22 @@ export class MemStorage implements IStorage {
     }
 
     async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
-      // Use database storage for unified program_enrollments table
-      return this.dbStorage.getEnrollmentsByChildIds(childIds);
+      // Get enrollments for multiple children from unified program_enrollments table
+      const db = await getDb();
+      return await db.select().from(programEnrollments).where(
+        childIds.length === 1 
+          ? eq(programEnrollments.childId, childIds[0])
+          : inArray(programEnrollments.childId, childIds)
+      );
     }
 
     async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {
-      return this.dbStorage.getEnrollmentsByProgramId(programId);
+      return this.dbStorage.getProgramEnrollmentsByProgram(programId);
     }
 
     async getEnrollmentCountForProgram(programId: number): Promise<number> {
-      return this.dbStorage.getEnrollmentCountForProgram(programId);
+      const enrollments = await this.dbStorage.getProgramEnrollmentsByProgram(programId);
+      return enrollments.length;
     }
 
     async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
