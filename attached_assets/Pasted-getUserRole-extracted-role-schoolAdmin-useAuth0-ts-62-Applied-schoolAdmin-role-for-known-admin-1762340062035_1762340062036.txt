@@ -1,0 +1,89 @@
+getUserRole - extracted role: schoolAdmin
+useAuth0.ts:62 🏫 Applied schoolAdmin role for known admin email
+useAuth0.ts:65 🔍 getUserRole - final role: schoolAdmin
+App.tsx:270 Router effect - activeRole: schoolAdmin isAuthenticated: true
+[Violation] Forced reflow while executing JavaScript took 104ms
+queryClient.ts:143  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/enrollments 401 (Unauthorized)
+(anonymous) @ queryClient.ts:143
+fetchFn @ @tanstack_react-query.js?v=d3074f71:840
+run @ @tanstack_react-query.js?v=d3074f71:494
+start @ @tanstack_react-query.js?v=d3074f71:536
+fetch @ @tanstack_react-query.js?v=d3074f71:926
+executeFetch_fn @ @tanstack_react-query.js?v=d3074f71:2211
+onSubscribe @ @tanstack_react-query.js?v=d3074f71:1898
+subscribe @ @tanstack_react-query.js?v=d3074f71:24
+(anonymous) @ @tanstack_react-query.js?v=d3074f71:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=d3074f71:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d3074f71:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d3074f71:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d3074f71:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d3074f71:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=d3074f71:19432
+commitRoot @ chunk-NFC5BX5N.js?v=d3074f71:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=d3074f71:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18718
+workLoop @ chunk-NFC5BX5N.js?v=d3074f71:197
+flushWork @ chunk-NFC5BX5N.js?v=d3074f71:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=d3074f71:384Understand this error
+ParentAppShell.tsx:110 No school association found for user
+queryClient.ts:143  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/payments/summary 404 (Not Found)
+(anonymous) @ queryClient.ts:143
+fetchFn @ @tanstack_react-query.js?v=d3074f71:840
+run @ @tanstack_react-query.js?v=d3074f71:494
+start @ @tanstack_react-query.js?v=d3074f71:536
+fetch @ @tanstack_react-query.js?v=d3074f71:926
+executeFetch_fn @ @tanstack_react-query.js?v=d3074f71:2211
+onSubscribe @ @tanstack_react-query.js?v=d3074f71:1898
+subscribe @ @tanstack_react-query.js?v=d3074f71:24
+(anonymous) @ @tanstack_react-query.js?v=d3074f71:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=d3074f71:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d3074f71:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d3074f71:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d3074f71:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d3074f71:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=d3074f71:19432
+commitRoot @ chunk-NFC5BX5N.js?v=d3074f71:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=d3074f71:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18718
+workLoop @ chunk-NFC5BX5N.js?v=d3074f71:197
+flushWork @ chunk-NFC5BX5N.js?v=d3074f71:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=d3074f71:384Understand this error
+queryClient.ts:87  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/school-admin/my-school 404 (Not Found)
+apiRequest @ queryClient.ts:87
+queryFn @ MySchoolPage.tsx:134
+fetchFn @ @tanstack_react-query.js?v=d3074f71:840
+run @ @tanstack_react-query.js?v=d3074f71:494
+start @ @tanstack_react-query.js?v=d3074f71:536
+fetch @ @tanstack_react-query.js?v=d3074f71:926
+executeFetch_fn @ @tanstack_react-query.js?v=d3074f71:2211
+onSubscribe @ @tanstack_react-query.js?v=d3074f71:1898
+subscribe @ @tanstack_react-query.js?v=d3074f71:24
+(anonymous) @ @tanstack_react-query.js?v=d3074f71:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=d3074f71:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d3074f71:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d3074f71:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d3074f71:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d3074f71:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=d3074f71:19432
+commitRoot @ chunk-NFC5BX5N.js?v=d3074f71:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=d3074f71:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18718
+workLoop @ chunk-NFC5BX5N.js?v=d3074f71:197
+flushWork @ chunk-NFC5BX5N.js?v=d3074f71:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=d3074f71:384Understand this error
+queryClient.ts:122 ❌ API 404: {"message":"No school found for this admin"}
