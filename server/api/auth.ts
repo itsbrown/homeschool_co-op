@@ -134,7 +134,8 @@ router.post('/register', async (req, res) => {
         email_confirm: true, // Auto-confirm email for registration
         user_metadata: {
           name: `${userFirstName} ${userLastName}`,
-          role: role || 'parent'
+          role: role || 'parent',
+          school_id: schoolId || null
         }
       });
       

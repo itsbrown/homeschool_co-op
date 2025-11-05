@@ -79,6 +79,22 @@ Before marking any task complete, verify:
 - **ALWAYS** plan comprehensive fixes that address all related issues
 - **NEVER** create new problems while fixing old ones
 
+## Recent Fixes and Updates
+
+### November 5, 2025 - School ID Registration Fix
+**Problem**: Parent registrations were not setting `school_id` in Supabase auth.users table, causing "No school association found" errors.
+
+**Root Cause**: In `server/api/auth.ts`, the Supabase user creation was missing `school_id` in `user_metadata`.
+
+**Solution**: Added `school_id: schoolId || null` to Supabase user_metadata (line 141 in auth.ts).
+
+**Status**: 
+- ✅ NEW registrations now correctly set school_id
+- ⚠️ EXISTING users with NULL school_id need manual backfill
+- 📝 Default school: American Seekers Academy (schoolId: 1)
+
+**Next Steps for Existing Users**: Update auth.users table to set school_id = 1 for existing parents.
+
 ## System Architecture
 ### Core Design Principles
 The platform uses a modern web application architecture focused on scalability, security, and user experience. It incorporates role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
