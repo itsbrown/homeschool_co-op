@@ -263,7 +263,7 @@ router.post('/:id/enroll', async (req, res) => {
 
     res.json({ 
       message,
-      enrollment: enrollment,
+      enrollment: savedEnrollment,
       isWaitlisted: enrollmentStatus === 'waitlist',
       waitlistPosition: waitlistPosition
     });
@@ -295,9 +295,9 @@ async function promoteNextWaitlistedStudent(classId: number) {
     
     console.log(`🎯 Promoting student from waitlist: ${nextStudent.childName} (position ${nextStudent.waitlistPosition})`);
     
-    // Update the enrollment status to pending_payment
+    // Update the enrollment status to enrolled
     await storage.updateProgramEnrollment(nextStudent.id, {
-      status: 'pending_payment',
+      status: 'enrolled',
       waitlistPosition: null
     });
     
@@ -321,9 +321,11 @@ async function promoteNextWaitlistedStudent(classId: number) {
       
       // If we have parent email in the enrollment data, send the email
       if (nextStudent.parentEmail && classData) {
+        // Extract parent name from email or use default
+        const parentName = nextStudent.parentEmail.split('@')[0] || 'Parent';
         await sendWaitlistPromotedEmail({
           parentEmail: nextStudent.parentEmail,
-          parentName: nextStudent.parentName || 'Parent',
+          parentName: parentName,
           childName: nextStudent.childName,
           className: classData.title,
           programStartDate: classData.startDate ? new Date(classData.startDate) : undefined,
@@ -361,10 +363,10 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    // Only allow unenrollment if payment is pending (not yet paid)
-    if (enrollment.status !== 'pending_payment' && enrollment.status !== 'waitlist') {
+    // Only allow unenrollment if not completed or cancelled
+    if (enrollment.status === 'completed' || enrollment.status === 'cancelled') {
       return res.status(400).json({ 
-        message: 'Cannot unenroll from a class that has already been paid for' 
+        message: 'Cannot unenroll from a class that is completed or cancelled' 
       });
     }
 
@@ -374,7 +376,7 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
     console.log(`✅ Successfully unenrolled child from class: ${enrollment.className}`);
 
     // If this was an enrolled student (not waitlisted), try to promote next waitlisted student
-    if (enrollment.status === 'pending_payment') {
+    if (enrollment.status === 'enrolled') {
       const promoted = await promoteNextWaitlistedStudent(classId);
       
       if (promoted) {
@@ -397,11 +399,12 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
 router.get("/published", async (req, res) => {
   try {
     const { schoolId } = req.query;
-    let classes = await storage.getPublishedClasses?.() || [];
+    const allClasses = await storage.getAllClasses();
+    let classes = allClasses.filter((c: any) => c.published || c.status === 'active');
 
     // Filter by school if schoolId is provided
     if (schoolId) {
-      classes = classes.filter(cls => cls.schoolId === parseInt(schoolId as string));
+      classes = classes.filter((cls: any) => cls.schoolId === parseInt(schoolId as string));
     }
 
     res.json(classes);
