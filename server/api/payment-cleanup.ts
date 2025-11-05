@@ -41,33 +41,19 @@ router.post('/migrate-to-stripe', async (req, res) => {
             totalCost = classData?.price || 30000;
           }
 
-          // Create migrated enrollment
-          const migratedEnrollment = {
-            ...enrollment,
-            // Standard Stripe fields
+          // Calculate migrated enrollment fields
+          const totalPaid = enrollment.totalPaid || enrollment.amount || 0;
+          const remainingBalance = totalCost ? totalCost - totalPaid : totalCost || 30000;
+          
+          // Update enrollment with Stripe system fields
+          await storage.updateProgramEnrollment(enrollment.id, {
             totalCost: totalCost || 30000,
-            totalPaid: enrollment.totalPaid || enrollment.amount || 0,
-            remainingBalance: totalCost ? totalCost - (enrollment.totalPaid || enrollment.amount || 0) : totalCost || 30000,
-            
-            // Set Stripe system fields
+            totalPaid: totalPaid,
+            remainingBalance: remainingBalance,
             paymentSystemVersion: 'v2_stripe',
             paymentStatus: 'stripe_managed',
-            status: 'enrolled',
-            
-            // Clean up legacy fields
-            depositRequired: undefined,
-            
-            // Add migration tracking
-            migrationDate: new Date().toISOString(),
-            migratedFrom: enrollment.status,
-            updatedAt: new Date().toISOString(),
-            
-            // Ensure required dates exist
-            createdAt: enrollment.createdAt || new Date().toISOString(),
-            enrollmentDate: enrollment.enrollmentDate || new Date()
-          };
-
-          await storage.updateEnrollment(migratedEnrollment);
+            status: 'enrolled'
+          });
           migratedCount++;
           console.log(`✅ Migrated: ${enrollment.childName} - ${enrollment.className}`);
         }

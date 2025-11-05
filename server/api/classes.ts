@@ -296,19 +296,15 @@ async function promoteNextWaitlistedStudent(classId: number) {
     console.log(`🎯 Promoting student from waitlist: ${nextStudent.childName} (position ${nextStudent.waitlistPosition})`);
     
     // Update the enrollment status to pending_payment
-    const updatedEnrollment = {
-      ...nextStudent,
+    await storage.updateProgramEnrollment(nextStudent.id, {
       status: 'pending_payment',
-      waitlistPosition: null, // Remove from waitlist
-    };
-    
-    await storage.updateEnrollment(nextStudent.id, updatedEnrollment);
+      waitlistPosition: null
+    });
     
     // Update waitlist positions for remaining students
     for (let i = 1; i < waitlistedEnrollments.length; i++) {
       const student = waitlistedEnrollments[i];
-      await storage.updateEnrollment(student.id, {
-        ...student,
+      await storage.updateProgramEnrollment(student.id, {
         waitlistPosition: i // New position (1-indexed)
       });
     }
@@ -360,7 +356,7 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
     }
 
     // Get the enrollment to verify it exists and check status
-    const enrollment = await storage.getEnrollmentById(enrollmentId);
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     if (!enrollment) {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
@@ -373,7 +369,7 @@ router.delete('/:id/enroll/:enrollmentId', async (req, res) => {
     }
 
     // Delete the enrollment
-    await storage.deleteEnrollment(enrollmentId);
+    await storage.deleteProgramEnrollment(enrollmentId);
 
     console.log(`✅ Successfully unenrolled child from class: ${enrollment.className}`);
 

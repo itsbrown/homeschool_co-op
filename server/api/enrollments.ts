@@ -44,7 +44,7 @@ router.delete('/:enrollmentId/unenroll', async (req, res) => {
     console.log(`📝 UNENROLLMENT REQUEST: Enrollment ${enrollmentId}`);
 
     // Get the enrollment to verify it exists and check status
-    const enrollment = await storage.getEnrollmentById(enrollmentId);
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     if (!enrollment) {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
@@ -57,7 +57,7 @@ router.delete('/:enrollmentId/unenroll', async (req, res) => {
     }
 
     // Delete the enrollment
-    await storage.deleteEnrollment(enrollmentId);
+    await storage.deleteProgramEnrollment(enrollmentId);
 
     console.log(`✅ Successfully unenrolled from class: ${enrollment.className}`);
     

@@ -52,7 +52,7 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
     }
 
     // Fetch enrollment
-    const enrollment = await storage.getEnrollmentById(enrollmentId);
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     if (!enrollment) {
       return res.status(404).json({ error: 'Enrollment not found' });
     }
@@ -178,8 +178,7 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
     }
 
     // Update enrollment in database
-    const enrollmentUpdate = {
-      ...enrollment,
+    await storage.updateProgramEnrollment(enrollment.id, {
       paymentFrequency,
       paymentPlan: newPaymentPlan,
       metadata: {
@@ -187,13 +186,11 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
         paymentPlanHistory,
         lastPaymentPlanUpdate: new Date().toISOString(),
         stripeUpdateResult
-      },
-      updatedAt: new Date()
-    };
-    await storage.updateEnrollment(enrollmentUpdate);
+      }
+    });
 
     // Fetch updated enrollment
-    const updatedEnrollment = await storage.getEnrollmentById(enrollmentId);
+    const updatedEnrollment = await storage.getProgramEnrollmentById(enrollmentId);
 
     console.log(`✅ Updated payment plan for enrollment ${enrollmentId}: ${oldFrequency} → ${paymentFrequency}`);
 
@@ -243,7 +240,7 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
     }
 
     // Fetch enrollment
-    const enrollment = await storage.getEnrollmentById(enrollmentId);
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     if (!enrollment) {
       return res.status(404).json({ error: 'Enrollment not found' });
     }

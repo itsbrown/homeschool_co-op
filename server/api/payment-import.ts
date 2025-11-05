@@ -63,7 +63,7 @@ router.post("/upload-payments", async (req: Request, res: Response) => {
         if (paymentData.enrollmentIds.length > 0) {
           for (const enrollmentId of paymentData.enrollmentIds) {
             try {
-              await storage.updateEnrollment(enrollmentId, {
+              await storage.updateProgramEnrollment(enrollmentId, {
                 status: 'enrolled',
                 paymentIntentId: paymentData.stripePaymentIntentId,
                 remainingBalance: 0
