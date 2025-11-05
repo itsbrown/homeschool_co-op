@@ -411,7 +411,7 @@ export class StripePaymentPlanService {
           ...existingEnrollment,
           stripeCustomerId: customerId,
           paymentSystemVersion: 'v2_stripe_simplified',
-          paymentStatus: paymentPlan === 'full' ? 'pending_payment' : 'payment_plan_active',
+          paymentStatus: paymentPlan === 'full' ? 'pending' : 'partial_payment',
           migrationDate: new Date(),
           // Store payment plan info in metadata
           metadata: {
@@ -456,7 +456,7 @@ export class StripePaymentPlanService {
           ...enrollment,
           totalPaid: newPaidAmount,
           remainingBalance: newBalance,
-          paymentStatus: newBalance === 0 ? 'paid' : 'payment_plan_active',
+          paymentStatus: newBalance === 0 ? 'completed' : 'partial_payment',
           lastPaymentDate: new Date()
         });
       }
