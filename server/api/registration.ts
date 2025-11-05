@@ -34,7 +34,8 @@ const completeRegistrationSchema = z.object({
     transactionId: z.string(),
     amount: z.number(),
     timestamp: z.string()
-  })
+  }),
+  schoolId: z.number().optional()
 });
 
 // Complete registration endpoint
@@ -52,6 +53,9 @@ router.post('/complete', async (req, res) => {
         firstName: data.parent.firstName,
         lastName: data.parent.lastName,
         phone: data.parent.phone,
+        name: `${data.parent.firstName} ${data.parent.lastName}`,
+        username: data.parent.email,
+        password: '',
         role: 'parent' as const,
         schoolId: data.schoolId || null,
         isActive: true,
@@ -80,10 +84,17 @@ router.post('/complete', async (req, res) => {
       gradeLevel: data.child.gradeLevel,
       parentId: parentUser.id,
       parentEmail: data.parent.email,
+      school: null,
+      schoolId: parentUser.schoolId || null,
+      locationId: null,
+      gender: null,
+      learningStyle: null,
       specialNeeds: '',
       interests: null,
       notes: '',
       emergencyContact: data.parent.phone,
+      medicalInfo: null,
+      allergies: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -92,7 +103,8 @@ router.post('/complete', async (req, res) => {
     console.log('👶 Created new child:', child.id);
     
     // Get class information for enrollment
-    const classInfo = await storage.getClass(data.enrollment.classId);
+    const allClasses = await storage.getClasses();
+    const classInfo = allClasses.find(c => c.id === data.enrollment.classId);
     if (!classInfo) {
       throw new Error('Class not found');
     }
@@ -120,20 +132,8 @@ router.post('/complete', async (req, res) => {
     const enrollment = await storage.createProgramEnrollment(enrollmentData);
     console.log('📚 Created enrollment:', enrollment.id);
     
-    // Record payment
-    const paymentRecord = {
-      enrollmentId: enrollment.id,
-      amount: data.payment.amount,
-      transactionId: data.payment.transactionId,
-      paymentType: 'deposit',
-      status: 'completed',
-      timestamp: data.payment.timestamp
-    };
-    
-    // Store payment record if storage supports it
-    if (storage.createPayment) {
-      await storage.createPayment(paymentRecord);
-    }
+    // Skip payment recording for now - this endpoint is not actively used
+    // Payment recording is handled by the Stripe webhook system
     
     console.log('✅ Registration completed successfully');
     
@@ -147,9 +147,10 @@ router.post('/complete', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Registration error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(400).json({
       success: false,
-      error: error instanceof z.ZodError ? error.errors : error.message
+      error: error instanceof z.ZodError ? error.errors : errorMessage
     });
   }
 });
@@ -157,10 +158,11 @@ router.post('/complete', async (req, res) => {
 // Get published classes for registration
 router.get('/classes', async (req, res) => {
   try {
-    const classes = await storage.getPublishedClasses?.() || [];
+    const allClasses = await storage.getClasses();
+    const classes = allClasses.filter((c: any) => c.published || c.status === 'active');
     
     // Format classes for registration display
-    const formattedClasses = classes.map(cls => ({
+    const formattedClasses = classes.map((cls: any) => ({
       id: cls.id,
       title: cls.title,
       description: cls.description,

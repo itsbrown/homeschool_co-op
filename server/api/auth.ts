@@ -149,9 +149,10 @@ router.post('/register', async (req, res) => {
       
     } catch (supabaseError) {
       console.error('❌ Supabase account creation failed:', supabaseError);
+      const errorMessage = supabaseError instanceof Error ? supabaseError.message : 'Unknown error';
       return res.status(500).json({ 
         success: false, 
-        message: `Failed to create authentication account: ${supabaseError.message}` 
+        message: `Failed to create authentication account: ${errorMessage}` 
       });
     }
 
@@ -668,7 +669,7 @@ router.post("/forgot-password", async (req, res) => {
     // Store the reset token in database
     await storage.createPasswordResetToken({
       token: resetToken,
-      email: user.email,
+      email: user.email || '',
       userId: user.id.toString(),
       expiresAt,
       used: false
@@ -757,21 +758,24 @@ router.post("/reset-password", async (req, res) => {
 // Validate reset token
 router.get("/validate-reset-token", async (req, res) => {
   try {
-    const { token } = req.query;
+    const token = req.query.token as string;
 
     if (!token) {
       return res.status(400).json({ valid: false, message: "Token is required" });
     }
 
-    const tokenData = passwordResetTokens.get(token);
+    const tokenData = await storage.getPasswordResetToken(token);
     if (!tokenData) {
       return res.status(400).json({ valid: false, message: "Invalid token" });
     }
 
     if (new Date() > new Date(tokenData.expiresAt)) {
-      passwordResetTokens.delete(token);
-      savePasswordResetTokens(passwordResetTokens);
+      await storage.markPasswordResetTokenAsUsed(token);
       return res.status(400).json({ valid: false, message: "Token has expired" });
+    }
+
+    if (tokenData.used) {
+      return res.status(400).json({ valid: false, message: "Token has already been used" });
     }
 
     res.status(200).json({ 

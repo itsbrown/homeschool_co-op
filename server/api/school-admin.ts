@@ -542,7 +542,7 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
     console.log(`🏫 Loading classes for school ID: ${schoolId}`);
 
     // Get classes from database storage
-    const allClasses = await storage.getClassesBySchoolId(schoolId);
+    const allClasses = await storage.getClassesBySchoolId(String(schoolId));
     
     console.log(`Found ${allClasses.length} classes for school ID ${schoolId} from database`);
 
