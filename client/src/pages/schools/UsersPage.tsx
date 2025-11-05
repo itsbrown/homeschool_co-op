@@ -36,6 +36,7 @@ import CreateUserDialog from '@/components/schools/CreateUserDialog';
 import ImportUsersDialog from '@/components/schools/ImportUsersDialog';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { useToast } from '@/hooks/use-toast';
+import { useSchoolAdmin } from '@/hooks/useSchoolAdmin';
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,15 +46,11 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<any>(null);
   
   const queryClient = useQueryClient();
+  const { schoolId } = useSchoolAdmin();
 
   // Fetch users for the school
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/school-admin/users'],
-    queryFn: async () => {
-      const response = await fetch('/api/school-admin/users');
-      if (!response.ok) throw new Error('Failed to fetch users');
-      return response.json();
-    },
   });
 
   // Filter users based on search and role
@@ -413,7 +410,7 @@ export default function UsersPage() {
       <ImportUsersDialog 
         open={showImportDialog} 
         onOpenChange={setShowImportDialog}
-        schoolId={schoolId}
+        schoolId={schoolId || 0}
       />
       </div>
     </SchoolAdminLayout>
