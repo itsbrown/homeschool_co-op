@@ -329,7 +329,7 @@ router.post('/manual', async (req, res) => {
         // Add payment tracking info
         updatedEnrollment.paymentIntentId = payment.stripePaymentIntentId;
         
-        await storage.updateEnrollment(updatedEnrollment);
+        await storage.updateProgramEnrollment(updatedEnrollment.id, updatedEnrollment);
         
         console.log(`✅ Updated enrollment ${updatedEnrollment.id}: paid=${CurrencyUtils.format(updatedEnrollment.amountPaid)}, remaining=${CurrencyUtils.format(updatedEnrollment.remainingBalance)}, status=${updatedEnrollment.status}`);
       } else {
@@ -595,7 +595,7 @@ router.post('/refund/:paymentId', async (req, res) => {
         let remainingRefund = refundAmountCents;
         
         for (const enrollment of matchingEnrollments) {
-          const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
+          const currentAmountPaid = enrollment.totalPaid || 0;
           
           // For last enrollment, use all remaining refund to avoid rounding errors
           const refundForThisEnrollment = matchingEnrollments.indexOf(enrollment) === matchingEnrollments.length - 1
@@ -607,21 +607,21 @@ router.post('/refund/:paymentId', async (req, res) => {
           const newAmountPaid = Math.max(0, currentAmountPaid - refundForThisEnrollment);
           const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
           
-          enrollment.amount = newAmountPaid;
-          enrollment.amountPaid = newAmountPaid;
-          enrollment.remainingBalance = remainingBalance;
-          enrollment.outstandingBalance = remainingBalance;
-          
-          // Update enrollment status based on remaining balance
+          // Determine enrollment status based on remaining balance
+          let enrollmentStatus: "completed" | "cancelled" | "enrolled" | "withdrawn" | "waitlist";
           if (remainingBalance >= enrollment.totalCost) {
-            enrollment.status = 'pending_payment'; // Full refund, back to pending
+            enrollmentStatus = 'waitlist'; // Full refund, back to pending
           } else if (remainingBalance > 0) {
-            enrollment.status = 'enrolled'; // Partial refund, still enrolled with balance
+            enrollmentStatus = 'enrolled'; // Partial refund, still enrolled with balance
           } else {
-            enrollment.status = 'enrolled'; // Still fully paid
+            enrollmentStatus = 'enrolled'; // Still fully paid
           }
           
-          await storage.updateEnrollment(enrollment);
+          await storage.updateProgramEnrollment(enrollment.id, {
+            totalPaid: newAmountPaid,
+            remainingBalance: remainingBalance,
+            status: enrollmentStatus
+          });
           console.log(`✅ Updated enrollment ${enrollment.id} for refund: refunded=${refundForThisEnrollment/100}, paid=${newAmountPaid/100}, remaining=${remainingBalance/100}`);
           
           remainingRefund -= refundForThisEnrollment;

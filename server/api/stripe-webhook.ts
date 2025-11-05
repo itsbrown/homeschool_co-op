@@ -78,13 +78,12 @@ async function handlePaymentSuccess(invoice: any) {
         
         // Update each enrollment
         for (const enrollmentId of enrollmentIds) {
-          const enrollment = await storage.getEnrollmentById(enrollmentId);
+          const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
           if (enrollment) {
             const newTotalPaid = (enrollment.totalPaid || 0) + perEnrollmentAmount;
             const newRemainingBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
             
-            await storage.updateEnrollment({
-              ...enrollment,
+            await storage.updateProgramEnrollment(enrollment.id, {
               totalPaid: newTotalPaid,
               remainingBalance: newRemainingBalance,
               paymentStatus: newRemainingBalance === 0 ? 'completed' : 'stripe_managed',
@@ -190,23 +189,19 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     // Update each enrollment
     for (const enrollmentId of enrollmentIdList) {
       try {
-        const enrollment = await storage.getEnrollmentById(enrollmentId);
+        const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
         if (enrollment) {
-          const currentPaid = enrollment.totalPaid || enrollment.amountPaid || 0;
+          const currentPaid = enrollment.totalPaid || 0;
           const newTotalPaid = currentPaid + perEnrollmentAmount;
           const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
           
-          const updatedEnrollment = {
-            ...enrollment,
+          await storage.updateProgramEnrollment(enrollment.id, {
             totalPaid: newTotalPaid,
-            amountPaid: newTotalPaid,
             remainingBalance: newBalance,
             paymentStatus: newBalance === 0 ? 'completed' : 'stripe_managed',
             paymentSystemVersion: 'v2_stripe',
             status: 'enrolled'
-          };
-          
-          await storage.updateEnrollment(updatedEnrollment);
+          });
           console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newTotalPaid}, balance=${newBalance}`);
         }
       } catch (error) {
@@ -250,12 +245,11 @@ async function handleFinalPaymentFailure(schedule: any, invoice: any) {
     const enrollmentIds = JSON.parse(schedule.enrollmentIds);
     
     for (const enrollmentId of enrollmentIds) {
-      const enrollment = await storage.getEnrollmentById(enrollmentId);
+      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
       if (enrollment) {
-        await storage.updateEnrollment({
-          ...enrollment,
-          paymentStatus: 'payment_failed',
-          status: 'payment_required'
+        await storage.updateProgramEnrollment(enrollment.id, {
+          paymentStatus: 'pending',
+          status: 'enrolled'
         });
       }
     }

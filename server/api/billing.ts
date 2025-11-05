@@ -45,7 +45,7 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     // Get all enrollments
     const enrollments = [];
     for (const enrollmentId of enrollmentIds) {
-      const enrollment = await storage.getEnrollmentById(enrollmentId);
+      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
       if (enrollment && enrollment.paymentStatus !== 'completed') {
         enrollments.push(enrollment);
       }
@@ -80,7 +80,7 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
         updatedAt: new Date().toISOString()
       };
       
-      await storage.updateEnrollment(enrollment.id, updateData);
+      await storage.updateProgramEnrollment(enrollment.id, updateData);
       console.log(`✅ Updated enrollment ${enrollment.id}: paid ${newAmountPaid} of ${totalCost}, remaining ${remainingBalance}, status ${paymentStatus}`);
     }
     
@@ -184,7 +184,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     
     // Get schoolId from first enrollment or parent
     const firstEnrollment = enrollmentDetails && enrollmentDetails.length > 0
-      ? await storage.getEnrollmentById(enrollmentDetails[0].enrollmentId)
+      ? await storage.getProgramEnrollmentById(enrollmentDetails[0].enrollmentId)
       : null;
     
     const schoolId = firstEnrollment?.schoolId || parentUser.schoolId;
@@ -301,7 +301,7 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
     console.log(`💰 Processing individual enrollment payment: ${enrollmentId}, amount: ${amount}, type: ${paymentType}`);
 
     // Get the enrollment
-    const enrollment = await storage.getEnrollmentById(parseInt(enrollmentId));
+    const enrollment = await storage.getProgramEnrollmentById(parseInt(enrollmentId));
     if (!enrollment) {
       return res.status(404).json({
         success: false,
@@ -310,18 +310,15 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
     }
 
     // Update enrollment with payment
-    const currentAmount = enrollment.amount || 0;
+    const currentAmount = enrollment.totalPaid || 0;
     const newAmount = currentAmount + amount;
     const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
 
-    const updatedEnrollment = {
-      ...enrollment,
-      amount: newAmount,
+    await storage.updateProgramEnrollment(enrollment.id, {
+      totalPaid: newAmount,
       remainingBalance: remainingBalance,
-      status: 'enrolled' as const, // Any payment makes them enrolled
-    };
-
-    await storage.updateEnrollment(updatedEnrollment);
+      status: 'enrolled'
+    });
 
     // Create payment record for history tracking
     const paymentData: InsertPayment = {
@@ -346,13 +343,21 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
         previousAmount: currentAmount,
         newAmount: newAmount,
         remainingBalance: remainingBalance
-      }
+      },
+      paymentDate: new Date()
     };
 
     await storage.createPayment(paymentData);
 
-    console.log(`✅ Updated enrollment ${enrollmentId}: amount=${newAmount}, remaining=${remainingBalance}`);
+    console.log(`✅ Updated enrollment ${enrollmentId}: totalPaid=${newAmount}, remaining=${remainingBalance}`);
     console.log(`✅ Created payment record for enrollment ${enrollmentId}`);
+
+    const updatedEnrollment = {
+      ...enrollment,
+      totalPaid: newAmount,
+      remainingBalance: remainingBalance,
+      status: 'enrolled' as const
+    };
 
     res.json({
       success: true,
@@ -644,14 +649,18 @@ router.post('/confirm-payment', async (req, res) => {
         console.log(`🔄 Updating enrollment ${enrollmentId} from status '${enrollment.status}' to 'completed'`);
         
         // Update the enrollment with payment information
+        await storage.updateProgramEnrollment(enrollment.id, {
+          status: 'completed',
+          totalPaid: (enrollment.totalPaid || 0) + amountPerEnrollment,
+          notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}` : `Payment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}`
+        });
+        
         const updatedEnrollment = {
           ...enrollment,
           status: 'completed' as const,
           totalPaid: (enrollment.totalPaid || 0) + amountPerEnrollment,
           notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}` : `Payment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}`
         };
-        
-        await storage.updateEnrollment(updatedEnrollment);
         updatedEnrollments.push(updatedEnrollment);
         console.log('✅ Updated enrollment:', enrollmentId, 'status to completed, amount paid:', amountPerEnrollment);
       } else if (enrollment && !userChildIds.includes(enrollment.childId)) {
@@ -843,19 +852,22 @@ router.post('/process-recent-payment', async (req, res) => {
         ) as any;
         
         if (enrollment) {
-          const currentAmount = enrollment.amount || 0;
+          const currentAmount = enrollment.totalPaid || 0;
           const newAmount = currentAmount + amountPerItem;
           const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
           
+          await storage.updateProgramEnrollment(enrollment.id, {
+            totalPaid: newAmount,
+            remainingBalance: remainingBalance,
+            status: 'enrolled'
+          });
+          
           const updatedEnrollment = {
             ...enrollment,
-            amount: newAmount,
+            totalPaid: newAmount,
             remainingBalance: remainingBalance,
-            status: 'enrolled' as const,
-            paymentIntentId: targetPaymentIntent.id
+            status: 'enrolled' as const
           };
-          
-          await storage.updateEnrollment(updatedEnrollment);
           updatedEnrollments.push(updatedEnrollment);
           console.log(`✅ Updated enrollment for ${item.childName} in ${item.className}: amount=${newAmount}, remaining=${remainingBalance}`);
         } else {
