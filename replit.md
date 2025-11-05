@@ -1,18 +1,18 @@
 # ASA Learning Platform
 
 ## Overview
-The ASA Learning Platform is an adaptive learning application for American Seekers Academy, designed to provide a comprehensive and engaging educational experience. It integrates full-stack web architecture with AI-powered content generation and educational assessment tools, offering robust educational support, personalized learning paths, and efficient administrative tools for parents, educators, school administrators, and students.
+The ASA Learning Platform is an adaptive learning application for American Seekers Academy. It provides a comprehensive and engaging educational experience by integrating full-stack web architecture with AI-powered content generation and educational assessment tools. The platform offers robust educational support, personalized learning paths, and efficient administrative tools for parents, educators, school administrators, and students. Its vision is to deliver an adaptive, secure, and user-friendly learning environment that caters to diverse educational needs.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 ### Core Design Principles
-The platform utilizes a modern web application architecture prioritizing scalability, security, and user experience. It incorporates role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
+The platform uses a modern web application architecture focused on scalability, security, and user experience. It incorporates role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
 
 ### Frontend
-- **Framework**: React with TypeScript, using Vite.
-- **UI**: Shadcn/ui (built on Radix UI) and Tailwind CSS for a professional, intuitive design with consolidated navigation and simplified page structures.
+- **Framework**: React with TypeScript (Vite).
+- **UI**: Shadcn/ui (Radix UI) and Tailwind CSS for a professional, intuitive design with consolidated navigation.
 - **State Management**: React hooks and context.
 - **Authentication**: Auth0 integration.
 
@@ -24,18 +24,17 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Authentication Middleware**: Auth0 JWT validation.
 
 ### Data Storage
-- **Primary Database**: Neon PostgreSQL for all application data, including enrollment, payment, and financial tracking.
-- **Database Connection**: URL-encoded connection string builder.
+- **Primary Database**: Neon PostgreSQL for all application data (enrollment, payment, financial tracking).
 - **File Storage**: Local filesystem for general files and knowledge bases.
 - **Authentication Integration**: Frontend uses Supabase OAuth; backend queries Supabase for user/school data.
-- **Storage Architecture**: Hybrid system using CombinedStorage, routing operations between database storage (dbStorage) for persistent data and in-memory storage (memStorage) for feature-specific data. All critical data, including Classes, Schools, Children, School Students, Membership Enrollments, Stripe Subscription Schedules, Locations, User Locations, Program Enrollments (unified for both school and marketplace classes), Staff Positions, Staff Invitations, and Password Reset Tokens, have been migrated to persistent PostgreSQL storage.
+- **Storage Architecture**: Hybrid system (CombinedStorage) routing operations between persistent database storage (dbStorage) and in-memory storage (memStorage) for feature-specific data. Critical data (Classes, Schools, Children, Enrollments, Stripe Subscriptions, etc.) are in PostgreSQL.
 
 ### Key Features and Implementations
-- **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation. All school-admin API endpoints protected with Supabase JWT authentication middleware.
-- **Multi-Tenant Security**: Comprehensive isolation preventing cross-school data leakage. All hardcoded school IDs eliminated from codebase. All 30+ school-admin API endpoints enforce strict school boundary validation using helper functions (extractSchoolId, requireSchoolContext) that extract and validate school_id from JWT tokens. Cross-school data access returns 403 Forbidden. Account import processes enforce strict school-scoped validation.
-- **Membership Management System**: Admin interface for managing annual membership fees, enrollment validation, and manual payment recording.
-- **Payment System**: Stripe-only payment system with subscription schedules, webhook integration, smart cart logic, date-driven payment plans, and automated refund processing.
-- **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing (e.g., Morning Session vs. Afternoon Session with different prices). Both class creation (POST /school-admin/classes) and update (PUT /api/class-details/:id) endpoints fully migrated to PostgreSQL with JWT authentication and school boundary enforcement. Pricing extracted from variants array and stored in both price field (first variant) and schedule jsonb field (all variants). Currency handled in cents internally. All class CRUD operations enforce strict school isolation.
+- **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation. School-admin API endpoints are protected with Supabase JWT authentication.
+- **Multi-Tenant Security**: Comprehensive isolation prevents cross-school data leakage. All school-admin API endpoints enforce strict school boundary validation using JWT tokens.
+- **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
+- **Payment System**: Stripe-only payment system with subscription schedules, webhooks, smart cart logic, date-driven payment plans, and automated refund processing.
+- **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing. All class CRUD operations enforce strict school isolation.
 - **Registration Flow**: Automated account creation, handling existing accounts, and auto-login.
 - **AI Enrollment Assistant**: Personalized AI guidance for enrollment.
 - **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management.
@@ -44,6 +43,7 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Email Service**: Dual integration with Brevo SMTP and SendGrid.
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis, Stability AI for image generation, and Hugging Face for text processing.
+- **Product Order Form System**: Enhanced schema with 'product' field type supporting variant configurations, descriptions, and dynamic pricing. Includes pre-built templates and a form builder UI.
 
 ## External Dependencies
 - **Auth0**: Authentication provider.
@@ -58,28 +58,3 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Brevo SMTP**: Email service.
 - **SendGrid**: Email service.
 - **Twilio**: SMS service.
-
-## Recent Updates (November 4, 2025)
-### Enrollment Table Consolidation & Data Migration Fixes
-- **Unified Enrollment Table**: Consolidated `marketplace_class_enrollments` and school-based enrollments into a single `program_enrollments` table with `class_type` enum field ('school_class' | 'marketplace')
-- **Schema Changes**: Added `marketplaceClassId` field to `program_enrollments` to support marketplace class tracking alongside existing `classId` for school classes
-- **Educator API Updates**: Updated educator dashboard endpoints to filter `program_enrollments` by `class_type === 'marketplace'` for marketplace class student lists
-- **Cart Checkout**: Modified enrollment creation to set appropriate `class_type` based on cart item source (marketplace vs school)
-- **Code Cleanup**: Removed obsolete marketplace enrollment methods from dbStorage and cleaned up schema exports
-- **Architecture**: Simplified enrollment system from two separate tables to one unified table with discriminator field, reducing complexity and improving maintainability
-- **Storage Layer Migration**: Updated `CombinedStorage` class to use unified `program_enrollments` methods instead of deprecated marketplace enrollment methods (fixed `getMarketplaceEnrollmentsByChildId` errors)
-- **Endpoint Database Migration**: Converted all children.json file reads to database queries:
-  - `/api/schools/students/:id` - Now uses `storage.getChildById()` instead of reading children.json
-  - `/school-admin/students/:id` - Now uses `storage.getChildById()` instead of reading children.json
-  - `/api/auth0/children` - Now uses `storage.getChildrenByParentId()` and `storage.getAllChildren()` instead of reading children.json
-- **Multi-Tenant Security Hardening**: Eliminated all hardcoded school ID 1 references from ParentAppShell, ParentSidebar, and ChildRegistrationForm - now exclusively uses school-parents API with generic "Learning Platform" fallback
-
-### Product Order Form System Enhancements
-- **Product Field Type**: Extended schema with 'product' field type supporting variant configurations (name, price), descriptions, max quantity limits, and dynamic pricing
-- **Form Templates**: Created and seeded 4 pre-built templates (Candle Order Form, Farm Fresh Products, Bakery Order Form, General Product Order) into database
-- **Template Endpoint**: Added GET `/api/custom-forms/templates` endpoint to serve template forms to all authenticated users
-- **Form Builder UI**: Enhanced FormEditorPage with dedicated "Add Product" button (shows only for product_order forms) and product-specific configuration panel including variant editor
-- **Product Rendering**: Updated ProductOrderFormPage to render product fields with variant dropdown selectors, dynamic price display based on selected variant, quantity inputs with max limits
-- **Order Submission**: Enhanced submission payload to include both quantity data and selected variant indices for accurate fulfillment tracking
-- **Validation**: Fixed async shipping address validation to properly await form trigger before allowing submission
-- **Template Workflow**: School administrators can browse template catalog, clone templates to their school, and customize with their own products and settings

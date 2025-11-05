@@ -185,12 +185,42 @@ export interface IStorage {
   deleteMembershipEnrollment(id: number): Promise<void>;
   createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment>;
 
-  // Class Enrollment methods
+  // Class Enrollment methods (DEPRECATED - Use Program Enrollment methods above)
+  /**
+   * @deprecated Use createProgramEnrollment() with createEnrollmentData() factory from @shared/enrollment-factory instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   * See replit.md "Storage Layer Patterns" for correct usage.
+   */
   createEnrollment(enrollment: any): Promise<any>;
+  
+  /**
+   * @deprecated Use getEnrollmentsByChildIds() (note: plural 'Ids', expects array) instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
+  
+  /**
+   * @deprecated Use getProgramEnrollmentById() instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   getEnrollmentById(id: number): Promise<any>;
+  
+  /**
+   * @deprecated Use updateProgramEnrollment(id, updates) instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   updateEnrollment(enrollment: any): Promise<any>;
+  
+  /**
+   * @deprecated Use deleteProgramEnrollment() instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   deleteEnrollment(id: number): Promise<void>;
+  
+  /**
+   * @deprecated Use deleteProgramEnrollment() instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   removeEnrollment(enrollmentId: number): Promise<boolean>;
 
   // Class methods
@@ -244,7 +274,16 @@ export interface IStorage {
   updateStripeSubscriptionSchedule(id: number, schedule: Partial<InsertStripeSubscriptionSchedule>): Promise<StripeSubscriptionSchedule | undefined>;
 
   // Enhanced enrollment methods
+  /**
+   * @deprecated Use getProgramEnrollmentById() in a loop or add batch method to interface
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   getEnrollmentsByIds(enrollmentIds: number[]): Promise<any[]>;
+  
+  /**
+   * @deprecated Use updateProgramEnrollment(id, updates) instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   updateEnrollment(id: number, updates: any): Promise<any>;
 
   // School Student methods
@@ -1257,7 +1296,7 @@ export class MemStorage implements IStorage {
   async getEnrollmentCountForProgram(programId: number): Promise<number> {
     return this.getEnrollmentsByProgramId(programId).then(enrollments =>
       enrollments.filter(enrollment =>
-        enrollment.status === 'confirmed' || enrollment.status === 'pending').length
+        enrollment.status === 'enrolled' || enrollment.status === 'waitlist').length
     );
   }
 
@@ -1269,11 +1308,7 @@ export class MemStorage implements IStorage {
       ...enrollmentData,
       id,
       createdAt: now,
-      updatedAt: now,
-      transactionId: enrollmentData.transactionId || null,
-      totalPaid: enrollmentData.totalPaid || null,
-      discountCode: enrollmentData.discountCode || null,
-      discountAmount: enrollmentData.discountAmount || null
+      updatedAt: now
     };
 
     this.programEnrollmentsStore.set(id, enrollment);
