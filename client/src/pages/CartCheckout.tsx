@@ -397,6 +397,17 @@ export default function CartCheckout() {
     return selectedPlan ? selectedPlan.amount - (selectedPlan.discount || 0) : cart.total;
   };
 
+  // Get the amount to display on the Pay button (first payment amount)
+  const getButtonDisplayAmount = () => {
+    // For biweekly plans, show the FIRST payment amount (total divided by 4)
+    if (selectedPaymentPlan === 'biweekly') {
+      return Math.ceil(cart.total / 4);
+    }
+    
+    // For all other plans, show the full selected plan amount
+    return getSelectedPlanAmount();
+  };
+
   if (loading) {
     return (
       <ParentAppShell>
@@ -769,7 +780,7 @@ export default function CartCheckout() {
                   </Alert>
                 ) : clientSecret ? (
                   <Elements key={clientSecret} stripe={stripePromise} options={{ clientSecret }}>
-                    <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getSelectedPlanAmount()} />
+                    <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getButtonDisplayAmount()} />
                   </Elements>
                 ) : (
                   <Alert variant="destructive">
