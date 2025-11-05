@@ -218,3 +218,113 @@ export function createSchoolClassEnrollmentData(
     marketplaceClassId: null,
   });
 }
+
+/**
+ * Simplified flat parameters for enrollment creation
+ * Use this when you have individual fields instead of nested objects
+ */
+export interface SimpleEnrollmentParams {
+  // School and class
+  schoolId: number | null;
+  classId: number | null;
+  className: string;
+  classType: "school_class" | "marketplace";
+  
+  // Child
+  childId: number;
+  childName: string;
+  
+  // Parent
+  parentId: number;
+  parentEmail: string;
+  
+  // Financial (all in cents)
+  totalCost: number;
+  depositRequired?: number;
+  totalPaid?: number;
+  remainingBalance?: number;
+  
+  // Payment
+  paymentStatus?: "pending" | "deposit_paid" | "partial_payment" | "completed" | "stripe_managed" | "refunded";
+  paymentPlan?: "full_payment" | "deposit_only" | "biweekly" | "custom" | null;
+  paymentFrequency?: "weekly" | "biweekly" | "monthly" | "one_time";
+  
+  // Program dates
+  programStartDate: string | Date | null;
+  programEndDate: string | Date | null;
+  
+  // Optional
+  programId?: number | null;
+  marketplaceClassId?: number | null;
+  variantId?: string | null;
+  status?: "enrolled" | "completed" | "withdrawn" | "cancelled" | "waitlist";
+  waitlistPosition?: number | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  notes?: string | null;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Simplified factory function for flat parameters
+ * Use this when you have individual enrollment fields
+ */
+export function createEnrollmentDataSimple(params: SimpleEnrollmentParams): InsertProgramEnrollment {
+  // Convert dates to proper format
+  const programStartDate = params.programStartDate 
+    ? (typeof params.programStartDate === 'string' ? params.programStartDate : params.programStartDate.toISOString().split('T')[0])
+    : null;
+  const programEndDate = params.programEndDate 
+    ? (typeof params.programEndDate === 'string' ? params.programEndDate : params.programEndDate.toISOString().split('T')[0])
+    : null;
+
+  return {
+    // School and class identification
+    schoolId: params.schoolId,
+    classType: params.classType,
+    classId: params.classId,
+    marketplaceClassId: params.marketplaceClassId ?? null,
+    programId: params.programId ?? null,
+
+    // Child information
+    childId: params.childId,
+    childName: params.childName,
+
+    // Class information
+    className: params.className,
+    variantId: params.variantId ?? null,
+
+    // Parent information
+    parentId: params.parentId,
+    parentEmail: params.parentEmail,
+
+    // Financial fields (all in cents)
+    totalCost: params.totalCost,
+    totalPaid: params.totalPaid ?? 0,
+    remainingBalance: params.remainingBalance ?? (params.totalCost - (params.totalPaid ?? 0)),
+    depositRequired: params.depositRequired ?? 0,
+
+    // Payment tracking
+    paymentStatus: params.paymentStatus ?? "pending",
+    paymentPlan: params.paymentPlan ?? null,
+    paymentFrequency: params.paymentFrequency ?? "one_time",
+    paymentSystemVersion: "v2_stripe",
+
+    // Program dates for payment calculations
+    programStartDate,
+    programEndDate,
+
+    // Enrollment status
+    status: params.status ?? "enrolled",
+    waitlistPosition: params.waitlistPosition ?? null,
+    enrollmentDate: new Date(),
+
+    // Stripe integration
+    stripeSubscriptionId: params.stripeSubscriptionId ?? null,
+    stripeCustomerId: params.stripeCustomerId ?? null,
+
+    // Metadata
+    notes: params.notes ?? null,
+    metadata: params.metadata ?? {},
+  };
+}

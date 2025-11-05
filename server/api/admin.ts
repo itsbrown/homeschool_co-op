@@ -1,6 +1,7 @@
 import express from "express";
 import { storage } from "../storage";
 import { verifyAuth0Token, requireRole } from "../middleware/auth0-auth";
+import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 
 const router = express.Router();
 
@@ -27,6 +28,12 @@ router.post('/manual-enrollment', async (req, res) => {
       return res.status(400).json({ message: 'Manual enrollment is only allowed for admin-only classes' });
     }
 
+    // Get child data for parent information
+    const child = await storage.getChildById(studentId);
+    if (!child) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
     // Check if student is already enrolled
     const existingEnrollments = await storage.getEnrollmentsByChildId(studentId);
     const alreadyEnrolled = existingEnrollments.some((e: any) => e.programId === classId || e.classId === classId);
@@ -35,16 +42,27 @@ router.post('/manual-enrollment', async (req, res) => {
       return res.status(400).json({ message: 'Student is already enrolled in this class' });
     }
 
-    // Create the enrollment
-    const enrollment = await storage.createEnrollment({
-      programId: classId,
+    // Create complete enrollment using factory function
+    const enrollmentData = createEnrollmentDataSimple({
+      schoolId: child.schoolId || classItem.schoolId || null,
+      parentId: child.parentId,
+      parentEmail: child.parentEmail || '',
       childId: studentId,
-      status: 'enrolled',
-      paymentStatus: 'completed', // Admin enrollments are considered paid
-      totalAmount: 0, // No payment required for admin enrollments
-      amountPaid: 0,
-      enrollmentDate: new Date()
+      childName: `${child.firstName} ${child.lastName}`,
+      classId: classId,
+      className: classItem.title,
+      classType: 'school_class',
+      totalCost: 0, // No payment required for admin enrollments
+      totalPaid: 0,
+      remainingBalance: 0,
+      depositRequired: 0,
+      paymentStatus: 'completed',
+      programStartDate: classItem.startDate || new Date(),
+      programEndDate: classItem.endDate || new Date(),
+      status: 'enrolled'
     });
+
+    const enrollment = await storage.createProgramEnrollment(enrollmentData);
 
     console.log(`✅ Admin manually enrolled student ${studentId} in class ${classId}`);
     

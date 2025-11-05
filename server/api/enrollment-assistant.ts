@@ -4,6 +4,7 @@ import { formatZodError } from "../utils";
 import { processEnrollmentMessage } from "../services/enrollmentAI";
 import { storage } from "../storage";
 import { getAuthEmail, getAuthUserId, AuthenticatedRequest } from "../utils/auth";
+import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 
 // Input validation schema
 const messageSchema = z.object({
@@ -112,6 +113,10 @@ async function executeEnrollmentAction(action: any, req: AuthenticatedRequest): 
           throw new Error(`Program with ID ${action.programId} not found`);
         }
         
+        // Get parent information
+        const parentEmail = getAuthEmail(req) || child.parentEmail || '';
+        const parentId = child.parentId;
+        
         // Determine pricing based on program and option
         let programPrice = program.price || 1300; // Default to $1300 for Tycoons Full Day
         
@@ -120,21 +125,25 @@ async function executeEnrollmentAction(action: any, req: AuthenticatedRequest): 
           programPrice = 1300; // Full Day Including Afternoon Extracurriculars
         }
         
-        // Create the enrollment
-        const enrollmentData = {
-          classId: action.programId,
+        // Use factory function to create complete enrollment data
+        const enrollmentData = createEnrollmentDataSimple({
+          schoolId: child.schoolId || program.schoolId || null,
+          parentId,
+          parentEmail,
           childId: action.childId,
           childName: `${child.firstName} ${child.lastName}`,
+          classId: action.programId,
           className: program.title,
-          status: 'pending_payment' as const,
-          enrollmentDate: new Date(),
-          amount: 0,
-          depositRequired: Math.round(programPrice * 0.1), // 10% deposit  
+          classType: 'school_class',
           totalCost: programPrice,
-          remainingBalance: programPrice
-        };
+          depositRequired: Math.round(programPrice * 0.1),
+          remainingBalance: programPrice,
+          paymentStatus: 'pending',
+          programStartDate: program.startDate || new Date(),
+          programEndDate: program.endDate || new Date()
+        });
         
-        const enrollment = await storage.createEnrollment(enrollmentData);
+        const enrollment = await storage.createProgramEnrollment(enrollmentData);
         console.log('✅ Enrollment created:', enrollment);
       }
       break;

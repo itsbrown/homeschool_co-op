@@ -1,6 +1,7 @@
 import express from "express";
 import { storage } from "../storage";
 import { sendWaitlistJoinedEmail, sendWaitlistPromotedEmail } from "../lib/email-service";
+import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 
 const router = express.Router();
 
@@ -199,43 +200,37 @@ router.post('/:id/enroll', async (req, res) => {
     const classPrice = classItem.price || 90000; // Default $900 in cents
     const depositAmount = Math.round(classPrice * 0.1); // 10% deposit
 
-    // Create enrollment record with ALL required fields
-    const enrollment = {
-      schoolId: classItem.schoolId || 1, // Get from class
-      classType: 'marketplace' as const, // This is a marketplace class
-      classId: null, // Not a school_class, so null
-      marketplaceClassId: classId, // This is the marketplace class ID
+    // Create enrollment record with ALL required fields using factory function
+    const enrollmentData = createEnrollmentDataSimple({
+      schoolId: classItem.schoolId || 1,
+      classType: 'marketplace',
+      classId: null, // Not a school_class
+      marketplaceClassId: classId,
       childId: childId,
       childName: `${child.firstName} ${child.lastName}`,
       className: classItem.title,
       variantId: null,
       parentId: child.parentId,
-      parentEmail: child.parentEmail, // Get from child record
+      parentEmail: child.parentEmail || '',
       totalCost: classPrice,
       totalPaid: 0,
       remainingBalance: classPrice,
       depositRequired: depositAmount,
-      paymentStatus: 'pending' as const,
-      paymentPlan: 'deposit_only' as const,
-      paymentFrequency: 'one_time' as const,
-      paymentSystemVersion: 'v2_stripe',
+      paymentStatus: 'pending',
+      paymentPlan: 'deposit_only',
+      paymentFrequency: 'one_time',
       programStartDate: classItem.startDate || null,
       programEndDate: classItem.endDate || null,
       status: enrollmentStatus as any,
       waitlistPosition: waitlistPosition,
-      enrollmentDate: new Date(),
       stripeSubscriptionId: null,
-      stripeSubscriptionScheduleId: null,
-      stripeCustomerId: null,
-      transactionId: null,
-      discountCode: null,
-      discountAmount: null
-    };
+      stripeCustomerId: null
+    });
 
-    console.log(`📝 ENROLLMENT OBJECT CREATED:`, enrollment);
+    console.log(`📝 ENROLLMENT OBJECT CREATED:`, enrollmentData);
 
     // Save enrollment to storage
-    const savedEnrollment = await storage.createEnrollment(enrollment);
+    const savedEnrollment = await storage.createProgramEnrollment(enrollmentData);
     console.log(`📝 ENROLLMENT SAVED RESULT:`, savedEnrollment);
 
     // Note: Child enrollment tracking will be handled separately

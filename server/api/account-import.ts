@@ -6,6 +6,7 @@ import * as fileUpload from "express-fileupload";
 import { UploadedFile } from "express-fileupload";
 import { supabaseAuth } from '../middleware/supabase-auth';
 import path from "path";
+import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 
 // Import handling modes
 type ImportMode = 'skip' | 'override' | 'update';
@@ -337,27 +338,19 @@ async function processEnrollments(records: any[], results: any, options: ImportO
         continue;
       }
       
-      const enrollmentData = {
-        classId,
-        childId,
-        childName: record['Child Name'] || record.childName,
-        className: record['Class Name'] || record.className,
-        status: record['Status'] || record.status || 'enrolled',
-        enrollmentDate: record['Enrollment Date'] ? new Date(record['Enrollment Date']) : new Date(),
-        amount: record['Amount'] ? Math.round(parseFloat(record['Amount']) * 100) : 0,
-        remainingBalance: record['Remaining Balance'] ? Math.round(parseFloat(record['Remaining Balance']) * 100) : 0
-      };
+      const childName = record['Child Name'] || record.childName || `${child.firstName} ${child.lastName}`;
+      const className = record['Class Name'] || record.className || classRecord.title;
+      const amount = record['Amount'] ? Math.round(parseFloat(record['Amount']) * 100) : 0;
+      const remainingBalance = record['Remaining Balance'] ? Math.round(parseFloat(record['Remaining Balance']) * 100) : 0;
       
       // Check for existing enrollment by childId and classId
-      // Note: We've already verified both child and class belong to this school,
-      // so any enrollment with these IDs must also belong to this school
       const childEnrollments = await storage.getEnrollmentsByChildId(childId);
       const existingEnrollment = childEnrollments.find(enrollment => 
         enrollment.classId === classId
       );
       
       if (existingEnrollment) {
-        const duplicateInfo = `Enrollment for ${enrollmentData.childName} in ${enrollmentData.className}`;
+        const duplicateInfo = `Enrollment for ${childName} in ${className}`;
         
         if (options.mode === 'skip') {
           results.enrollments.skipped++;
@@ -373,7 +366,37 @@ async function processEnrollments(records: any[], results: any, options: ImportO
           results.duplicatesHandled.push(`Updated: ${duplicateInfo}`);
         }
       } else {
-        await storage.createEnrollment(enrollmentData);
+        // Determine correct payment status based on amount and remaining balance
+        let paymentStatus: "pending" | "deposit_paid" | "partial_payment" | "completed" | "stripe_managed" | "refunded";
+        if (remainingBalance <= 0) {
+          paymentStatus = 'completed';
+        } else if (amount > 0) {
+          paymentStatus = 'partial_payment';
+        } else {
+          paymentStatus = 'pending';
+        }
+        
+        // Create complete enrollment using factory function
+        const enrollmentData = createEnrollmentDataSimple({
+          schoolId: schoolId,
+          parentId: child.parentId,
+          parentEmail: child.parentEmail || '',
+          childId: childId,
+          childName: childName,
+          classId: classId,
+          className: className,
+          classType: 'school_class',
+          totalCost: classRecord.price || amount,
+          totalPaid: amount,
+          remainingBalance: remainingBalance,
+          depositRequired: 0,
+          paymentStatus: paymentStatus,
+          programStartDate: classRecord.startDate || new Date(),
+          programEndDate: classRecord.endDate || new Date(),
+          status: record['Status'] || record.status || 'enrolled'
+        });
+        
+        await storage.createProgramEnrollment(enrollmentData);
         results.enrollments.successful++;
       }
     } catch (error: any) {

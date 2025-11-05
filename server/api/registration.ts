@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
+import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 // Email service will be implemented separately
 
 const router = Router();
@@ -90,24 +91,33 @@ router.post('/complete', async (req, res) => {
     const child = await storage.createChild(childData);
     console.log('👶 Created new child:', child.id);
     
-    // Create enrollment
-    const enrollmentData = {
-      classId: data.enrollment.classId,
-      childId: child.id,
-      childName: `${data.child.firstName} ${data.child.lastName}`,
-      enrollmentDate: new Date(),
-      status: data.enrollment.status,
-      depositPaid: data.enrollment.depositPaid,
-      remainingBalance: data.enrollment.remainingBalance
-    };
-    
     // Get class information for enrollment
     const classInfo = await storage.getClass(data.enrollment.classId);
-    if (classInfo) {
-      enrollmentData.className = classInfo.title;
+    if (!classInfo) {
+      throw new Error('Class not found');
     }
     
-    const enrollment = await storage.createEnrollment(enrollmentData);
+    // Create complete enrollment using factory function
+    const enrollmentData = createEnrollmentDataSimple({
+      schoolId: parentUser.schoolId || child.schoolId || classInfo.schoolId || null,
+      parentId: parentUser.id,
+      parentEmail: data.parent.email,
+      childId: child.id,
+      childName: `${data.child.firstName} ${data.child.lastName}`,
+      classId: data.enrollment.classId,
+      className: classInfo.title,
+      classType: 'school_class',
+      totalCost: classInfo.price || 0,
+      depositRequired: data.enrollment.depositPaid || 0,
+      totalPaid: data.enrollment.depositPaid || 0,
+      remainingBalance: data.enrollment.remainingBalance || 0,
+      paymentStatus: data.payment.success ? 'deposit_paid' : 'pending',
+      programStartDate: classInfo.startDate || new Date(),
+      programEndDate: classInfo.endDate || new Date(),
+      status: data.enrollment.status as any || 'enrolled'
+    });
+    
+    const enrollment = await storage.createProgramEnrollment(enrollmentData);
     console.log('📚 Created enrollment:', enrollment.id);
     
     // Record payment
