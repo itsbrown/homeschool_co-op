@@ -33,14 +33,7 @@ export default function SettingsPage() {
 
   // Fetch user profile data from API
   const { data: profileData, isLoading: profileLoading } = useQuery({
-    queryKey: ['/api/users/profile'],
-    queryFn: async () => {
-      const response = await fetch('/api/users/profile');
-      if (!response.ok) {
-        throw new Error('Failed to fetch profile');
-      }
-      return response.json();
-    },
+    queryKey: ['/api/users/profile']
   });
 
   // Initialize form with profile data
@@ -59,19 +52,10 @@ export default function SettingsPage() {
       lastName: string;
       phoneNumber: string;
     }) => {
-      const response = await fetch('/api/users/profile', {
+      return await apiRequest('/api/users/profile', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(profileData),
+        body: JSON.stringify(profileData)
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
-      }
-
-      return response.json();
     },
     onSuccess: () => {
       toast({

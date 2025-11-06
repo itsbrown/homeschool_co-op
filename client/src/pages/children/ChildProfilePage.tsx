@@ -27,17 +27,7 @@ export default function ChildProfilePage() {
     queryKey: [`/api/school-admin/students/${id}`],
     queryFn: async () => {
       try {
-        const token = localStorage.getItem('supabase_token');
-        const response = await fetch(`/api/school-admin/students/${id}`, {
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Content-Type': 'application/json'
-          }
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const studentData = await response.json();
+        const studentData = await apiRequest(`/api/school-admin/students/${id}`);
         
         // Calculate age from birthdate
         const calculateAge = (birthdate: string) => {
@@ -86,17 +76,7 @@ export default function ChildProfilePage() {
     queryKey: [`/api/enrollments/child/${id}`],
     queryFn: async () => {
       try {
-        const token = localStorage.getItem('supabase_token');
-        const response = await fetch(`/api/enrollments/child/${id}`, {
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Content-Type': 'application/json'
-          }
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return await response.json();
+        return await apiRequest(`/api/enrollments/child/${id}`);
       } catch (error) {
         console.error('Error fetching enrollments:', error);
         return [];

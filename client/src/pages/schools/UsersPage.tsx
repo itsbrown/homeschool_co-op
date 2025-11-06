@@ -37,6 +37,7 @@ import ImportUsersDialog from '@/components/schools/ImportUsersDialog';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { useToast } from '@/hooks/use-toast';
 import { useSchoolAdmin } from '@/hooks/useSchoolAdmin';
+import { apiRequest } from '@/lib/queryClient';
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,13 +106,9 @@ export default function UsersPage() {
     }
     
     try {
-      const response = await fetch(`/api/school-admin/users/${userId}`, {
+      await apiRequest(`/api/school-admin/users/${userId}`, {
         method: 'DELETE',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete user');
-      }
       
       // Refresh the users list
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
@@ -131,13 +128,9 @@ export default function UsersPage() {
 
   const handleSendInvite = async (userId: number, userName: string) => {
     try {
-      const response = await fetch(`/api/school-admin/users/${userId}/send-invite`, {
+      await apiRequest(`/api/school-admin/users/${userId}/send-invite`, {
         method: 'POST',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to send invite');
-      }
       
       toast({
         title: "Success",
@@ -155,13 +148,9 @@ export default function UsersPage() {
 
   const handleSendPasswordReset = async (userId: number, userName: string) => {
     try {
-      const response = await fetch(`/api/school-admin/users/${userId}/send-password-reset`, {
+      await apiRequest(`/api/school-admin/users/${userId}/send-password-reset`, {
         method: 'POST',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to send password reset');
-      }
       
       toast({
         title: "Success",

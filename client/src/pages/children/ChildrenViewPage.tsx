@@ -17,31 +17,6 @@ export default function ChildrenViewPage() {
   // Fetch children data from parent-specific endpoint
   const { data: childrenData, isLoading: childrenLoading } = useQuery({
     queryKey: ["/api/parent/children"],
-    queryFn: async () => {
-      try {
-        const token = localStorage.getItem('supabase_token');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-        
-        const response = await fetch("/api/parent/children", {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const children = await response.json();
-        return children;
-      } catch (error) {
-        console.error("Error fetching children:", error);
-        return [];
-      }
-    },
     enabled: isAuthenticated && activeRole === 'parent',
   });
 
