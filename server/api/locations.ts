@@ -5,13 +5,45 @@ import { storage } from "../storage";
 
 const router = express.Router();
 
+// ROUTE ORDER MATTERS: Static paths must come before parameterized paths
+// to prevent Express from treating "accessible" as an ID
+
 // Get all locations for a school
-router.get("/", async (req, res) => {
+router.get("/", async (req: any, res) => {
   try {
-    const schoolId = parseInt(req.query.schoolId as string);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Valid school ID required" });
+    // SECURITY: Always use authenticated user's schoolId from JWT token
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    
+    if (!schoolIdFromToken) {
+      return res.status(401).json({ 
+        message: "Authentication required - school ID not found in token" 
+      });
     }
+    
+    const authenticatedSchoolId = Number(schoolIdFromToken);
+    if (isNaN(authenticatedSchoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in authentication token" });
+    }
+    
+    // If a query parameter is provided, validate it matches the authenticated school
+    if (req.query.schoolId) {
+      const requestedSchoolId = parseInt(req.query.schoolId as string);
+      
+      if (isNaN(requestedSchoolId)) {
+        return res.status(400).json({ message: "Invalid school ID in query parameter" });
+      }
+      
+      // SECURITY: Prevent cross-tenant data access
+      if (requestedSchoolId !== authenticatedSchoolId) {
+        console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to access locations from school ${requestedSchoolId}`);
+        return res.status(403).json({ 
+          message: "Access denied - you can only view locations for your own school" 
+        });
+      }
+    }
+    
+    // Use the authenticated user's school ID
+    const schoolId = authenticatedSchoolId;
 
     console.log('🏢 Fetching locations for school ID:', schoolId);
     // Get all locations for the school from database
@@ -24,41 +56,100 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Get a single location by ID
-router.get("/:id", async (req, res) => {
+// Get accessible locations for a user (BEFORE /:id to prevent route shadowing)
+router.get("/accessible", async (req: any, res) => {
   try {
+    // SECURITY: Verify authenticated user's school
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    
+    if (!schoolIdFromToken) {
+      return res.status(401).json({ 
+        message: "Authentication required - school ID not found in token" 
+      });
+    }
+    
+    const authenticatedSchoolId = Number(schoolIdFromToken);
+    if (isNaN(authenticatedSchoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in authentication token" });
+    }
+    
+    const userId = parseInt(req.query.userId as string);
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: "Valid user ID required" });
+    }
+
+    // SECURITY: Verify user belongs to authenticated user's school to prevent enumeration
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    if (user.schoolId !== authenticatedSchoolId) {
+      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to access locations for user ${userId} from school ${user.schoolId}`);
+      return res.status(403).json({ 
+        message: "Access denied - this user belongs to a different school" 
+      });
+    }
+
+    // Get locations the user has access to from database
+    const accessibleLocations = await storage.getUserAccessibleLocations(userId);
+    
+    // SECURITY: Filter to only locations belonging to authenticated user's school (defense in depth)
+    const schoolFilteredLocations = accessibleLocations.filter(
+      location => location.schoolId === authenticatedSchoolId
+    );
+    
+    if (accessibleLocations.length !== schoolFilteredLocations.length) {
+      console.warn(`🚨 Security: Filtered ${accessibleLocations.length - schoolFilteredLocations.length} cross-tenant locations for user ${userId}`);
+    }
+    
+    res.json(schoolFilteredLocations);
+  } catch (error) {
+    console.error("Error fetching accessible locations:", error);
+    res.status(500).json({ message: "Failed to fetch accessible locations" });
+  }
+});
+
+// Get a single location by ID (AFTER /accessible to prevent shadowing)
+router.get("/:id", async (req: any, res) => {
+  try {
+    // SECURITY: Verify authenticated user's school
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    
+    if (!schoolIdFromToken) {
+      return res.status(401).json({ 
+        message: "Authentication required - school ID not found in token" 
+      });
+    }
+    
+    const authenticatedSchoolId = Number(schoolIdFromToken);
+    if (isNaN(authenticatedSchoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in authentication token" });
+    }
+    
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid location ID" });
     }
 
-    // Use the storage system that the overview endpoint uses
+    // Fetch the location
     const location = await storage.getLocationById(id);
     if (!location) {
       return res.status(404).json({ message: "Location not found" });
+    }
+    
+    // SECURITY: Verify location belongs to authenticated user's school
+    if (location.schoolId !== authenticatedSchoolId) {
+      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to access location ${id} from school ${location.schoolId}`);
+      return res.status(403).json({ 
+        message: "Access denied - this location belongs to a different school" 
+      });
     }
 
     res.json(location);
   } catch (error) {
     console.error("Error fetching location:", error);
     res.status(500).json({ message: "Failed to fetch location" });
-  }
-});
-
-// Get accessible locations for a user
-router.get("/accessible", async (req, res) => {
-  try {
-    const userId = parseInt(req.query.userId as string);
-    if (isNaN(userId)) {
-      return res.status(400).json({ message: "Valid user ID required" });
-    }
-
-    // Get locations the user has access to from database
-    const accessibleLocations = await storage.getUserAccessibleLocations(userId);
-    res.json(accessibleLocations);
-  } catch (error) {
-    console.error("Error fetching accessible locations:", error);
-    res.status(500).json({ message: "Failed to fetch accessible locations" });
   }
 });
 
@@ -134,19 +225,50 @@ router.post("/", async (req: any, res) => {
 });
 
 // Update a location
-router.put("/:id", async (req, res) => {
+router.put("/:id", async (req: any, res) => {
   try {
+    // SECURITY: Verify authenticated user's school
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    
+    if (!schoolIdFromToken) {
+      return res.status(401).json({ 
+        message: "Authentication required - school ID not found in token" 
+      });
+    }
+    
+    const authenticatedSchoolId = Number(schoolIdFromToken);
+    if (isNaN(authenticatedSchoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in authentication token" });
+    }
+    
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid location ID" });
     }
 
-    const validatedData = insertLocationSchema.partial().parse(req.body);
-    const location = await storage.updateLocation(id, validatedData);
-
-    if (!location) {
+    // Fetch existing location to verify ownership
+    const existingLocation = await storage.getLocationById(id);
+    if (!existingLocation) {
       return res.status(404).json({ message: "Location not found" });
     }
+    
+    // SECURITY: Verify location belongs to authenticated user's school
+    if (existingLocation.schoolId !== authenticatedSchoolId) {
+      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to update location ${id} from school ${existingLocation.schoolId}`);
+      return res.status(403).json({ 
+        message: "Access denied - this location belongs to a different school" 
+      });
+    }
+
+    const validatedData = insertLocationSchema.partial().parse(req.body);
+    
+    // SECURITY: Ensure schoolId cannot be changed via update
+    const updateData = {
+      ...validatedData,
+      schoolId: authenticatedSchoolId  // Enforce authenticated school
+    };
+    
+    const location = await storage.updateLocation(id, updateData);
 
     res.json(location);
   } catch (error) {
@@ -162,14 +284,42 @@ router.put("/:id", async (req, res) => {
 });
 
 // Delete a location
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", async (req: any, res) => {
   try {
+    // SECURITY: Verify authenticated user's school
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    
+    if (!schoolIdFromToken) {
+      return res.status(401).json({ 
+        message: "Authentication required - school ID not found in token" 
+      });
+    }
+    
+    const authenticatedSchoolId = Number(schoolIdFromToken);
+    if (isNaN(authenticatedSchoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in authentication token" });
+    }
+    
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid location ID" });
     }
 
-    // Use the storage system that the overview endpoint uses
+    // Fetch existing location to verify ownership
+    const existingLocation = await storage.getLocationById(id);
+    if (!existingLocation) {
+      return res.status(404).json({ message: "Location not found" });
+    }
+    
+    // SECURITY: Verify location belongs to authenticated user's school
+    if (existingLocation.schoolId !== authenticatedSchoolId) {
+      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to delete location ${id} from school ${existingLocation.schoolId}`);
+      return res.status(403).json({ 
+        message: "Access denied - this location belongs to a different school" 
+      });
+    }
+
+    // Delete the location
     await storage.deleteLocation(id);
 
     res.json({ message: "Location deleted successfully" });
@@ -180,9 +330,50 @@ router.delete("/:id", async (req, res) => {
 });
 
 // Assign user access to a location
-router.post("/access", async (req, res) => {
+router.post("/access", async (req: any, res) => {
   try {
+    // SECURITY: Verify authenticated user's school
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    
+    if (!schoolIdFromToken) {
+      return res.status(401).json({ 
+        message: "Authentication required - school ID not found in token" 
+      });
+    }
+    
+    const authenticatedSchoolId = Number(schoolIdFromToken);
+    if (isNaN(authenticatedSchoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in authentication token" });
+    }
+    
     const validatedData = insertUserLocationSchema.parse(req.body);
+    
+    // SECURITY: Verify location belongs to authenticated user's school
+    const location = await storage.getLocationById(validatedData.locationId);
+    if (!location) {
+      return res.status(404).json({ message: "Location not found" });
+    }
+    
+    if (location.schoolId !== authenticatedSchoolId) {
+      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to assign access to location ${validatedData.locationId} from school ${location.schoolId}`);
+      return res.status(403).json({ 
+        message: "Access denied - this location belongs to a different school" 
+      });
+    }
+    
+    // SECURITY: Verify user belongs to authenticated user's school
+    const user = await storage.getUser(validatedData.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    if (user.schoolId !== authenticatedSchoolId) {
+      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to assign access for user ${validatedData.userId} from school ${user.schoolId}`);
+      return res.status(403).json({ 
+        message: "Access denied - this user belongs to a different school" 
+      });
+    }
+    
     const userLocation = await storage.createUserLocation(validatedData);
     
     res.status(201).json(userLocation);
@@ -199,13 +390,53 @@ router.post("/access", async (req, res) => {
 });
 
 // Remove user access from a location
-router.delete("/access/:userId/:locationId", async (req, res) => {
+router.delete("/access/:userId/:locationId", async (req: any, res) => {
   try {
+    // SECURITY: Verify authenticated user's school
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    
+    if (!schoolIdFromToken) {
+      return res.status(401).json({ 
+        message: "Authentication required - school ID not found in token" 
+      });
+    }
+    
+    const authenticatedSchoolId = Number(schoolIdFromToken);
+    if (isNaN(authenticatedSchoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in authentication token" });
+    }
+    
     const userId = parseInt(req.params.userId);
     const locationId = parseInt(req.params.locationId);
     
     if (isNaN(userId) || isNaN(locationId)) {
       return res.status(400).json({ message: "Invalid user ID or location ID" });
+    }
+
+    // SECURITY: Verify location belongs to authenticated user's school
+    const location = await storage.getLocationById(locationId);
+    if (!location) {
+      return res.status(404).json({ message: "Location not found" });
+    }
+    
+    if (location.schoolId !== authenticatedSchoolId) {
+      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to remove access to location ${locationId} from school ${location.schoolId}`);
+      return res.status(403).json({ 
+        message: "Access denied - this location belongs to a different school" 
+      });
+    }
+    
+    // SECURITY: Verify user belongs to authenticated user's school
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    if (user.schoolId !== authenticatedSchoolId) {
+      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to remove access for user ${userId} from school ${user.schoolId}`);
+      return res.status(403).json({ 
+        message: "Access denied - this user belongs to a different school" 
+      });
     }
 
     await storage.deleteUserLocation(userId, locationId);
