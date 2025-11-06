@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import { storage } from '../storage';
+import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
+
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // GET user by email (check if user exists)
 router.get('/users/email/:email', async (req, res) => {
@@ -108,6 +113,74 @@ router.post('/users/create-from-enrollments', async (req, res) => {
   } catch (error) {
     console.error('Error creating user from enrollments:', error);
     res.status(500).json({ message: 'Failed to create user' });
+  }
+});
+
+// POST sync Supabase role with database role
+router.post('/users/sync-supabase-role', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+    
+    console.log(`🔄 Admin syncing Supabase role for: ${email}`);
+    
+    // Get user from database
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found in database' });
+    }
+    
+    console.log(`📊 Database role for ${email}: ${user.role}`);
+    
+    // Get Supabase user
+    const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('Error listing Supabase users:', listError);
+      return res.status(500).json({ message: 'Failed to list Supabase users' });
+    }
+    
+    const supabaseUser = supabaseUsers.users.find((u: any) => u.email === email);
+    
+    if (!supabaseUser) {
+      return res.status(404).json({ message: 'User not found in Supabase' });
+    }
+    
+    console.log(`🔍 Current Supabase role for ${email}: ${supabaseUser.user_metadata?.role || 'none'}`);
+    
+    // Update Supabase user_metadata with database role
+    const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      supabaseUser.id,
+      {
+        user_metadata: {
+          ...supabaseUser.user_metadata,
+          role: user.role,
+          school_id: user.schoolId
+        }
+      }
+    );
+    
+    if (updateError) {
+      console.error('Error updating Supabase user:', updateError);
+      return res.status(500).json({ message: 'Failed to update Supabase user' });
+    }
+    
+    console.log(`✅ Successfully synced Supabase role for ${email}: ${user.role}`);
+    
+    res.json({
+      message: 'Supabase role synced successfully',
+      email: email,
+      databaseRole: user.role,
+      previousSupabaseRole: supabaseUser.user_metadata?.role,
+      newSupabaseRole: user.role,
+      note: 'User must log out and log back in for changes to take effect'
+    });
+  } catch (error) {
+    console.error('Error syncing Supabase role:', error);
+    res.status(500).json({ message: 'Failed to sync Supabase role' });
   }
 });
 
