@@ -120,16 +120,17 @@ export default function StaffEditPage() {
     mutationFn: async (data: StaffMember) => {
       return await apiRequest("PUT", `/api/school-admin/staff/${id}`, data);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Success",
         description: "Staff member updated successfully",
       });
-      // Force complete cache refresh
-      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff', id] });
-      // Small delay to ensure navigation happens after cache invalidation
-      setTimeout(() => navigate('/schools/staff'), 100);
+      // Force cache refresh and wait for completion
+      await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/school-admin/staff'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff', id] });
+      // Navigate after cache is refreshed
+      navigate('/schools/staff');
     },
     onError: (error: any) => {
       toast({
@@ -145,12 +146,15 @@ export default function StaffEditPage() {
     mutationFn: async () => {
       return await apiRequest("DELETE", `/api/school-admin/staff/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Success",
         description: "Staff member removed successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+      // Force cache refresh and wait for completion
+      await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/school-admin/staff'] });
+      // Navigate after cache is refreshed
       navigate('/schools/staff');
     },
     onError: (error: any) => {
