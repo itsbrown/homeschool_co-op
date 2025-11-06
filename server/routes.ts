@@ -2197,8 +2197,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User settings endpoints
   app.get("/api/users/profile", jwtCheck, async (req: any, res) => {
     try {
+      console.log('🔍 /api/users/profile - Authorization header:', req.headers.authorization ? 'PRESENT' : 'MISSING');
+      console.log('🔍 /api/users/profile - req.user:', req.user);
+      console.log('🔍 /api/users/profile - req.auth:', req.auth);
+      
       const user = req.user;
       if (!user || !user.id) {
+        console.log('❌ /api/users/profile - No user or user.id:', { hasUser: !!user, hasId: !!user?.id });
         return res.status(401).json({ message: "User not authenticated" });
       }
 
