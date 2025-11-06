@@ -33,11 +33,16 @@ export const supabaseAuth = async (
   try {
     const authHeader = req.headers.authorization;
     
+    console.log('🔐 supabaseAuth middleware - Path:', req.path);
+    console.log('🔐 supabaseAuth middleware - Authorization header:', authHeader ? 'PRESENT' : 'MISSING');
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ supabaseAuth - Rejecting: Missing or invalid authorization header');
       return res.status(401).json({ error: 'Missing or invalid authorization header' });
     }
 
     const token = authHeader.substring(7);
+    console.log('🔐 supabaseAuth - Token extracted, length:', token.length);
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
