@@ -79,7 +79,59 @@ Before marking any task complete, verify:
 - **ALWAYS** plan comprehensive fixes that address all related issues
 - **NEVER** create new problems while fixing old ones
 
+### 11. API REQUEST CONSISTENCY
+- **ALWAYS** use `apiRequest` helper from `@lib/queryClient` instead of manual `fetch()` calls
+- **ALWAYS** follow correct `apiRequest` signature: `apiRequest(method, url, body?, options?)`
+  - ✅ CORRECT: `apiRequest('POST', '/api/locations', locationData)`
+  - ❌ WRONG: `apiRequest('/api/locations', { method: 'POST', body: ... })`
+- **NEVER** mix manual fetch() with apiRequest - use one pattern consistently
+- **ALWAYS** include Authorization headers in ALL API calls (apiRequest handles this automatically)
+- **ALWAYS** check function signatures before calling helper functions
+
+### 12. TYPE CONVERSION FOR UI COMPONENTS
+- **ALWAYS** convert numeric database fields to strings before passing to Input components
+- **ALWAYS** use `String()` wrapper for potentially numeric values (zipCode, phoneNumber, capacity)
+- **NEVER** assume database types match UI component prop types
+- Example: `String(loc.zipCode)` instead of passing `loc.zipCode` directly
+
 ## Recent Fixes and Updates
+
+### November 6, 2025 - Location Management Page Fix
+**Problem**: "url.startsWith is not a function" error when creating/editing/deleting locations.
+
+**Root Cause**: Incorrect usage of `apiRequest` helper function. The function signature is `apiRequest(method, url, body?, options?)` but code was calling it with wrong parameter order.
+
+**Solution**: 
+1. Fixed all location mutations to use correct apiRequest signature:
+   - Create: `apiRequest('POST', '/api/locations', locationData)`
+   - Update: `apiRequest('PUT', '/api/locations/${id}', locationData)`
+   - Delete: `apiRequest('DELETE', '/api/locations/${id}')`
+2. Removed manual object construction with `{ method: 'POST', body: ... }`
+
+**Status**: 
+- ✅ Location creation working
+- ✅ Location editing working
+- ✅ Location deletion working
+
+**Lesson Learned**: Always verify helper function signatures before use. Document all helper function usage patterns in guardrails.
+
+### November 6, 2025 - Systematic Authorization Header Fixes
+**Problem**: Multiple 401 errors across the application due to missing Authorization headers in manual fetch() calls.
+
+**Root Cause**: ~64 files using manual `fetch()` calls without Authorization headers. Only apiRequest helper automatically includes auth headers.
+
+**Solution**: 
+1. Systematically fixed 18+ fetch() calls across 8 files to include Authorization headers using `localStorage.getItem('supabase_token')`
+2. Files fixed:
+   - FileUploadModal.tsx, KnowledgeBase.tsx, RoleSelection.tsx
+   - EducatorDailyFlowsPage.tsx, DailyFlowManagementPage.tsx
+   - StudentDetailPage.tsx, SchoolClassDetailsPage.tsx, EducatorDashboard.tsx
+
+**Status**: 
+- ✅ 18 fetch() calls fixed with proper auth headers
+- ⚠️ ~46 files still have manual fetch() calls requiring fixes
+
+**Lesson Learned**: Use `apiRequest` helper consistently to avoid manual auth header management. Avoid mixing fetch() and apiRequest patterns.
 
 ### November 6, 2025 - Parent Enrollments API Fix
 **Problem**: Parent dashboard showing "No active enrollments" and 401 errors when loading enrollments.
