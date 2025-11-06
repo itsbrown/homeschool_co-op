@@ -116,6 +116,97 @@ router.post('/users/create-from-enrollments', async (req, res) => {
   }
 });
 
+// POST update user role in database and sync with Supabase
+router.post('/users/update-role', async (req, res) => {
+  try {
+    const { email, role } = req.body;
+    
+    if (!email || !role) {
+      return res.status(400).json({ message: 'Email and role are required' });
+    }
+    
+    console.log(`🔧 Admin updating role for ${email} to: ${role}`);
+    
+    // Get user from database
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found in database' });
+    }
+    
+    console.log(`📊 Current database role for ${email}: ${user.role}`);
+    
+    // Update user role in database
+    const updatedUser = await storage.updateUser(user.id, { role });
+    
+    if (!updatedUser) {
+      return res.status(500).json({ message: 'Failed to update user role in database' });
+    }
+    
+    console.log(`✅ Updated database role for ${email}: ${role}`);
+    
+    // Now sync with Supabase
+    const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('Error listing Supabase users:', listError);
+      return res.json({
+        message: 'Database role updated, but failed to sync with Supabase',
+        email: email,
+        databaseRole: role,
+        supabaseSync: 'failed'
+      });
+    }
+    
+    const supabaseUser = supabaseUsers.users.find((u: any) => u.email === email);
+    
+    if (!supabaseUser) {
+      return res.json({
+        message: 'Database role updated, but user not found in Supabase',
+        email: email,
+        databaseRole: role,
+        supabaseSync: 'user_not_found'
+      });
+    }
+    
+    console.log(`🔍 Current Supabase role for ${email}: ${supabaseUser.user_metadata?.role || 'none'}`);
+    
+    // Update Supabase user_metadata
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      supabaseUser.id,
+      {
+        user_metadata: {
+          ...supabaseUser.user_metadata,
+          role: role,
+          school_id: user.schoolId
+        }
+      }
+    );
+    
+    if (updateError) {
+      console.error('Error updating Supabase user:', updateError);
+      return res.json({
+        message: 'Database role updated, but failed to update Supabase metadata',
+        email: email,
+        databaseRole: role,
+        supabaseSync: 'failed'
+      });
+    }
+    
+    console.log(`✅ Successfully synced Supabase role for ${email}: ${role}`);
+    
+    res.json({
+      message: 'User role updated successfully in both database and Supabase',
+      email: email,
+      previousRole: user.role,
+      newRole: role,
+      note: 'User must log out and log back in for changes to take effect'
+    });
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ message: 'Failed to update user role' });
+  }
+});
+
 // POST sync Supabase role with database role
 router.post('/users/sync-supabase-role', async (req, res) => {
   try {
