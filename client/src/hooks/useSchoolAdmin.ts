@@ -20,16 +20,8 @@ interface UserProfile {
  * If the user doesn't have a schoolId, components should show an appropriate error.
  */
 export function useSchoolAdmin() {
-  const { data: userProfile, isLoading, error } = useQuery<UserProfile>({
+  const { data: userProfile, isLoading, error} = useQuery<UserProfile>({
     queryKey: ['/api/users/profile'],
-    queryFn: () => fetch('/api/users/profile', {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-      }
-    }).then(res => {
-      if (!res.ok) throw new Error('Failed to fetch profile')
-      return res.json()
-    }),
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     retry: 1
   });

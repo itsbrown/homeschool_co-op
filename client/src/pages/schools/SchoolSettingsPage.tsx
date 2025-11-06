@@ -84,7 +84,7 @@ export default function SchoolSettingsPage() {
   // Fetch user profile data
   const { data: userProfile } = useQuery<UserProfile>({
     queryKey: ['/api/users/profile'],
-    enabled: !!user?.email,
+    enabled: !!user?.email
   });
 
   // Initialize form with user data
@@ -105,19 +105,10 @@ export default function SchoolSettingsPage() {
       phoneNumber: string;
       username: string;
     }) => {
-      const response = await fetch('/api/users/profile', {
+      return await apiRequest('/api/users/profile', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(profileData),
+        body: JSON.stringify(profileData)
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
-      }
-      
-      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -137,19 +128,10 @@ export default function SchoolSettingsPage() {
   // Update notifications mutation
   const updateNotificationsMutation = useMutation({
     mutationFn: async (notificationSettings: NotificationSettings) => {
-      const response = await fetch('/api/users/notifications', {
+      return await apiRequest('/api/users/notifications', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(notificationSettings),
+        body: JSON.stringify(notificationSettings)
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update notifications');
-      }
-      
-      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -172,19 +154,10 @@ export default function SchoolSettingsPage() {
       currentPassword: string;
       newPassword: string;
     }) => {
-      const response = await fetch('/api/users/change-password', {
+      return await apiRequest('/api/users/change-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(passwordData),
+        body: JSON.stringify(passwordData)
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to change password');
-      }
-      
-      return response.json();
     },
     onSuccess: () => {
       toast({
