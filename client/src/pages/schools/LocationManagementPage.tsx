@@ -114,8 +114,11 @@ export default function LocationManagementPage() {
   })
 
   const handleCreateLocation = (e: React.FormEvent<HTMLFormElement>) => {
+    console.log('🎯 handleCreateLocation called!')
     e.preventDefault()
+    console.log('🎯 preventDefault called')
     const formData = new FormData(e.currentTarget)
+    console.log('🎯 FormData created')
     
     if (!hasSchool || !schoolId) {
       toast({
