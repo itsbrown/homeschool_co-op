@@ -2195,10 +2195,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User settings endpoints
-  app.get("/api/users/profile", jwtCheck, async (req, res) => {
+  app.get("/api/users/profile", jwtCheck, async (req: any, res) => {
     try {
-      const userId = req.auth?.payload?.sub;
-      if (!userId) {
+      const user = req.user;
+      if (!user || !user.id) {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
@@ -2206,15 +2206,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const schoolIdFromToken = req.auth?.payload?.school_id;
       const schoolId = schoolIdFromToken ? Number(schoolIdFromToken) : null;
 
-      console.log('👤 Profile request - userId:', userId, 'schoolId:', schoolId);
+      console.log('👤 Profile request - userId:', user.id, 'schoolId:', schoolId);
 
       // Return basic user profile information including schoolId
       res.json({
-        id: userId,
-        email: req.auth?.payload?.email || '',
+        id: user.id,
+        email: user.email || '',
         firstName: req.auth?.payload?.given_name || '',
         lastName: req.auth?.payload?.family_name || '',
-        username: req.auth?.payload?.email || '',
+        username: user.email || '',
         phoneNumber: req.auth?.payload?.phone_number || '',
         role: req.auth?.payload?.role || 'staff',
         schoolId: schoolId && !isNaN(schoolId) ? schoolId : null
@@ -2225,10 +2225,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/users/profile", jwtCheck, async (req, res) => {
+  app.patch("/api/users/profile", jwtCheck, async (req: any, res) => {
     try {
-      const userId = req.auth?.payload?.sub;
-      if (!userId) {
+      const user = req.user;
+      if (!user || !user.id) {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
@@ -2251,10 +2251,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/notifications", jwtCheck, async (req, res) => {
+  app.get("/api/users/notifications", jwtCheck, async (req: any, res) => {
     try {
-      const userId = req.auth?.payload?.sub;
-      if (!userId) {
+      const user = req.user;
+      if (!user || !user.id) {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
