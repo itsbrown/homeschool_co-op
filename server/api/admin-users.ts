@@ -85,6 +85,7 @@ router.post('/users/create-from-enrollments', async (req, res) => {
     const newUser = await storage.createUser({
       email: email,
       name: name,
+      username: namePart,
       role: 'parent',
       schoolId: schoolId,
       password: '', // No password needed for Supabase OAuth users
