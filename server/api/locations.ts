@@ -65,6 +65,15 @@ router.get("/accessible", async (req, res) => {
 // Create a new location
 router.post("/", async (req: any, res) => {
   try {
+    console.log('📍 Location creation request received');
+    console.log('📍 Headers:', {
+      authorization: req.headers.authorization ? 'Present' : 'Missing',
+      contentType: req.headers['content-type']
+    });
+    console.log('📍 req.auth exists:', !!req.auth);
+    console.log('📍 req.user exists:', !!req.user);
+    console.log('📍 Full req.auth:', JSON.stringify(req.auth, null, 2));
+    
     // Get school_id from JWT token metadata (Auth0 or Supabase)
     const schoolIdFromToken = req.auth?.payload?.school_id;
     console.log('🔐 Location creation - JWT payload:', {
@@ -75,6 +84,7 @@ router.post("/", async (req: any, res) => {
     
     if (!schoolIdFromToken) {
       console.error('❌ No school_id found in JWT token');
+      console.error('❌ Full payload:', JSON.stringify(req.auth?.payload, null, 2));
       return res.status(403).json({ 
         message: "Unable to determine your school. Please contact support." 
       });
