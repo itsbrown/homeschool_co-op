@@ -84,40 +84,17 @@ export default function SchoolClassCreationPage() {
   // Fetch class data if in edit mode using direct endpoint
   const { data: classData, isLoading: isLoadingClass } = useQuery({
     queryKey: ["/api/class-details", classId],
-    queryFn: async () => {
-      const response = await fetch(`/api/class-details/${classId}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch class: ${response.status}`);
-      }
-      return response.json();
-    },
     enabled: !!classId, // Only run if classId exists
   });
 
   // Fetch available staff members for instructor selection
   const { data: staffMembers = [], isLoading: staffLoading } = useQuery({
-    queryKey: ["/school-admin/staff"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/school-admin/staff");
-      const data = await response.json();
-      return data;
-    },
+    queryKey: ["/school-admin/staff"]
   });
 
   // Fetch locations for the school
   const { data: locationData = [] } = useQuery({
-    queryKey: ["/api/locations"],
-    queryFn: async () => {
-      const response = await fetch('/api/locations', {
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        console.log('Failed to fetch locations');
-        return [{ id: 1, name: 'Brighton' }]; // Fallback
-      }
-      const data = await response.json();
-      return data;
-    },
+    queryKey: ["/api/locations"]
   });
 
   // Update locations state when data is fetched
@@ -145,7 +122,7 @@ export default function SchoolClassCreationPage() {
       let startTime = classData.startTime || "";
       let endTime = classData.endTime || "";
       
-      if (classData.schedule && !startTime && !endTime) {
+      if (classData.schedule && typeof classData.schedule === 'string' && !startTime && !endTime) {
         // Try to extract time from schedule string
         const timePattern = /(\d{1,2}(?::\d{2})?)([ap]m)?[-–](\d{1,2}(?::\d{2})?)([ap]m)/i;
         const match = classData.schedule.match(timePattern);
