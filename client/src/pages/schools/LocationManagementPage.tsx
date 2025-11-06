@@ -56,8 +56,24 @@ export default function LocationManagementPage() {
 
   // Fetch location overview data
   const { data: locationData, isLoading: isLoadingLocations, error: locationsError } = useQuery({
-    queryKey: ['/api/school-admin/locations/overview']
+    queryKey: ['/api/school-admin/locations/overview'],
+    retry: false
   })
+
+  // Log location data and errors for debugging
+  useEffect(() => {
+    if (locationsError) {
+      console.error('❌ Location overview query error:', locationsError)
+      console.error('❌ Error details:', {
+        message: (locationsError as any)?.message,
+        stack: (locationsError as any)?.stack
+      })
+    }
+    if (locationData) {
+      console.log('✅ Location overview data received:', locationData)
+      console.log('✅ Raw locations:', (locationData as any)?.locations)
+    }
+  }, [locationData, locationsError])
 
   // Fetch students for selected location
   const { data: studentsData, isLoading: isLoadingStudents } = useQuery({
@@ -292,7 +308,39 @@ export default function LocationManagementPage() {
     )
   }
 
-  const locations: LocationOverview[] = locationData?.locations || []
+  let locations: LocationOverview[] = []
+  try {
+    console.log('📊 Processing location data:', locationData)
+    locations = locationData?.locations || []
+    console.log('✅ Extracted locations:', locations)
+    
+    // Ensure all string fields are actually strings
+    locations = locations.map((loc, index) => {
+      try {
+        console.log(`🔍 Processing location ${index}:`, loc)
+        return {
+          ...loc,
+          zipCode: loc.zipCode ? String(loc.zipCode) : '',
+          phoneNumber: loc.phoneNumber ? String(loc.phoneNumber) : '',
+          address: loc.address ? String(loc.address) : '',
+          name: loc.name ? String(loc.name) : '',
+          status: loc.status ? String(loc.status) : 'Active'
+        }
+      } catch (err) {
+        console.error(`❌ Error processing location ${index}:`, err, loc)
+        throw err
+      }
+    })
+    console.log('✅ Normalized locations:', locations)
+  } catch (error) {
+    console.error('❌ Error processing locations:', error)
+    toast({
+      title: "Error",
+      description: `Failed to process location data: ${(error as Error).message}`,
+      variant: "destructive"
+    })
+  }
+  
   const students: Student[] = studentsData?.students || []
 
   return (
