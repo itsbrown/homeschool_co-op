@@ -89,10 +89,7 @@ export default function LocationManagementPage() {
   // Create location mutation
   const createLocationMutation = useMutation({
     mutationFn: (locationData: any) => 
-      apiRequest('/api/locations', {
-        method: 'POST',
-        body: JSON.stringify(locationData)
-      }),
+      apiRequest('POST', '/api/locations', locationData),
     onSuccess: () => {
       // Force refresh multiple related queries
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
@@ -166,9 +163,7 @@ export default function LocationManagementPage() {
   // Delete location mutation
   const deleteLocationMutation = useMutation({
     mutationFn: (locationId: number) => 
-      apiRequest(`/api/locations/${locationId}`, {
-        method: 'DELETE'
-      }),
+      apiRequest('DELETE', `/api/locations/${locationId}`),
     onSuccess: () => {
       // Force refresh multiple related queries  
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
@@ -232,10 +227,7 @@ export default function LocationManagementPage() {
   // Update location mutation
   const updateLocationMutation = useMutation({
     mutationFn: ({ id, locationData }: { id: number; locationData: any }) => 
-      apiRequest(`/api/locations/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(locationData)
-      }),
+      apiRequest('PUT', `/api/locations/${id}`, locationData),
     onSuccess: () => {
       // Force refresh multiple related queries
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
