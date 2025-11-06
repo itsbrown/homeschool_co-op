@@ -899,10 +899,12 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
   console.log("📧 Staff invitation request received:", req.body);
 
   try {
+    console.log("🔍 Step 1: Extracting schoolId from auth");
     const schoolId = req.auth?.payload?.school_id;
     if (!schoolId) {
       return res.status(400).json({ message: "School ID not found in user metadata" });
     }
+    console.log("✅ Step 1 complete: schoolId =", schoolId);
 
     const { email, firstName, lastName, role, locationId, classId, message } = req.body;
 
@@ -913,7 +915,7 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
 
     const department = role; // Use role as department for compatibility
 
-    // Check if staff member already exists for this school
+    console.log("🔍 Step 2: Checking for existing staff");
     const existingStaff = await storage.getSchoolStaffBySchoolId(schoolId);
     const staffEmails = await Promise.all(
       existingStaff.map(async (staff) => {
@@ -921,13 +923,14 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
         return user?.email;
       })
     );
+    console.log("✅ Step 2 complete: Found", existingStaff.length, "existing staff");
     
     if (staffEmails.includes(email)) {
       console.log("❌ Staff member already exists:", email);
       return res.status(400).json({ message: "Staff member with this email already exists" });
     }
 
-    // Check if user exists, if not create one
+    console.log("🔍 Step 3: Checking if user exists");
     const existingUsers = await storage.getAllUsers();
     let user = existingUsers.find(u => u.email === email);
     
@@ -946,8 +949,9 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
     if (!user) {
       throw new Error("Failed to create user");
     }
+    console.log("✅ Step 3 complete: User ID =", user.id);
 
-    // Create school_staff record
+    console.log("🔍 Step 4: Creating school_staff record");
     const staffRecord = await storage.createSchoolStaff({
       schoolId,
       userId: user.id,
@@ -963,30 +967,40 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
     if (!staffRecord) {
       throw new Error("Failed to create staff record");
     }
+    console.log("✅ Step 4 complete: Staff record ID =", staffRecord.id);
 
-    // Generate invitation token
+    console.log("🔍 Step 5: Generating invitation token");
     const invitationToken = generateInvitationToken();
+    console.log("✅ Step 5 complete: Token generated");
     
-    // Create role invitation record
+    console.log("🔍 Step 6: Creating role invitation record");
     const mappedRole = mapPositionToRole(role);
     const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
-    const roleInvitation = await storage.createRoleInvitation({
-      email,
-      role: userRole,
-      invitedBy: 1,
-      schoolId,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      isActive: true
-    });
+    
+    try {
+      const roleInvitation = await storage.createRoleInvitation({
+        email,
+        role: userRole,
+        invitedBy: 1,
+        schoolId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        isActive: true
+      });
+      console.log("✅ Step 6 complete: Role invitation created");
+    } catch (roleInviteError) {
+      console.error("❌ Error creating role invitation (non-critical):", roleInviteError);
+      // Continue even if role invitation fails - this is optional
+    }
+
+    console.log("🔍 Step 7: Transforming staff to frontend format");
+    const responseStaff = transformStaffToFrontend(staffRecord, user, []);
+    console.log("✅ Step 7 complete");
+    
+    console.log("🔍 Step 8: Sending invitation email");
+    const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message);
+    console.log("✅ Step 8 complete: Email sent =", emailSent);
 
     console.log("✅ Staff member invited successfully:", { id: staffRecord.id, email });
-
-    // Transform to frontend format
-    const responseStaff = transformStaffToFrontend(staffRecord, user, []);
-    
-    // Send invitation email with token
-    const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message);
-
     res.json({ 
       success: true, 
       message: emailSent ? "Staff member invited successfully and invitation email sent" : "Staff member invited successfully (email not sent)",
@@ -995,7 +1009,12 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
     });
   } catch (error) {
     console.error("❌ Error inviting staff member:", error);
-    res.status(500).json({ message: "Error inviting staff member", error: error instanceof Error ? error.message : 'Unknown error' });
+    console.error("❌ Error stack:", error instanceof Error ? error.stack : 'No stack trace');
+    res.status(500).json({ 
+      message: "Error inviting staff member", 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
   }
 });
 
