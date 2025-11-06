@@ -76,17 +76,6 @@ export default function StaffEditPage() {
   // Fetch staff member data
   const { data: staffMember, isLoading } = useQuery({
     queryKey: ['/api/school-admin/staff', id],
-    queryFn: async () => {
-      const response = await fetch(`/api/school-admin/staff/${id}`, {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch staff member');
-      }
-      
-      return await response.json();
-    },
     enabled: !!id,
   });
 
@@ -97,69 +86,23 @@ export default function StaffEditPage() {
 
   // Fetch all locations
   const { data: locations = [] } = useQuery({
-    queryKey: ['/api/locations'],
-    queryFn: async () => {
-      const response = await fetch('/api/locations', {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch locations');
-      }
-      
-      return await response.json();
-    },
+    queryKey: ['/api/locations']
   });
 
   // Fetch all classes for selection
   const { data: allClassesList = [] } = useQuery({
-    queryKey: ['/api/school-admin/classes-list'],
-    queryFn: async () => {
-      const response = await fetch('/api/school-admin/classes?limit=1000', {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch classes');
-      }
-      
-      const data = await response.json();
-      return data.items || data.classes || [];
-    },
+    queryKey: ['/api/school-admin/classes-list']
   });
 
   // Fetch assigned classes for this staff member
   const { data: assignedClasses = [], isLoading: classesLoading } = useQuery({
     queryKey: ['/api/school-admin/staff', id, 'classes'],
-    queryFn: async () => {
-      const response = await fetch(`/api/school-admin/staff/${id}/classes`, {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch assigned classes');
-      }
-      
-      return await response.json();
-    },
     enabled: !!id,
   });
 
   // Fetch all available classes for assignment
   const { data: allClasses = [] } = useQuery({
-    queryKey: ['/api/school-admin/classes'],
-    queryFn: async () => {
-      const response = await fetch('/api/school-admin/classes', {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch classes');
-      }
-      
-      const data = await response.json();
-      return data.items || [];
-    },
+    queryKey: ['/api/school-admin/classes']
   });
 
   // Update form when data is loaded
