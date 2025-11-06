@@ -102,11 +102,6 @@ export default function ParentDashboard() {
     enabled: !!user && !!session,
   });
 
-  // Fetch payment summary (keeping original since it works)
-  const { data: paymentData, isLoading: paymentLoading } = useQuery({
-    queryKey: ["/api/payments/summary"],
-  });
-
   // Handle syncing children accounts with parent email
   const handleSyncChildren = async () => {
     console.log('🔄 Starting sync process...');
@@ -237,8 +232,10 @@ export default function ParentDashboard() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{paymentData?.pending || 0}</div>
-                <p className="text-xs text-muted-foreground">Pending payments</p>
+                <div className="text-2xl font-bold">
+                  {enrollmentsData?.filter((e: any) => e.paymentStatus !== 'completed').length || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Unpaid enrollments</p>
               </CardContent>
             </Card>
           </div>
