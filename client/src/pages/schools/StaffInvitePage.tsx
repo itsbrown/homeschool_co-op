@@ -36,38 +36,18 @@ export default function StaffInvitePage() {
   // Fetch staff positions for dropdown with automatic updates
   const { data: staffPositions = [] } = useQuery({
     queryKey: ['/api/school-admin/staff-positions'],
-    queryFn: async () => {
-      const response = await fetch('/api/school-admin/staff-positions', {
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch staff positions');
-      }
-      return response.json();
-    },
-    retry: false,
-    refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
+    refetchInterval: 5000,
   });
 
   // Fetch all locations
   const { data: locations = [] } = useQuery({
     queryKey: ['/api/locations'],
-    queryFn: async () => {
-      const response = await fetch('/api/locations', {
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch locations');
-      }
-      return response.json();
-    },
-    retry: false,
-    refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
+    refetchInterval: 5000,
   });
 
   // Fetch all classes for selection
   const { data: allClassesList = [] } = useQuery({
-    queryKey: ['/api/school-admin/classes-list'],
+    queryKey: ['/api/school-admin/classes?limit=1000'],
     queryFn: async () => {
       const response = await fetch('/api/school-admin/classes?limit=1000', {
         credentials: 'include',

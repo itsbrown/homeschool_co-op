@@ -93,17 +93,6 @@ export default function StaffEditPage() {
   // Fetch staff positions
   const { data: staffPositions } = useQuery({
     queryKey: ['/api/school-admin/staff-positions'],
-    queryFn: async () => {
-      const response = await fetch('/api/school-admin/staff-positions', {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch staff positions');
-      }
-      
-      return await response.json();
-    },
   });
 
   // Fetch all locations

@@ -96,16 +96,6 @@ export default function StaffPositionsPage() {
   // Get staff positions from API
   const { data: positions, isLoading } = useQuery({
     queryKey: ['/api/school-admin/staff-positions'],
-    queryFn: async () => {
-      const response = await fetch('/api/school-admin/staff-positions', {
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch staff positions');
-      }
-      return response.json();
-    },
-    enabled: true,
   });
 
   // Form for adding new position
