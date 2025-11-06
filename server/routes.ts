@@ -22,6 +22,7 @@ import * as csvUploadApi from "./api/csv-upload";
 import aiPricingRouter from "./api/ai-pricing";
 import adminClassesRouter from "./api/admin-classes";
 import adminRouter from "./api/admin";
+import adminEnrollmentsRouter from "./api/admin-enrollments";
 import { backupService } from "./services/backupService";
 import classesRouter from "./api/classes";
 import activitiesRouter from "./api/activities";
@@ -1767,6 +1768,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/ai-insights", aiInsightsRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
+  app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management
   app.use("/api/activities", activitiesRouter);
   app.use("/api/migration", migrationRouter);
   app.use("/api/school-admin/marketing-links", marketingLinksRouter);
