@@ -49,7 +49,12 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const fetchUserRole = async (email: string): Promise<string> => {
     try {
       console.log(`🔍 Fetching role for user: ${email}`);
-      const response = await fetch(`/api/users/role/${encodeURIComponent(email)}`);
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/users/role/${encodeURIComponent(email)}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         console.log(`✅ Role fetched for ${email}:`, data.role);
