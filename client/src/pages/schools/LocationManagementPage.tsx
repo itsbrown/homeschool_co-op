@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { useSchoolAdmin } from '@/hooks/useSchoolAdmin'
 import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit, Power } from 'lucide-react'
+import { apiRequest } from '@/lib/queryClient'
 
 interface LocationOverview {
   id: number
@@ -55,49 +56,26 @@ export default function LocationManagementPage() {
 
   // Fetch location overview data
   const { data: locationData, isLoading: isLoadingLocations, error: locationsError } = useQuery({
-    queryKey: ['/api/school-admin/locations/overview'],
-    queryFn: () => fetch('/api/school-admin/locations/overview', {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-      }
-    }).then(res => res.json())
+    queryKey: ['/api/school-admin/locations/overview']
   })
 
   // Fetch students for selected location
   const { data: studentsData, isLoading: isLoadingStudents } = useQuery({
     queryKey: ['/api/school-admin/students/by-location', selectedLocationId],
-    queryFn: () => selectedLocationId ? 
-      fetch(`/api/school-admin/students/by-location/${selectedLocationId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-        }
-      }).then(res => res.json()) : null,
     enabled: !!selectedLocationId
   })
 
   // Fetch user location permissions
   const { data: permissionsData } = useQuery({
-    queryKey: ['/api/school-admin/user-locations/my-permissions'],
-    queryFn: () => fetch('/api/school-admin/user-locations/my-permissions', {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-      }
-    }).then(res => res.json())
+    queryKey: ['/api/school-admin/user-locations/my-permissions']
   })
 
   // Create location mutation
   const createLocationMutation = useMutation({
     mutationFn: (locationData: any) => 
-      fetch('/api/locations', {
+      apiRequest('/api/locations', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-        },
         body: JSON.stringify(locationData)
-      }).then(res => {
-        if (!res.ok) throw new Error('Failed to create location')
-        return res.json()
       }),
     onSuccess: () => {
       // Force refresh multiple related queries
@@ -153,14 +131,8 @@ export default function LocationManagementPage() {
   // Delete location mutation
   const deleteLocationMutation = useMutation({
     mutationFn: (locationId: number) => 
-      fetch(`/api/locations/${locationId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-        }
-      }).then(res => {
-        if (!res.ok) throw new Error('Failed to delete location')
-        return res.json()
+      apiRequest(`/api/locations/${locationId}`, {
+        method: 'DELETE'
       }),
     onSuccess: () => {
       // Force refresh multiple related queries  
@@ -190,16 +162,9 @@ export default function LocationManagementPage() {
   // Status toggle mutation
   const toggleStatusMutation = useMutation({
     mutationFn: ({ id, newStatus }: { id: number; newStatus: boolean }) => 
-      fetch(`/api/locations/${id}`, {
+      apiRequest(`/api/locations/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-        },
         body: JSON.stringify({ isActive: newStatus })
-      }).then(res => {
-        if (!res.ok) throw new Error('Failed to update location status')
-        return res.json()
       }),
     onSuccess: () => {
       // Force refresh multiple related queries
@@ -232,16 +197,9 @@ export default function LocationManagementPage() {
   // Update location mutation
   const updateLocationMutation = useMutation({
     mutationFn: ({ id, locationData }: { id: number; locationData: any }) => 
-      fetch(`/api/locations/${id}`, {
+      apiRequest(`/api/locations/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-        },
         body: JSON.stringify(locationData)
-      }).then(res => {
-        if (!res.ok) throw new Error('Failed to update location')
-        return res.json()
       }),
     onSuccess: () => {
       // Force refresh multiple related queries
@@ -267,12 +225,7 @@ export default function LocationManagementPage() {
   const handleEditLocation = async (location: LocationOverview) => {
     try {
       // Fetch complete location details for editing
-      const response = await fetch(`/api/locations/${location.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase_token') || ''}`
-        }
-      })
-      const fullLocationData = await response.json()
+      const fullLocationData = await apiRequest(`/api/locations/${location.id}`)
       setEditingLocation(fullLocationData)
       setIsEditDialogOpen(true)
     } catch (error) {
