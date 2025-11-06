@@ -154,11 +154,13 @@ export default function KnowledgeBasePage() {
       console.log("Starting download with direct fetch");
       
       // Use GET method for the download endpoint
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/knowledge-bases/${id}/download`, {
         method: "GET",
         credentials: 'include',
         headers: {
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
         }
       });
       
@@ -179,11 +181,13 @@ export default function KnowledgeBasePage() {
         title = data.title || `knowledge-base-${id}`;
       } else {
         // Fetch knowledge base details if no files in the response
+        const token = localStorage.getItem('supabase_token');
         const knowledgeBaseResponse = await fetch(`/api/knowledge-bases/${id}`, {
           method: "GET",
           credentials: 'include',
           headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` })
           }
         });
         

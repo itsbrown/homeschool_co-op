@@ -59,10 +59,15 @@ export default function EducatorDailyFlowsPage() {
       if (!classes.length) return [];
       
       // Get entries for all classes on the selected date
+      const token = localStorage.getItem('supabase_token');
       const allEntries = [];
       for (const cls of classes) {
         try {
-          const response = await fetch(`/api/daily-flows/entries?classId=${cls.id}&startDate=${selectedDate}&endDate=${selectedDate}`);
+          const response = await fetch(`/api/daily-flows/entries?classId=${cls.id}&startDate=${selectedDate}&endDate=${selectedDate}`, {
+            headers: {
+              ...(token && { Authorization: `Bearer ${token}` })
+            }
+          });
           if (response.ok) {
             const classEntries = await response.json();
             if (Array.isArray(classEntries)) {
@@ -87,9 +92,13 @@ export default function EducatorDailyFlowsPage() {
   // Mark entry as completed
   const completeMutation = useMutation({
     mutationFn: async ({ entryId, notes }: { entryId: number; notes?: string }) => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/daily-flows/entries/${entryId}/complete`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         body: JSON.stringify({ notes })
       });
       
@@ -118,9 +127,13 @@ export default function EducatorDailyFlowsPage() {
   // Update entry notes
   const updateNotesMutation = useMutation({
     mutationFn: async ({ entryId, notes }: { entryId: number; notes: string }) => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/daily-flows/entries/${entryId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         body: JSON.stringify({ notes })
       });
       

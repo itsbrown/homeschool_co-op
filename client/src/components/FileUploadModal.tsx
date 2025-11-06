@@ -139,8 +139,12 @@ export function FileUploadModal({
       const formData = new FormData();
       formData.append('files', item.file);
 
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/file-upload/knowledge-base', {
         method: 'POST',
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         body: formData,
       });
 

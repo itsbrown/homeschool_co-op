@@ -53,10 +53,12 @@ export default function RoleSelection() {
 
     try {
       // Update user role via API
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/auth/update-role', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
         },
         body: JSON.stringify({ role: selectedRole }),
       });
