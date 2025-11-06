@@ -140,7 +140,16 @@ export const getQueryFn: <T>(options: {
     const token = localStorage.getItem('supabase_token');
     const activeRole = localStorage.getItem('activeRole');
     
-    const res = await fetch(queryKey[0] as string, {
+    // Handle array query keys properly by joining them into a URL
+    // e.g., ['/api/staff', 5] becomes '/api/staff/5'
+    let url: string;
+    if (Array.isArray(queryKey) && queryKey.length > 1) {
+      url = queryKey.join('/');
+    } else {
+      url = queryKey[0] as string;
+    }
+    
+    const res = await fetch(url, {
       credentials: "include",
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
