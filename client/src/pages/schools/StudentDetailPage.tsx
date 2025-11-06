@@ -40,7 +40,12 @@ export default function StudentDetailPage() {
   const { data: student, isLoading, error } = useQuery({
     queryKey: [`/api/schools/students/${id}`],
     queryFn: async () => {
-      const response = await fetch(`/api/schools/students/${id}`);
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/schools/students/${id}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        }
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

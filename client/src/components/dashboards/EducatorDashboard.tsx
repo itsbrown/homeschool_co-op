@@ -53,7 +53,11 @@ export default function EducatorDashboard() {
   const { data: assignedClasses, isLoading: classesLoading } = useQuery({
     queryKey: ["/api/educator/classes", user?.email],
     queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/educator/classes?email=${user?.email}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         credentials: "include"
       });
       if (!response.ok) throw new Error("Failed to fetch classes");
@@ -66,7 +70,11 @@ export default function EducatorDashboard() {
   const { data: studentsData, isLoading: studentsLoading } = useQuery({
     queryKey: ["/api/educator/students", user?.email],
     queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/educator/students?email=${user?.email}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         credentials: "include"
       });
       if (!response.ok) throw new Error("Failed to fetch students");

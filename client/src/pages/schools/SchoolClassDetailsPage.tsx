@@ -32,7 +32,11 @@ export default function SchoolClassDetailsPage() {
   const { data: classData, isLoading: classLoading } = useQuery({
     queryKey: ["/api/class-details", classId],
     queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/class-details/${classId}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         credentials: "include"
       });
       if (!response.ok) throw new Error("Failed to fetch class");
@@ -45,7 +49,11 @@ export default function SchoolClassDetailsPage() {
   const { data: studentsData, isLoading: studentsLoading } = useQuery({
     queryKey: ["/api/school-admin/class-students", classId],
     queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/school-admin/class-students/${classId}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         credentials: "include"
       });
       if (!response.ok) throw new Error("Failed to fetch students");

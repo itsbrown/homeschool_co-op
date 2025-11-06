@@ -45,7 +45,11 @@ export default function DailyFlowManagementPage() {
 
   const fetchClasses = async () => {
     try {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/school-admin/classes', {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         credentials: 'include'
       });
       const data = await response.json();
@@ -57,7 +61,11 @@ export default function DailyFlowManagementPage() {
 
   const fetchTemplates = async () => {
     try {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/daily-flows/templates', {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         credentials: 'include'
       });
       const data = await response.json();
@@ -71,7 +79,11 @@ export default function DailyFlowManagementPage() {
     if (!selectedClass) return;
 
     try {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/daily-flows/entries?classId=${selectedClass.id}&startDate=${selectedDate}&endDate=${selectedDate}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         credentials: 'include'
       });
       const data = await response.json();
@@ -85,10 +97,12 @@ export default function DailyFlowManagementPage() {
     if (!selectedClass) return;
 
     try {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/daily-flows/entries', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -121,10 +135,12 @@ export default function DailyFlowManagementPage() {
 
   const handleCompleteEntry = async (entryId: number, notes?: string) => {
     try {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/daily-flows/entries/${entryId}/complete`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
         },
         credentials: 'include',
         body: JSON.stringify({ notes })
@@ -140,10 +156,12 @@ export default function DailyFlowManagementPage() {
 
   const handleUpdateEntry = async (entryId: number, updateData: Partial<DailyFlowEntry>) => {
     try {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/daily-flows/entries/${entryId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
         },
         credentials: 'include',
         body: JSON.stringify(updateData)
