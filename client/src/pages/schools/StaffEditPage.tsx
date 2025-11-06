@@ -120,16 +120,21 @@ export default function StaffEditPage() {
     mutationFn: async (data: StaffMember) => {
       return await apiRequest("PUT", `/api/school-admin/staff/${id}`, data);
     },
-    onSuccess: async () => {
+    onSuccess: (updatedStaff) => {
       toast({
         title: "Success",
         description: "Staff member updated successfully",
       });
-      // Force cache refresh and wait for completion
-      await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
-      await queryClient.refetchQueries({ queryKey: ['/api/school-admin/staff'] });
-      await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff', id] });
-      // Navigate after cache is refreshed
+      // Synchronously update the staff list cache
+      queryClient.setQueryData(['/api/school-admin/staff'], (oldData: any) => {
+        if (!Array.isArray(oldData)) return oldData;
+        return oldData.map((staff: any) => 
+          staff.id === updatedStaff.id ? updatedStaff : staff
+        );
+      });
+      // Also update the individual staff member cache
+      queryClient.setQueryData(['/api/school-admin/staff', id], updatedStaff);
+      // Navigate immediately - cache is already updated
       navigate('/schools/staff');
     },
     onError: (error: any) => {
@@ -146,15 +151,18 @@ export default function StaffEditPage() {
     mutationFn: async () => {
       return await apiRequest("DELETE", `/api/school-admin/staff/${id}`);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       toast({
         title: "Success",
         description: "Staff member removed successfully",
       });
-      // Force cache refresh and wait for completion
-      await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
-      await queryClient.refetchQueries({ queryKey: ['/api/school-admin/staff'] });
-      // Navigate after cache is refreshed
+      // Synchronously remove from staff list cache (convert id to number for comparison)
+      const staffIdNum = parseInt(id as string, 10);
+      queryClient.setQueryData(['/api/school-admin/staff'], (oldData: any) => {
+        if (!Array.isArray(oldData)) return oldData;
+        return oldData.filter((staff: any) => staff.id !== staffIdNum);
+      });
+      // Navigate immediately - cache is already updated
       navigate('/schools/staff');
     },
     onError: (error: any) => {

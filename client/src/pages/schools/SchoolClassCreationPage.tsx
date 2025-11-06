@@ -51,6 +51,7 @@ export default function SchoolClassCreationPage() {
   const queryClient = useQueryClient();
   const [isEditMode, setIsEditMode] = useState(false);
   const [locations, setLocations] = useState<{id: number, name: string}[]>([]);
+  const formInitialized = React.useRef(false);
 
   // Get class ID from URL if in edit mode
   const classId = params.id ? parseInt(params.id, 10) : undefined;
@@ -107,7 +108,16 @@ export default function SchoolClassCreationPage() {
   // Update form when class data is loaded
   useEffect(() => {
     if (classData && classId) {
-      setIsEditMode(true);
+      // Only allow first reset or when instructor data becomes available
+      const shouldReset = !formInitialized.current || 
+        (formInitialized.current && !form.getValues().instructorName && staffMembers.length > 0);
+      
+      if (!shouldReset) return;
+      
+      if (!formInitialized.current) {
+        setIsEditMode(true);
+        formInitialized.current = true;
+      }
       
       // Format dates properly for the form
       const startDate = classData.startDate ? 
@@ -164,13 +174,19 @@ export default function SchoolClassCreationPage() {
                 staff.id === classData.instructorId
       );
       
+      // Get current grade levels to preserve them during instructor-only resets
+      const currentGradeLevels = form.getValues().gradeLevels;
+      const targetGradeLevels = currentGradeLevels && currentGradeLevels.length > 0
+        ? currentGradeLevels
+        : (Array.isArray(classData.gradeLevels) && classData.gradeLevels.length > 0
+          ? classData.gradeLevels
+          : (classData.gradeLevel ? [classData.gradeLevel] : []));
+      
       form.reset({
         title: classData.title || "",
         description: classData.description || "",
         category: classData.category || "",
-        gradeLevels: Array.isArray(classData.gradeLevels) && classData.gradeLevels.length > 0
-          ? classData.gradeLevels
-          : (classData.gradeLevel ? [classData.gradeLevel] : []),
+        gradeLevels: targetGradeLevels,
         startDate,
         endDate,
         variants: classData.variants || [{
