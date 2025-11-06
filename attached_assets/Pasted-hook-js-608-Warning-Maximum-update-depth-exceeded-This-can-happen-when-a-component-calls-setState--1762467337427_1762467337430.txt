@@ -1,0 +1,45 @@
+hook.js:608 Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. Error Component Stack
+    at SchoolClassCreationPage (SchoolClassCreationPage.tsx:48:24)
+    at Router (App.tsx:261:55)
+    at CartProvider (CartContext.tsx:490:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:33:40)
+    at RoleProvider (RoleContext.tsx:27:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/classes
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff/invite
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff/positions
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff/invite
+StaffInvitePage.tsx:86 Sending invitation to: 
+Object
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff/1
+StaffEditPage.tsx:232 Uncaught TypeError: allClasses.filter is not a function
+    at StaffEditPage (StaffEditPage.tsx:232:40)
+App.tsx:265 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: coreycreates@gmail.com location: /schools/staff/1
+StaffEditPage.tsx:232 Uncaught TypeError: allClasses.filter is not a function
+    at StaffEditPage (StaffEditPage.tsx:232:40)
+hook.js:608 The above error occurred in the <StaffEditPage> component:
+
+    at StaffEditPage (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/schools/StaffEditPage.tsx:49:18)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d3074f71:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d3074f71:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?v=5Q-cgs3GhuQQ5ojR6xrRx:331:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…unner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d3074f71:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…rkspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=d3074f71:64:5)
+    at CartProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/CartContext.tsx:323:32)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at NotificationProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/hooks/useNotifications.tsx:23:40)
+    at RoleProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/RoleContext.tsx:30:32)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d3074f71:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+chunk-NFC5BX5N.js?v=d3074f71:9129 Uncaught TypeError: allClasses.filter is not a function
+    at StaffEditPage (StaffEditPage.tsx:232:40)

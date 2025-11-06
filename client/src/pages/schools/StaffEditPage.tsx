@@ -101,9 +101,12 @@ export default function StaffEditPage() {
   });
 
   // Fetch all available classes for assignment
-  const { data: allClasses = [] } = useQuery({
+  const { data: allClassesData } = useQuery({
     queryKey: ['/api/school-admin/classes']
   });
+  
+  // Extract items array from response (API returns { items: [], total, ... })
+  const allClasses = allClassesData?.items || [];
 
   // Update form when data is loaded
   useEffect(() => {

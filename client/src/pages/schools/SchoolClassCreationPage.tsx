@@ -188,7 +188,8 @@ export default function SchoolClassCreationPage() {
         isAdminOnly: classData.isAdminOnly || false,
       });
     }
-  }, [classData, classId, form, staffMembers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classData, classId, staffMembers]);
 
   // Create class mutation
   const createClassMutation = useMutation({
