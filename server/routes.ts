@@ -2022,9 +2022,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Import and register users API router
+  // Import and register users API router (protected with Supabase auth)
   const usersRouter = await import("./api/users");
-  app.use("/api/users", usersRouter.default);
+  app.use("/api/users", supabaseAuth, usersRouter.default);
 
   // Add endpoint to get user role by email for authentication
   app.get("/api/users/role/:email", async (req, res) => {
