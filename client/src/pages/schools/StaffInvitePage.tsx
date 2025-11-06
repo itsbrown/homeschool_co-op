@@ -49,7 +49,11 @@ export default function StaffInvitePage() {
   const { data: allClassesList = [] } = useQuery({
     queryKey: ['/api/school-admin/classes?limit=1000'],
     queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/school-admin/classes?limit=1000', {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
         credentials: 'include',
       });
       if (!response.ok) {
@@ -81,10 +85,12 @@ export default function StaffInvitePage() {
     mutationFn: async (data: InviteFormValues) => {
       console.log("Sending invitation to:", data);
       
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/school-admin/staff/invite', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
         },
         credentials: 'include',
         body: JSON.stringify(data),
