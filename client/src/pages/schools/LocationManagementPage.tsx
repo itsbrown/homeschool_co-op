@@ -141,6 +141,22 @@ export default function LocationManagementPage() {
       timezone: formData.get('timezone') as string || 'America/New_York'
     }
 
+    console.log('🆕 CREATE LOCATION - Form data captured:', {
+      schoolId,
+      name: formData.get('name'),
+      code: formData.get('code'),
+      address: formData.get('address'),
+      city: formData.get('city'),
+      state: formData.get('state'),
+      zipCode: formData.get('zipCode'),
+      phoneNumber: formData.get('phoneNumber'),
+      email: formData.get('email'),
+      managerName: formData.get('managerName'),
+      capacity: formData.get('capacity'),
+      timezone: formData.get('timezone')
+    })
+    console.log('🆕 CREATE LOCATION - Sending to API:', locationData)
+
     createLocationMutation.mutate(locationData)
   }
 
