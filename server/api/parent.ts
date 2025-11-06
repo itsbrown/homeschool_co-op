@@ -244,4 +244,42 @@ router.post('/children', jwtCheck, async (req: any, res) => {
   }
 });
 
+// Get enrollments for the authenticated parent's children
+router.get('/enrollments', jwtCheck, async (req: any, res) => {
+  try {
+    console.log('📚 Parent enrollments API called');
+
+    // Get the authenticated user's email from the auth middleware
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      console.log('❌ No authenticated user found');
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+
+    console.log('📚 Parent requesting enrollments for email:', userEmail);
+
+    // Get all enrollments from storage
+    const allEnrollments = await storage.getAllEnrollments();
+    
+    // Filter enrollments for this parent's email
+    const parentEnrollments = allEnrollments.filter((enrollment: any) => 
+      enrollment.parentEmail === userEmail
+    );
+
+    console.log(`📚 Found ${parentEnrollments.length} enrollments for parent ${userEmail}`);
+
+    return res.status(200).json(parentEnrollments);
+  } catch (error) {
+    console.error('❌ Error fetching enrollments:', error);
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: 'ENROLLMENTS_FETCH_ERROR'
+    });
+  }
+});
+
 export default router;

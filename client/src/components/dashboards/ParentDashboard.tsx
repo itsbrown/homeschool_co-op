@@ -88,7 +88,7 @@ export default function ParentDashboard() {
 
   // Fetch enrollments data
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
-    queryKey: ["/api/enrollments"],
+    queryKey: ["/api/parent/enrollments"],
     enabled: !!user && !!session,
     onSuccess: () => {
       // Refresh cart when enrollments change

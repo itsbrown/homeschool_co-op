@@ -81,6 +81,28 @@ Before marking any task complete, verify:
 
 ## Recent Fixes and Updates
 
+### November 6, 2025 - Parent Enrollments API Fix
+**Problem**: Parent dashboard showing "No active enrollments" and 401 errors when loading enrollments.
+
+**Root Cause**: Frontend was calling `/api/enrollments` which only exists for school admins at `/api/school-admin/enrollments`. Parents had no dedicated enrollments endpoint.
+
+**Solution**: 
+1. Created `/api/parent/enrollments` endpoint in `server/api/parent.ts`
+2. Updated all parent-facing pages to use correct endpoint:
+   - `client/src/components/dashboards/ParentDashboard.tsx` 
+   - `client/src/contexts/CartContext.tsx` (2 locations)
+   - `client/src/pages/ParentDashboard.tsx`
+
+**Status**: 
+- ✅ Parent enrollments now loading successfully
+- ✅ Dashboard displays enrollment counts correctly
+- ✅ Cart properly checks existing enrollments
+
+**Technical Details**:
+- Endpoint filters all enrollments by `parentEmail` field
+- Uses `jwtCheck` middleware for Auth0 authentication
+- Returns full enrollment objects with payment status, cost, and plan details
+
 ### November 5, 2025 - School ID Registration Fix
 **Problem**: Parent registrations were not setting `school_id` in Supabase auth.users table, causing "No school association found" errors.
 

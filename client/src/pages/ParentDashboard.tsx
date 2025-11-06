@@ -51,7 +51,7 @@ export default function ParentDashboard() {
 
   // Query for enrollment data
   const { data: enrollments = [], isLoading: enrollmentsLoading } = useQuery<any[]>({
-    queryKey: ["/api/enrollments"],
+    queryKey: ["/api/parent/enrollments"],
     enabled: !!user,
   });
 

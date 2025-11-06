@@ -521,7 +521,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const response = await fetch('/api/enrollments', {
+      const response = await fetch('/api/parent/enrollments', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -858,7 +858,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Check if user is already enrolled in this class with a completed payment
       try {
-        const response = await apiRequest('GET', '/api/enrollments');
+        const response = await apiRequest('GET', '/api/parent/enrollments');
         if (response.ok) {
           const enrollments = await response.json();
 
