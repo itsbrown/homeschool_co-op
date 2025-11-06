@@ -522,7 +522,7 @@ export default function LocationManagementPage() {
                     <Input
                       id="edit-zipCode"
                       name="zipCode"
-                      defaultValue={editingLocation.zipCode || ''}
+                      defaultValue={String(editingLocation.zipCode || '')}
                       required
                     />
                   </div>
@@ -532,7 +532,7 @@ export default function LocationManagementPage() {
                       id="edit-capacity"
                       name="capacity"
                       type="number"
-                      defaultValue={editingLocation.capacity || ''}
+                      defaultValue={editingLocation.capacity?.toString() || ''}
                     />
                   </div>
                 </div>
@@ -543,7 +543,7 @@ export default function LocationManagementPage() {
                     <Input
                       id="edit-phoneNumber"
                       name="phoneNumber"
-                      defaultValue={editingLocation.phoneNumber || ''}
+                      defaultValue={String(editingLocation.phoneNumber || '')}
                     />
                   </div>
                   <div className="space-y-2">
