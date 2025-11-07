@@ -668,8 +668,29 @@ router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
       return res.status(403).json({ message: 'Access denied to this class' });
     }
 
+    // Parse variants from schedule field if they exist
+    let variants = undefined;
+    if (classData.schedule && typeof classData.schedule === 'string') {
+      try {
+        const scheduleData = JSON.parse(classData.schedule);
+        if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
+          variants = scheduleData.variants;
+        }
+      } catch (e) {
+        // Not JSON, keep schedule as-is
+      }
+    } else if (classData.schedule && typeof classData.schedule === 'object' && classData.schedule.variants) {
+      // Already parsed as object
+      variants = classData.schedule.variants;
+    }
+
     console.log('✅ Class found:', classData.title);
-    res.json(classData);
+    console.log('📋 Parsed variants:', variants);
+    
+    res.json({
+      ...classData,
+      variants
+    });
   } catch (error) {
     console.error('❌ Error fetching class:', error);
     res.status(500).json({ message: 'Error fetching class' });
