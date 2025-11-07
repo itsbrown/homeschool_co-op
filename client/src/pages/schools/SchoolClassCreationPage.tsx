@@ -108,11 +108,17 @@ export default function SchoolClassCreationPage() {
   // Update form when class data is loaded
   useEffect(() => {
     if (classData && classId) {
+      console.log('📝 SchoolClassCreationPage - classData received:', classData);
+      console.log('📝 classData.variants:', classData.variants);
+      
       // Only allow first reset or when instructor data becomes available
       const shouldReset = !formInitialized.current || 
         (formInitialized.current && !form.getValues().instructorName && staffMembers.length > 0);
       
-      if (!shouldReset) return;
+      if (!shouldReset) {
+        console.log('⏭️ Skipping form reset - shouldReset is false');
+        return;
+      }
       
       if (!formInitialized.current) {
         setIsEditMode(true);

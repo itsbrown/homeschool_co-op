@@ -1,0 +1,200 @@
+chunk-NFC5BX5N.js?v=d3074f71:9934 Uncaught Error: Objects are not valid as a React child (found: object with keys {variants}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (chunk-NFC5BX5N.js?v=d3074f71:9934:17)
+    at createChild (chunk-NFC5BX5N.js?v=d3074f71:10110:15)
+    at reconcileChildrenArray (chunk-NFC5BX5N.js?v=d3074f71:10282:33)
+    at reconcileChildFibers2 (chunk-NFC5BX5N.js?v=d3074f71:10559:24)
+    at reconcileChildren (chunk-NFC5BX5N.js?v=d3074f71:14290:37)
+    at updateHostComponent (chunk-NFC5BX5N.js?v=d3074f71:14807:11)
+    at beginWork (chunk-NFC5BX5N.js?v=d3074f71:15935:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=d3074f71:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=d3074f71:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=d3074f71:3733:39)
+throwOnInvalidObjectType @ chunk-NFC5BX5N.js?v=d3074f71:9934
+createChild @ chunk-NFC5BX5N.js?v=d3074f71:10110
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d3074f71:10282
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d3074f71:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d3074f71:14290
+updateHostComponent @ chunk-NFC5BX5N.js?v=d3074f71:14807
+beginWork @ chunk-NFC5BX5N.js?v=d3074f71:15935
+callCallback2 @ chunk-NFC5BX5N.js?v=d3074f71:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d3074f71:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d3074f71:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=d3074f71:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d3074f71:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d3074f71:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d3074f71:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d3074f71:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=d3074f71:555
+flush @ @tanstack_react-query.js?v=d3074f71:569
+batch @ @tanstack_react-query.js?v=d3074f71:587
+dispatch_fn @ @tanstack_react-query.js?v=d3074f71:996
+setData @ @tanstack_react-query.js?v=d3074f71:696
+onSuccess @ @tanstack_react-query.js?v=d3074f71:897
+resolve @ @tanstack_react-query.js?v=d3074f71:456
+Promise.then
+run @ @tanstack_react-query.js?v=d3074f71:498
+start @ @tanstack_react-query.js?v=d3074f71:536
+fetch @ @tanstack_react-query.js?v=d3074f71:926
+executeFetch_fn @ @tanstack_react-query.js?v=d3074f71:2211
+onSubscribe @ @tanstack_react-query.js?v=d3074f71:1898
+subscribe @ @tanstack_react-query.js?v=d3074f71:24
+(anonymous) @ @tanstack_react-query.js?v=d3074f71:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=d3074f71:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d3074f71:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d3074f71:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d3074f71:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d3074f71:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d3074f71:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d3074f71:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d3074f71:18627Understand this error
+chunk-NFC5BX5N.js?v=d3074f71:9934 Uncaught Error: Objects are not valid as a React child (found: object with keys {variants}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (chunk-NFC5BX5N.js?v=d3074f71:9934:17)
+    at createChild (chunk-NFC5BX5N.js?v=d3074f71:10110:15)
+    at reconcileChildrenArray (chunk-NFC5BX5N.js?v=d3074f71:10282:33)
+    at reconcileChildFibers2 (chunk-NFC5BX5N.js?v=d3074f71:10559:24)
+    at reconcileChildren (chunk-NFC5BX5N.js?v=d3074f71:14290:37)
+    at updateHostComponent (chunk-NFC5BX5N.js?v=d3074f71:14807:11)
+    at beginWork (chunk-NFC5BX5N.js?v=d3074f71:15935:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=d3074f71:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=d3074f71:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=d3074f71:3733:39)
+throwOnInvalidObjectType @ chunk-NFC5BX5N.js?v=d3074f71:9934
+createChild @ chunk-NFC5BX5N.js?v=d3074f71:10110
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=d3074f71:10282
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=d3074f71:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=d3074f71:14290
+updateHostComponent @ chunk-NFC5BX5N.js?v=d3074f71:14807
+beginWork @ chunk-NFC5BX5N.js?v=d3074f71:15935
+callCallback2 @ chunk-NFC5BX5N.js?v=d3074f71:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=d3074f71:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=d3074f71:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=d3074f71:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=d3074f71:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=d3074f71:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=d3074f71:19116
+recoverFromConcurrentError @ chunk-NFC5BX5N.js?v=d3074f71:18736
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18879
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d3074f71:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=d3074f71:555
+flush @ @tanstack_react-query.js?v=d3074f71:569
+batch @ @tanstack_react-query.js?v=d3074f71:587
+dispatch_fn @ @tanstack_react-query.js?v=d3074f71:996
+setData @ @tanstack_react-query.js?v=d3074f71:696
+onSuccess @ @tanstack_react-query.js?v=d3074f71:897
+resolve @ @tanstack_react-query.js?v=d3074f71:456
+Promise.then
+run @ @tanstack_react-query.js?v=d3074f71:498
+start @ @tanstack_react-query.js?v=d3074f71:536
+fetch @ @tanstack_react-query.js?v=d3074f71:926
+executeFetch_fn @ @tanstack_react-query.js?v=d3074f71:2211
+onSubscribe @ @tanstack_react-query.js?v=d3074f71:1898
+subscribe @ @tanstack_react-query.js?v=d3074f71:24
+(anonymous) @ @tanstack_react-query.js?v=d3074f71:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=d3074f71:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d3074f71:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d3074f71:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d3074f71:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d3074f71:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d3074f71:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d3074f71:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d3074f71:18627Understand this error
+installHook.js:1 The above error occurred in the <span> component:
+
+    at span
+    at div
+    at div
+    at div
+    at _c9 (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at div
+    at main
+    at div
+    at div
+    at SchoolAdminLayout (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/layout/SchoolAdminLayout.tsx:18:45)
+    at ClassRosterPage (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/schools/ClassRosterPage.tsx:39:27)
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d3074f71:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=d3074f71:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?t=1762511782678&v=b-nKaE1gNMWy5XiNqiafb:331:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=d3074f71:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=d3074f71:64:5)
+    at CartProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/CartContext.tsx:323:32)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at NotificationProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/hooks/useNotifications.tsx:23:40)
+    at RoleProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/RoleContext.tsx:30:32)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=d3074f71:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+overrideMethod @ installHook.js:1
+logCapturedError @ chunk-NFC5BX5N.js?v=d3074f71:14032
+update.callback @ chunk-NFC5BX5N.js?v=d3074f71:14052
+callCallback @ chunk-NFC5BX5N.js?v=d3074f71:11248
+commitUpdateQueue @ chunk-NFC5BX5N.js?v=d3074f71:11265
+commitLayoutEffectOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:17093
+commitLayoutMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:17980
+commitLayoutEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:17969
+commitLayoutEffects @ chunk-NFC5BX5N.js?v=d3074f71:17920
+commitRootImpl @ chunk-NFC5BX5N.js?v=d3074f71:19353
+commitRoot @ chunk-NFC5BX5N.js?v=d3074f71:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d3074f71:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=d3074f71:555
+flush @ @tanstack_react-query.js?v=d3074f71:569
+batch @ @tanstack_react-query.js?v=d3074f71:587
+dispatch_fn @ @tanstack_react-query.js?v=d3074f71:996
+setData @ @tanstack_react-query.js?v=d3074f71:696
+onSuccess @ @tanstack_react-query.js?v=d3074f71:897
+resolve @ @tanstack_react-query.js?v=d3074f71:456
+Promise.then
+run @ @tanstack_react-query.js?v=d3074f71:498
+start @ @tanstack_react-query.js?v=d3074f71:536
+fetch @ @tanstack_react-query.js?v=d3074f71:926
+executeFetch_fn @ @tanstack_react-query.js?v=d3074f71:2211
+onSubscribe @ @tanstack_react-query.js?v=d3074f71:1898
+subscribe @ @tanstack_react-query.js?v=d3074f71:24
+(anonymous) @ @tanstack_react-query.js?v=d3074f71:3022
+subscribeToStore @ chunk-NFC5BX5N.js?v=d3074f71:11984
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=d3074f71:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=d3074f71:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=d3074f71:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=d3074f71:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=d3074f71:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=d3074f71:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=d3074f71:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=d3074f71:19416
+commitRoot @ chunk-NFC5BX5N.js?v=d3074f71:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=d3074f71:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=d3074f71:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=d3074f71:18627Understand this error
+chunk-NFC5BX5N.js?v=d3074f71:9934 Uncaught Error: Objects are not valid as a React child (found: object with keys {variants}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (chunk-NFC5BX5N.js?v=d3074f71:9934:17)
+    at createChild (chunk-NFC5BX5N.js?v=d3074f71:10110:15)
+    at reconcileChildrenArray (chunk-NFC5BX5N.js?v=d3074f71:10282:33)
+    at reconcileChildFibers2 (chunk-NFC5BX5N.js?v=d3074f71:10559:24)
+    at reconcileChildren (chunk-NFC5BX5N.js?v=d3074f71:14290:37)
+    at updateHostComponent (chunk-NFC5BX5N.js?v=d3074f71:14807:11)
+    at beginWork (chunk-NFC5BX5N.js?v=d3074f71:15935:22)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=d3074f71:19753:22)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=d3074f71:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=d3074f71:19137:13)
