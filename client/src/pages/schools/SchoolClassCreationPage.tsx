@@ -200,7 +200,7 @@ export default function SchoolClassCreationPage() {
           startTime: startTime || '9:00 AM',
           endTime: endTime || '12:00 PM',
           days: ['Monday', 'Wednesday'],
-          price: classData.price ? classData.price * 100 : 5000
+          price: classData.price || 5000
         }],
         capacity: classData.capacity || 10,
         location: classData.location || "",

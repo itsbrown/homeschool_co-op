@@ -2348,16 +2348,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Parse variants from schedule field if they exist
       let enhancedClassData = { ...classData };
-      if (classData.schedule && typeof classData.schedule === 'string') {
-        try {
-          const scheduleData = JSON.parse(classData.schedule);
-          if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
-            console.log('✅ Parsed variants from schedule field:', scheduleData.variants);
-            enhancedClassData.variants = scheduleData.variants;
+      if (classData.schedule) {
+        let scheduleData = classData.schedule;
+        
+        // Handle both string (legacy) and object (current) schedule formats
+        if (typeof classData.schedule === 'string') {
+          try {
+            scheduleData = JSON.parse(classData.schedule);
+          } catch (e) {
+            // Not JSON, keep schedule as-is
+            console.log('📝 Schedule is not JSON, keeping as string');
+            scheduleData = null;
           }
-        } catch (e) {
-          // Not JSON, keep schedule as-is
-          console.log('📝 Schedule is not JSON, keeping as string');
+        }
+        
+        // Extract variants if they exist
+        if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
+          console.log('✅ Found variants in schedule field:', scheduleData.variants);
+          enhancedClassData.variants = scheduleData.variants;
         }
       }
 
