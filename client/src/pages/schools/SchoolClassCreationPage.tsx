@@ -246,7 +246,7 @@ export default function SchoolClassCreationPage() {
   // Update class mutation
   const updateClassMutation = useMutation({
     mutationFn: (data: ClassFormValues) => {
-      return apiRequest("PUT", `/class-details/${classId}`, data);
+      return apiRequest("PUT", `/school-admin/classes/${classId}`, data);
     },
     onSuccess: () => {
       toast({
