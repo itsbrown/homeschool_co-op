@@ -730,6 +730,28 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       gradeLevels = req.body.gradeLevels;
     }
 
+    // Find instructor ID from instructor name if changed
+    let instructorId = existingClass.instructorId;
+    let instructorName = existingClass.instructorName;
+    if (req.body.instructorName && req.body.instructorName !== existingClass.instructorName) {
+      instructorName = req.body.instructorName;
+      if (req.body.instructorName !== 'no-instructor' && req.body.instructorName !== 'No Instructor Assigned') {
+        const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+        for (const staffRecord of allStaff) {
+          const user = await storage.getUser(staffRecord.userId);
+          if (user && (user.name === req.body.instructorName || 
+                      `${user.firstName} ${user.lastName}` === req.body.instructorName)) {
+            instructorId = user.id;
+            console.log(`✅ Found instructor ID ${instructorId} for ${instructorName}`);
+            break;
+          }
+        }
+      } else {
+        instructorId = null;
+        console.log('ℹ️ No instructor assigned');
+      }
+    }
+
     // Prepare update data
     const updateData: any = {
       title: req.body.title || existingClass.title,
@@ -742,7 +764,8 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       schedule: schedule,
       capacity: req.body.capacity !== undefined ? req.body.capacity : existingClass.capacity,
       location: req.body.location ?? existingClass.location,
-      instructorName: req.body.instructorName ?? existingClass.instructorName,
+      instructorName: instructorName,
+      instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly
     };
