@@ -186,6 +186,7 @@ export default function StaffEditPage() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff', id, 'classes'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes-list'] });
       setShowAssignDialog(false);
       setSelectedClassId(null);
     },
@@ -210,6 +211,7 @@ export default function StaffEditPage() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff', id, 'classes'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes-list'] });
     },
     onError: (error: any) => {
       toast({
