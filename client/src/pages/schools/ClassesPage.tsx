@@ -173,6 +173,7 @@ export default function SchoolClassesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes-list'] });
       toast({
         title: "Success",
         description: "Class has been duplicated successfully.",
@@ -197,6 +198,7 @@ export default function SchoolClassesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes-list'] });
       toast({
         title: "Success",
         description: "Instructor has been unassigned from the class.",
@@ -234,6 +236,7 @@ export default function SchoolClassesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes-list'] });
       toast({
         title: "Success",
         description: "Class has been deleted successfully.",

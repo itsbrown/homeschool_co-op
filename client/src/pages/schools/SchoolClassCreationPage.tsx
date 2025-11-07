@@ -222,7 +222,9 @@ export default function SchoolClassCreationPage() {
         title: "Class created successfully",
         description: "Your new class has been added to the system.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/school-admin/classes"] });
+      // Invalidate all class-related caches to ensure UI updates everywhere
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes-list"] });
       navigate("/schools/classes");
     },
     onError: (error) => {
@@ -245,9 +247,10 @@ export default function SchoolClassCreationPage() {
         title: "Class updated successfully",
         description: "Your class has been updated.",
       });
-      // Invalidate both the class list and the individual class data
-      queryClient.invalidateQueries({ queryKey: ["/school-admin/classes"] });
-      queryClient.invalidateQueries({ queryKey: ["/class-details", classId] });
+      // Invalidate all class-related caches to ensure UI updates everywhere
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes-list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/class-details", classId] });
       navigate("/schools/classes");
     },
     onError: (error) => {
