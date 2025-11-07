@@ -167,12 +167,17 @@ export default function SchoolClassCreationPage() {
         }
       }
       
-      // Find the instructor ID from staff members
+      // Find the instructor from staff members
       const instructor = staffMembers.find(
         staff => staff.instructorName === classData.instructorName || 
                 staff.name === classData.instructorName ||
                 staff.id === classData.instructorId
       );
+      
+      // Get the instructor name for the dropdown (dropdown uses name, not ID)
+      const instructorValue = instructor 
+        ? (instructor.name || `${instructor.firstName} ${instructor.lastName}`)
+        : (classData.instructorName || "");
       
       // Get current grade levels to preserve them during instructor-only resets
       const currentGradeLevels = form.getValues().gradeLevels;
@@ -199,7 +204,7 @@ export default function SchoolClassCreationPage() {
         }],
         capacity: classData.capacity || 10,
         location: classData.location || "",
-        instructorName: instructor ? instructor.id.toString() : "",
+        instructorName: instructorValue,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
       });
