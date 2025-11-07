@@ -33,7 +33,7 @@ interface ClassDetails {
   id: number;
   title: string;
   gradeLevel: string;
-  schedule: string;
+  schedule: string | { variants?: Array<{ days?: string[]; startTime?: string; endTime?: string; }> };
   instructorName: string;
   capacity: number;
   enrollmentCount: number;
@@ -136,7 +136,11 @@ export default function ClassRosterPage() {
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">
-                      <strong>Schedule:</strong> {classData.schedule}
+                      <strong>Schedule:</strong> {
+                        typeof classData.schedule === 'string' 
+                          ? classData.schedule 
+                          : (classData.schedule?.variants?.[0]?.days?.join(', ') || 'Not set')
+                      }
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
