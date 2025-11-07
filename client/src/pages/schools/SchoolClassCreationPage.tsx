@@ -90,7 +90,7 @@ export default function SchoolClassCreationPage() {
 
   // Fetch available staff members for instructor selection
   const { data: staffMembers = [], isLoading: staffLoading } = useQuery({
-    queryKey: ["/school-admin/staff"]
+    queryKey: ["/api/school-admin/staff"]
   });
 
   // Fetch locations for the school
