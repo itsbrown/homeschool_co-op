@@ -82,9 +82,9 @@ export default function SchoolClassCreationPage() {
     },
   });
 
-  // Fetch class data if in edit mode using direct endpoint
+  // Fetch class data if in edit mode using school-admin endpoint
   const { data: classData, isLoading: isLoadingClass } = useQuery({
-    queryKey: ["/api/class-details", classId],
+    queryKey: ["/api/school-admin/classes", classId],
     enabled: !!classId, // Only run if classId exists
   });
 
@@ -256,7 +256,7 @@ export default function SchoolClassCreationPage() {
       // Invalidate all class-related caches to ensure UI updates everywhere
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes-list"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/class-details", classId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes", classId] });
       navigate("/schools/classes");
     },
     onError: (error) => {
