@@ -94,7 +94,7 @@ export default function SchoolClassCreationPage() {
   });
 
   // Fetch locations for the school
-  const { data: locationData = [] } = useQuery({
+  const { data: locationData = [], isLoading: locationsLoading } = useQuery({
     queryKey: ["/api/locations"]
   });
 
@@ -110,6 +110,13 @@ export default function SchoolClassCreationPage() {
     if (classData && classId) {
       console.log('📝 SchoolClassCreationPage - classData received:', classData);
       console.log('📝 classData.variants:', classData.variants);
+      
+      // Wait for queries to finish loading before resetting form
+      // This ensures dropdowns have loaded (even if empty) before matching values
+      if (locationsLoading || staffLoading) {
+        console.log('⏭️ Waiting for locations/staff data to load...');
+        return;
+      }
       
       // Only allow first reset or when instructor data becomes available
       const shouldReset = !formInitialized.current || 
@@ -216,7 +223,7 @@ export default function SchoolClassCreationPage() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classData, classId, staffMembers]);
+  }, [classData, classId, staffMembers, locations]);
 
   // Create class mutation
   const createClassMutation = useMutation({
@@ -421,7 +428,7 @@ export default function SchoolClassCreationPage() {
                         <FormLabel>Status*</FormLabel>
                         <Select 
                           onValueChange={field.onChange} 
-                          defaultValue={field.value}
+                          value={field.value}
                         >
                           <FormControl>
                             <SelectTrigger>

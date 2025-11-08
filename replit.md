@@ -33,16 +33,19 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Multi-Tenant Security**: Comprehensive isolation preventing cross-school data leakage, with strict school boundary validation enforced on all school-admin API endpoints using JWT tokens.
 - **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 - **Payment System**: Stripe-only payment system featuring subscription schedules, webhooks, smart cart logic, date-driven payment plans, and automated refund processing.
-- **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing. All class CRUD operations enforce strict school isolation.
+- **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing. All class CRUD operations enforce strict school isolation. Edit form dropdowns (location, instructor, status) properly pre-select existing values when editing.
 - **Registration Flow**: Automated account creation, handling existing accounts, and auto-login.
 - **AI Enrollment Assistant**: Personalized AI guidance for enrollment.
-- **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management.
+- **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management. Requires `CLIENT_URL` environment variable set to production domain for correct email links.
 - **User Account Management**: School administrators can send account invites and password reset emails.
 - **Password Reset System**: Email-based password reset with secure token handling.
 - **Email Service**: Dual integration with Brevo SMTP and SendGrid.
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis, Stability AI for image generation, and Hugging Face for text processing.
 - **Product Order Form System**: Enhanced schema with 'product' field type supporting variant configurations, descriptions, and dynamic pricing, including pre-built templates and a form builder UI.
+
+### Environment Variables
+- **CLIENT_URL**: Required for production deployment. Must be set to the production domain (e.g., `https://accounts.americanseekersacademy.com`) for correct email link generation (staff invites, password resets, account invitations). Without this, emails will contain incorrect URLs.
 
 ## External Dependencies
 - **Auth0**: Authentication provider.
