@@ -301,10 +301,13 @@ export default function SchoolClassesPage() {
 
   // Filter logic
   const filteredClasses = classData.filter((cls: any) => {
+    // Safely handle instructor field - could be 'instructor' or 'instructorName'
+    const instructorField = cls.instructorName || cls.instructor || '';
+    
     return (
       (!searchQuery || 
        cls.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-       cls.instructor.toLowerCase().includes(searchQuery.toLowerCase())) &&
+       instructorField.toLowerCase().includes(searchQuery.toLowerCase())) &&
       (!categoryFilter || categoryFilter === 'all-categories' || cls.category === categoryFilter) &&
       (!statusFilter || statusFilter === 'all-statuses' || cls.status === statusFilter) &&
       (!gradeLevelFilter || gradeLevelFilter === 'all-grade-levels' || cls.gradeLevel === gradeLevelFilter)
@@ -322,11 +325,11 @@ export default function SchoolClassesPage() {
       ...filteredClasses.map((cls: any) => [
         cls.title,
         cls.category,
-        cls.instructor,
+        cls.instructorName || cls.instructor || 'Unassigned',
         cls.gradeLevel,
         cls.status,
-        `${cls.enrollmentCount}/${cls.maxEnrollment}`,
-        cls.schedule
+        `${cls.enrollmentCount || 0}/${cls.capacity || cls.maxEnrollment || 0}`,
+        cls.schedule || ''
       ])
     ].map(row => row.join(',')).join('\n');
 
@@ -367,8 +370,9 @@ export default function SchoolClassesPage() {
               </TabsList>
 
               {/* Filters and Search */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
+              <div className="flex flex-col gap-4 mb-6">
+                {/* Search bar - full width on all screens */}
+                <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <Input
                     placeholder="Search by class name or instructor..."
@@ -377,101 +381,118 @@ export default function SchoolClassesPage() {
                     className="pl-9"
                   />
                 </div>
-                
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all-categories">All Categories</SelectItem>
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category}>{category}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
 
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all-statuses">All Statuses</SelectItem>
-                    {statuses.map((status) => (
-                      <SelectItem key={status} value={status}>{status}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Filters row - stack on mobile, row on desktop */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all-categories">All Categories</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>{category}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Columns
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuLabel>Show/Hide Columns</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuCheckboxItem
-                      checked={visibleColumns.className}
-                      onCheckedChange={() => toggleColumn('className')}
-                    >
-                      Class Name
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={visibleColumns.category}
-                      onCheckedChange={() => toggleColumn('category')}
-                    >
-                      Category
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={visibleColumns.instructor}
-                      onCheckedChange={() => toggleColumn('instructor')}
-                    >
-                      Instructor
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={visibleColumns.gradeLevel}
-                      onCheckedChange={() => toggleColumn('gradeLevel')}
-                    >
-                      Grade Level
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={visibleColumns.location}
-                      onCheckedChange={() => toggleColumn('location')}
-                    >
-                      Location
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={visibleColumns.status}
-                      onCheckedChange={() => toggleColumn('status')}
-                    >
-                      Status
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={visibleColumns.enrollment}
-                      onCheckedChange={() => toggleColumn('enrollment')}
-                    >
-                      Enrollment
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={visibleColumns.actions}
-                      onCheckedChange={() => toggleColumn('actions')}
-                    >
-                      Actions
-                    </DropdownMenuCheckboxItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  <Select value={gradeLevelFilter} onValueChange={setGradeLevelFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Grade Level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all-grade-levels">All Grade Levels</SelectItem>
+                      {gradeLevels.map((level) => (
+                        <SelectItem key={level} value={level}>{level}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                <Button variant="outline" onClick={exportClassList}>
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Export Class List
-                </Button>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all-statuses">All Statuses</SelectItem>
+                      {statuses.map((status) => (
+                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Column selector - hide on mobile */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="hidden md:flex">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Columns
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuLabel>Show/Hide Columns</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuCheckboxItem
+                        checked={visibleColumns.className}
+                        onCheckedChange={() => toggleColumn('className')}
+                      >
+                        Class Name
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={visibleColumns.category}
+                        onCheckedChange={() => toggleColumn('category')}
+                      >
+                        Category
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={visibleColumns.instructor}
+                        onCheckedChange={() => toggleColumn('instructor')}
+                      >
+                        Instructor
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={visibleColumns.gradeLevel}
+                        onCheckedChange={() => toggleColumn('gradeLevel')}
+                      >
+                        Grade Level
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={visibleColumns.location}
+                        onCheckedChange={() => toggleColumn('location')}
+                      >
+                        Location
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={visibleColumns.status}
+                        onCheckedChange={() => toggleColumn('status')}
+                      >
+                        Status
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={visibleColumns.enrollment}
+                        onCheckedChange={() => toggleColumn('enrollment')}
+                      >
+                        Enrollment
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={visibleColumns.actions}
+                        onCheckedChange={() => toggleColumn('actions')}
+                      >
+                        Actions
+                      </DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <Button variant="outline" onClick={exportClassList} className="w-full sm:w-auto">
+                    <FileDown className="mr-2 h-4 w-4" />
+                    <span className="sm:inline">Export</span>
+                  </Button>
+                </div>
               </div>
 
               {/* List View */}
               <TabsContent value="list">
-                <Card>
+                {/* Desktop Table View - Hidden on mobile */}
+                <Card className="hidden md:block">
                   <CardHeader>
                     <CardTitle>Class List</CardTitle>
                     <CardDescription>
@@ -501,9 +522,9 @@ export default function SchoolClassesPage() {
                                 {visibleColumns.category && <TableCell>{cls.category}</TableCell>}
                                 {visibleColumns.instructor && (
                                   <TableCell>
-                                    {cls.instructorName && cls.instructorName !== "no-instructor" 
+                                    {(cls.instructorName && cls.instructorName !== "no-instructor") 
                                       ? cls.instructorName 
-                                      : "No Instructor Assigned"}
+                                      : (cls.instructor || "No Instructor Assigned")}
                                   </TableCell>
                                 )}
                                 {visibleColumns.gradeLevel && <TableCell>{cls.gradeLevel}</TableCell>}
@@ -575,6 +596,96 @@ export default function SchoolClassesPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Mobile Card View - Shown only on mobile */}
+                <div className="md:hidden space-y-4">
+                  <div className="text-sm text-muted-foreground mb-4">
+                    {filteredClasses.length} of {classData.length} classes
+                  </div>
+                  {filteredClasses.length > 0 ? (
+                    filteredClasses.map((cls: any) => (
+                      <Card key={cls.id} className="hover:shadow-md transition-shadow">
+                        <CardHeader className="pb-3">
+                          <div className="flex justify-between items-start gap-2">
+                            <CardTitle className="text-lg leading-tight">{cls.title}</CardTitle>
+                            <Badge variant="secondary" className="shrink-0">{cls.status}</Badge>
+                          </div>
+                          <CardDescription>{cls.category} • {cls.gradeLevel}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-0 space-y-2">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="font-medium">Instructor:</span>
+                              <p className="text-muted-foreground">
+                                {(cls.instructorName && cls.instructorName !== "no-instructor") 
+                                  ? cls.instructorName 
+                                  : (cls.instructor || "Unassigned")}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="font-medium">Location:</span>
+                              <p className="text-muted-foreground">{cls.location || "Not Specified"}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="font-medium">Enrollment:</span>
+                              <p className="text-muted-foreground">
+                                {cls.enrollmentCount || 0}/{cls.capacity || cls.maxEnrollment || 0} students
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                        <CardFooter className="pt-3 flex gap-2">
+                          <Link href={`/schools/classes/${cls.id}`} className="flex-1">
+                            <Button size="sm" variant="outline" className="w-full">
+                              View Details
+                            </Button>
+                          </Link>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>
+                                <Link href={`/schools/classes/${cls.id}/edit`}>Edit Class</Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Link href={`/schools/classes/${cls.id}/roster`}>View Roster</Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDuplicateClass(cls)}
+                                className="text-blue-600"
+                              >
+                                Duplicate Class
+                              </DropdownMenuItem>
+                              {cls.instructorName && cls.instructorName !== "no-instructor" && cls.instructorName !== "No Instructor Assigned" && (
+                                <DropdownMenuItem 
+                                  onClick={() => handleUnassignInstructor(cls.id, cls.title)}
+                                  className="text-orange-600"
+                                >
+                                  Unassign Instructor
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteClass(cls.id, cls.title)}
+                                className="text-red-600"
+                              >
+                                Delete Class
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </CardFooter>
+                      </Card>
+                    ))
+                  ) : (
+                    <Card>
+                      <CardContent className="text-center py-12 text-muted-foreground">
+                        No classes found. Try adjusting your search or filters.
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
               </TabsContent>
 
               {/* Grid View */}
@@ -602,15 +713,21 @@ export default function SchoolClassesPage() {
                               <div className="space-y-2">
                                 <div className="flex items-center">
                                   <Users className="w-4 h-4 mr-2 text-muted-foreground" />
-                                  <span className="text-sm">{cls.instructor}</span>
+                                  <span className="text-sm">
+                                    {(cls.instructorName && cls.instructorName !== "no-instructor") 
+                                      ? cls.instructorName 
+                                      : (cls.instructor || "Unassigned")}
+                                  </span>
                                 </div>
                                 <div className="flex items-center">
                                   <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                                  <span className="text-sm">{cls.schedule}</span>
+                                  <span className="text-sm">{cls.schedule || 'Schedule TBD'}</span>
                                 </div>
                                 <div className="flex items-center">
                                   <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
-                                  <span className="text-sm">{cls.startDate} to {cls.endDate}</span>
+                                  <span className="text-sm">
+                                    {cls.startDate && cls.endDate ? `${cls.startDate} to ${cls.endDate}` : 'Dates TBD'}
+                                  </span>
                                 </div>
                               </div>
                             </CardContent>
