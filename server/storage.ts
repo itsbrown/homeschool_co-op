@@ -4570,6 +4570,31 @@ export class MemStorage implements IStorage {
         return this.dbStorage.updateNotificationRecipient(id, recipient);
       }
 
+      // Push Subscription methods
+      async getPushSubscriptionsByUserId(userId: number): Promise<any[]> {
+        return this.dbStorage.getPushSubscriptionsByUserId(userId);
+      }
+
+      async getPushSubscriptionByEndpoint(endpoint: string): Promise<any | undefined> {
+        return this.dbStorage.getPushSubscriptionByEndpoint(endpoint);
+      }
+
+      async createPushSubscription(subscription: any): Promise<any> {
+        return this.dbStorage.createPushSubscription(subscription);
+      }
+
+      async updatePushSubscription(id: number, subscription: Partial<any>): Promise<any | undefined> {
+        return this.dbStorage.updatePushSubscription(id, subscription);
+      }
+
+      async deletePushSubscription(id: number): Promise<void> {
+        return this.dbStorage.deletePushSubscription(id);
+      }
+
+      async deletePushSubscriptionByEndpoint(endpoint: string): Promise<void> {
+        return this.dbStorage.deletePushSubscriptionByEndpoint(endpoint);
+      }
+
       // Discount methods
       async getDiscountById(id: number): Promise<Discount | undefined> {
         return this.dbStorage.getDiscountById(id);

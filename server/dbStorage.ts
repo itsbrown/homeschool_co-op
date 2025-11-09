@@ -1796,6 +1796,59 @@ export class DatabaseStorage implements IStorage {
     return updatedRecipient;
   }
 
+  // Push Subscription methods
+  async getPushSubscriptionsByUserId(userId: number): Promise<any[]> {
+    const db = await getDb();
+    const { pushSubscriptions } = await import('../shared/schema.js');
+    return await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId));
+  }
+
+  async getPushSubscriptionByEndpoint(endpoint: string): Promise<any | undefined> {
+    const db = await getDb();
+    const { pushSubscriptions } = await import('../shared/schema.js');
+    const [subscription] = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.endpoint, endpoint));
+    return subscription;
+  }
+
+  async createPushSubscription(subscription: any): Promise<any> {
+    const db = await getDb();
+    const { pushSubscriptions } = await import('../shared/schema.js');
+    const [created] = await db
+      .insert(pushSubscriptions)
+      .values(subscription)
+      .returning();
+    return created;
+  }
+
+  async updatePushSubscription(id: number, subscription: Partial<any>): Promise<any | undefined> {
+    const db = await getDb();
+    const { pushSubscriptions } = await import('../shared/schema.js');
+    const [updated] = await db
+      .update(pushSubscriptions)
+      .set(subscription)
+      .where(eq(pushSubscriptions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePushSubscription(id: number): Promise<void> {
+    const db = await getDb();
+    const { pushSubscriptions } = await import('../shared/schema.js');
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, id));
+  }
+
+  async deletePushSubscriptionByEndpoint(endpoint: string): Promise<void> {
+    const db = await getDb();
+    const { pushSubscriptions } = await import('../shared/schema.js');
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+
   // Discount methods
   async getDiscountById(id: number): Promise<Discount | undefined> {
     const db = await getDb();

@@ -1,10 +1,20 @@
 import webpush from 'web-push';
 
-// VAPID keys for web push (generated via npx web-push generate-vapid-keys)
-// These should be stored as environment variables in production
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BCGmUSATUlw1hM6mLZPP7wTfvFtTDPw3eTm3klDrSa9129ZJJvCmNbi8B3tDpbGuN-OyACDzx_OUY2knRXIpqXM';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'bZl4pYZEJLKRLyxTdSe65YyK2wgDn0CbNcCJffiutNs';
+// VAPID keys MUST be provided via environment variables for security
+// Generate keys with: npx web-push generate-vapid-keys
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:support@americanseekersacademy.com';
+
+// Fail fast if VAPID keys are missing - throw to prevent misconfigured deployment
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  const error = new Error(
+    'VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set in environment variables. ' +
+    'Generate keys with: npx web-push generate-vapid-keys'
+  );
+  console.error('❌', error.message);
+  throw error;
+}
 
 // Configure web push with VAPID details
 webpush.setVapidDetails(
@@ -12,6 +22,7 @@ webpush.setVapidDetails(
   VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY
 );
+console.log('✅ Web push configured with VAPID keys');
 
 export interface PushNotificationPayload {
   title: string;

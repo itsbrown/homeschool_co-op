@@ -62,6 +62,13 @@ router.post('/subscribe', supabaseAuth, async (req: any, res: Response) => {
     // Check if subscription already exists
     const existing = await storage.getPushSubscriptionByEndpoint(endpoint);
     if (existing) {
+      // 🔒 SECURITY: Verify ownership - prevent toggling another user's subscription
+      if (existing.userId !== user.id) {
+        return res.status(403).json({ 
+          message: 'This device is already registered to another account' 
+        });
+      }
+      
       // Update to active if it was deactivated
       if (!existing.isActive) {
         const updated = await storage.updatePushSubscription(existing.id, {
@@ -94,15 +101,35 @@ router.post('/subscribe', supabaseAuth, async (req: any, res: Response) => {
 // Unsubscribe from push notifications
 router.post('/unsubscribe', supabaseAuth, async (req: any, res: Response) => {
   try {
+    const userEmail = req.auth?.payload?.email;
     const { endpoint } = req.body;
+    
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
     
     if (!endpoint) {
       return res.status(400).json({ message: 'Endpoint required' });
     }
     
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // 🔒 SECURITY: Verify ownership before deleting
+    const subscription = await storage.getPushSubscriptionByEndpoint(endpoint);
+    if (!subscription) {
+      return res.status(404).json({ message: 'Subscription not found' });
+    }
+    
+    if (subscription.userId !== user.id) {
+      return res.status(403).json({ message: 'Access denied: You can only unsubscribe your own devices' });
+    }
+    
     await storage.deletePushSubscriptionByEndpoint(endpoint);
     
-    console.log(`🔕 Push subscription removed: ${endpoint.substring(0, 50)}...`);
+    console.log(`🔕 Push subscription removed for user ${userEmail}: ${endpoint.substring(0, 50)}...`);
     res.json({ success: true });
   } catch (error) {
     console.error('Error removing push subscription:', error);
