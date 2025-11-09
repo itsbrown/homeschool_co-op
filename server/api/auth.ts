@@ -127,15 +127,17 @@ router.post('/register', async (req, res) => {
       
       console.log('🔧 Creating Supabase auth account...');
       
-      // Create authentication account in Supabase
+      // 🔐 PHASE 2: Write to app_metadata (admin-only, secure) for new users
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: email,
         password: userPassword,
         email_confirm: true, // Auto-confirm email for registration
-        user_metadata: {
-          name: `${userFirstName} ${userLastName}`,
+        app_metadata: {
           role: role || 'parent',
           school_id: schoolId || null
+        },
+        user_metadata: {
+          name: `${userFirstName} ${userLastName}`
         }
       });
       

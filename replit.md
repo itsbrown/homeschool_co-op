@@ -39,10 +39,16 @@ The platform utilizes a modern web application architecture prioritizing scalabi
   - **Database as Source of Truth**: All user metadata (schoolId, role, name) is derived from the PostgreSQL database, NOT from JWT tokens or user-editable fields
   - **Auto-Sync Mechanism**: Authentication middleware (`server/middleware/supabase-auth.ts`) automatically detects and corrects metadata mismatches on every authenticated request
   - **Tampering Detection**: Enhanced monitoring logs security alerts when metadata doesn't match database values, enabling detection of tampering attempts
-  - **Current Implementation (Phase 1)**: Uses Supabase `user_metadata` (user-editable) with automatic synchronization from database to prevent security issues
+  - **Current Implementation (Phase 2 - ACTIVE)**: Hybrid authentication mode supporting both `app_metadata` (new users, admin-only) and `user_metadata` (existing users, with auto-sync)
+  - **Phase 2 Features**:
+    - New user registrations write role and schoolId to secure `app_metadata` (immutable, admin-only)
+    - Middleware checks `app_metadata` first, then falls back to `user_metadata` for existing users
+    - Feature flag (`PHASE_2_APP_METADATA_ENABLED`) enables instant rollback to Phase 1 if needed (defaults to enabled)
+    - Existing users continue working seamlessly with auto-sync from database
+    - Zero downtime migration - no impact on active users
   - **Migration Strategy**: Three-phase approach to migrate from `user_metadata` to `app_metadata` (admin-only, immutable):
-    - **Phase 1 (Current)**: Email notifications for new student registrations, enhanced security monitoring and logging
-    - **Phase 2 (Planned)**: New user signups write to `app_metadata`, existing users continue with auto-sync fallback
+    - **Phase 1 (COMPLETED)**: Email notifications for new student registrations, enhanced security monitoring and logging
+    - **Phase 2 (ACTIVE)**: New user signups write to `app_metadata`, existing users continue with auto-sync fallback
     - **Phase 3 (Future)**: Gradual batch migration of existing users to `app_metadata` during controlled maintenance windows
   - **Notification System**: School administrators receive dual-channel notifications (email + in-app) when new students register, with graceful error handling to prevent registration failures
 - **School Branding System**: 

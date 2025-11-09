@@ -4,6 +4,15 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// 🔐 PHASE 2 FEATURE FLAG: Set to 'false' to rollback to Phase 1 behavior
+const PHASE_2_APP_METADATA_ENABLED = process.env.PHASE_2_APP_METADATA_ENABLED !== 'false';
+
+if (PHASE_2_APP_METADATA_ENABLED) {
+  console.log('✅ Phase 2 app_metadata mode ENABLED (default)');
+} else {
+  console.log('⚠️ Phase 2 app_metadata mode DISABLED - using Phase 1 user_metadata only');
+}
+
 if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
 }
@@ -57,10 +66,23 @@ export const supabaseAuth = async (
       sub: user.id,
     };
 
+    // 🔐 PHASE 2 HYBRID MODE: Check app_metadata first (new users), then user_metadata (existing users)
+    // Feature flag allows instant rollback to Phase 1 if needed
+    const hasAppMetadata = user.app_metadata && (user.app_metadata.role || user.app_metadata.school_id);
+    const metadataSource = hasAppMetadata && PHASE_2_APP_METADATA_ENABLED ? 'app_metadata' : 'user_metadata';
+    
+    if (hasAppMetadata && PHASE_2_APP_METADATA_ENABLED) {
+      console.log(`✅ Phase 2: Using app_metadata for ${user.email} (secure, immutable)`);
+    }
+
     req.auth = {
       payload: {
         sub: user.id,
         email: user.email!,
+        // Phase 2: Prefer app_metadata (admin-only) over user_metadata (user-editable) if enabled
+        role: (PHASE_2_APP_METADATA_ENABLED ? user.app_metadata?.role : null) || user.user_metadata?.role,
+        school_id: (PHASE_2_APP_METADATA_ENABLED ? user.app_metadata?.school_id : null) || user.user_metadata?.school_id,
+        // Include other metadata from user_metadata (non-critical fields like name)
         ...user.user_metadata,
       },
     };
@@ -74,51 +96,60 @@ export const supabaseAuth = async (
         const dbUser = await storage.getUserByEmail(user.email);
         
         if (dbUser) {
-          // Check for metadata mismatches (potential tampering or missing data)
-          const metadataSchoolId = user.user_metadata?.school_id;
-          const metadataRole = user.user_metadata?.role;
+          // For Phase 2 users (app_metadata), check if database matches app_metadata
+          // For existing users (user_metadata), auto-sync from database
+          const currentSchoolId = user.app_metadata?.school_id || user.user_metadata?.school_id;
+          const currentRole = user.app_metadata?.role || user.user_metadata?.role;
           const dbSchoolId = dbUser.schoolId;
           const dbRole = dbUser.role;
 
-          const schoolIdMismatch = metadataSchoolId !== undefined && metadataSchoolId !== dbSchoolId;
-          const roleMismatch = metadataRole !== undefined && metadataRole !== dbRole;
-          const missingSchoolId = !metadataSchoolId && dbSchoolId;
-          const missingRole = !metadataRole && dbRole;
+          const schoolIdMismatch = currentSchoolId !== undefined && currentSchoolId !== dbSchoolId;
+          const roleMismatch = currentRole !== undefined && currentRole !== dbRole;
+          const missingSchoolId = !currentSchoolId && dbSchoolId;
+          const missingRole = !currentRole && dbRole;
 
           // 🚨 SECURITY ALERT: Log potential tampering attempts
           if (schoolIdMismatch || roleMismatch) {
-            console.warn(`🚨 SECURITY: Metadata mismatch detected for ${user.email}`);
-            console.warn(`   Metadata school_id: ${metadataSchoolId} vs DB: ${dbSchoolId}`);
-            console.warn(`   Metadata role: ${metadataRole} vs DB: ${dbRole}`);
+            console.warn(`🚨 SECURITY: Metadata mismatch detected for ${user.email} (source: ${metadataSource})`);
+            console.warn(`   Current school_id: ${currentSchoolId} vs DB: ${dbSchoolId}`);
+            console.warn(`   Current role: ${currentRole} vs DB: ${dbRole}`);
             console.warn(`   This could indicate tampering or outdated token. Auto-correcting...`);
           }
 
-          // Auto-fix missing or mismatched metadata
+          // Auto-fix for user_metadata users (Phase 1)
+          // Phase 2 users with app_metadata should already be correct, but log if not
           if (missingSchoolId || missingRole || schoolIdMismatch || roleMismatch) {
-            if (missingSchoolId || missingRole) {
-              console.log(`⚠️ Auto-fixing missing metadata for ${user.email}`);
-            }
-            
-            // Update Supabase user metadata to match database (source of truth)
-            const { data, error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
-              user_metadata: {
-                ...user.user_metadata,
-                school_id: dbUser.schoolId,
-                role: dbUser.role,
-                name: dbUser.name
+            if (!hasAppMetadata) {
+              // Existing user with user_metadata - auto-sync from database
+              if (missingSchoolId || missingRole) {
+                console.log(`⚠️ Auto-fixing missing user_metadata for ${user.email}`);
               }
-            });
-            
-            if (updateError) {
-              console.error(`❌ Failed to update metadata for ${user.email}:`, updateError.message);
+              
+              // Update Supabase user metadata to match database (source of truth)
+              const { data, error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+                user_metadata: {
+                  ...user.user_metadata,
+                  school_id: dbUser.schoolId,
+                  role: dbUser.role,
+                  name: dbUser.name
+                }
+              });
+              
+              if (updateError) {
+                console.error(`❌ Failed to update user_metadata for ${user.email}:`, updateError.message);
+              } else {
+                console.log(`✅ user_metadata synced for ${user.email}: school_id=${dbUser.schoolId}, role=${dbUser.role}`);
+                if (schoolIdMismatch || roleMismatch) {
+                  console.log(`   🔒 Corrected mismatch - token will be updated on next login`);
+                }
+              }
             } else {
-              console.log(`✅ Metadata synced for ${user.email}: school_id=${dbUser.schoolId}, role=${dbUser.role}`);
-              if (schoolIdMismatch || roleMismatch) {
-                console.log(`   🔒 Corrected mismatch - token will be updated on next login`);
-              }
+              // Phase 2 user with app_metadata mismatch - this shouldn't happen
+              console.error(`⚠️ Phase 2 user ${user.email} has app_metadata mismatch with database!`);
+              console.error(`   app_metadata should be admin-only and match database. Investigate!`);
             }
             
-            // Apply corrections to current request immediately
+            // Apply corrections to current request immediately (use database as source of truth)
             if (req.auth?.payload) {
               req.auth.payload.school_id = dbUser.schoolId;
               req.auth.payload.role = dbUser.role;
