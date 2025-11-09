@@ -1707,3 +1707,26 @@ export type InsertCustomFormField = z.infer<typeof insertCustomFormFieldSchema>;
 export type CustomFormField = typeof customFormFields.$inferSelect;
 export type InsertCustomFormSubmission = z.infer<typeof insertCustomFormSubmissionSchema>;
 export type CustomFormSubmission = typeof customFormSubmissions.$inferSelect;
+
+// Push Subscriptions table for web push notifications
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dhKey: text("p256dh_key").notNull(), // Public key for encryption
+  authKey: text("auth_key").notNull(), // Authentication secret
+  userAgent: text("user_agent"), // Browser/device info
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+
+// Push subscriptions relations
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(users, { fields: [pushSubscriptions.userId], references: [users.id] }),
+}));
