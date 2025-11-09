@@ -93,7 +93,8 @@ export default function StudentRegistrationPage() {
         lastName: formData.get('lastName'),
         dateOfBirth: formData.get('dateOfBirth'),
         gradeLevel: gradeLevel, // Use state value instead of FormData
-        locationId: locationId ? parseInt(locationId) : null, // Add location
+        // schoolId is derived server-side from authenticated admin's JWT token for security
+        locationId: locationId ? parseInt(locationId) : null, // Server validates this belongs to your school
         parentEmail: formData.get('parentEmail'),
         parentPhone: formData.get('parentPhone'),
         emergencyContact: formData.get('emergencyContact'),

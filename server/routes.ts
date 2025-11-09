@@ -2904,16 +2904,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/school-applications", schoolApplicationsRouter.default);
 
   // Student registration endpoint for school admins
-  app.post("/api/students/register", async (req, res) => {
+  app.post("/api/students/register", supabaseAuth, async (req: any, res) => {
     console.log('🚀 Student registration started');
     console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
 
     try {
+      // SECURITY: Derive schoolId from authenticated admin's JWT token, not from client
+      const schoolIdFromToken = req.auth?.payload?.school_id;
+      if (!schoolIdFromToken) {
+        console.error('❌ No school ID found in JWT token');
+        return res.status(400).json({ 
+          success: false,
+          message: "School ID not found in user credentials. Please ensure you're logged in as a school administrator." 
+        });
+      }
+      const schoolId = Number(schoolIdFromToken);
+      if (isNaN(schoolId)) {
+        console.error('❌ Invalid school ID in JWT token:', schoolIdFromToken);
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid school ID in user credentials." 
+        });
+      }
+
+      console.log('🔐 Authenticated school ID from JWT:', schoolId);
+
+      // SECURITY: Verify user has schoolAdmin role (only admins can register students)
+      const userRole = req.auth?.payload?.role;
+      if (userRole !== 'schoolAdmin' && userRole !== 'superAdmin') {
+        console.error('❌ Unauthorized role attempting student registration. Role:', userRole);
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: Only school administrators can register students."
+        });
+      }
+      console.log('✅ Role authorization passed:', userRole);
+
       const {
         firstName,
         lastName,
         dateOfBirth,
         gradeLevel,
+        locationId, // Still accept locationId but will validate it belongs to this school
         parentEmail,
         parentPhone,
         emergencyContact,
@@ -2924,8 +2956,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } = req.body;
 
       console.log('✅ Extracted form data:', {
-        firstName, lastName, dateOfBirth, gradeLevel, parentEmail, sendInvitation
+        firstName, lastName, dateOfBirth, gradeLevel, parentEmail, sendInvitation, schoolId
       });
+
+      // SECURITY: Validate locationId belongs to the authenticated school
+      if (locationId) {
+        console.log('🔐 Validating locationId:', locationId, 'belongs to schoolId:', schoolId);
+        const location = await storage.getLocationById(locationId);
+        if (!location) {
+          console.error('❌ Location not found:', locationId);
+          return res.status(400).json({ 
+            success: false,
+            message: "Invalid location ID provided." 
+          });
+        }
+        if (location.schoolId !== schoolId) {
+          console.error('❌ Location belongs to different school. LocationSchoolId:', location.schoolId, 'AuthenticatedSchoolId:', schoolId);
+          return res.status(403).json({ 
+            success: false,
+            message: "Access denied: Location does not belong to your school." 
+          });
+        }
+        console.log('✅ Location validation passed');
+      }
 
       // Create or find parent account
       console.log('🔍 Looking for parent with email:', parentEmail);
@@ -2959,6 +3012,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         birthdate: dateOfBirth, // Use 'birthdate' not 'dateOfBirth'
         gradeLevel,
         parentId: parentUser.id,
+        schoolId: schoolId, // Mandatory - derived from authenticated admin's JWT
+        locationId: locationId || null, // Optional - validated to belong to schoolId
         school: null,
         learningStyle: null,
         specialNeeds: specialNeeds || null,
