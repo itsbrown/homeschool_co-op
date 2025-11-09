@@ -5,6 +5,7 @@ import PageLayout from "@/components/layout/PageLayout";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import ChildRegistrationForm from "@/components/registration/ChildRegistrationForm";
+import type { Child } from "@shared/schema";
 
 export default function ChildProfileEditPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -33,14 +34,10 @@ export default function ChildProfileEditPage() {
     return <Redirect to="/children" />;
   }
 
-  // Use the correct API endpoint for parent access to children
-  const { data: childData, isLoading: childLoading, error } = useQuery({
-    queryKey: ["/api/parent/children", childId],
+  // Fetch the specific child by ID
+  const { data: childData, isLoading: childLoading, error } = useQuery<Child>({
+    queryKey: [`/api/children/${childId}`],
     enabled: !!childId && isAuthenticated,
-    select: (data: any[]) => {
-      // Find the specific child by ID from the parent's children array
-      return data?.find((child: any) => child.id === parseInt(childId));
-    }
   });
 
   // Handle errors with useEffect to avoid calling toast during render
