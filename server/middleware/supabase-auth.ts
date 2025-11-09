@@ -75,15 +75,20 @@ export const supabaseAuth = async (
       console.log(`✅ Phase 2: Using app_metadata for ${user.email} (secure, immutable)`);
     }
 
+    // 🔒 CRITICAL: Spread user_metadata FIRST, then override with secure values
+    // This prevents user_metadata from overwriting admin-only app_metadata values
+    const { role: _, school_id: __, ...safeUserMetadata } = user.user_metadata || {};
+    
     req.auth = {
       payload: {
         sub: user.id,
         email: user.email!,
-        // Phase 2: Prefer app_metadata (admin-only) over user_metadata (user-editable) if enabled
+        // Include non-critical metadata from user_metadata (like name, preferences)
+        ...safeUserMetadata,
+        // Phase 2: Use app_metadata (admin-only) or user_metadata (existing users)
+        // These MUST come after spread to prevent tampering via user_metadata
         role: (PHASE_2_APP_METADATA_ENABLED ? user.app_metadata?.role : null) || user.user_metadata?.role,
         school_id: (PHASE_2_APP_METADATA_ENABLED ? user.app_metadata?.school_id : null) || user.user_metadata?.school_id,
-        // Include other metadata from user_metadata (non-critical fields like name)
-        ...user.user_metadata,
       },
     };
 
