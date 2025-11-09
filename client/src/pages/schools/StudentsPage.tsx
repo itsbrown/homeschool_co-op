@@ -198,180 +198,265 @@ export default function StudentsPage() {
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {/* Search and Filters */}
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by name, parent, or email..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-8"
-                      />
-                    </div>
-                    <Select value={gradeLevelFilter} onValueChange={setGradeLevelFilter}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Grade Level" />
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name, parent, or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+
+                {/* Filters - stack on mobile */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Select value={gradeLevelFilter} onValueChange={setGradeLevelFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Grade Level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Grades</SelectItem>
+                      {gradeLevels.map((grade: any) => (
+                        <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={locationFilter} onValueChange={setLocationFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Locations</SelectItem>
+                      {locations.map((location: any) => (
+                        <SelectItem key={location} value={location}>{location}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {statuses.map((status: any) => (
+                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Sorting Controls - stack on mobile */}
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">Sort by:</span>
+                    <Select value={sortField} onValueChange={setSortField}>
+                      <SelectTrigger className="w-full sm:w-[180px]">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Grades</SelectItem>
-                        {gradeLevels.map((grade: any) => (
-                          <SelectItem key={grade} value={grade}>{grade}</SelectItem>
-                        ))}
+                        <SelectItem value="name">Name</SelectItem>
+                        <SelectItem value="grade">Grade Level</SelectItem>
+                        <SelectItem value="age">Age</SelectItem>
+                        <SelectItem value="location">Location</SelectItem>
+                        <SelectItem value="parent">Parent/Guardian</SelectItem>
+                        <SelectItem value="enrollment">Enrollment Date</SelectItem>
+                        <SelectItem value="status">Status</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Select value={locationFilter} onValueChange={setLocationFilter}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Locations</SelectItem>
-                        {locations.map((location: any) => (
-                          <SelectItem key={location} value={location}>{location}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        {statuses.map((status: any) => (
-                          <SelectItem key={status} value={status}>{status}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+                      aria-label="Toggle sort direction"
+                      data-testid="button-toggle-sort"
+                    >
+                      {sortDirection === "asc" ? "↑" : "↓"}
+                    </Button>
                   </div>
-                  
-                  {/* Sorting Controls */}
-                  <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-muted-foreground">Sort by:</span>
-                      <Select value={sortField} onValueChange={setSortField}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="name">Name</SelectItem>
-                          <SelectItem value="grade">Grade Level</SelectItem>
-                          <SelectItem value="age">Age</SelectItem>
-                          <SelectItem value="location">Location</SelectItem>
-                          <SelectItem value="parent">Parent/Guardian</SelectItem>
-                          <SelectItem value="enrollment">Enrollment Date</SelectItem>
-                          <SelectItem value="status">Status</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
-                      >
-                        {sortDirection === "asc" ? "↑" : "↓"}
-                      </Button>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {filteredStudents.length} of {studentsData.length || 0} students
-                    </div>
+                  <div className="text-sm text-muted-foreground">
+                    {filteredStudents.length} of {studentsData.length || 0} students
                   </div>
                 </div>
               </CardContent>
 
               <TabsContent value="list" className="mt-0">
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student</TableHead>
-                        <TableHead>Grade</TableHead>
-                        <TableHead>Age</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Parent/Guardian</TableHead>
-                        <TableHead>Enrollment</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredStudents.length > 0 ? (
-                        filteredStudents.map((student: any) => (
-                          <TableRow key={student.id}>
-                            <TableCell>
+                  {/* Desktop Table View - Hidden on mobile */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Grade</TableHead>
+                          <TableHead>Age</TableHead>
+                          <TableHead>Location</TableHead>
+                          <TableHead>Parent/Guardian</TableHead>
+                          <TableHead>Enrollment</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredStudents.length > 0 ? (
+                          filteredStudents.map((student: any) => (
+                            <TableRow key={student.id}>
+                              <TableCell>
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span className="text-sm font-medium text-primary">
+                                      {student.name?.split(' ').map((n: any) => n[0]).join('').toUpperCase() || 'S'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <div className="font-medium">{student.name}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      ID: {student.id}
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{student.gradeLevel}</Badge>
+                              </TableCell>
+                              <TableCell>{student.age || 'N/A'}</TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <div className="font-medium">{student.locationName || 'Unknown'}</div>
+                                  <div className="text-xs text-muted-foreground">{student.locationCode || 'N/A'}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <div className="font-medium">{student.parentName || 'N/A'}</div>
+                                  <div className="text-sm text-muted-foreground">{student.email || 'No email'}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : 'N/A'}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={student.status === 'Active' ? 'default' : 'secondary'}
+                                  className={student.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : ''}
+                                >
+                                  {student.status || 'Active'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem asChild>
+                                      <Link href={`/schools/students/${student.id}`}>View Profile</Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                      <Link href={`/schools/students/${student.id}/edit`}>Edit Student</Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                      <Link href={`/schools/students/${student.id}/classes`}>Manage Classes</Link>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center py-8">
+                              <div className="text-muted-foreground">No students found matching your criteria.</div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile Card View - Shown only on mobile */}
+                  <div className="md:hidden space-y-3">
+                    {filteredStudents.length > 0 ? (
+                      filteredStudents.map((student: any) => (
+                        <Card key={student.id} className="overflow-hidden">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between">
                               <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                                   <span className="text-sm font-medium text-primary">
                                     {student.name?.split(' ').map((n: any) => n[0]).join('').toUpperCase() || 'S'}
                                   </span>
                                 </div>
                                 <div>
-                                  <div className="font-medium">{student.name}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    ID: {student.id}
-                                  </div>
+                                  <CardTitle className="text-base">{student.name}</CardTitle>
+                                  <CardDescription className="text-xs">
+                                    Grade {student.gradeLevel} • Age {student.age || 'N/A'}
+                                  </CardDescription>
                                 </div>
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{student.gradeLevel}</Badge>
-                            </TableCell>
-                            <TableCell>{student.age || 'N/A'}</TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="font-medium">{student.locationName || 'Unknown'}</div>
-                                <div className="text-xs text-muted-foreground">{student.locationCode || 'N/A'}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="font-medium">{student.parentName || 'N/A'}</div>
-                                <div className="text-sm text-muted-foreground">{student.email || 'No email'}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm">
-                                {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : 'N/A'}
-                              </div>
-                            </TableCell>
-                            <TableCell>
                               <Badge 
                                 variant={student.status === 'Active' ? 'default' : 'secondary'}
                                 className={student.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : ''}
                               >
                                 {student.status || 'Active'}
                               </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" className="h-8 w-8 p-0">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem asChild>
-                                    <Link href={`/schools/students/${student.id}`}>View Profile</Link>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem asChild>
-                                    <Link href={`/schools/students/${student.id}/edit`}>Edit Student</Link>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem asChild>
-                                    <Link href={`/schools/students/${student.id}/classes`}>Manage Classes</Link>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
-                            <div className="text-muted-foreground">No students found matching your criteria.</div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0 space-y-2">
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="font-medium">Parent:</span>
+                                <p className="text-muted-foreground">{student.parentName || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Location:</span>
+                                <p className="text-muted-foreground">{student.locationName || 'Unknown'}</p>
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Enrolled: {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : 'N/A'}
+                            </div>
+                          </CardContent>
+                          <CardFooter className="pt-2 pb-3">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="w-full"
+                                  data-testid={`button-student-actions-${student.id}`}
+                                >
+                                  <MoreHorizontal className="mr-2 h-4 w-4" />
+                                  Actions
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/schools/students/${student.id}`}>View Profile</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/schools/students/${student.id}/edit`}>Edit Student</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/schools/students/${student.id}/classes`}>Manage Classes</Link>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </CardFooter>
+                        </Card>
+                      ))
+                    ) : (
+                      <Card>
+                        <CardContent className="text-center py-12 text-muted-foreground">
+                          No students found matching your criteria.
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
                 </CardContent>
               </TabsContent>
 
