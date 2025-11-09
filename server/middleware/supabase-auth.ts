@@ -65,43 +65,69 @@ export const supabaseAuth = async (
       },
     };
 
-    // Auto-fix missing school_id in JWT token by syncing from database
-    // This runs ONCE per user and permanently updates their Supabase metadata
-    if (!user.user_metadata?.school_id && user.email) {
+    // 🔒 SECURITY MONITORING & AUTO-SYNC: Detect and correct metadata mismatches
+    // This protects against user_metadata tampering by ensuring database is source of truth
+    if (user.email) {
       try {
         // Import storage dynamically to avoid circular dependencies
         const { storage } = await import('../storage.js');
         const dbUser = await storage.getUserByEmail(user.email);
         
-        if (dbUser?.schoolId) {
-          console.log(`⚠️ Auto-fixing missing school_id for ${user.email}`);
-          
-          // Update Supabase user metadata SYNCHRONOUSLY to ensure it's permanent
-          const { data, error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
-            user_metadata: {
-              ...user.user_metadata,
-              school_id: dbUser.schoolId,
-              role: dbUser.role,
-              name: dbUser.name
-            }
-          });
-          
-          if (updateError) {
-            console.error(`❌ Failed to update metadata for ${user.email}:`, updateError.message);
-          } else {
-            console.log(`✅ Permanently fixed metadata for ${user.email} with school_id=${dbUser.schoolId}`);
-            console.log(`   User should log out and back in for changes to take full effect`);
+        if (dbUser) {
+          // Check for metadata mismatches (potential tampering or missing data)
+          const metadataSchoolId = user.user_metadata?.school_id;
+          const metadataRole = user.user_metadata?.role;
+          const dbSchoolId = dbUser.schoolId;
+          const dbRole = dbUser.role;
+
+          const schoolIdMismatch = metadataSchoolId !== undefined && metadataSchoolId !== dbSchoolId;
+          const roleMismatch = metadataRole !== undefined && metadataRole !== dbRole;
+          const missingSchoolId = !metadataSchoolId && dbSchoolId;
+          const missingRole = !metadataRole && dbRole;
+
+          // 🚨 SECURITY ALERT: Log potential tampering attempts
+          if (schoolIdMismatch || roleMismatch) {
+            console.warn(`🚨 SECURITY: Metadata mismatch detected for ${user.email}`);
+            console.warn(`   Metadata school_id: ${metadataSchoolId} vs DB: ${dbSchoolId}`);
+            console.warn(`   Metadata role: ${metadataRole} vs DB: ${dbRole}`);
+            console.warn(`   This could indicate tampering or outdated token. Auto-correcting...`);
           }
-          
-          // Add school_id to current request immediately so it works right now
-          if (req.auth?.payload) {
-            req.auth.payload.school_id = dbUser.schoolId;
-            req.auth.payload.role = dbUser.role;
-            req.auth.payload.name = dbUser.name;
+
+          // Auto-fix missing or mismatched metadata
+          if (missingSchoolId || missingRole || schoolIdMismatch || roleMismatch) {
+            if (missingSchoolId || missingRole) {
+              console.log(`⚠️ Auto-fixing missing metadata for ${user.email}`);
+            }
+            
+            // Update Supabase user metadata to match database (source of truth)
+            const { data, error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+              user_metadata: {
+                ...user.user_metadata,
+                school_id: dbUser.schoolId,
+                role: dbUser.role,
+                name: dbUser.name
+              }
+            });
+            
+            if (updateError) {
+              console.error(`❌ Failed to update metadata for ${user.email}:`, updateError.message);
+            } else {
+              console.log(`✅ Metadata synced for ${user.email}: school_id=${dbUser.schoolId}, role=${dbUser.role}`);
+              if (schoolIdMismatch || roleMismatch) {
+                console.log(`   🔒 Corrected mismatch - token will be updated on next login`);
+              }
+            }
+            
+            // Apply corrections to current request immediately
+            if (req.auth?.payload) {
+              req.auth.payload.school_id = dbUser.schoolId;
+              req.auth.payload.role = dbUser.role;
+              req.auth.payload.name = dbUser.name;
+            }
           }
         }
       } catch (syncError) {
-        console.error('Error during metadata auto-fix:', syncError);
+        console.error('Error during metadata sync:', syncError);
       }
     }
 

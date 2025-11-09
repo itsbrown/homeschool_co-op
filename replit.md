@@ -35,6 +35,16 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation. School-admin API endpoints are protected with Supabase JWT authentication.
 - **Multi-Tenant Security**: Comprehensive isolation preventing cross-school data leakage, with strict school boundary validation enforced on all school-admin API endpoints using JWT tokens.
+- **Security Architecture & Metadata Management**:
+  - **Database as Source of Truth**: All user metadata (schoolId, role, name) is derived from the PostgreSQL database, NOT from JWT tokens or user-editable fields
+  - **Auto-Sync Mechanism**: Authentication middleware (`server/middleware/supabase-auth.ts`) automatically detects and corrects metadata mismatches on every authenticated request
+  - **Tampering Detection**: Enhanced monitoring logs security alerts when metadata doesn't match database values, enabling detection of tampering attempts
+  - **Current Implementation (Phase 1)**: Uses Supabase `user_metadata` (user-editable) with automatic synchronization from database to prevent security issues
+  - **Migration Strategy**: Three-phase approach to migrate from `user_metadata` to `app_metadata` (admin-only, immutable):
+    - **Phase 1 (Current)**: Email notifications for new student registrations, enhanced security monitoring and logging
+    - **Phase 2 (Planned)**: New user signups write to `app_metadata`, existing users continue with auto-sync fallback
+    - **Phase 3 (Future)**: Gradual batch migration of existing users to `app_metadata` during controlled maintenance windows
+  - **Notification System**: School administrators receive dual-channel notifications (email + in-app) when new students register, with graceful error handling to prevent registration failures
 - **School Branding System**: 
   - **Logo Storage**: School logos stored in the `schools.logo` field (text field containing URL/path to image file)
   - **Logo Upload**: School administrators can upload logos via the School Settings page (`/schools/settings`) after school creation

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { storage } from '../storage';
 import { jwtCheck } from '../middleware/auth0-auth';
+import { sendNewStudentNotificationEmail } from '../lib/email-service';
 
 const router = Router();
 
@@ -225,6 +226,61 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       } catch (schoolStudentError) {
         console.error('⚠️ Failed to create school_student record:', schoolStudentError);
         // Don't fail the entire registration if this fails - child is already created
+      }
+    }
+
+    // 🔔 Notify school admins about new student registration
+    if (validSchoolId) {
+      try {
+        console.log('🔔 Sending notifications to school admins for school:', validSchoolId);
+        
+        // Fetch all users and filter for school admins
+        const allUsers = await storage.getAllUsers();
+        const schoolAdmins = allUsers.filter(user => 
+          user.schoolId === validSchoolId && 
+          (user.role === 'schoolAdmin' || user.role === 'superAdmin')
+        );
+        console.log(`📋 Found ${schoolAdmins.length} school admin(s) to notify`);
+        
+        // Get school details for better notifications
+        const school = await storage.getSchool(validSchoolId);
+        const schoolName = school?.name || 'Your School';
+        
+        // Only send notifications if we have admins
+        if (schoolAdmins.length > 0) {
+          // Send email notifications to each admin
+          for (const admin of schoolAdmins) {
+            try {
+              const emailSent = await sendNewStudentNotificationEmail({
+                adminEmail: admin.email,
+                adminName: admin.name || `${admin.firstName} ${admin.lastName}`,
+                schoolName: schoolName,
+                studentFirstName: firstName,
+                studentLastName: lastName,
+                studentGradeLevel: gradeLevel,
+                parentEmail: userEmail,
+                parentPhone: parentPhone || parent.phone,
+                registrationDate: new Date()
+              });
+              
+              if (emailSent) {
+                console.log(`✅ Sent email notification to admin: ${admin.email}`);
+              } else {
+                console.log(`⚠️ Email notification failed for admin: ${admin.email}`);
+              }
+            } catch (notificationError) {
+              const error = notificationError as Error;
+              console.error(`❌ Failed to notify admin ${admin.email}:`, error.message);
+              // Continue notifying other admins even if one fails
+            }
+          }
+        }
+        
+        console.log('✅ Admin notification process completed');
+      } catch (notificationError) {
+        const error = notificationError as Error;
+        console.error('⚠️ Error during admin notification process:', error.message);
+        // Don't fail registration if notifications fail
       }
     }
 

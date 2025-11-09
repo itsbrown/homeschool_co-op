@@ -895,3 +895,112 @@ If you have any questions, please contact us at support@americanseekersacademy.c
     return false;
   }
 }
+
+interface NewStudentNotificationData {
+  adminEmail: string;
+  adminName: string;
+  schoolName: string;
+  studentFirstName: string;
+  studentLastName: string;
+  studentGradeLevel: string;
+  parentEmail: string;
+  parentPhone?: string;
+  registrationDate: Date;
+}
+
+export async function sendNewStudentNotificationEmail(data: NewStudentNotificationData): Promise<boolean> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping new student notification email send');
+      return true;
+    }
+
+    const { 
+      adminEmail, 
+      adminName, 
+      schoolName,
+      studentFirstName, 
+      studentLastName, 
+      studentGradeLevel,
+      parentEmail, 
+      parentPhone,
+      registrationDate 
+    } = data;
+
+    const formatDate = (date: Date) => {
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(date);
+    };
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #4F46E5; padding: 24px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">New Student Registration</h1>
+          <p style="color: #E0E7FF; margin: 8px 0 0 0;">${schoolName}</p>
+        </div>
+        
+        <div style="background-color: #ffffff; padding: 32px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+          <h2 style="color: #1F2937; margin-top: 0;">👋 New Student Registered</h2>
+          
+          <p>Hello ${adminName},</p>
+          
+          <p>A new student has been registered at ${schoolName}:</p>
+          
+          <div style="background-color: #F3F4F6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin: 0 0 12px 0; color: #374151;">Student Information</h3>
+            <p style="margin: 0 0 8px 0;"><strong>Name:</strong> ${studentFirstName} ${studentLastName}</p>
+            <p style="margin: 0 0 8px 0;"><strong>Grade Level:</strong> ${studentGradeLevel}</p>
+            <p style="margin: 0;"><strong>Registration Date:</strong> ${formatDate(registrationDate)}</p>
+          </div>
+          
+          <div style="background-color: #EFF6FF; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6;">
+            <h3 style="margin: 0 0 12px 0; color: #1E40AF;">Parent Contact</h3>
+            <p style="margin: 0 0 8px 0; color: #1E3A8A;"><strong>Email:</strong> ${parentEmail}</p>
+            ${parentPhone ? `<p style="margin: 0; color: #1E3A8A;"><strong>Phone:</strong> ${parentPhone}</p>` : ''}
+          </div>
+          
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/schools/students" 
+               style="display: inline-block; background-color: #4F46E5; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View All Students
+            </a>
+          </div>
+          
+          <p style="font-size: 14px; color: #6B7280;">
+            You can view and manage this student's information in your school admin dashboard.
+          </p>
+        </div>
+      </div>
+    `;
+
+    const textContent = `
+New Student Registration - ${schoolName}
+
+Hello ${adminName},
+
+A new student has been registered at ${schoolName}:
+
+Student Information:
+- Name: ${studentFirstName} ${studentLastName}
+- Grade Level: ${studentGradeLevel}
+- Registration Date: ${formatDate(registrationDate)}
+
+Parent Contact:
+- Email: ${parentEmail}
+${parentPhone ? `- Phone: ${parentPhone}` : ''}
+
+You can view and manage this student's information in your school admin dashboard at:
+${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/schools/students
+    `;
+
+    return await sendEmail(adminEmail, adminName, `New Student Registration - ${studentFirstName} ${studentLastName}`, htmlContent, textContent);
+  } catch (error) {
+    console.error('❌ Error sending new student notification email:', error);
+    return false;
+  }
+}

@@ -1,5 +1,6 @@
 import express from 'express';
 import { storage } from '../storage';
+import { sendNewStudentNotificationEmail } from '../lib/email-service';
 const router = express.Router();
 
 // Student registration endpoint
@@ -78,10 +79,13 @@ router.post('/register', async (req, res) => {
     } else {
       // Create new parent user
       const parentData = {
+        username: normalizedData.parentEmail.split('@')[0],
         email: normalizedData.parentEmail,
+        password: 'temp_password_' + Math.random().toString(36),
+        name: `${parentFirstName || 'Parent'} ${parentLastName || 'User'}`,
         firstName: parentFirstName || 'Parent',
         lastName: parentLastName || 'User',
-        phone: normalizedData.parentPhone,
+        phone: normalizedData.parentPhone || null,
         role: 'parent' as const,
         isActive: true
       };
@@ -102,19 +106,28 @@ router.post('/register', async (req, res) => {
       gradeLevel: normalizedData.childGradeLevel,
       parentId: parentUser.id,
       parentEmail: normalizedData.parentEmail,
+      schoolId: schoolId || parentUser.schoolId || null,
       locationId: normalizedData.locationId,
-      specialNeeds: normalizedData.specialNeeds,
+      specialNeeds: normalizedData.specialNeeds || null,
       interests: null,
-      notes: normalizedData.medicalNotes,
-      emergencyContact: emergencyContactStr
+      allergies: allergies || null,
+      gender: null,
+      school: null,
+      learningStyle: null,
+      medicalInfo: medicalNotes || null,
+      profileImage: null,
+      additionalLanguages: null,
+      notes: normalizedData.medicalNotes || null,
+      emergencyContact: emergencyContactStr || null
     };
 
     const child = await storage.createChild(childData);
     console.log('✅ Created child:', child.id);
 
     // Create school_student record if child has a schoolId
+    let studentSchoolId = null;
     if (child && (schoolId || parentUser.schoolId)) {
-      const studentSchoolId = schoolId || parentUser.schoolId;
+      studentSchoolId = schoolId || parentUser.schoolId;
       try {
         console.log('📚 Creating school_student record for child:', child.id, 'at school:', studentSchoolId);
         const schoolStudent = await storage.createSchoolStudent({
@@ -130,6 +143,61 @@ router.post('/register', async (req, res) => {
       } catch (schoolStudentError) {
         console.error('⚠️ Failed to create school_student record:', schoolStudentError);
         // Don't fail the entire registration if this fails - child is already created
+      }
+    }
+
+    // 🔔 Notify school admins about new student registration
+    if (studentSchoolId) {
+      try {
+        console.log('🔔 Sending notifications to school admins for school:', studentSchoolId);
+        
+        // Fetch all users and filter for school admins
+        const allUsers = await storage.getAllUsers();
+        const schoolAdmins = allUsers.filter(user => 
+          user.schoolId === studentSchoolId && 
+          (user.role === 'schoolAdmin' || user.role === 'superAdmin')
+        );
+        console.log(`📋 Found ${schoolAdmins.length} school admin(s) to notify`);
+        
+        // Get school details for better notifications
+        const school = await storage.getSchool(studentSchoolId);
+        const schoolName = school?.name || 'Your School';
+        
+        // Only send notifications if we have admins
+        if (schoolAdmins.length > 0) {
+          // Send email notifications to each admin
+          for (const admin of schoolAdmins) {
+            try {
+              const emailSent = await sendNewStudentNotificationEmail({
+                adminEmail: admin.email,
+                adminName: admin.name || `${admin.firstName} ${admin.lastName}`,
+                schoolName: schoolName,
+                studentFirstName: normalizedData.childFirstName,
+                studentLastName: normalizedData.childLastName,
+                studentGradeLevel: normalizedData.childGradeLevel,
+                parentEmail: normalizedData.parentEmail,
+                parentPhone: normalizedData.parentPhone,
+                registrationDate: new Date()
+              });
+              
+              if (emailSent) {
+                console.log(`✅ Sent email notification to admin: ${admin.email}`);
+              } else {
+                console.log(`⚠️ Email notification failed for admin: ${admin.email}`);
+              }
+            } catch (notificationError) {
+              const error = notificationError as Error;
+              console.error(`❌ Failed to notify admin ${admin.email}:`, error.message);
+              // Continue notifying other admins even if one fails
+            }
+          }
+        }
+        
+        console.log('✅ Admin notification process completed');
+      } catch (notificationError) {
+        const error = notificationError as Error;
+        console.error('⚠️ Error during admin notification process:', error.message);
+        // Don't fail registration if notifications fail
       }
     }
 
@@ -158,8 +226,9 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('💥 REGISTRATION ERROR:', error);
-    console.error('Error stack:', error.stack);
+    const err = error as Error;
+    console.error('💥 REGISTRATION ERROR:', err.message);
+    console.error('Error stack:', err.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to register student. Please try again.'
