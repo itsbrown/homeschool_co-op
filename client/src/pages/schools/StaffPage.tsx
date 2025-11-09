@@ -151,14 +151,15 @@ export default function StaffPage() {
   return (
     <SchoolAdminLayout pageTitle="Staff">
       <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+        <div className="flex flex-col gap-4 mb-6">
           <p className="text-muted-foreground">Manage your school's teachers and staff members</p>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
               onClick={() => resendAllInvitesMutation.mutate()}
               disabled={resendAllInvitesMutation.isPending}
               data-testid="button-resend-invites"
+              className="w-full sm:w-auto"
             >
               {resendAllInvitesMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -167,13 +168,13 @@ export default function StaffPage() {
               )}
               Resend All Invites
             </Button>
-            <Button asChild data-testid="button-invite-staff">
+            <Button asChild data-testid="button-invite-staff" className="w-full sm:w-auto">
               <Link href="/schools/staff/invite">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Invite Staff
               </Link>
             </Button>
-            <Button variant="outline" asChild data-testid="button-manage-positions">
+            <Button variant="outline" asChild data-testid="button-manage-positions" className="w-full sm:w-auto">
               <Link href="/schools/staff/positions">Manage Positions</Link>
             </Button>
           </div>
@@ -199,19 +200,21 @@ export default function StaffPage() {
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {/* Search and Filters */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name or email..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-8"
-                    />
-                  </div>
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+
+                {/* Filters - stack on mobile */}
+                <div className="flex flex-col sm:flex-row gap-3">
                   <Select value={selectedRole} onValueChange={setSelectedRole}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]">
                       <SelectValue placeholder="Role" />
                     </SelectTrigger>
                     <SelectContent>
@@ -222,7 +225,7 @@ export default function StaffPage() {
                     </SelectContent>
                   </Select>
                   <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]">
                       <SelectValue placeholder="Department" />
                     </SelectTrigger>
                     <SelectContent>
@@ -233,7 +236,7 @@ export default function StaffPage() {
                     </SelectContent>
                   </Select>
                   <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -248,97 +251,188 @@ export default function StaffPage() {
 
               <TabsContent value="list" className="mt-0">
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Department</TableHead>
-                        <TableHead>Contact</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredStaff.length > 0 ? (
-                        filteredStaff.map((member: any) => (
-                          <TableRow key={member.id}>
-                            <TableCell>
+                  {/* Desktop Table View - Hidden on mobile */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Department</TableHead>
+                          <TableHead>Contact</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredStaff.length > 0 ? (
+                          filteredStaff.map((member: any) => (
+                            <TableRow key={member.id}>
+                              <TableCell>
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span className="text-sm font-medium text-primary">
+                                      {member.name?.split(' ').map((n: any) => n[0]).join('').toUpperCase() || 'U'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <div className="font-medium">{member.name}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      Joined {new Date(member.joinDate).toLocaleDateString()}
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>{member.role}</TableCell>
+                              <TableCell>{member.department}</TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <div className="flex items-center space-x-1">
+                                    <Mail className="w-3 h-3" />
+                                    <span className="text-sm">{member.email}</span>
+                                  </div>
+                                  {member.phone && (
+                                    <div className="flex items-center space-x-1">
+                                      <Phone className="w-3 h-3" />
+                                      <span className="text-sm">{member.phone}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={member.status === 'Active' ? 'default' : 'secondary'}
+                                  className={member.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : ''}
+                                >
+                                  {member.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem asChild>
+                                      <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                      <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
+                                    </DropdownMenuItem>
+                                    {member.status === "Pending" && (
+                                      <DropdownMenuItem 
+                                        onClick={() => resendInviteMutation.mutate(member.id)}
+                                        disabled={resendInviteMutation.isPending}
+                                      >
+                                        <Send className="w-4 h-4 mr-2" />
+                                        Resend Invite
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8">
+                              <div className="text-muted-foreground">No staff members found matching your criteria.</div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile Card View - Shown only on mobile */}
+                  <div className="md:hidden space-y-3">
+                    {filteredStaff.length > 0 ? (
+                      filteredStaff.map((member: any) => (
+                        <Card key={member.id} className="overflow-hidden">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between">
                               <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                                   <span className="text-sm font-medium text-primary">
                                     {member.name?.split(' ').map((n: any) => n[0]).join('').toUpperCase() || 'U'}
                                   </span>
                                 </div>
                                 <div>
-                                  <div className="font-medium">{member.name}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    Joined {new Date(member.joinDate).toLocaleDateString()}
-                                  </div>
+                                  <CardTitle className="text-base">{member.name}</CardTitle>
+                                  <CardDescription className="text-xs">
+                                    {member.role} • {member.department}
+                                  </CardDescription>
                                 </div>
                               </div>
-                            </TableCell>
-                            <TableCell>{member.role}</TableCell>
-                            <TableCell>{member.department}</TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="flex items-center space-x-1">
-                                  <Mail className="w-3 h-3" />
-                                  <span className="text-sm">{member.email}</span>
-                                </div>
-                                {member.phone && (
-                                  <div className="flex items-center space-x-1">
-                                    <Phone className="w-3 h-3" />
-                                    <span className="text-sm">{member.phone}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
                               <Badge 
                                 variant={member.status === 'Active' ? 'default' : 'secondary'}
                                 className={member.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : ''}
                               >
                                 {member.status}
                               </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" className="h-8 w-8 p-0">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem asChild>
-                                    <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0 space-y-2">
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-1 text-sm">
+                                <Mail className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-muted-foreground">{member.email}</span>
+                              </div>
+                              {member.phone && (
+                                <div className="flex items-center space-x-1 text-sm">
+                                  <Phone className="w-3 h-3 text-muted-foreground" />
+                                  <span className="text-muted-foreground">{member.phone}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Joined {new Date(member.joinDate).toLocaleDateString()}
+                            </div>
+                          </CardContent>
+                          <CardFooter className="pt-2 pb-3">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="w-full"
+                                  data-testid={`button-staff-actions-${member.id}`}
+                                >
+                                  <MoreHorizontal className="mr-2 h-4 w-4" />
+                                  Actions
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
+                                </DropdownMenuItem>
+                                {member.status === "Pending" && (
+                                  <DropdownMenuItem 
+                                    onClick={() => resendInviteMutation.mutate(member.id)}
+                                    disabled={resendInviteMutation.isPending}
+                                  >
+                                    <Send className="w-4 h-4 mr-2" />
+                                    Resend Invite
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem asChild>
-                                    <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
-                                  </DropdownMenuItem>
-                                  {member.status === "Pending" && (
-                                    <DropdownMenuItem 
-                                      onClick={() => resendInviteMutation.mutate(member.id)}
-                                      disabled={resendInviteMutation.isPending}
-                                    >
-                                      <Send className="w-4 h-4 mr-2" />
-                                      Resend Invite
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8">
-                            <div className="text-muted-foreground">No staff members found matching your criteria.</div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </CardFooter>
+                        </Card>
+                      ))
+                    ) : (
+                      <Card>
+                        <CardContent className="text-center py-12 text-muted-foreground">
+                          No staff members found matching your criteria.
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
                 </CardContent>
               </TabsContent>
 
