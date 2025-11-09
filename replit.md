@@ -13,6 +13,10 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 ### Frontend
 - **Framework**: React with TypeScript (Vite).
 - **UI**: Shadcn/ui (Radix UI) and Tailwind CSS for a professional and intuitive design with consolidated navigation.
+- **Responsive Design**: Mobile-first approach with breakpoint-specific layouts:
+  - Mobile (<md): Card-based layouts for list views, stacked filters/controls
+  - Tablet (md-lg): Optimized table views with responsive columns
+  - Desktop (lg+): Full-featured table views with all columns visible
 - **State Management**: React hooks and context.
 - **Authentication**: Auth0 integration.
 
@@ -43,6 +47,11 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis, Stability AI for image generation, and Hugging Face for text processing.
 - **Product Order Form System**: Enhanced schema with 'product' field type supporting variant configurations, descriptions, and dynamic pricing, including pre-built templates and a form builder UI.
+- **Responsive UI Patterns**: Consistent mobile-responsive patterns across school admin pages (Classes, Students, Staff) with:
+  - Desktop: Full table views with all data columns
+  - Mobile: Card-based layouts with essential info and dropdown actions
+  - Filters: Stack vertically on mobile, row layout on desktop
+  - Action buttons: Full-width on mobile, auto-width on desktop
 
 ### Environment Variables
 - **CLIENT_URL**: Required for production deployment. Must be set to the production domain (e.g., `https://accounts.americanseekersacademy.com`) for correct email link generation (staff invites, password resets, account invitations). Without this, emails will contain incorrect URLs.
