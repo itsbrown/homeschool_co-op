@@ -129,6 +129,14 @@ export interface IStorage {
   createNotificationRecipient(recipient: InsertNotificationRecipient): Promise<NotificationRecipient>;
   updateNotificationRecipient(id: number, recipient: Partial<InsertNotificationRecipient>): Promise<NotificationRecipient | undefined>;
   
+  // Push Subscription methods
+  getPushSubscriptionsByUserId(userId: number): Promise<any[]>;
+  getPushSubscriptionByEndpoint(endpoint: string): Promise<any | undefined>;
+  createPushSubscription(subscription: any): Promise<any>;
+  updatePushSubscription(id: number, subscription: Partial<any>): Promise<any | undefined>;
+  deletePushSubscription(id: number): Promise<void>;
+  deletePushSubscriptionByEndpoint(endpoint: string): Promise<void>;
+  
   getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]>;
   getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
   getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;
