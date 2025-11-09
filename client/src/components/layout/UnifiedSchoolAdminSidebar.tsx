@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { cn } from '@/lib/utils';
@@ -26,6 +27,12 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+interface SchoolData {
+  id: number;
+  name: string;
+  logo?: string;
+}
 
 interface NavItem {
   title: string;
@@ -157,6 +164,12 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const { user, isAuthenticated, signOut } = useAuth();
   const { activeRole } = useRole();
 
+  // Fetch school data for logo and name
+  const { data: schoolData } = useQuery<SchoolData>({
+    queryKey: ['/api/school-admin/my-school'],
+    enabled: !!user && (activeRole === 'schoolAdmin' || activeRole === 'superAdmin' || activeRole === 'educator'),
+  });
+
   // Get appropriate navigation items based on role
   const getNavItems = () => {
     if (activeRole === 'educator') {
@@ -234,8 +247,24 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             isCollapsed ? "justify-center" : "justify-between"
           )}>
             {!isCollapsed && (
-              <Link href="/" data-testid="sidebar-logo-link">
-                <span className="font-bold text-xl text-gray-800">ASA Platform</span>
+              <Link href="/" data-testid="sidebar-logo-link" className="flex items-center gap-2">
+                {schoolData?.logo ? (
+                  <>
+                    <img 
+                      src={schoolData.logo} 
+                      alt={`${schoolData.name} Logo`}
+                      className="h-8 w-8 object-contain"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                    <span className="font-bold text-xl text-gray-800">{schoolData.name}</span>
+                  </>
+                ) : schoolData?.name ? (
+                  <span className="font-bold text-xl text-gray-800">{schoolData.name}</span>
+                ) : (
+                  <span className="font-bold text-xl text-gray-800">ASA Platform</span>
+                )}
               </Link>
             )}
             <Button variant="ghost" size="icon" onClick={toggleSidebar} data-testid="sidebar-toggle-button">
@@ -329,8 +358,24 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             >
               {/* Header */}
               <div className="flex h-14 items-center border-b px-4 flex-shrink-0">
-                <Link href="/" data-testid="mobile-sidebar-logo-link">
-                  <span className="font-bold text-xl text-gray-800">Platform</span>
+                <Link href="/" data-testid="mobile-sidebar-logo-link" className="flex items-center gap-2">
+                  {schoolData?.logo ? (
+                    <>
+                      <img 
+                        src={schoolData.logo} 
+                        alt={`${schoolData.name} Logo`}
+                        className="h-6 w-6 object-contain"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="font-bold text-lg text-gray-800">{schoolData.name}</span>
+                    </>
+                  ) : schoolData?.name ? (
+                    <span className="font-bold text-lg text-gray-800">{schoolData.name}</span>
+                  ) : (
+                    <span className="font-bold text-lg text-gray-800">ASA Platform</span>
+                  )}
                 </Link>
                 <Button variant="ghost" size="icon" className="ml-auto" onClick={closeMobileMenu} data-testid="mobile-menu-close">
                   <X className="h-5 w-5" />

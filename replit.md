@@ -35,6 +35,15 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 ### Key Features and Implementations
 - **Authentication and Authorization**: Auth0-based secure authentication with role-based access control (parent, educator, schoolAdmin, admin, superAdmin) and JWT validation. School-admin API endpoints are protected with Supabase JWT authentication.
 - **Multi-Tenant Security**: Comprehensive isolation preventing cross-school data leakage, with strict school boundary validation enforced on all school-admin API endpoints using JWT tokens.
+- **School Branding System**: 
+  - **Logo Storage**: School logos stored in the `schools.logo` field (text field containing URL/path to image file)
+  - **Logo Upload**: School administrators can upload logos via the School Settings page (`/schools/settings`) after school creation
+  - **Logo Display**: School logo and name are displayed consistently across all user interfaces:
+    - **Parent Interface**: ParentSidebar and ParentAppShell show school logo/name
+    - **School Admin Interface**: UnifiedSchoolAdminSidebar displays school logo/name for administrators and educators
+    - **Fallback Behavior**: If no logo is uploaded, displays school name only; if no school data available, displays "ASA Platform" as default
+  - **Responsive Sizing**: Logo sizes adapt to context (8px height for desktop sidebar, 6px for mobile)
+  - **Error Handling**: Images with broken URLs gracefully hide via `onError` handler
 - **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 - **Payment System**: Stripe-only payment system featuring subscription schedules, webhooks, smart cart logic, date-driven payment plans, and automated refund processing.
 - **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing. All class CRUD operations enforce strict school isolation. Edit form dropdowns (location, instructor, status) properly pre-select existing values when editing.
