@@ -190,7 +190,7 @@ export default function ParentSidebar() {
       icon: <Users className="h-5 w-5" />,
     },
     {
-      href: "/programs",
+      href: "/parent/programs",
       title: "Programs & Classes",
       icon: <BookOpen className="h-5 w-5" />,
     },

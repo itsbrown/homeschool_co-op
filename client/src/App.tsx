@@ -491,11 +491,10 @@ function Router() {
 
       {/* Authenticated registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
-      <Route path="/programs" component={ProgramsParentPage} />
-      <Route path="/programs/browse" component={ProgramsBrowseRedirect} />
       
       {/* Parent routes */}
       <Route path="/parent/programs" component={ProgramsParentPage} />
+      <Route path="/parent/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/parent/classes/:id" component={ParentClassDetailsPage} />
 
       {/* Educator routes */}

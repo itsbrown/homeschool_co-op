@@ -661,18 +661,18 @@ export default function ProgramsParentPage() {
         </div>
 
         <Switch>
-          <Route path="/programs/enroll">
+          <Route path="/parent/programs/enroll">
             <ProgramEnrollmentForm />
           </Route>
-          <Route path="/programs/enrollments">
+          <Route path="/parent/programs/enrollments">
             <EnrollmentList />
           </Route>
-          <Route path="/programs/enrollments/:childId">
+          <Route path="/parent/programs/enrollments/:childId">
             {(params) => (
               <EnrollmentList childId={parseInt(params.childId)} />
             )}
           </Route>
-          <Route path="/programs">
+          <Route path="/parent/programs">
             <ProgramsContent isAdmin={isAdmin} />
           </Route>
         </Switch>

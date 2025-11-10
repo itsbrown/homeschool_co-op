@@ -79,7 +79,7 @@ export default function ParentDashboard() {
         {/* Action Buttons - Mobile Optimized */}
         <div className="flex flex-col sm:flex-row gap-3">
           <Button asChild variant="default" size="lg" className="w-full sm:flex-1" data-testid="button-browse-classes">
-            <Link href="/programs">
+            <Link href="/parent/programs">
               <BookOpen className="mr-2 h-5 w-5" />
               Browse Classes & Programs
             </Link>
@@ -179,7 +179,7 @@ export default function ParentDashboard() {
                     </Link>
                   </Button>
                   <Button variant="outline" className="w-full justify-start" asChild>
-                    <Link href="/programs">
+                    <Link href="/parent/programs">
                       <BookOpen className="mr-2 h-4 w-4" />
                       Browse Programs
                     </Link>
@@ -321,7 +321,7 @@ export default function ParentDashboard() {
                       Enroll your children in programs to see them here.
                     </p>
                     <Button asChild>
-                      <Link href="/programs">
+                      <Link href="/parent/programs">
                         <Plus className="mr-2 h-4 w-4" />
                         Browse Programs
                       </Link>
