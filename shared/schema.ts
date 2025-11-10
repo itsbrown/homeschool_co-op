@@ -1066,19 +1066,34 @@ export const activitiesRelations = relations(activities, ({ one }) => ({
   author: one(users, { fields: [activities.authorId], references: [users.id] }),
 }));
 
-// Classes table for AI-suggested pricing
+// Unified Classes table - consolidates both marketplace programs and school admin classes
 export const classes = pgTable("classes", {
   id: serial("id").primaryKey(),
-  schoolId: integer("school_id").references(() => schools.id), // Multi-location support
-  locationId: integer("location_id").references(() => locations.id), // Multi-location support
+  
+  // Type discriminator - distinguishes between marketplace programs and school admin classes
+  type: text("type", { enum: ["marketplace", "school_admin"] }).notNull().default("school_admin"),
+  
+  // Shared fields (used by both types)
+  schoolId: integer("school_id").references(() => schools.id),
+  locationId: integer("location_id").references(() => locations.id),
   title: text("title").notNull(),
   description: text("description").notNull(),
+  category: text("category").notNull(), // academic, enrichment, summer-camp, workshop, course, arts, music, sports, stem, language, coding, cooking, crafts, other
+  gradeLevels: text("grade_levels").array(),
+  startDate: date("start_date"), // Keep as date type for compatibility
+  endDate: date("end_date"), // Keep as date type for compatibility
+  schedule: jsonb("schedule"), // JSON object with schedule details - supports variants for school_admin
+  capacity: integer("capacity"),
+  price: integer("price").notNull(), // in cents
+  instructorId: integer("instructor_id").references(() => users.id),
+  isPublished: boolean("is_published").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  
+  // School admin specific fields (from original classes table)
   productId: text("product_id"),
   productType: text("product_type"),
   categoryName: text("category_name"), // e.g. "SPRING 2025 10 WEEK PROGRAM"
-  category: text("category").notNull(), // academic, arts, music, sports, stem, language, coding, cooking, crafts
-  startDate: date("start_date"),
-  endDate: date("end_date"),
   numSessions: integer("num_sessions"),
   sessionDays: text("session_days"),
   durationWeeks: integer("duration_weeks"),
@@ -1086,15 +1101,9 @@ export const classes = pgTable("classes", {
   sessionLengthMinutes: integer("session_length_minutes"),
   startTime: text("start_time"), // HH:MM format
   endTime: text("end_time"), // HH:MM format
-  schedule: jsonb("schedule"), // JSON object with schedule details - supports variants
-  // schedule structure: { variants: [{ id: string, name: string, startTime: string, endTime: string, days: string[] }], description?: string }
   status: text("status", { enum: ["upcoming", "active", "completed", "cancelled"] }).default("upcoming").notNull(),
-  gradeLevels: text("grade_levels").array(),
-  capacity: integer("capacity"),
   location: text("location"),
   instructorName: text("instructor_name"),
-  instructorId: integer("instructor_id").references(() => users.id),
-  price: integer("price").notNull(), // in cents
   suggestedPrice: integer("suggested_price"), // AI suggested price in cents
   totalOrders: integer("total_orders").default(0),
   paidOrders: integer("paid_orders").default(0),
@@ -1102,23 +1111,45 @@ export const classes = pgTable("classes", {
   totalOrderValue: integer("total_order_value").default(0), // in cents
   totalDiscounted: integer("total_discounted").default(0), // in cents
   totalCollected: integer("total_collected").default(0), // in cents
-  isPublished: boolean("is_published").default(false).notNull(),
   isAdminOnly: boolean("is_admin_only").default(false).notNull(),
   enrollmentCount: integer("enrollment_count").default(0).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  
+  // Marketplace specific fields (from original programs table)
+  ageRange: text("age_range"), // "4-5", "6-7", "8-10", etc.
+  scheduleType: text("schedule_type", { enum: ["one-time", "recurring", "flexible"] }),
+  scheduleDetails: jsonb("schedule_details"), // Detailed schedule info for marketplace programs
+  locationName: text("location_name"),
+  locationAddress: text("location_address"),
+  isVirtual: boolean("is_virtual").default(false),
+  meetingUrl: text("meeting_url"),
+  curriculumId: integer("curriculum_id").references(() => curricula.id),
+  coverImage: text("cover_image"),
+  materials: jsonb("materials"),
 });
 
 export const insertClassSchema = createInsertSchema(classes)
   .omit({ id: true, createdAt: true, updatedAt: true, instructorId: true, enrollmentCount: true })
   .extend({
+    // Type discriminator (required)
+    type: z.enum(["marketplace", "school_admin"]).default("school_admin"),
+    
     // String dates will be converted to Date objects
     startDate: z.string().nullable().transform((str) => str ? new Date(str) : null),
     endDate: z.string().nullable().transform((str) => str ? new Date(str) : null),
+    
     // Convert dollar amounts to cents for storage
     price: z.number().transform(amount => Math.round(amount * 100)),
     suggestedPrice: z.number().optional().transform(amount => amount ? Math.round(amount * 100) : undefined),
-    // Make certain fields optional
+    
+    // Shared optional fields
+    schoolId: z.number().optional(),
+    locationId: z.number().optional(),
+    gradeLevels: z.array(z.string()).optional(),
+    capacity: z.number().optional(),
+    schedule: z.any().optional(),
+    isPublished: z.boolean().default(false),
+    
+    // School admin specific fields (optional)
     productId: z.string().optional(),
     productType: z.string().optional(),
     categoryName: z.string().optional(),
@@ -1129,10 +1160,7 @@ export const insertClassSchema = createInsertSchema(classes)
     sessionLengthMinutes: z.number().optional(),
     startTime: z.string().optional(),
     endTime: z.string().optional(),
-    schedule: z.string().optional(),
-    status: z.string().optional(),
-    gradeLevels: z.array(z.string()).optional(),
-    capacity: z.number().optional(),
+    status: z.enum(["upcoming", "active", "completed", "cancelled"]).optional(),
     location: z.string().optional(),
     instructorName: z.string().optional(),
     totalOrders: z.number().optional(),
@@ -1141,6 +1169,19 @@ export const insertClassSchema = createInsertSchema(classes)
     totalOrderValue: z.number().optional(),
     totalDiscounted: z.number().optional(),
     totalCollected: z.number().optional(),
+    isAdminOnly: z.boolean().optional(),
+    
+    // Marketplace specific fields (optional)
+    ageRange: z.string().optional(),
+    scheduleType: z.enum(["one-time", "recurring", "flexible"]).optional(),
+    scheduleDetails: z.any().optional(),
+    locationName: z.string().optional(),
+    locationAddress: z.string().optional(),
+    isVirtual: z.boolean().optional(),
+    meetingUrl: z.string().optional(),
+    curriculumId: z.number().optional(),
+    coverImage: z.string().optional(),
+    materials: z.any().optional(),
   });
 export type InsertClass = z.infer<typeof insertClassSchema>;
 export type Class = typeof classes.$inferSelect;
@@ -1148,6 +1189,7 @@ export type Class = typeof classes.$inferSelect;
 // Define class relations
 export const classesRelations = relations(classes, ({ one }) => ({
   instructor: one(users, { fields: [classes.instructorId], references: [users.id] }),
+  curriculum: one(curricula, { fields: [classes.curriculumId], references: [curricula.id] }),
 }));
 
 // Marketing Links table for school admin marketing campaigns
