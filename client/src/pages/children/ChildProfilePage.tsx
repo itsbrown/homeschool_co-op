@@ -22,28 +22,33 @@ export default function ChildProfilePage() {
   const { activeRole } = useRole();
   const [confirmDialog, setConfirmDialog] = useState({ open: false, enrollmentId: null, className: "" });
 
-  // Fetch detailed child data using proper authentication
-  const { data: child, isLoading } = useQuery({
-    queryKey: [`/api/school-admin/students/${id}`],
+  // Calculate age from birthdate
+  const calculateAge = (birthdate: string) => {
+    if (!birthdate) return "Unknown";
+    const today = new Date();
+    const birth = new Date(birthdate);
+    const age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      return age - 1;
+    }
+    return age;
+  };
+
+  // Fetch detailed child data using role-based endpoint
+  const { data: child, isLoading, error: childError } = useQuery({
+    queryKey: activeRole === 'parent' ? [`/api/parent/children/${id}`] : [`/api/school-admin/students/${id}`],
     queryFn: async () => {
       try {
-        const studentData = await apiRequest(`/api/school-admin/students/${id}`);
+        // Use different endpoints based on role
+        const endpoint = activeRole === 'parent' 
+          ? `/api/parent/children/${id}`
+          : `/api/school-admin/students/${id}`;
         
-        // Calculate age from birthdate
-        const calculateAge = (birthdate: string) => {
-          if (!birthdate) return "Unknown";
-          const today = new Date();
-          const birth = new Date(birthdate);
-          const age = today.getFullYear() - birth.getFullYear();
-          const monthDiff = today.getMonth() - birth.getMonth();
-          
-          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-            return age - 1;
-          }
-          return age;
-        };
+        const studentData = await apiRequest(endpoint);
         
-        // Return authentic student data from database
+        // Return normalized student data
         return {
           id: studentData.id,
           firstName: studentData.firstName,
@@ -52,15 +57,15 @@ export default function ChildProfilePage() {
           gradeLevel: studentData.gradeLevel,
           birthdate: studentData.birthdate,
           age: calculateAge(studentData.birthdate),
-          school: "American Seekers Academy",
+          school: studentData.school || "American Seekers Academy",
           interests: studentData.interests || [],
           allergies: studentData.allergies || "None specified",
-          medicalInfo: studentData.medicalNotes || "No medical notes",
+          medicalInfo: studentData.medicalInfo || studentData.medicalNotes || "No medical notes",
           specialNeeds: studentData.specialNeeds || "None specified",
           parentEmail: studentData.parentEmail,
           parentPhone: studentData.parentPhone,
           emergencyContact: studentData.emergencyContact,
-          enrollmentDate: studentData.enrollmentDate,
+          enrollmentDate: studentData.enrollmentDate || studentData.createdAt,
           status: studentData.status || "Active"
         };
       } catch (error) {
@@ -68,7 +73,7 @@ export default function ChildProfilePage() {
         throw error;
       }
     },
-    enabled: !!id,
+    enabled: !!id && !!activeRole,
   });
 
   // Fetch enrollment data for this child

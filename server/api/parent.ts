@@ -80,6 +80,54 @@ router.get('/children', jwtCheck, async (req: any, res) => {
   }
 });
 
+// Get a specific child by ID (parent must own the child)
+router.get('/children/:id', jwtCheck, async (req: any, res) => {
+  try {
+    const childId = parseInt(req.params.id);
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+    
+    if (isNaN(childId)) {
+      return res.status(400).json({ 
+        message: 'Invalid child ID',
+        error: 'INVALID_ID'
+      });
+    }
+    
+    // Get the child
+    const child = await storage.getChild(childId);
+    
+    if (!child) {
+      return res.status(404).json({ 
+        message: 'Child not found',
+        error: 'CHILD_NOT_FOUND'
+      });
+    }
+    
+    // 🔒 SECURITY: Verify parent owns this child
+    if (child.parentEmail !== userEmail) {
+      return res.status(403).json({ 
+        message: 'Access denied: You can only view your own children',
+        error: 'NOT_YOUR_CHILD'
+      });
+    }
+    
+    return res.status(200).json(child);
+  } catch (error) {
+    console.error('❌ Error fetching child:', error);
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: 'CHILD_FETCH_ERROR'
+    });
+  }
+});
+
 // Register a new child
 router.post('/children', jwtCheck, async (req: any, res) => {
   try {
