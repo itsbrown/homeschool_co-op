@@ -219,14 +219,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   });
 
   // Transform school admin classes data to match expected format
-  // Filter out parent classes that have variants - parents should only see the individual variant classes
   const classesData: ClassesResponse = {
     classes: ((schoolClassesResponse as any)?.items || [])
-      .filter((item: any) => {
-        // Hide classes that have variants - these are parent classes
-        // Parents should only see the individual variant classes like "Seekers | Half Day"
-        return !item.variants || item.variants.length === 0;
-      })
       .map((item: any) => ({
         id: item.id,
         title: item.title,
