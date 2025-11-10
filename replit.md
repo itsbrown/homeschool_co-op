@@ -72,6 +72,7 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis, Stability AI for image generation, and Hugging Face for text processing.
 - **Product Order Form System**: Enhanced schema with 'product' field type supporting variant configurations, descriptions, and dynamic pricing, including pre-built templates and a form builder UI.
+- **Parent Class Details Page**: Dedicated full-page view for class details (`/parent/classes/:id`) replacing the previous unformatted dialog. Features proper ParentAppShell layout with header/navigation, formatted class information (price, description, dates, capacity, variants), and responsive design. Replaces the legacy viewDetailsDialog pattern with route-based navigation.
 - **Responsive UI Patterns**: Consistent mobile-responsive patterns across school admin pages (Classes, Students, Staff) with:
   - Desktop: Full table views with all data columns
   - Mobile: Card-based layouts with essential info and dropdown actions
