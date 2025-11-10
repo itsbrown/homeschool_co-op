@@ -49,7 +49,15 @@ async function runMigrations() {
       ALTER TABLE programs 
       ALTER COLUMN instructor_id DROP NOT NULL;
     `);
-    console.log('✅ Migration completed: instructor_id column now allows null values');
+    console.log('✅ Migration completed: instructor_id column now allows null values in programs table');
+    
+    // Make instructor_id column nullable in classes table
+    console.log('Running migration: Making instructor_id nullable in classes table...');
+    await db.execute(sql`
+      ALTER TABLE classes 
+      ALTER COLUMN instructor_id DROP NOT NULL;
+    `);
+    console.log('✅ Migration completed: instructor_id column now allows null values in classes table');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
