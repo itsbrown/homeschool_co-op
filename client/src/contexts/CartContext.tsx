@@ -53,6 +53,14 @@ export interface AppliedDiscount {
   value: number;
   discountAmount: number;
   priority: number;
+  // Optional bundle discount metadata for UI display
+  bundleRule?: {
+    type: 'nth_item_free' | 'buy_x_get_y_free' | 'buy_x_get_y_percent_off';
+    buyQuantity: number;
+    freeQuantity?: number;
+    discountPercentage?: number;
+  };
+  sourceType?: 'percentage' | 'fixed_amount' | 'bundle';
 }
 
 interface CartState {
@@ -194,7 +202,9 @@ const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, get
           type: discount.type,
           value: discount.value,
           discountAmount,
-          priority: discount.priority
+          priority: discount.priority,
+          bundleRule: discount.bundleRule || undefined, // Preserve bundle metadata for UI
+          sourceType: discount.bundleRule ? 'bundle' : discount.type // Set sourceType based on bundleRule presence
         });
 
         // If discounts don't combine, stop after first applicable discount
@@ -397,10 +407,12 @@ const calculateCartTotalsSync = (
     allDiscounts.push({
       id: appliedPromo.discountId,
       name: appliedPromo.name,
-      type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type, // Safely handle bundle type
+      type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type, // Keep as fixed_amount for calculations
       value: appliedPromo.value,
       discountAmount: appliedPromo.discountAmount,
-      priority: 999 // Promo codes have lowest priority
+      priority: 999, // Promo codes have lowest priority
+      sourceType: appliedPromo.type, // Preserve original type for UI
+      bundleRule: undefined // Bundle rule not available in sync calculation
     });
   }
   
@@ -482,10 +494,12 @@ const calculateCartTotalsWithDiscounts = async (
     allDiscounts.push({
       id: appliedPromo.discountId,
       name: appliedPromo.name,
-      type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type, // Safely handle bundle type
+      type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type, // Keep as fixed_amount for calculations
       value: appliedPromo.value,
       discountAmount: appliedPromo.discountAmount,
-      priority: 999 // Promo codes have lowest priority
+      priority: 999, // Promo codes have lowest priority
+      sourceType: appliedPromo.type, // Preserve original type for UI
+      bundleRule: undefined // TODO: Fetch bundle rule from discount object if needed
     });
   }
   

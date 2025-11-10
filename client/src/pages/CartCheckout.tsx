@@ -546,10 +546,8 @@ export default function CartCheckout() {
                       )}
 
                       {cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.map((discount) => {
-                        // Determine icon and color based on discount type and name
-                        const isBundle = discount.name.toLowerCase().includes('free') || 
-                                        discount.name.toLowerCase().includes('buy') || 
-                                        discount.name.toLowerCase().includes('bundle');
+                        // Determine icon and color based on sourceType (not keyword heuristics)
+                        const isBundle = discount.sourceType === 'bundle' || discount.bundleRule !== undefined;
                         const Icon = isBundle ? Gift : (discount.type === 'percentage' ? Percent : DollarSign);
                         const colorClass = isBundle ? 'text-purple-600' : 'text-blue-600';
                         
