@@ -2314,6 +2314,7 @@ export class MemStorage implements IStorage {
     sampleClasses.forEach(classData => {
       this.createClass({
         ...classData,
+        type: "school_admin" as const,
         instructorId: classData.instructorId
       });
     });

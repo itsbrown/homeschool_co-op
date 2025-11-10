@@ -1072,6 +1072,7 @@ export const classes = pgTable("classes", {
   
   // Type discriminator - distinguishes between marketplace programs and school admin classes
   type: text("type", { enum: ["marketplace", "school_admin"] }).notNull().default("school_admin"),
+  legacyProgramId: integer("legacy_program_id").unique(), // For safe ID mapping during migration
   
   // Shared fields (used by both types)
   schoolId: integer("school_id").references(() => schools.id),
@@ -1082,7 +1083,7 @@ export const classes = pgTable("classes", {
   gradeLevels: text("grade_levels").array(),
   startDate: date("start_date"), // Keep as date type for compatibility
   endDate: date("end_date"), // Keep as date type for compatibility
-  schedule: jsonb("schedule"), // JSON object with schedule details - supports variants for school_admin
+  schedule: jsonb("schedule").default(null), // JSON object with schedule details - supports variants for school_admin
   capacity: integer("capacity"),
   price: integer("price").notNull(), // in cents
   instructorId: integer("instructor_id").references(() => users.id),
