@@ -159,7 +159,15 @@ const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, get
 
       // Calculate discount amount
       let discountAmount = 0;
-      if (discount.type === 'percentage') {
+      
+      // Check if this is a bundle discount (has bundleRule)
+      if (discount.bundleRule) {
+        discountAmount = calculateBundleDiscount(items, discount.bundleRule);
+        // Apply max discount limit if set
+        if (discount.maxDiscountAmount && discountAmount > discount.maxDiscountAmount) {
+          discountAmount = discount.maxDiscountAmount;
+        }
+      } else if (discount.type === 'percentage') {
         discountAmount = Math.round((subtotal * discount.value) / 100);
         // Apply max discount limit if set
         if (discount.maxDiscountAmount && discountAmount > discount.maxDiscountAmount) {
@@ -167,6 +175,10 @@ const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, get
         }
       } else {
         discountAmount = discount.value;
+        // Apply max discount limit for fixed amounts too
+        if (discount.maxDiscountAmount && discountAmount > discount.maxDiscountAmount) {
+          discountAmount = discount.maxDiscountAmount;
+        }
       }
 
       // Ensure discount doesn't exceed remaining subtotal
