@@ -1130,8 +1130,8 @@ export const classes = pgTable("classes", {
 export const insertClassSchema = createInsertSchema(classes)
   .omit({ id: true, createdAt: true, updatedAt: true, instructorId: true, enrollmentCount: true })
   .extend({
-    // Type discriminator (required)
-    type: z.enum(["marketplace", "school_admin"]).default("school_admin"),
+    // Type discriminator (optional - has DB default)
+    type: z.enum(["marketplace", "school_admin"]).optional().default("school_admin"),
     
     // String dates will be converted to Date objects
     startDate: z.string().nullable().transform((str) => str ? new Date(str) : null),
