@@ -153,7 +153,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
 }
 
 export default function CartCheckout() {
-  const { cart, clearCart, loadUnpaidEnrollments } = useCart();
+  const { cart, clearCart, loadUnpaidEnrollments, applyPromoCode, removePromoCode } = useCart();
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [clientSecret, setClientSecret] = useState<string>('');
@@ -162,6 +162,12 @@ export default function CartCheckout() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full');
   const [paymentFrequency, setPaymentFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | 'one_time'>('one_time');
+  
+  // Promo code state
+  const [promoCode, setPromoCode] = useState<string>('');
+  const [validatingPromo, setValidatingPromo] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<any>(null);
+  const [promoError, setPromoError] = useState<string>('');
 
   // Debug cart data
   console.log('🛒 CartCheckout - cart data:', {
@@ -557,6 +563,83 @@ export default function CartCheckout() {
                     <span>{formatCurrency(cart.total)}</span>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Promo Code Input */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Percent className="h-4 w-4" />
+                  Promo Code
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!cart.appliedPromoCode ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter promo code"
+                      value={promoCode}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.toUpperCase());
+                        setPromoError('');
+                      }}
+                      className="flex-1 px-3 py-2 border rounded-md text-sm"
+                      disabled={validatingPromo}
+                      data-testid="input-promo-code"
+                    />
+                    <Button
+                      onClick={async () => {
+                        setValidatingPromo(true);
+                        setPromoError('');
+                        const result = await applyPromoCode(promoCode);
+                        setValidatingPromo(false);
+                        if (!result.success) {
+                          setPromoError(result.error || 'Invalid promo code');
+                        } else {
+                          setPromoCode('');
+                        }
+                      }}
+                      disabled={!promoCode || validatingPromo}
+                      size="sm"
+                      data-testid="button-apply-promo"
+                    >
+                      {validatingPromo ? (
+                        <>
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          Validating...
+                        </>
+                      ) : (
+                        'Apply'
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-md">
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-600" />
+                      <div>
+                        <p className="text-sm font-medium text-green-800">{cart.appliedPromoCode.name}</p>
+                        <p className="text-xs text-green-600">
+                          Saving {formatCurrency(cart.appliedPromoCode.discountAmount)}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={removePromoCode}
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      data-testid="button-remove-promo"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                )}
+                {promoError && (
+                  <p className="text-sm text-red-600" data-testid="text-promo-error">{promoError}</p>
+                )}
               </CardContent>
             </Card>
 

@@ -1342,6 +1342,14 @@ export const discounts = pgTable("discounts", {
   newStudentsOnly: boolean("new_students_only").default(false),
   siblingDiscount: boolean("sibling_discount").default(false), // Apply when multiple siblings enroll
   
+  // Bundle discount rules (optional)
+  bundleRule: jsonb("bundle_rule").$type<{
+    type: 'nth_item_free' | 'buy_x_get_y_free' | 'buy_x_get_y_percent_off';
+    buyQuantity: number;
+    freeQuantity?: number;
+    discountPercentage?: number;
+  }>(),
+  
   // Usage limits
   usageLimit: integer("usage_limit"), // Total times this discount can be used
   usageLimitPerUser: integer("usage_limit_per_user"), // Times per user/family
@@ -1398,6 +1406,27 @@ export const discountApplicationRelations = relations(discountApplications, ({ o
   appliedByUser: one(users, { fields: [discountApplications.appliedBy], references: [users.id] }),
 }));
 
+// Bundle rule validation schema
+export const bundleRuleSchema = z.object({
+  type: z.enum(['nth_item_free', 'buy_x_get_y_free', 'buy_x_get_y_percent_off']),
+  buyQuantity: z.number().int().min(1, 'Buy quantity must be at least 1'),
+  freeQuantity: z.number().int().min(1).optional(),
+  discountPercentage: z.number().min(0).max(100).optional(),
+}).refine((data) => {
+  // Validate field alignment with type
+  if (data.type === 'nth_item_free' || data.type === 'buy_x_get_y_free') {
+    return data.freeQuantity !== undefined && data.freeQuantity > 0;
+  }
+  if (data.type === 'buy_x_get_y_percent_off') {
+    return data.discountPercentage !== undefined && data.discountPercentage > 0;
+  }
+  return true;
+}, {
+  message: 'Bundle rule fields must match the selected type'
+});
+
+export type BundleRule = z.infer<typeof bundleRuleSchema>;
+
 // Discount schemas for validation
 export const insertDiscountSchema = createInsertSchema(discounts)
   .omit({ id: true, createdAt: true, updatedAt: true, currentUsageCount: true })
@@ -1407,6 +1436,8 @@ export const insertDiscountSchema = createInsertSchema(discounts)
     maxDiscountAmount: z.number().optional().transform(amount => amount ? Math.round(amount * 100) : undefined),
     // For fixed amount discounts, convert to cents
     value: z.number().transform(value => Math.round(value * 100)),
+    // Bundle rule validation
+    bundleRule: bundleRuleSchema.optional(),
   });
 
 export const insertDiscountApplicationSchema = createInsertSchema(discountApplications)

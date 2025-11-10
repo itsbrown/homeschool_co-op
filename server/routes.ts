@@ -43,6 +43,7 @@ import accountImportRouter from "./api/account-import";
 import paymentCleanupRouter from "./api/payment-cleanup";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import customFormsRouter from "./api/custom-forms";
+import discountsRouter from "./api/discounts";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -1765,6 +1766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register API routers
   app.use("/api/classes", classesRouter);
+  app.use("/api/discounts", discountsRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/ai-insights", aiInsightsRouter);
   app.use("/api/admin", adminRouter);

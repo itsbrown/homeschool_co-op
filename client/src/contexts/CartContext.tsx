@@ -36,6 +36,14 @@ export interface Cart {
     totalDiscountAmount: number;
   };
   total: number;
+  appliedPromoCode?: {
+    code: string;
+    discountId: number;
+    name: string;
+    type: 'percentage' | 'fixed_amount' | 'bundle';
+    value: number;
+    discountAmount: number;
+  } | null;
 }
 
 export interface AppliedDiscount {
@@ -59,7 +67,9 @@ type CartAction =
   | { type: 'CLEAR_CART' }
   | { type: 'OPEN_CART' }
   | { type: 'CLOSE_CART' }
-  | { type: 'LOAD_CART'; payload: Cart };
+  | { type: 'LOAD_CART'; payload: Cart }
+  | { type: 'APPLY_PROMO'; payload: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } }
+  | { type: 'REMOVE_PROMO' };
 
 // Function to check for applicable automatic discounts
 // Fetch sibling discount settings from school admin
@@ -226,7 +236,10 @@ const isDiscountApplicable = (discount: any, items: CartItem[], subtotal: number
 };
 
 // Keep the synchronous version for immediate calculations
-const calculateCartTotalsSync = (items: CartItem[]): { subtotal: number; discounts: any; total: number } => {
+const calculateCartTotalsSync = (
+  items: CartItem[],
+  appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null
+): { subtotal: number; discounts: any; total: number } => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
 
   // Group items by child to calculate sibling discount
@@ -264,22 +277,42 @@ const calculateCartTotalsSync = (items: CartItem[]): { subtotal: number; discoun
     freeAfterThreeDiscount = averagePricePerChild * freeChildren;
   }
 
-  const total = Math.max(0, subtotal - siblingDiscount - freeAfterThreeDiscount);
+  // Apply promo code discount if provided (merge with automatic discounts, don't replace)
+  const allDiscounts: AppliedDiscount[] = [];
+  if (appliedPromo) {
+    allDiscounts.push({
+      id: appliedPromo.discountId,
+      name: appliedPromo.name,
+      type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type, // Safely handle bundle type
+      value: appliedPromo.value,
+      discountAmount: appliedPromo.discountAmount,
+      priority: 999 // Promo codes have lowest priority
+    });
+  }
+  
+  const promoDiscount = appliedPromo ? appliedPromo.discountAmount : 0;
+  const totalDiscountAmount = siblingDiscount + freeAfterThreeDiscount + promoDiscount;
+
+  const total = Math.max(0, subtotal - totalDiscountAmount);
 
   return {
     subtotal,
     discounts: {
       siblingDiscount,
       freeAfterThree: freeAfterThreeDiscount,
-      appliedDiscounts: [],
-      totalDiscountAmount: 0,
+      appliedDiscounts: allDiscounts, // Merge automatic + promo discounts
+      totalDiscountAmount,
     },
     total,
   };
 };
 
 // Async version that includes automatic discounts
-const calculateCartTotalsWithDiscounts = async (items: CartItem[], getAccessTokenSilently?: () => Promise<string>): Promise<{ subtotal: number; discounts: any; total: number }> => {
+const calculateCartTotalsWithDiscounts = async (
+  items: CartItem[],
+  getAccessTokenSilently?: () => Promise<string>,
+  appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null
+): Promise<{ subtotal: number; discounts: any; total: number }> => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
 
   // Group items by child to calculate sibling discount
@@ -327,18 +360,34 @@ const calculateCartTotalsWithDiscounts = async (items: CartItem[], getAccessToke
   }
 
   // Get applicable automatic discounts
-  const appliedDiscounts = await fetchApplicableDiscounts(items, subtotal, getAccessTokenSilently);
-  const totalDiscountAmount = appliedDiscounts.reduce((sum, discount) => sum + discount.discountAmount, 0);
+  const autoDiscounts = await fetchApplicableDiscounts(items, subtotal, getAccessTokenSilently);
+  
+  // Merge automatic discounts with promo code discount if present
+  const allDiscounts = [...autoDiscounts];
+  if (appliedPromo) {
+    allDiscounts.push({
+      id: appliedPromo.discountId,
+      name: appliedPromo.name,
+      type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type, // Safely handle bundle type
+      value: appliedPromo.value,
+      discountAmount: appliedPromo.discountAmount,
+      priority: 999 // Promo codes have lowest priority
+    });
+  }
+  
+  // Calculate total discount amount INCLUDING sibling, free, and automatic/promo discounts (align with sync version)
+  const autoAndPromoDiscountAmount = allDiscounts.reduce((sum, discount) => sum + discount.discountAmount, 0);
+  const totalDiscountAmount = siblingDiscount + freeAfterThreeDiscount + autoAndPromoDiscountAmount;
 
-  const total = Math.max(0, subtotal - siblingDiscount - freeAfterThreeDiscount - totalDiscountAmount);
+  const total = Math.max(0, subtotal - totalDiscountAmount);
 
   return {
     subtotal,
     discounts: {
       siblingDiscount,
       freeAfterThree: freeAfterThreeDiscount,
-      appliedDiscounts,
-      totalDiscountAmount,
+      appliedDiscounts: allDiscounts,
+      totalDiscountAmount, // Now includes ALL discounts (sibling + free + auto + promo)
     },
     total,
   };
@@ -365,13 +414,14 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       }
 
       const newItems = [...state.cart.items, action.payload];
-      const totals = calculateCartTotalsSync(newItems);
+      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode);
 
       const newState = {
         ...state,
         cart: {
           items: newItems,
           ...totals,
+          appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
         },
       };
 
@@ -386,13 +436,14 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
 
     case 'REMOVE_ITEM': {
       const newItems = state.cart.items.filter(item => item.id !== action.payload);
-      const totals = calculateCartTotalsSync(newItems);
+      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode);
 
       return {
         ...state,
         cart: {
           items: newItems,
           ...totals,
+          appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
         },
       };
     }
@@ -401,13 +452,14 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       const newItems = state.cart.items.map(item =>
         item.id === action.payload.id ? { ...item, ...action.payload.updates } : item
       );
-      const totals = calculateCartTotalsSync(newItems);
+      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode);
 
       return {
         ...state,
         cart: {
           items: newItems,
           ...totals,
+          appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
         },
       };
     }
@@ -425,6 +477,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             totalDiscountAmount: 0
           },
           total: 0,
+          appliedPromoCode: null,
         },
       };
 
@@ -439,6 +492,38 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         ...state,
         cart: action.payload,
       };
+
+    case 'APPLY_PROMO': {
+      const newCart = {
+        ...state.cart,
+        appliedPromoCode: action.payload,
+      };
+      // Recalculate totals with promo code
+      const totals = calculateCartTotalsSync(newCart.items, newCart.appliedPromoCode);
+      return {
+        ...state,
+        cart: {
+          ...newCart,
+          ...totals,
+        },
+      };
+    }
+
+    case 'REMOVE_PROMO': {
+      const newCart = {
+        ...state.cart,
+        appliedPromoCode: null,
+      };
+      // Recalculate totals without promo code
+      const totals = calculateCartTotalsSync(newCart.items);
+      return {
+        ...state,
+        cart: {
+          ...newCart,
+          ...totals,
+        },
+      };
+    }
 
     default:
       return state;
@@ -456,6 +541,7 @@ const initialState: CartState = {
       totalDiscountAmount: 0
     },
     total: 0,
+    appliedPromoCode: null,
   },
   isOpen: false,
 };
@@ -475,6 +561,8 @@ interface CartContextType {
   loadUnpaidEnrollments: () => Promise<void>;
   refreshCart: () => void;
   refreshDiscounts: () => Promise<void>;
+  applyPromoCode: (code: string) => Promise<{ success: boolean; error?: string; discount?: any }>;
+  removePromoCode: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -660,7 +748,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
 
-      const totals = calculateCartTotalsSync(cartItems);
+      const totals = calculateCartTotalsSync(cartItems, null); // Fresh load - no promo code yet
 
       console.log('🛒 About to merge API enrollments with existing cart');
       console.log('🛒 Current cart items:', state.cart.items.length);
@@ -676,6 +764,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             payload: {
               items: cartItems,
               ...totals,
+              appliedPromoCode: null, // Fresh load - clear promo
             },
           });
         } else {
@@ -686,12 +775,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (newItems.length > 0) {
             console.log('🛒 Merging new pending enrollments with existing cart');
             const allItems = [...state.cart.items, ...newItems];
-            const mergedTotals = calculateCartTotalsSync(allItems);
+            const mergedTotals = calculateCartTotalsSync(allItems, state.cart.appliedPromoCode); // Preserve promo when merging
             dispatch({
               type: 'LOAD_CART',
               payload: {
                 items: allItems,
                 ...mergedTotals,
+                appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code when merging
               },
             });
           }
@@ -729,19 +819,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const totalsWithDiscounts = await calculateCartTotalsWithDiscounts(state.cart.items, getAccessTokenSilently);
+      const totalsWithDiscounts = await calculateCartTotalsWithDiscounts(
+        state.cart.items, 
+        getAccessTokenSilently,
+        state.cart.appliedPromoCode // Pass promo code to preserve it
+      );
       dispatch({
         type: 'LOAD_CART',
         payload: {
           items: state.cart.items,
           ...totalsWithDiscounts,
+          appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
         },
       });
       console.log('🛒 Discount refresh completed:', totalsWithDiscounts.discounts);
     } catch (error) {
       console.error('Error refreshing discounts:', error);
     }
-  }, [state.cart.items]);
+  }, [state.cart.items, state.cart.appliedPromoCode, getAccessTokenSilently]);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -957,6 +1052,65 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  const applyPromoCode = async (code: string): Promise<{ success: boolean; error?: string; discount?: any }> => {
+    try {
+      console.log('🎟️ Validating promo code:', code, 'for cart total:', state.cart.total);
+      
+      const response = await fetch('/api/discounts/validate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await getAccessTokenSilently()}`,
+        },
+        body: JSON.stringify({
+          code,
+          cartTotal: state.cart.total,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Promo code validation failed:', data.error);
+        return { success: false, error: data.error || 'Invalid promo code' };
+      }
+
+      console.log('✅ Promo code validated:', data.discount);
+
+      // Dispatch APPLY_PROMO action to update cart with discount
+      dispatch({
+        type: 'APPLY_PROMO',
+        payload: {
+          code: data.discount.code,
+          discountId: data.discount.id,
+          name: data.discount.name,
+          type: data.discount.type,
+          value: data.discount.value,
+          discountAmount: data.discountAmount,
+        },
+      });
+
+      toast({
+        title: "Promo Code Applied!",
+        description: `${data.discount.name} - Save $${(data.discountAmount / 100).toFixed(2)}`,
+      });
+
+      return { success: true, discount: data.discount };
+    } catch (error: any) {
+      console.error('❌ Error applying promo code:', error);
+      return { success: false, error: error.message || 'Failed to apply promo code' };
+    }
+  };
+
+  const removePromoCode = () => {
+    console.log('🗑️ Removing promo code');
+    dispatch({ type: 'REMOVE_PROMO' });
+    toast({
+      title: "Promo Code Removed",
+      description: "Discount has been removed from your cart",
+    });
+  };
+
   const contextValue: CartContextType = {
     cart: state.cart,
     isOpen: state.isOpen,
@@ -971,7 +1125,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hasItem,
     loadUnpaidEnrollments,
     refreshCart,
-    refreshDiscounts
+    refreshDiscounts,
+    applyPromoCode,
+    removePromoCode,
   };
 
   return (
