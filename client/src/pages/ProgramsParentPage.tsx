@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack, ShoppingCart, Plus } from "lucide-react";
+import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack, ShoppingCart, Plus, MapPin, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -191,6 +191,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     capacity?: number;
     totalOrders: number;
     totalWaitlisted: number;
+    location?: string;
+    instructorName?: string;
     variants?: {
       id: string;
       name: string;
@@ -238,6 +240,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         capacity: item.capacity,
         totalOrders: item.enrollmentCount || 0,
         totalWaitlisted: 0,
+        location: item.location,
+        instructorName: item.instructorName,
         variants: item.variants || []
       })),
     pagination: {
@@ -385,16 +389,19 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                           </div>
                         )}
 
-                        {classItem.capacity && (
+                        {classItem.variants && classItem.variants.length > 0 && (
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Spots Available:</div>
-                            <div className="font-semibold">
-                              {classItem.capacity - (classItem.totalOrders || 0) > 0 ? (
-                                <span className="text-green-600">{classItem.capacity - (classItem.totalOrders || 0)}</span>
-                              ) : (
-                                <span className="text-red-600">Full</span>
-                              )}
+                            <div className="flex items-center"><Clock className="h-4 w-4 mr-1 opacity-70" />Time:</div>
+                            <div className="font-medium text-sm">
+                              {formatClassSchedule({ variants: classItem.variants })}
                             </div>
+                          </div>
+                        )}
+
+                        {classItem.location && (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center"><MapPin className="h-4 w-4 mr-1 opacity-70" />Location:</div>
+                            <div className="font-medium text-sm">{classItem.location}</div>
                           </div>
                         )}
 
