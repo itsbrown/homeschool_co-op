@@ -545,15 +545,29 @@ export default function CartCheckout() {
                         </div>
                       )}
 
-                      {cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.map((discount) => (
-                        <div key={discount.id} className="flex justify-between text-sm text-blue-600">
-                          <span className="flex items-center gap-1">
-                            <Gift className="h-3 w-3" />
-                            {discount.name}:
-                          </span>
-                          <span>-{formatCurrency(discount.discountAmount)}</span>
-                        </div>
-                      ))}
+                      {cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.map((discount) => {
+                        // Determine icon and color based on discount type and name
+                        const isBundle = discount.name.toLowerCase().includes('free') || 
+                                        discount.name.toLowerCase().includes('buy') || 
+                                        discount.name.toLowerCase().includes('bundle');
+                        const Icon = isBundle ? Gift : (discount.type === 'percentage' ? Percent : DollarSign);
+                        const colorClass = isBundle ? 'text-purple-600' : 'text-blue-600';
+                        
+                        return (
+                          <div key={discount.id} className={`flex justify-between text-sm ${colorClass}`}>
+                            <span className="flex items-center gap-1">
+                              <Icon className="h-3 w-3" />
+                              <span className="font-medium">{discount.name}</span>
+                              {discount.type === 'percentage' && (
+                                <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0">
+                                  {discount.value}%
+                                </Badge>
+                              )}
+                            </span>
+                            <span className="font-semibold">-{formatCurrency(discount.discountAmount)}</span>
+                          </div>
+                        );
+                      })}
                     </>
                   )}
 
