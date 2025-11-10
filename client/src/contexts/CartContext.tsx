@@ -235,6 +235,108 @@ const isDiscountApplicable = (discount: any, items: CartItem[], subtotal: number
   return true;
 };
 
+// Calculate bundle discount amount based on bundleRule
+const calculateBundleDiscount = (
+  items: CartItem[],
+  bundleRule: { type: string; buyQuantity: number; freeQuantity?: number; discountPercentage?: number }
+): number => {
+  // Validate inputs
+  if (!bundleRule || items.length === 0) {
+    return 0;
+  }
+
+  // Validate buyQuantity (must be at least 1)
+  if (!bundleRule.buyQuantity || bundleRule.buyQuantity < 1) {
+    console.error('Invalid bundleRule: buyQuantity must be at least 1');
+    return 0;
+  }
+
+  // Validate freeQuantity (must be non-negative if provided)
+  if (bundleRule.freeQuantity !== undefined && bundleRule.freeQuantity < 0) {
+    console.error('Invalid bundleRule: freeQuantity cannot be negative');
+    return 0;
+  }
+
+  // Validate discountPercentage (must be 0-100 if provided)
+  if (bundleRule.discountPercentage !== undefined && 
+      (bundleRule.discountPercentage < 0 || bundleRule.discountPercentage > 100)) {
+    console.error('Invalid bundleRule: discountPercentage must be between 0 and 100');
+    return 0;
+  }
+
+  const itemCount = items.length;
+  
+  switch (bundleRule.type) {
+    case 'nth_item_free': {
+      // Every nth item is free (e.g., "4th class free")
+      const nthItem = bundleRule.buyQuantity;
+      const freeItemsCount = Math.floor(itemCount / nthItem);
+      
+      if (freeItemsCount === 0) return 0;
+      
+      // Sort items by price (ascending) and make the cheapest items free
+      const sortedItems = [...items].sort((a, b) => a.price - b.price);
+      const discountAmount = sortedItems
+        .slice(0, freeItemsCount)
+        .reduce((sum, item) => sum + item.price, 0);
+      
+      // Round to nearest cent
+      return Math.round(discountAmount);
+    }
+    
+    case 'buy_x_get_y_free': {
+      // Buy X items, get Y free
+      const buyQty = bundleRule.buyQuantity;
+      const freeQty = bundleRule.freeQuantity || 0;
+      
+      if (freeQty === 0) return 0;
+      
+      const setSize = buyQty + freeQty;
+      const completeSets = Math.floor(itemCount / setSize);
+      
+      if (completeSets === 0) return 0;
+      
+      // For each complete set, the cheapest Y items are free
+      const sortedItems = [...items].sort((a, b) => a.price - b.price);
+      const freeItemsCount = completeSets * freeQty;
+      const discountAmount = sortedItems
+        .slice(0, freeItemsCount)
+        .reduce((sum, item) => sum + item.price, 0);
+      
+      // Round to nearest cent
+      return Math.round(discountAmount);
+    }
+    
+    case 'buy_x_get_y_percent_off': {
+      // Buy X items, get Y% off on Y items
+      const buyQty = bundleRule.buyQuantity;
+      const discountQty = bundleRule.freeQuantity || 0;
+      const percentOff = bundleRule.discountPercentage || 0;
+      
+      if (discountQty === 0 || percentOff === 0) return 0;
+      
+      const setSize = buyQty + discountQty;
+      const completeSets = Math.floor(itemCount / setSize);
+      
+      if (completeSets === 0) return 0;
+      
+      // For each complete set, apply percentage discount to cheapest Y items
+      const sortedItems = [...items].sort((a, b) => a.price - b.price);
+      const discountedItemsCount = completeSets * discountQty;
+      const discountAmount = sortedItems
+        .slice(0, discountedItemsCount)
+        .reduce((sum, item) => sum + (item.price * (percentOff / 100)), 0);
+      
+      // Round to nearest cent
+      return Math.round(discountAmount);
+    }
+    
+    default:
+      console.error(`Unknown bundleRule type: ${bundleRule.type}`);
+      return 0;
+  }
+};
+
 // Keep the synchronous version for immediate calculations
 const calculateCartTotalsSync = (
   items: CartItem[],
