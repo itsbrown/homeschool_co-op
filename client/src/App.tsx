@@ -492,6 +492,14 @@ function Router() {
       {/* Authenticated registration system routes */}
       <Route path="/registration" component={RegistrationPage} />
       
+      {/* Backward compatibility redirects */}
+      <Route path="/programs">
+        <Redirect to="/parent/programs" />
+      </Route>
+      <Route path="/programs/browse">
+        <Redirect to="/parent/programs/browse" />
+      </Route>
+      
       {/* Parent routes */}
       <Route path="/parent/programs" component={ProgramsParentPage} />
       <Route path="/parent/programs/browse" component={ProgramsBrowseRedirect} />
