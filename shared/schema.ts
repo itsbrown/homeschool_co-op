@@ -743,7 +743,7 @@ export const programs = pgTable("programs", {
   meetingUrl: text("meeting_url"),
   capacity: integer("capacity").notNull(),
   price: integer("price").notNull(), // in cents
-  instructorId: integer("instructor_id").notNull().references(() => users.id),
+  instructorId: integer("instructor_id").references(() => users.id),
   curriculumId: integer("curriculum_id").references(() => curricula.id),
   coverImage: text("cover_image"),
   materials: jsonb("materials"),

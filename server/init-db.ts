@@ -42,6 +42,14 @@ async function runMigrations() {
       ADD COLUMN IF NOT EXISTS marketplace_class_id INTEGER REFERENCES classes(id);
     `);
     console.log('✅ Migration completed: marketplace_class_id column added');
+    
+    // Make instructor_id column nullable in programs table
+    console.log('Running migration: Making instructor_id nullable in programs table...');
+    await db.execute(sql`
+      ALTER TABLE programs 
+      ALTER COLUMN instructor_id DROP NOT NULL;
+    `);
+    console.log('✅ Migration completed: instructor_id column now allows null values');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
