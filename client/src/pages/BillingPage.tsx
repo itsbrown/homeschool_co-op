@@ -1460,11 +1460,32 @@ export default function BillingPage() {
                           
                           // Clear cart immediately
                           console.log('🛒 Clearing cart after successful payment');
-                          clearCart();
+                          try {
+                            await clearCart(true); // Skip enrollment cancellation
+                          } catch (error) {
+                            console.error('❌ Failed to clear cart:', error);
+                          }
+                          
+                          // Show success toast
+                          toast({
+                            title: "Payment Successful!",
+                            description: `Your payment of ${formatCurrency(details.amount)} has been processed successfully.`,
+                            duration: 5000,
+                          });
                           
                           // Clear the payment form
                           setShowPayment(false);
                           setClientSecret('');
+                          setCurrentPayment(null);
+                          
+                          // Invalidate queries to refresh data
+                          queryClient.invalidateQueries({ queryKey: ['/api/payment-history/history'] });
+                          queryClient.invalidateQueries({ queryKey: ['/api/payment-history/summary'] });
+                          queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+                          queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
+                          queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
+                          
+                          console.log('✅ Payment success handling complete');
                         }}
                       />
                     </Elements>
