@@ -2918,7 +2918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/locations", supabaseAuth, locationsRouter);
   
   const notificationsRouter = (await import("./api/notifications")).default;
-  app.use("/api/notifications", jwtCheck, notificationsRouter);
+  app.use("/api/notifications", supabaseAuth, notificationsRouter);
 
   // Register billing routes
   const billingRouter = (await import("./api/billing")).default;
