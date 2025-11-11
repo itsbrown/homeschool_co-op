@@ -37,7 +37,7 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Enrollment Lifecycle & Duplicate Prevention**: Robust system preventing duplicate enrollments, managing a clear status workflow (pending_payment, enrolled, waitlist, cancelled, completed, withdrawn, failed), and integrating with the cart-to-checkout flow.
 - **Cart Clearing System**: Allows users to clear their shopping cart, properly cancelling `pending_payment` enrollments in the database for audit trails, with strict ownership validation.
 - **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing, enforcing strict school isolation. Class deletion includes foreign key constraint validation to prevent deletion when enrollments, discount applications, daily flow entries, or schedules exist, providing clear error messages.
-- **Registration Flow**: Automated account creation, handling existing accounts, and auto-login.
+- **Registration Flow**: Two-tier registration system with school code validation. The `/register` route requires users to enter a valid school registration code before accessing the school-specific registration page at `/register/{code}`. This ensures all registrations are properly associated with schools. Automated account creation, handling existing accounts, and auto-login.
 - **AI Enrollment Assistant**: Provides personalized AI guidance for enrollment.
 - **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management.
 - **User Account Management**: School administrators can send account invites and password reset emails.
