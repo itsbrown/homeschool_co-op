@@ -7,6 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { decodeJWT, inspectJWT } from '@/utils/jwtDebugger';
 
 export default function JWTDebugPanel() {
+  // Only render in development mode for security
+  if (!import.meta.env.DEV) {
+    return null;
+  }
+
   const { session, isAuthenticated } = useAuth();
   const [manualToken, setManualToken] = useState('');
   const [decodedPayload, setDecodedPayload] = useState<any>(null);

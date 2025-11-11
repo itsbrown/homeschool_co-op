@@ -279,8 +279,8 @@ export default function SettingsPage() {
               </Button>
             </div>
 
-            {/* JWT Debug Panel */}
-            <JWTDebugPanel />
+            {/* JWT Debug Panel - Development Only */}
+            {import.meta.env.DEV && <JWTDebugPanel />}
           </div>
         </div>
       </div>
