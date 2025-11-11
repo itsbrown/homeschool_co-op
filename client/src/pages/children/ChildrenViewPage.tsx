@@ -14,11 +14,35 @@ export default function ChildrenViewPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { activeRole } = useRole();
   
+  // Helper function to calculate age from birthdate
+  const calculateAge = (birthdate: string) => {
+    if (!birthdate) return "Unknown";
+    const today = new Date();
+    const birth = new Date(birthdate);
+    const age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      return age - 1;
+    }
+    return age;
+  };
+  
   // Fetch children data from parent-specific endpoint
-  const { data: childrenData, isLoading: childrenLoading } = useQuery({
+  const { data: rawChildrenData, isLoading: childrenLoading } = useQuery({
     queryKey: ["/api/parent/children"],
     enabled: isAuthenticated && activeRole === 'parent',
   });
+
+  // Transform children data to include computed properties
+  const childrenData = React.useMemo(() => {
+    if (!rawChildrenData) return [];
+    return rawChildrenData.map((child: any) => ({
+      ...child,
+      name: `${child.firstName} ${child.lastName}`,
+      age: calculateAge(child.birthdate)
+    }));
+  }, [rawChildrenData]);
 
   // Redirect if not authenticated
   React.useEffect(() => {
