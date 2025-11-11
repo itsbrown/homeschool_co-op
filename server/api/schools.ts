@@ -95,6 +95,46 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Validate school registration code - must be before /:id route to avoid conflicts
+router.get("/validate-code/:code", async (req, res) => {
+  try {
+    const code = req.params.code.toUpperCase().trim();
+    console.log('🔍 Validating registration code:', code);
+    
+    const db = await getDb();
+    const [school] = await db
+      .select()
+      .from(schools)
+      .where(eq(schools.registrationCode, code))
+      .limit(1);
+    
+    if (!school) {
+      console.log('❌ Invalid registration code:', code);
+      return res.status(404).json({ 
+        message: "Invalid registration code. Please check with your school administrator." 
+      });
+    }
+    
+    // Check if school is active
+    if (school.status !== 'active') {
+      console.log('⚠️ School is not active:', school.name);
+      return res.status(403).json({ 
+        message: "This school is not currently accepting registrations. Please contact your administrator." 
+      });
+    }
+    
+    console.log('✅ Valid registration code for school:', school.name);
+    res.json({ 
+      id: school.id,
+      name: school.name,
+      code: school.registrationCode 
+    });
+  } catch (error: any) {
+    console.error("Error validating registration code:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // Get knowledge bases - must be before /:id route to avoid conflicts
 router.get("/knowledge-bases", async (req, res) => {
   try {
