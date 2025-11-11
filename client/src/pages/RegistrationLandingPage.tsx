@@ -122,8 +122,8 @@ export default function RegistrationLandingPage() {
         password: data.password, // Use the password provided by the user
         username: data.email, // Use email as username
         name: `${data.parentFirstName} ${data.parentLastName}`, // Combined name
-        parentFirstName: data.parentFirstName,
-        parentLastName: data.parentLastName,
+        firstName: data.parentFirstName,
+        lastName: data.parentLastName,
         phone: data.phone,
         location: data.location,
         role: 'parent',

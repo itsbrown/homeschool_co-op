@@ -392,6 +392,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             user_metadata: {
               role: validatedData.role,
               name: validatedData.name,
+              first_name: validatedData.firstName,
+              last_name: validatedData.lastName,
               school_id: validatedData.schoolId  // Use snake_case to match API expectations
             }
           });
