@@ -288,8 +288,17 @@ router.post('/:id/enroll', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error adding to cart:', error);
-    res.status(500).json({ message: 'Failed to add to cart' });
+    console.error('❌ ERROR adding to cart:', error);
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      classId: req.params.id,
+      body: req.body
+    });
+    res.status(500).json({ 
+      message: 'Failed to add to cart',
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
