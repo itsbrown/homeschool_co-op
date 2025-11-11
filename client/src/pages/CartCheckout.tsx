@@ -502,13 +502,20 @@ export default function CartCheckout() {
               <CardContent className="space-y-4">
                 {cart.items.map((item) => {
                   const isDiscounted = cart.discounts.discountedChildIds?.includes(item.childId);
+                  const isFree = cart.discounts.freeItemIds?.includes(item.id);
                   return (
                   <div key={item.id} className="flex justify-between items-start p-3 border rounded-lg">
                     <div className="flex-1">
                       <h4 className="font-medium text-sm">{item.className}</h4>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <p className="text-xs text-muted-foreground">for {item.childName}</p>
-                        {isDiscounted && (
+                        {isFree && (
+                          <Badge variant="secondary" className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200" data-testid={`badge-free-${item.id}`}>
+                            <Gift className="h-2.5 w-2.5 mr-0.5" />
+                            FREE
+                          </Badge>
+                        )}
+                        {isDiscounted && !isFree && (
                           <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-200">
                             <Percent className="h-2.5 w-2.5 mr-0.5" />
                             Discount
@@ -520,7 +527,11 @@ export default function CartCheckout() {
                       )}
                     </div>
                     <div className="text-sm font-medium">
-                      {formatCurrency(item.price)}
+                      {isFree ? (
+                        <span className="text-emerald-600" data-testid={`price-free-${item.id}`}>FREE</span>
+                      ) : (
+                        formatCurrency(item.price)
+                      )}
                     </div>
                   </div>
                 );

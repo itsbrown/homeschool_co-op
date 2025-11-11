@@ -90,15 +90,22 @@ export default function CartDrawer() {
               <div className="space-y-4 pb-4">
                 {cart.items.map((item) => {
                   const isDiscounted = cart.discounts.discountedChildIds?.includes(item.childId);
+                  const isFree = cart.discounts.freeItemIds?.includes(item.id);
                   return (
                   <Card key={item.id} className="relative">
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h4 className="font-medium">{item.className}</h4>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm text-muted-foreground">{item.childName}</p>
-                      {isDiscounted && (
+                      {isFree && (
+                        <Badge variant="secondary" className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200" data-testid={`badge-free-${item.id}`}>
+                          <Gift className="h-2.5 w-2.5 mr-1" />
+                          FREE
+                        </Badge>
+                      )}
+                      {isDiscounted && !isFree && (
                         <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-200">
                           <Percent className="h-2.5 w-2.5 mr-1" />
                           Sibling Discount
@@ -117,7 +124,11 @@ export default function CartDrawer() {
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">{formatCurrency(item.price)}</p>
+                    {isFree ? (
+                      <p className="font-medium text-emerald-600" data-testid={`price-free-${item.id}`}>FREE</p>
+                    ) : (
+                      <p className="font-medium">{formatCurrency(item.price)}</p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       {item.remainingBalance ? 'Balance Due' : 'Total Due'}
                     </p>
@@ -135,11 +146,13 @@ export default function CartDrawer() {
                           {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
                         </p>
                       )}
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">
-                          {formatCurrency(item.price)}
-                        </span>
-                      </div>
+                      {!isFree && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">
+                            {formatCurrency(item.price)}
+                          </span>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -198,14 +211,27 @@ export default function CartDrawer() {
 
               {/* Discount Info */}
               {getUniqueChildrenCount() > 1 && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-xs text-green-700">
-                    <strong>Great!</strong> You're getting a 10% sibling discount for enrolling multiple children.
-                  </p>
-                  {getUniqueChildrenCount() >= 3 && (
-                    <p className="text-xs text-green-700 mt-1">
-                      <strong>Bonus:</strong> Your 4th child and beyond are free with our "Free After Three" policy!
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3" data-testid="section-discount-info">
+                  {cart.schoolSettings?.freeAfterThresholdEnabled && 
+                   getUniqueChildrenCount() > cart.schoolSettings.freeAfterThreshold ? (
+                    <p className="text-xs text-green-700" data-testid="text-free-after-active">
+                      <strong>Amazing!</strong> You have {getUniqueChildrenCount()} children enrolled. 
+                      Your {getUniqueChildrenCount() - cart.schoolSettings.freeAfterThreshold} cheapest 
+                      enrollment{getUniqueChildrenCount() - cart.schoolSettings.freeAfterThreshold > 1 ? 's are' : ' is'} FREE!
                     </p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-green-700" data-testid="text-sibling-discount-active">
+                        <strong>Great!</strong> You're getting a {cart.schoolSettings?.siblingDiscountRate ? `${cart.schoolSettings.siblingDiscountRate}%` : '10%'} sibling discount for enrolling multiple children.
+                      </p>
+                      {cart.schoolSettings?.freeAfterThresholdEnabled && 
+                       getUniqueChildrenCount() >= cart.schoolSettings.freeAfterThreshold && (
+                        <p className="text-xs text-green-700 mt-1" data-testid="text-free-after-coming">
+                          <strong>Bonus:</strong> Enroll {cart.schoolSettings.freeAfterThreshold + 1 - getUniqueChildrenCount()} more 
+                          child{cart.schoolSettings.freeAfterThreshold + 1 - getUniqueChildrenCount() > 1 ? 'ren' : ''} to get your cheapest classes free!
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
