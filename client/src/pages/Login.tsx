@@ -59,13 +59,23 @@ export default function Login() {
 
   const handleLogin = async (email: string, password: string) => {
     try {
+      console.log('🔐 Starting login attempt for:', email);
       const result = await signIn(email, password);
+      console.log('🔐 SignIn result:', { hasError: !!result.error, hasData: !!result.data });
+      
       if (result.error) {
+        console.error('🔐 Login error:', result.error.message);
         setError(result.error.message);
+      } else if (result.data?.session) {
+        console.log('🔐 Login successful, session established');
+        setError(null);
+        // Navigation will happen via useEffect when user state updates
       } else {
-        navigate('/dashboard');
+        console.warn('🔐 No error but no session either');
+        setError('Login failed. Please try again.');
       }
     } catch (err) {
+      console.error('🔐 Login exception:', err);
       setError('Login failed. Please try again.');
     }
   };
@@ -88,17 +98,8 @@ export default function Login() {
   };
 
   const onSubmit = async (data: LoginFormValues) => {
-    try {
-      setError(null);
-      await handleLogin(data.email, data.password);
-    } catch (error) {
-      setError("Login failed. Please try again.");
-      toast({
-        title: "Login Failed",
-        description: "Please check your credentials and try again.",
-        variant: "destructive",
-      });
-    }
+    setError(null);
+    await handleLogin(data.email, data.password);
   };
 
   // Test accounts for easy access
@@ -151,7 +152,74 @@ export default function Login() {
             </div>
 
             {/* Email/Password Form */}
-            <EmbeddedLogin />
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="your@email.com"
+                          {...field}
+                          disabled={isLoading}
+                          data-testid="input-email"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Enter your password"
+                            {...field}
+                            disabled={isLoading}
+                            data-testid="input-password"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                            disabled={isLoading}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading}
+                  data-testid="button-signin"
+                >
+                  {isLoading ? "Signing in..." : "Sign In"}
+                </Button>
+              </form>
+            </Form>
 
             {/* Test Accounts */}
             <div className="space-y-3">
