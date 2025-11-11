@@ -2273,22 +2273,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/users/profile", jwtCheck, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (!user || !user.id) {
+      const userEmail = req.user?.email || req.auth?.payload?.email;
+      if (!userEmail) {
+        console.log('❌ /api/users/profile PATCH - No user email found');
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      const { firstName, lastName, phoneNumber, username } = req.body;
+      console.log('✏️ Updating profile for user:', userEmail);
 
-      // In a real implementation, you would update the user in your database
-      // For now, we'll just return a success response
+      const { firstName, lastName, phoneNumber } = req.body;
+
+      // Get the user from database by email
+      const dbUser = await storage.getUserByEmail(userEmail);
+      if (!dbUser) {
+        console.log('❌ User not found in database:', userEmail);
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Update the user in the database
+      const updateData: any = {};
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+      if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
+      
+      // Combine firstName and lastName into name field if both provided
+      if (firstName !== undefined || lastName !== undefined) {
+        const newFirstName = firstName !== undefined ? firstName : dbUser.firstName || '';
+        const newLastName = lastName !== undefined ? lastName : dbUser.lastName || '';
+        updateData.name = `${newFirstName} ${newLastName}`.trim();
+      }
+
+      console.log('💾 Saving profile updates:', updateData);
+      
+      await storage.updateUser(dbUser.id, updateData);
+
+      console.log('✅ Profile updated successfully for:', userEmail);
+
       res.json({
         message: "Profile updated successfully",
         profile: {
-          firstName,
-          lastName,
-          phoneNumber,
-          username
+          firstName: firstName !== undefined ? firstName : dbUser.firstName,
+          lastName: lastName !== undefined ? lastName : dbUser.lastName,
+          phoneNumber: phoneNumber !== undefined ? phoneNumber : dbUser.phoneNumber
         }
       });
     } catch (error) {
