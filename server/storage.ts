@@ -3684,7 +3684,7 @@ export class MemStorage implements IStorage {
         console.log(`📡 Attempting database lookup for user ID: ${id}`);
         // Try database storage first
         const result = await this.dbStorage.getUser(id);
-        console.log(`✅ Database lookup successful for user ID: ${id}`);
+        console.log(`✅ Database lookup result for user ID ${id}:`, result ? `Found user: ${result.email}` : 'User not found (undefined)');
         return result;
       } catch (error) {
         console.log(`💾 Database lookup failed for user ID: ${id}, using file storage fallback`);

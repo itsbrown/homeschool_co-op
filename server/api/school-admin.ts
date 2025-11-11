@@ -3666,10 +3666,13 @@ router.get('/users', supabaseAuth, async (req: any, res) => {
     const staffAsUsers = await Promise.all(
       staffRecords.map(async (staffRecord) => {
         const user = await storage.getUser(staffRecord.userId);
-        if (!user) return null;
+        if (!user) {
+          console.log(`⚠️ Skipping orphaned staff record: staffRecord.id=${staffRecord.id}, userId=${staffRecord.userId} - user not found`);
+          return null;
+        }
         
         return {
-          id: user.id,
+          id: staffRecord.userId, // Use canonical userId, not staff record's auto-incremented ID
           email: user.email,
           firstName: user.name.split(' ')[0] || '',
           lastName: user.name.split(' ').slice(1).join(' ') || '',
@@ -3683,7 +3686,7 @@ router.get('/users', supabaseAuth, async (req: any, res) => {
       })
     );
     
-    // Filter out null entries
+    // Filter out null entries (orphaned staff records)
     const validStaffUsers = staffAsUsers.filter(user => user !== null);
     
     // Combine regular users and staff
