@@ -62,6 +62,19 @@ The platform utilizes a modern web application architecture prioritizing scalabi
   - **Error Handling**: Images with broken URLs gracefully hide via `onError` handler
 - **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 - **Payment System**: Stripe-only payment system featuring subscription schedules, webhooks, smart cart logic, date-driven payment plans, and automated refund processing.
+- **Free After Threshold Discount System** (Added Nov 11, 2025):
+  - **Configuration**: School administrators can enable/disable the feature and set the threshold (default: 3 children) via the Discounts page (`/schools/discounts`)
+  - **Formula**: `freeCount = max(0, uniqueChildren - threshold)` - counts UNIQUE children (not total enrollments)
+  - **Application**: Makes the cheapest enrollments free based on freeCount (e.g., if threshold=3 and family has 4 children, the cheapest enrollment is free)
+  - **Double-Dipping Prevention**: When active (family has more children than threshold), sibling discounts and promo codes are automatically suppressed to prevent stacking discounts
+  - **Database Schema**: Added `freeAfterThresholdEnabled` (boolean, default false) and `freeAfterThreshold` (integer, default 3) columns to schools table
+  - **Cart Integration**: Cart context tracks free items in `cart.discounts.freeItemIds` array and total discount in `cart.discounts.freeAfterThree`
+  - **UI Indicators**: FREE badges (emerald color with Gift icon) and "FREE" text replace prices in both CartDrawer and CartCheckout for free items
+  - **Dynamic Messaging**: Cart shows personalized messages based on children count and threshold (e.g., "Amazing! Your 2 cheapest enrollments are FREE!")
+  - **API Endpoints**: 
+    - GET `/api/school-admin/my-school` - Fetch school settings including threshold configuration
+    - PATCH `/api/school-admin/my-school/free-after-threshold` - Update threshold settings (requires school admin JWT authentication)
+  - **Security**: All settings modifications require school administrator authentication, settings stored in database (not client-side), multi-tenant isolation enforced
 - **Enrollment Lifecycle & Duplicate Prevention** (Updated Nov 11, 2025):
   - **Proper Status Workflow**: Enrollments now follow a clear lifecycle: `pending_payment` (cart) → `enrolled` (after payment) → `completed`/`cancelled`
   - **Database Schema**: Updated program_enrollments status constraint to allow all lifecycle values: `pending_payment`, `enrolled`, `waitlist`, `cancelled`, `completed`, `withdrawn`, `failed`
