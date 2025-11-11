@@ -83,6 +83,10 @@ export default function DiscountsPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedGradeLevels, setSelectedGradeLevels] = useState<string[]>([]);
   
+  // Free After Threshold settings
+  const [freeAfterEnabled, setFreeAfterEnabled] = useState(false);
+  const [freeAfterThreshold, setFreeAfterThreshold] = useState(3);
+  
   const queryClient = useQueryClient();
 
   // Initial form data
@@ -110,6 +114,30 @@ export default function DiscountsPage() {
   });
 
   const [formData, setFormData] = useState<DiscountFormData>(getInitialFormData());
+
+  // Fetch school settings for Free After Threshold
+  const { data: schoolData } = useQuery({
+    queryKey: ['/api/school-admin/my-school'],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch('/api/school-admin/my-school', {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch school settings');
+      }
+      const data = await response.json();
+      // Update local state when data is fetched
+      if (data.school) {
+        setFreeAfterEnabled(data.school.freeAfterThresholdEnabled || false);
+        setFreeAfterThreshold(data.school.freeAfterThreshold || 3);
+      }
+      return data;
+    },
+  });
 
   // Fetch discounts
   const { data: discountsData, isLoading } = useQuery({
@@ -272,6 +300,43 @@ export default function DiscountsPage() {
     },
   });
 
+  // Update Free After Threshold settings mutation
+  const updateFreeAfterMutation = useMutation({
+    mutationFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch('/api/school-admin/my-school/free-after-threshold', {
+        method: 'PATCH',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          enabled: freeAfterEnabled,
+          threshold: freeAfterThreshold,
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update settings');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+      toast({
+        title: "Success",
+        description: "Free after threshold settings updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -366,6 +431,88 @@ export default function DiscountsPage() {
                 />
           </Dialog>
         </div>
+
+        {/* Free After Threshold Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Free Enrollment After X Children
+            </CardTitle>
+            <CardDescription>
+              Automatically make the cheapest enrollments free when families have multiple children enrolled. Formula: freeCount = max(0, uniqueChildren - threshold)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Enable Feature</Label>
+                <p className="text-sm text-muted-foreground" data-testid="text-free-after-description">
+                  When enabled, families with {freeAfterThreshold}+ unique children get free enrollments for their cheapest classes
+                </p>
+              </div>
+              <Switch 
+                checked={freeAfterEnabled}
+                onCheckedChange={setFreeAfterEnabled}
+                data-testid="switch-free-after-enabled"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="threshold">Threshold (number of children before free enrollments apply)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="threshold"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={freeAfterThreshold}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val)) {
+                      setFreeAfterThreshold(Math.max(1, Math.min(10, val)));
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Ensure value is valid on blur
+                    if (!e.target.value || parseInt(e.target.value) < 1) {
+                      setFreeAfterThreshold(1);
+                    }
+                  }}
+                  disabled={!freeAfterEnabled}
+                  className="w-32"
+                  data-testid="input-free-after-threshold"
+                />
+                <span className="text-sm text-muted-foreground flex items-center">
+                  children before free enrollments
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-muted/50 p-4 rounded-lg space-y-2" data-testid="section-free-after-examples">
+              <p className="text-sm font-medium">Examples:</p>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li data-testid="text-example-at-threshold">• {freeAfterThreshold} children → 0 free enrollments</li>
+                <li data-testid="text-example-one-above">• {freeAfterThreshold + 1} children → 1 free enrollment (cheapest class)</li>
+                <li data-testid="text-example-two-above">• {freeAfterThreshold + 2} children → 2 free enrollments (2 cheapest classes)</li>
+              </ul>
+              <p className="text-sm text-amber-600 dark:text-amber-400 mt-2" data-testid="text-override-warning">
+                ⚠️ When active, this discount overrides sibling discounts and promo codes to prevent double-dipping
+              </p>
+            </div>
+
+            <div className="flex justify-end">
+              <Button 
+                onClick={() => updateFreeAfterMutation.mutate()}
+                disabled={updateFreeAfterMutation.isPending}
+                data-testid="button-save-free-after-settings"
+              >
+                {updateFreeAfterMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Settings
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Discounts Table */}
         <Card>
