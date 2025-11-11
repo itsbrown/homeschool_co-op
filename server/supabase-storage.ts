@@ -472,7 +472,6 @@ export class SupabaseStorage implements IStorage {
   async getAllActivities(): Promise<any[]> { return []; }
   async getAllPayments(): Promise<any[]> { return []; }
   async getAllEnrollments(): Promise<any[]> { return []; }
-  async getAllUsers(): Promise<any[]> { return []; }
   async getCurriculumById(id: number): Promise<any | undefined> { return undefined; }
   async getKnowledgeBaseById(id: number, userId: number): Promise<any | undefined> { return undefined; }
   async getActivityById(id: number, userId: number): Promise<any | undefined> { return undefined; }
@@ -520,11 +519,6 @@ export class SupabaseStorage implements IStorage {
   async updateEmergencyContact(id: number, contact: any): Promise<any> { throw new Error('Not implemented'); }
   async deleteEmergencyContact(id: number): Promise<void> { throw new Error('Not implemented'); }
   async getPrograms(): Promise<any[]> { return []; }
-  async getProgramById(id: number): Promise<any | undefined> { return undefined; }
-  async getProgramsBySchoolId(schoolId: number): Promise<any[]> { return []; }
-  async createProgram(program: any): Promise<any> { throw new Error('Not implemented'); }
-  async updateProgram(id: number, program: any): Promise<any> { throw new Error('Not implemented'); }
-  async deleteProgram(id: number): Promise<void> { throw new Error('Not implemented'); }
   async getEnrollmentsByChildId(childId: number): Promise<any[]> { return []; }
   async getEnrollmentsByProgramId(programId: number): Promise<any[]> { return []; }
   async createEnrollment(enrollment: any): Promise<any> { throw new Error('Not implemented'); }
@@ -571,7 +565,7 @@ export class SupabaseStorage implements IStorage {
     throw new Error('Program deletion not implemented in Supabase storage');
   }
 
-  async createRoleInvitation(invitation: any): Promise<any> { throw new Error('Not implemented'); }
+  // Unimplemented interface methods (real implementations exist above or use fallback storage)
   async getRoleInvitationsByEmail(email: string): Promise<any[]> { return []; }
   async getRoleInvitationById(id: number): Promise<any | undefined> { return undefined; }
   async updateRoleInvitation(id: number, invitation: any): Promise<any> { throw new Error('Not implemented'); }
