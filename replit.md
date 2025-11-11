@@ -104,6 +104,12 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management. Requires `CLIENT_URL` environment variable set to production domain for correct email links.
 - **User Account Management**: School administrators can send account invites and password reset emails.
 - **Password Reset System**: Email-based password reset with secure token handling.
+- **Parent Profile Management** (Updated Nov 11, 2025):
+  - **Settings Page**: Parent users can update their profile (firstName, lastName, phoneNumber) via the Settings page
+  - **Database Persistence**: PATCH `/api/users/profile` endpoint saves changes to PostgreSQL database via storage layer
+  - **Implementation**: Endpoint authenticates via Supabase JWT, fetches user by email, validates ownership, updates database with partial updates
+  - **Name Field Sync**: Automatically combines firstName + lastName into the `name` field for consistency across the platform
+  - **Error Handling**: Comprehensive logging and error handling for debugging profile update failures
 - **Email Service**: Dual integration with Brevo SMTP and SendGrid.
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
 - **AI Integration Services**: Utilizes Anthropic Claude for content analysis, Stability AI for image generation, and Hugging Face for text processing.
