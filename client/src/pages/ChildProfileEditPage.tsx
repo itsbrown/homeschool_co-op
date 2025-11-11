@@ -1,11 +1,13 @@
 import React, { useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { Redirect, useRoute, useLocation } from "wouter";
-import PageLayout from "@/components/layout/PageLayout";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import ChildRegistrationForm from "@/components/registration/ChildRegistrationForm";
 import type { Child } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export default function ChildProfileEditPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -18,11 +20,11 @@ export default function ChildProfileEditPage() {
   // Early returns for auth and routing
   if (authLoading) {
     return (
-      <PageLayout>
+      <ParentAppShell>
         <div className="flex justify-center items-center min-h-96">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
         </div>
-      </PageLayout>
+      </ParentAppShell>
     );
   }
 
@@ -66,22 +68,22 @@ export default function ChildProfileEditPage() {
 
   if (childLoading) {
     return (
-      <PageLayout title="Edit Child Profile" backTo="/children">
+      <ParentAppShell>
         <div className="flex justify-center items-center min-h-96">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
         </div>
-      </PageLayout>
+      </ParentAppShell>
     );
   }
 
   // If we're still loading or had errors, don't render the form yet
   if (!childData || error) {
     return (
-      <PageLayout title="Edit Child Profile" backTo="/children">
+      <ParentAppShell>
         <div className="flex justify-center items-center min-h-96">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
         </div>
-      </PageLayout>
+      </ParentAppShell>
     );
   }
 
@@ -114,11 +116,21 @@ export default function ChildProfileEditPage() {
   };
 
   return (
-    <PageLayout title="Edit Child Profile" backTo="/children">
-      <div className="max-w-4xl mx-auto">
+    <ParentAppShell>
+      <div className="max-w-4xl mx-auto p-4 md:p-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Edit Child Profile</h1>
-          <p className="text-gray-600 mt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setLocation("/children")}
+            className="mb-4"
+            data-testid="button-back-to-children"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Edit Child Profile</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
             Update your child's profile information
           </p>
         </div>
@@ -129,6 +141,6 @@ export default function ChildProfileEditPage() {
           onSuccess={handleSuccess}
         />
       </div>
-    </PageLayout>
+    </ParentAppShell>
   );
 }
