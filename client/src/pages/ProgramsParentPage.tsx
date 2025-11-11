@@ -548,6 +548,15 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
             </div>
 
             {/* Variant Selection - Show if multiple variants exist */}
+            {(() => {
+              console.log("🔍 VARIANT SELECTOR DEBUG:");
+              console.log("  - enrollmentDialog.classData:", enrollmentDialog.classData);
+              console.log("  - variants exists?:", !!enrollmentDialog.classData?.variants);
+              console.log("  - variants:", enrollmentDialog.classData?.variants);
+              console.log("  - variants length:", enrollmentDialog.classData?.variants?.length);
+              console.log("  - should show?:", enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1);
+              return null;
+            })()}
             {enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1 && (
               <div>
                 <Label htmlFor="variant-select">Time Option</Label>
