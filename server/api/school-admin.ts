@@ -570,14 +570,26 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
       
       // Parse variants from schedule field if they exist
       let variants = undefined;
+      console.log(`📊 Class ${classItem.id} "${classItem.title}" schedule type:`, typeof classItem.schedule);
+      console.log(`📊 Class ${classItem.id} schedule value:`, classItem.schedule);
+      
       if (classItem.schedule && typeof classItem.schedule === 'string') {
         try {
           const scheduleData = JSON.parse(classItem.schedule);
+          console.log(`📊 Class ${classItem.id} parsed schedule:`, scheduleData);
           if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
             variants = scheduleData.variants;
+            console.log(`✅ Class ${classItem.id} has ${variants.length} variants`);
           }
         } catch (e) {
-          // Not JSON, keep schedule as-is
+          console.log(`⚠️ Class ${classItem.id} schedule JSON parse error:`, e.message);
+        }
+      } else if (classItem.schedule && typeof classItem.schedule === 'object') {
+        // Schedule is already an object (not JSON string)
+        console.log(`📊 Class ${classItem.id} schedule is already an object:`, classItem.schedule);
+        if (classItem.schedule.variants && Array.isArray(classItem.schedule.variants)) {
+          variants = classItem.schedule.variants;
+          console.log(`✅ Class ${classItem.id} has ${variants.length} variants from object`);
         }
       }
       
