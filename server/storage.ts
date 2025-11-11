@@ -4350,15 +4350,41 @@ export class MemStorage implements IStorage {
 
       // Scheduled payments methods 
       async createScheduledPayment(scheduledPayment: InsertScheduledPayment): Promise<ScheduledPayment> {
-        return this.memStorage.createScheduledPayment(scheduledPayment);
+        try {
+          if (this.dbStorage && typeof this.dbStorage.createScheduledPayment === 'function') {
+            return await this.dbStorage.createScheduledPayment(scheduledPayment);
+          } else {
+            console.log('💾 DB storage unavailable or method missing, using file storage fallback for createScheduledPayment');
+            return await this.fileStorage.createScheduledPayment(scheduledPayment);
+          }
+        } catch (error) {
+          return await this.fileStorage.createScheduledPayment(scheduledPayment);
+        }
       }
 
       async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
-        return this.memStorage.getScheduledPaymentsByParentEmail(parentEmail);
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentsByParentEmail === 'function') {
+            return await this.dbStorage.getScheduledPaymentsByParentEmail(parentEmail);
+          } else {
+            console.log('💾 DB storage unavailable or method missing, using file storage fallback for getScheduledPaymentsByParentEmail');
+            return await this.fileStorage.getScheduledPaymentsByParentEmail(parentEmail);
+          }
+        } catch (error) {
+          return await this.fileStorage.getScheduledPaymentsByParentEmail(parentEmail);
+        }
       }
 
       async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
-        return this.memStorage.updateScheduledPaymentStatus(id, status);
+        try {
+          if (this.dbStorage && typeof this.dbStorage.updateScheduledPaymentStatus === 'function') {
+            return await this.dbStorage.updateScheduledPaymentStatus(id, status);
+          } else {
+            return await this.memStorage.updateScheduledPaymentStatus(id, status);
+          }
+        } catch (error) {
+          return await this.memStorage.updateScheduledPaymentStatus(id, status);
+        }
       }
 
       // School Student methods - Migrated to database storage

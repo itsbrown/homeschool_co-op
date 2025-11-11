@@ -1,6 +1,6 @@
 import express from 'express';
 import Stripe from 'stripe';
-import { MemStorage } from '../storage';
+import { storage } from '../storage';
 
 const router = express.Router();
 
@@ -65,7 +65,6 @@ async function handlePaymentSuccess(invoice: any) {
     // Get subscription schedule from invoice
     if (invoice.subscription_schedule) {
       const scheduleId = invoice.subscription_schedule;
-      const storage = new MemStorage();
       
       // Find enrollments associated with this schedule
       const schedules = await storage.getStripeSubscriptionSchedules();
@@ -111,7 +110,6 @@ async function handlePaymentFailure(invoice: any) {
     
     if (invoice.subscription_schedule) {
       const scheduleId = invoice.subscription_schedule;
-      const storage = new MemStorage();
       
       // Find enrollments associated with this schedule
       const schedules = await storage.getStripeSubscriptionSchedules();
@@ -170,7 +168,6 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     console.log('💳 Processing direct payment success:', paymentIntent.id);
     console.log('🔍 Payment metadata:', paymentIntent.metadata);
     
-    const storage = new MemStorage();
     const parentEmail = paymentIntent.metadata.parentEmail;
     const enrollmentIds = paymentIntent.metadata.enrollmentIds;
     const paymentType = paymentIntent.metadata.paymentType;
@@ -241,7 +238,6 @@ async function handleFinalPaymentFailure(schedule: any, invoice: any) {
     await stripe.subscriptionSchedules.cancel(schedule.stripeScheduleId);
     
     // Update enrollments to require manual payment
-    const storage = new MemStorage();
     const enrollmentIds = JSON.parse(schedule.enrollmentIds);
     
     for (const enrollmentId of enrollmentIds) {
