@@ -183,11 +183,16 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     
     console.log(`💰 Processing payment for ${enrollmentIdList.length} enrollments, ${perEnrollmentAmount} cents each`);
     
-    // Update each enrollment
+    // Collect enrollment data for payment record
+    const enrollments = [];
+    
+    // Update each enrollment and collect data
     for (const enrollmentId of enrollmentIdList) {
       try {
         const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
         if (enrollment) {
+          enrollments.push(enrollment); // Store for later use
+          
           const currentPaid = enrollment.totalPaid || 0;
           const newTotalPaid = currentPaid + perEnrollmentAmount;
           const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
@@ -206,15 +211,31 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
       }
     }
     
-    // Create payment record
+    // Build child and class names from actual enrollments
+    let childName = 'Child';
+    let className = 'Class';
+    
+    if (enrollments.length === 1) {
+      childName = enrollments[0].childName || 'Child';
+      className = enrollments[0].className || 'Class';
+    } else if (enrollments.length > 1) {
+      const childNames = [...new Set(enrollments.map(e => e.childName).filter(Boolean))];
+      const classNames = [...new Set(enrollments.map(e => e.className).filter(Boolean))];
+      
+      childName = childNames.length === 1 ? childNames[0] : `${childNames.length} children`;
+      className = classNames.length === 1 ? classNames[0] : `${classNames.length} classes`;
+    }
+    
+    // Create payment record with actual enrollment data
     const payment = {
       stripePaymentIntentId: paymentIntent.id,
       parentEmail: parentEmail,
-      childName: enrollmentIdList.length > 1 ? 'Multiple Children' : 'Child',
-      className: enrollmentIdList.length > 1 ? `${enrollmentIdList.length} enrollments` : 'Class',
+      childName: childName,
+      className: className,
       amount: totalAmount,
       currency: paymentIntent.currency || 'usd',
       status: 'completed' as const,
+      enrollmentIds: enrollmentIdList, // Add enrollment IDs for reference
       metadata: {
         paymentType: 'direct_payment',
         enrollmentCount: enrollmentIdList.length
@@ -222,7 +243,7 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     };
     
     await storage.createPayment(payment);
-    console.log('✅ Payment record created for direct payment:', paymentIntent.id);
+    console.log('✅ Payment record created for direct payment:', paymentIntent.id, 'Child:', childName, 'Class:', className);
     
   } catch (error) {
     console.error('❌ Error handling direct payment success:', error);

@@ -1279,60 +1279,63 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dispatch({ type: 'UPDATE_ITEM', payload: { id, updates } });
   };
 
-  const clearCart = async () => {
-    console.log('🧹 CLEARING CART - Current items:', state.cart.items.length);
+  const clearCart = async (skipCancellation: boolean = false) => {
+    console.log('🧹 CLEARING CART - Current items:', state.cart.items.length, 'skipCancellation:', skipCancellation);
     
-    // Gather enrollment IDs from cart items using enrollmentId field
-    const enrollmentIds = state.cart.items
-      .map(item => item.enrollmentId)
-      .filter((id): id is number => id !== undefined && id !== null);
-    
-    if (enrollmentIds.length > 0) {
-      try {
-        // Get auth token same way as other protected requests
-        const token = await getAccessTokenSilently();
-        const response = await fetch('/api/cart/clear', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ enrollmentIds }),
-        });
+    // Only attempt to cancel enrollments if not skipping and cart has items with enrollment IDs
+    if (!skipCancellation) {
+      // Gather enrollment IDs from cart items using enrollmentId field
+      const enrollmentIds = state.cart.items
+        .map(item => item.enrollmentId)
+        .filter((id): id is number => id !== undefined && id !== null);
+      
+      if (enrollmentIds.length > 0) {
+        try {
+          // Get auth token same way as other protected requests
+          const token = await getAccessTokenSilently();
+          const response = await fetch('/api/cart/clear', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ enrollmentIds }),
+          });
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to cancel enrollments');
-        }
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to cancel enrollments');
+          }
 
-        const result = await response.json();
-        console.log('🧹 Enrollments cancelled:', result);
-        
-        if (result.errors && result.errors.length > 0) {
-          console.warn('🧹 Some enrollments could not be cancelled:', result.errors);
+          const result = await response.json();
+          console.log('🧹 Enrollments cancelled:', result);
+          
+          if (result.errors && result.errors.length > 0) {
+            console.warn('🧹 Some enrollments could not be cancelled:', result.errors);
+            toast({
+              title: "Partial Success",
+              description: `${result.cancelled.length} enrollments cancelled, but ${result.errors.length} had errors.`,
+              variant: "destructive",
+            });
+          }
+
+          // Invalidate program enrollments query to refresh children page
+          queryClient.invalidateQueries({ queryKey: ['/api/program-enrollments'] });
+          
+        } catch (error: any) {
+          console.error('🧹 Error cancelling enrollments:', error);
           toast({
-            title: "Partial Success",
-            description: `${result.cancelled.length} enrollments cancelled, but ${result.errors.length} had errors.`,
+            title: "Error",
+            description: "Failed to cancel enrollments. Please try again or contact support if the issue persists.",
             variant: "destructive",
           });
+          // Don't clear local state if API fails - keep cart visible
+          return;
         }
-
-        // Invalidate program enrollments query to refresh children page
-        queryClient.invalidateQueries({ queryKey: ['/api/program-enrollments'] });
-        
-      } catch (error: any) {
-        console.error('🧹 Error cancelling enrollments:', error);
-        toast({
-          title: "Error",
-          description: "Failed to cancel enrollments. Please try again or contact support if the issue persists.",
-          variant: "destructive",
-        });
-        // Don't clear local state if API fails - keep cart visible
-        return;
       }
     }
 
-    // Only clear local state if API call succeeded (or if cart was empty)
+    // Clear local state (always runs when skipCancellation is true, or after successful API call)
     dispatch({ type: 'CLEAR_CART' });
     localStorage.removeItem('asa_cart');
     localStorage.removeItem('asa_cart_items');
@@ -1341,10 +1344,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Set a flag to prevent immediate reload after payment
     localStorage.setItem('asa_cart_cleared', Date.now().toString());
     console.log('🧹 CART CLEARED - Flag set at:', Date.now());
-    toast({
-      title: "Cart Cleared",
-      description: "All items removed from cart",
-    });
+    
+    // Only show toast if manually clearing (not after successful payment)
+    if (!skipCancellation) {
+      toast({
+        title: "Cart Cleared",
+        description: "All items removed from cart",
+      });
+    }
   };
 
   // Force refresh cart by reloading unpaid enrollments

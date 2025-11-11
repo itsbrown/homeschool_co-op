@@ -51,21 +51,112 @@ router.get('/upcoming', async (req, res) => {
 
     console.log('📅 Fetching scheduled payments for:', userEmail);
     
-    // Get all scheduled payments for this parent
-    console.log('🔍 Checking storage for scheduled payments...');
-    const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
-    console.log(`📋 Found ${scheduledPayments.length} total scheduled payments for ${userEmail}:`, scheduledPayments);
+    if (!stripe) {
+      console.log('❌ Stripe not configured');
+      return res.json({
+        success: true,
+        payments: []
+      });
+    }
     
-    // Filter for pending payments and sort by due date
-    const upcomingPayments = scheduledPayments
-      .filter(payment => {
-        const isUpcoming = payment.status === 'pending';
-        console.log(`📅 Payment ${payment.id}: due ${new Date(payment.dueDate).toLocaleDateString()}, status: ${payment.status}, upcoming: ${isUpcoming}`);
-        return isUpcoming;
-      })
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    // Get Stripe Subscription Schedules for this parent (NEW APPROACH)
+    console.log('🔍 Checking Stripe Subscription Schedules...');
+    const subscriptionSchedules = await storage.getStripeSubscriptionSchedulesByParentEmail(userEmail);
+    console.log(`📋 Found ${subscriptionSchedules.length} subscription schedules for ${userEmail}`);
     
-    console.log(`📊 Found ${upcomingPayments.length} upcoming payments`);
+    const upcomingPayments = [];
+    
+    // For each schedule, fetch upcoming invoices from Stripe
+    for (const localSchedule of subscriptionSchedules) {
+      try {
+        // Skip completed or canceled schedules
+        if (localSchedule.status === 'completed' || localSchedule.status === 'canceled') {
+          console.log(`⏭️ Skipping ${localSchedule.status} schedule ${localSchedule.stripeScheduleId}`);
+          continue;
+        }
+        
+        // Safely parse enrollmentIds with error handling
+        let enrollmentIds: number[] = [];
+        try {
+          if (localSchedule.enrollmentIds) {
+            const parsed = typeof localSchedule.enrollmentIds === 'string' 
+              ? JSON.parse(localSchedule.enrollmentIds) 
+              : localSchedule.enrollmentIds;
+            enrollmentIds = Array.isArray(parsed) ? parsed : [];
+          }
+        } catch (parseError) {
+          console.error(`❌ Failed to parse enrollmentIds for schedule ${localSchedule.stripeScheduleId}:`, parseError);
+          continue; // Skip this schedule if metadata is corrupted
+        }
+        
+        if (enrollmentIds.length === 0) {
+          console.log(`⚠️ No enrollments found for schedule ${localSchedule.stripeScheduleId}`);
+          continue;
+        }
+        
+        // Fetch live schedule data from Stripe
+        const stripeSchedule = await stripe.subscriptionSchedules.retrieve(localSchedule.stripeScheduleId);
+        console.log(`✅ Retrieved Stripe schedule ${stripeSchedule.id}, status: ${stripeSchedule.status}`);
+        
+        // Get upcoming invoice preview if schedule is active
+        if (stripeSchedule.status === 'active' && stripeSchedule.subscription) {
+          try {
+            const upcomingInvoice = await stripe.invoices.retrieveUpcoming({
+              subscription: stripeSchedule.subscription as string
+            });
+            
+            if (upcomingInvoice && upcomingInvoice.amount_due > 0) {
+              // Get child and class names from enrollments with error handling
+              const enrollments = [];
+              for (const enrollmentId of enrollmentIds) {
+                try {
+                  const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+                  if (enrollment) enrollments.push(enrollment);
+                } catch (enrollmentError) {
+                  console.error(`❌ Failed to fetch enrollment ${enrollmentId}:`, enrollmentError);
+                }
+              }
+              
+              // Build display names with fallbacks
+              const childNames = [...new Set(enrollments.map(e => e.childName).filter(Boolean))];
+              const classNames = [...new Set(enrollments.map(e => e.className).filter(Boolean))];
+              
+              const childName = childNames.length === 0 ? 'Child' : 
+                               childNames.length === 1 ? childNames[0] : 
+                               `${childNames.length} children`;
+              const className = classNames.length === 0 ? 'Class' :
+                               classNames.length === 1 ? classNames[0] : 
+                               `${classNames.length} classes`;
+              
+              upcomingPayments.push({
+                id: localSchedule.id,
+                amount: upcomingInvoice.amount_due,
+                dueDate: new Date(upcomingInvoice.period_end * 1000),
+                status: 'pending',
+                childName: childName,
+                className: className,
+                description: `Upcoming payment for ${localSchedule.paymentPlan} plan`,
+                enrollmentIds: enrollmentIds,
+                stripeScheduleId: localSchedule.stripeScheduleId,
+                installmentNumber: localSchedule.currentPhase,
+                totalInstallments: localSchedule.totalPhases
+              });
+              console.log(`📅 Added upcoming payment: ${upcomingInvoice.amount_due / 100} due ${new Date(upcomingInvoice.period_end * 1000).toLocaleDateString()}`);
+            }
+          } catch (invoiceError: any) {
+            // No upcoming invoice (schedule might be paused or no more payments)
+            console.log(`ℹ️ No upcoming invoice for schedule ${stripeSchedule.id}:`, invoiceError.message);
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ Error processing schedule ${localSchedule.stripeScheduleId}:`, error.message);
+        // Continue processing other schedules even if one fails
+      }
+    }
+    
+    // Sort by due date
+    upcomingPayments.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    console.log(`📊 Found ${upcomingPayments.length} upcoming payments from Stripe Subscription Schedules`);
     
     res.json({
       success: true,
