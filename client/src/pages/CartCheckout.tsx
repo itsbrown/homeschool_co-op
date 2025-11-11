@@ -500,11 +500,21 @@ export default function CartCheckout() {
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
-                {cart.items.map((item) => (
+                {cart.items.map((item) => {
+                  const isDiscounted = cart.discounts.discountedChildIds?.includes(item.childId);
+                  return (
                   <div key={item.id} className="flex justify-between items-start p-3 border rounded-lg">
                     <div className="flex-1">
                       <h4 className="font-medium text-sm">{item.className}</h4>
-                      <p className="text-xs text-muted-foreground">for {item.childName}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-muted-foreground">for {item.childName}</p>
+                        {isDiscounted && (
+                          <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-200">
+                            <Percent className="h-2.5 w-2.5 mr-0.5" />
+                            Discount
+                          </Badge>
+                        )}
+                      </div>
                       {item.schedule && (
                         <p className="text-xs text-muted-foreground mt-1">{item.schedule}</p>
                       )}
@@ -513,7 +523,8 @@ export default function CartCheckout() {
                       {formatCurrency(item.price)}
                     </div>
                   </div>
-                ))}
+                );
+                })}
 
                 <Separator />
 

@@ -88,13 +88,23 @@ export default function CartDrawer() {
           <div className="flex flex-col h-full">
             <ScrollArea className="flex-1 mt-6 max-h-[calc(100vh-400px)]">
               <div className="space-y-4 pb-4">
-                {cart.items.map((item) => (
+                {cart.items.map((item) => {
+                  const isDiscounted = cart.discounts.discountedChildIds?.includes(item.childId);
+                  return (
                   <Card key={item.id} className="relative">
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h4 className="font-medium">{item.className}</h4>
-                    <p className="text-sm text-muted-foreground">{item.childName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">{item.childName}</p>
+                      {isDiscounted && (
+                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-200">
+                          <Percent className="h-2.5 w-2.5 mr-1" />
+                          Sibling Discount
+                        </Badge>
+                      )}
+                    </div>
                     {(item.statusText || item.status) && (
                       <p className="text-xs text-orange-600 font-medium">
                         {item.statusText || (item.status === 'pending_payment' ? 'Payment Required' : item.status)}
@@ -132,7 +142,8 @@ export default function CartDrawer() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                );
+                })}
               </div>
             </ScrollArea>
 

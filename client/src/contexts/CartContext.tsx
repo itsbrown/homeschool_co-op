@@ -34,6 +34,7 @@ export interface Cart {
     freeAfterThree: number;
     appliedDiscounts: AppliedDiscount[];
     totalDiscountAmount: number;
+    discountedChildIds?: number[]; // Track which children are receiving sibling discount
   };
   total: number;
   appliedPromoCode?: {
@@ -377,20 +378,35 @@ const calculateCartTotalsSync = (
   // For sync calculation, use fallback rate (this will be updated by async calculation)
   const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0; // Fallback rate
   
-  // Apply sibling discount: 10% off for 2nd child and beyond (not the first child)
+  // Apply sibling discount: 10% off for children with lower total enrollment costs
   let siblingDiscount = 0;
-  if (uniqueChildren > 1) {
-    // Sort children by first occurrence in cart (first child gets no discount)
-    const childOrder = [...new Set(items.map(item => item.childId))];
+  let discountedChildIds: number[] = [];
+  if (uniqueChildren > 1 && siblingDiscountRate > 0) {
+    // Calculate total cost per child
+    const childTotals = items.reduce((acc, item) => {
+      acc[item.childId] = (acc[item.childId] || 0) + item.price;
+      return acc;
+    }, {} as Record<number, number>);
     
+    // Sort children by total cost (highest to lowest) - most expensive child pays full price
+    const childrenByTotalCost = Object.entries(childTotals)
+      .sort(([, totalA], [, totalB]) => totalB - totalA)
+      .map(([childId]) => Number(childId));
+    
+    // Apply discount to all children except the one with highest total cost
     siblingDiscount = items.reduce((sum, item) => {
-      const childIndex = childOrder.indexOf(item.childId);
-      // First child (index 0) gets no discount, subsequent children get discount
+      const childIndex = childrenByTotalCost.indexOf(item.childId);
+      // First child in sorted list (highest cost) gets no discount
       if (childIndex > 0) {
         return sum + (item.price * siblingDiscountRate);
       }
       return sum;
     }, 0);
+    
+    // Only track discounted children if discount was actually applied
+    if (siblingDiscount > 0) {
+      discountedChildIds = childrenByTotalCost.slice(1);
+    }
   }
 
   // Apply "Free After Three" - 4th child and beyond are free
@@ -428,6 +444,7 @@ const calculateCartTotalsSync = (
       freeAfterThree: freeAfterThreeDiscount,
       appliedDiscounts: allDiscounts, // Merge automatic + promo discounts
       totalDiscountAmount,
+      discountedChildIds,
     },
     total,
   };
@@ -452,6 +469,7 @@ const calculateCartTotalsWithDiscounts = async (
   // Get sibling discount rate from school admin settings
   let siblingDiscountRate = 0;
   let siblingDiscount = 0;
+  let discountedChildIds: number[] = [];
   
   if (uniqueChildren > 1) {
     try {
@@ -459,21 +477,39 @@ const calculateCartTotalsWithDiscounts = async (
       const siblingDiscountSettings = await fetchSiblingDiscountSettings(getAccessTokenSilently);
       siblingDiscountRate = siblingDiscountSettings.rate;
       
-      // Apply sibling discount: 10% off for 2nd child and beyond (not the first child)
-      const childOrder = [...new Set(items.map(item => item.childId))];
-      
-      siblingDiscount = items.reduce((sum, item) => {
-        const childIndex = childOrder.indexOf(item.childId);
-        // First child (index 0) gets no discount, subsequent children get discount
-        if (childIndex > 0) {
-          return sum + (item.price * siblingDiscountRate);
+      if (siblingDiscountRate > 0) {
+        // Apply sibling discount: 10% off for children with lower total enrollment costs
+        // Calculate total cost per child
+        const childTotals = items.reduce((acc, item) => {
+          acc[item.childId] = (acc[item.childId] || 0) + item.price;
+          return acc;
+        }, {} as Record<number, number>);
+        
+        // Sort children by total cost (highest to lowest) - most expensive child pays full price
+        const childrenByTotalCost = Object.entries(childTotals)
+          .sort(([, totalA], [, totalB]) => totalB - totalA)
+          .map(([childId]) => Number(childId));
+        
+        // Apply discount to all children except the one with highest total cost
+        siblingDiscount = items.reduce((sum, item) => {
+          const childIndex = childrenByTotalCost.indexOf(item.childId);
+          // First child in sorted list (highest cost) gets no discount
+          if (childIndex > 0) {
+            return sum + (item.price * siblingDiscountRate);
+          }
+          return sum;
+        }, 0);
+        
+        // Only track discounted children if discount was actually applied
+        if (siblingDiscount > 0) {
+          discountedChildIds = childrenByTotalCost.slice(1);
         }
-        return sum;
-      }, 0);
+      }
     } catch (error) {
       console.log('Failed to fetch sibling discount settings, using default 0%');
       siblingDiscountRate = 0;
       siblingDiscount = 0;
+      discountedChildIds = [];
     }
   }
 
@@ -516,6 +552,7 @@ const calculateCartTotalsWithDiscounts = async (
       freeAfterThree: freeAfterThreeDiscount,
       appliedDiscounts: allDiscounts,
       totalDiscountAmount, // Now includes ALL discounts (sibling + free + auto + promo)
+      discountedChildIds,
     },
     total,
   };
