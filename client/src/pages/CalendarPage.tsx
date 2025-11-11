@@ -94,7 +94,7 @@ export default function CalendarPage() {
       if (filter !== "all" && event.eventType !== filter) {
         return false;
       }
-      const eventDate = parseISO(event.startDate);
+      const eventDate = typeof event.startDate === 'string' ? parseISO(event.startDate) : event.startDate;
       return isSameMonth(eventDate, currentMonth);
     })
     .sort((a: Event, b: Event) => {
@@ -118,7 +118,7 @@ export default function CalendarPage() {
   // Check if a date has events
   const hasEvent = (day: Date) => {
     return filteredEvents.some((event: Event) => {
-      const eventDate = parseISO(event.startDate);
+      const eventDate = typeof event.startDate === 'string' ? parseISO(event.startDate) : event.startDate;
       return isSameDay(day, eventDate);
     });
   };
@@ -259,7 +259,7 @@ export default function CalendarPage() {
                     <div className="space-y-3">
                       {filteredEvents
                         .filter((event: Event) => {
-                          const eventDate = parseISO(event.startDate);
+                          const eventDate = typeof event.startDate === 'string' ? parseISO(event.startDate) : event.startDate;
                           return isSameDay(eventDate, date);
                         })
                         .map((event: Event) => (
@@ -271,7 +271,7 @@ export default function CalendarPage() {
                               <div>
                                 <h4 className="font-medium">{event.title}</h4>
                                 <p className="text-sm">
-                                  {format(parseISO(event.startDate), 'h:mm a')} - {format(parseISO(event.endDate), 'h:mm a')}
+                                  {format(typeof event.startDate === 'string' ? parseISO(event.startDate) : event.startDate, 'h:mm a')} - {format(typeof event.endDate === 'string' ? parseISO(event.endDate) : event.endDate, 'h:mm a')}
                                 </p>
                                 {event.location && (
                                   <p className="text-sm mt-1">
@@ -291,7 +291,7 @@ export default function CalendarPage() {
                           </div>
                         ))}
                       {filteredEvents.filter((event: Event) => {
-                        const eventDate = parseISO(event.startDate);
+                        const eventDate = typeof event.startDate === 'string' ? parseISO(event.startDate) : event.startDate;
                         return isSameDay(eventDate, date);
                       }).length === 0 && (
                         <p className="text-muted-foreground text-center py-4">
@@ -328,7 +328,7 @@ export default function CalendarPage() {
                                 <div>
                                   <h4 className="font-medium">{event.title}</h4>
                                   <p className="text-sm">
-                                    {format(parseISO(event.startDate), 'h:mm a')} - {format(parseISO(event.endDate), 'h:mm a')}
+                                    {format(typeof event.startDate === 'string' ? parseISO(event.startDate) : event.startDate, 'h:mm a')} - {format(typeof event.endDate === 'string' ? parseISO(event.endDate) : event.endDate, 'h:mm a')}
                                   </p>
                                   {event.location && (
                                     <p className="text-sm mt-1">
