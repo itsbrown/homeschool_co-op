@@ -1571,6 +1571,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/program-enrollments/:id', isAuthenticated, programEnrollmentsApi.updateEnrollment);
   app.delete('/api/program-enrollments/:id', isAuthenticated, requireAdmin, programEnrollmentsApi.deleteEnrollment);
 
+  // Cart clear endpoint - Cancel pending enrollments
+  app.post('/api/cart/clear', jwtCheck, async (req, res) => {
+    try {
+      const { enrollmentIds } = req.body;
+      
+      if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+        return res.status(400).json({ error: 'enrollmentIds array is required' });
+      }
+
+      // Get parent user ID from JWT token and convert to number
+      const parentUserIdStr = req.auth?.userId;
+      if (!parentUserIdStr) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const parentUserId = Number(parentUserIdStr);
+      if (isNaN(parentUserId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+
+      // Cancel the pending enrollments using the storage method
+      const result = await storage.cancelPendingEnrollments(enrollmentIds, parentUserId);
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully cancelled ${result.cancelled.length} enrollment(s)`,
+        cancelled: result.cancelled,
+        skipped: result.skipped,
+        errors: result.errors
+      });
+    } catch (error: any) {
+      console.error('Error clearing cart enrollments:', error);
+      return res.status(500).json({ 
+        error: 'Failed to clear cart enrollments',
+        message: error.message 
+      });
+    }
+  });
+
   // Manual membership enrollment creation for school admins
   app.post('/api/admin/membership-enrollments', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'admin']), async (req, res) => {
     try {

@@ -184,6 +184,7 @@ export interface IStorage {
   createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment>;
   updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined>;
   deleteProgramEnrollment(id: number): Promise<void>;
+  cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }>;
 
   // Membership Enrollment methods
   getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
@@ -1341,6 +1342,50 @@ export class MemStorage implements IStorage {
 
   async deleteProgramEnrollment(id: number): Promise<void> {
     this.programEnrollmentsStore.delete(id);
+  }
+
+  async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
+    const cancelled: number[] = [];
+    const skipped: number[] = [];
+    const errors: string[] = [];
+
+    for (const id of enrollmentIds) {
+      const enrollment = this.programEnrollmentsStore.get(id);
+      if (!enrollment) {
+        errors.push(`Enrollment ${id} not found`);
+        continue;
+      }
+
+      // Verify ownership by checking if the child belongs to the parent
+      const child = await this.getChildById(enrollment.childId);
+      if (!child || child.parentUserId !== parentUserId) {
+        errors.push(`Enrollment ${id} does not belong to this parent`);
+        continue;
+      }
+
+      // Skip if enrollment has been paid
+      if (enrollment.amountPaid && enrollment.amountPaid > 0) {
+        skipped.push(id);
+        continue;
+      }
+
+      // Skip if not in pending_payment status
+      if (enrollment.status !== 'pending_payment') {
+        skipped.push(id);
+        continue;
+      }
+
+      // Update to cancelled status
+      const updatedEnrollment: ProgramEnrollment = {
+        ...enrollment,
+        status: 'cancelled',
+        updatedAt: new Date()
+      };
+      this.programEnrollmentsStore.set(id, updatedEnrollment);
+      cancelled.push(id);
+    }
+
+    return { cancelled, skipped, errors };
   }
 
   // Membership Enrollment methods
@@ -4125,6 +4170,10 @@ export class MemStorage implements IStorage {
 
     async deleteProgramEnrollment(id: number): Promise<void> {
       return this.dbStorage.deleteProgramEnrollment(id);
+    }
+
+    async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
+      return this.dbStorage.cancelPendingEnrollments(enrollmentIds, parentUserId);
     }
 
     async createEnrollment(enrollment: any): Promise<any> {

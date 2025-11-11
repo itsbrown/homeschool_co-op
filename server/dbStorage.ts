@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, isNull } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, isNull, inArray } from 'drizzle-orm';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -570,6 +570,53 @@ export class DatabaseStorage implements IStorage {
   async deleteProgramEnrollment(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(programEnrollments).where(eq(programEnrollments.id, id));
+  }
+
+  async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
+    const db = await getDb();
+    const cancelled: number[] = [];
+    const skipped: number[] = [];
+    const errors: string[] = [];
+
+    // Fetch all the enrollments to validate them
+    const enrollmentsToCheck = await db
+      .select()
+      .from(programEnrollments)
+      .where(inArray(programEnrollments.id, enrollmentIds));
+
+    for (const enrollment of enrollmentsToCheck) {
+      // Verify ownership by checking if the child belongs to the parent
+      const child = await this.getChildById(enrollment.childId);
+      if (!child || child.parentUserId !== parentUserId) {
+        errors.push(`Enrollment ${enrollment.id} does not belong to this parent`);
+        continue;
+      }
+
+      // Skip if enrollment has been paid
+      if (enrollment.amountPaid && enrollment.amountPaid > 0) {
+        skipped.push(enrollment.id);
+        continue;
+      }
+
+      // Skip if not in pending_payment status
+      if (enrollment.status !== 'pending_payment') {
+        skipped.push(enrollment.id);
+        continue;
+      }
+
+      // Update to cancelled status
+      await db
+        .update(programEnrollments)
+        .set({
+          status: 'cancelled',
+          updatedAt: new Date()
+        })
+        .where(eq(programEnrollments.id, enrollment.id));
+      
+      cancelled.push(enrollment.id);
+    }
+
+    return { cancelled, skipped, errors };
   }
 
   // Membership Enrollment methods
