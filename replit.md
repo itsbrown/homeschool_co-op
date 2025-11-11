@@ -91,6 +91,13 @@ The platform utilizes a modern web application architecture prioritizing scalabi
     - `POST /stripe/create-payment-intent` finds and reuses existing pending enrollments
     - Stripe webhooks handle status transitions on payment success/failure
   - **Fix Summary**: Eliminated duplicate enrollment bug where enrollments were created both during cart-add AND checkout, and fixed database constraint to allow pending_payment status before payment completion
+  - **Cart Clearing System** (Added Nov 11, 2025):
+    - **Database Consistency**: When users clear their shopping cart, pending_payment enrollments are properly cancelled in the database (not deleted) to maintain audit trail
+    - **Implementation**: POST `/api/cart/clear` endpoint with Auth0 JWT authentication validates ownership and marks enrollments as 'cancelled'
+    - **Storage Layer**: `cancelPendingEnrollments(enrollmentIds[], parentUserId)` validates child ownership, skips already-paid enrollments, and returns detailed status
+    - **Frontend Flow**: CartContext gathers enrollment IDs from cart items, calls API with auth token, invalidates React Query cache, and only clears local state after successful backend response
+    - **Security**: Strict ownership validation ensures parents can only cancel their own children's enrollments
+    - **Error Handling**: Partial failures are logged and reported, preventing orphaned enrollments that appear on children page after cart is cleared
 - **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing. All class CRUD operations enforce strict school isolation. Edit form dropdowns (location, instructor, status) properly pre-select existing values when editing.
 - **Registration Flow**: Automated account creation, handling existing accounts, and auto-login.
 - **AI Enrollment Assistant**: Personalized AI guidance for enrollment.
