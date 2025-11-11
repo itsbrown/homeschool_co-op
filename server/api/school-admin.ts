@@ -845,7 +845,15 @@ router.delete("/classes/:id", supabaseAuth, async (req: any, res) => {
     res.json({ message: 'Class deleted successfully', deletedClass: classToDelete });
   } catch (error) {
     console.error('❌ Error deleting class:', error);
-    res.status(500).json({ message: 'Error deleting class' });
+    const errorMessage = error instanceof Error ? error.message : 'Error deleting class';
+    
+    // Check if this is a dependency conflict error
+    if (errorMessage.includes('Cannot delete class:')) {
+      return res.status(409).json({ message: errorMessage });
+    }
+    
+    // For other errors, return 500
+    res.status(500).json({ message: errorMessage });
   }
 });
 

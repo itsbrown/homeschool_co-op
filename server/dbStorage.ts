@@ -307,6 +307,48 @@ export class DatabaseStorage implements IStorage {
 
   async deleteClass(id: number): Promise<void> {
     const db = await getDb();
+    
+    // Check for related enrollments
+    const relatedEnrollments = await db
+      .select()
+      .from(programEnrollments)
+      .where(eq(programEnrollments.marketplaceClassId, id));
+    
+    if (relatedEnrollments.length > 0) {
+      throw new Error(`Cannot delete class: ${relatedEnrollments.length} student(s) enrolled. Please cancel all enrollments first.`);
+    }
+    
+    // Check for related discount applications
+    const relatedDiscounts = await db
+      .select()
+      .from(discountApplications)
+      .where(eq(discountApplications.classId, id));
+    
+    if (relatedDiscounts.length > 0) {
+      throw new Error(`Cannot delete class: has ${relatedDiscounts.length} discount application(s). Please remove discount applications first.`);
+    }
+    
+    // Check for related daily flow entries
+    const relatedFlowEntries = await db
+      .select()
+      .from(dailyFlowEntries)
+      .where(eq(dailyFlowEntries.classId, id));
+    
+    if (relatedFlowEntries.length > 0) {
+      throw new Error(`Cannot delete class: has ${relatedFlowEntries.length} daily flow entries. Please remove flow entries first.`);
+    }
+    
+    // Check for related daily flow schedules
+    const relatedFlowSchedules = await db
+      .select()
+      .from(dailyFlowSchedules)
+      .where(eq(dailyFlowSchedules.classId, id));
+    
+    if (relatedFlowSchedules.length > 0) {
+      throw new Error(`Cannot delete class: has ${relatedFlowSchedules.length} daily flow schedules. Please remove schedules first.`);
+    }
+    
+    // If no related records, safe to delete
     await db.delete(classes).where(eq(classes.id, id));
   }
 

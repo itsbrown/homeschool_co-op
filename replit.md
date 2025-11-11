@@ -36,7 +36,7 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Free After Threshold Discount System**: Configurable by school administrators, offering free enrollments for additional children beyond a set threshold, with automatic suppression of other discounts to prevent stacking.
 - **Enrollment Lifecycle & Duplicate Prevention**: Robust system preventing duplicate enrollments, managing a clear status workflow (pending_payment, enrolled, waitlist, cancelled, completed, withdrawn, failed), and integrating with the cart-to-checkout flow.
 - **Cart Clearing System**: Allows users to clear their shopping cart, properly cancelling `pending_payment` enrollments in the database for audit trails, with strict ownership validation.
-- **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing, enforcing strict school isolation.
+- **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing, enforcing strict school isolation. Class deletion includes foreign key constraint validation to prevent deletion when enrollments, discount applications, daily flow entries, or schedules exist, providing clear error messages.
 - **Registration Flow**: Automated account creation, handling existing accounts, and auto-login.
 - **AI Enrollment Assistant**: Provides personalized AI guidance for enrollment.
 - **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management.
