@@ -94,8 +94,10 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
       
       const dbPaymentPlan = (paymentPlanMapping[paymentPlan] || 'full_payment') as 'full_payment' | 'deposit_only' | 'biweekly' | 'custom';
       
-      // Create enrollments in database
+      // Find or use existing pending enrollments (created when items were added to cart)
       const enrollmentIds = [];
+      const allEnrollments = await storage.getAllEnrollments?.() || [];
+      
       for (const item of items) {
         // Get the child to fetch schoolId
         const child = children.find(c => c.id === item.childId);
@@ -109,53 +111,74 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           throw new Error(`Class ${item.classId} not found`);
         }
         
-        // Validate schoolId - NEVER allow fallback to hardcoded values
-        const enrollmentSchoolId = child.schoolId || parent.schoolId;
-        if (!enrollmentSchoolId) {
-          throw new Error(`Cannot create enrollment: No valid school ID found for child ${item.childId} or parent ${parent.email}`);
+        // Check if there's already a pending enrollment for this child+class (created from cart)
+        let enrollment = allEnrollments.find(e => 
+          e.childId === item.childId &&
+          e.marketplaceClassId === item.classId &&
+          e.status === 'pending_payment'
+        );
+        
+        if (enrollment) {
+          console.log(`✅ Found existing pending enrollment ${enrollment.id} for child ${item.childId} in class ${item.classId}`);
+          // Update the existing enrollment with payment plan details
+          await storage.updateProgramEnrollment(enrollment.id, {
+            paymentPlan: dbPaymentPlan,
+            paymentFrequency: paymentFrequency,
+            paymentSystemVersion: 'v2_stripe'
+          });
+          enrollmentIds.push(enrollment.id);
+        } else {
+          // If no pending enrollment found (shouldn't happen in normal flow), create one
+          console.log(`⚠️ No pending enrollment found for child ${item.childId} in class ${item.classId}, creating new one`);
+          
+          // Validate schoolId - NEVER allow fallback to hardcoded values
+          const enrollmentSchoolId = child.schoolId || parent.schoolId;
+          if (!enrollmentSchoolId) {
+            throw new Error(`Cannot create enrollment: No valid school ID found for child ${item.childId} or parent ${parent.email}`);
+          }
+          
+          // Helper to safely convert date to string
+          const formatDate = (date: any): string | null => {
+            if (!date) return null;
+            if (typeof date === 'string') return date;
+            if (date instanceof Date) return date.toISOString().split('T')[0];
+            return String(date);
+          };
+          
+          enrollment = await storage.createProgramEnrollment({
+            schoolId: enrollmentSchoolId,
+            classType: 'marketplace',
+            classId: null,
+            marketplaceClassId: item.classId,
+            programId: item.classId,
+            childId: item.childId,
+            childName: item.childName,
+            className: item.className,
+            variantId: null,
+            parentId: parent.id,
+            parentEmail: userEmail,
+            totalCost: item.totalCost,
+            totalPaid: 0,
+            remainingBalance: item.totalCost,
+            depositRequired: 0,
+            paymentStatus: 'pending',
+            paymentPlan: dbPaymentPlan,
+            paymentSystemVersion: 'v2_stripe',
+            paymentFrequency: paymentFrequency,
+            programStartDate: formatDate(classData.startDate),
+            programEndDate: formatDate(classData.endDate),
+            stripeSubscriptionId: null,
+            stripeCustomerId: null,
+            notes: null,
+            metadata: {},
+            status: 'pending_payment', // Start as pending, will be enrolled after payment
+            enrollmentDate: new Date()
+          });
+          enrollmentIds.push(enrollment.id);
         }
-        
-        // Helper to safely convert date to string
-        const formatDate = (date: any): string | null => {
-          if (!date) return null;
-          if (typeof date === 'string') return date;
-          if (date instanceof Date) return date.toISOString().split('T')[0];
-          return String(date);
-        };
-        
-        const enrollment = await storage.createProgramEnrollment({
-          schoolId: enrollmentSchoolId,
-          classType: 'marketplace', // Enrolling in marketplace class
-          classId: null, // Not a school_class enrollment
-          marketplaceClassId: item.classId, // Reference to classes table
-          programId: item.classId, // For backward compatibility
-          childId: item.childId,
-          childName: item.childName,
-          className: item.className,
-          variantId: null,
-          parentId: parent.id,
-          parentEmail: userEmail,
-          totalCost: item.totalCost,
-          totalPaid: 0,
-          remainingBalance: item.totalCost,
-          depositRequired: 0,
-          paymentStatus: paymentPlan === 'full' ? 'pending' : 'deposit_paid',
-          paymentPlan: dbPaymentPlan,
-          paymentSystemVersion: 'v2_stripe',
-          paymentFrequency: paymentFrequency,
-          programStartDate: formatDate(classData.startDate),
-          programEndDate: formatDate(classData.endDate),
-          stripeSubscriptionId: null,
-          stripeCustomerId: null,
-          notes: null,
-          metadata: {},
-          status: 'enrolled',
-          enrollmentDate: new Date()
-        });
-        enrollmentIds.push(enrollment.id);
       }
 
-      console.log('✅ Created database enrollments with IDs:', enrollmentIds);
+      console.log('✅ Using enrollments with IDs:', enrollmentIds);
 
       // Use payment plan service for ALL payment plans
       const paymentPlanService = new StripePaymentPlanService(storage);

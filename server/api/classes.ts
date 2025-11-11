@@ -149,18 +149,18 @@ router.get('/categories/names', async (req, res) => {
   }
 });
 
-// Enroll a child in a class
+// Add to cart (creates pending enrollment - will be confirmed during checkout payment)
 router.post('/:id/enroll', async (req, res) => {
   try {
-    console.log(`📝 ENROLLMENT REQUEST: Class ${req.params.id}, Body:`, req.body);
+    console.log(`📝 ADD TO CART REQUEST: Class ${req.params.id}, Body:`, req.body);
 
     const classId = parseInt(req.params.id);
     const { childId } = req.body;
 
-    console.log(`📝 ENROLLMENT PARSED: classId=${classId}, childId=${childId}`);
+    console.log(`📝 PARSED: classId=${classId}, childId=${childId}`);
 
     if (isNaN(classId) || !childId) {
-      console.log(`📝 ENROLLMENT VALIDATION FAILED: Invalid classId or childId`);
+      console.log(`📝 VALIDATION FAILED: Invalid classId or childId`);
       return res.status(400).json({ message: 'Invalid class ID or child ID' });
     }
 
@@ -176,6 +176,27 @@ router.post('/:id/enroll', async (req, res) => {
       return res.status(404).json({ message: 'Child not found' });
     }
 
+    // CRITICAL: Check if child is already enrolled or has a pending enrollment for this class
+    const existingEnrollments = await storage.getAllEnrollments?.() || [];
+    const activeEnrollment = existingEnrollments.find(e => 
+      e.marketplaceClassId === classId && 
+      e.childId === childId && 
+      e.status !== 'cancelled' &&
+      e.status !== 'completed'
+    );
+
+    if (activeEnrollment) {
+      console.log(`⚠️ Child ${childId} already has an active enrollment for class ${classId}:`, activeEnrollment);
+      // Return the existing enrollment instead of creating a duplicate
+      return res.json({ 
+        message: 'Already in cart or enrolled',
+        enrollment: activeEnrollment,
+        isWaitlisted: activeEnrollment.status === 'waitlist',
+        waitlistPosition: activeEnrollment.waitlistPosition,
+        isDuplicate: true
+      });
+    }
+
     // Check class capacity and enrollment count
     const capacity = classItem.capacity || 0;
     const currentEnrollmentCount = classItem.enrollmentCount || 0;
@@ -183,13 +204,13 @@ router.post('/:id/enroll', async (req, res) => {
 
     // Calculate waitlist position if at capacity
     let waitlistPosition = null;
-    let enrollmentStatus = 'enrolled';
+    let enrollmentStatus = 'pending_payment'; // DEFAULT: pending until payment confirmed
     
     if (isAtCapacity) {
       // Get current waitlist count for this class
       const waitlistCount = classItem.totalWaitlisted || 0;
       waitlistPosition = waitlistCount + 1; // Next position in waitlist
-      enrollmentStatus = 'waitlist';
+      enrollmentStatus = 'waitlist'; // Waitlist doesn't require payment first
       
       console.log(`⚠️ Class is at capacity (${currentEnrollmentCount}/${capacity}). Adding to waitlist at position ${waitlistPosition}`);
     } else {
@@ -200,7 +221,7 @@ router.post('/:id/enroll', async (req, res) => {
     const classPrice = classItem.price || 90000; // Default $900 in cents
     const depositAmount = Math.round(classPrice * 0.1); // 10% deposit
 
-    // Create enrollment record with ALL required fields using factory function
+    // Create PENDING enrollment record (will be confirmed after payment)
     const enrollmentData = createEnrollmentDataSimple({
       schoolId: classItem.schoolId || 1,
       classType: 'marketplace',
@@ -221,27 +242,24 @@ router.post('/:id/enroll', async (req, res) => {
       paymentFrequency: 'one_time',
       programStartDate: classItem.startDate || null,
       programEndDate: classItem.endDate || null,
-      status: enrollmentStatus as any,
+      status: enrollmentStatus as any, // 'pending_payment' or 'waitlist'
       waitlistPosition: waitlistPosition,
       stripeSubscriptionId: null,
       stripeCustomerId: null
     });
 
-    console.log(`📝 ENROLLMENT OBJECT CREATED:`, enrollmentData);
+    console.log(`📝 PENDING ENROLLMENT CREATED (will be confirmed after payment):`, enrollmentData);
 
     // Save enrollment to storage
     const savedEnrollment = await storage.createProgramEnrollment(enrollmentData);
-    console.log(`📝 ENROLLMENT SAVED RESULT:`, savedEnrollment);
-
-    // Note: Child enrollment tracking will be handled separately
-    // For now, just create the enrollment record
+    console.log(`📝 ENROLLMENT SAVED with ID ${savedEnrollment.id}, status: ${enrollmentStatus}`);
 
     // Send appropriate message based on enrollment status
     const message = enrollmentStatus === 'waitlist'
       ? `Added to waitlist at position #${waitlistPosition}. You'll be notified when a spot opens up.`
-      : 'Enrollment successful';
+      : 'Added to cart - proceed to checkout to complete enrollment';
     
-    console.log(`✅ ${enrollmentStatus === 'waitlist' ? 'Waitlisted' : 'Enrolled'} ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
+    console.log(`✅ ${enrollmentStatus === 'waitlist' ? 'Waitlisted' : 'Added to cart'} ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
 
     // Send email notification for waitlist
     if (enrollmentStatus === 'waitlist') {
@@ -265,12 +283,13 @@ router.post('/:id/enroll', async (req, res) => {
       message,
       enrollment: savedEnrollment,
       isWaitlisted: enrollmentStatus === 'waitlist',
-      waitlistPosition: waitlistPosition
+      waitlistPosition: waitlistPosition,
+      isDuplicate: false
     });
 
   } catch (error) {
-    console.error('Error enrolling child in class:', error);
-    res.status(500).json({ message: 'Failed to enroll child in class' });
+    console.error('Error adding to cart:', error);
+    res.status(500).json({ message: 'Failed to add to cart' });
   }
 });
 
