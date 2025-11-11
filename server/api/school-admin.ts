@@ -2131,6 +2131,61 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Update school "Free After Threshold" discount configuration
+router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = requireSchoolContext(req, res);
+    if (schoolId === null) return;
+
+    const { freeAfterThresholdEnabled, freeAfterThreshold } = req.body;
+
+    const dbUpdateData: any = {};
+
+    if (freeAfterThresholdEnabled !== undefined) {
+      dbUpdateData.free_after_threshold_enabled = Boolean(freeAfterThresholdEnabled);
+    }
+
+    if (freeAfterThreshold !== undefined) {
+      const threshold = parseInt(freeAfterThreshold);
+      if (isNaN(threshold) || threshold < 1) {
+        return res.status(400).json({ message: "Invalid threshold (must be 1 or greater)" });
+      }
+      dbUpdateData.free_after_threshold = threshold;
+    }
+
+    console.log('🔄 Updating "Free After Threshold" configuration:', dbUpdateData);
+
+    // Use admin client to update the school
+    const { supabaseAdmin } = await import('../db/supabase');
+
+    // Update the school's "Free After Threshold" configuration
+    const { data: updatedSchool, error: updateError } = await supabaseAdmin
+      .from('schools')
+      .update(dbUpdateData)
+      .eq('id', schoolId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('❌ Database update error:', updateError);
+      return res.status(500).json({ 
+        message: "Failed to update discount configuration",
+        error: updateError.message
+      });
+    }
+
+    console.log('✅ "Free After Threshold" configuration updated successfully');
+
+    return res.json({
+      message: "Discount configuration updated successfully",
+      school: updatedSchool
+    });
+  } catch (error) {
+    console.error("Error updating discount configuration:", error);
+    return res.status(500).json({ message: "Server error while updating discount configuration" });
+  }
+});
+
 router.get("/knowledge-bases", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = requireSchoolContext(req, res);

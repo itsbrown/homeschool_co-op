@@ -71,6 +71,15 @@ async function runMigrations() {
       CHECK (status IN ('pending_payment', 'enrolled', 'waitlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
     `);
     console.log('✅ Migration completed: status constraint now allows pending_payment, waitlist, and cancelled statuses');
+    
+    // Add "Free After Threshold" discount configuration columns to schools table
+    console.log('Running migration: Adding free_after_threshold columns to schools table...');
+    await db.execute(sql`
+      ALTER TABLE schools 
+      ADD COLUMN IF NOT EXISTS free_after_threshold_enabled BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS free_after_threshold INTEGER DEFAULT 3;
+    `);
+    console.log('✅ Migration completed: free_after_threshold columns added to schools table');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
