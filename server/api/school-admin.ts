@@ -4102,7 +4102,7 @@ router.post('/users/:userId/send-password-reset', async (req, res) => {
     console.log(`🔑 Sending password reset to user ID: ${userId}`);
 
     // Get user details
-    const user = await storage.getUserById(userId);
+    const user = await storage.getUser(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
