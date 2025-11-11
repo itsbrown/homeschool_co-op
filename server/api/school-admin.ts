@@ -560,8 +560,8 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
     }
 
     // Add enrollment counts and parse variants from each class
-    // Also expand classes with variants into individual variant class entries
-    const classesWithEnrollment = allClasses.flatMap(classItem => {
+    // Keep classes with variants intact (don't expand into individual entries)
+    const classesWithEnrollment = allClasses.map(classItem => {
       // Count enrollments for this specific class
       const classEnrollmentCount = enrollments.filter(enrollment => 
         Number(enrollment.classId) === Number(classItem.id) && 
@@ -581,38 +581,15 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
         }
       }
       
-      // If the class has variants, expand them into individual class entries
-      if (variants && variants.length > 0) {
-        return variants.map((variant: any, index: number) => ({
-          ...classItem,
-          id: classItem.id, // Keep numeric ID for enrollment compatibility
-          variantId: variant.id, // Add variant ID as separate field
-          variantIndex: index, // Add index to help with unique keys in frontend
-          parentClassId: classItem.id, // Reference to parent class
-          title: variant.name, // Use variant name as title
-          price: variant.price, // Use variant price
-          enrollmentCount: classEnrollmentCount,
-          capacity: classItem.capacity || 20,
-          enrolled: classEnrollmentCount,
-          // Store variant details in schedule for reference
-          schedule: JSON.stringify({
-            days: variant.days,
-            startTime: variant.startTime,
-            endTime: variant.endTime
-          }),
-          variants: undefined // Variant classes don't have sub-variants
-        }));
-      }
-      
-      // If no variants, return the class as-is
-      return [{
+      // Return the class with variants array intact for enrollment dialog
+      return {
         ...classItem,
         enrollmentCount: classEnrollmentCount,
         capacity: classItem.capacity || 20,
         enrolled: classEnrollmentCount,
-        // Add parsed variants if they exist (though shouldn't reach here if variants exist)
-        ...(variants && { variants })
-      }];
+        // Include variants array if they exist
+        variants: variants || undefined
+      };
     });
 
     // Apply additional filters if needed
