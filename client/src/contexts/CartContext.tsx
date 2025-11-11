@@ -46,6 +46,12 @@ export interface Cart {
     value: number;
     discountAmount: number;
   } | null;
+  // Store school discount settings so sync calculator can access them
+  schoolSettings?: {
+    freeAfterThresholdEnabled: boolean;
+    freeAfterThreshold: number;
+    siblingDiscountRate: number;
+  };
 }
 
 export interface AppliedDiscount {
@@ -397,8 +403,9 @@ const calculateBundleDiscount = (
 // Keep the synchronous version for immediate calculations
 const calculateCartTotalsSync = (
   items: CartItem[],
-  appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null
-): { subtotal: number; discounts: any; total: number } => {
+  appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null,
+  schoolSettings?: { freeAfterThresholdEnabled: boolean; freeAfterThreshold: number; siblingDiscountRate: number }
+): { subtotal: number; discounts: any; total: number; schoolSettings?: typeof schoolSettings } => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
 
   // Group items by child to calculate sibling discount
@@ -409,16 +416,15 @@ const calculateCartTotalsSync = (
 
   const uniqueChildren = Object.keys(childrenWithClasses).length;
 
-  // For sync calculation, use fallback rate (this will be updated by async calculation)
-  const siblingDiscountRate = uniqueChildren > 1 ? 0.10 : 0; // Fallback rate
+  // Use school settings if available, otherwise use safe defaults (feature disabled)
+  const freeAfterThreeEnabled = schoolSettings?.freeAfterThresholdEnabled || false;
+  const freeAfterThreshold = schoolSettings?.freeAfterThreshold || 3;
+  const siblingDiscountRate = schoolSettings?.siblingDiscountRate || 0;
   
   // Apply "Free After Threshold" - Makes cheapest enrollments free based on child count
   // Formula: freeCount = max(0, childrenCount - threshold)
-  // For sync calculation, assume feature is DISABLED (async version will fetch actual settings)
   let freeAfterThreeDiscount = 0;
   let freeItemIds: string[] = [];
-  const freeAfterThreeEnabled = false; // Sync default: disabled
-  const freeAfterThreshold = 3; // Sync default threshold
   
   // Apply sibling discount: 10% off for children with lower total enrollment costs
   let siblingDiscount = 0;
@@ -469,24 +475,28 @@ const calculateCartTotalsSync = (
     }
   }
 
-  // Apply promo code discount if provided (merge with automatic discounts, don't replace)
+  // Apply promo code discount ONLY if "free after threshold" is NOT active (prevent double-dipping)
   const allDiscounts: AppliedDiscount[] = [];
-  if (appliedPromo) {
-    allDiscounts.push({
-      id: appliedPromo.discountId,
-      name: appliedPromo.name,
-      type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type, // Keep as fixed_amount for calculations
-      value: appliedPromo.value,
-      discountAmount: appliedPromo.discountAmount,
-      priority: 999, // Promo codes have lowest priority
-      sourceType: appliedPromo.type, // Preserve original type for UI
-      bundleRule: undefined // Bundle rule not available in sync calculation
-    });
+  let promoDiscount = 0;
+  
+  if (!freeAfterThreeEnabled || uniqueChildren <= freeAfterThreshold) {
+    // Only add promo code if "free after threshold" is NOT active
+    if (appliedPromo) {
+      allDiscounts.push({
+        id: appliedPromo.discountId,
+        name: appliedPromo.name,
+        type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type,
+        value: appliedPromo.value,
+        discountAmount: appliedPromo.discountAmount,
+        priority: 999,
+        sourceType: appliedPromo.type,
+        bundleRule: undefined
+      });
+      promoDiscount = appliedPromo.discountAmount;
+    }
   }
   
-  const promoDiscount = appliedPromo ? appliedPromo.discountAmount : 0;
   const totalDiscountAmount = siblingDiscount + freeAfterThreeDiscount + promoDiscount;
-
   const total = Math.max(0, subtotal - totalDiscountAmount);
 
   return {
@@ -494,12 +504,13 @@ const calculateCartTotalsSync = (
     discounts: {
       siblingDiscount,
       freeAfterThree: freeAfterThreeDiscount,
-      appliedDiscounts: allDiscounts, // Merge automatic + promo discounts
+      appliedDiscounts: allDiscounts,
       totalDiscountAmount,
       discountedChildIds,
       freeItemIds,
     },
     total,
+    schoolSettings, // Return schoolSettings so reducer can preserve them
   };
 };
 
@@ -508,7 +519,7 @@ const calculateCartTotalsWithDiscounts = async (
   items: CartItem[],
   getAccessTokenSilently?: () => Promise<string>,
   appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null
-): Promise<{ subtotal: number; discounts: any; total: number }> => {
+): Promise<{ subtotal: number; discounts: any; total: number; schoolSettings?: { freeAfterThresholdEnabled: boolean; freeAfterThreshold: number; siblingDiscountRate: number } }> => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
 
   // Group items by child to calculate sibling discount
@@ -598,25 +609,31 @@ const calculateCartTotalsWithDiscounts = async (
     }
   }
 
-  // Get applicable automatic discounts
-  const autoDiscounts = await fetchApplicableDiscounts(items, subtotal, getAccessTokenSilently);
+  // Get applicable automatic discounts (skip if "free after threshold" is active to prevent double-dipping)
+  let autoDiscounts: AppliedDiscount[] = [];
+  let allDiscounts: AppliedDiscount[] = [];
   
-  // Merge automatic discounts with promo code discount if present
-  const allDiscounts = [...autoDiscounts];
-  if (appliedPromo) {
-    allDiscounts.push({
-      id: appliedPromo.discountId,
-      name: appliedPromo.name,
-      type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type, // Keep as fixed_amount for calculations
-      value: appliedPromo.value,
-      discountAmount: appliedPromo.discountAmount,
-      priority: 999, // Promo codes have lowest priority
-      sourceType: appliedPromo.type, // Preserve original type for UI
-      bundleRule: undefined // TODO: Fetch bundle rule from discount object if needed
-    });
+  if (!freeAfterThreeEnabled || uniqueChildren <= freeAfterThreshold) {
+    // Only fetch automatic discounts if "free after threshold" is NOT active
+    autoDiscounts = await fetchApplicableDiscounts(items, subtotal, getAccessTokenSilently);
+    allDiscounts = [...autoDiscounts];
+    
+    // Add promo code discount if present
+    if (appliedPromo) {
+      allDiscounts.push({
+        id: appliedPromo.discountId,
+        name: appliedPromo.name,
+        type: appliedPromo.type === 'bundle' ? 'fixed_amount' : appliedPromo.type,
+        value: appliedPromo.value,
+        discountAmount: appliedPromo.discountAmount,
+        priority: 999,
+        sourceType: appliedPromo.type,
+        bundleRule: undefined
+      });
+    }
   }
   
-  // Calculate total discount amount INCLUDING sibling, free, and automatic/promo discounts (align with sync version)
+  // Calculate total discount amount
   const autoAndPromoDiscountAmount = allDiscounts.reduce((sum, discount) => sum + discount.discountAmount, 0);
   const totalDiscountAmount = siblingDiscount + freeAfterThreeDiscount + autoAndPromoDiscountAmount;
 
@@ -628,10 +645,17 @@ const calculateCartTotalsWithDiscounts = async (
       siblingDiscount,
       freeAfterThree: freeAfterThreeDiscount,
       appliedDiscounts: allDiscounts,
-      totalDiscountAmount, // Now includes ALL discounts (sibling + free + auto + promo)
+      totalDiscountAmount,
       discountedChildIds,
+      freeItemIds, // Add freeItemIds to return payload for UI display
     },
     total,
+    // Return school settings so they can be stored in cart state for sync calculator
+    schoolSettings: {
+      freeAfterThresholdEnabled: freeAfterThreeEnabled,
+      freeAfterThreshold: freeAfterThreshold,
+      siblingDiscountRate: siblingDiscountRate,
+    },
   };
 };
 
@@ -656,7 +680,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       }
 
       const newItems = [...state.cart.items, action.payload];
-      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode);
+      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode, state.cart.schoolSettings);
 
       const newState = {
         ...state,
@@ -664,6 +688,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           items: newItems,
           ...totals,
           appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
+          schoolSettings: totals.schoolSettings, // Preserve schoolSettings
         },
       };
 
@@ -678,7 +703,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
 
     case 'REMOVE_ITEM': {
       const newItems = state.cart.items.filter(item => item.id !== action.payload);
-      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode);
+      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode, state.cart.schoolSettings);
 
       return {
         ...state,
@@ -686,6 +711,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           items: newItems,
           ...totals,
           appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
+          schoolSettings: totals.schoolSettings, // Preserve schoolSettings
         },
       };
     }
@@ -694,7 +720,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       const newItems = state.cart.items.map(item =>
         item.id === action.payload.id ? { ...item, ...action.payload.updates } : item
       );
-      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode);
+      const totals = calculateCartTotalsSync(newItems, state.cart.appliedPromoCode, state.cart.schoolSettings);
 
       return {
         ...state,
@@ -702,6 +728,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           items: newItems,
           ...totals,
           appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
+          schoolSettings: totals.schoolSettings, // Preserve schoolSettings
         },
       };
     }
@@ -741,12 +768,13 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         appliedPromoCode: action.payload,
       };
       // Recalculate totals with promo code
-      const totals = calculateCartTotalsSync(newCart.items, newCart.appliedPromoCode);
+      const totals = calculateCartTotalsSync(newCart.items, newCart.appliedPromoCode, state.cart.schoolSettings);
       return {
         ...state,
         cart: {
           ...newCart,
           ...totals,
+          schoolSettings: totals.schoolSettings, // Preserve schoolSettings
         },
       };
     }
@@ -757,12 +785,13 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         appliedPromoCode: null,
       };
       // Recalculate totals without promo code
-      const totals = calculateCartTotalsSync(newCart.items);
+      const totals = calculateCartTotalsSync(newCart.items, newCart.appliedPromoCode, state.cart.schoolSettings);
       return {
         ...state,
         cart: {
           ...newCart,
           ...totals,
+          schoolSettings: totals.schoolSettings, // Preserve schoolSettings
         },
       };
     }
@@ -990,7 +1019,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
 
-      const totals = calculateCartTotalsSync(cartItems, null); // Fresh load - no promo code yet
+      const totals = calculateCartTotalsSync(cartItems, null, state.cart.schoolSettings); // Fresh load - no promo code yet
 
       console.log('🛒 About to merge API enrollments with existing cart');
       console.log('🛒 Current cart items:', state.cart.items.length);
@@ -1007,6 +1036,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
               items: cartItems,
               ...totals,
               appliedPromoCode: null, // Fresh load - clear promo
+              schoolSettings: totals.schoolSettings, // Preserve schoolSettings
             },
           });
         } else {
@@ -1017,13 +1047,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (newItems.length > 0) {
             console.log('🛒 Merging new pending enrollments with existing cart');
             const allItems = [...state.cart.items, ...newItems];
-            const mergedTotals = calculateCartTotalsSync(allItems, state.cart.appliedPromoCode); // Preserve promo when merging
+            const mergedTotals = calculateCartTotalsSync(allItems, state.cart.appliedPromoCode, state.cart.schoolSettings); // Preserve promo when merging
             dispatch({
               type: 'LOAD_CART',
               payload: {
                 items: allItems,
                 ...mergedTotals,
                 appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code when merging
+                schoolSettings: mergedTotals.schoolSettings, // Preserve schoolSettings
               },
             });
           }
