@@ -58,6 +58,19 @@ async function runMigrations() {
       ALTER COLUMN instructor_id DROP NOT NULL;
     `);
     console.log('✅ Migration completed: instructor_id column now allows null values in classes table');
+    
+    // Update program_enrollments status constraint to include new lifecycle statuses
+    console.log('Running migration: Updating enrollment status constraint...');
+    await db.execute(sql`
+      ALTER TABLE program_enrollments 
+      DROP CONSTRAINT IF EXISTS program_enrollments_status_check;
+    `);
+    await db.execute(sql`
+      ALTER TABLE program_enrollments 
+      ADD CONSTRAINT program_enrollments_status_check 
+      CHECK (status IN ('pending_payment', 'enrolled', 'waitlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
+    `);
+    console.log('✅ Migration completed: status constraint now allows pending_payment, waitlist, and cancelled statuses');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

@@ -64,6 +64,8 @@ The platform utilizes a modern web application architecture prioritizing scalabi
 - **Payment System**: Stripe-only payment system featuring subscription schedules, webhooks, smart cart logic, date-driven payment plans, and automated refund processing.
 - **Enrollment Lifecycle & Duplicate Prevention** (Updated Nov 11, 2025):
   - **Proper Status Workflow**: Enrollments now follow a clear lifecycle: `pending_payment` (cart) → `enrolled` (after payment) → `completed`/`cancelled`
+  - **Database Schema**: Updated program_enrollments status constraint to allow all lifecycle values: `pending_payment`, `enrolled`, `waitlist`, `cancelled`, `completed`, `withdrawn`, `failed`
+  - **Migration**: Automatic migration runs on app startup via `server/init-db.ts` to update status CHECK constraint
   - **Duplicate Prevention**: Robust checks prevent creating multiple enrollments for the same child+class combination
   - **Cart-to-Checkout Flow**:
     - Adding to cart creates enrollment with status='pending_payment'
@@ -75,7 +77,7 @@ The platform utilizes a modern web application architecture prioritizing scalabi
     - `POST /classes/:id/enroll` creates pending enrollments with duplicate checks
     - `POST /stripe/create-payment-intent` finds and reuses existing pending enrollments
     - Stripe webhooks handle status transitions on payment success/failure
-  - **Fix Summary**: Eliminated duplicate enrollment bug where enrollments were created both during cart-add AND checkout, and fixed incorrect "already enrolled" status before payment completion
+  - **Fix Summary**: Eliminated duplicate enrollment bug where enrollments were created both during cart-add AND checkout, and fixed database constraint to allow pending_payment status before payment completion
 - **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing. All class CRUD operations enforce strict school isolation. Edit form dropdowns (location, instructor, status) properly pre-select existing values when editing.
 - **Registration Flow**: Automated account creation, handling existing accounts, and auto-login.
 - **AI Enrollment Assistant**: Personalized AI guidance for enrollment.

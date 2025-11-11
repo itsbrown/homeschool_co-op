@@ -66,7 +66,7 @@ export interface EnrollmentPaymentDetails {
  * Enrollment status options
  */
 export interface EnrollmentStatusDetails {
-  status?: "enrolled" | "completed" | "withdrawn" | "cancelled" | "waitlist";
+  status?: "pending_payment" | "enrolled" | "waitlist" | "cancelled" | "completed" | "withdrawn" | "failed";
   waitlistPosition?: number | null;
 }
 
@@ -257,7 +257,7 @@ export interface SimpleEnrollmentParams {
   programId?: number | null;
   marketplaceClassId?: number | null;
   variantId?: string | null;
-  status?: "enrolled" | "completed" | "withdrawn" | "cancelled" | "waitlist";
+  status?: "pending_payment" | "enrolled" | "waitlist" | "cancelled" | "completed" | "withdrawn" | "failed";
   waitlistPosition?: number | null;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
