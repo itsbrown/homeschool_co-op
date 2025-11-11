@@ -69,6 +69,10 @@ export const schools = pgTable("schools", {
   membershipGracePeriodDays: integer("membership_grace_period_days").default(30), // Grace period in days
   membershipDescription: text("membership_description"), // Benefits description
   membershipRequired: boolean("membership_required").default(true), // Whether membership is required
+  
+  // "Free After X" Discount Configuration
+  freeAfterThresholdEnabled: boolean("free_after_threshold_enabled").default(false), // Enable/disable "free after X children" discount
+  freeAfterThreshold: integer("free_after_threshold").default(3), // Number of children before free enrollments apply (default: 3, meaning 4th+ child gets discounts)
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -90,6 +94,10 @@ export const insertSchoolSchema = createInsertSchema(schools)
     membershipRenewalMonth: z.number().min(1).max(12).default(9),
     membershipRenewalDay: z.number().min(1).max(31).default(1),
     membershipGracePeriodDays: z.number().default(30),
+    
+    // "Free After X" Discount Configuration
+    freeAfterThresholdEnabled: z.boolean().default(false),
+    freeAfterThreshold: z.number().int().min(1).default(3),
     membershipDescription: z.string().nullable().default(null),
     membershipRequired: z.boolean().default(true),
   });
