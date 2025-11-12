@@ -34,7 +34,8 @@ import {
   DiscountApplication, InsertDiscountApplication, discountApplications,
   StaffPosition, InsertStaffPosition, staffPositions,
   StaffInvitation, InsertStaffInvitation, staffInvitations,
-  PasswordResetToken, InsertPasswordResetToken, passwordResetTokens
+  PasswordResetToken, InsertPasswordResetToken, passwordResetTokens,
+  RoleInvitation, InsertRoleInvitation, roleInvitations
 } from '../shared/schema';
 
 /**
@@ -2159,5 +2160,89 @@ export class DatabaseStorage implements IStorage {
         lt(passwordResetTokens.expiresAt, now)
       )
     );
+  }
+
+  // ============================================
+  // Role Invitation Methods
+  // ============================================
+
+  async getPendingRoleInvitationsByEmails(emails: string[]): Promise<Map<string, boolean>> {
+    if (emails.length === 0) {
+      return new Map();
+    }
+
+    const db = await getDb();
+    const now = new Date();
+    
+    // Find all pending invitations for the given emails
+    const pendingInvitations = await db
+      .select({ email: roleInvitations.email })
+      .from(roleInvitations)
+      .where(
+        and(
+          inArray(roleInvitations.email, emails),
+          eq(roleInvitations.isActive, true),
+          isNull(roleInvitations.usedAt),
+          sql`${roleInvitations.expiresAt} > ${now}`
+        )
+      );
+
+    // Build map of email -> true for emails with pending invitations
+    const pendingMap = new Map<string, boolean>();
+    for (const invitation of pendingInvitations) {
+      pendingMap.set(invitation.email, true);
+    }
+
+    return pendingMap;
+  }
+
+  async getActiveRoleInvitation(tokenOrEmail: string): Promise<RoleInvitation | undefined> {
+    const db = await getDb();
+    const now = new Date();
+    
+    const [invitation] = await db
+      .select()
+      .from(roleInvitations)
+      .where(
+        and(
+          or(
+            eq(roleInvitations.token, tokenOrEmail),
+            eq(roleInvitations.email, tokenOrEmail)
+          ),
+          eq(roleInvitations.isActive, true),
+          isNull(roleInvitations.usedAt),
+          sql`${roleInvitations.expiresAt} > ${now}`
+        )
+      );
+    
+    return invitation;
+  }
+
+  async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation> {
+    const db = await getDb();
+    const [newInvitation] = await db.insert(roleInvitations).values(invitation).returning();
+    return newInvitation;
+  }
+
+  async acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined> {
+    const db = await getDb();
+    const now = new Date();
+    
+    const [updatedInvitation] = await db
+      .update(roleInvitations)
+      .set({ usedAt: now })
+      .where(eq(roleInvitations.token, token))
+      .returning();
+    
+    return updatedInvitation;
+  }
+
+  async getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(roleInvitations)
+      .where(eq(roleInvitations.invitedBy, inviterId))
+      .orderBy(desc(roleInvitations.createdAt));
   }
 }

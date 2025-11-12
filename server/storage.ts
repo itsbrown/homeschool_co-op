@@ -249,6 +249,7 @@ export interface IStorage {
   createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation>;
   acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined>;
   getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]>;
+  getPendingRoleInvitationsByEmails(emails: string[]): Promise<Map<string, boolean>>;
 
   // Marketing Link methods
   getMarketingLinkById(id: number): Promise<MarketingLink | undefined>;
@@ -3567,6 +3568,11 @@ export class MemStorage implements IStorage {
     return [];
   }
 
+  async getPendingRoleInvitationsByEmails(emails: string[]): Promise<Map<string, boolean>> {
+    // For in-memory storage, return empty map
+    return new Map();
+  }
+
   // Missing methods for full interface compliance
   async getAllScheduledPayments(): Promise<any[]> {
     return [];
@@ -4255,6 +4261,10 @@ export class MemStorage implements IStorage {
 
     async getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]> {
       return this.dbStorage.getRoleInvitationsByInviter(inviterId);
+    }
+
+    async getPendingRoleInvitationsByEmails(emails: string[]): Promise<Map<string, boolean>> {
+      return this.dbStorage.getPendingRoleInvitationsByEmails(emails);
     }
 
     async createMarketingLink(link: InsertMarketingLink): Promise<MarketingLink> {
