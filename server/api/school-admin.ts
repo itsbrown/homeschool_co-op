@@ -1851,6 +1851,81 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Backfill/sync students to school_students table
+router.post("/students/sync", supabaseAuth, async (req: any, res) => {
+  try {
+    // Extract school_id from authenticated user's token metadata
+    const schoolIdFromToken = req.auth?.payload?.school_id;
+    if (!schoolIdFromToken) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+    const schoolId = Number(schoolIdFromToken);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID in user metadata" });
+    }
+
+    console.log(`🔄 Starting student sync for school ${schoolId}...`);
+    
+    // Get all children for this school
+    const allChildren = await storage.getAllChildren();
+    const schoolChildren = allChildren.filter(child => Number(child.schoolId) === schoolId);
+    console.log(`📊 Found ${schoolChildren.length} children for school ${schoolId}`);
+    
+    // Get existing school_student records
+    const existingSchoolStudents = await storage.getAllSchoolStudents();
+    const existingChildIds = new Set(existingSchoolStudents.map(ss => ss.childId));
+    
+    // Track sync results
+    let created = 0;
+    let skipped = 0;
+    let errors = 0;
+    
+    // Create school_student records for children that don't have them
+    for (const child of schoolChildren) {
+      if (existingChildIds.has(child.id)) {
+        console.log(`⏭️ Child ${child.id} already has school_student record, skipping`);
+        skipped++;
+        continue;
+      }
+      
+      try {
+        console.log(`📚 Creating school_student record for child: ${child.id} (${child.firstName} ${child.lastName})`);
+        await storage.createSchoolStudent({
+          schoolId: schoolId,
+          childId: child.id,
+          grade: child.gradeLevel || 'Unknown',
+          status: 'active',
+          locationId: child.locationId || null,
+          studentId: null,
+          notes: null
+        });
+        console.log(`✅ School student record created for child ${child.id}`);
+        created++;
+      } catch (error) {
+        console.error(`❌ Failed to create school_student record for child ${child.id}:`, error);
+        errors++;
+      }
+    }
+    
+    console.log(`✅ Student sync completed: ${created} created, ${skipped} skipped, ${errors} errors`);
+    
+    res.json({
+      success: true,
+      message: `Student sync completed successfully`,
+      results: {
+        total: schoolChildren.length,
+        created,
+        skipped,
+        errors
+      }
+    });
+    
+  } catch (error) {
+    console.error("❌ Error syncing students:", error);
+    res.status(500).json({ message: "Error syncing students" });
+  }
+});
+
 // Create a new class for a school
 router.post("/classes", supabaseAuth, async (req: any, res: any) => {
   try {
