@@ -192,9 +192,13 @@ const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, get
     const applicableDiscounts: AppliedDiscount[] = [];
 
     // Filter for active, automatic discounts
+    // Note: Sibling discounts are excluded here because they're handled by the manual per-child
+    // calculation in calculateCartTotalsWithDiscounts to ensure correct discount application
+    // (only lower-cost siblings receive the discount, not whole-order percentage)
     const activeDiscounts = discounts.filter((discount: any) => 
       discount.isActive && 
-      (discount.applicationMethod === 'automatic' || discount.applicationMethod === 'both')
+      (discount.applicationMethod === 'automatic' || discount.applicationMethod === 'both') &&
+      !discount.siblingDiscount  // Skip sibling discounts - they're handled separately
     );
 
     // Sort by priority (higher priority applies first)
@@ -1032,7 +1036,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
 
-      const totals = calculateCartTotalsSync(cartItems, null, state.cart.schoolSettings); // Fresh load - no promo code yet
+      // Use calculateCartTotalsWithDiscounts to fetch school settings and calculate discounts properly
+      const totals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null); // Fresh load - no promo code yet
 
       console.log('🛒 About to merge API enrollments with existing cart');
       console.log('🛒 Current cart items:', state.cart.items.length);
@@ -1060,7 +1065,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (newItems.length > 0) {
             console.log('🛒 Merging new pending enrollments with existing cart');
             const allItems = [...state.cart.items, ...newItems];
-            const mergedTotals = calculateCartTotalsSync(allItems, state.cart.appliedPromoCode, state.cart.schoolSettings); // Preserve promo when merging
+            // Also use async version for merged totals to recalculate with proper settings
+            const mergedTotals = await calculateCartTotalsWithDiscounts(allItems, getAccessToken, state.cart.appliedPromoCode); // Preserve promo when merging
             dispatch({
               type: 'LOAD_CART',
               payload: {
