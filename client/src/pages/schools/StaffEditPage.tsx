@@ -120,7 +120,8 @@ export default function StaffEditPage() {
     mutationFn: async (data: StaffMember) => {
       return await apiRequest("PUT", `/api/school-admin/staff/${id}`, data);
     },
-    onSuccess: (updatedStaff) => {
+    onSuccess: (response: any) => {
+      const updatedStaff = response.staff;
       toast({
         title: "Success",
         description: "Staff member updated successfully",
