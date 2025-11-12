@@ -2598,8 +2598,9 @@ router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
     const schoolPayments = allPayments.filter((p: any) => p.schoolId === schoolId);
 
     // Filter for completed payments (positive amounts)
+    // Note: Stripe 'succeeded' status gets converted to 'completed' in our database
     const completedPayments = schoolPayments.filter((p: any) => 
-      p.amount > 0 && p.status === 'succeeded'
+      p.amount > 0 && (p.status === 'completed' || p.status === 'succeeded')
     );
 
     // Calculate total revenue (sum of all successful payments)

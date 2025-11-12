@@ -116,3 +116,10 @@ The platform prioritizes scalability, security, and user experience with a moder
   2. Removed custom queryFn from all queries to use default authenticated fetcher
   3. Added proper array checks and type safety for data handling
 - **Files Modified**: `client/src/pages/ManualPaymentEntryPage.tsx`
+
+#### Fixed School Admin Dashboard Financial Metrics
+- **Issue**: Dashboard showing $0 for Monthly Revenue, Total Revenue, and Outstanding Balance even though payments were made
+- **Root Cause**: Financial metrics endpoint was filtering for `status === 'succeeded'`, but when Stripe payments are saved to the database, the 'succeeded' status gets converted to 'completed'
+- **Solution**: Updated the payment filter to check for both 'completed' and 'succeeded' statuses: `p.status === 'completed' || p.status === 'succeeded'`
+- **Files Modified**: `server/api/school-admin.ts` (financial metrics endpoint)
+- **Impact**: Dashboard now correctly displays revenue from completed payments
