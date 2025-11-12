@@ -255,15 +255,7 @@ export default function Login() {
           </CardContent>
 
           <CardFooter className="text-center">
-            <div className="w-full space-y-2">
-              <p className="text-sm text-gray-600">
-                Don't have an account?{" "}
-                <Link href="/register">
-                  <Button variant="link" className="p-0 h-auto">
-                    Sign up
-                  </Button>
-                </Link>
-              </p>
+            <div className="w-full">
               <p className="text-sm text-gray-600">
                 <Button variant="link" className="p-0 h-auto" onClick={() => setLocation('/forgot-password')}>
                   Forgot your password?
