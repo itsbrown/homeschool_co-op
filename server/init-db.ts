@@ -101,6 +101,14 @@ async function runMigrations() {
       END $$;
     `);
     console.log('✅ Migration completed: used column renamed to used_at in role_invitations table');
+    
+    // Add bundle_rule column to discounts table
+    console.log('Running migration: Adding bundle_rule column to discounts table...');
+    await db.execute(sql`
+      ALTER TABLE discounts 
+      ADD COLUMN IF NOT EXISTS bundle_rule JSONB;
+    `);
+    console.log('✅ Migration completed: bundle_rule column added to discounts table');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
