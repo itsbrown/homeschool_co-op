@@ -67,8 +67,8 @@ export default function ChildEnrollmentsPage() {
     enabled: !!childId,
   });
 
-  // Fetch all classes to get class details
-  const { data: classes = [] } = useQuery({
+  // Fetch marketplace classes to get class details
+  const { data: marketplaceClasses = [] } = useQuery({
     queryKey: ['/api/classes'],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/classes");
@@ -77,6 +77,18 @@ export default function ChildEnrollmentsPage() {
       return Array.isArray(data.classes) ? data.classes : [];
     },
   });
+
+  // Fetch school classes to get school class details
+  const { data: schoolClassesData } = useQuery({
+    queryKey: ['/api/school-admin/classes'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/school-admin/classes");
+      const data = await response.json();
+      return data;
+    },
+  });
+
+  const schoolClasses = schoolClassesData?.items || [];
 
   const unenrollMutation = useMutation({
     mutationFn: async (enrollmentId: number) => {
