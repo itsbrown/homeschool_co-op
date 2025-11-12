@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -7,11 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, XCircle, Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function ResetPasswordPage() {
   const [, setLocation] = useLocation();
@@ -22,24 +16,21 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isValidSession, setIsValidSession] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [validatingToken, setValidatingToken] = useState(true);
 
   useEffect(() => {
-    // Check if we have a valid session for password reset
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setIsValidSession(true);
-        } else {
-          setError("Invalid or expired reset link. Please request a new password reset.");
-        }
-      } catch (err) {
-        setError("Failed to validate reset link. Please try again.");
-      }
-    };
-
-    checkSession();
+    // Extract token from URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const resetToken = urlParams.get('token');
+    
+    if (resetToken) {
+      setToken(resetToken);
+      setValidatingToken(false);
+    } else {
+      setError("No reset token found. Please request a new password reset.");
+      setValidatingToken(false);
+    }
   }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -60,16 +51,30 @@ export default function ResetPasswordPage() {
       return;
     }
 
+    if (!token) {
+      setError("Invalid reset token. Please request a new password reset.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          token,
+          newPassword: password 
+        }),
       });
+
+      const data = await response.json();
       
-      if (error) {
-        setError(error.message || "Failed to update password");
+      if (!response.ok) {
+        setError(data.message || "Failed to reset password");
       } else {
         setSuccess(true);
       }
@@ -80,7 +85,7 @@ export default function ResetPasswordPage() {
     }
   };
 
-  if (!isValidSession && !error) {
+  if (validatingToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
@@ -112,6 +117,7 @@ export default function ResetPasswordPage() {
             <Button 
               onClick={() => setLocation('/login')}
               className="w-full"
+              data-testid="button-go-to-login"
             >
               Go to Login
             </Button>
@@ -121,7 +127,7 @@ export default function ResetPasswordPage() {
     );
   }
 
-  if (!isValidSession) {
+  if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
@@ -137,6 +143,7 @@ export default function ResetPasswordPage() {
               onClick={() => setLocation('/login')}
               className="w-full"
               variant="outline"
+              data-testid="button-back-to-login"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Go to Login
@@ -145,6 +152,7 @@ export default function ResetPasswordPage() {
             <Button 
               onClick={() => setLocation('/forgot-password')}
               className="w-full"
+              data-testid="button-request-new-reset"
             >
               Request New Reset Link
             </Button>
@@ -185,6 +193,7 @@ export default function ResetPasswordPage() {
                   placeholder="Enter your new password"
                   required
                   minLength={6}
+                  data-testid="input-password"
                 />
                 <Button
                   type="button"
@@ -192,6 +201,7 @@ export default function ResetPasswordPage() {
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
+                  data-testid="button-toggle-password"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -213,6 +223,7 @@ export default function ResetPasswordPage() {
                   placeholder="Confirm your new password"
                   required
                   minLength={6}
+                  data-testid="input-confirm-password"
                 />
                 <Button
                   type="button"
@@ -220,6 +231,7 @@ export default function ResetPasswordPage() {
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  data-testid="button-toggle-confirm-password"
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -234,6 +246,7 @@ export default function ResetPasswordPage() {
               type="submit" 
               className="w-full" 
               disabled={loading}
+              data-testid="button-reset-password"
             >
               {loading ? (
                 <>
@@ -251,6 +264,7 @@ export default function ResetPasswordPage() {
                 variant="link"
                 onClick={() => setLocation('/login')}
                 className="text-sm"
+                data-testid="link-back-to-login"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Login

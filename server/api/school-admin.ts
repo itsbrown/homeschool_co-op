@@ -7,7 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 import { parse as parseCSV } from 'csv-parse';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { sendAccountInviteEmail, sendPasswordResetEmail, sendStaffInvitationEmail } from '../lib/email-service';
+import { sendAccountInviteEmail, sendStaffInvitationEmail } from '../lib/email-service';
+import { sendPasswordResetEmail } from '../services/emailService';
 import { supabaseAuth } from '../middleware/supabase-auth';
 
 const router = Router();
@@ -4205,13 +4206,12 @@ router.post('/users/:userId/send-password-reset', supabaseAuth, async (req: any,
       return res.status(500).json({ message: 'Failed to create password reset token' });
     }
 
+    // Generate reset URL using current domain (works in both dev and production)
+    const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
+    
     // Send password reset email
     console.log(`📨 Attempting to send password reset email to ${user.email}...`);
-    const emailSuccess = await sendPasswordResetEmail({
-      email: user.email,
-      firstName: user.firstName || user.name || 'User',
-      resetToken
-    });
+    const emailSuccess = await sendPasswordResetEmail(user.email, resetUrl);
 
     if (!emailSuccess) {
       console.error(`❌ Email service returned false for ${user.email}`);
