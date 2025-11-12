@@ -556,9 +556,11 @@ function NotificationComposeDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="email">Email Only</SelectItem>
                     <SelectItem value="in_app">In-App Only</SelectItem>
+                    <SelectItem value="email">Email Only</SelectItem>
+                    <SelectItem value="sms">SMS Only</SelectItem>
                     <SelectItem value="both">Email + In-App</SelectItem>
+                    <SelectItem value="all">All (Email + SMS + In-App)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
