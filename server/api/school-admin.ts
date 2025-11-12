@@ -1848,7 +1848,8 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
           }
 
           return {
-            id: schoolStudent.id,
+            id: child.id,
+            schoolStudentId: schoolStudent.id,
             name: `${child.firstName} ${child.lastName}`,
             firstName: child.firstName,
             lastName: child.lastName,
