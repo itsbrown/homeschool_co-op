@@ -72,17 +72,53 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if user already exists in database
+    // CRITICAL: Do not proceed if we can't verify uniqueness
+    let existingUser;
     try {
-      const existingUser = await storage.getUserByEmail?.(email);
+      existingUser = await storage.getUserByEmail?.(email);
       if (existingUser) {
+        console.log(`⚠️ Registration blocked: User ${email} already exists in database (ID: ${existingUser.id})`);
         return res.status(400).json({ 
           success: false, 
-          message: 'User already exists' 
+          message: 'User already exists. Please use the login page to access your account.' 
         });
       }
     } catch (error) {
-      // If database lookup fails, continue with registration
-      console.log('Database lookup failed during registration check, continuing...');
+      // CRITICAL: If we can't check for existing users, we must fail safely
+      console.error('❌ Database lookup failed during registration check:', error);
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Unable to verify account uniqueness. Please try again in a moment.' 
+      });
+    }
+
+    // Also check Supabase auth to catch orphaned accounts
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+        
+        // Check if auth account already exists
+        const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers();
+        const existingAuthUser = existingAuthUsers?.users.find(u => u.email === email);
+        
+        if (existingAuthUser) {
+          console.log(`⚠️ Registration blocked: Auth account for ${email} already exists (Supabase ID: ${existingAuthUser.id})`);
+          return res.status(400).json({ 
+            success: false, 
+            message: 'User already exists. Please use the login page to access your account.' 
+          });
+        }
+      }
+    } catch (supabaseCheckError) {
+      console.error('❌ Supabase user check failed:', supabaseCheckError);
+      // Continue if Supabase check fails but database check passed
+      console.log('⚠️ Proceeding with registration despite Supabase check failure');
     }
 
     // For parent registration, generate a temporary password or use a default
@@ -191,10 +227,13 @@ router.post('/register', async (req, res) => {
     }
 
     // If this is a school-specific registration, associate with school
+    // CRITICAL: School association MUST succeed for school registrations
     if (schoolId && registrationCode) {
       try {
+        console.log(`🏫 Attempting school association for ${email} with school ${schoolId}`);
+        
         // Create school-parent association
-        await fetch(`${req.protocol}://${req.get('host')}/api/school-parents/associate`, {
+        const associationResponse = await fetch(`${req.protocol}://${req.get('host')}/api/school-parents/associate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -203,11 +242,42 @@ router.post('/register', async (req, res) => {
             registrationCode
           })
         });
+
+        if (!associationResponse.ok) {
+          const errorData = await associationResponse.json().catch(() => ({}));
+          throw new Error(`School association failed: ${errorData.message || associationResponse.statusText}`);
+        }
+
+        console.log(`✅ School association successful for ${email}`);
       } catch (associationError) {
-        console.warn('Could not create school association:', associationError);
+        console.error('❌ School association failed - rolling back account creation:', associationError);
+        
+        // CRITICAL: Clean up both Supabase and database records since this is a school registration
+        try {
+          // Delete local database record
+          await storage.deleteUser(user.id);
+          console.log(`🧹 Deleted local user record (ID: ${user.id})`);
+          
+          // Delete Supabase auth account
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+            auth: { autoRefreshToken: false, persistSession: false }
+          });
+          await supabaseAdmin.auth.admin.deleteUser(supabaseUser.id);
+          console.log(`🧹 Deleted Supabase auth account (ID: ${supabaseUser.id})`);
+        } catch (cleanupError) {
+          console.error('❌ Failed to cleanup accounts after association failure:', cleanupError);
+        }
+        
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Failed to associate account with school. Please contact your school administrator or try again.' 
+        });
       }
     }
 
+    console.log(`✅ Registration complete for ${email} (User ID: ${user.id}, Supabase ID: ${supabaseUser.id})`);
+    
     res.json({ 
       success: true, 
       message: 'Parent account created successfully',
