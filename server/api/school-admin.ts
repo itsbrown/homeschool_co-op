@@ -4174,31 +4174,43 @@ router.post('/users/:userId/send-invite', async (req, res) => {
 });
 
 // Send password reset email to existing user
-router.post('/users/:userId/send-password-reset', async (req, res) => {
+router.post('/users/:userId/send-password-reset', supabaseAuth, async (req: any, res) => {
   try {
     const userId = parseInt(req.params.userId);
-    console.log(`🔑 Sending password reset to user ID: ${userId}`);
+    console.log(`🔑 Attempting to send password reset to user ID: ${userId}`);
 
     // Get user details
     const user = await storage.getUser(userId);
     if (!user) {
+      console.error(`❌ User not found: ID ${userId}`);
       return res.status(404).json({ message: 'User not found' });
     }
+
+    console.log(`📧 Found user: ${user.email} (${user.firstName || user.name})`);
 
     // Generate reset token
     const resetToken = uuidv4();
     const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
 
+    console.log(`🔐 Generated reset token for ${user.email}, expires: ${tokenExpiry.toISOString()}`);
+
     // Store reset token in database
-    await storage.createPasswordResetToken({
-      token: resetToken,
-      email: user.email,
-      userId: userId.toString(),
-      expiresAt: tokenExpiry,
-      used: false
-    });
+    try {
+      await storage.createPasswordResetToken({
+        token: resetToken,
+        email: user.email,
+        userId: userId.toString(),
+        expiresAt: tokenExpiry,
+        used: false
+      });
+      console.log(`💾 Reset token stored in database for ${user.email}`);
+    } catch (tokenError) {
+      console.error(`❌ Failed to store reset token in database:`, tokenError);
+      return res.status(500).json({ message: 'Failed to create password reset token' });
+    }
 
     // Send password reset email
+    console.log(`📨 Attempting to send password reset email to ${user.email}...`);
     const emailSuccess = await sendPasswordResetEmail({
       email: user.email,
       firstName: user.firstName || user.name || 'User',
@@ -4206,14 +4218,19 @@ router.post('/users/:userId/send-password-reset', async (req, res) => {
     });
 
     if (!emailSuccess) {
-      return res.status(500).json({ message: 'Failed to send password reset email' });
+      console.error(`❌ Email service returned false for ${user.email}`);
+      return res.status(500).json({ message: 'Email service failed to send password reset' });
     }
 
     console.log(`✅ Password reset email sent successfully to ${user.email}`);
     res.json({ message: 'Password reset email sent successfully' });
   } catch (error) {
-    console.error('❌ Error sending password reset:', error);
-    res.status(500).json({ message: 'Failed to send password reset email' });
+    console.error('❌ Unexpected error sending password reset:', error);
+    console.error('Error details:', error instanceof Error ? error.stack : error);
+    res.status(500).json({ 
+      message: 'Failed to send password reset email',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 
