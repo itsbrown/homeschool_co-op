@@ -98,3 +98,9 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Action**: Migrated discount data from JSON file to PostgreSQL database
 - **Tool**: Created `server/migrate-discounts.ts` migration script
 - **Status**: Successfully migrated all discounts to database
+
+#### Fixed Marketing Links Sidebar Navigation
+- **Issue**: Marketing Links page was using a different sidebar template than other school admin pages
+- **Root Cause**: MarketingLinksPage was using `AppShell` instead of `SchoolAdminLayout`
+- **Solution**: Updated MarketingLinksPage to use `SchoolAdminLayout` for consistent navigation
+- **Files Modified**: `client/src/pages/MarketingLinksPage.tsx`

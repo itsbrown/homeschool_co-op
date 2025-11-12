@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, ExternalLink, QrCode, BarChart3, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import AppShell from "@/components/layout/AppShell";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 
 interface MarketingLink {
   id: number;
@@ -152,8 +152,8 @@ export default function MarketingLinksPage() {
   const utmMediums = ["organic", "social", "email", "print", "referral", "direct"];
 
   return (
-    <AppShell>
-      <div className="container mx-auto py-6 space-y-6">
+    <SchoolAdminLayout pageTitle="Marketing Links">
+      <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Marketing Links</h1>
@@ -161,7 +161,7 @@ export default function MarketingLinksPage() {
               Generate trackable links with QR codes for enrollment campaigns
             </p>
           </div>
-          <Button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2">
+          <Button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2" data-testid="button-create-link">
             <Plus className="w-4 h-4" />
             Create Link
           </Button>
@@ -480,6 +480,6 @@ export default function MarketingLinksPage() {
           )}
         </Tabs>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }
