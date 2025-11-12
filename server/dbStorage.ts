@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, isNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, gt, isNull, inArray } from 'drizzle-orm';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -2183,7 +2183,7 @@ export class DatabaseStorage implements IStorage {
           inArray(roleInvitations.email, emails),
           eq(roleInvitations.isActive, true),
           isNull(roleInvitations.usedAt),
-          sql`${roleInvitations.expiresAt} > ${now}`
+          gt(roleInvitations.expiresAt, now)
         )
       );
 
@@ -2211,7 +2211,7 @@ export class DatabaseStorage implements IStorage {
           ),
           eq(roleInvitations.isActive, true),
           isNull(roleInvitations.usedAt),
-          sql`${roleInvitations.expiresAt} > ${now}`
+          gt(roleInvitations.expiresAt, now)
         )
       );
     

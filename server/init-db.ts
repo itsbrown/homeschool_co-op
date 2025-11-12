@@ -80,6 +80,27 @@ async function runMigrations() {
       ADD COLUMN IF NOT EXISTS free_after_threshold INTEGER DEFAULT 3;
     `);
     console.log('✅ Migration completed: free_after_threshold columns added to schools table');
+    
+    // Add is_active column to role_invitations table for pending invitation tracking
+    console.log('Running migration: Adding is_active column to role_invitations table...');
+    await db.execute(sql`
+      ALTER TABLE role_invitations 
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true NOT NULL;
+    `);
+    console.log('✅ Migration completed: is_active column added to role_invitations table');
+    
+    // Rename used column to used_at in role_invitations table to match schema
+    console.log('Running migration: Renaming used column to used_at in role_invitations table...');
+    await db.execute(sql`
+      DO $$ 
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns 
+                  WHERE table_name = 'role_invitations' AND column_name = 'used') THEN
+          ALTER TABLE role_invitations RENAME COLUMN used TO used_at;
+        END IF;
+      END $$;
+    `);
+    console.log('✅ Migration completed: used column renamed to used_at in role_invitations table');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
