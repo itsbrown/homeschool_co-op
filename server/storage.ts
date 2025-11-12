@@ -157,7 +157,7 @@ export interface IStorage {
   // Role invitation methods
   createRoleInvitation(invitation: any): Promise<any>;
   getRoleInvitations(): Promise<any[]>;
-  getActiveRoleInvitation(token: string): Promise<any>;
+  getActiveRoleInvitation(tokenOrEmail: string): Promise<any>;
   acceptRoleInvitation(token: string): Promise<void>;
   revokeRoleInvitation(id: number): Promise<void>;
 
@@ -245,7 +245,7 @@ export interface IStorage {
   deleteClass(id: number): Promise<void>;
 
   // Role Invitation methods
-  getActiveRoleInvitation(email: string): Promise<RoleInvitation | undefined>;
+  getActiveRoleInvitation(tokenOrEmail: string): Promise<RoleInvitation | undefined>;
   createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation>;
   acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined>;
   getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]>;
@@ -4235,8 +4235,8 @@ export class MemStorage implements IStorage {
       return this.dbStorage.deleteClass(id);
     }
 
-    async getActiveRoleInvitation(email: string): Promise<RoleInvitation | undefined> {
-      return this.dbStorage.getActiveRoleInvitation(email);
+    async getActiveRoleInvitation(tokenOrEmail: string): Promise<RoleInvitation | undefined> {
+      return this.dbStorage.getActiveRoleInvitation(tokenOrEmail);
     }
 
     async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation> {

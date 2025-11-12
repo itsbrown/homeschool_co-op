@@ -115,21 +115,36 @@ export class SupabaseStorage implements IStorage {
     return data || [];
   }
 
-  async getActiveRoleInvitation(token: string): Promise<RoleInvitation | null> {
-    const { data, error } = await supabase
+  async getActiveRoleInvitation(tokenOrEmail: string): Promise<RoleInvitation | undefined> {
+    // Try to find by token first (most common case for validation)
+    let { data, error } = await supabase
       .from('role_invitations')
       .select('*')
-      .eq('token', token)
+      .eq('token', tokenOrEmail)
       .eq('is_active', true)
       .is('used_at', null)
-      .single();
+      .maybeSingle();
+    
+    // If not found by token, try by email (for check-invitation endpoint)
+    if (!data && !error) {
+      const emailResult = await supabase
+        .from('role_invitations')
+        .select('*')
+        .eq('email', tokenOrEmail)
+        .eq('is_active', true)
+        .is('used_at', null)
+        .maybeSingle();
+      
+      data = emailResult.data;
+      error = emailResult.error;
+    }
     
     if (error) {
       console.error('Error fetching active role invitation:', error);
-      return null;
+      return undefined;
     }
     
-    return data;
+    return data || undefined;
   }
 
   async acceptRoleInvitation(token: string): Promise<void> {
