@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, PlusCircle, Search, GraduationCap, BookOpen, CalendarDays, FileUp, MoreHorizontal } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,25 +41,70 @@ export default function StudentsPage() {
   const [sortField, setSortField] = useState("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [activeView, setActiveView] = useState("list");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const syncAttemptedRef = useRef(false);
   const { toast } = useToast();
 
   // Fetch students data from API
-  const { data: students, isLoading, error } = useQuery({
+  const { data: students, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/school-admin/students'],
     refetchInterval: 30000, // Refetch every 30 seconds
     refetchIntervalInBackground: true,
+  });
+
+  // Auto-sync mutation
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/school-admin/students/sync");
+    },
+    onSuccess: (data: any) => {
+      console.log("✅ Student sync completed:", data);
+      setIsSyncing(false);
+      
+      if (data?.results?.created > 0) {
+        toast({
+          title: "Students Synced",
+          description: `Successfully synced ${data.results.created} students to your school.`,
+        });
+      }
+      
+      // Refetch students after sync
+      refetch();
+    },
+    onError: (error: any) => {
+      console.error("❌ Student sync failed:", error);
+      setIsSyncing(false);
+      
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync students. Please try refreshing the page.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Ensure students is treated as an array
   const studentsArray = Array.isArray(students) ? students : [];
   const studentsData = studentsArray;
 
-  if (isLoading) {
+  // Auto-sync when no students are found (only once)
+  useEffect(() => {
+    if (!isLoading && !error && studentsArray.length === 0 && !syncAttemptedRef.current && !isSyncing) {
+      console.log("📊 No students found - triggering auto-sync...");
+      syncAttemptedRef.current = true;
+      setIsSyncing(true);
+      syncMutation.mutate();
+    }
+  }, [isLoading, error, studentsArray.length, isSyncing, syncMutation]);
+
+  if (isLoading || isSyncing) {
     return (
       <SchoolAdminLayout pageTitle="Students">
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="ml-2 text-lg">Loading students...</span>
+          <span className="ml-2 text-lg">
+            {isSyncing ? "Syncing students to your school..." : "Loading students..."}
+          </span>
         </div>
       </SchoolAdminLayout>
     );
