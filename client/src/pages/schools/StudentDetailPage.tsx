@@ -38,19 +38,7 @@ export default function StudentDetailPage() {
 
   // Fetch student data
   const { data: student, isLoading, error } = useQuery({
-    queryKey: [`/api/schools/students/${id}`],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      const response = await fetch(`/api/schools/students/${id}`, {
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` })
-        }
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
-    },
+    queryKey: [`/api/school-admin/students/${id}`],
     enabled: !!id,
   });
 
