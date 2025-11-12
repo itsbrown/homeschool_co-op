@@ -121,11 +121,25 @@ export default function StaffEditPage() {
       return await apiRequest("PUT", `/api/school-admin/staff/${id}`, data);
     },
     onSuccess: (response: any) => {
-      const updatedStaff = response.staff;
+      const updatedStaff = response?.staff || response;
+      
+      if (!updatedStaff) {
+        console.error("No staff data in response:", response);
+        toast({
+          title: "Warning",
+          description: "Staff updated but response was incomplete",
+          variant: "destructive",
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+        navigate('/schools/staff');
+        return;
+      }
+      
       toast({
         title: "Success",
         description: "Staff member updated successfully",
       });
+      
       // Synchronously update the staff list cache
       queryClient.setQueryData(['/api/school-admin/staff'], (oldData: any) => {
         if (!Array.isArray(oldData)) return oldData;
