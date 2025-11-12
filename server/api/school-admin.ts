@@ -1268,14 +1268,15 @@ router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
 
     // Update the class to assign this instructor
     const updatedClass = await storage.updateClass(classId, {
-      instructorName: user.name
+      instructorName: user.name,
+      instructorId: user.id
     });
 
     if (!updatedClass) {
       return res.status(404).json({ message: "Class not found" });
     }
 
-    console.log(`✅ Successfully assigned ${user.name} to class ${classId}`);
+    console.log(`✅ Successfully assigned ${user.name} (ID: ${user.id}) to class ${classId}`);
     res.json({ 
       success: true, 
       message: `${user.name} assigned to class successfully`,
@@ -1319,7 +1320,8 @@ router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: an
 
     // Update the class to remove instructor assignment
     const updatedClass = await storage.updateClass(classId, {
-      instructorName: "No Instructor Assigned"
+      instructorName: "No Instructor Assigned",
+      instructorId: null
     });
 
     if (!updatedClass) {
