@@ -106,9 +106,7 @@ export default function UsersPage() {
     }
     
     try {
-      await apiRequest(`/api/school-admin/users/${userId}`, {
-        method: 'DELETE',
-      });
+      await apiRequest('DELETE', `/api/school-admin/users/${userId}`);
       
       // Refresh the users list
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
@@ -128,9 +126,7 @@ export default function UsersPage() {
 
   const handleSendInvite = async (userId: number, userName: string) => {
     try {
-      await apiRequest(`/api/school-admin/users/${userId}/send-invite`, {
-        method: 'POST',
-      });
+      await apiRequest('POST', `/api/school-admin/users/${userId}/send-invite`);
       
       toast({
         title: "Success",
@@ -148,9 +144,7 @@ export default function UsersPage() {
 
   const handleSendPasswordReset = async (userId: number, userName: string) => {
     try {
-      await apiRequest(`/api/school-admin/users/${userId}/send-password-reset`, {
-        method: 'POST',
-      });
+      await apiRequest('POST', `/api/school-admin/users/${userId}/send-password-reset`);
       
       toast({
         title: "Success",
