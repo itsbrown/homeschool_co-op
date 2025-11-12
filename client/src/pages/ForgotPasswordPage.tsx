@@ -1,7 +1,6 @@
 
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/components/SupabaseProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +10,6 @@ import { CheckCircle, XCircle, Loader2, ArrowLeft } from "lucide-react";
 
 export default function ForgotPasswordPage() {
   const [, setLocation] = useLocation();
-  const { resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,10 +27,18 @@ export default function ForgotPasswordPage() {
     setError(null);
 
     try {
-      const { error } = await resetPassword(email);
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
       
-      if (error) {
-        setError(error.message || "Failed to send reset email");
+      if (!response.ok) {
+        setError(data.message || "Failed to send reset email");
       } else {
         setSuccess(true);
       }
