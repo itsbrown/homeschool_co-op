@@ -50,6 +50,7 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Parent Class Details Page**: Dedicated full-page view for class details, replacing legacy dialogs with route-based navigation and consistent UI.
 - **Edit Child Profile Page**: Dedicated page for editing child profiles using the ParentAppShell component for consistent navigation and layout.
 - **Responsive UI Patterns**: Consistent mobile-responsive patterns across all admin pages, adapting layouts, filters, and action buttons for optimal display on different devices.
+- **Student Management System**: Comprehensive system for tracking and displaying students across schools. Children are stored in the `children` table and linked to schools via the `school_students` table. When children are registered, corresponding school_student records are automatically created. The Students page features auto-sync functionality that automatically backfills existing children into the school_students table when no students are found, ensuring seamless data migration and display.
 
 ### Environment Variables
 - **CLIENT_URL**: Required for production to ensure correct email link generation for staff invites, password resets, and account invitations.
