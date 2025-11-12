@@ -474,6 +474,15 @@ export async function sendEmail(
     return true;
   } catch (error) {
     console.error('❌ Failed to send email via Brevo:', error);
+    if (error && typeof error === 'object') {
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      if ('response' in error) {
+        console.error('API response:', error.response);
+      }
+      if ('body' in error) {
+        console.error('Error body:', error.body);
+      }
+    }
     return false;
   }
 }
