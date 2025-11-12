@@ -128,12 +128,42 @@ export default function ChildEnrollmentsPage() {
 
   // Helper function to get class details for an enrollment
   const getClassDetails = (enrollment: Enrollment) => {
-    const classData = Array.isArray(classes) ? classes.find((c: any) => c.id === enrollment.classId) : null;
+    // Check the enrollment's classType to determine which class list to search
+    const isSchoolClass = (enrollment as any).classType === 'school_class';
+    const classId = isSchoolClass ? enrollment.classId : (enrollment as any).marketplaceClassId;
+    
+    // Search in the appropriate class list
+    const classData = isSchoolClass
+      ? schoolClasses.find((c: any) => c.id === classId)
+      : marketplaceClasses.find((c: any) => c.id === classId);
+    
+    // Format schedule based on the class data
+    let schedule = 'Schedule TBD';
+    if (classData?.schedule) {
+      if (typeof classData.schedule === 'object' && classData.schedule.variants) {
+        const variants = classData.schedule.variants;
+        if (variants.length > 0) {
+          const firstVariant = variants[0];
+          schedule = `${firstVariant.days.join(', ')} ${firstVariant.startTime} - ${firstVariant.endTime}`;
+        }
+      } else if (typeof classData.schedule === 'string') {
+        schedule = classData.schedule;
+      }
+    }
+    
+    // Get location - for school classes, check multiple possible locations
+    let location = 'Location TBD';
+    if (classData?.location) {
+      location = classData.location;
+    } else if ((enrollment as any).locationName) {
+      location = (enrollment as any).locationName;
+    }
+    
     return {
       className: enrollment.className || classData?.title || 'Unknown Class',
       description: enrollment.classDescription || classData?.description || '',
-      schedule: classData?.schedule || 'Schedule TBD',
-      location: classData?.location || 'Location TBD',
+      schedule,
+      location,
       startDate: classData?.startDate,
       endDate: classData?.endDate
     };
