@@ -1764,13 +1764,9 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
 
     console.log(`📚 Fetching students for school admin (school_id: ${schoolId})...`);
     
-    // Get all school students from storage
-    const allSchoolStudents = await storage.getAllSchoolStudents();
-    console.log(`📊 Found ${allSchoolStudents.length} total school students in storage`);
-    
-    // Filter by school ID
-    const schoolStudents = allSchoolStudents.filter((student: any) => Number(student.schoolId) === schoolId);
-    console.log(`📊 Filtered to ${schoolStudents.length} students for school ${schoolId}`);
+    // Get school students from database (not in-memory storage)
+    const schoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
+    console.log(`📊 Found ${schoolStudents.length} students for school ${schoolId} in database`);
     
     // Get children details for each school student
     const studentsWithDetails = await Promise.all(
