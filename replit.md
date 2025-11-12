@@ -104,3 +104,15 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Root Cause**: MarketingLinksPage was using `AppShell` instead of `SchoolAdminLayout`
 - **Solution**: Updated MarketingLinksPage to use `SchoolAdminLayout` for consistent navigation
 - **Files Modified**: `client/src/pages/MarketingLinksPage.tsx`
+
+#### Fixed Manual Payment Entry Page
+- **Issue**: Manual Payment Entry page was showing "h.map is not a function" error
+- **Root Cause**: 
+  1. Page had no layout component (missing SchoolAdminLayout)
+  2. Custom queryFn calls were bypassing default authenticated fetcher
+  3. When API returned errors, .map() was called on non-array data
+- **Solution**: 
+  1. Added `SchoolAdminLayout` for consistent navigation
+  2. Removed custom queryFn from all queries to use default authenticated fetcher
+  3. Added proper array checks and type safety for data handling
+- **Files Modified**: `client/src/pages/ManualPaymentEntryPage.tsx`

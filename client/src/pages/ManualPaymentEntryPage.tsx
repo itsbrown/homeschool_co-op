@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Calendar, DollarSign, User, FileText, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency, centsToDollars } from '@/utils/currency';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 const manualPaymentSchema = z.object({
   parentEmail: z.string().email('Please enter a valid email address'),
@@ -53,34 +54,25 @@ export default function ManualPaymentEntryPage() {
   });
 
   // Fetch parent users for selection
-  const { data: parentUsers = [] } = useQuery({
+  const { data: allUsers = [], isLoading: usersLoading } = useQuery({
     queryKey: ['/api/school-admin/users'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/school-admin/users');
-      const data = await response.json();
-      return data.filter((user: any) => user.role === 'parent');
-    }
   });
+  
+  const parentUsers = Array.isArray(allUsers) ? allUsers.filter((user: any) => user.role === 'parent') : [];
 
   // Fetch children for selection
-  const { data: children = [] } = useQuery({
+  const { data: studentsData, isLoading: studentsLoading } = useQuery({
     queryKey: ['/api/school-admin/students'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/school-admin/students');
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
-    }
   });
+  
+  const children = Array.isArray(studentsData) ? studentsData : [];
 
   // Fetch classes for selection
-  const { data: classes = [] } = useQuery({
+  const { data: classesData, isLoading: classesLoading } = useQuery({
     queryKey: ['/api/school-admin/classes'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/school-admin/classes');
-      const data = await response.json();
-      return data.items || data.classes || [];
-    }
   });
+  
+  const classes = classesData?.items || classesData?.classes || [];
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: ManualPaymentForm) => {
@@ -116,18 +108,19 @@ export default function ManualPaymentEntryPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <div className="p-3 bg-primary/10 rounded-lg">
-          <CreditCard className="h-6 w-6 text-primary" />
+    <SchoolAdminLayout pageTitle="Manual Payment Entry">
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-primary/10 rounded-lg">
+            <CreditCard className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold">Manual Payment Entry</h1>
+            <p className="text-muted-foreground">
+              Record payments made outside the online system
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-3xl font-bold">Manual Payment Entry</h1>
-          <p className="text-muted-foreground">
-            Record payments made outside the online system
-          </p>
-        </div>
-      </div>
 
       <Card className="max-w-2xl">
         <CardHeader>
@@ -435,6 +428,7 @@ export default function ManualPaymentEntryPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </SchoolAdminLayout>
   );
 }
