@@ -24,13 +24,6 @@ export default function AdminProfilePage() {
   const { data: admin, isLoading, error } = useQuery({
     queryKey: [`/api/school-admin/users/${adminId}`],
     enabled: !!adminId,
-    queryFn: async () => {
-      const response = await fetch(`/api/school-admin/users/${adminId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch admin details');
-      }
-      return response.json();
-    },
   });
 
   if (isLoading) {

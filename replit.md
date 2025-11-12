@@ -68,3 +68,33 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Brevo SMTP**: Email service.
 - **SendGrid**: Email service.
 - **Twilio**: SMS service.
+
+## Recent Changes
+
+### November 12, 2025
+#### Fixed Staff Profile Page Loading Error
+- **Issue**: Staff/Admin/Educator profile pages were failing to load with React error #31 (rendering object instead of string)
+- **Root Cause**: Missing GET `/api/school-admin/users/:userId` endpoint - frontend was receiving HTML error page instead of JSON
+- **Solution**: 
+  - Created new GET endpoint `/api/school-admin/users/:userId` with proper authentication and school ownership validation
+  - Removed custom queryFn from profile pages (StaffProfilePage, AdminProfilePage, EducatorProfilePage) to use default authenticated fetcher
+  - Added robust validation for numeric user IDs with Number.isInteger check
+  - Implemented proper school boundary validation to prevent cross-school data access
+  - Added support for both firstName/lastName fields and legacy name field splitting
+- **Security**: Endpoint enforces strict school ownership validation - admins can only view users from their own school
+- **Files Modified**: 
+  - `server/api/school-admin.ts` (added GET /users/:userId endpoint)
+  - `client/src/pages/schools/StaffProfilePage.tsx` (removed custom queryFn)
+  - `client/src/pages/schools/AdminProfilePage.tsx` (removed custom queryFn)
+  - `client/src/pages/schools/EducatorProfilePage.tsx` (removed custom queryFn)
+
+#### Sibling Discount Fix
+- **Issue**: Sibling discounts were being double-counted in cart ($450 instead of $180)
+- **Root Cause**: Both manual calculation AND automatic discount system were applying sibling discounts simultaneously
+- **Solution**: Filter out sibling discounts from `fetchApplicableDiscounts` to prevent double-counting, as CartContext.tsx handles sibling calculations directly
+- **Files Modified**: `client/src/contexts/CartContext.tsx`
+
+#### Discount Data Migration
+- **Action**: Migrated discount data from JSON file to PostgreSQL database
+- **Tool**: Created `server/migrate-discounts.ts` migration script
+- **Status**: Successfully migrated all discounts to database

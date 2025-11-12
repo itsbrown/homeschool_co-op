@@ -25,13 +25,6 @@ export default function EducatorProfilePage() {
   const { data: educator, isLoading, error } = useQuery({
     queryKey: [`/api/school-admin/users/${educatorId}`],
     enabled: !!educatorId,
-    queryFn: async () => {
-      const response = await fetch(`/api/school-admin/users/${educatorId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch educator details');
-      }
-      return response.json();
-    },
   });
 
   if (isLoading) {

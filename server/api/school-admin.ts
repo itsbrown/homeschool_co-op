@@ -3821,6 +3821,65 @@ router.get('/users', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Get a single user by ID (numeric database primary key)
+router.get('/users/:userId', supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = req.auth?.payload?.school_id;
+    if (!schoolId) {
+      return res.status(400).json({ message: "School ID not found in user metadata" });
+    }
+
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ message: 'Invalid user ID - must be a positive integer' });
+    }
+
+    console.log(`👤 Fetching user ${userId} for school ${schoolId}`);
+
+    const user = await storage.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if user belongs to this school (handle both camelCase and snake_case)
+    const userSchoolId = user.schoolId || (user as any).school_id;
+    if (!userSchoolId) {
+      console.log(`⚠️ User ${userId} has no school assignment`);
+      return res.status(403).json({ message: 'Access denied - user has no school assignment' });
+    }
+    
+    if (userSchoolId !== schoolId) {
+      console.log(`❌ School ID mismatch: user has ${userSchoolId}, admin has ${schoolId}`);
+      return res.status(403).json({ message: 'Access denied - user belongs to different school' });
+    }
+
+    // Format user data consistently with the list endpoint
+    const formattedUser = {
+      id: user.id,
+      email: user.email,
+      firstName: (user as any).firstName || user.name?.split(' ')[0] || '',
+      lastName: (user as any).lastName || user.name?.split(' ').slice(1).join(' ') || '',
+      role: user.role,
+      phone: user.phone || '',
+      isActive: user.isActive ?? true,
+      schoolId: userSchoolId,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      metadata: user.metadata || {}
+    };
+
+    console.log(`✅ Found user: ${user.email}`);
+    res.status(200).json(formattedUser);
+  } catch (error) {
+    console.error('❌ Error fetching user:', error);
+    res.status(500).json({ 
+      message: 'Error fetching user',
+      error: error.message 
+    });
+  }
+});
+
 // Create a new user for the school
 router.post('/users', supabaseAuth, async (req: any, res) => {
   try {

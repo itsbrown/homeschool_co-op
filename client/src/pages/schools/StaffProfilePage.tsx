@@ -24,13 +24,6 @@ export default function StaffProfilePage() {
   const { data: staffMember, isLoading, error } = useQuery({
     queryKey: [`/api/school-admin/users/${staffId}`],
     enabled: !!staffId,
-    queryFn: async () => {
-      const response = await fetch(`/api/school-admin/users/${staffId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch staff details');
-      }
-      return response.json();
-    },
   });
 
   if (isLoading) {
