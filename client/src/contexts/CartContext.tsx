@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback } 
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { useAuth0 } from "@auth0/auth0-react"; // Assuming Auth0 for authentication
+import { useAuth } from "@/components/SupabaseProvider";
 
 export interface CartItem {
   id: string;
@@ -849,7 +849,20 @@ export const useCart = () => {
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const { toast } = useToast();
-  const { user, isAuthenticated, getAccessTokenSilently } = useAuth0(); // Using Auth0 hooks
+  const { user, isAuthenticated, session } = useAuth(); // Using Supabase hooks
+  
+  // Helper function to get access token from Supabase session
+  const getAccessToken = useCallback(async (): Promise<string> => {
+    if (!session?.access_token) {
+      // Try to get from localStorage as fallback
+      const storedToken = localStorage.getItem('supabase_token');
+      if (storedToken) {
+        return storedToken;
+      }
+      throw new Error('No access token available');
+    }
+    return session.access_token;
+  }, [session]);
 
   const loadUnpaidEnrollments = useCallback(async () => {
     console.log('🛒 === LOAD_UNPAID_ENROLLMENTS CALLED ===');
@@ -869,7 +882,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Get the access token for API requests
       let token;
       try {
-        token = await getAccessTokenSilently();
+        token = await getAccessToken();
       } catch (error) {
         console.log('Failed to get access token:', error);
         return;
@@ -1073,7 +1086,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Error loading unpaid enrollments:', error);
     }
-  }, [user?.email, isAuthenticated, getAccessTokenSilently]);
+  }, [user?.email, isAuthenticated, getAccessToken]);
 
   // Manual refresh function for external use
   const refreshCart = useCallback(() => {
@@ -1094,7 +1107,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const totalsWithDiscounts = await calculateCartTotalsWithDiscounts(
         state.cart.items, 
-        getAccessTokenSilently,
+        getAccessToken,
         state.cart.appliedPromoCode // Pass promo code to preserve it
       );
       dispatch({
@@ -1109,7 +1122,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Error refreshing discounts:', error);
     }
-  }, [state.cart.items, state.cart.appliedPromoCode, getAccessTokenSilently]);
+  }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken]);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -1292,7 +1305,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (enrollmentIds.length > 0) {
         try {
           // Get auth token same way as other protected requests
-          const token = await getAccessTokenSilently();
+          const token = await getAccessToken();
           const response = await fetch('/api/cart/clear', {
             method: 'POST',
             headers: {
@@ -1392,7 +1405,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await getAccessTokenSilently()}`,
+          'Authorization': `Bearer ${await getAccessToken()}`,
         },
         body: JSON.stringify({
           code,

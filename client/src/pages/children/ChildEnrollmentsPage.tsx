@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -126,48 +126,75 @@ export default function ChildEnrollmentsPage() {
     });
   };
 
-  // Helper function to get class details for an enrollment
-  const getClassDetails = (enrollment: Enrollment) => {
-    // Check the enrollment's classType to determine which class list to search
-    const isSchoolClass = (enrollment as any).classType === 'school_class';
-    const classId = isSchoolClass ? enrollment.classId : (enrollment as any).marketplaceClassId;
-    
-    // Search in the appropriate class list
-    const classData = isSchoolClass
-      ? schoolClasses.find((c: any) => c.id === classId)
-      : marketplaceClasses.find((c: any) => c.id === classId);
-    
-    // Format schedule based on the class data
-    let schedule = 'Schedule TBD';
-    if (classData?.schedule) {
-      if (typeof classData.schedule === 'object' && classData.schedule.variants) {
-        const variants = classData.schedule.variants;
-        if (variants.length > 0) {
-          const firstVariant = variants[0];
-          schedule = `${firstVariant.days.join(', ')} ${firstVariant.startTime} - ${firstVariant.endTime}`;
+  // Memoized helper to get class details for enrollments
+  const enrichedEnrollments = useMemo(() => {
+    return enrollments.map((enrollment) => {
+      const enrollmentAny = enrollment as any;
+      const isSchoolClass = enrollmentAny.classType === 'school_class';
+      
+      // Try to find the class in the appropriate list
+      let classData = null;
+      
+      if (isSchoolClass) {
+        classData = schoolClasses.find((c: any) => c.id === enrollment.classId);
+      } else {
+        // For marketplace type, try marketplace classes first
+        const marketplaceId = enrollmentAny.marketplaceClassId;
+        classData = marketplaceClasses.find((c: any) => c.id === marketplaceId);
+        
+        // Fallback: if not found in marketplace, check school classes
+        // (handles data inconsistency where classType is wrong)
+        if (!classData && marketplaceId) {
+          classData = schoolClasses.find((c: any) => c.id === marketplaceId);
         }
-      } else if (typeof classData.schedule === 'string') {
-        schedule = classData.schedule;
       }
-    }
-    
-    // Get location - for school classes, check multiple possible locations
-    let location = 'Location TBD';
-    if (classData?.location) {
-      location = classData.location;
-    } else if ((enrollment as any).locationName) {
-      location = (enrollment as any).locationName;
-    }
-    
-    return {
-      className: enrollment.className || classData?.title || 'Unknown Class',
-      description: enrollment.classDescription || classData?.description || '',
-      schedule,
-      location,
-      startDate: classData?.startDate,
-      endDate: classData?.endDate
-    };
-  };
+      
+      // Format schedule based on the class data
+      let schedule = 'Schedule TBD';
+      if (classData?.schedule) {
+        if (typeof classData.schedule === 'object' && classData.schedule.variants) {
+          const variants = classData.schedule.variants;
+          if (variants.length > 0) {
+            // Use the variant matching the enrollment's variantId, or the first one
+            const enrolledVariant = enrollmentAny.variantId 
+              ? variants.find((v: any) => v.id === enrollmentAny.variantId)
+              : variants[0];
+            const variant = enrolledVariant || variants[0];
+            schedule = `${variant.days.join(', ')} ${variant.startTime} - ${variant.endTime}`;
+          }
+        } else if (typeof classData.schedule === 'string') {
+          schedule = classData.schedule;
+        }
+      }
+      
+      // Get location from multiple possible sources
+      let location = 'Location TBD';
+      if (classData?.location) {
+        // Direct location field
+        location = typeof classData.location === 'string' 
+          ? classData.location
+          : classData.location?.name || 'Location TBD';
+      } else if (enrollmentAny.locationName) {
+        // Location from enrollment
+        location = enrollmentAny.locationName;
+      } else if (classData?.campus) {
+        // Location from campus field (some class structures)
+        location = classData.campus;
+      }
+      
+      return {
+        ...enrollment,
+        enrichedData: {
+          className: enrollment.className || classData?.title || 'Unknown Class',
+          description: enrollment.classDescription || classData?.description || '',
+          schedule,
+          location,
+          startDate: classData?.startDate,
+          endDate: classData?.endDate
+        }
+      };
+    });
+  }, [enrollments, marketplaceClasses, schoolClasses]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -265,47 +292,51 @@ export default function ChildEnrollmentsPage() {
                 </Card>
               ))}
             </div>
-          ) : enrollments.length > 0 ? (
+          ) : enrichedEnrollments.length > 0 ? (
             <div className="space-y-4">
-              {enrollments.map((enrollment, index) => (
-                <Card key={enrollment.id || `enrollment-${index}`}>
-                  <CardHeader className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-                      <CardTitle className="text-base sm:text-lg">{getClassDetails(enrollment).className}</CardTitle>
-                      <Badge className={`${getStatusColor(enrollment.status)} self-start sm:self-auto text-xs`}>
-                        {enrollment.status.replace('_', ' ').charAt(0).toUpperCase() + enrollment.status.replace('_', ' ').slice(1)}
-                      </Badge>
-                    </div>
-                    <CardDescription className="text-sm line-clamp-3 sm:line-clamp-none">{getClassDetails(enrollment).description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-4 sm:p-6 pt-0">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 text-sm">
-                      <div className="flex items-center">
-                        <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">Duration</p>
-                          <p className="text-muted-foreground">
-                            {getClassDetails(enrollment).startDate && getClassDetails(enrollment).endDate
-                              ? `${formatDate(getClassDetails(enrollment).startDate)} - ${formatDate(getClassDetails(enrollment).endDate)}`
-                              : 'Full semester'}
-                          </p>
+              {enrichedEnrollments.map((enrichedEnrollment, index) => {
+                const enrollment = enrichedEnrollment as Enrollment;
+                const details = (enrichedEnrollment as any).enrichedData;
+                
+                return (
+                  <Card key={enrollment.id || `enrollment-${index}`}>
+                    <CardHeader className="p-4 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                        <CardTitle className="text-base sm:text-lg">{details.className}</CardTitle>
+                        <Badge className={`${getStatusColor(enrollment.status)} self-start sm:self-auto text-xs`}>
+                          {enrollment.status.replace('_', ' ').charAt(0).toUpperCase() + enrollment.status.replace('_', ' ').slice(1)}
+                        </Badge>
+                      </div>
+                      <CardDescription className="text-sm line-clamp-3 sm:line-clamp-none">{details.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 sm:p-6 pt-0">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 text-sm">
+                        <div className="flex items-center">
+                          <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium">Duration</p>
+                            <p className="text-muted-foreground">
+                              {details.startDate && details.endDate
+                                ? `${formatDate(details.startDate)} - ${formatDate(details.endDate)}`
+                                : 'Full semester'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium">Schedule</p>
+                            <p className="text-muted-foreground">{details.schedule}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium">Location</p>
+                            <p className="text-muted-foreground">{details.location}</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center">
-                        <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">Schedule</p>
-                          <p className="text-muted-foreground">{getClassDetails(enrollment).schedule}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">Location</p>
-                          <p className="text-muted-foreground">{getClassDetails(enrollment).location}</p>
-                        </div>
-                      </div>
-                    </div>
                     <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t">
                       <div className="flex flex-col gap-3">
                         <p className="text-xs sm:text-sm text-muted-foreground">
@@ -379,10 +410,11 @@ export default function ChildEnrollmentsPage() {
                           )}
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <Card>
