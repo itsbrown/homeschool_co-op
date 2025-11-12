@@ -5,12 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 
 export const SupabaseLogin: React.FC = () => {
-  const { signIn, signUp, signInWithGoogle, user, isAuthenticated } = useAuth();
+  const { signIn, signInWithGoogle, user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
@@ -72,40 +71,6 @@ export const SupabaseLogin: React.FC = () => {
     setIsLoading(false);
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
-    console.log('Attempting sign up with:', email);
-    const { data, error } = await signUp(email, password);
-    
-    console.log('Sign up response:', { data, error });
-    
-    if (error) {
-      console.error('Sign up error:', error);
-      setError(error.message);
-      toast({
-        title: "Registration Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      console.log('Sign up successful:', data);
-      toast({
-        title: "Registration Successful", 
-        description: data.user?.email_confirmed_at ? "Account created successfully!" : "Please check your email to verify your account.",
-      });
-      
-      // If email confirmation is disabled, redirect to dashboard
-      if (data.user && data.user.email_confirmed_at) {
-        window.location.href = '/dashboard';
-      }
-    }
-    
-    setIsLoading(false);
-  };
-
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setError(null);
@@ -130,18 +95,12 @@ export const SupabaseLogin: React.FC = () => {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl text-center">American Seekers Academy</CardTitle>
           <CardDescription className="text-center">
-            Sign in to your account or create a new one
+            Sign in to your account
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="signin" className="space-y-4">
-              <form onSubmit={handleSignIn} className="space-y-4">
+          <div className="space-y-4">
+            <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -183,43 +142,7 @@ export const SupabaseLogin: React.FC = () => {
                   </button>
                 </div>
               </form>
-            </TabsContent>
-            
-            <TabsContent value="signup" className="space-y-4">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="Create a password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Creating account...' : 'Sign Up'}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+            </div>
           
           <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
