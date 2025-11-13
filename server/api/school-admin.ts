@@ -2,6 +2,7 @@ import { Router } from "express";
 import { storage } from "../storage";
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import * as brevo from '@getbrevo/brevo';
 import { createClient } from '@supabase/supabase-js';
 import { parse as parseCSV } from 'csv-parse';
@@ -4299,7 +4300,7 @@ router.post('/users/:userId/send-password-reset', supabaseAuth, async (req: any,
     console.log(`✅ User has Supabase UUID: ${user.supabaseId}`);
 
     // Generate cryptographically secure reset token
-    const resetToken = require('crypto').randomBytes(32).toString('hex');
+    const resetToken = crypto.randomBytes(32).toString('hex');
     const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
 
     console.log(`🔐 Generated secure reset token for ${user.email}, expires: ${tokenExpiry.toISOString()}`);

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "../storage";
@@ -758,7 +759,7 @@ router.post("/forgot-password", async (req, res) => {
     }
 
     // Generate a cryptographically secure reset token
-    const resetToken = require('crypto').randomBytes(32).toString('hex');
+    const resetToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     console.log(`🔐 Generated secure reset token for ${email}, expires: ${expiresAt.toISOString()}`);
