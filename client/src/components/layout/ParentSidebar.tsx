@@ -210,17 +210,19 @@ export default function ParentSidebar() {
       icon: <DollarSign className="h-5 w-5" />,
       description: "Manage billing and view payment history"
     },
-    {
-      href: "/enrollment-assistant",
-      title: "AI Enrollment Assistant",
-      icon: <Bot className="h-5 w-5" />,
-    },
-    {
-      href: "/ai-insights",
-      title: "AI Insights",
-      icon: <Brain className="h-5 w-5" />,
-      badge: "Beta"
-    },
+    // TODO: Future feature - AI Enrollment Assistant
+    // {
+    //   href: "/enrollment-assistant",
+    //   title: "AI Enrollment Assistant",
+    //   icon: <Bot className="h-5 w-5" />,
+    // },
+    // TODO: Future feature - AI Insights
+    // {
+    //   href: "/ai-insights",
+    //   title: "AI Insights",
+    //   icon: <Brain className="h-5 w-5" />,
+    //   badge: "Beta"
+    // },
     {
       href: "/settings",
       title: "Settings",

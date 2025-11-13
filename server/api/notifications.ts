@@ -514,10 +514,10 @@ async function getNotificationStats(notificationId: number): Promise<any> {
 
 async function markNotificationAsRead(notificationId: number, userId: number): Promise<void> {
   const recipients = await storage.getNotificationRecipientsByNotificationId(notificationId);
-  const recipientRecord = recipients.find(r => r.recipientId === userId);
+  const inAppRecipient = recipients.find(r => r.recipientId === userId && r.deliveryType === "in_app");
   
-  if (recipientRecord) {
-    await storage.updateNotificationRecipient(recipientRecord.id, {
+  if (inAppRecipient) {
+    await storage.updateNotificationRecipient(inAppRecipient.id, {
       status: "read",
       readAt: new Date(),
     });
