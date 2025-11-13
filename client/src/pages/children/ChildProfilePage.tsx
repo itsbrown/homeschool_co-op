@@ -65,7 +65,7 @@ export default function ChildProfilePage() {
   });
 
   // Fetch enrollment data for this child
-  const { data: enrollments, isLoading: enrollmentsLoading } = useQuery({
+  const { data: enrollments = [], isLoading: enrollmentsLoading } = useQuery<any[]>({
     queryKey: [`/api/enrollments/child/${id}`],
     enabled: !!id
   });

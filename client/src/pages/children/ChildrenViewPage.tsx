@@ -29,14 +29,14 @@ export default function ChildrenViewPage() {
   };
   
   // Fetch children data from parent-specific endpoint
-  const { data: rawChildrenData, isLoading: childrenLoading } = useQuery({
+  const { data: rawChildrenData = [], isLoading: childrenLoading } = useQuery<any[]>({
     queryKey: ["/api/parent/children"],
     enabled: isAuthenticated && activeRole === 'parent',
   });
 
   // Transform children data to include computed properties
   const childrenData = React.useMemo(() => {
-    if (!rawChildrenData) return [];
+    if (!rawChildrenData || rawChildrenData.length === 0) return [];
     return rawChildrenData.map((child: any) => ({
       ...child,
       name: `${child.firstName} ${child.lastName}`,
@@ -113,8 +113,8 @@ export default function ChildrenViewPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {childrenData?.map((child, index) => (
-                  <div key={index} className="flex justify-between items-center p-4 border rounded-lg">
+                {childrenData?.map((child: any) => (
+                  <div key={child.id} className="flex justify-between items-center p-4 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <User className="h-5 w-5 text-primary" />
