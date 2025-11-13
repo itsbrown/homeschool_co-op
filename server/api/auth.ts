@@ -713,54 +713,66 @@ router.post("/forgot-password", async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    // Check if user exists in Supabase first, fallback to storage
-    let user = null;
+    console.log(`🔑 Password reset requested for: ${email}`);
+
+    // ALWAYS look up user in Supabase to get the UUID
+    let supabaseUuid: string | null = null;
     
     try {
-      // Try to get user from Supabase
       const { data: supabaseUsers, error } = await supabaseAdmin.auth.admin.listUsers();
       if (!error && supabaseUsers?.users) {
         const supabaseUser = supabaseUsers.users.find((u: any) => u.email === email);
         if (supabaseUser) {
-          user = {
-            id: supabaseUser.id,
-            email: supabaseUser.email,
-            name: `${supabaseUser.user_metadata?.firstName || ''} ${supabaseUser.user_metadata?.lastName || ''}`.trim()
-          };
+          supabaseUuid = supabaseUser.id;
+          console.log(`✅ Found Supabase user with UUID: ${supabaseUuid}`);
         }
       }
     } catch (supabaseError) {
-      console.log('Supabase user lookup failed, trying storage...');
+      console.error('❌ Supabase user lookup failed:', supabaseError);
     }
     
-    // Fallback to storage if not found in Supabase
-    if (!user) {
+    // If no Supabase account exists, check storage to see if user exists there
+    if (!supabaseUuid) {
       try {
-        user = await storage.getUserByEmail(email);
+        const localUser = await storage.getUserByEmail(email);
+        if (localUser) {
+          // User exists in local DB, try to get their Supabase ID
+          if (localUser.supabaseId) {
+            supabaseUuid = localUser.supabaseId;
+            console.log(`✅ Found Supabase UUID from local DB: ${supabaseUuid}`);
+          } else {
+            console.log(`⚠️ User ${email} exists in local DB but has no Supabase account`);
+          }
+        }
       } catch (storageError) {
-        console.log('Storage lookup also failed');
+        console.log('💾 Storage lookup also failed');
       }
     }
     
-    if (!user) {
+    if (!supabaseUuid) {
       // Don't reveal if the email exists or not for security
+      console.log(`⚠️ No Supabase account found for ${email}, returning success without sending email`);
       return res.status(200).json({ 
         message: "If your email is registered, you will receive a password reset link" 
       });
     }
 
-    // Generate a secure reset token
-    const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    // Generate a cryptographically secure reset token
+    const resetToken = require('crypto').randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Store the reset token in database
+    console.log(`🔐 Generated secure reset token for ${email}, expires: ${expiresAt.toISOString()}`);
+
+    // Store the reset token in database with Supabase UUID
     await storage.createPasswordResetToken({
       token: resetToken,
-      email: user.email || '',
-      userId: user.id.toString(),
+      email: email,
+      userId: supabaseUuid,
       expiresAt,
       used: false
     });
+
+    console.log(`💾 Reset token stored in database for Supabase UUID: ${supabaseUuid}`);
 
     // Clean up expired tokens
     await storage.deleteExpiredPasswordResetTokens();
@@ -780,7 +792,7 @@ router.post("/forgot-password", async (req, res) => {
       message: "If your email is registered, you will receive a password reset link"
     });
   } catch (error) {
-    console.error("Forgot password error:", error);
+    console.error("❌ Forgot password error:", error);
     res.status(500).json({ message: "Error processing your request" });
   }
 });
@@ -798,46 +810,74 @@ router.post("/reset-password", async (req, res) => {
       return res.status(400).json({ message: "Password must be at least 6 characters long" });
     }
 
+    console.log(`🔑 Password reset attempt with token: ${token.substring(0, 10)}...`);
+
     // Check if token exists and is valid in database
     const tokenData = await storage.getPasswordResetTokenByToken(token);
     if (!tokenData || tokenData.used) {
+      console.log(`❌ Invalid or used token: ${token.substring(0, 10)}...`);
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
 
     if (new Date() > new Date(tokenData.expiresAt)) {
+      console.log(`❌ Token expired for ${tokenData.email}, expired at: ${tokenData.expiresAt}`);
       return res.status(400).json({ message: "Reset token has expired" });
     }
 
-    // Hash the new password
+    console.log(`✅ Valid token found for email: ${tokenData.email}, userId: ${tokenData.userId}`);
+
+    // Hash the new password for local storage
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update user password in Supabase
+    // Update user password in Supabase using the UUID stored in tokenData.userId
     try {
+      console.log(`🔐 Updating Supabase password for UUID: ${tokenData.userId}`);
+      
       const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
         tokenData.userId,
         { password: newPassword }
       );
 
       if (error) {
-        console.error('❌ Failed to update password in Supabase:', error);
-        return res.status(500).json({ message: "Error updating password" });
+        console.error('❌ Supabase updateUserById error details:', {
+          code: error.code,
+          message: error.message,
+          status: error.status,
+          userId: tokenData.userId,
+          email: tokenData.email
+        });
+        return res.status(500).json({ message: "Error updating password in authentication system" });
       }
 
-      console.log(`✅ Password updated successfully for user ${tokenData.userId} (${tokenData.email})`);
+      console.log(`✅ Supabase password updated successfully for ${tokenData.email} (UUID: ${tokenData.userId})`);
+      
+      // Update local database password hash for consistency
+      try {
+        const localUser = await storage.getUserByEmail(tokenData.email);
+        if (localUser) {
+          await storage.updateUser(localUser.id, { password: hashedPassword });
+          console.log(`✅ Local database password updated for user ID: ${localUser.id}`);
+        } else {
+          console.log(`⚠️ No local user found for ${tokenData.email}, skipping local password update`);
+        }
+      } catch (localUpdateError) {
+        console.error('⚠️ Failed to update local database password (non-critical):', localUpdateError);
+      }
       
       // Mark the token as used
       await storage.markPasswordResetTokenAsUsed(token);
+      console.log(`✅ Reset token marked as used for ${tokenData.email}`);
 
       res.status(200).json({ 
         message: "Password reset successfully. You can now log in with your new password." 
       });
     } catch (updateError) {
-      console.error("Error updating password:", updateError);
+      console.error("❌ Unexpected error during password update:", updateError);
       res.status(500).json({ message: "Error updating password" });
     }
 
   } catch (error) {
-    console.error("Reset password error:", error);
+    console.error("❌ Reset password error:", error);
     res.status(500).json({ message: "Error resetting password" });
   }
 });

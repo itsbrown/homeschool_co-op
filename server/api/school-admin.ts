@@ -4290,22 +4290,30 @@ router.post('/users/:userId/send-password-reset', supabaseAuth, async (req: any,
 
     console.log(`📧 Found user: ${user.email} (${user.firstName || user.name})`);
 
-    // Generate reset token
-    const resetToken = uuidv4();
+    // Verify user has a Supabase account
+    if (!user.supabaseId) {
+      console.error(`❌ User ${user.email} has no Supabase account (supabaseId is null)`);
+      return res.status(400).json({ message: 'User does not have a password account. Please use account invite instead.' });
+    }
+
+    console.log(`✅ User has Supabase UUID: ${user.supabaseId}`);
+
+    // Generate cryptographically secure reset token
+    const resetToken = require('crypto').randomBytes(32).toString('hex');
     const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
 
-    console.log(`🔐 Generated reset token for ${user.email}, expires: ${tokenExpiry.toISOString()}`);
+    console.log(`🔐 Generated secure reset token for ${user.email}, expires: ${tokenExpiry.toISOString()}`);
 
-    // Store reset token in database
+    // Store reset token in database with Supabase UUID
     try {
       await storage.createPasswordResetToken({
         token: resetToken,
         email: user.email,
-        userId: userId.toString(),
+        userId: user.supabaseId,
         expiresAt: tokenExpiry,
         used: false
       });
-      console.log(`💾 Reset token stored in database for ${user.email}`);
+      console.log(`💾 Reset token stored in database for ${user.email} with Supabase UUID: ${user.supabaseId}`);
     } catch (tokenError) {
       console.error(`❌ Failed to store reset token in database:`, tokenError);
       return res.status(500).json({ message: 'Failed to create password reset token' });
