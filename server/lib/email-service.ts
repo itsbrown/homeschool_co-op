@@ -1013,3 +1013,143 @@ ${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/schoo
     return false;
   }
 }
+
+// Welcome Email for New Registrants
+interface WelcomeEmailData {
+  email: string;
+  firstName: string;
+  lastName?: string;
+  role?: string;
+}
+
+export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping welcome email send');
+      return true; // Return true to indicate graceful handling
+    }
+
+    const { email, firstName, lastName, role } = data;
+    const fullName = lastName ? `${firstName} ${lastName}` : firstName;
+    const loginUrl = `${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/login`;
+    
+    // Format role for display
+    const formatRole = (role?: string): string => {
+      if (!role) return 'Member';
+      const roleMap: Record<string, string> = {
+        'parent': 'Parent',
+        'schoolAdmin': 'School Administrator',
+        'staff': 'Staff Member',
+        'educator': 'Educator',
+        'admin': 'Administrator'
+      };
+      return roleMap[role] || role.charAt(0).toUpperCase() + role.slice(1);
+    };
+
+    const htmlContent = `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+          <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+            <h1 style="color: white; margin: 0;">Welcome to American Seekers Academy!</h1>
+            <p style="color: #E0E7FF; margin: 8px 0 0 0;">Your Learning Journey Begins Here</p>
+          </div>
+          
+          <div style="padding: 24px;">
+            <h2 style="color: #1F2937; margin-bottom: 16px;">Hello ${firstName}!</h2>
+            
+            <p>We're thrilled to have you join the American Seekers Academy community. Your account has been successfully created and you're all set to get started.</p>
+            
+            ${role ? `<div style="background-color: #EFF6FF; padding: 16px; border-radius: 8px; margin: 16px 0; border-left: 4px solid #3B82F6;">
+              <p style="margin: 0;"><strong>Account Type:</strong> ${formatRole(role)}</p>
+            </div>` : ''}
+            
+            <h3 style="color: #374151; margin-top: 24px;">Next Steps</h3>
+            <ul style="color: #4B5563; line-height: 1.8;">
+              <li>Log in to your account using the button below</li>
+              <li>Complete your profile setup</li>
+              <li>Explore available classes and programs</li>
+              <li>Connect with our learning community</li>
+            </ul>
+            
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${loginUrl}" 
+                 style="background-color: #4F46E5; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                 Log In to Your Account
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px; margin-top: 24px;">
+              If the button doesn't work, you can also copy and paste this link into your browser:<br>
+              <a href="${loginUrl}" style="color: #4F46E5; word-break: break-all;">${loginUrl}</a>
+            </p>
+            
+            <div style="margin-top: 32px; padding: 16px; background-color: #F3F4F6; border-radius: 8px;">
+              <h3 style="margin: 0 0 12px 0; color: #374151;">Need Help?</h3>
+              <p style="margin: 0; color: #6B7280; font-size: 14px;">
+                If you have any questions or need assistance getting started, our support team is here to help at 
+                <a href="mailto:support@americanseekersacademy.com" style="color: #4F46E5;">support@americanseekersacademy.com</a>
+              </p>
+            </div>
+            
+            <div style="margin-top: 32px; text-align: center; color: #6B7280; font-size: 14px;">
+              <p>Thank you for choosing American Seekers Academy!</p>
+              <p style="margin-top: 16px; font-size: 12px;">
+                © 2025 American Seekers Academy. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const textContent = `
+Welcome to American Seekers Academy!
+
+Hello ${firstName}!
+
+We're thrilled to have you join the American Seekers Academy community. Your account has been successfully created and you're all set to get started.
+
+${role ? `Account Type: ${formatRole(role)}\n` : ''}
+Next Steps:
+- Log in to your account at: ${loginUrl}
+- Complete your profile setup
+- Explore available classes and programs
+- Connect with our learning community
+
+Need Help?
+If you have any questions or need assistance getting started, our support team is here to help at support@americanseekersacademy.com
+
+Thank you for choosing American Seekers Academy!
+
+© 2025 American Seekers Academy. All rights reserved.
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: email, name: fullName }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
+      name: 'American Seekers Academy' 
+    };
+    sendSmtpEmail.subject = 'Welcome to American Seekers Academy!';
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping welcome email send');
+      return false;
+    }
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Welcome email sent successfully via Brevo to:', email);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
+  } catch (error: any) {
+    if (error.body?.code === 'unauthorized' || error.statusCode === 401) {
+      console.log('📧 Brevo authorization issue (IP not whitelisted), skipping welcome email - registration still successful');
+    } else {
+      console.error('❌ Failed to send welcome email via Brevo:', error.message || error);
+    }
+    return true; // Return true to indicate registration success despite email failure
+  }
+}

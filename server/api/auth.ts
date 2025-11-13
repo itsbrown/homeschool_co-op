@@ -5,7 +5,8 @@ import fs from "fs";
 import path from "path";
 import { storage } from "../storage";
 import { insertUserSchema } from "@shared/schema";
-import { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService";
+import { sendWelcomeEmail } from "../lib/email-service";
+import { sendPasswordResetEmail } from "../services/emailService";
 import { userStorage } from "../users-storage";
 import { supabaseAdmin } from "../db/supabase";
 
@@ -277,6 +278,20 @@ router.post('/register', async (req, res) => {
     }
 
     console.log(`✅ Registration complete for ${email} (User ID: ${user.id}, Supabase ID: ${supabaseUser.id})`);
+    
+    // Send welcome email (non-blocking - registration succeeds even if email fails)
+    try {
+      console.log('📧 Sending welcome email to:', email);
+      await sendWelcomeEmail({
+        email: email,
+        firstName: userFirstName,
+        lastName: userLastName,
+        role: role || 'parent'
+      });
+      console.log('✅ Welcome email sent successfully');
+    } catch (emailError) {
+      console.error('⚠️ Failed to send welcome email, but registration was successful:', emailError);
+    }
     
     res.json({ 
       success: true, 
