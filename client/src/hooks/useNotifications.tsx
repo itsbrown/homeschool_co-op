@@ -11,9 +11,7 @@ interface BackendNotification {
   type: string;
   priority: string;
   status: string;
-  recipientId?: number;
-  deliveryType?: string;
-  recipientStatus?: string;
+  read: boolean;
   readAt?: string | null;
   createdAt: string;
 }
@@ -50,7 +48,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       title: n.subject,
       message: n.content,
       timestamp: new Date(n.createdAt),
-      read: readOverrides.has(String(n.id)) || n.recipientStatus === 'read',
+      read: readOverrides.has(String(n.id)) || n.read,
       actionable: false,
     }));
   }, [backendNotifications, readOverrides]);
@@ -90,7 +88,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Clear read overrides when all backend notifications are confirmed as read
   React.useEffect(() => {
-    const allBackendRead = backendNotifications.every(n => n.recipientStatus === 'read');
+    const allBackendRead = backendNotifications.every(n => n.read);
     if (allBackendRead && readOverrides.size > 0) {
       setReadOverrides(new Set());
     }
