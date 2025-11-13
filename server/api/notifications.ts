@@ -199,7 +199,7 @@ router.get("/:id/stats", async (req, res) => {
 router.post("/:id/read", async (req, res) => {
   try {
     const notificationId = parseInt(req.params.id);
-    const email = (req as any).auth?.email;
+    const email = (req as any).auth?.payload?.email;
     
     if (isNaN(notificationId)) {
       return res.status(400).json({ message: "Invalid notification ID" });
@@ -225,7 +225,7 @@ router.post("/:id/read", async (req, res) => {
 
 router.post("/mark-all-read", async (req, res) => {
   try {
-    const email = (req as any).auth?.email;
+    const email = (req as any).auth?.payload?.email;
     
     if (!email) {
       return res.status(401).json({ message: "User not authenticated" });
