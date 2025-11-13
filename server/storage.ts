@@ -4870,6 +4870,11 @@ export class MemStorage implements IStorage {
       async deleteExpiredPasswordResetTokens(): Promise<void> {
         return this.dbStorage.deleteExpiredPasswordResetTokens();
       }
+
+      // Database initialization methods
+      async initializeNotifications(): Promise<void> {
+        return this.dbStorage.initializeNotifications();
+      }
   }
 
   // Use the MemStorage implementation for classes functionality

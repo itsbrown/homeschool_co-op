@@ -190,5 +190,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     
     // Initialize membership status tracking service
     MembershipStatusService.initializeMembershipStatusJob();
+    
+    // Load notifications and notification recipients from JSON into database
+    const { storage } = await import('./storage');
+    await storage.initializeNotifications();
   });
 })();

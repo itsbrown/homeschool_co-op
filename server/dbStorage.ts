@@ -2245,4 +2245,120 @@ export class DatabaseStorage implements IStorage {
       .where(eq(roleInvitations.invitedBy, inviterId))
       .orderBy(desc(roleInvitations.createdAt));
   }
+
+  // Notification data initialization from JSON files
+  async initializeNotifications(): Promise<void> {
+    const fs = await import('fs');
+    const path = await import('path');
+    const db = await getDb();
+
+    try {
+      await db.transaction(async (tx) => {
+        let notificationsInserted = 0;
+        let notificationsSkipped = 0;
+
+        // Load and upsert notifications
+        const notificationsFilePath = path.join(process.cwd(), 'data', 'notifications.json');
+        if (fs.existsSync(notificationsFilePath)) {
+          const notificationsData = JSON.parse(fs.readFileSync(notificationsFilePath, 'utf-8'));
+          console.log(`📬 Seeding ${notificationsData.length} notifications from notifications.json`);
+
+          for (const notification of notificationsData) {
+            try {
+              const result = await tx.insert(notifications)
+                .values({
+                  id: notification.id,
+                  senderId: notification.senderId,
+                  type: notification.type,
+                  priority: notification.priority,
+                  subject: notification.subject,
+                  content: notification.content,
+                  targetType: notification.targetType,
+                  targetData: notification.targetData,
+                  scheduledFor: notification.scheduledFor ? new Date(notification.scheduledFor) : null,
+                  sentAt: notification.sentAt ? new Date(notification.sentAt) : null,
+                  status: notification.status,
+                  deliveryStats: notification.deliveryStats || {},
+                  createdAt: new Date(notification.createdAt),
+                  updatedAt: new Date(notification.updatedAt)
+                })
+                .onConflictDoNothing();
+              
+              if (result.rowCount && result.rowCount > 0) {
+                notificationsInserted++;
+              } else {
+                notificationsSkipped++;
+              }
+            } catch (error) {
+              console.error(`⚠️  Error inserting notification ${notification.id}:`, error);
+              notificationsSkipped++;
+            }
+          }
+          console.log(`✅ Notifications: ${notificationsInserted} inserted, ${notificationsSkipped} skipped (already exist)`);
+        } else {
+          console.log('📬 No notifications.json found, skipping notification seeding');
+        }
+
+        // Load and upsert notification recipients with validation
+        let recipientsInserted = 0;
+        let recipientsSkipped = 0;
+        
+        const recipientsFilePath = path.join(process.cwd(), 'data', 'notification-recipients.json');
+        if (fs.existsSync(recipientsFilePath)) {
+          const recipientsData = JSON.parse(fs.readFileSync(recipientsFilePath, 'utf-8'));
+          console.log(`📬 Seeding ${recipientsData.length} notification recipients from notification-recipients.json`);
+
+          // Pre-fetch valid notification IDs and user IDs for efficient validation
+          const validNotificationIds = new Set(
+            (await tx.select({ id: notifications.id }).from(notifications)).map(n => n.id)
+          );
+          const validUserIds = new Set(
+            (await tx.select({ id: users.id }).from(users)).map(u => u.id)
+          );
+
+          for (const recipient of recipientsData) {
+            try {
+              // Validate foreign key references before attempting insert
+              if (!validNotificationIds.has(recipient.notificationId)) {
+                recipientsSkipped++;
+                continue;
+              }
+              if (!validUserIds.has(recipient.recipientId)) {
+                recipientsSkipped++;
+                continue;
+              }
+
+              const result = await tx.insert(notificationRecipients)
+                .values({
+                  id: recipient.id,
+                  notificationId: recipient.notificationId,
+                  recipientId: recipient.recipientId,
+                  deliveryType: recipient.deliveryType,
+                  status: recipient.status || 'pending',
+                  deliveredAt: recipient.deliveredAt ? new Date(recipient.deliveredAt) : null,
+                  readAt: recipient.readAt ? new Date(recipient.readAt) : null,
+                  createdAt: new Date(recipient.createdAt)
+                })
+                .onConflictDoNothing();
+              
+              if (result.rowCount && result.rowCount > 0) {
+                recipientsInserted++;
+              } else {
+                recipientsSkipped++;
+              }
+            } catch (error) {
+              console.error(`⚠️  Error inserting recipient ${recipient.id}:`, error);
+              recipientsSkipped++;
+            }
+          }
+          console.log(`✅ Recipients: ${recipientsInserted} inserted, ${recipientsSkipped} skipped (invalid refs or already exist)`);
+        } else {
+          console.log('📬 No notification-recipients.json found, skipping recipient seeding');
+        }
+      });
+    } catch (error) {
+      console.error('❌ FATAL: Notification seeding failed, transaction rolled back:', error);
+      throw error; // Re-throw to prevent silent failures
+    }
+  }
 }
