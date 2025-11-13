@@ -50,6 +50,7 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Edit Child Profile Page**: Dedicated page for editing child profiles using the ParentAppShell component.
 - **Responsive UI Patterns**: Consistent mobile-responsive patterns across all admin pages.
 - **Student Management System**: Comprehensive system for tracking and displaying students across schools, including auto-sync functionality for backfilling existing children into `school_students` table.
+- **Notification System**: In-app notification system with PostgreSQL storage, automatic data seeding from JSON files at server startup using transactional upserts, real-time unread count badge on bell icon, optimistic UI updates via React Query cache invalidation, and mark-as-read functionality that updates notification recipients with accurate status tracking.
 
 ## External Dependencies
 - **Auth0**: Authentication provider.
