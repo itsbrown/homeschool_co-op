@@ -101,7 +101,7 @@ router.get('/children/:id', jwtCheck, async (req: any, res) => {
     }
     
     // Get the child
-    const child = await storage.getChild(childId);
+    const child = await storage.getChildById(childId);
     
     if (!child) {
       return res.status(404).json({ 
