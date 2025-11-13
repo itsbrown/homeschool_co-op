@@ -157,6 +157,7 @@ export const getQueryFn: <T>(options: {
     
     const res = await fetch(url, {
       credentials: "include",
+      cache: "no-store",
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
         ...(activeRole && { 'X-Active-Role': activeRole }),
