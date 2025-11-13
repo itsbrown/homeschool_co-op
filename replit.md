@@ -29,17 +29,18 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Storage Architecture**: Hybrid system routing operations between persistent database storage and in-memory storage.
 
 ### Key Features and Implementations
-- **Authentication and Authorization**: Auth0-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync.
+- **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync. All user creation flows (registration, account invite, admin user creation) create Supabase authentication accounts and link them via `supabaseId`. Login authenticates via Supabase `signInWithPassword`.
 - **School Branding System**: Allows school administrators to upload and display school logos.
 - **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 - **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, and automated refunds.
 - **Discount Systems**: Free After Threshold Discount System configurable by school administrators, with automatic suppression of other discounts.
 - **Enrollment Management**: Robust system preventing duplicate enrollments, managing a clear status workflow (pending_payment, enrolled, waitlist, cancelled, completed, withdrawn, failed), and integrated with the cart-to-checkout flow. Includes a cart clearing system.
 - **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing, enforcing strict school isolation and foreign key constraint validation on deletion.
-- **Registration Flow**: Two-tier registration system with school code validation and robust duplicate prevention across PostgreSQL and Supabase, ensuring atomic school association with full rollback on failure.
+- **Registration Flow**: Two-tier registration system with school code validation and robust duplicate prevention across PostgreSQL and Supabase, ensuring atomic school association with full rollback on failure. Creates both Supabase auth account and local database record with linked `supabaseId`.
+- **Authentication Migration Utility**: `/api/admin-users/users/migrate-to-supabase` endpoint to batch-create Supabase accounts for existing users without `supabaseId`, with intelligent handling of existing accounts to enable convergence from hybrid authentication state.
 - **AI Enrollment Assistant**: Provides personalized AI guidance for enrollment.
 - **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, dynamic position management, and intelligent status detection with batched pending invitation checks.
-- **User Account Management**: School administrators can send account invites and password reset emails.
+- **User Account Management**: School administrators can send account invites and password reset emails. Account invite system now creates Supabase accounts for users without `supabaseId`, with intelligent handling of existing Supabase accounts via error code detection (`email_exists`).
 - **Password Reset System**: Email-based password reset with cryptographically secure token generation (crypto.randomBytes), Supabase UUID-based authentication, dual-database password synchronization, and comprehensive error logging. Fixed critical bug where local database IDs were incorrectly used instead of Supabase UUIDs, which caused 500 errors during password updates.
 - **Welcome Email System**: Automated welcome emails sent to new registrants after successful account creation, featuring professional HTML design, login link, and role-aware messaging. Uses BREVO_SENDER_EMAIL for sender address with graceful error handling that doesn't block registration.
 - **Parent Profile Management**: Parent users can update their profile information.

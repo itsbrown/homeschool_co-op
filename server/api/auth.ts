@@ -478,54 +478,60 @@ router.post("/login", async (req, res) => {
     // 1. Provided incorrect credentials for a test account
     // 2. Is trying to use a database account
 
-    console.log(`Test account login failed, trying database lookup for: ${loginIdentifier}`);
+    console.log(`Test account login failed, trying Supabase authentication for: ${loginIdentifier}`);
 
-    // Only try database if test accounts don't match
-    const user = await storage.getUserByUsername(loginIdentifier) || await storage.getUserByEmail?.(loginIdentifier);
-    if (!user) {
-      console.log('User not found in database:', loginIdentifier);
-      return res.status(401).json({ message: "Invalid credentials" });
+    // Authenticate via Supabase
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseAdmin = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      );
+
+      // Try to sign in with Supabase
+      const { data: signInData, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+        email: loginIdentifier,
+        password: password
+      });
+
+      if (signInError || !signInData.user) {
+        console.log('❌ Supabase authentication failed:', signInError?.message);
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      console.log(`✅ Supabase authentication successful for: ${signInData.user.email}`);
+
+      // Get user data from local database
+      const user = await storage.getUserByEmail?.(signInData.user.email);
+      if (!user) {
+        console.log('⚠️ User authenticated but not found in local database:', signInData.user.email);
+        return res.status(401).json({ message: "User account not properly configured. Please contact support." });
+      }
+
+      console.log(`✅ Found user in database: ${user.email}, ID: ${user.id}, Role: ${user.role}`);
+
+      // Set session data
+      if (req.session) {
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+      } else {
+        console.log('⚠️ No session available - this endpoint may be designed for token-based auth');
+      }
+
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user;
+
+      console.log('✅ Login successful for user:', user.email);
+      
+      res.status(200).json({ 
+        message: "Login successful", 
+        user: userWithoutPassword 
+      });
+    } catch (supabaseError) {
+      console.error('❌ Supabase login error:', supabaseError);
+      return res.status(500).json({ message: "Authentication service error. Please try again." });
     }
-
-    console.log(`🔍 Found user for login: ${user.email}, ID: ${user.id}`);
-    console.log(`🔒 Stored password hash exists: ${!!user.password}`);
-    console.log(`🔒 Password hash length: ${user.password?.length || 'N/A'}`);
-    console.log(`🔒 Provided password: ${password}`);
-    
-    // Check if the stored password is actually hashed (bcrypt hashes start with $2a$, $2b$, etc.)
-    const isHashed = user.password && user.password.startsWith('$2');
-    console.log(`🔒 Password appears to be hashed: ${isHashed}`);
-    
-    if (!user.password) {
-      console.log('❌ No password stored for user');
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    
-    const passwordValid = await bcrypt.compare(password, user.password);
-    console.log(`🔒 Password comparison result: ${passwordValid}`);
-    
-    if (!passwordValid) {
-      console.log('❌ Password comparison failed');
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    // Set session data (if session is available)
-    if (req.session) {
-      req.session.userId = user.id;
-      req.session.userRole = user.role;
-    } else {
-      console.log('⚠️ No session available - this endpoint may be designed for token-based auth');
-    }
-
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
-
-    console.log('✅ Login successful for user:', user.email);
-    
-    res.status(200).json({ 
-      message: "Login successful", 
-      user: userWithoutPassword 
-    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Error during login" });

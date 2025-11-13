@@ -4248,12 +4248,106 @@ router.post('/users/:userId/send-invite', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Generate a temporary password if user doesn't have one or needs a new one
+    // Generate a temporary password
     const temporaryPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
     
-    // Hash the temporary password and update user
+    // Hash the temporary password for local storage
     const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
-    await storage.updateUser(userId, { password: hashedPassword });
+    
+    // Create or update Supabase account if user doesn't have one
+    let supabaseUserId = user.supabaseId;
+    
+    if (!supabaseUserId) {
+      console.log(`🔧 Creating or linking Supabase account for ${user.email} (user has no supabaseId)`);
+      
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabaseAdmin = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        );
+
+        // Try to create Supabase auth account
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: user.email,
+          password: temporaryPassword,
+          email_confirm: true,
+          app_metadata: {
+            role: user.role || 'parent',
+            school_id: user.schoolId || null
+          },
+          user_metadata: {
+            name: `${user.firstName || user.name || ''} ${user.lastName || ''}`
+          }
+        });
+
+        // If account already exists, find it and link it  
+        if (authError && (authError.code === 'email_exists' || authError.message?.includes('already registered'))) {
+          console.log(`⚠️ Supabase account already exists for ${user.email}, finding existing account...`);
+          
+          const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+          if (listError) {
+            console.error('❌ Failed to list Supabase users:', listError);
+            return res.status(500).json({ message: 'Failed to find existing authentication account' });
+          }
+          
+          const existingSupabaseUser = supabaseUsers.users.find((u: any) => u.email === user.email);
+          if (!existingSupabaseUser) {
+            console.error('❌ Supabase user not found despite email exists error');
+            return res.status(500).json({ message: 'Authentication account in inconsistent state' });
+          }
+          
+          supabaseUserId = existingSupabaseUser.id;
+          console.log(`✅ Found existing Supabase account with UUID: ${supabaseUserId}`);
+          
+          // Update the existing Supabase account's password
+          await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, { 
+            password: temporaryPassword 
+          });
+          console.log(`✅ Updated password for existing Supabase account ${supabaseUserId}`);
+        } else if (authError) {
+          console.error('❌ Supabase account creation failed:', authError);
+          return res.status(500).json({ message: `Failed to create authentication account: ${authError.message}` });
+        } else {
+          supabaseUserId = authData.user.id;
+          console.log(`✅ Supabase account created with UUID: ${supabaseUserId}`);
+        }
+        
+        // Update local user record with Supabase ID and password
+        await storage.updateUser(userId, { 
+          password: hashedPassword,
+          supabaseId: supabaseUserId 
+        });
+        console.log(`✅ Updated local user ${userId} with supabaseId: ${supabaseUserId}`);
+      } catch (supabaseError) {
+        console.error('❌ Error creating Supabase account:', supabaseError);
+        return res.status(500).json({ message: 'Failed to create authentication account' });
+      }
+    } else {
+      console.log(`✅ User already has Supabase account: ${supabaseUserId}`);
+      
+      // Update password in both Supabase and local database
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabaseAdmin = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        );
+
+        await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, { 
+          password: temporaryPassword 
+        });
+        console.log(`✅ Updated Supabase password for ${user.email}`);
+        
+        await storage.updateUser(userId, { password: hashedPassword });
+        console.log(`✅ Updated local password for user ${userId}`);
+      } catch (updateError) {
+        console.error('❌ Error updating password:', updateError);
+        return res.status(500).json({ message: 'Failed to update password' });
+      }
+    }
 
     // Send invite email
     const emailSuccess = await sendAccountInviteEmail({

@@ -86,18 +86,84 @@ router.post('/users/create-from-enrollments', async (req, res) => {
     const namePart = email.split('@')[0];
     const name = namePart.charAt(0).toUpperCase() + namePart.slice(1);
     
-    // Create user record
+    // Generate a temporary password for the new account
+    const temporaryPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
+    
+    // Create Supabase auth account first
+    let supabaseUserId: string;
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseAdmin = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      );
+
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: email,
+        password: temporaryPassword,
+        email_confirm: true,
+        app_metadata: {
+          role: 'parent',
+          school_id: schoolId
+        },
+        user_metadata: {
+          name: name
+        }
+      });
+
+      // If account already exists, find it and link it
+      if (authError && (authError.code === 'email_exists' || authError.message?.includes('already registered'))) {
+        console.log(`⚠️ Supabase account already exists for ${email}, finding existing account...`);
+        
+        const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+        if (listError) {
+          console.error('❌ Failed to list Supabase users:', listError);
+          return res.status(500).json({ message: 'Failed to find existing authentication account' });
+        }
+        
+        const existingSupabaseUser = supabaseUsers.users.find((u: any) => u.email === email);
+        if (!existingSupabaseUser) {
+          console.error('❌ Supabase user not found despite email exists error');
+          return res.status(500).json({ message: 'Authentication account in inconsistent state' });
+        }
+        
+        supabaseUserId = existingSupabaseUser.id;
+        console.log(`✅ Found existing Supabase account with UUID: ${supabaseUserId}`);
+        
+        // Update the existing Supabase account's password
+        await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, { 
+          password: temporaryPassword 
+        });
+        console.log(`✅ Updated password for existing Supabase account ${supabaseUserId}`);
+      } else if (authError) {
+        console.error('❌ Supabase account creation failed:', authError);
+        return res.status(500).json({ message: `Failed to create authentication account: ${authError.message}` });
+      } else {
+        supabaseUserId = authData.user.id;
+        console.log(`✅ Supabase account created with UUID: ${supabaseUserId}`);
+      }
+    } catch (supabaseError) {
+      console.error('❌ Error creating Supabase account:', supabaseError);
+      return res.status(500).json({ message: 'Failed to create authentication account' });
+    }
+    
+    // Create user record in local database with Supabase ID
+    const bcrypt = await import('bcryptjs');
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+    
     const newUser = await storage.createUser({
       email: email,
       name: name,
       username: namePart,
       role: 'parent',
       schoolId: schoolId,
-      password: '', // No password needed for Supabase OAuth users
+      password: hashedPassword,
+      supabaseId: supabaseUserId,
       subscription: 'free'
     });
     
-    console.log(`✅ Created user: ${email} - ID: ${newUser.id}, Role: ${newUser.role}, School: ${schoolId}`);
+    console.log(`✅ Created user: ${email} - ID: ${newUser.id}, Role: ${newUser.role}, School: ${schoolId}, Supabase UUID: ${supabaseUserId}`);
     
     res.json({
       message: 'User created successfully',
@@ -106,9 +172,11 @@ router.post('/users/create-from-enrollments', async (req, res) => {
         email: newUser.email,
         name: newUser.name,
         role: newUser.role,
-        schoolId: newUser.schoolId
+        schoolId: newUser.schoolId,
+        supabaseId: supabaseUserId
       },
-      enrollmentsFound: userEnrollments.length
+      enrollmentsFound: userEnrollments.length,
+      temporaryPassword: temporaryPassword
     });
   } catch (error) {
     console.error('Error creating user from enrollments:', error);
@@ -204,6 +272,124 @@ router.post('/users/update-role', async (req, res) => {
   } catch (error) {
     console.error('Error updating user role:', error);
     res.status(500).json({ message: 'Failed to update user role' });
+  }
+});
+
+// POST create Supabase accounts for users missing them (migration utility)
+router.post('/users/migrate-to-supabase', async (req, res) => {
+  try {
+    console.log('🔄 Starting migration: creating Supabase accounts for users without supabaseId');
+    
+    // Get all users from database
+    const allUsers = await storage.getAllUsers?.() || [];
+    
+    // Filter users without supabaseId
+    const usersWithoutSupabase = allUsers.filter((user: any) => !user.supabaseId);
+    
+    console.log(`📊 Found ${usersWithoutSupabase.length} users without Supabase accounts out of ${allUsers.length} total users`);
+    
+    const results = {
+      total: usersWithoutSupabase.length,
+      successful: 0,
+      failed: 0,
+      errors: [] as any[]
+    };
+    
+    for (const user of usersWithoutSupabase) {
+      try {
+        console.log(`🔧 Creating Supabase account for: ${user.email}`);
+        
+        // Generate temporary password
+        const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
+        
+        // Create Supabase account
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabaseAdmin = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        );
+
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: user.email,
+          password: tempPassword,
+          email_confirm: true,
+          app_metadata: {
+            role: user.role || 'parent',
+            school_id: user.schoolId || null
+          },
+          user_metadata: {
+            name: `${user.firstName || user.name || ''} ${user.lastName || ''}`
+          }
+        });
+
+        let supabaseUserId: string;
+
+        // If account already exists, find it and link it
+        if (authError && (authError.code === 'email_exists' || authError.message?.includes('already registered'))) {
+          console.log(`⚠️ Supabase account already exists for ${user.email}, finding and linking...`);
+          
+          const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+          if (listError) {
+            console.error(`❌ Failed to list Supabase users for ${user.email}:`, listError);
+            results.failed++;
+            results.errors.push({ email: user.email, error: 'Failed to find existing account' });
+            continue;
+          }
+          
+          const existingSupabaseUser = supabaseUsers.users.find((u: any) => u.email === user.email);
+          if (!existingSupabaseUser) {
+            console.error(`❌ Supabase user not found for ${user.email} despite email exists error`);
+            results.failed++;
+            results.errors.push({ email: user.email, error: 'Account in inconsistent state' });
+            continue;
+          }
+          
+          supabaseUserId = existingSupabaseUser.id;
+          console.log(`✅ Found existing Supabase account for ${user.email} with UUID: ${supabaseUserId}`);
+          
+          // Update the existing Supabase account's password
+          await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, { 
+            password: tempPassword 
+          });
+          console.log(`✅ Updated password for existing Supabase account ${supabaseUserId}`);
+        } else if (authError) {
+          console.error(`❌ Failed to create Supabase account for ${user.email}:`, authError);
+          results.failed++;
+          results.errors.push({ email: user.email, error: authError.message });
+          continue;
+        } else {
+          supabaseUserId = authData.user.id;
+          console.log(`✅ Created Supabase account for ${user.email} with UUID: ${supabaseUserId}`);
+        }
+
+        // Update local user with supabaseId
+        const bcrypt = await import('bcryptjs');
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        
+        await storage.updateUser(user.id, { 
+          supabaseId: supabaseUserId,
+          password: hashedPassword 
+        });
+        
+        console.log(`✅ Linked local user ${user.id} to Supabase UUID: ${supabaseUserId}`);
+        results.successful++;
+      } catch (error: any) {
+        console.error(`❌ Error processing user ${user.email}:`, error);
+        results.failed++;
+        results.errors.push({ email: user.email, error: error.message });
+      }
+    }
+    
+    console.log(`✅ Migration complete: ${results.successful} successful, ${results.failed} failed`);
+    
+    res.json({
+      message: 'Migration completed',
+      results: results
+    });
+  } catch (error) {
+    console.error('Error during migration:', error);
+    res.status(500).json({ message: 'Migration failed' });
   }
 });
 
