@@ -304,6 +304,7 @@ export interface IStorage {
   getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]>;
   getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]>;
   getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined>;
+  getSchoolStudentByChildAndSchool(childId: number, schoolId: number): Promise<SchoolStudent | undefined>;
   createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent>;
   updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined>;
   deleteSchoolStudent(id: number): Promise<void>;
@@ -2826,6 +2827,12 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getSchoolStudentByChildAndSchool(childId: number, schoolId: number): Promise<SchoolStudent | undefined> {
+    return Array.from(this.schoolStudentsStore.values()).find(
+      student => student.childId === childId && student.schoolId === schoolId
+    );
+  }
+
   async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
     const id = this.schoolStudentIdCounter++;
     const now = new Date();
@@ -4420,6 +4427,11 @@ export class MemStorage implements IStorage {
       async getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined> {
         const students = await this.dbStorage.getSchoolStudentsByChildId(childId);
         return students[0]; // Return first match
+      }
+
+      async getSchoolStudentByChildAndSchool(childId: number, schoolId: number): Promise<SchoolStudent | undefined> {
+        const students = await this.dbStorage.getSchoolStudentsByChildId(childId);
+        return students.find(s => s.schoolId === schoolId);
       }
 
       async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {

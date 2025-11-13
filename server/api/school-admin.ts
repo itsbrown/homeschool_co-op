@@ -571,10 +571,10 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
     // Add enrollment counts and parse variants from each class
     // Keep classes with variants intact (don't expand into individual entries)
     const classesWithEnrollment = allClasses.map(classItem => {
-      // Count enrollments for this specific class
+      // Count enrollments for this specific class (exclude pending_payment, waitlist, cancelled, withdrawn, failed)
       const classEnrollmentCount = enrollments.filter(enrollment => 
         Number(enrollment.classId) === Number(classItem.id) && 
-        ['enrolled', 'confirmed', 'completed'].includes(enrollment.status)
+        ['enrolled', 'completed'].includes(enrollment.status)
       ).length;
       
       // Parse variants from schedule field if they exist

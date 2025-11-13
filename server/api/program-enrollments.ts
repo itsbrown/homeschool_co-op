@@ -182,6 +182,31 @@ export const createEnrollment = async (req: Request, res: Response) => {
       }
     }
     
+    // Auto-create school_student record if enrollment status is enrolled or completed (check actual enrollment status after creation)
+    if (program.schoolId && enrollment.status && ['enrolled', 'completed'].includes(enrollment.status)) {
+      try {
+        // Check if school_student record already exists for this child AND school (targeted query)
+        const existingSchoolStudent = await storage.getSchoolStudentByChildAndSchool(child.id, program.schoolId);
+        
+        if (!existingSchoolStudent) {
+          console.log(`📚 Creating school_student record for child ${child.id} at school ${program.schoolId}`);
+          await storage.createSchoolStudent({
+            childId: child.id,
+            schoolId: program.schoolId,
+            grade: child.gradeLevel || 'Unknown',
+            status: 'active',
+            locationId: null,
+            studentId: null,
+            notes: null
+          });
+          console.log(`✅ School student record created for child ${child.id}`);
+        }
+      } catch (error) {
+        console.error(`⚠️ Failed to create school_student record for child ${child.id}:`, error);
+        // Don't fail the enrollment if school_student creation fails
+      }
+    }
+    
     res.status(201).json(enrollment);
   } catch (error: any) {
     if (error instanceof ZodError) {
@@ -245,6 +270,37 @@ export const updateEnrollment = async (req: Request, res: Response) => {
     const isBeingPromoted = wasWaitlisted && validatedData.status && validatedData.status !== 'waitlist';
     
     const updatedEnrollment = await storage.updateProgramEnrollment(enrollmentId, validatedData);
+    
+    // If update failed, return error
+    if (!updatedEnrollment) {
+      return res.status(500).json({ message: "Failed to update enrollment" });
+    }
+    
+    // Auto-create school_student record if enrollment status is or became enrolled/completed (check both new and existing status)
+    const finalStatus = updatedEnrollment.status || existingEnrollment.status;
+    if (program.schoolId && ['enrolled', 'completed'].includes(finalStatus)) {
+      try {
+        // Check if school_student record already exists for this child AND school (targeted query)
+        const existingSchoolStudent = await storage.getSchoolStudentByChildAndSchool(child.id, program.schoolId);
+        
+        if (!existingSchoolStudent) {
+          console.log(`📚 Creating school_student record for child ${child.id} at school ${program.schoolId} (status: ${finalStatus})`);
+          await storage.createSchoolStudent({
+            childId: child.id,
+            schoolId: program.schoolId,
+            grade: child.gradeLevel || 'Unknown',
+            status: 'active',
+            locationId: null,
+            studentId: null,
+            notes: null
+          });
+          console.log(`✅ School student record created for child ${child.id}`);
+        }
+      } catch (error) {
+        console.error(`⚠️ Failed to create school_student record for child ${child.id}:`, error);
+        // Don't fail the enrollment update if school_student creation fails
+      }
+    }
     
     // If student was promoted from waitlist, recalculate positions for remaining students
     if (isBeingPromoted) {
