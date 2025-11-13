@@ -51,8 +51,9 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Parent Class Details Page**: Dedicated full-page view for class details with route-based navigation.
 - **Edit Child Profile Page**: Dedicated page for editing child profiles using the ParentAppShell component.
 - **Responsive UI Patterns**: Consistent mobile-responsive patterns across all admin pages.
-- **Student Management System**: Comprehensive system for tracking and displaying students across schools, including auto-sync functionality for backfilling existing children into `school_students` table.
+- **Student Management System**: Comprehensive system for tracking and displaying students across schools. Features auto-sync functionality for backfilling existing children into `school_students` table, and automatic school_student record creation when enrollments reach 'enrolled' or 'completed' status. Uses optimized `getSchoolStudentByChildAndSchool` storage method to prevent full-table scans. Auto-creation is scoped by both childId and schoolId to support multi-school scenarios, with graceful error handling that doesn't block enrollment mutations.
 - **Notification System**: In-app notification system with PostgreSQL storage, automatic data seeding from JSON files at server startup using transactional upserts, real-time unread count badge on bell icon, optimistic UI updates via React Query cache invalidation, and mark-as-read functionality that updates notification recipients with accurate status tracking.
+- **Enrollment Count Display**: Class enrollment counts correctly filter by valid statuses ('enrolled', 'completed') only, excluding invalid 'confirmed' status that doesn't exist in schema.
 
 ## External Dependencies
 - **Auth0**: Authentication provider.
