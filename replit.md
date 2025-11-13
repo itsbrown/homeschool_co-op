@@ -5,6 +5,7 @@ The ASA Learning Platform is an adaptive learning application for American Seeke
 
 ## Recent Changes
 ### November 2025
+- **BillingPage Payment Tabs**: Fixed Upcoming Payments tab data transformation to correctly parse Stripe subscription schedule API responses. Resolved CartContext type signature issue and lifted payment state management to parent component. All three tabs (Payment History, Subscription Schedules, Upcoming Payments) now work correctly with proper data display.
 - **Payment Discount Architecture**: Removed all hardcoded payment discounts from payment flows (CartCheckout, ClassPaymentPlans, PaymentPlanPage, BillingPage) - all discounts now exclusively managed through the database discount system
 - **Student Management System**: Added comprehensive system for tracking students across schools with automatic school_student record creation when enrollments reach 'enrolled' or 'completed' status
 - **Notification System**: Implemented in-app notification system with PostgreSQL storage, automatic data seeding, real-time unread count badge, and mark-as-read functionality

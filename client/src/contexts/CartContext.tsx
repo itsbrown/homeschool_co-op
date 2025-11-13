@@ -829,7 +829,7 @@ interface CartContextType {
   addItem: (item: Omit<CartItem, 'id'>, skipValidation?: boolean) => void;
   removeItem: (id: string) => void;
   updateItem: (id: string, updates: Partial<CartItem>) => void;
-  clearCart: () => Promise<void>;
+  clearCart: (skipCancellation?: boolean) => Promise<void>;
   forceRefreshCart: () => void;
   openCart: () => void;
   closeCart: () => void;
