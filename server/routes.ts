@@ -342,7 +342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertUserSchema.parse(req.body);
       console.log('✅ Data validation passed:', validatedData);
 
-      // Check if user already exists
+      // Check if user already exists in local database
       const existingUser = await storage.getUserByUsername(validatedData.username);
       if (existingUser) {
         console.log('❌ Username already exists:', validatedData.username);
@@ -355,60 +355,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Email already exists" });
       }
 
+      // Check if user already exists in Supabase auth
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        console.error('❌ Supabase configuration missing');
+        return res.status(500).json({ message: "Authentication service not configured" });
+      }
+
+      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      });
+
+      // Check for existing Supabase user
+      const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers();
+      const existingAuthUser = existingAuthUsers?.users.find(u => u.email === validatedData.email);
+      
+      if (existingAuthUser) {
+        console.log('❌ Auth account already exists for:', validatedData.email);
+        return res.status(400).json({ 
+          message: "User already exists. Please use the login page to access your account." 
+        });
+      }
+
       // Hash password
       const hashedPassword = await bcrypt.hash(validatedData.password, 10);
       console.log('🔒 Password hashed successfully');
 
-      // Create user in local storage first
-      console.log('👤 Creating user with data:', { ...validatedData, password: '[REDACTED]' });
-      const user = await storage.createUser({
-        ...validatedData,
-        password: hashedPassword
-      });
-      console.log('✅ User created successfully in local storage:', user.id);
-
-      // Remove password from response first
-      const { password, ...userWithoutPassword } = user;
-
-      // Also create user in Supabase for authentication
-      console.log('🔄 Attempting to create user in Supabase...');
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabaseUrl = process.env.VITE_SUPABASE_URL;
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        
-        console.log('🔑 Supabase URL available:', !!supabaseUrl);
-        console.log('🔑 Service key available:', !!supabaseServiceKey);
-        
-        if (supabaseUrl && supabaseServiceKey) {
-          console.log('🔧 Creating Supabase admin client...');
-          const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-          
-          console.log('👤 Creating user in Supabase auth system...');
-          const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-            email: validatedData.email,
-            password: validatedData.password,
-            email_confirm: true,
-            user_metadata: {
-              role: validatedData.role,
-              name: validatedData.name,
-              first_name: validatedData.firstName,
-              last_name: validatedData.lastName,
-              school_id: validatedData.schoolId  // Use snake_case to match API expectations
-            }
-          });
-
-          if (authError) {
-            console.log('⚠️ Supabase user creation failed, but local user created:', authError.message);
-          } else {
-            console.log('✅ User also created in Supabase:', authUser?.user?.id);
-          }
-        } else {
-          console.log('⚠️ Supabase credentials not available, user only created locally');
+      // Create user in Supabase FIRST
+      console.log('👤 Creating user in Supabase auth system...');
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: validatedData.email,
+        password: validatedData.password,
+        email_confirm: true,
+        app_metadata: {
+          role: validatedData.role,
+          school_id: validatedData.schoolId
+        },
+        user_metadata: {
+          name: validatedData.name,
+          first_name: validatedData.firstName,
+          last_name: validatedData.lastName
         }
-      } catch (supabaseError) {
-        console.log('⚠️ Error creating user in Supabase:', supabaseError instanceof Error ? supabaseError.message : 'Unknown error');
+      });
+
+      if (authError) {
+        console.error('❌ Supabase auth creation failed:', authError);
+        return res.status(500).json({ 
+          message: "Failed to create authentication account. Please try again." 
+        });
       }
+
+      console.log('✅ Supabase auth account created:', authUser.user.id);
+
+      // Now create user in local storage
+      let user;
+      try {
+        console.log('👤 Creating local user record...');
+        user = await storage.createUser({
+          ...validatedData,
+          password: hashedPassword,
+          supabaseId: authUser.user.id
+        });
+        console.log('✅ Local user record created:', user.id);
+      } catch (localError) {
+        console.error('❌ Local user creation failed:', localError);
+        
+        // Clean up Supabase account
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+          console.log('🧹 Cleaned up Supabase account');
+        } catch (cleanupError) {
+          console.error('Failed to cleanup Supabase account:', cleanupError);
+        }
+        
+        return res.status(500).json({ 
+          message: "Failed to create user account. Please try again." 
+        });
+      }
+
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
 
       res.status(201).json({ message: "User created successfully", user: userWithoutPassword });
     } catch (error) {
