@@ -65,8 +65,8 @@ export default function NotificationsPage() {
       return apiRequest("POST", `/api/notifications/${notificationId}/read`, {});
     },
     onSuccess: () => {
-      // Invalidate all notification queries to update dashboard, bell icon, and notifications page
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      // Force refetch to update UI immediately (invalidateQueries doesn't work with staleTime: Infinity)
+      queryClient.refetchQueries({ queryKey: ['/api/notifications'] });
       toast({
         title: "Marked as read",
         description: "Notification has been marked as read",
@@ -87,8 +87,8 @@ export default function NotificationsPage() {
       return apiRequest("POST", "/api/notifications/mark-all-read", {});
     },
     onSuccess: () => {
-      // Invalidate all notification queries to update dashboard, bell icon, and notifications page
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      // Force refetch to update UI immediately (invalidateQueries doesn't work with staleTime: Infinity)
+      queryClient.refetchQueries({ queryKey: ['/api/notifications'] });
       toast({
         title: "All marked as read",
         description: "All notifications have been marked as read",
