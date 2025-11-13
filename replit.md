@@ -3,6 +3,15 @@
 ## Overview
 The ASA Learning Platform is an adaptive learning application for American Seekers Academy. It offers a comprehensive and engaging educational experience by integrating full-stack web architecture with AI-powered content generation and assessment tools. The platform provides personalized learning paths, efficient administrative tools, and aims to deliver an adaptive, secure, and user-friendly learning environment for diverse educational needs.
 
+## Recent Changes
+### November 2025
+- **Payment Discount Architecture**: Removed all hardcoded payment discounts from payment flows (CartCheckout, ClassPaymentPlans, PaymentPlanPage) - all discounts now exclusively managed through the database discount system
+- **Student Management System**: Added comprehensive system for tracking students across schools with automatic school_student record creation when enrollments reach 'enrolled' or 'completed' status
+- **Notification System**: Implemented in-app notification system with PostgreSQL storage, automatic data seeding, real-time unread count badge, and mark-as-read functionality
+- **Authentication Migration**: Completed full migration to Supabase-only authentication with proper error handling for existing accounts
+- **Welcome Email System**: Added automated welcome emails for new registrants with professional HTML design and role-aware messaging
+- **Password Reset System**: Fixed critical UUID bug and implemented dual-database password synchronization with comprehensive error logging
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
