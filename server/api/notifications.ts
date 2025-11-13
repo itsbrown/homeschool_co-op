@@ -28,7 +28,7 @@ router.get("/", async (req, res) => {
     const role = req.query.role as string;
     
     if (!userId) {
-      const email = (req as any).auth?.email;
+      const email = (req as any).auth?.payload?.email || (req as any).auth?.email;
       
       if (email) {
         console.log('📬 GET /api/notifications - Authenticated user email:', email);
