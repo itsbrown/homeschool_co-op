@@ -2295,6 +2295,10 @@ export class DatabaseStorage implements IStorage {
             }
           }
           console.log(`✅ Notifications: ${notificationsInserted} inserted, ${notificationsSkipped} skipped (already exist)`);
+          
+          // Always reset the sequence to avoid duplicate key errors, even if no new records were inserted
+          await tx.execute(sql`SELECT setval('notifications_id_seq', (SELECT COALESCE(MAX(id), 1) FROM notifications))`);
+          console.log('✅ Reset notifications ID sequence');
         } else {
           console.log('📬 No notifications.json found, skipping notification seeding');
         }
@@ -2352,6 +2356,10 @@ export class DatabaseStorage implements IStorage {
             }
           }
           console.log(`✅ Recipients: ${recipientsInserted} inserted, ${recipientsSkipped} skipped (invalid refs or already exist)`);
+          
+          // Always reset the sequence to avoid duplicate key errors, even if no new records were inserted
+          await tx.execute(sql`SELECT setval('notification_recipients_id_seq', (SELECT COALESCE(MAX(id), 1) FROM notification_recipients))`);
+          console.log('✅ Reset notification_recipients ID sequence');
         } else {
           console.log('📬 No notification-recipients.json found, skipping recipient seeding');
         }
