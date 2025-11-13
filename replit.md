@@ -41,6 +41,7 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, dynamic position management, and intelligent status detection with batched pending invitation checks.
 - **User Account Management**: School administrators can send account invites and password reset emails.
 - **Password Reset System**: Email-based password reset with secure token handling.
+- **Welcome Email System**: Automated welcome emails sent to new registrants after successful account creation, featuring professional HTML design, login link, and role-aware messaging. Uses BREVO_SENDER_EMAIL for sender address with graceful error handling that doesn't block registration.
 - **Parent Profile Management**: Parent users can update their profile information.
 - **Email Service**: Dual integration with Brevo SMTP and SendGrid.
 - **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
