@@ -581,7 +581,6 @@ function Router() {
       <Route path="/product-order/:slug" component={ProductOrderFormPage} />
       <Route path="/payment/:submissionId" component={ProductOrderPaymentPage} />
       <Route path="/order-confirmation/:submissionId" component={OrderConfirmationPage} />
-      <Route path="/schools/staff/:id" component={StaffEditPage} />
       <Route path="/schools/staff/:id/edit" component={StaffEditPage} />
       <Route path="/schools/students" component={StudentsPage} />
       <Route path="/schools/students/register" component={StudentRegistrationPage} />
