@@ -58,6 +58,12 @@ export async function apiRequest(
   options?: RequestInit,
   _retryCount: number = 0
 ): Promise<Response> {
+  // Safety check for undefined URL
+  if (!url || typeof url !== 'string') {
+    console.error('❌ apiRequest called with invalid URL:', url);
+    throw new Error(`Invalid URL provided to apiRequest: ${url}`);
+  }
+
   let token = localStorage.getItem('supabase_token');
   const activeRole = localStorage.getItem('activeRole');
 

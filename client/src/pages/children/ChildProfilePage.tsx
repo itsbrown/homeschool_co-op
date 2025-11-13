@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X } from "lucide-react";
@@ -36,10 +36,24 @@ export default function ChildProfilePage() {
     return age;
   };
 
+  // Derive endpoint based on activeRole - returns null if role isn't properly set yet
+  const endpoint = useMemo(() => {
+    if (!id || !activeRole) return null;
+    if (activeRole === 'parent') return `/api/parent/children/${id}`;
+    if (activeRole === 'schoolAdmin') return `/api/school-admin/students/${id}`;
+    return null;
+  }, [id, activeRole]);
+
   // Fetch detailed child data using role-based endpoint
   const { data: child, isLoading, error: childError } = useQuery({
-    queryKey: activeRole === 'parent' ? [`/api/parent/children/${id}`] : [`/api/school-admin/students/${id}`],
+    queryKey: endpoint ? [endpoint] : ['disabled'],
     select: (studentData: any) => {
+      // Safety check for undefined or null studentData
+      if (!studentData) {
+        console.error('❌ No student data received');
+        return null;
+      }
+      
       // Return normalized student data
       return {
         id: studentData.id,
@@ -61,7 +75,7 @@ export default function ChildProfilePage() {
         status: studentData.status || "Active"
       };
     },
-    enabled: !!id && !!activeRole,
+    enabled: !!endpoint,
   });
 
   // Fetch enrollment data for this child
