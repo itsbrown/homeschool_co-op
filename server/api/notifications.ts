@@ -23,15 +23,18 @@ const enhancedNotificationSchema = insertNotificationSchema.extend({
 });
 
 router.get("/", async (req, res) => {
+  console.log('🎯 GET /api/notifications - START');
   try {
     let userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
+    console.log('📊 userId from query:', userId, 'role:', role);
     
     if (!userId) {
       const email = (req as any).auth?.payload?.email || (req as any).auth?.email;
+      console.log('📧 Extracted email:', email);
       
       if (email) {
-        console.log('📬 GET /api/notifications - Authenticated user email:', email);
+        console.log('✅ Email found, fetching user...');
         
         const user = await storage.getUserByEmail(email);
         
