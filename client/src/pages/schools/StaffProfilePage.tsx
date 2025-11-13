@@ -179,16 +179,21 @@ export default function StaffProfilePage() {
                         {staffMember.updatedAt ? new Date(staffMember.updatedAt).toLocaleDateString() : 'N/A'}
                       </span>
                     </div>
+                    {staffMember.subscription && (
+                      <div>
+                        <span className="font-medium">Subscription:</span>
+                        <span className="ml-2 text-muted-foreground capitalize">{staffMember.subscription}</span>
+                      </div>
+                    )}
+                    {staffMember.lastLogin && (
+                      <div>
+                        <span className="font-medium">Last Login:</span>
+                        <span className="ml-2 text-muted-foreground">
+                          {new Date(staffMember.lastLogin).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  
-                  {staffMember.metadata && Object.keys(staffMember.metadata).length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2">Additional Information:</p>
-                      <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
-                        {JSON.stringify(staffMember.metadata, null, 2)}
-                      </pre>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
