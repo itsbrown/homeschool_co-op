@@ -105,21 +105,17 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           throw new Error(`Child ${item.childId} not found`);
         }
         
-        // Get the class to fetch program start/end dates for payment calculations
-        const classData = await storage.getClassById(item.classId);
-        if (!classData) {
-          throw new Error(`Class ${item.classId} not found`);
-        }
-        
-        // Check if there's already a pending enrollment for this child+class (created from cart)
+        // Check if there's already a pending enrollment (from cart or existing)
         let enrollment = allEnrollments.find(e => 
-          e.childId === item.childId &&
-          e.marketplaceClassId === item.classId &&
-          e.status === 'pending_payment'
+          (item.enrollmentId && e.id === item.enrollmentId) || // Match by enrollmentId if available
+          (e.childId === item.childId &&
+           ((item.classType === 'marketplace' && e.marketplaceClassId === item.marketplaceClassId) ||
+            (item.classType !== 'marketplace' && e.classId === item.classId)) &&
+           e.status === 'pending_payment')
         );
         
         if (enrollment) {
-          console.log(`✅ Found existing pending enrollment ${enrollment.id} for child ${item.childId} in class ${item.classId}`);
+          console.log(`✅ Found existing pending enrollment ${enrollment.id} for child ${item.childId}`);
           // Update the existing enrollment with payment plan details
           await storage.updateProgramEnrollment(enrollment.id, {
             paymentPlan: dbPaymentPlan,
@@ -128,6 +124,18 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           });
           enrollmentIds.push(enrollment.id);
         } else {
+          // Get class data for new enrollments
+          // Use marketplaceClassId for marketplace enrollments, classId for regular enrollments
+          const actualClassId = item.marketplaceClassId || item.classId;
+          if (!actualClassId) {
+            throw new Error(`No valid class ID found for ${item.className}`);
+          }
+          
+          const classData = await storage.getClassById(actualClassId);
+          if (!classData) {
+            throw new Error(`Class ${actualClassId} not found for ${item.className}`);
+          }
+          
           // If no pending enrollment found (shouldn't happen in normal flow), create one
           console.log(`⚠️ No pending enrollment found for child ${item.childId} in class ${item.classId}, creating new one`);
           
@@ -147,10 +155,10 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
           
           enrollment = await storage.createProgramEnrollment({
             schoolId: enrollmentSchoolId,
-            classType: 'marketplace',
-            classId: null,
-            marketplaceClassId: item.classId,
-            programId: item.classId,
+            classType: item.classType || 'regular',
+            classId: item.classType === 'marketplace' ? null : item.classId,
+            marketplaceClassId: item.marketplaceClassId || null,
+            programId: item.marketplaceClassId || item.classId,
             childId: item.childId,
             childName: item.childName,
             className: item.className,

@@ -7,7 +7,9 @@ import { useAuth } from "@/components/SupabaseProvider";
 export interface CartItem {
   id: string;
   enrollmentId?: number;
-  classId: number;
+  classType?: string; // 'marketplace' or 'regular'
+  classId: number | null; // Normalized to actual class ID (can be null for marketplace before normalization)
+  marketplaceClassId?: number | null; // Marketplace class ID if applicable
   className: string;
   childId: number;
   childName: string;
@@ -1018,7 +1020,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           id: `enrollment-${enrollment.id}`,
           enrollmentId: enrollment.id,
-          classId: enrollment.classId,
+          classType: enrollment.classType || 'regular', // Include class type
+          classId: enrollment.marketplaceClassId || enrollment.classId, // Normalize to actual class ID
+          marketplaceClassId: enrollment.marketplaceClassId || null, // Include marketplace ID
           className: enrollment.className,
           childId: enrollment.childId,
           childName: enrollment.childName,
