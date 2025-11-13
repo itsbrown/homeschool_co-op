@@ -71,6 +71,21 @@ The platform prioritizes scalability, security, and user experience with a moder
 
 ## Recent Changes
 
+### November 13, 2025
+#### Fixed Notification Marking as Read Error
+- **Issue**: Notifications were erroring when attempting to mark them as read
+- **Root Cause**: The `markNotificationAsRead` function was not specifying which delivery type to update when multiple delivery types existed for the same notification (email, in_app, SMS)
+- **Solution**: Updated the function to specifically target the "in_app" delivery type when marking notifications as read, preventing conflicts with email and SMS delivery records
+- **Files Modified**: `server/api/notifications.ts`
+- **Impact**: Users can now successfully mark in-app notifications as read without errors
+
+#### Hidden AI Features from Parent Sidebar
+- **Action**: Removed AI Insights and AI Enrollment Assistant from the parent sidebar navigation
+- **Reason**: These features are marked for future development
+- **Implementation**: Commented out the navigation items with TODO comments indicating they are future features
+- **Files Modified**: `client/src/components/layout/ParentSidebar.tsx`
+- **Impact**: Parent users no longer see AI-related navigation options in the sidebar
+
 ### November 12, 2025
 #### Fixed Staff Profile Page Loading Error
 - **Issue**: Staff/Admin/Educator profile pages were failing to load with React error #31 (rendering object instead of string)
