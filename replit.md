@@ -72,6 +72,19 @@ The platform prioritizes scalability, security, and user experience with a moder
 ## Recent Changes
 
 ### November 13, 2025
+#### Fixed Child Profile Page Enrollment Fetching Error
+- **Issue**: Child profile page was crashing with error "Cannot read properties of undefined (reading 'startsWith')" when fetching enrollments
+- **Root Cause**: The `apiRequest` function expects method as the first parameter, but custom queryFn calls were passing only the URL, causing the URL to be treated as the method parameter and leaving the actual url parameter undefined
+- **Solution**: 
+  - Removed custom queryFn from both child detail and enrollment queries in ChildProfilePage.tsx
+  - Moved data normalization logic to a `select` transform for the child detail query
+  - Fixed SettingsPage.tsx which had the same apiRequest usage issue
+  - Now using the default TanStack Query fetcher which properly handles GET requests and JSON parsing
+- **Files Modified**: 
+  - `client/src/pages/children/ChildProfilePage.tsx` (removed custom queryFn, added select transform)
+  - `client/src/pages/SettingsPage.tsx` (fixed apiRequest call to use correct method parameter)
+- **Impact**: Child profile pages now load correctly with enrollment data visible, and settings updates work properly
+
 #### Fixed Notification Marking as Read Error
 - **Issue**: Notifications were erroring when attempting to mark them as read
 - **Root Cause**: The `markNotificationAsRead` function was not specifying which delivery type to update when multiple delivery types existed for the same notification (email, in_app, SMS)
