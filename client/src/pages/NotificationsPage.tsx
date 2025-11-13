@@ -31,7 +31,7 @@ interface Notification {
   content: string;
   targetType: string;
   createdAt: string;
-  recipientStatus?: string;
+  read: boolean;
   readAt?: string | null;
 }
 
@@ -104,7 +104,7 @@ export default function NotificationsPage() {
   });
 
   const unreadNotifications = notifications.filter(
-    (n) => n.recipientStatus !== "read"
+    (n) => !n.read
   );
 
   const displayedNotifications = activeTab === "unread" ? unreadNotifications : notifications;
@@ -236,7 +236,7 @@ export default function NotificationsPage() {
             ) : (
               <div className="space-y-3">
                 {displayedNotifications.map((notification) => {
-                  const isUnread = notification.recipientStatus !== "read";
+                  const isUnread = !notification.read;
                   const Icon = typeIcons[notification.type as keyof typeof typeIcons] || Bell;
 
                   return (
