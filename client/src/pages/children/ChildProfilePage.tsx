@@ -39,39 +39,27 @@ export default function ChildProfilePage() {
   // Fetch detailed child data using role-based endpoint
   const { data: child, isLoading, error: childError } = useQuery({
     queryKey: activeRole === 'parent' ? [`/api/parent/children/${id}`] : [`/api/school-admin/students/${id}`],
-    queryFn: async () => {
-      try {
-        // Use different endpoints based on role
-        const endpoint = activeRole === 'parent' 
-          ? `/api/parent/children/${id}`
-          : `/api/school-admin/students/${id}`;
-        
-        const studentData = await apiRequest(endpoint);
-        
-        // Return normalized student data
-        return {
-          id: studentData.id,
-          firstName: studentData.firstName,
-          lastName: studentData.lastName,
-          name: `${studentData.firstName} ${studentData.lastName}`,
-          gradeLevel: studentData.gradeLevel,
-          birthdate: studentData.birthdate,
-          age: calculateAge(studentData.birthdate),
-          school: studentData.school || "American Seekers Academy",
-          interests: studentData.interests || [],
-          allergies: studentData.allergies || "None specified",
-          medicalInfo: studentData.medicalInfo || studentData.medicalNotes || "No medical notes",
-          specialNeeds: studentData.specialNeeds || "None specified",
-          parentEmail: studentData.parentEmail,
-          parentPhone: studentData.parentPhone,
-          emergencyContact: studentData.emergencyContact,
-          enrollmentDate: studentData.enrollmentDate || studentData.createdAt,
-          status: studentData.status || "Active"
-        };
-      } catch (error) {
-        console.error("Error fetching student:", error);
-        throw error;
-      }
+    select: (studentData: any) => {
+      // Return normalized student data
+      return {
+        id: studentData.id,
+        firstName: studentData.firstName,
+        lastName: studentData.lastName,
+        name: `${studentData.firstName} ${studentData.lastName}`,
+        gradeLevel: studentData.gradeLevel,
+        birthdate: studentData.birthdate,
+        age: calculateAge(studentData.birthdate),
+        school: studentData.school || "American Seekers Academy",
+        interests: studentData.interests || [],
+        allergies: studentData.allergies || "None specified",
+        medicalInfo: studentData.medicalInfo || studentData.medicalNotes || "No medical notes",
+        specialNeeds: studentData.specialNeeds || "None specified",
+        parentEmail: studentData.parentEmail,
+        parentPhone: studentData.parentPhone,
+        emergencyContact: studentData.emergencyContact,
+        enrollmentDate: studentData.enrollmentDate || studentData.createdAt,
+        status: studentData.status || "Active"
+      };
     },
     enabled: !!id && !!activeRole,
   });
@@ -79,14 +67,6 @@ export default function ChildProfilePage() {
   // Fetch enrollment data for this child
   const { data: enrollments, isLoading: enrollmentsLoading } = useQuery({
     queryKey: [`/api/enrollments/child/${id}`],
-    queryFn: async () => {
-      try {
-        return await apiRequest(`/api/enrollments/child/${id}`);
-      } catch (error) {
-        console.error('Error fetching enrollments:', error);
-        return [];
-      }
-    },
     enabled: !!id
   });
 

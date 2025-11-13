@@ -52,10 +52,7 @@ export default function SettingsPage() {
       lastName: string;
       phoneNumber: string;
     }) => {
-      return await apiRequest('/api/users/profile', {
-        method: 'PATCH',
-        body: JSON.stringify(profileData)
-      });
+      return await apiRequest('PATCH', '/api/users/profile', profileData);
     },
     onSuccess: () => {
       toast({
