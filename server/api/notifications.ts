@@ -53,7 +53,22 @@ router.get("/", async (req, res) => {
     }
 
     const notifications = await storage.getNotificationsByUserId(userId, role);
-    res.json(notifications);
+    
+    // Enrich each notification with read status for this user
+    const enrichedNotifications = await Promise.all(
+      notifications.map(async (notification) => {
+        const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+        const userRecipient = recipients.find(r => r.recipientId === userId && r.deliveryType === "in_app");
+        
+        return {
+          ...notification,
+          read: userRecipient?.status === "read",
+          readAt: userRecipient?.readAt || null,
+        };
+      })
+    );
+    
+    res.json(enrichedNotifications);
   } catch (error) {
     console.error("Error fetching notifications:", error);
     res.status(500).json({ message: "Failed to fetch notifications" });
