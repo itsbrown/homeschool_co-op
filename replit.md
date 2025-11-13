@@ -40,7 +40,7 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **AI Enrollment Assistant**: Provides personalized AI guidance for enrollment.
 - **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, dynamic position management, and intelligent status detection with batched pending invitation checks.
 - **User Account Management**: School administrators can send account invites and password reset emails.
-- **Password Reset System**: Email-based password reset with secure token handling.
+- **Password Reset System**: Email-based password reset with cryptographically secure token generation (crypto.randomBytes), Supabase UUID-based authentication, dual-database password synchronization, and comprehensive error logging. Fixed critical bug where local database IDs were incorrectly used instead of Supabase UUIDs, which caused 500 errors during password updates.
 - **Welcome Email System**: Automated welcome emails sent to new registrants after successful account creation, featuring professional HTML design, login link, and role-aware messaging. Uses BREVO_SENDER_EMAIL for sender address with graceful error handling that doesn't block registration.
 - **Parent Profile Management**: Parent users can update their profile information.
 - **Email Service**: Dual integration with Brevo SMTP and SendGrid.
