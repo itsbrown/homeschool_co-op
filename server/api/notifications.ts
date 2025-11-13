@@ -68,6 +68,10 @@ router.get("/", async (req, res) => {
       })
     );
     
+    // Prevent caching of personalized notification data
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.json(enrichedNotifications);
   } catch (error) {
     console.error("Error fetching notifications:", error);
