@@ -71,7 +71,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      queryClient.refetchQueries({ queryKey: ['/api/notifications'] });
     },
   });
 
@@ -81,7 +81,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       await apiRequest('POST', '/api/notifications/mark-all-read');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      queryClient.refetchQueries({ queryKey: ['/api/notifications'] });
       // Don't clear overrides immediately - let useEffect handle it when backend data is updated
     },
   });
