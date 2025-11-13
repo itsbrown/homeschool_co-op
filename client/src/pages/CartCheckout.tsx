@@ -218,23 +218,31 @@ export default function CartCheckout() {
 
     // Only run cart loading logic on initial load and when cart is empty
     if (isInitialLoad && cart.items.length === 0) {
-      // If cart is empty, try to load unpaid enrollments first
-      console.log('🛒 Cart is empty, forcing load of unpaid enrollments...');
-      loadUnpaidEnrollments();
+      // First wait briefly for cart to hydrate from localStorage (fast path)
+      console.log('🛒 Cart is empty, waiting for hydration from localStorage...');
       
       let attempts = 0;
-      const maxAttempts = 20; // Give more time: 10 seconds (20 * 500ms) to account for localStorage loading
+      const hydrationAttempts = 4; // Wait up to 2 seconds for localStorage hydration
+      let hasSyncedWithBackend = false;
       
       const timer = setInterval(() => {
         attempts++;
-        console.log(`🛒 Cart loading attempt ${attempts}/${maxAttempts} - items:`, cart.items.length);
+        console.log(`🛒 Cart loading attempt ${attempts} - items:`, cart.items.length);
         
         if (cart.items.length > 0) {
           console.log('🛒 Cart loaded with items:', cart.items.length);
           clearInterval(timer);
+          setIsInitialLoad(false);
           // Don't call createPaymentIntent here - the effect will re-run with cart.items
-        } else if (attempts >= maxAttempts) {
-          console.log('🛒 CartCheckout: No items found after multiple attempts, redirecting to programs');
+        } else if (attempts === hydrationAttempts && !hasSyncedWithBackend) {
+          // After waiting for localStorage, sync with backend if still empty
+          console.log('🛒 Cart still empty after hydration, syncing with backend...');
+          hasSyncedWithBackend = true;
+          loadUnpaidEnrollments();
+          // Continue polling for backend response
+        } else if (attempts >= 16) {
+          // Total wait: 2s for hydration + 6s for backend sync = 8 seconds
+          console.log('🛒 CartCheckout: No items found after hydration and backend sync, redirecting to programs');
           clearInterval(timer);
           setLocation('/programs');
         }

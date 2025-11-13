@@ -998,10 +998,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Always clear the cart first to ensure we don't have stale items from localStorage
-      console.log('🧹 Clearing existing cart before loading fresh unpaid enrollments');
-      dispatch({ type: 'CLEAR_CART' });
-
       // Convert enrollments to cart items with enhanced status display
       const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
         const remainingBalance = enrollment.remainingBalance || enrollment.totalCost || 0;
@@ -1082,7 +1078,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('🛒 No pending enrollments found - clearing cart completely');
         dispatch({ type: 'CLEAR_CART' });
         localStorage.removeItem('asa_cart_items');
-        localStorage.setItem('asa_cart_cleared', Date.now().toString());
       }
 
       console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
