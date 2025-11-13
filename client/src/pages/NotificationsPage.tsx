@@ -1,3 +1,4 @@
+import React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/SupabaseProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +59,15 @@ export default function NotificationsPage() {
     queryKey: ['/api/notifications'],
     enabled: !!user,
   });
+  
+  // DEBUG: Log notifications data whenever it changes
+  React.useEffect(() => {
+    console.log('📧 NotificationsPage received notifications:', notifications.map(n => ({
+      id: n.id,
+      subject: n.subject,
+      read: n.read
+    })));
+  }, [notifications]);
 
   // Mark notification as read mutation
   const markAsReadMutation = useMutation({

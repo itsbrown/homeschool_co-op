@@ -72,6 +72,14 @@ router.get("/", async (req, res) => {
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    
+    // DEBUG: Log read status for each notification
+    console.log('📧 Notification read status:', enrichedNotifications.map(n => ({
+      id: n.id,
+      subject: n.subject,
+      read: n.read
+    })));
+    
     res.json(enrichedNotifications);
   } catch (error) {
     console.error("Error fetching notifications:", error);
