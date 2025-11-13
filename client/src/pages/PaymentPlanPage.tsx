@@ -58,9 +58,8 @@ export default function PaymentPlanPage({ enrollmentData }: PaymentPlanPageProps
       name: "Pay in Full",
       description: "Complete payment now",
       amount: enrollmentData.remainingBalance,
-      discount: enrollmentData.totalCost > 50000 ? 500 : 0, // $5 discount for full payment over $500
       features: [
-        "5% discount on total cost",
+        "No additional fees",
         "No future payment worries",
         "Priority class placement",
         "Full refund if cancelled 30 days before"
@@ -85,11 +84,10 @@ export default function PaymentPlanPage({ enrollmentData }: PaymentPlanPageProps
     if (selectedPlanData) {
       // Navigate to checkout with payment plan data
       const paymentData = {
-        enrollmentId: enrollmentData.enrollmentId,
+        ...enrollmentData,
         paymentType: selectedPlan,
-        amount: selectedPlanData.amount - (selectedPlanData.discount || 0),
-        description: `${selectedPlanData.name} for ${enrollmentData.className}`,
-        ...enrollmentData
+        amount: selectedPlanData.amount,
+        description: `${selectedPlanData.name} for ${enrollmentData.className}`
       };
       
       // Store payment data and navigate to checkout
@@ -176,13 +174,8 @@ export default function PaymentPlanPage({ enrollmentData }: PaymentPlanPageProps
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold">
-                        {formatCurrency(plan.amount - (plan.discount || 0))}
+                        {formatCurrency(plan.amount)}
                       </div>
-                      {plan.discount && plan.discount > 0 && (
-                        <div className="text-sm text-green-600">
-                          Save {formatCurrency(plan.discount)}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </CardHeader>

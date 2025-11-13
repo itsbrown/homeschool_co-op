@@ -354,9 +354,8 @@ export default function CartCheckout() {
         name: 'Pay in Full',
         description: 'Complete payment now',
         amount: fullAmount,
-        discount: fullAmount > 50000 ? 2500 : 0, // $25 discount for full payment over $500 (amounts in cents)
         features: [
-          fullAmount > 50000 ? '$25 discount on total cost' : 'No additional fees',
+          'No additional fees',
           'No future payment worries',
           'Priority class placement',
           'Full refund if cancelled 30 days before'
@@ -408,7 +407,7 @@ export default function CartCheckout() {
     // For other plans, return the calculated plan amount
     const plans = getPaymentPlanOptions();
     const selectedPlan = plans.find(plan => plan.id === selectedPaymentPlan);
-    return selectedPlan ? selectedPlan.amount - (selectedPlan.discount || 0) : cart.total;
+    return selectedPlan ? selectedPlan.amount : cart.total;
   };
 
   // Get the amount to display on the Pay button (first payment amount)
@@ -743,13 +742,8 @@ export default function CartCheckout() {
                             </div>
                             <div className="text-right">
                               <div className="text-lg font-bold">
-                                {formatCurrency(plan.amount - (plan.discount || 0))}
+                                {formatCurrency(plan.amount)}
                               </div>
-                              {plan.discount && (
-                                <div className="text-xs text-green-600">
-                                  Save {formatCurrency(plan.discount)}
-                                </div>
-                              )}
                             </div>
                           </div>
                         </Label>

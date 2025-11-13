@@ -45,7 +45,6 @@ export default function ClassPaymentPlans({ classData, childName, onSelectPlan }
   const depositAmount = classData.depositRequired;
   const fullAmount = classData.price;
   const remainingBalance = fullAmount - depositAmount;
-  const fullPaymentDiscount = fullAmount > 50000 ? 500 : 0; // $5 discount for full payment over $500
 
   const paymentPlans: ClassPaymentPlan[] = [
     {
@@ -67,9 +66,8 @@ export default function ClassPaymentPlans({ classData, childName, onSelectPlan }
       name: "Pay in Full",
       description: "Complete payment now",
       amount: fullAmount,
-      discount: fullPaymentDiscount,
       features: [
-        fullPaymentDiscount > 0 ? "$5 discount on total cost" : "No additional fees",
+        "No additional fees",
         "No future payment worries",
         "Priority class placement",
         "Full refund if cancelled 30 days before"
@@ -192,13 +190,8 @@ export default function ClassPaymentPlans({ classData, childName, onSelectPlan }
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold">
-                        {formatCurrency(plan.amount - (plan.discount || 0))}
+                        {formatCurrency(plan.amount)}
                       </div>
-                      {plan.discount && (
-                        <div className="text-sm text-green-600 line-through">
-                          {formatCurrency(plan.amount)}
-                        </div>
-                      )}
                       {plan.installments && (
                         <div className="text-sm text-gray-500">
                           {plan.installments.count} payments
@@ -258,7 +251,7 @@ export default function ClassPaymentPlans({ classData, childName, onSelectPlan }
                             ) : (
                               <div className="flex justify-between">
                                 <span>Today:</span>
-                                <span className="font-medium">{formatCurrency(plan.amount - (plan.discount || 0))}</span>
+                                <span className="font-medium">{formatCurrency(plan.amount)}</span>
                               </div>
                             )}
                           </div>
