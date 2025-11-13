@@ -16,12 +16,13 @@ import {
   CheckCircle
 } from 'lucide-react';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import type { User as UserType } from '@shared/schema';
 
 export default function StaffProfilePage() {
   const [, params] = useRoute<{ staffId: string }>('/schools/staff/:staffId');
   const staffId = params?.staffId;
 
-  const { data: staffMember, isLoading, error } = useQuery({
+  const { data: staffMember, isLoading, error } = useQuery<UserType>({
     queryKey: [`/api/school-admin/users/${staffId}`],
     enabled: !!staffId,
   });
