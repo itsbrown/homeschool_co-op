@@ -5,7 +5,7 @@ The ASA Learning Platform is an adaptive learning application for American Seeke
 
 ## Recent Changes
 ### November 2025
-- **Payment Discount Architecture**: Removed all hardcoded payment discounts from payment flows (CartCheckout, ClassPaymentPlans, PaymentPlanPage) - all discounts now exclusively managed through the database discount system
+- **Payment Discount Architecture**: Removed all hardcoded payment discounts from payment flows (CartCheckout, ClassPaymentPlans, PaymentPlanPage, BillingPage) - all discounts now exclusively managed through the database discount system
 - **Student Management System**: Added comprehensive system for tracking students across schools with automatic school_student record creation when enrollments reach 'enrolled' or 'completed' status
 - **Notification System**: Implemented in-app notification system with PostgreSQL storage, automatic data seeding, real-time unread count badge, and mark-as-read functionality
 - **Authentication Migration**: Completed full migration to Supabase-only authentication with proper error handling for existing accounts

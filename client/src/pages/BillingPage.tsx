@@ -955,9 +955,8 @@ export default function BillingPage() {
         // Pay 50% now, 50% later
         return Math.round(totalBalance * 0.5);
       case 'full_payment':
-        // Pay everything with 5% discount if over $500
-        const discount = totalBalance > 50000 ? Math.round(totalBalance * 0.05) : 0;
-        return totalBalance - discount;
+        // Pay everything
+        return totalBalance;
       case 'three_payments':
         // Split into 3 monthly payments - first payment amount
         return Math.round(totalBalance / 3);
@@ -981,8 +980,7 @@ export default function BillingPage() {
       case 'half_now':
         return `Pay 50% now (${formatCurrency(Math.round(totalBalance * 0.5))}), remaining 50% in 30 days.`;
       case 'full_payment':
-        const discount = totalBalance > 50000 ? Math.round(totalBalance * 0.05) : 0;
-        return `Pay full amount now${discount > 0 ? ` with 5% discount (save ${formatCurrency(discount)})` : ''}. No future payments needed.`;
+        return `Pay full amount now. No future payments needed.`;
       case 'three_payments':
         return `Split into 3 equal monthly payments of ${formatCurrency(Math.round(totalBalance / 3))} each.`;
       default:
@@ -1332,13 +1330,10 @@ export default function BillingPage() {
                       <div className="flex-1">
                         <div className="font-medium">Pay in Full</div>
                         <div className="text-sm text-muted-foreground mt-1">
-                          Complete payment now - {formatCurrency(getSelectedTotal() - (getSelectedTotal() > 50000 ? Math.round(getSelectedTotal() * 0.05) : 0))}
-                          {getSelectedTotal() > 50000 && (
-                            <span className="text-green-600 font-medium"> (Save {formatCurrency(Math.round(getSelectedTotal() * 0.05))})</span>
-                          )}
+                          Complete payment now - {formatCurrency(getSelectedTotal())}
                         </div>
                         <div className="text-xs text-green-600 mt-1">
-                          {getSelectedTotal() > 50000 ? '5% discount applied, ' : ''}No future payments needed
+                          No additional fees, no future payments needed
                         </div>
                       </div>
                     </label>
