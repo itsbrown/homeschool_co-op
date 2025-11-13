@@ -5,6 +5,7 @@ The ASA Learning Platform is an adaptive learning application for American Seeke
 
 ## Recent Changes
 ### November 2025
+- **Stripe API Integration & Authentication Migration (November 13, 2025)**: Completed comprehensive migration of all payment and billing endpoints to Supabase-only authentication. Added new Stripe API endpoints for subscription schedules and subscriptions, implemented proper admin role authorization for sensitive endpoints, and created storage helper methods for Stripe customer ID retrieval. All Auth0 dependencies removed from payment flows. See Authentication Standards section for implementation details.
 - **BillingPage Payment Tabs**: Fixed Upcoming Payments tab data transformation to correctly parse Stripe subscription schedule API responses. Resolved CartContext type signature issue and lifted payment state management to parent component. All three tabs (Payment History, Subscription Schedules, Upcoming Payments) now work correctly with proper data display.
 - **Payment Discount Architecture**: Removed all hardcoded payment discounts from payment flows (CartCheckout, ClassPaymentPlans, PaymentPlanPage, BillingPage) - all discounts now exclusively managed through the database discount system
 - **Student Management System**: Added comprehensive system for tracking students across schools with automatic school_student record creation when enrollments reach 'enrolled' or 'completed' status
@@ -30,7 +31,16 @@ The platform prioritizes scalability, security, and user experience with a moder
 - **Runtime**: Node.js with Express.
 - **Language**: TypeScript with ESM modules.
 - **API Design**: RESTful JSON API.
-- **Authentication Middleware**: Auth0 JWT validation.
+- **Authentication Middleware**: Supabase-only authentication using `supabaseAuth` middleware.
+
+### Authentication Standards
+**CRITICAL**: The platform has fully migrated to Supabase-only authentication. All new API endpoints MUST follow these guidelines:
+
+1. **Middleware Standard**: Use `supabaseAuth` middleware from `server/middleware/supabase-auth.ts` for ALL new protected endpoints
+2. **No Auth0**: Never use `jwtCheck` or any Auth0 middleware (`auth0-auth.ts`) - this is legacy code being phased out
+3. **User Identification**: Extract user email from `req.user.email` after `supabaseAuth` middleware runs
+4. **Migration Path**: Existing endpoints using `jwtCheck` should be migrated to `supabaseAuth` when updated
+5. **Consistency**: All payment, billing, and user-facing endpoints use Supabase authentication exclusively
 
 ### Data Storage
 - **Primary Database**: Neon PostgreSQL for all application data.

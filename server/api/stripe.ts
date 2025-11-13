@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { storage } from '../storage';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { StripePaymentPlanService } from '../services/stripe-payment-plans';
-import { jwtCheck } from '../middleware/auth0-auth';
+import { supabaseAuth } from '../middleware/supabase-auth';
 
 const router = Router();
 
@@ -13,20 +13,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 });
 
 // Create payment intent for cart checkout
-router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
+router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
   try {
     console.log('💳 Creating payment intent for cart checkout');
     
-    // Get the authenticated user's email from the JWT
-    const userEmail = req.user?.email || req.auth?.email;
-    
-    if (!userEmail) {
-      console.log('❌ No authenticated user found');
-      return res.status(401).json({ 
-        message: 'Authentication required',
-        error: 'NO_USER_EMAIL'
-      });
-    }
+    // Get the authenticated user's email from Supabase auth
+    const userEmail = req.user.email;
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
@@ -230,19 +222,12 @@ router.post('/create-payment-intent', jwtCheck, async (req: any, res) => {
 });
 
 // Create payment intent for product order
-router.post('/create-product-payment', jwtCheck, async (req: any, res) => {
+router.post('/create-product-payment', supabaseAuth, async (req: any, res) => {
   try {
     console.log('💳 Creating payment intent for product order');
     
-    const userEmail = req.user?.email || req.auth?.email;
-    
-    if (!userEmail) {
-      console.log('❌ No authenticated user found');
-      return res.status(401).json({ 
-        message: 'Authentication required',
-        error: 'NO_USER_EMAIL'
-      });
-    }
+    // Get the authenticated user's email from Supabase auth
+    const userEmail = req.user.email;
 
     const { submissionId, totalAmount, description } = req.body;
 
@@ -280,6 +265,124 @@ router.post('/create-product-payment', jwtCheck, async (req: any, res) => {
     res.status(500).json({
       message: 'Failed to create payment intent',
       error: error.message
+    });
+  }
+});
+
+// Get subscription schedules for authenticated parent
+router.get('/subscription-schedules', supabaseAuth, async (req: any, res) => {
+  try {
+    const parentEmail = req.user.email;
+    console.log('📅 Fetching subscription schedules for parent:', parentEmail);
+
+    // Get unique Stripe customer IDs for this parent
+    const customerIds = await storage.getStripeCustomerIdsByParentEmail(parentEmail);
+    
+    if (customerIds.length === 0) {
+      return res.json({
+        success: true,
+        schedules: []
+      });
+    }
+
+    console.log(`📅 Found ${customerIds.length} Stripe customer IDs`);
+
+    // Fetch subscription schedules from Stripe for each customer ID
+    const allSchedules = [];
+    for (const customerId of customerIds) {
+      const schedules = await stripe.subscriptionSchedules.list({
+        customer: customerId,
+        limit: 100
+      });
+      allSchedules.push(...schedules.data);
+    }
+
+    console.log(`✅ Retrieved ${allSchedules.length} subscription schedules from Stripe`);
+
+    // Transform to frontend format (camelCase top-level, snake_case for Stripe nested objects)
+    const formattedSchedules = allSchedules.map(schedule => ({
+      id: schedule.id,
+      status: schedule.status,
+      created: schedule.created,
+      customer: schedule.customer,
+      metadata: schedule.metadata,
+      phases: schedule.phases, // Keep snake_case as it's Stripe's format
+      currentPhase: schedule.current_phase,
+      endBehavior: schedule.end_behavior,
+      releasedAt: schedule.released_at,
+      releasedSubscription: schedule.released_subscription
+    }));
+
+    res.json({
+      success: true,
+      schedules: formattedSchedules
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error fetching subscription schedules:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch subscription schedules'
+    });
+  }
+});
+
+// Get active subscriptions for authenticated parent
+router.get('/subscriptions', supabaseAuth, async (req: any, res) => {
+  try {
+    const parentEmail = req.user.email;
+    console.log('💳 Fetching subscriptions for parent:', parentEmail);
+
+    // Get unique Stripe customer IDs for this parent
+    const customerIds = await storage.getStripeCustomerIdsByParentEmail(parentEmail);
+    
+    if (customerIds.length === 0) {
+      return res.json({
+        success: true,
+        subscriptions: []
+      });
+    }
+
+    console.log(`💳 Found ${customerIds.length} Stripe customer IDs`);
+
+    // Fetch subscriptions from Stripe for each customer ID
+    const allSubscriptions = [];
+    for (const customerId of customerIds) {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'all', // Get all statuses (active, past_due, canceled, etc.)
+        limit: 100
+      });
+      allSubscriptions.push(...subscriptions.data);
+    }
+
+    console.log(`✅ Retrieved ${allSubscriptions.length} subscriptions from Stripe`);
+
+    // Transform to frontend format (keep Stripe snake_case for nested properties)
+    const formattedSubscriptions = allSubscriptions.map(sub => ({
+      id: sub.id,
+      status: sub.status,
+      created: sub.created,
+      current_period_start: sub.current_period_start,
+      current_period_end: sub.current_period_end,
+      customer: sub.customer,
+      items: sub.items.data,
+      metadata: sub.metadata,
+      cancel_at_period_end: sub.cancel_at_period_end,
+      canceled_at: sub.canceled_at,
+      schedule: sub.schedule
+    }));
+
+    res.json({
+      success: true,
+      subscriptions: formattedSubscriptions
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error fetching subscriptions:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch subscriptions'
     });
   }
 });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { storage } from '../storage';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAuth } from '../middleware/supabase-auth';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 import { MembershipService } from '../services/membership-service.js';
@@ -14,62 +14,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 });
 
 // Get payment history for a specific user
-router.get('/history', async (req, res) => {
+router.get('/history', supabaseAuth, async (req: any, res) => {
   try {
-    // Extract user email from Supabase token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authorization header missing'
-      });
-    }
-
-    const token = authHeader.split(' ')[1];
-    
-    // In development/test mode, use simple JWT decoding instead of Supabase verification
-    let userEmail;
-    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-      try {
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-        userEmail = payload.email;
-        if (!userEmail) {
-          return res.status(401).json({
-            success: false,
-            error: 'Email not found in token'
-          });
-        }
-      } catch (error) {
-        console.log('❌ Token decode error:', error);
-        console.log('Token parts:', token.split('.').length);
-        console.log('Payload part:', token.split('.')[1]);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid authentication token'
-        });
-      }
-    } else {
-      // Production: Verify the Supabase token
-      const supabase = createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      
-      if (error || !user) {
-        console.log('❌ Supabase auth error:', error);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid authentication token'
-        });
-      }
-      userEmail = user.email;
-    }
-
+    const userEmail = req.user.email;
     console.log('✅ Payment history request for user:', userEmail);
 
-    const payments = await storage.getPaymentsByParentEmail(userEmail!);
+    const payments = await storage.getPaymentsByParentEmail(userEmail);
     
     // Transform payments to include formatted data
     const formattedPayments = payments.map((payment: any) => ({
@@ -103,8 +53,19 @@ router.get('/history', async (req, res) => {
 });
 
 // Get all payments (admin only)
-router.get('/all', async (req, res) => {
+router.get('/all', supabaseAuth, async (req: any, res) => {
   try {
+    // Verify admin role
+    const userEmail = req.user.email;
+    const user = await storage.getUserByEmail(userEmail);
+    
+    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'superAdmin')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
     const payments = await storage.getAllPayments();
     
     res.json({
@@ -132,9 +93,20 @@ router.get('/all', async (req, res) => {
 });
 
 // Get payment details by ID
-router.get('/:paymentId', async (req, res) => {
+router.get('/:paymentId', supabaseAuth, async (req: any, res) => {
   try {
     const { paymentId } = req.params;
+    
+    // Verify admin role
+    const userEmail = req.user.email;
+    const user = await storage.getUserByEmail(userEmail);
+    
+    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'superAdmin')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
     
     const payments = await storage.getAllPayments();
     const payment = payments.find(p => p.id === parseInt(paymentId));
@@ -172,58 +144,11 @@ router.get('/:paymentId', async (req, res) => {
 });
 
 // Create manual payment (school admin only)
-router.post('/manual', async (req, res) => {
+router.post('/manual', supabaseAuth, async (req: any, res) => {
   try {
     console.log('💰 Manual payment creation request received');
     
-    // Extract and verify user role from token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authorization header missing'
-      });
-    }
-
-    const token = authHeader.split(' ')[1];
-    let userEmail;
-
-    // Decode token to get user email
-    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-      try {
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-        userEmail = payload.email;
-        if (!userEmail) {
-          return res.status(401).json({
-            success: false,
-            error: 'Email not found in token'
-          });
-        }
-      } catch (error) {
-        console.log('❌ Token decode error:', error);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid authentication token'
-        });
-      }
-    } else {
-      // Production: Verify the Supabase token
-      const supabase = createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      
-      if (error || !user) {
-        console.log('❌ Supabase auth error:', error);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid authentication token'
-        });
-      }
-      userEmail = user.email;
-    }
+    const userEmail = req.user.email;
 
     // Verify user has school admin role
     const user = await storage.getUserByEmail(userEmail);
@@ -405,58 +330,11 @@ router.post('/manual', async (req, res) => {
 });
 
 // Refund a payment (school admin only)
-router.post('/refund/:paymentId', async (req, res) => {
+router.post('/refund/:paymentId', supabaseAuth, async (req: any, res) => {
   try {
     console.log('🔄 Processing refund request for payment:', req.params.paymentId);
 
-    // Verify authentication
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authorization header missing'
-      });
-    }
-
-    const token = authHeader.split(' ')[1];
-    let userEmail;
-
-    // Decode token to get user email (same as manual payment logic)
-    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-      try {
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-        userEmail = payload.email;
-        if (!userEmail) {
-          return res.status(401).json({
-            success: false,
-            error: 'Email not found in token'
-          });
-        }
-      } catch (error) {
-        console.log('❌ Token decode error:', error);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid authentication token'
-        });
-      }
-    } else {
-      // Production: Verify the Supabase token
-      const supabase = createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      
-      if (error || !user) {
-        console.log('❌ Supabase auth error:', error);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid authentication token'
-        });
-      }
-      userEmail = user.email;
-    }
+    const userEmail = req.user.email;
 
     // Verify user has school admin role
     const user = await storage.getUserByEmail(userEmail);
@@ -706,58 +584,11 @@ router.post('/refund/:paymentId', async (req, res) => {
 });
 
 // Create manual membership payment
-router.post('/membership/manual', async (req, res) => {
+router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
   try {
     console.log('🏅 Manual membership payment creation request received');
     
-    // Extract and verify user role from token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authorization header missing'
-      });
-    }
-
-    const token = authHeader.split(' ')[1];
-    let userEmail;
-
-    // Decode token to get user email
-    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-      try {
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-        userEmail = payload.email;
-        if (!userEmail) {
-          return res.status(401).json({
-            success: false,
-            error: 'Email not found in token'
-          });
-        }
-      } catch (error) {
-        console.log('❌ Token decode error:', error);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid authentication token'
-        });
-      }
-    } else {
-      // Production: Verify the Supabase token
-      const supabase = createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      
-      if (error || !user) {
-        console.log('❌ Supabase auth error:', error);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid authentication token'
-        });
-      }
-      userEmail = user.email;
-    }
+    const userEmail = req.user.email;
 
     // Verify user has school admin role
     const user = await storage.getUserByEmail(userEmail);

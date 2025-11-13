@@ -185,6 +185,8 @@ export interface IStorage {
   updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined>;
   deleteProgramEnrollment(id: number): Promise<void>;
   cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }>;
+  getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]>;
+  getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
 
   // Membership Enrollment methods
   getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
@@ -1388,6 +1390,32 @@ export class MemStorage implements IStorage {
     }
 
     return { cancelled, skipped, errors };
+  }
+
+  async getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]> {
+    // In-memory implementation: extract unique Stripe customer IDs from enrollments
+    const enrollments = Array.from(this.programEnrollmentsStore.values());
+    const activeStatuses = ['pending_payment', 'enrolled', 'completed'];
+    
+    const uniqueCustomerIds = new Set(
+      enrollments
+        .filter(e => e.parentEmail === parentEmail && activeStatuses.includes(e.status) && e.stripeCustomerId)
+        .map(e => e.stripeCustomerId!)
+    );
+    
+    return Array.from(uniqueCustomerIds);
+  }
+
+  async getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
+    // In-memory implementation: return enrollments with Stripe data
+    const activeStatuses = ['pending_payment', 'enrolled', 'completed'];
+    
+    return Array.from(this.programEnrollmentsStore.values())
+      .filter(e => 
+        e.parentEmail === parentEmail && 
+        activeStatuses.includes(e.status) && 
+        e.stripeCustomerId !== null
+      );
   }
 
   // Membership Enrollment methods
@@ -4187,6 +4215,51 @@ export class MemStorage implements IStorage {
 
     async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
       return this.dbStorage.cancelPendingEnrollments(enrollmentIds, parentUserId);
+    }
+
+    async getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]> {
+      const db = await getDb();
+      const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
+      
+      // Get enrollments with Stripe customer IDs for active statuses
+      const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
+      const enrollments = await db.select({
+        stripeCustomerId: programEnrollments.stripeCustomerId
+      })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.parentEmail, parentEmail),
+          isNotNull(programEnrollments.stripeCustomerId),
+          inArray(programEnrollments.status, activeStatuses)
+        )
+      );
+      
+      // Deduplicate customer IDs using Set
+      const uniqueCustomerIds = new Set(
+        enrollments
+          .map(e => e.stripeCustomerId)
+          .filter((id): id is string => id !== null)
+      );
+      
+      return Array.from(uniqueCustomerIds);
+    }
+
+    async getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
+      const db = await getDb();
+      const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
+      
+      // Get all enrollments with Stripe data for active statuses
+      const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
+      return await db.select()
+        .from(programEnrollments)
+        .where(
+          and(
+            eq(programEnrollments.parentEmail, parentEmail),
+            isNotNull(programEnrollments.stripeCustomerId),
+            inArray(programEnrollments.status, activeStatuses)
+          )
+        );
     }
 
     async createEnrollment(enrollment: any): Promise<any> {
