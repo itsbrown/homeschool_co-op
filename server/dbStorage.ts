@@ -128,6 +128,11 @@ export class DatabaseStorage implements IStorage {
     return updatedSchool;
   }
 
+  async getLocationsBySchool(schoolId: number): Promise<Location[]> {
+    const db = await getDb();
+    return await db.select().from(locations).where(eq(locations.schoolId, schoolId));
+  }
+
   // School Student methods
   async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
     const db = await getDb();

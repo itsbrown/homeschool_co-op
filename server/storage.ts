@@ -62,6 +62,9 @@ export interface IStorage {
   updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined>;
   getAllSchools(): Promise<School[]>;
 
+  // Location methods
+  getLocationsBySchool(schoolId: number): Promise<Location[]>;
+
   // School Application methods
   getSchoolApplicationById(id: number): Promise<SchoolApplication | undefined>;
   getSchoolApplicationByEmail(email: string): Promise<SchoolApplication | undefined>;
@@ -735,6 +738,10 @@ export class MemStorage implements IStorage {
 
   async getAllSchools(): Promise<School[]> {
     return Array.from(this.schoolsStore.values());
+  }
+
+  async getLocationsBySchool(schoolId: number): Promise<Location[]> {
+    return [];
   }
 
   // Curriculum methods
@@ -3960,6 +3967,10 @@ export class MemStorage implements IStorage {
 
     async getAllSchools(): Promise<School[]> {
       return this.dbStorage.getAllSchools();
+    }
+
+    async getLocationsBySchool(schoolId: number): Promise<Location[]> {
+      return this.dbStorage.getLocationsBySchool(schoolId);
     }
 
     async getCurriculum(id: number): Promise<Curriculum | undefined> {
