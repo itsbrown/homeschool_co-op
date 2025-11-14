@@ -157,15 +157,15 @@ export default function ChildrenPage() {
   
   return (
     <ParentAppShell>
-      <div className="p-6 space-y-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold">Children</h1>
+      <div className="p-4 sm:p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+          <div className="flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold">Children</h1>
             <p className="text-muted-foreground mt-1">
               Manage your children's profiles and program enrollments
             </p>
           </div>
-          <Button asChild>
+          <Button asChild className="w-full sm:w-auto">
             <Link href="/children/register">
               <UserPlus className="mr-2 h-4 w-4" />
               Register New Child
@@ -174,7 +174,7 @@ export default function ChildrenPage() {
         </div>
         
         <Tabs defaultValue="profiles">
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 grid grid-cols-2 w-full sm:w-auto sm:inline-flex">
             <TabsTrigger value="profiles">Child Profiles</TabsTrigger>
             <TabsTrigger value="enrollments">Program Enrollments</TabsTrigger>
           </TabsList>
@@ -224,11 +224,11 @@ export default function ChildrenPage() {
                         )}
                       </div>
                     </CardContent>
-                    <CardFooter className="flex justify-between">
-                      <Button variant="outline" asChild>
+                    <CardFooter className="flex flex-col sm:flex-row gap-2 sm:justify-between">
+                      <Button variant="outline" asChild className="w-full sm:w-auto">
                         <Link href={`/children/${child.id}/edit`}>Edit Profile</Link>
                       </Button>
-                      <Button variant="outline" asChild>
+                      <Button variant="outline" asChild className="w-full sm:w-auto">
                         <Link href={`/children/${child.id}/enrollments`}>View Enrollments</Link>
                       </Button>
                     </CardFooter>

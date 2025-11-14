@@ -69,31 +69,44 @@ router.patch("/profile", async (req: any, res) => {
   try {
     const { firstName, lastName, phoneNumber } = req.body;
     
-    console.log("Updating profile with:", { firstName, lastName, phoneNumber });
+    console.log("✏️ PATCH /profile - Request body:", { firstName, lastName, phoneNumber });
     
     const userEmail = req.user?.email;
     
     if (!userEmail) {
+      console.error("❌ PATCH /profile - No user email in req.user:", req.user);
       return res.status(401).json({ message: "User not authenticated" });
     }
+    
+    console.log("✅ PATCH /profile - Authenticated user email:", userEmail);
     
     // Get existing user from database
     const user = await storage.getUserByEmail(userEmail);
     
     if (!user) {
+      console.error("❌ PATCH /profile - User not found in database:", userEmail);
       return res.status(404).json({ message: "User not found" });
     }
     
+    console.log("✅ PATCH /profile - Found user in DB:", { id: user.id, email: user.email });
+    
     // Update user in database
-    const updatedUser = await storage.updateUser(user.id, {
+    const updateData = {
       firstName: firstName || user.firstName,
       lastName: lastName || user.lastName,
       phone: phoneNumber || user.phone
-    });
+    };
+    
+    console.log("💾 PATCH /profile - Updating user with data:", updateData);
+    
+    const updatedUser = await storage.updateUser(user.id, updateData);
     
     if (!updatedUser) {
+      console.error("❌ PATCH /profile - storage.updateUser returned null/undefined");
       return res.status(500).json({ message: "Failed to update profile" });
     }
+    
+    console.log("✅ PATCH /profile - Successfully updated user:", { id: updatedUser.id, email: updatedUser.email });
     
     // Build profile response
     const updatedProfile = {
