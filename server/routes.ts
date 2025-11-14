@@ -2268,6 +2268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // User settings endpoints
   app.get("/api/users/profile", supabaseAuth, async (req: any, res) => {
+    console.log('🚀🚀🚀 PROFILE ENDPOINT CALLED - START 🚀🚀🚀');
     try {
       const userEmail = req.user?.email;
       if (!userEmail) {
