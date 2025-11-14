@@ -246,7 +246,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                   <img
                     src={userSchool.logo}
                     alt={`${userSchool.name} Logo`}
-                    className="h-24 w-auto max-w-[240px] object-contain"
+                    className="h-32 w-auto max-w-[280px] object-contain"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
                     }}
