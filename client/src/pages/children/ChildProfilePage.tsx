@@ -144,9 +144,9 @@ export default function ChildProfilePage() {
 
   return (
     <ParentAppShell>
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4 mb-4 sm:mb-6">
           <Button 
             variant="ghost" 
             size="sm" 
@@ -154,39 +154,40 @@ export default function ChildProfilePage() {
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Children
+            <span className="hidden sm:inline">Back to Children</span>
+            <span className="sm:hidden">Back</span>
           </Button>
         </div>
 
         {/* Profile Header */}
         <Card>
-          <CardHeader>
-            <div className="flex items-start gap-6">
-              <Avatar className="h-20 w-20">
+          <CardHeader className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
+              <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
                 <AvatarImage src="" alt={child.name} />
-                <AvatarFallback className="text-lg">
+                <AvatarFallback className="text-lg sm:text-xl">
                   {child.firstName[0]}{child.lastName[0]}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-3xl font-bold">{child.name}</h1>
-                  <Badge variant="secondary">
+              <div className="flex-1 text-center sm:text-left w-full">
+                <div className="flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                  <h1 className="text-2xl sm:text-3xl font-bold">{child.name}</h1>
+                  <Badge variant="secondary" className="w-fit">
                     {child.status}
                   </Badge>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
                     <GraduationCap className="h-4 w-4" />
-                    Grade {child.gradeLevel}
+                    <span>Grade {child.gradeLevel}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
                     <Calendar className="h-4 w-4" />
-                    Age {child.age}
+                    <span>Age {child.age}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
                     <MapPin className="h-4 w-4" />
-                    {child.school}
+                    <span className="truncate">{child.school}</span>
                   </div>
                 </div>
               </div>
@@ -195,24 +196,24 @@ export default function ChildProfilePage() {
         </Card>
 
         {/* Detailed Information */}
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="academic">Academic</TabsTrigger>
-            <TabsTrigger value="health">Health & Safety</TabsTrigger>
-            <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
+        <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6">
+          <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:flex h-auto gap-1">
+            <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
+            <TabsTrigger value="academic" className="text-xs sm:text-sm">Academic</TabsTrigger>
+            <TabsTrigger value="health" className="text-xs sm:text-sm whitespace-nowrap">Health & Safety</TabsTrigger>
+            <TabsTrigger value="enrollments" className="text-xs sm:text-sm">Enrollments</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <TabsContent value="overview" className="space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5" />
+                <CardHeader className="p-4 sm:p-6">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <User className="h-4 w-4 sm:h-5 sm:w-5" />
                     Personal Information
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6 pt-0">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Full Name</label>
                     <p className="font-medium">{child.name}</p>
@@ -233,13 +234,13 @@ export default function ChildProfilePage() {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Heart className="h-5 w-5" />
+                <CardHeader className="p-4 sm:p-6">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Heart className="h-4 w-4 sm:h-5 sm:w-5" />
                     Interests & Learning
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6 pt-0">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Grade Level</label>
                     <p className="font-medium">{child.gradeLevel}</p>
@@ -259,15 +260,15 @@ export default function ChildProfilePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="academic" className="space-y-6">
+          <TabsContent value="academic" className="space-y-4 sm:space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
                   Academic Information
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 sm:p-6 pt-0">
                 <div className="text-center py-8 text-muted-foreground">
                   <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>Academic records and progress reports will be displayed here.</p>
@@ -276,15 +277,15 @@ export default function ChildProfilePage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="health" className="space-y-6">
+          <TabsContent value="health" className="space-y-4 sm:space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
                   Health & Safety Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6 pt-0">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Allergies</label>
                   <p className="font-medium">{child.allergies || "None reported"}</p>
