@@ -23,7 +23,10 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Upload,
+  Image as ImageIcon,
+  X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -40,6 +43,7 @@ interface UserProfile {
   school?: {
     id: number;
     name: string;
+    logo?: string | null;
   };
 }
 
@@ -53,7 +57,7 @@ interface NotificationSettings {
 }
 
 export default function SchoolSettingsPage() {
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -220,6 +224,103 @@ export default function SchoolSettingsPage() {
       ...prev,
       [key]: value
     }));
+  };
+
+  // Logo upload state
+  const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  // Logo upload mutation
+  const uploadLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const schoolId = userProfile?.school?.id;
+      if (!schoolId) {
+        throw new Error("School ID not found");
+      }
+
+      const formData = new FormData();
+      formData.append('logo', file);
+      formData.append('schoolId', String(schoolId));
+
+      const token = session?.access_token;
+      if (!token) {
+        throw new Error("Not authenticated");
+      }
+
+      const response = await fetch('/api/schools/upload-logo', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to upload logo');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users/profile'] });
+      setSelectedLogo(null);
+      setLogoPreview(null);
+      toast({
+        title: "Logo uploaded",
+        description: "Your school logo has been updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Upload failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid file type",
+          description: "Please select an image file (PNG, JPEG, SVG)",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Maximum file size is 5MB",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setSelectedLogo(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleUploadLogo = () => {
+    if (selectedLogo) {
+      uploadLogoMutation.mutate(selectedLogo);
+    }
+  };
+
+  const handleCancelLogo = () => {
+    setSelectedLogo(null);
+    setLogoPreview(null);
   };
 
   return (
@@ -631,6 +732,121 @@ export default function SchoolSettingsPage() {
                         You are successfully associated with this school. Contact your administrator for any changes.
                       </AlertDescription>
                     </Alert>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* School Logo Upload */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5" />
+                    School Logo
+                  </CardTitle>
+                  <CardDescription>
+                    Upload or update your school's logo (PNG, JPEG, SVG - Max 5MB)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col sm:flex-row gap-6">
+                    {/* Current Logo Display */}
+                    <div className="flex-shrink-0">
+                      <Label className="text-sm font-medium mb-2 block">Current Logo</Label>
+                      <Avatar className="h-24 w-24">
+                        {userProfile?.school?.logo ? (
+                          <AvatarImage src={userProfile.school.logo} alt={userProfile.school.name} />
+                        ) : (
+                          <AvatarFallback className="text-2xl">
+                            {userProfile?.school?.name?.split(' ').map(word => word[0]).join('').toUpperCase() || 'SC'}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                    </div>
+
+                    {/* Upload Section */}
+                    <div className="flex-1 space-y-4">
+                      {/* File Input */}
+                      <div>
+                        <Label htmlFor="logo-upload" className="text-sm font-medium">
+                          Choose New Logo
+                        </Label>
+                        <Input
+                          id="logo-upload"
+                          type="file"
+                          accept="image/png, image/jpeg, image/svg+xml"
+                          onChange={handleLogoChange}
+                          className="mt-2"
+                          disabled={!userProfile?.school?.id || uploadLogoMutation.isPending}
+                          data-testid="input-logo-upload"
+                        />
+                      </div>
+
+                      {/* Preview and Actions */}
+                      {(logoPreview || selectedLogo) && (
+                        <div className="space-y-3">
+                          <div className="border rounded-lg p-4 bg-muted/30">
+                            <Label className="text-sm font-medium mb-2 block">Preview</Label>
+                            <div className="flex items-center gap-4">
+                              <Avatar className="h-16 w-16">
+                                <AvatarImage src={logoPreview || ''} alt="Logo preview" />
+                              </Avatar>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{selectedLogo?.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {selectedLogo?.size ? `${(selectedLogo.size / 1024).toFixed(1)} KB` : ''}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={handleCancelLogo}
+                                disabled={uploadLogoMutation.isPending}
+                                data-testid="button-cancel-logo"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={handleUploadLogo}
+                              disabled={!selectedLogo || uploadLogoMutation.isPending}
+                              className="flex items-center gap-2"
+                              data-testid="button-upload-logo"
+                            >
+                              {uploadLogoMutation.isPending ? (
+                                <>
+                                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="h-4 w-4" />
+                                  Upload Logo
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={handleCancelLogo}
+                              disabled={uploadLogoMutation.isPending}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {!userProfile?.school?.id && (
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            You must be associated with a school to upload a logo.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

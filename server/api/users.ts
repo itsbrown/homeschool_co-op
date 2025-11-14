@@ -31,7 +31,8 @@ router.get("/profile", async (req: any, res) => {
       if (fetchedSchool) {
         school = {
           id: fetchedSchool.id,
-          name: fetchedSchool.name
+          name: fetchedSchool.name,
+          logo: fetchedSchool.logo || null
         };
         console.log('🏫 Fetched school:', school);
       } else {
