@@ -116,16 +116,16 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     },
   });
 
-  // Get scheduled payments for upcoming payments tab
+  // Get subscription schedules for upcoming payments tab
   const { data: scheduledPayments, isLoading: isLoadingScheduled } = useQuery({
-    queryKey: ["/api/scheduled-payments/upcoming", childId],
+    queryKey: ["/api/stripe/subscription-schedules", childId],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
       if (!token) {
         throw new Error('No authentication token');
       }
 
-      const response = await fetch('/api/scheduled-payments/upcoming', {
+      const response = await fetch('/api/stripe/subscription-schedules', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -133,11 +133,48 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch scheduled payments: ${response.status}`);
+        throw new Error(`Failed to fetch subscription schedules: ${response.status}`);
       }
 
       const data = await response.json();
-      return data.success ? data.payments : [];
+      if (!data.success || !data.schedules) {
+        return [];
+      }
+
+      // Transform Stripe schedules to match payment structure expected by UI
+      return data.schedules
+        .filter((schedule: any) => schedule.status === 'active')
+        .map((schedule: any) => {
+          // Get the current phase using the numeric index
+          const currentPhaseIndex = schedule.currentPhaseIndex || 0;
+          const currentPhase = schedule.phases?.[currentPhaseIndex];
+          const nextPhase = schedule.phases?.[currentPhaseIndex + 1];
+          
+          // Calculate next payment date from next phase start or current phase end
+          const dueDate = nextPhase?.start_date 
+            ? new Date(nextPhase.start_date * 1000)
+            : currentPhase?.end_date 
+            ? new Date(currentPhase.end_date * 1000)
+            : new Date();
+
+          // Get amount from current phase items (in cents)
+          const amount = currentPhase?.items?.[0]?.price_data?.unit_amount 
+            || currentPhase?.items?.[0]?.price?.unit_amount 
+            || 0;
+          
+          return {
+            id: schedule.id,
+            amount: amount,
+            dueDate: dueDate,
+            status: 'pending',
+            childName: schedule.metadata?.childName || 'Child',
+            className: schedule.metadata?.className || 'Class',
+            description: schedule.metadata?.description || 'Upcoming payment',
+            stripeScheduleId: schedule.id,
+            installmentNumber: currentPhaseIndex + 1,
+            totalInstallments: schedule.phases?.length || 0
+          };
+        });
     },
   });
   

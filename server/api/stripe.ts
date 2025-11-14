@@ -300,18 +300,29 @@ router.get('/subscription-schedules', supabaseAuth, async (req: any, res) => {
     console.log(`✅ Retrieved ${allSchedules.length} subscription schedules from Stripe`);
 
     // Transform to frontend format (camelCase top-level, snake_case for Stripe nested objects)
-    const formattedSchedules = allSchedules.map(schedule => ({
-      id: schedule.id,
-      status: schedule.status,
-      created: schedule.created,
-      customer: schedule.customer,
-      metadata: schedule.metadata,
-      phases: schedule.phases, // Keep snake_case as it's Stripe's format
-      currentPhase: schedule.current_phase,
-      endBehavior: schedule.end_behavior,
-      releasedAt: schedule.released_at,
-      releasedSubscription: schedule.released_subscription
-    }));
+    const formattedSchedules = allSchedules.map(schedule => {
+      // Find current phase index by matching phase start_date with current_phase
+      let currentPhaseIndex = 0;
+      if (schedule.current_phase && schedule.phases) {
+        currentPhaseIndex = schedule.phases.findIndex((phase: any) => 
+          phase.start_date === (schedule.current_phase as any)?.start_date
+        );
+        if (currentPhaseIndex === -1) currentPhaseIndex = 0;
+      }
+
+      return {
+        id: schedule.id,
+        status: schedule.status,
+        created: schedule.created,
+        customer: schedule.customer,
+        metadata: schedule.metadata,
+        phases: schedule.phases, // Keep snake_case as it's Stripe's format
+        currentPhaseIndex: currentPhaseIndex, // Numeric index instead of object
+        endBehavior: schedule.end_behavior,
+        releasedAt: schedule.released_at,
+        releasedSubscription: schedule.released_subscription
+      };
+    });
 
     res.json({
       success: true,
