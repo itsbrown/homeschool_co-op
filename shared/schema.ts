@@ -623,9 +623,9 @@ export const enrichedPaymentHistorySchema = z.object({
   currency: z.string(),
   status: z.string(),
   description: z.string(),
-  date: z.date(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  date: z.string(), // ISO date string (serialized from Date)
+  createdAt: z.string(), // ISO date string
+  updatedAt: z.string(), // ISO date string
   stripePaymentIntentId: z.string().nullable(),
   enrollmentIds: z.array(z.number()),
   metadata: z.record(z.any()).nullable(),
@@ -643,17 +643,25 @@ export const enrichedPaymentHistorySchema = z.object({
     paymentPlan: z.string().nullable(),
   })),
   
-  // Stripe enrichment fields
+  // Stripe enrichment fields (nullable when no Stripe data available)
   stripeStatus: z.string().nullable(),
   stripeAmount: z.number().nullable(), // Amount in cents from Stripe
-  stripeCreated: z.date().nullable(),
+  stripeCreated: z.string().nullable(), // ISO date string from Stripe timestamp
   
   // Future enhancement fields
-  nextPaymentDate: z.date().nullable().optional(),
+  nextPaymentDate: z.string().nullable().optional(), // ISO date string
   source: z.enum(['database', 'stripe']).optional(), // Tag for Stripe-only payments
 });
 
 export type EnrichedPaymentHistory = z.infer<typeof enrichedPaymentHistorySchema>;
+
+// API response wrapper for payment history endpoint
+export const enrichedPaymentHistoryListResponseSchema = z.object({
+  success: z.boolean(),
+  payments: z.array(enrichedPaymentHistorySchema),
+});
+
+export type EnrichedPaymentHistoryListResponse = z.infer<typeof enrichedPaymentHistoryListResponseSchema>;
 
 // Scheduled Payments table - for recurring payment schedules
 export const scheduledPayments = pgTable("scheduled_payments", {

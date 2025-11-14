@@ -4,6 +4,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 import { MembershipService } from '../services/membership-service.js';
+import { enrichedPaymentHistoryListResponseSchema, type EnrichedPaymentHistory } from '../../shared/schema';
 import Stripe from 'stripe';
 
 const router = Router();
@@ -13,11 +14,73 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-04-10',
 });
 
-// Get payment history for a specific user (enriched with Stripe and enrollment data)
+// Helper: Calculate next payment date from Stripe subscription schedule
+function calculateNextPaymentDate(schedule: any, enrollment: any): string | null {
+  if (!schedule || schedule.status !== 'active') return null;
+  
+  const currentPhase = schedule.current_phase;
+  if (!currentPhase) return null;
+  
+  // Check if there's a next phase
+  const phases = schedule.phases || [];
+  const currentPhaseIndex = phases.findIndex((p: any) => 
+    p.start_date === currentPhase.start_date
+  );
+  
+  if (currentPhaseIndex >= 0 && currentPhaseIndex < phases.length - 1) {
+    // Next payment is the start of next phase
+    const nextPhase = phases[currentPhaseIndex + 1];
+    return new Date(nextPhase.start_date * 1000).toISOString();
+  }
+  
+  // If in a recurring phase, calculate next payment from interval
+  const items = currentPhase.items || [];
+  if (items.length > 0) {
+    const item = items[0];
+    const price = item.price_data || item.price;
+    
+    // If recurring interval exists, calculate next charge
+    if (price?.recurring?.interval && currentPhase.start_date) {
+      const startMs = currentPhase.start_date * 1000;
+      const now = Date.now();
+      const intervalMs = price.recurring.interval === 'month' 
+        ? 30 * 24 * 60 * 60 * 1000  // Approximate month
+        : price.recurring.interval === 'week'
+        ? 7 * 24 * 60 * 60 * 1000
+        : price.recurring.interval === 'year'
+        ? 365 * 24 * 60 * 60 * 1000
+        : 0;
+      
+      if (intervalMs > 0) {
+        // Calculate how many intervals have passed
+        const elapsedMs = now - startMs;
+        const intervalsPassed = Math.floor(elapsedMs / intervalMs);
+        const nextPaymentMs = startMs + ((intervalsPassed + 1) * intervalMs);
+        
+        // Only return if it's in the future
+        if (nextPaymentMs > now) {
+          return new Date(nextPaymentMs).toISOString();
+        }
+      }
+    }
+  }
+  
+  // Fallback: if phase has end_date and it's in the future
+  if (currentPhase.end_date) {
+    const endDateMs = currentPhase.end_date * 1000;
+    if (endDateMs > Date.now()) {
+      return new Date(endDateMs).toISOString();
+    }
+  }
+  
+  return null;
+}
+
+// Get payment history for a specific user (enriched with Stripe, schedule, and enrollment data)
 router.get('/history', supabaseAuth, async (req: any, res) => {
   try {
     const userEmail = req.user.email;
-    console.log('✅ Payment history request (enriched) for user:', userEmail);
+    console.log('✅ Payment history request (fully enriched) for user:', userEmail);
 
     // Step 1: Fetch all data sources in parallel
     const [dbPayments, enrollments, customerIds] = await Promise.all([
@@ -28,35 +91,58 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
     
     console.log(`📊 Found: ${dbPayments.length} DB payments, ${enrollments.length} enrollments, ${customerIds.length} customer IDs`);
     
-    // Step 2: Batch-fetch Stripe PaymentIntents for all customer IDs
-    const stripePaymentIntents = new Map();
+    // Step 2: Batch-fetch Stripe data (PaymentIntents AND subscription schedules) for all customer IDs
+    const stripePaymentIntents = new Map<string, any>();
+    const stripeSubscriptionSchedules = new Map<string, any>();
+    
     if (customerIds.length > 0) {
       for (const customerId of customerIds) {
         try {
+          // Fetch PaymentIntents
           const paymentIntents = await stripe.paymentIntents.list({
             customer: customerId,
-            limit: 100 // Fetch last 100 payments per customer
+            limit: 100
           });
           
           for (const intent of paymentIntents.data) {
             stripePaymentIntents.set(intent.id, intent);
           }
+          
+          // Fetch subscription schedules
+          const schedules = await stripe.subscriptionSchedules.list({
+            customer: customerId,
+            limit: 50
+          });
+          
+          for (const schedule of schedules.data) {
+            // Index by subscription ID for easy lookup
+            if (schedule.subscription) {
+              stripeSubscriptionSchedules.set(schedule.subscription as string, schedule);
+            }
+          }
+          
         } catch (stripeError: any) {
-          console.error(`⚠️  Failed to fetch Stripe payments for customer ${customerId}:`, stripeError.message);
+          console.error(`⚠️  Failed to fetch Stripe data for customer ${customerId}:`, stripeError.message);
           // Continue processing other customers even if one fails
         }
       }
     }
-    console.log(`💳 Fetched ${stripePaymentIntents.size} Stripe PaymentIntents`);
+    console.log(`💳 Fetched ${stripePaymentIntents.size} PaymentIntents, ${stripeSubscriptionSchedules.size} subscription schedules`);
     
-    // Step 3: Create enrollment lookup map
+    // Step 3: Create enrollment lookup maps
     const enrollmentMap = new Map();
+    const subscriptionToEnrollmentMap = new Map();
+    
     for (const enrollment of enrollments) {
       enrollmentMap.set(enrollment.id, enrollment);
+      // Map subscription ID to enrollment for schedule lookup
+      if (enrollment.stripeSubscriptionId) {
+        subscriptionToEnrollmentMap.set(enrollment.stripeSubscriptionId, enrollment);
+      }
     }
     
-    // Step 4: Merge and enrich payments
-    const enrichedPayments = dbPayments.map((payment: any) => {
+    // Step 4: Enrich database payments
+    const enrichedDbPayments: EnrichedPaymentHistory[] = dbPayments.map((payment: any) => {
       // Get linked enrollments
       const linkedEnrollments = (payment.enrollmentIds || [])
         .map((id: number) => enrollmentMap.get(id))
@@ -69,29 +155,36 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
       // Build enrollment details
       const enrollmentDetails = linkedEnrollments.map((e: any) => ({
         enrollmentId: e.id,
-        childName: e.childName,
-        className: e.className,
-        status: e.status,
-        paymentPlan: e.paymentPlan
+        childName: e.childName || '',
+        className: e.className || '',
+        status: e.status || '',
+        paymentPlan: e.paymentPlan || null
       }));
       
-      // Enrich with Stripe data if available
+      // Enrich with Stripe PaymentIntent data
       const stripeIntent = payment.stripePaymentIntentId 
         ? stripePaymentIntents.get(payment.stripePaymentIntentId)
         : null;
       
+      // Calculate next payment date from subscription schedule
+      let nextPaymentDate: string | null = null;
+      if (firstEnrollment?.stripeSubscriptionId) {
+        const schedule = stripeSubscriptionSchedules.get(firstEnrollment.stripeSubscriptionId);
+        nextPaymentDate = calculateNextPaymentDate(schedule, firstEnrollment);
+      }
+      
       return {
         id: payment.id,
-        amount: CurrencyUtils.toDisplay(payment.amount || 0),
+        amount: CurrencyUtils.format(payment.amount || 0),
         currency: payment.currency || 'usd',
-        status: stripeIntent?.status || payment.status,
+        status: stripeIntent?.status || payment.status || 'unknown',
         description: payment.description || `Payment for ${payment.className || 'program'}`,
-        date: payment.createdAt,
-        createdAt: payment.createdAt,
-        updatedAt: payment.updatedAt,
-        stripePaymentIntentId: payment.stripePaymentIntentId,
+        date: payment.createdAt?.toISOString() || new Date().toISOString(),
+        createdAt: payment.createdAt?.toISOString() || new Date().toISOString(),
+        updatedAt: payment.updatedAt?.toISOString() || new Date().toISOString(),
+        stripePaymentIntentId: payment.stripePaymentIntentId || null,
         enrollmentIds: payment.enrollmentIds || [],
-        metadata: payment.metadata,
+        metadata: payment.metadata || null,
         childName: payment.childName || enrollmentDetails[0]?.childName || '',
         programName: payment.className || enrollmentDetails[0]?.className || '',
         paymentMethod: stripeIntent?.payment_method_types?.[0] || payment.paymentMethod || 'card',
@@ -101,16 +194,68 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
         // Stripe enrichment
         stripeStatus: stripeIntent?.status || null,
         stripeAmount: stripeIntent?.amount || null,
-        stripeCreated: stripeIntent?.created ? new Date(stripeIntent.created * 1000) : null
+        stripeCreated: stripeIntent?.created ? new Date(stripeIntent.created * 1000).toISOString() : null,
+        // Schedule-derived fields
+        nextPaymentDate: nextPaymentDate,
+        source: 'database' as const
       };
     });
-
-    res.json({
+    
+    // Step 5: Detect and transform Stripe-only payments (orphaned PaymentIntents)
+    const dbPaymentIntentIds = new Set(
+      dbPayments.map((p: any) => p.stripePaymentIntentId).filter(Boolean)
+    );
+    
+    const stripeOnlyPayments: EnrichedPaymentHistory[] = Array.from(stripePaymentIntents.values())
+      .filter(intent => !dbPaymentIntentIds.has(intent.id) && intent.status === 'succeeded')
+      .map(intent => ({
+        id: -1, // Synthetic ID (will be ignored by frontend if using intent.id)
+        amount: CurrencyUtils.format(intent.amount || 0),
+        currency: intent.currency || 'usd',
+        status: intent.status || 'unknown',
+        description: intent.description || (intent.metadata?.className ? `Payment for ${intent.metadata.className}` : 'Stripe payment'),
+        date: new Date(intent.created * 1000).toISOString(),
+        createdAt: new Date(intent.created * 1000).toISOString(),
+        updatedAt: new Date(intent.created * 1000).toISOString(),
+        stripePaymentIntentId: intent.id,
+        enrollmentIds: [],
+        metadata: intent.metadata || null,
+        childName: intent.metadata?.childName || '',
+        programName: intent.metadata?.className || '',
+        paymentMethod: intent.payment_method_types?.[0] || 'card',
+        paymentPlan: intent.metadata?.paymentPlan || null,
+        enrollmentDetails: [],
+        stripeStatus: intent.status || null,
+        stripeAmount: intent.amount || null,
+        stripeCreated: new Date(intent.created * 1000).toISOString(),
+        nextPaymentDate: null,
+        source: 'stripe' as const
+      }));
+    
+    console.log(`🔍 Found ${stripeOnlyPayments.length} Stripe-only payments`);
+    
+    // Step 6: Merge and sort all payments
+    const allPayments = [...enrichedDbPayments, ...stripeOnlyPayments]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Step 7: Validate response with Zod schema
+    const response = enrichedPaymentHistoryListResponseSchema.parse({
       success: true,
-      payments: enrichedPayments
+      payments: allPayments
     });
+    
+    console.log(`✅ Returning ${response.payments.length} enriched payments (${enrichedDbPayments.length} DB + ${stripeOnlyPayments.length} Stripe-only)`);
+    
+    res.json(response);
+    
   } catch (error) {
-    console.error('Error fetching enriched payment history:', error);
+    console.error('❌ Error fetching enriched payment history:', error);
+    
+    // If Zod validation error, log details
+    if (error instanceof Error && error.name === 'ZodError') {
+      console.error('Schema validation failed:', JSON.stringify((error as any).errors, null, 2));
+    }
+    
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch payment history'
