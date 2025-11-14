@@ -15,13 +15,33 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 });
 
 // Helper: Calculate next payment date from Stripe subscription schedule
-function calculateNextPaymentDate(schedule: any, enrollment: any): string | null {
+// Uses Stripe's actual subscription data for accuracy (no approximations)
+async function calculateNextPaymentDate(schedule: any, enrollment: any): Promise<string | null> {
   if (!schedule || schedule.status !== 'active') return null;
+  
+  // If the schedule has a subscription ID, fetch the subscription for accurate billing data
+  if (schedule.subscription) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(schedule.subscription);
+      
+      // Use current_period_end for the next payment date (Stripe's accurate billing anchor)
+      if (subscription.current_period_end && subscription.status === 'active') {
+        const nextPaymentDate = new Date(subscription.current_period_end * 1000);
+        // Only return if it's in the future
+        if (nextPaymentDate.getTime() > Date.now()) {
+          return nextPaymentDate.toISOString();
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching subscription for next payment date:', err);
+      // Fall through to schedule-based calculation
+    }
+  }
   
   const currentPhase = schedule.current_phase;
   if (!currentPhase) return null;
   
-  // Check if there's a next phase
+  // Check if there's a next phase scheduled
   const phases = schedule.phases || [];
   const currentPhaseIndex = phases.findIndex((p: any) => 
     p.start_date === currentPhase.start_date
@@ -31,38 +51,6 @@ function calculateNextPaymentDate(schedule: any, enrollment: any): string | null
     // Next payment is the start of next phase
     const nextPhase = phases[currentPhaseIndex + 1];
     return new Date(nextPhase.start_date * 1000).toISOString();
-  }
-  
-  // If in a recurring phase, calculate next payment from interval
-  const items = currentPhase.items || [];
-  if (items.length > 0) {
-    const item = items[0];
-    const price = item.price_data || item.price;
-    
-    // If recurring interval exists, calculate next charge
-    if (price?.recurring?.interval && currentPhase.start_date) {
-      const startMs = currentPhase.start_date * 1000;
-      const now = Date.now();
-      const intervalMs = price.recurring.interval === 'month' 
-        ? 30 * 24 * 60 * 60 * 1000  // Approximate month
-        : price.recurring.interval === 'week'
-        ? 7 * 24 * 60 * 60 * 1000
-        : price.recurring.interval === 'year'
-        ? 365 * 24 * 60 * 60 * 1000
-        : 0;
-      
-      if (intervalMs > 0) {
-        // Calculate how many intervals have passed
-        const elapsedMs = now - startMs;
-        const intervalsPassed = Math.floor(elapsedMs / intervalMs);
-        const nextPaymentMs = startMs + ((intervalsPassed + 1) * intervalMs);
-        
-        // Only return if it's in the future
-        if (nextPaymentMs > now) {
-          return new Date(nextPaymentMs).toISOString();
-        }
-      }
-    }
   }
   
   // Fallback: if phase has end_date and it's in the future
@@ -141,65 +129,67 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
       }
     }
     
-    // Step 4: Enrich database payments
-    const enrichedDbPayments: EnrichedPaymentHistory[] = dbPayments.map((payment: any) => {
-      // Get linked enrollments
-      const linkedEnrollments = (payment.enrollmentIds || [])
-        .map((id: number) => enrollmentMap.get(id))
-        .filter(Boolean);
-      
-      // Extract payment plan from first enrollment
-      const firstEnrollment = linkedEnrollments[0];
-      const paymentPlan = firstEnrollment?.paymentPlan || payment.metadata?.paymentPlan || null;
-      
-      // Build enrollment details
-      const enrollmentDetails = linkedEnrollments.map((e: any) => ({
-        enrollmentId: e.id,
-        childName: e.childName || '',
-        className: e.className || '',
-        status: e.status || '',
-        paymentPlan: e.paymentPlan || null
-      }));
-      
-      // Enrich with Stripe PaymentIntent data
-      const stripeIntent = payment.stripePaymentIntentId 
-        ? stripePaymentIntents.get(payment.stripePaymentIntentId)
-        : null;
-      
-      // Calculate next payment date from subscription schedule
-      let nextPaymentDate: string | null = null;
-      if (firstEnrollment?.stripeSubscriptionId) {
-        const schedule = stripeSubscriptionSchedules.get(firstEnrollment.stripeSubscriptionId);
-        nextPaymentDate = calculateNextPaymentDate(schedule, firstEnrollment);
-      }
-      
-      return {
-        id: payment.id,
-        amount: CurrencyUtils.format(payment.amount || 0),
-        currency: payment.currency || 'usd',
-        status: stripeIntent?.status || payment.status || 'unknown',
-        description: payment.description || `Payment for ${payment.className || 'program'}`,
-        date: payment.createdAt?.toISOString() || new Date().toISOString(),
-        createdAt: payment.createdAt?.toISOString() || new Date().toISOString(),
-        updatedAt: payment.updatedAt?.toISOString() || new Date().toISOString(),
-        stripePaymentIntentId: payment.stripePaymentIntentId || null,
-        enrollmentIds: payment.enrollmentIds || [],
-        metadata: payment.metadata || null,
-        childName: payment.childName || enrollmentDetails[0]?.childName || '',
-        programName: payment.className || enrollmentDetails[0]?.className || '',
-        paymentMethod: stripeIntent?.payment_method_types?.[0] || payment.paymentMethod || 'card',
-        // Enriched fields
-        paymentPlan: paymentPlan,
-        enrollmentDetails: enrollmentDetails,
-        // Stripe enrichment
-        stripeStatus: stripeIntent?.status || null,
-        stripeAmount: stripeIntent?.amount || null,
-        stripeCreated: stripeIntent?.created ? new Date(stripeIntent.created * 1000).toISOString() : null,
-        // Schedule-derived fields
-        nextPaymentDate: nextPaymentDate,
-        source: 'database' as const
-      };
-    });
+    // Step 4: Enrich database payments (using Promise.all for async operations)
+    const enrichedDbPayments: EnrichedPaymentHistory[] = await Promise.all(
+      dbPayments.map(async (payment: any) => {
+        // Get linked enrollments
+        const linkedEnrollments = (payment.enrollmentIds || [])
+          .map((id: number) => enrollmentMap.get(id))
+          .filter(Boolean);
+        
+        // Extract payment plan from first enrollment
+        const firstEnrollment = linkedEnrollments[0];
+        const paymentPlan = firstEnrollment?.paymentPlan || payment.metadata?.paymentPlan || null;
+        
+        // Build enrollment details
+        const enrollmentDetails = linkedEnrollments.map((e: any) => ({
+          enrollmentId: e.id,
+          childName: e.childName || '',
+          className: e.className || '',
+          status: e.status || '',
+          paymentPlan: e.paymentPlan || null
+        }));
+        
+        // Enrich with Stripe PaymentIntent data
+        const stripeIntent = payment.stripePaymentIntentId 
+          ? stripePaymentIntents.get(payment.stripePaymentIntentId)
+          : null;
+        
+        // Calculate next payment date from subscription schedule (async)
+        let nextPaymentDate: string | null = null;
+        if (firstEnrollment?.stripeSubscriptionId) {
+          const schedule = stripeSubscriptionSchedules.get(firstEnrollment.stripeSubscriptionId);
+          nextPaymentDate = await calculateNextPaymentDate(schedule, firstEnrollment);
+        }
+        
+        return {
+          id: payment.id,
+          amount: payment.amount || 0, // Send raw cents (number)
+          currency: payment.currency || 'usd',
+          status: stripeIntent?.status || payment.status || 'unknown',
+          description: payment.description || `Payment for ${payment.className || 'program'}`,
+          date: payment.createdAt?.toISOString() || new Date().toISOString(),
+          createdAt: payment.createdAt?.toISOString() || new Date().toISOString(),
+          updatedAt: payment.updatedAt?.toISOString() || new Date().toISOString(),
+          stripePaymentIntentId: payment.stripePaymentIntentId || null,
+          enrollmentIds: payment.enrollmentIds || [],
+          metadata: payment.metadata || null,
+          childName: payment.childName || enrollmentDetails[0]?.childName || '',
+          programName: payment.className || enrollmentDetails[0]?.className || '',
+          paymentMethod: stripeIntent?.payment_method_types?.[0] || payment.paymentMethod || 'card',
+          // Enriched fields
+          paymentPlan: paymentPlan,
+          enrollmentDetails: enrollmentDetails,
+          // Stripe enrichment
+          stripeStatus: stripeIntent?.status || null,
+          stripeAmount: stripeIntent?.amount || null,
+          stripeCreated: stripeIntent?.created ? new Date(stripeIntent.created * 1000).toISOString() : null,
+          // Schedule-derived fields
+          nextPaymentDate: nextPaymentDate,
+          source: 'database' as const
+        };
+      })
+    );
     
     // Step 5: Detect and transform Stripe-only payments (orphaned PaymentIntents)
     const dbPaymentIntentIds = new Set(
@@ -210,7 +200,7 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
       .filter(intent => !dbPaymentIntentIds.has(intent.id) && intent.status === 'succeeded')
       .map(intent => ({
         id: -1, // Synthetic ID (will be ignored by frontend if using intent.id)
-        amount: CurrencyUtils.format(intent.amount || 0),
+        amount: intent.amount || 0, // Send raw cents (number)
         currency: intent.currency || 'usd',
         status: intent.status || 'unknown',
         description: intent.description || (intent.metadata?.className ? `Payment for ${intent.metadata.className}` : 'Stripe payment'),
