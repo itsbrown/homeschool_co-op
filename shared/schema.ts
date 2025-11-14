@@ -619,7 +619,7 @@ export type Payment = typeof payments.$inferSelect;
 export const enrichedPaymentHistorySchema = z.object({
   // Base payment fields
   id: z.number(),
-  amount: z.string(), // Formatted display amount (e.g., "$900.00")
+  amount: z.number(), // Raw cents (e.g., 90000 for $900.00) - frontend formats using CurrencyUtils
   currency: z.string(),
   status: z.string(),
   description: z.string(),
