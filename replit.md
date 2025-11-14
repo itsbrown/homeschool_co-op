@@ -50,6 +50,25 @@ The platform prioritizes scalability, security, and user experience with a moder
 4. **Migration Path**: Existing endpoints using `jwtCheck` should be migrated to `supabaseAuth` when updated
 5. **Consistency**: All payment, billing, and user-facing endpoints use Supabase authentication exclusively
 
+### Currency Formatting Standards
+**CRITICAL**: All currency values must follow these standardized patterns to ensure consistency across the platform:
+
+1. **Backend Storage & API**: Always store and send amounts as **raw cents (numbers)**
+   - Database: Store amounts as integers (cents)
+   - API Responses: Send amounts as numbers (e.g., `90000` for $900.00)
+   - Never send pre-formatted strings from the backend (e.g., "$900.00")
+   - Example: `{ amount: 90000, currency: "usd" }`
+
+2. **Frontend Display**: Always format amounts using `CurrencyUtils` helpers from `shared/currency-utils.ts`
+   - For display: `CurrencyUtils.format(cents)` → `"$900.00"`
+   - For calculations: `CurrencyUtils.toDisplay(cents)` → `900.00` (number)
+   - For user input: `CurrencyUtils.parseInput(input)` → cents (number)
+   - Never perform raw math on formatted strings
+
+3. **Rationale**: Backend sends raw cents (numbers) for flexibility - frontend can format differently for different contexts (tables, forms, charts). This prevents NaN errors when UI components attempt calculations on pre-formatted strings.
+
+4. **Migration**: All new payment/billing endpoints follow this standard (November 2024). Legacy endpoints should be updated when modified.
+
 ### Data Storage
 - **Primary Database**: Neon PostgreSQL for all application data.
 - **File Storage**: Local filesystem for general files and knowledge bases.
