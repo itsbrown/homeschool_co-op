@@ -2267,34 +2267,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User settings endpoints
-  app.get("/api/users/profile", jwtCheck, async (req: any, res) => {
+  app.get("/api/users/profile", supabaseAuth, async (req: any, res) => {
     try {
-      console.log('🔍 /api/users/profile - Authorization header:', req.headers.authorization ? 'PRESENT' : 'MISSING');
-      console.log('🔍 /api/users/profile - req.user:', req.user);
-      console.log('🔍 /api/users/profile - req.auth:', req.auth);
-      
-      const user = req.user;
-      if (!user || !user.id) {
-        console.log('❌ /api/users/profile - No user or user.id:', { hasUser: !!user, hasId: !!user?.id });
+      const userEmail = req.user?.email;
+      if (!userEmail) {
+        console.log('❌ /api/users/profile - No user email');
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      // Get schoolId from JWT token metadata
-      const schoolIdFromToken = req.auth?.payload?.school_id;
-      const schoolId = schoolIdFromToken ? Number(schoolIdFromToken) : null;
+      console.log('🔍 Profile API - Email:', userEmail);
 
-      console.log('👤 Profile request - userId:', user.id, 'schoolId:', schoolId);
+      // Get user from database
+      const dbUser = await storage.getUserByEmail(userEmail);
+      if (!dbUser) {
+        console.log('❌ User not found in database:', userEmail);
+        return res.status(404).json({ message: "User not found" });
+      }
 
-      // Return basic user profile information including schoolId
+      // Fetch school information if user has schoolId
+      let school = null;
+      if (dbUser.schoolId) {
+        school = await storage.getSchool(dbUser.schoolId);
+        if (school) {
+          school = {
+            id: school.id,
+            name: school.name
+          };
+        }
+      }
+
+      console.log('📋 Profile returned:', {
+        id: dbUser.id,
+        name: dbUser.name,
+        email: dbUser.email,
+        firstName: dbUser.firstName || '',
+        lastName: dbUser.lastName || '',
+        phoneNumber: dbUser.phoneNumber || '',
+        avatar: dbUser.avatar || '',
+        subscription: 'free',
+        role: dbUser.role,
+        schoolId: dbUser.schoolId
+      });
+
+      // Return user profile with school information
       res.json({
-        id: user.id,
-        email: user.email || '',
-        firstName: req.auth?.payload?.given_name || '',
-        lastName: req.auth?.payload?.family_name || '',
-        username: user.email || '',
-        phoneNumber: req.auth?.payload?.phone_number || '',
-        role: req.auth?.payload?.role || 'staff',
-        schoolId: schoolId && !isNaN(schoolId) ? schoolId : null
+        id: dbUser.id,
+        name: dbUser.name,
+        email: dbUser.email,
+        firstName: dbUser.firstName || '',
+        lastName: dbUser.lastName || '',
+        phoneNumber: dbUser.phoneNumber || '',
+        avatar: dbUser.avatar || '',
+        subscription: 'free',
+        role: dbUser.role,
+        school: school,
+        schoolId: dbUser.schoolId
       });
     } catch (error) {
       console.error("Error fetching user profile:", error);
