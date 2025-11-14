@@ -131,6 +131,8 @@ export default function ParentSidebar() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [location, setLocation] = useLocation();
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>({});
+  const [logoLoadFailed, setLogoLoadFailed] = React.useState(false);
+  const [mobileLogoLoadFailed, setMobileLogoLoadFailed] = React.useState(false);
 
   // Fetch user's associated school for branding
   const { data: schoolData } = useQuery({
@@ -165,6 +167,14 @@ export default function ParentSidebar() {
       }
     }
   });
+
+  // Reset logo load failed states when school logo changes
+  React.useEffect(() => {
+    if (schoolData?.school?.logo) {
+      setLogoLoadFailed(false);
+      setMobileLogoLoadFailed(false);
+    }
+  }, [schoolData?.school?.logo]);
 
   const toggleExpanded = (section: string) => {
     setExpandedSections(prevState => ({
@@ -245,20 +255,17 @@ export default function ParentSidebar() {
               <div className="flex items-center justify-between">
                 <a
                   href="/dashboard"
-                  className="flex items-center gap-2 font-semibold"
+                  className="flex items-center justify-center flex-1 mr-2 font-semibold"
                 >
-                  {schoolData?.success && schoolData?.school?.logo ? (
-                    <div className="flex items-center gap-2">
-                      <img 
-                        src={schoolData.school.logo} 
-                        alt={`${schoolData.school.name} Logo`}
-                        className="h-6 w-6 object-contain"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                      <span className="text-lg">{schoolData.school.name}</span>
-                    </div>
+                  {schoolData?.success && schoolData?.school?.logo && !mobileLogoLoadFailed ? (
+                    <img 
+                      src={schoolData.school.logo} 
+                      alt={`${schoolData.school.name} Logo`}
+                      className="h-8 max-w-[140px] object-contain"
+                      onError={() => {
+                        setMobileLogoLoadFailed(true);
+                      }}
+                    />
                   ) : schoolData?.success && schoolData?.school?.name ? (
                     <span className="text-xl">{schoolData.school.name}</span>
                   ) : (
@@ -312,23 +319,20 @@ export default function ParentSidebar() {
       {/* Desktop sidebar */}
       <div className="hidden border-r bg-background lg:block">
         <div className="flex h-screen flex-col p-4">
-          <div className="flex items-center gap-2 px-2 py-4">
+          <div className="flex items-center justify-center gap-2 px-2 py-4">
             <a
               href="/dashboard"
-              className="flex items-center gap-2 font-semibold"
+              className="flex items-center justify-center font-semibold"
             >
-              {schoolData?.success && schoolData?.school?.logo ? (
-                <div className="flex items-center gap-2">
-                  <img 
-                    src={schoolData.school.logo} 
-                    alt={`${schoolData.school.name} Logo`}
-                    className="h-8 w-8 object-contain"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                  <span className="text-xl">{schoolData.school.name}</span>
-                </div>
+              {schoolData?.success && schoolData?.school?.logo && !logoLoadFailed ? (
+                <img 
+                  src={schoolData.school.logo} 
+                  alt={`${schoolData.school.name} Logo`}
+                  className="h-10 max-w-[180px] object-contain"
+                  onError={() => {
+                    setLogoLoadFailed(true);
+                  }}
+                />
               ) : schoolData?.success && schoolData?.school?.name ? (
                 <span className="text-xl">{schoolData.school.name}</span>
               ) : (

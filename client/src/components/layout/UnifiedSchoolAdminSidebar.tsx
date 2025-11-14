@@ -161,6 +161,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
+  const [mobileLogoLoadFailed, setMobileLogoLoadFailed] = useState(false);
   const { user, isAuthenticated, signOut } = useAuth();
   const { activeRole } = useRole();
 
@@ -169,6 +171,14 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     queryKey: ['/api/school-admin/my-school'],
     enabled: !!user && (activeRole === 'schoolAdmin' || activeRole === 'superAdmin' || activeRole === 'educator'),
   });
+
+  // Reset logo load failed states when school logo changes
+  useEffect(() => {
+    if (schoolData?.logo) {
+      setLogoLoadFailed(false);
+      setMobileLogoLoadFailed(false);
+    }
+  }, [schoolData?.logo]);
 
   // Get appropriate navigation items based on role
   const getNavItems = () => {
@@ -246,24 +256,42 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             "flex items-center justify-between w-full",
             isCollapsed ? "justify-center" : "justify-between"
           )}>
-            {!isCollapsed && (
-              <Link href="/" data-testid="sidebar-logo-link" className="flex items-center gap-2">
-                {schoolData?.logo ? (
-                  <>
-                    <img 
-                      src={schoolData.logo} 
-                      alt={`${schoolData.name} Logo`}
-                      className="h-8 w-8 object-contain"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                    <span className="font-bold text-xl text-gray-800">{schoolData.name}</span>
-                  </>
+            {!isCollapsed ? (
+              <Link href="/" data-testid="sidebar-logo-link" className="flex items-center justify-center flex-1 mr-2">
+                {schoolData?.logo && !logoLoadFailed ? (
+                  <img 
+                    src={schoolData.logo} 
+                    alt={`${schoolData.name} Logo`}
+                    className="h-10 max-w-[180px] object-contain"
+                    onError={() => {
+                      setLogoLoadFailed(true);
+                    }}
+                  />
                 ) : schoolData?.name ? (
                   <span className="font-bold text-xl text-gray-800">{schoolData.name}</span>
                 ) : (
                   <span className="font-bold text-xl text-gray-800">ASA Platform</span>
+                )}
+              </Link>
+            ) : (
+              <Link href="/" data-testid="sidebar-logo-link-collapsed" className="flex items-center justify-center">
+                {schoolData?.logo && !logoLoadFailed ? (
+                  <img 
+                    src={schoolData.logo} 
+                    alt={`${schoolData.name} Logo`}
+                    className="h-8 w-8 object-contain"
+                    onError={() => {
+                      setLogoLoadFailed(true);
+                    }}
+                  />
+                ) : schoolData?.name ? (
+                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-sm">
+                    {schoolData.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
+                  </div>
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-sm">
+                    ASA
+                  </div>
                 )}
               </Link>
             )}
@@ -358,19 +386,16 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             >
               {/* Header */}
               <div className="flex h-14 items-center border-b px-4 flex-shrink-0">
-                <Link href="/" data-testid="mobile-sidebar-logo-link" className="flex items-center gap-2">
-                  {schoolData?.logo ? (
-                    <>
-                      <img 
-                        src={schoolData.logo} 
-                        alt={`${schoolData.name} Logo`}
-                        className="h-6 w-6 object-contain"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                      <span className="font-bold text-lg text-gray-800">{schoolData.name}</span>
-                    </>
+                <Link href="/" data-testid="mobile-sidebar-logo-link" className="flex items-center justify-center flex-1 mr-2">
+                  {schoolData?.logo && !mobileLogoLoadFailed ? (
+                    <img 
+                      src={schoolData.logo} 
+                      alt={`${schoolData.name} Logo`}
+                      className="h-8 max-w-[140px] object-contain"
+                      onError={() => {
+                        setMobileLogoLoadFailed(true);
+                      }}
+                    />
                   ) : schoolData?.name ? (
                     <span className="font-bold text-lg text-gray-800">{schoolData.name}</span>
                   ) : (

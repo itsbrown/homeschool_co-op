@@ -120,6 +120,9 @@ export default function MySchoolPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Logo load state
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
+
   // Marketing Links state
   const [showCreateLinkDialog, setShowCreateLinkDialog] = useState(false);
   const [newLinkData, setNewLinkData] = useState<CreateMarketingLinkData>({
@@ -169,6 +172,13 @@ export default function MySchoolPage() {
     queryKey: ["/api/school-admin/marketing-links"],
     enabled: isAuthenticated && !!school,
   });
+
+  // Reset logo load failed state when school logo changes
+  useEffect(() => {
+    if (school?.logo) {
+      setLogoLoadFailed(false);
+    }
+  }, [school?.logo]);
 
   // Create marketing link mutation
   const createLinkMutation = useMutation({
@@ -328,17 +338,24 @@ export default function MySchoolPage() {
           <Card className="mb-8">
             <CardHeader className="pb-3">
               <div className="flex items-center space-x-4">
-                <Avatar className="h-16 w-16">
-                  {school.logo ? (
-                    <AvatarImage src={school.logo} alt={school.name} />
-                  ) : (
+                {school.logo && !logoLoadFailed ? (
+                  <img 
+                    src={school.logo} 
+                    alt={`${school.name} Logo`}
+                    className="h-20 max-w-[200px] object-contain"
+                    onError={() => {
+                      setLogoLoadFailed(true);
+                    }}
+                  />
+                ) : (
+                  <Avatar className="h-16 w-16">
                     <AvatarFallback className="text-lg">
                       {school.name.split(' ').map(word => word[0]).join('').toUpperCase()}
                     </AvatarFallback>
-                  )}
-                </Avatar>
+                  </Avatar>
+                )}
                 <div>
-                  <CardTitle className="text-2xl mb-1">{school.name}</CardTitle>
+                  {(!school.logo || logoLoadFailed) && <CardTitle className="text-2xl mb-1">{school.name}</CardTitle>}
                   <CardDescription className="flex items-center space-x-2">
                     <Badge variant="secondary">{school.type}</Badge>
                     <Badge variant={school.status === 'active' ? 'default' : 'secondary'}>
