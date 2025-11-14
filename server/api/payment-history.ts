@@ -11,7 +11,7 @@ const router = Router();
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-04-10',
+  apiVersion: '2025-08-27.basil',
 });
 
 // Helper: Calculate next payment date from Stripe subscription schedule
@@ -26,8 +26,8 @@ async function calculateNextPaymentDate(schedule: any, enrollment: any): Promise
       const subscription = await stripe.subscriptions.retrieve(schedule.subscription);
       
       // Use current_period_end for the next payment date (Stripe's accurate billing anchor)
-      if (subscription.current_period_end && subscription.status === 'active') {
-        const nextPaymentDate = new Date(subscription.current_period_end * 1000);
+      if ((subscription as any).current_period_end && subscription.status === 'active') {
+        const nextPaymentDate = new Date((subscription as any).current_period_end * 1000);
         // Only return if it's in the future
         if (nextPaymentDate.getTime() > Date.now()) {
           return nextPaymentDate.toISOString();
@@ -427,6 +427,14 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       amount: amountInCents, // Already converted to cents
       currency,
       status: 'completed' as const, // Manual payments are immediately completed
+      description: description || `Manual payment for ${childName} - ${className}`,
+      schoolId: user.schoolId || 0,
+      parentId: user.id,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      enrollmentIds: [],
+      originalPaymentId: null,
+      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
       metadata: {
         paymentMethod,
         createdBy: userEmail,
@@ -593,7 +601,7 @@ router.post('/refund/:paymentId', supabaseAuth, async (req: any, res) => {
         console.log(`💳 Processing Stripe refund for payment intent: ${originalPayment.stripePaymentIntentId}`);
         
         stripeRefund = await stripe.refunds.create({
-          payment_intent: originalPayment.stripePaymentIntentId,
+          payment_intent: originalPayment.stripePaymentIntentId!,
           amount: refundAmountCents,
           reason: 'requested_by_customer',
           metadata: {
@@ -634,11 +642,19 @@ router.post('/refund/:paymentId', supabaseAuth, async (req: any, res) => {
     const refundPaymentData = {
       stripePaymentIntentId: stripeRefund ? stripeRefund.id : `refund_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       parentEmail: originalPayment.parentEmail,
-      childName: originalPayment.childName,
-      className: originalPayment.className,
+      childName: (originalPayment as any).childName || '',
+      className: (originalPayment as any).className || '',
       amount: -refundAmountCents, // Negative amount for refund
       currency: originalPayment.currency || 'usd',
       status: 'completed' as const,
+      description: `Refund for payment ${paymentId}`,
+      schoolId: (originalPayment as any).schoolId || 0,
+      parentId: (originalPayment as any).parentId || null,
+      stripeChargeId: null,
+      stripeRefundId: stripeRefund?.id || null,
+      enrollmentIds: [],
+      originalPaymentId: paymentId,
+      paymentDate: new Date(),
       metadata: {
         paymentMethod: 'refund',
         originalPaymentId: paymentId,
@@ -662,10 +678,10 @@ router.post('/refund/:paymentId', supabaseAuth, async (req: any, res) => {
       // Find matching enrollments using enrollmentIds if available, otherwise match by details
       let matchingEnrollments = [];
       
-      if (originalPayment.enrollmentIds && Array.isArray(originalPayment.enrollmentIds)) {
+      if ((originalPayment as any).enrollmentIds && Array.isArray((originalPayment as any).enrollmentIds)) {
         // Use enrollmentIds from payment record for accurate matching
         matchingEnrollments = allEnrollments.filter((enrollment: any) => 
-          originalPayment.enrollmentIds.includes(enrollment.id)
+          ((originalPayment as any).enrollmentIds as number[]).includes(enrollment.id)
         );
         console.log(`🔍 Found ${matchingEnrollments.length} enrollments via enrollmentIds for refund`);
       } else {
@@ -753,8 +769,8 @@ router.post('/refund/:paymentId', supabaseAuth, async (req: any, res) => {
         paymentDate: formatDate(new Date().toISOString()),
         paymentMethod: 'Refund',
         amount: formatCurrency(refundAmountCents),
-        childName: originalPayment.childName,
-        className: originalPayment.className,
+        childName: (originalPayment as any).childName || '',
+        className: (originalPayment as any).className || '',
         notes: `Refund for payment ${originalPayment.id}. Reason: ${reason || 'Administrative refund'}`
       });
       
@@ -771,8 +787,8 @@ router.post('/refund/:paymentId', supabaseAuth, async (req: any, res) => {
         amount: refundAmountCents / 100,
         reason: reason || 'Administrative refund',
         parentEmail: originalPayment.parentEmail,
-        childName: originalPayment.childName,
-        className: originalPayment.className,
+        childName: (originalPayment as any).childName || '',
+        className: (originalPayment as any).className || '',
         createdAt: refundPayment.createdAt,
         processedBy: userEmail,
         refundType: isStripePayment ? 'stripe' : 'manual',
@@ -849,7 +865,7 @@ router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
     }
 
     // Convert amount to cents
-    const amountInCents = CurrencyUtils.toCents(amount);
+    const amountInCents = CurrencyUtils.parseInput(amount);
 
     // Create payment record
     const paymentData = {
@@ -858,10 +874,17 @@ router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
       className: `${membership.membershipYear} Annual Membership`,
       amount: amountInCents,
       currency: currency.toLowerCase(),
-      status: 'completed',
+      status: 'completed' as const,
       paymentMethod,
       stripePaymentIntentId: `MANUAL-MEMBERSHIP-${Date.now()}`,
       description: description || `Manual payment for ${membership.membershipYear} annual membership`,
+      schoolId: membership.schoolId,
+      parentId: membership.parentUserId,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      enrollmentIds: [],
+      originalPaymentId: null,
+      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
       metadata: {
         membershipId: membership.id,
         paymentType: 'membership',
@@ -878,7 +901,7 @@ router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
     try {
       const existingPayments = await storage.getPaymentsByParentEmail(parentEmail);
       const membershipPayments = existingPayments.filter(p => 
-        p.metadata?.membershipId === membership.id &&
+        (p.metadata as any)?.membershipId === membership.id &&
         ['completed', 'succeeded'].includes(p.status)
       );
       
