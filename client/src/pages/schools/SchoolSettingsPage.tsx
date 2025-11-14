@@ -617,9 +617,9 @@ export default function SchoolSettingsPage() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-4 border rounded-lg">
                       <div>
-                        <h3 className="font-semibold">American Seekers Academy</h3>
+                        <h3 className="font-semibold">{userProfile?.school?.name || 'No School'}</h3>
                         <p className="text-sm text-muted-foreground">
-                          School ID: 1
+                          School ID: {userProfile?.school?.id || 'N/A'}
                         </p>
                       </div>
                       <Badge variant="outline">Active</Badge>
