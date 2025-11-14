@@ -2287,13 +2287,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fetch school information if user has schoolId
       let school = null;
       if (dbUser.schoolId) {
-        school = await storage.getSchool(dbUser.schoolId);
-        if (school) {
+        console.log('🏫 Fetching school with ID:', dbUser.schoolId);
+        const fetchedSchool = await storage.getSchool(dbUser.schoolId);
+        console.log('🏫 Fetched school:', fetchedSchool);
+        if (fetchedSchool) {
           school = {
-            id: school.id,
-            name: school.name
+            id: fetchedSchool.id,
+            name: fetchedSchool.name
           };
+          console.log('🏫 Processed school object:', school);
+        } else {
+          console.log('❌ No school found for ID:', dbUser.schoolId);
         }
+      } else {
+        console.log('❌ User has no schoolId');
       }
 
       console.log('📋 Profile returned:', {
@@ -2306,6 +2313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         avatar: dbUser.avatar || '',
         subscription: 'free',
         role: dbUser.role,
+        school: school,
         schoolId: dbUser.schoolId
       });
 
