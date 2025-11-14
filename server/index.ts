@@ -57,6 +57,14 @@ app.use('/api/school-admin/import-users', fileUpload({
   createParentPath: true,
 }));
 
+// Apply fileUpload middleware for school logo uploads
+app.use('/api/schools/upload-logo', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max file size for logos
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
