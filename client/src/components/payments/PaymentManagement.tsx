@@ -48,7 +48,7 @@ interface Payment {
   date: string;
   amount: number;
   description: string;
-  status: 'paid' | 'pending' | 'failed' | 'refunded';
+  status: 'paid' | 'succeeded' | 'pending' | 'failed' | 'refunded' | 'canceled';
   method: string;
   programName: string;
   childName: string;
@@ -189,8 +189,19 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         (payment.programName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (payment.childName || '').toLowerCase().includes(searchQuery.toLowerCase());
       
-      // Filter by status
-      const matchesStatus = filterStatus === 'all' || payment.status === filterStatus;
+      // Filter by status - treat 'succeeded' and 'paid' as equivalent
+      let matchesStatus = filterStatus === 'all';
+      if (!matchesStatus) {
+        if (filterStatus === 'paid') {
+          // Show both 'paid' and 'succeeded' for the "Paid" filter
+          matchesStatus = payment.status === 'paid' || payment.status === 'succeeded';
+        } else if (filterStatus === 'succeeded') {
+          // Also allow filtering by 'succeeded' specifically
+          matchesStatus = payment.status === 'succeeded' || payment.status === 'paid';
+        } else {
+          matchesStatus = payment.status === filterStatus;
+        }
+      }
       
       return matchesSearch && matchesStatus;
     });
@@ -236,12 +247,20 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     const outstandingData = outstandingBalances || [];
     
     const stats = paymentData.reduce((acc: any, payment: Payment) => {
+      // Count by exact status for filtering
       acc[payment.status] = (acc[payment.status] || 0) + 1;
       acc.total += 1;
-      acc.totalPaid = (acc.totalPaid || 0) + (payment.status === 'paid' ? payment.amount : 0);
-      acc.totalPending = (acc.totalPending || 0) + (payment.status === 'pending' ? payment.amount : 0);
+      
+      // Accumulate totals for each payment type (treat 'succeeded' and 'paid' as successful)
+      if (payment.status === 'paid' || payment.status === 'succeeded') {
+        acc.totalPaid = (acc.totalPaid || 0) + payment.amount;
+        acc.successfulCount = (acc.successfulCount || 0) + 1;
+      } else if (payment.status === 'pending') {
+        acc.totalPending = (acc.totalPending || 0) + payment.amount;
+      }
+      
       return acc;
-    }, { paid: 0, pending: 0, failed: 0, refunded: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0 });
+    }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0 });
     
     // Add outstanding balances
     stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => 
@@ -303,6 +322,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
+      case 'succeeded':
         return (
           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
             <Check className="mr-1 h-3 w-3" /> Paid
@@ -315,6 +335,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
           </Badge>
         );
       case 'failed':
+      case 'canceled':
         return (
           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
             <AlertCircle className="mr-1 h-3 w-3" /> Failed
@@ -350,7 +371,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(paymentStats.totalPaid || 0)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {paymentStats.paid || 0} successful payments
+                  {paymentStats.successfulCount || 0} successful payments
                 </p>
               </CardContent>
             </Card>
@@ -416,11 +437,11 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                     <div key={payment.id} className="flex justify-between items-center p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
                         <div className={`h-10 w-10 rounded-full flex items-center justify-center 
-                          ${payment.status === 'paid' ? 'bg-green-100 text-green-700' : 
+                          ${payment.status === 'paid' || payment.status === 'succeeded' ? 'bg-green-100 text-green-700' : 
                             payment.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
                             payment.status === 'refunded' ? 'bg-blue-100 text-blue-700' :
                             'bg-red-100 text-red-700'}`}>
-                          {payment.status === 'paid' ? <Check className="h-5 w-5" /> : 
+                          {payment.status === 'paid' || payment.status === 'succeeded' ? <Check className="h-5 w-5" /> : 
                            payment.status === 'pending' ? <Clock className="h-5 w-5" /> :
                            payment.status === 'refunded' ? <DollarSign className="h-5 w-5" /> :
                            <AlertCircle className="h-5 w-5" />}
@@ -473,9 +494,10 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="paid">Paid / Succeeded</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="canceled">Canceled</SelectItem>
                     <SelectItem value="refunded">Refunded</SelectItem>
                   </SelectContent>
                 </Select>
