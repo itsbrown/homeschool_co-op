@@ -379,7 +379,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         
         {/* Mobile sidebar drawer */}
         {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-40 bg-black/50" onClick={closeMobileMenu}>
+          <div className="md:hidden fixed inset-0 z-40 bg-black/50" onClick={closeMobileMenu}>
             <div 
               className="fixed inset-y-0 left-0 z-50 w-3/4 max-w-xs bg-white border-r shadow-lg flex flex-col" 
               onClick={(e) => e.stopPropagation()}
