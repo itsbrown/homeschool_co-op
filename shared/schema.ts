@@ -615,6 +615,46 @@ export const insertPaymentSchema = createInsertSchema(payments)
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
 
+// Enriched Payment History types for API responses
+export const enrichedPaymentHistorySchema = z.object({
+  // Base payment fields
+  id: z.number(),
+  amount: z.string(), // Formatted display amount (e.g., "$900.00")
+  currency: z.string(),
+  status: z.string(),
+  description: z.string(),
+  date: z.date(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  stripePaymentIntentId: z.string().nullable(),
+  enrollmentIds: z.array(z.number()),
+  metadata: z.record(z.any()).nullable(),
+  childName: z.string(),
+  programName: z.string(),
+  paymentMethod: z.string(),
+  
+  // Enriched fields from enrollment linking
+  paymentPlan: z.string().nullable(),
+  enrollmentDetails: z.array(z.object({
+    enrollmentId: z.number(),
+    childName: z.string(),
+    className: z.string(),
+    status: z.string(),
+    paymentPlan: z.string().nullable(),
+  })),
+  
+  // Stripe enrichment fields
+  stripeStatus: z.string().nullable(),
+  stripeAmount: z.number().nullable(), // Amount in cents from Stripe
+  stripeCreated: z.date().nullable(),
+  
+  // Future enhancement fields
+  nextPaymentDate: z.date().nullable().optional(),
+  source: z.enum(['database', 'stripe']).optional(), // Tag for Stripe-only payments
+});
+
+export type EnrichedPaymentHistory = z.infer<typeof enrichedPaymentHistorySchema>;
+
 // Scheduled Payments table - for recurring payment schedules
 export const scheduledPayments = pgTable("scheduled_payments", {
   id: serial("id").primaryKey(),
