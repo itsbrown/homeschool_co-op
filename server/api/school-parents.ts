@@ -97,4 +97,43 @@ router.get("/school/:parentEmail", async (req, res) => {
   }
 });
 
+// Get school contact information for authenticated parent
+router.get("/my-school-contact", supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user?.email;
+    
+    if (!userEmail) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Get user by email
+    const user = await storage.getUserByEmail(userEmail);
+
+    if (user && user.schoolId) {
+      // Fetch school details
+      const school = await storage.getSchool(user.schoolId);
+      if (school) {
+        return res.json({ 
+          success: true, 
+          school: {
+            name: school.name,
+            email: school.email,
+            phoneNumber: school.phoneNumber,
+            website: school.website,
+            address: school.address,
+            city: school.city,
+            state: school.state,
+            zipCode: school.zipCode
+          }
+        });
+      }
+    }
+
+    return res.json({ success: false, message: "No school associated with your account" });
+  } catch (error: any) {
+    console.error("Error fetching school contact info:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 export default router;
