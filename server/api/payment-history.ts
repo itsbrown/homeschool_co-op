@@ -17,7 +17,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 // Helper: Calculate next payment date from Stripe subscription schedule
 // Uses Stripe's actual subscription data for accuracy (no approximations)
 async function calculateNextPaymentDate(schedule: any, enrollment: any): Promise<string | null> {
-  if (!schedule || schedule.status !== 'active') return null;
+  // Accept schedules that imply upcoming charges (not_started, active)
+  if (!schedule || (schedule.status !== 'active' && schedule.status !== 'not_started')) return null;
   
   // If the schedule has a subscription ID, fetch the subscription for accurate billing data
   if (schedule.subscription) {
@@ -198,16 +199,24 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
     
     const stripeOnlyPayments: EnrichedPaymentHistory[] = Array.from(stripePaymentIntents.values())
       .filter(intent => !dbPaymentIntentIds.has(intent.id) && intent.status === 'succeeded')
+      .filter(intent => {
+        // Validate that amount exists (skip malformed records)
+        if (!intent.amount || intent.amount === 0) {
+          console.warn(`⚠️  Skipping Stripe payment intent ${intent.id} with invalid amount: ${intent.amount}`);
+          return false;
+        }
+        return true;
+      })
       .map(intent => ({
-        id: -1, // Synthetic ID (will be ignored by frontend if using intent.id)
-        amount: intent.amount || 0, // Send raw cents (number)
+        id: -1, // Synthetic ID (frontend should use stripePaymentIntentId as key)
+        amount: intent.amount, // Send raw cents (number) - validated above
         currency: intent.currency || 'usd',
         status: intent.status || 'unknown',
         description: intent.description || (intent.metadata?.className ? `Payment for ${intent.metadata.className}` : 'Stripe payment'),
         date: new Date(intent.created * 1000).toISOString(),
         createdAt: new Date(intent.created * 1000).toISOString(),
         updatedAt: new Date(intent.created * 1000).toISOString(),
-        stripePaymentIntentId: intent.id,
+        stripePaymentIntentId: intent.id, // CRITICAL: Set this for unique React keys
         enrollmentIds: [],
         metadata: intent.metadata || null,
         childName: intent.metadata?.childName || '',

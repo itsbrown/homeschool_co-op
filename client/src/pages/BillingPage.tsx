@@ -102,6 +102,9 @@ interface PaymentHistoryItem {
     price: number;
     amountPaid: number;
   }>;
+  source?: 'database' | 'stripe';
+  childName?: string;
+  programName?: string;
 }
 
 interface StripeSubscriptionSchedule {
@@ -260,19 +263,22 @@ function PaymentHistoryTab() {
     enabled: true,
   });
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount / 100);
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const formatPaymentPlan = (plan: string | null) => {
+    if (!plan) return null;
+    const planMap: Record<string, string> = {
+      'full_payment': 'Full Payment',
+      'deposit_installment': 'Deposit + Installment',
+      'multi_installment': 'Multiple Installments',
+    };
+    return planMap[plan] || plan;
   };
 
   if (historyLoading) {
@@ -303,32 +309,59 @@ function PaymentHistoryTab() {
 
       <div className="space-y-4">
         {paymentHistory.map((payment) => (
-          <Card key={payment.id} className="p-4">
+          <Card key={payment.stripePaymentIntentId || payment.id} className="p-4" data-testid={`payment-card-${payment.id}`}>
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
+              <div className="space-y-1 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-medium">{payment.description || 'Payment'}</h3>
                   <Badge 
                     variant={payment.status === 'succeeded' ? 'default' : 
                             payment.status === 'pending' ? 'secondary' : 'destructive'}
+                    data-testid={`badge-status-${payment.id}`}
                   >
                     {payment.status}
                   </Badge>
+                  {payment.source && (
+                    <Badge 
+                      variant="outline"
+                      data-testid={`badge-source-${payment.id}`}
+                    >
+                      {payment.source === 'stripe' ? 'Stripe Only' : 'Database'}
+                    </Badge>
+                  )}
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {formatDate(payment.createdAt)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Transaction ID: {payment.stripePaymentIntentId}
-                </p>
-                {payment.stripeSubscriptionScheduleId && (
-                  <p className="text-sm text-muted-foreground">
-                    Payment Plan: {payment.stripeSubscriptionScheduleId}
+
+                {/* Enrollment details */}
+                {payment.childName && payment.programName && (
+                  <p className="text-sm text-muted-foreground" data-testid={`text-enrollment-${payment.id}`}>
+                    <strong>{payment.childName}</strong> - {payment.programName}
                   </p>
                 )}
+
+                {/* Payment plan */}
+                {payment.paymentPlan && (
+                  <p className="text-sm text-muted-foreground" data-testid={`text-plan-${payment.id}`}>
+                    Plan: {formatPaymentPlan(payment.paymentPlan)}
+                  </p>
+                )}
+
+                <p className="text-sm text-muted-foreground" data-testid={`text-date-${payment.id}`}>
+                  {formatDate(payment.createdAt)}
+                </p>
+
+                {/* Next payment date */}
+                {payment.nextPaymentDate && (
+                  <p className="text-sm text-green-600 font-medium" data-testid={`text-next-payment-${payment.id}`}>
+                    Next Payment: {formatDate(payment.nextPaymentDate)}
+                  </p>
+                )}
+
+                <p className="text-xs text-muted-foreground" data-testid={`text-transaction-${payment.id}`}>
+                  Transaction ID: {payment.stripePaymentIntentId || 'N/A'}
+                </p>
               </div>
               <div className="text-right">
-                <div className="text-lg font-semibold">
+                <div className="text-lg font-semibold" data-testid={`text-amount-${payment.id}`}>
                   {formatCurrency(payment.amount)}
                 </div>
               </div>
