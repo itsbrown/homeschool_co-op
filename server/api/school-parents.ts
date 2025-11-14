@@ -123,7 +123,8 @@ router.get("/my-school-contact", supabaseAuth, async (req: any, res) => {
             address: school.address,
             city: school.city,
             state: school.state,
-            zipCode: school.zipCode
+            zipCode: school.zipCode,
+            logo: school.logo
           }
         });
       }

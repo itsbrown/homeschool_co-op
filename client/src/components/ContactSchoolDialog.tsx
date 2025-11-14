@@ -26,9 +26,12 @@ interface SchoolContact {
   city?: string;
   state?: string;
   zipCode?: string;
+  logo?: string | null;
 }
 
 export default function ContactSchoolDialog({ isOpen, onClose }: ContactSchoolDialogProps) {
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
+  
   const { data, isLoading, error } = useQuery({
     queryKey: ['/api/school-parents/my-school-contact'],
     enabled: isOpen,
@@ -37,6 +40,19 @@ export default function ContactSchoolDialog({ isOpen, onClose }: ContactSchoolDi
 
   const school = data?.school as SchoolContact | undefined;
   const hasAddress = school?.address && school?.city && school?.state;
+  
+  const handleLogoError = () => {
+    setLogoLoadFailed(true);
+  };
+  
+  const getSchoolInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 3);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -77,9 +93,29 @@ export default function ContactSchoolDialog({ isOpen, onClose }: ContactSchoolDi
           {school && (
             <div className="space-y-4">
               <div className="rounded-lg bg-gray-50 p-4">
-                <h3 className="font-semibold text-lg mb-3" data-testid="school-name">
-                  {school.name}
-                </h3>
+                {/* School Logo */}
+                <div className="flex justify-center mb-4">
+                  {school.logo && !logoLoadFailed ? (
+                    <img 
+                      src={school.logo} 
+                      alt={school.name}
+                      className="h-20 w-auto max-w-[200px] object-contain"
+                      onError={handleLogoError}
+                      data-testid="school-logo"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="h-20 w-20 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                        <span className="text-white text-2xl font-bold">
+                          {getSchoolInitials(school.name)}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-700" data-testid="school-name">
+                        {school.name}
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 <div className="space-y-3">
                   {school.email && (
