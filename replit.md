@@ -5,6 +5,14 @@ The ASA Learning Platform is an adaptive learning application for American Seeke
 
 ## Recent Changes
 ### November 2025
+- **Complete Payment System Modernization (November 14, 2025)**: Comprehensive update of entire payment and billing infrastructure:
+  - **Authentication Migration**: Migrated all payment-history and scheduled-payments endpoints to Supabase-only authentication, removing all Auth0 dependencies
+  - **Stripe API Integration**: Added `/api/stripe/subscription-schedules` and `/api/stripe/subscriptions` endpoints with proper data transformation
+  - **Legacy Endpoint Deprecation**: Removed `/api/scheduled-payments/upcoming` endpoint, migrated POST `/pay` and PATCH `/:id/paid` to supabaseAuth
+  - **Frontend Updates**: Updated PaymentManagement.tsx to consume new Stripe endpoints with correct phase index handling (fixed critical bug where currentPhase object was treated as numeric index)
+  - **Payment History Enrichment**: Enhanced `/api/payment-history/history` to batch-fetch Stripe PaymentIntents and merge with database records, adding enriched fields (paymentPlan, enrollmentDetails, Stripe status/amount)
+  - **Storage Layer**: Added `getStripeCustomerIdsByParentEmail()` and `getStripeLinkedEnrollmentsByParentEmail()` helper methods
+  - **Security**: All endpoints use consistent `req.user.email` extraction, admin endpoints verify schoolAdmin/superAdmin roles
 - **Stripe API Integration & Authentication Migration (November 13, 2025)**: Completed comprehensive migration of all payment and billing endpoints to Supabase-only authentication. Added new Stripe API endpoints for subscription schedules and subscriptions, implemented proper admin role authorization for sensitive endpoints, and created storage helper methods for Stripe customer ID retrieval. All Auth0 dependencies removed from payment flows. See Authentication Standards section for implementation details.
 - **BillingPage Payment Tabs**: Fixed Upcoming Payments tab data transformation to correctly parse Stripe subscription schedule API responses. Resolved CartContext type signature issue and lifted payment state management to parent component. All three tabs (Payment History, Subscription Schedules, Upcoming Payments) now work correctly with proper data display.
 - **Payment Discount Architecture**: Removed all hardcoded payment discounts from payment flows (CartCheckout, ClassPaymentPlans, PaymentPlanPage, BillingPage) - all discounts now exclusively managed through the database discount system
