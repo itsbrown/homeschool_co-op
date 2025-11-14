@@ -13,11 +13,13 @@ import {
   CheckCircle, 
   Clock,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Building2
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
 import { useToast } from '@/hooks/use-toast';
+import ContactSchoolDialog from './ContactSchoolDialog';
 
 interface SupportAssistantProps {
   isOpen: boolean;
@@ -309,22 +311,75 @@ export default function AISupportAssistant({ isOpen, onClose, initialIssue }: Su
 
 // Global support assistant trigger component
 export function SupportAssistantTrigger() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [isContactOpen, setIsContactOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <>
-      <Button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 z-40 rounded-full shadow-lg hover:shadow-xl transition-shadow"
-        size="lg"
-      >
-        <MessageCircle className="h-5 w-5 md:mr-2" />
-        <span className="hidden md:inline">Need Help?</span>
-      </Button>
+      <div className="fixed bottom-4 right-4 z-40">
+        {/* Menu dropdown */}
+        {isMenuOpen && (
+          <div className="absolute bottom-16 right-0 mb-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => {
+                setIsSupportOpen(true);
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+              data-testid="help-menu-technical-support"
+            >
+              <Bot className="h-5 w-5 text-blue-600" />
+              <div>
+                <p className="font-medium text-gray-900">AI Technical Support</p>
+                <p className="text-xs text-gray-500">Get help with platform issues</p>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setIsContactOpen(true);
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 border-t transition-colors"
+              data-testid="help-menu-contact-school"
+            >
+              <Building2 className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="font-medium text-gray-900">Contact My School</p>
+                <p className="text-xs text-gray-500">Reach out to your school admin</p>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Help button */}
+        <Button
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          className="rounded-full shadow-lg hover:shadow-xl transition-shadow"
+          size="lg"
+          data-testid="help-button"
+        >
+          <MessageCircle className="h-5 w-5 md:mr-2" />
+          <span className="hidden md:inline">Need Help?</span>
+        </Button>
+      </div>
+
+      {/* Backdrop to close menu */}
+      {isMenuOpen && (
+        <div 
+          className="fixed inset-0 z-30" 
+          onClick={() => setIsMenuOpen(false)}
+        />
+      )}
 
       <AISupportAssistant 
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
+        isOpen={isSupportOpen}
+        onClose={() => setIsSupportOpen(false)}
+      />
+
+      <ContactSchoolDialog 
+        isOpen={isContactOpen}
+        onClose={() => setIsContactOpen(false)}
       />
     </>
   );
