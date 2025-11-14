@@ -2,7 +2,7 @@ import express from "express";
 import { db, getDb } from "../db";
 import { schools, children } from "@shared/schema";
 import { insertSchoolSchema } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import uploadLogoRouter from './schools/upload-logo';
 
 const router = express.Router();
@@ -98,14 +98,14 @@ router.get("/", async (req, res) => {
 // Validate school registration code - must be before /:id route to avoid conflicts
 router.get("/validate-code/:code", async (req, res) => {
   try {
-    const code = req.params.code.toUpperCase().trim();
+    const code = req.params.code.trim();
     console.log('🔍 Validating registration code:', code);
     
     const db = await getDb();
     const [school] = await db
       .select()
       .from(schools)
-      .where(eq(schools.registrationCode, code))
+      .where(sql`LOWER(${schools.registrationCode}) = LOWER(${code})`)
       .limit(1);
     
     if (!school) {
