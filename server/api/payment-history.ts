@@ -13,38 +13,104 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-04-10',
 });
 
-// Get payment history for a specific user
+// Get payment history for a specific user (enriched with Stripe and enrollment data)
 router.get('/history', supabaseAuth, async (req: any, res) => {
   try {
     const userEmail = req.user.email;
-    console.log('✅ Payment history request for user:', userEmail);
+    console.log('✅ Payment history request (enriched) for user:', userEmail);
 
-    const payments = await storage.getPaymentsByParentEmail(userEmail);
+    // Step 1: Fetch all data sources in parallel
+    const [dbPayments, enrollments, customerIds] = await Promise.all([
+      storage.getPaymentsByParentEmail(userEmail),
+      storage.getStripeLinkedEnrollmentsByParentEmail(userEmail),
+      storage.getStripeCustomerIdsByParentEmail(userEmail)
+    ]);
     
-    // Transform payments to include formatted data
-    const formattedPayments = payments.map((payment: any) => ({
-      id: payment.id,
-      amount: CurrencyUtils.toDisplay(payment.amount || 0),
-      currency: payment.currency || 'usd',
-      status: payment.status,
-      description: payment.description || `Payment for ${payment.className || 'program'}`,
-      date: payment.createdAt,
-      createdAt: payment.createdAt,
-      updatedAt: payment.updatedAt,
-      stripePaymentIntentId: payment.stripePaymentIntentId,
-      enrollmentIds: payment.enrollmentIds || [],
-      metadata: payment.metadata,
-      childName: payment.childName || '',
-      programName: payment.className || '',
-      paymentMethod: payment.paymentMethod || 'card'
-    }));
+    console.log(`📊 Found: ${dbPayments.length} DB payments, ${enrollments.length} enrollments, ${customerIds.length} customer IDs`);
+    
+    // Step 2: Batch-fetch Stripe PaymentIntents for all customer IDs
+    const stripePaymentIntents = new Map();
+    if (customerIds.length > 0) {
+      for (const customerId of customerIds) {
+        try {
+          const paymentIntents = await stripe.paymentIntents.list({
+            customer: customerId,
+            limit: 100 // Fetch last 100 payments per customer
+          });
+          
+          for (const intent of paymentIntents.data) {
+            stripePaymentIntents.set(intent.id, intent);
+          }
+        } catch (stripeError: any) {
+          console.error(`⚠️  Failed to fetch Stripe payments for customer ${customerId}:`, stripeError.message);
+          // Continue processing other customers even if one fails
+        }
+      }
+    }
+    console.log(`💳 Fetched ${stripePaymentIntents.size} Stripe PaymentIntents`);
+    
+    // Step 3: Create enrollment lookup map
+    const enrollmentMap = new Map();
+    for (const enrollment of enrollments) {
+      enrollmentMap.set(enrollment.id, enrollment);
+    }
+    
+    // Step 4: Merge and enrich payments
+    const enrichedPayments = dbPayments.map((payment: any) => {
+      // Get linked enrollments
+      const linkedEnrollments = (payment.enrollmentIds || [])
+        .map((id: number) => enrollmentMap.get(id))
+        .filter(Boolean);
+      
+      // Extract payment plan from first enrollment
+      const firstEnrollment = linkedEnrollments[0];
+      const paymentPlan = firstEnrollment?.paymentPlan || payment.metadata?.paymentPlan || null;
+      
+      // Build enrollment details
+      const enrollmentDetails = linkedEnrollments.map((e: any) => ({
+        enrollmentId: e.id,
+        childName: e.childName,
+        className: e.className,
+        status: e.status,
+        paymentPlan: e.paymentPlan
+      }));
+      
+      // Enrich with Stripe data if available
+      const stripeIntent = payment.stripePaymentIntentId 
+        ? stripePaymentIntents.get(payment.stripePaymentIntentId)
+        : null;
+      
+      return {
+        id: payment.id,
+        amount: CurrencyUtils.toDisplay(payment.amount || 0),
+        currency: payment.currency || 'usd',
+        status: stripeIntent?.status || payment.status,
+        description: payment.description || `Payment for ${payment.className || 'program'}`,
+        date: payment.createdAt,
+        createdAt: payment.createdAt,
+        updatedAt: payment.updatedAt,
+        stripePaymentIntentId: payment.stripePaymentIntentId,
+        enrollmentIds: payment.enrollmentIds || [],
+        metadata: payment.metadata,
+        childName: payment.childName || enrollmentDetails[0]?.childName || '',
+        programName: payment.className || enrollmentDetails[0]?.className || '',
+        paymentMethod: stripeIntent?.payment_method_types?.[0] || payment.paymentMethod || 'card',
+        // Enriched fields
+        paymentPlan: paymentPlan,
+        enrollmentDetails: enrollmentDetails,
+        // Stripe enrichment
+        stripeStatus: stripeIntent?.status || null,
+        stripeAmount: stripeIntent?.amount || null,
+        stripeCreated: stripeIntent?.created ? new Date(stripeIntent.created * 1000) : null
+      };
+    });
 
     res.json({
       success: true,
-      payments: formattedPayments
+      payments: enrichedPayments
     });
   } catch (error) {
-    console.error('Error fetching payment history:', error);
+    console.error('Error fetching enriched payment history:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch payment history'
