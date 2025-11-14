@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { storage } from '../storage';
-import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
-import jwt from 'jsonwebtoken';
+import { supabaseAuth } from '../middleware/supabase-auth';
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -13,7 +12,9 @@ const stripe = process.env.STRIPE_SECRET_KEY
 
 const router = Router();
 
-// Get upcoming scheduled payments for a user
+// DEPRECATED: This endpoint has been replaced by /api/stripe/subscription-schedules
+// Keeping commented out for reference during migration
+/*
 router.get('/upcoming', async (req, res) => {
   try {
     console.log('🚀 Upcoming payments API called');
@@ -170,13 +171,15 @@ router.get('/upcoming', async (req, res) => {
     });
   }
 });
+*/
 
 // Process a scheduled payment
-router.post('/pay', async (req, res) => {
+router.post('/pay', supabaseAuth, async (req: any, res) => {
   try {
     const { paymentId, amount, description } = req.body;
+    const userEmail = req.user.email;
 
-    console.log('💳 Processing scheduled payment:', { paymentId, amount, description });
+    console.log('💳 Processing scheduled payment:', { paymentId, amount, description, userEmail });
 
     if (!stripe) {
       return res.status(500).json({
@@ -189,35 +192,6 @@ router.post('/pay', async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Payment ID and amount are required'
-      });
-    }
-
-    // Extract user email from Supabase token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authorization header missing'
-      });
-    }
-
-    const token = authHeader.split(' ')[1];
-    let userEmail: string;
-
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-      userEmail = payload.email;
-      if (!userEmail) {
-        return res.status(401).json({
-          success: false,
-          error: 'Email not found in token'
-        });
-      }
-    } catch (error) {
-      console.log('❌ Token decode error:', error);
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid authentication token'
       });
     }
 
@@ -271,36 +245,12 @@ router.post('/pay', async (req, res) => {
 });
 
 // Mark a scheduled payment as paid (for when someone pays early)
-router.patch('/:id/paid', async (req, res) => {
+router.patch('/:id/paid', supabaseAuth, async (req: any, res) => {
   try {
     const paymentId = parseInt(req.params.id);
+    const userEmail = req.user.email;
     
-    // Extract user email from Supabase token (same as payment-history)
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authorization header missing'
-      });
-    }
-
-    const token = authHeader.split(' ')[1];
-    
-    // Verify the Supabase token
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      console.log('❌ Scheduled payments auth error:', error);
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid authentication token'
-      });
-    }
+    console.log('✅ Marking payment as paid:', { paymentId, userEmail });
     
     // Update the scheduled payment status
     const updatedPayment = await storage.updateScheduledPaymentStatus(paymentId, 'paid');
