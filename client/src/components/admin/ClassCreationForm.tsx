@@ -51,7 +51,7 @@ const classFormSchema = z.object({
     days: z.array(z.string()).min(1, "At least one day must be selected"),
     price: z.number().min(0, "Price must be a positive number")
   })).min(1, "At least one time option is required"),
-  location: z.string().optional(),
+  locationId: z.string().optional(),
   price: z.string().transform(val => {
     // Convert to float, and round to 2 decimal places to avoid precision issues
     const numValue = parseFloat(val);
@@ -153,10 +153,9 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         days: ['Monday', 'Wednesday'],
         price: 5000
       }],
-    // Convert locationId to location name by looking up in the locations array
-    location: initialData.locationId ? 
-      (locations.find((loc: any) => loc.id === initialData.locationId)?.name || initialData.location || "") : 
-      (initialData.location || ""),
+    // Store locationId as string (matching instructor pattern)
+    locationId: initialData.locationId ? 
+      initialData.locationId.toString() : "",
     // Fix price display - convert to string with proper formatting
     price: initialData.price ? formatDollars(parseFloat(initialData.price.toString())) : "0.00",
     capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
@@ -196,7 +195,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       days: ['Monday', 'Wednesday'],
       price: 5000
     }],
-    location: "",
+    locationId: "",
     price: "0",
     capacity: "20",
     isPublished: false,
@@ -222,10 +221,8 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     // Wait for data to finish loading and ensure we have initialData
     // Only initialize once per classId to prevent wiping user edits on refetch
     if (!isLoadingLocations && !isLoadingStaff && initialData && initialData.id !== initializedClassIdRef.current) {
-      // Convert locationId to location name if possible, otherwise use the location string
-      const locationName = initialData.locationId && locations.length > 0 ? 
-        (locations.find((loc: any) => loc.id === initialData.locationId)?.name || initialData.location || "") : 
-        (initialData.location || "");
+      // Store locationId as string (matching instructor pattern)
+      const locationIdStr = initialData.locationId ? initialData.locationId.toString() : "";
       
       const formData = {
         title: initialData.title || "",
@@ -255,7 +252,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
             days: ['Monday', 'Wednesday'],
             price: 5000
           }],
-        location: locationName,
+        locationId: locationIdStr,
         price: initialData.price ? formatDollars(parseFloat(initialData.price.toString())) : "0.00",
         capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
         isPublished: initialData.isPublished || initialData.status === "published" || false,
@@ -266,7 +263,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         instructorId: initialData.instructorId ? initialData.instructorId.toString() : "1",
       };
       
-      console.log("Resetting form with processed data. Location:", locationName, "Instructor:", formData.instructorId);
+      console.log("Resetting form with processed data. LocationId:", locationIdStr, "Instructor:", formData.instructorId);
       form.reset(formData);
       
       // Mark this class as initialized
