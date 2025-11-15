@@ -570,7 +570,7 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
 
     // Add enrollment counts and parse variants from each class
     // Keep classes with variants intact (don't expand into individual entries)
-    const classesWithEnrollment = allClasses.map(classItem => {
+    const classesWithEnrollment = await Promise.all(allClasses.map(async (classItem) => {
       // Count enrollments for this specific class (exclude pending_payment, waitlist, cancelled, withdrawn, failed)
       // Check both classId (for regular classes) and marketplaceClassId (for marketplace classes)
       const classEnrollmentCount = enrollments.filter(enrollment => 
@@ -604,6 +604,19 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
         }
       }
       
+      // Look up location name if locationId exists
+      let locationName = null;
+      if (classItem.locationId) {
+        try {
+          const location = await storage.getLocationById(classItem.locationId);
+          if (location) {
+            locationName = location.name;
+          }
+        } catch (error) {
+          console.log(`⚠️ Could not fetch location for class ${classItem.id}:`, error);
+        }
+      }
+      
       // Return the class with variants array intact for enrollment dialog
       return {
         ...classItem,
@@ -611,9 +624,11 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
         capacity: classItem.capacity || 20,
         enrolled: classEnrollmentCount,
         // Include variants array if they exist
-        variants: variants || undefined
+        variants: variants || undefined,
+        // Include location name for display
+        location: locationName || classItem.location || null
       };
-    });
+    }));
 
     // Apply additional filters if needed
     let filteredClasses = classesWithEnrollment;
