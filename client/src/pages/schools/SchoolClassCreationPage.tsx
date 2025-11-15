@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
+import { useSchoolAdmin } from "@/hooks/useSchoolAdmin";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ const classFormSchema = z.object({
     price: z.number().min(0, "Price must be a positive number")
   })).min(1, "At least one time option is required"),
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1"),
-  location: z.string().min(1, "Location is required"),
+  locationId: z.coerce.number().int().min(1, "Location is required"),
   instructorName: z.string().min(1, "Instructor name is required"),
   status: z.string().min(1, "Please select a status"),
   isAdminOnly: z.boolean().default(false),
@@ -50,8 +51,10 @@ export default function SchoolClassCreationPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isEditMode, setIsEditMode] = useState(false);
-  const [locations, setLocations] = useState<{id: number, name: string}[]>([]);
   const formInitialized = React.useRef(false);
+  
+  // Get schoolId from authenticated user
+  const { schoolId } = useSchoolAdmin();
 
   // Get class ID from URL if in edit mode
   const classId = params.id ? parseInt(params.id, 10) : undefined;
@@ -75,7 +78,7 @@ export default function SchoolClassCreationPage() {
         price: 5000
       }],
       capacity: 10,
-      location: "",
+      locationId: 0,
       instructorName: "",
       status: "upcoming",
       isAdminOnly: false,
@@ -95,15 +98,26 @@ export default function SchoolClassCreationPage() {
 
   // Fetch locations for the school
   const { data: locationData = [], isLoading: locationsLoading } = useQuery({
-    queryKey: ["/api/locations"]
+    queryKey: ["/api/locations", schoolId],
+    queryFn: async () => {
+      if (!schoolId) return [];
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/locations?schoolId=${schoolId}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        credentials: "include"
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch locations');
+      }
+      return response.json();
+    },
+    enabled: !!schoolId
   });
 
-  // Update locations state when data is fetched
-  useEffect(() => {
-    if (locationData) {
-      setLocations(locationData);
-    }
-  }, [locationData]);
+  // Stabilize locations with useMemo to prevent infinite loops
+  const locations = React.useMemo(() => locationData || [], [locationData]);
 
   // Update form when class data is loaded
   useEffect(() => {
@@ -216,11 +230,13 @@ export default function SchoolClassCreationPage() {
           price: classData.price || 5000
         }],
         capacity: classData.capacity || 10,
-        location: classData.location || "",
+        locationId: classData.locationId || 0,
         instructorName: instructorValue,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
       });
+      
+      console.log('📍 Form reset with locationId:', classData.locationId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classData, classId, staffMembers, locations]);
@@ -540,13 +556,13 @@ export default function SchoolClassCreationPage() {
 
                   <FormField
                     control={form.control}
-                    name="location"
+                    name="locationId"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Location*</FormLabel>
                         <Select 
-                          onValueChange={field.onChange} 
-                          value={field.value}
+                          onValueChange={(value) => field.onChange(parseInt(value, 10))} 
+                          value={field.value ? String(field.value) : ""}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -555,7 +571,7 @@ export default function SchoolClassCreationPage() {
                           </FormControl>
                           <SelectContent>
                             {locations.map((location) => (
-                              <SelectItem key={location.id} value={location.name}>
+                              <SelectItem key={location.id} value={String(location.id)}>
                                 {location.name}
                               </SelectItem>
                             ))}
