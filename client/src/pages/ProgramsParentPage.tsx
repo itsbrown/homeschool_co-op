@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useCart } from "@/contexts/CartContext";
 import { ProgramList } from "@/components/registration/ProgramList";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack, ShoppingCart, Plus, MapPin, Clock } from "lucide-react";
+import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack, ShoppingCart, Plus, MapPin, Clock, ArrowUpDown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -29,12 +29,35 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; classId?: number; classTitle?: string; classData?: ClassData }>({ open: false });
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
+  const [sortField, setSortField] = useState<string>("startDate");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const { addItem, hasItem, openCart, refreshCart } = useCart();
   // Use wouter's location hook for navigation
   const [, setLocation] = useLocation();
+  
+  // Load sort preferences from localStorage
+  useEffect(() => {
+    const savedSortField = localStorage.getItem('parentClassesSortField');
+    const savedSortDirection = localStorage.getItem('parentClassesSortDirection');
+    
+    const validSortFields = ['startDate', 'title', 'location', 'price', 'enrollmentAvailability'];
+    if (savedSortField && validSortFields.includes(savedSortField)) {
+      setSortField(savedSortField);
+    }
+    
+    if (savedSortDirection && (savedSortDirection === 'asc' || savedSortDirection === 'desc')) {
+      setSortDirection(savedSortDirection as "asc" | "desc");
+    }
+  }, []);
+  
+  // Save sort preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('parentClassesSortField', sortField);
+    localStorage.setItem('parentClassesSortDirection', sortDirection);
+  }, [sortField, sortDirection]);
 
   // Get childId from URL query parameters if present
   const urlParams = new URLSearchParams(window.location.search);
@@ -234,7 +257,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         capacity: item.capacity,
         totalOrders: item.enrollmentCount || 0,
         totalWaitlisted: 0,
-        location: item.location,
+        location: item.locationName || item.location,
         instructorName: item.instructorName,
         variants: item.variants || []
       })),
@@ -267,23 +290,72 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   // Check if there are any summer camp classes
   const summerCamps = classesData.classes.filter(c => c.category === "summer-camp");
   
-  // Apply search and category filters to classes
-  const classesList = classesData.classes.filter(c => {
-    // Filter by category
-    const matchesCategory = c.category === "academic" || c.category === "membership";
+  // Apply search, category filters, and sorting to classes
+  const classesList = useMemo(() => {
+    // First filter
+    const filtered = classesData.classes.filter(c => {
+      // Filter by category
+      const matchesCategory = c.category === "academic" || c.category === "membership";
+      
+      // Filter by search term (search in title and description)
+      const matchesSearch = !searchTerm || 
+        c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.description && c.description.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      // Filter by category filter dropdown
+      const matchesCategoryFilter = !categoryFilter || 
+        categoryFilter === 'all' || 
+        c.categoryName === categoryFilter;
+      
+      return matchesCategory && matchesSearch && matchesCategoryFilter;
+    });
     
-    // Filter by search term (search in title and description)
-    const matchesSearch = !searchTerm || 
-      c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (c.description && c.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    // Then sort
+    const sorted = [...filtered];
+    sorted.sort((a: any, b: any) => {
+      let aValue: any;
+      let bValue: any;
+      
+      switch (sortField) {
+        case 'title':
+          aValue = (a.title || '').toLowerCase();
+          bValue = (b.title || '').toLowerCase();
+          break;
+        case 'location':
+          aValue = (a.location || 'zzz').toLowerCase();
+          bValue = (b.location || 'zzz').toLowerCase();
+          break;
+        case 'price':
+          aValue = a.price || 0;
+          bValue = b.price || 0;
+          break;
+        case 'startDate':
+          aValue = a.startDate ? new Date(a.startDate).getTime() : Number.POSITIVE_INFINITY;
+          bValue = b.startDate ? new Date(b.startDate).getTime() : Number.POSITIVE_INFINITY;
+          break;
+        case 'enrollmentAvailability':
+          const aAvailable = (a.capacity || 0) - (a.totalOrders || 0);
+          const bAvailable = (b.capacity || 0) - (b.totalOrders || 0);
+          aValue = aAvailable;
+          bValue = bAvailable;
+          break;
+        default:
+          aValue = a.startDate ? new Date(a.startDate).getTime() : Number.POSITIVE_INFINITY;
+          bValue = b.startDate ? new Date(b.startDate).getTime() : Number.POSITIVE_INFINITY;
+      }
+      
+      let comparison = 0;
+      if (aValue < bValue) {
+        comparison = -1;
+      } else if (aValue > bValue) {
+        comparison = 1;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
     
-    // Filter by category filter dropdown
-    const matchesCategoryFilter = !categoryFilter || 
-      categoryFilter === 'all' || 
-      c.categoryName === categoryFilter;
-    
-    return matchesCategory && matchesSearch && matchesCategoryFilter;
-  });
+    return sorted;
+  }, [classesData.classes, searchTerm, categoryFilter, sortField, sortDirection]);
 
   // Debug logging for filtered lists
   console.log('All classes:', classesData.classes);
@@ -304,42 +376,78 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                 <CardDescription>Find the perfect class for your child</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={(e) => e.preventDefault()} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <Label htmlFor="search">Search</Label>
-                    <Input
-                      id="search"
-                      placeholder="Search by title or description"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
+                <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                      <Label htmlFor="search">Search</Label>
+                      <Input
+                        id="search"
+                        placeholder="Search by title or description"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
 
-                  <div>
-                    <Label htmlFor="programType">Program</Label>
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger id="programType">
-                        <SelectValue placeholder="Any program" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Any program</SelectItem>
-                        {classCategories.map((cat: string) => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div>
+                      <Label htmlFor="programType">Program</Label>
+                      <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                        <SelectTrigger id="programType">
+                          <SelectValue placeholder="Any program" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Any program</SelectItem>
+                          {classCategories.map((cat: string) => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4 items-end">
+                    <div className="flex-1">
+                      <Label htmlFor="sortBy" className="flex items-center gap-1">
+                        <ArrowUpDown className="h-3 w-3" />
+                        Sort By
+                      </Label>
+                      <Select value={sortField} onValueChange={setSortField}>
+                        <SelectTrigger id="sortBy">
+                          <SelectValue placeholder="Sort by..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="startDate">Start Date</SelectItem>
+                          <SelectItem value="title">Class Name</SelectItem>
+                          <SelectItem value="location">Location</SelectItem>
+                          <SelectItem value="price">Price</SelectItem>
+                          <SelectItem value="enrollmentAvailability">Availability</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="flex-1">
+                      <Label htmlFor="sortDirection">Direction</Label>
+                      <Select value={sortDirection} onValueChange={(value) => setSortDirection(value as "asc" | "desc")}>
+                        <SelectTrigger id="sortDirection">
+                          <SelectValue placeholder="Direction" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="asc">Ascending</SelectItem>
+                          <SelectItem value="desc">Descending</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div className="md:col-span-3 flex justify-end gap-2">
-                    {(searchTerm || (categoryFilter && categoryFilter !== 'all')) && (
-                      <Button variant="outline" type="button" onClick={() => {
-                        setSearchTerm("");
-                        setCategoryFilter("all");
-                      }}>
-                        Clear Filters
-                      </Button>
-                    )}
-                    <Button type="submit">Search</Button>
+                    <div className="flex gap-2">
+                      {(searchTerm || (categoryFilter && categoryFilter !== 'all')) && (
+                        <Button variant="outline" type="button" onClick={() => {
+                          setSearchTerm("");
+                          setCategoryFilter("all");
+                        }}>
+                          Clear Filters
+                        </Button>
+                      )}
+                      <Button type="submit">Search</Button>
+                    </div>
                   </div>
                 </form>
               </CardContent>
@@ -392,10 +500,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                           </div>
                         )}
 
-                        {classItem.location && (
+                        {(classItem.locationName || classItem.location) && (
                           <div className="flex items-center justify-between">
                             <div className="flex items-center"><MapPin className="h-4 w-4 mr-1 opacity-70" />Location:</div>
-                            <div className="font-medium text-sm">{classItem.location}</div>
+                            <div className="font-medium text-sm">{classItem.locationName || classItem.location}</div>
                           </div>
                         )}
 

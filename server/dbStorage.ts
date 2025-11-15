@@ -219,13 +219,74 @@ export class DatabaseStorage implements IStorage {
     category?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
-  }): Promise<Class[]> {
+  }): Promise<any[]> {
     const db = await getDb();
-    let query = db.select().from(classes);
+    
+    // Start with a select that includes location join
+    const baseQuery = db
+      .select({
+        // Select all class fields (same as getClassesBySchoolId)
+        id: classes.id,
+        type: classes.type,
+        legacyProgramId: classes.legacyProgramId,
+        schoolId: classes.schoolId,
+        locationId: classes.locationId,
+        title: classes.title,
+        description: classes.description,
+        category: classes.category,
+        gradeLevels: classes.gradeLevels,
+        startDate: classes.startDate,
+        endDate: classes.endDate,
+        schedule: classes.schedule,
+        capacity: classes.capacity,
+        price: classes.price,
+        instructorId: classes.instructorId,
+        isPublished: classes.isPublished,
+        createdAt: classes.createdAt,
+        updatedAt: classes.updatedAt,
+        productId: classes.productId,
+        productType: classes.productType,
+        categoryName: classes.categoryName,
+        numSessions: classes.numSessions,
+        sessionDays: classes.sessionDays,
+        durationWeeks: classes.durationWeeks,
+        sessionsPerWeek: classes.sessionsPerWeek,
+        sessionLengthMinutes: classes.sessionLengthMinutes,
+        startTime: classes.startTime,
+        endTime: classes.endTime,
+        status: classes.status,
+        location: classes.location,
+        instructorName: classes.instructorName,
+        suggestedPrice: classes.suggestedPrice,
+        totalOrders: classes.totalOrders,
+        paidOrders: classes.paidOrders,
+        totalWaitlisted: classes.totalWaitlisted,
+        totalOrderValue: classes.totalOrderValue,
+        totalDiscounted: classes.totalDiscounted,
+        totalCollected: classes.totalCollected,
+        isAdminOnly: classes.isAdminOnly,
+        enrollmentCount: classes.enrollmentCount,
+        ageRange: classes.ageRange,
+        scheduleType: classes.scheduleType,
+        scheduleDetails: classes.scheduleDetails,
+        locationName: classes.locationName,
+        locationAddress: classes.locationAddress,
+        isVirtual: classes.isVirtual,
+        meetingUrl: classes.meetingUrl,
+        curriculumId: classes.curriculumId,
+        coverImage: classes.coverImage,
+        materials: classes.materials,
+        // Add location name from join
+        locationNameFromTable: locations.name,
+      })
+      .from(classes)
+      .leftJoin(locations, eq(classes.locationId, locations.id));
 
-    // Apply search filter
+    // Build query conditions
+    const conditions = [];
+    
     if (options.search) {
-      query = query.where(
+      conditions.push(
         or(
           like(classes.title, `%${options.search}%`),
           like(classes.description, `%${options.search}%`)
@@ -233,10 +294,12 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
-    // Apply category filter
     if (options.category) {
-      query = query.where(eq(classes.category, options.category));
+      conditions.push(eq(classes.category, options.category));
     }
+
+    // Apply where conditions if any
+    let query = conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
 
     // Apply sorting
     if (options.sortBy) {
@@ -259,7 +322,13 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    return await query;
+    const result = await query;
+    
+    // Map results to include locationName (prefer joined value, fallback to old location field)
+    return result.map(row => ({
+      ...row,
+      locationName: row.locationNameFromTable || row.location || null,
+    }));
   }
 
   async getClassesCount(options: { 
@@ -371,9 +440,75 @@ export class DatabaseStorage implements IStorage {
     return updatedClass;
   }
 
-  async getAllClasses(): Promise<Class[]> {
+  async getAllClasses(): Promise<any[]> {
     const db = await getDb();
-    const allClasses = await db.select().from(classes);
+    
+    // Left join with locations to include locationName
+    const result = await db
+      .select({
+        // Select all class fields
+        id: classes.id,
+        type: classes.type,
+        legacyProgramId: classes.legacyProgramId,
+        schoolId: classes.schoolId,
+        locationId: classes.locationId,
+        title: classes.title,
+        description: classes.description,
+        category: classes.category,
+        gradeLevels: classes.gradeLevels,
+        startDate: classes.startDate,
+        endDate: classes.endDate,
+        schedule: classes.schedule,
+        capacity: classes.capacity,
+        price: classes.price,
+        instructorId: classes.instructorId,
+        isPublished: classes.isPublished,
+        createdAt: classes.createdAt,
+        updatedAt: classes.updatedAt,
+        productId: classes.productId,
+        productType: classes.productType,
+        categoryName: classes.categoryName,
+        numSessions: classes.numSessions,
+        sessionDays: classes.sessionDays,
+        durationWeeks: classes.durationWeeks,
+        sessionsPerWeek: classes.sessionsPerWeek,
+        sessionLengthMinutes: classes.sessionLengthMinutes,
+        startTime: classes.startTime,
+        endTime: classes.endTime,
+        status: classes.status,
+        location: classes.location,
+        instructorName: classes.instructorName,
+        suggestedPrice: classes.suggestedPrice,
+        totalOrders: classes.totalOrders,
+        paidOrders: classes.paidOrders,
+        totalWaitlisted: classes.totalWaitlisted,
+        totalOrderValue: classes.totalOrderValue,
+        totalDiscounted: classes.totalDiscounted,
+        totalCollected: classes.totalCollected,
+        isAdminOnly: classes.isAdminOnly,
+        enrollmentCount: classes.enrollmentCount,
+        ageRange: classes.ageRange,
+        scheduleType: classes.scheduleType,
+        scheduleDetails: classes.scheduleDetails,
+        locationName: classes.locationName,
+        locationAddress: classes.locationAddress,
+        isVirtual: classes.isVirtual,
+        meetingUrl: classes.meetingUrl,
+        curriculumId: classes.curriculumId,
+        coverImage: classes.coverImage,
+        materials: classes.materials,
+        // Add location name from join
+        locationNameFromTable: locations.name,
+      })
+      .from(classes)
+      .leftJoin(locations, eq(classes.locationId, locations.id));
+    
+    // Map results to include locationName (prefer joined value, fallback to old location field)
+    const allClasses = result.map(row => ({
+      ...row,
+      locationName: row.locationNameFromTable || row.location || null,
+    }));
+    
     console.log(`📊 getAllClasses: Found ${allClasses.length} total classes`);
     const schoolIdCounts = allClasses.reduce((acc, c) => {
       const sid = c.schoolId ?? 'null';
@@ -384,23 +519,82 @@ export class DatabaseStorage implements IStorage {
     return allClasses;
   }
 
-  async getClassesBySchoolId(schoolId: string): Promise<Class[]> {
+  async getClassesBySchoolId(schoolId: string): Promise<any[]> {
     const db = await getDb();
     const schoolIdNum = parseInt(schoolId, 10);
     if (isNaN(schoolIdNum)) {
       return [];
     }
-    const allClasses = await db.select().from(classes);
-    console.log(`📊 Total classes in DB: ${allClasses.length}`);
-    const schoolIdCounts = allClasses.reduce((acc, c) => {
-      const sid = c.schoolId ?? 'null';
-      acc[sid] = (acc[sid] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    console.log(`📊 Classes by schoolId:`, schoolIdCounts);
-    const filtered = await db.select().from(classes).where(eq(classes.schoolId, schoolIdNum));
-    console.log(`📊 Filtered classes for schoolId=${schoolIdNum}: ${filtered.length}`);
-    return filtered;
+    
+    // Left join with locations to include locationName
+    const result = await db
+      .select({
+        // Select all class fields
+        id: classes.id,
+        type: classes.type,
+        legacyProgramId: classes.legacyProgramId,
+        schoolId: classes.schoolId,
+        locationId: classes.locationId,
+        title: classes.title,
+        description: classes.description,
+        category: classes.category,
+        gradeLevels: classes.gradeLevels,
+        startDate: classes.startDate,
+        endDate: classes.endDate,
+        schedule: classes.schedule,
+        capacity: classes.capacity,
+        price: classes.price,
+        instructorId: classes.instructorId,
+        isPublished: classes.isPublished,
+        createdAt: classes.createdAt,
+        updatedAt: classes.updatedAt,
+        productId: classes.productId,
+        productType: classes.productType,
+        categoryName: classes.categoryName,
+        numSessions: classes.numSessions,
+        sessionDays: classes.sessionDays,
+        durationWeeks: classes.durationWeeks,
+        sessionsPerWeek: classes.sessionsPerWeek,
+        sessionLengthMinutes: classes.sessionLengthMinutes,
+        startTime: classes.startTime,
+        endTime: classes.endTime,
+        status: classes.status,
+        location: classes.location,
+        instructorName: classes.instructorName,
+        suggestedPrice: classes.suggestedPrice,
+        totalOrders: classes.totalOrders,
+        paidOrders: classes.paidOrders,
+        totalWaitlisted: classes.totalWaitlisted,
+        totalOrderValue: classes.totalOrderValue,
+        totalDiscounted: classes.totalDiscounted,
+        totalCollected: classes.totalCollected,
+        isAdminOnly: classes.isAdminOnly,
+        enrollmentCount: classes.enrollmentCount,
+        ageRange: classes.ageRange,
+        scheduleType: classes.scheduleType,
+        scheduleDetails: classes.scheduleDetails,
+        locationName: classes.locationName,
+        locationAddress: classes.locationAddress,
+        isVirtual: classes.isVirtual,
+        meetingUrl: classes.meetingUrl,
+        curriculumId: classes.curriculumId,
+        coverImage: classes.coverImage,
+        materials: classes.materials,
+        // Add location name from join
+        locationNameFromTable: locations.name,
+      })
+      .from(classes)
+      .leftJoin(locations, eq(classes.locationId, locations.id))
+      .where(eq(classes.schoolId, schoolIdNum));
+    
+    // Map results to include locationName (prefer joined value, fallback to old location field)
+    const mappedResults = result.map(row => ({
+      ...row,
+      locationName: row.locationNameFromTable || row.location || null,
+    }));
+    
+    console.log(`📊 Filtered classes for schoolId=${schoolIdNum}: ${mappedResults.length}`);
+    return mappedResults;
   }
 
   // Knowledge Base methods

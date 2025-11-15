@@ -332,8 +332,9 @@ export default function SchoolClassesPage() {
           bValue = (b.title || '').toLowerCase();
           break;
         case 'location':
-          aValue = (a.location || 'zzz').toLowerCase(); // Put null locations at end
-          bValue = (b.location || 'zzz').toLowerCase();
+          // Use locationName (from join), fallback to old location field for backward compatibility
+          aValue = (a.locationName || a.location || 'zzz').toLowerCase(); // Put null locations at end
+          bValue = (b.locationName || b.location || 'zzz').toLowerCase();
           break;
         case 'enrollmentCount':
           aValue = a.enrollmentCount || 0;
@@ -672,7 +673,7 @@ export default function SchoolClassesPage() {
                                   </TableCell>
                                 )}
                                 {visibleColumns.gradeLevel && <TableCell>{cls.gradeLevel}</TableCell>}
-                                {visibleColumns.location && <TableCell>{cls.location || "Not Specified"}</TableCell>}
+                                {visibleColumns.location && <TableCell>{cls.locationName || cls.location || "Not Specified"}</TableCell>}
                                 {visibleColumns.status && (
                                   <TableCell>
                                     <Badge variant="secondary">{cls.status}</Badge>
@@ -768,7 +769,7 @@ export default function SchoolClassesPage() {
                             </div>
                             <div>
                               <span className="font-medium">Location:</span>
-                              <p className="text-muted-foreground">{cls.location || "Not Specified"}</p>
+                              <p className="text-muted-foreground">{cls.locationName || cls.location || "Not Specified"}</p>
                             </div>
                             <div className="col-span-2">
                               <span className="font-medium">Enrollment:</span>
