@@ -317,7 +317,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         // Send price as a number in dollars - server will convert to cents
         price: inputPrice,
         capacity: parseInt(data.capacity.toString(), 10),
-        location: data.location || "",
+        locationId: data.locationId ? parseInt(data.locationId) : null,
         // Keep the date format exactly as entered in the form to prevent timezone shifts
         startDate: data.startDate || null,
         endDate: data.endDate || null,
