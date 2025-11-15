@@ -69,3 +69,79 @@ All currency values are stored and transmitted as raw cents (numbers) by the bac
 - **Brevo SMTP**: Email service.
 - **SendGrid**: Email service.
 - **Twilio**: SMS service.
+
+## Development Best Practices
+
+### State Persistence and localStorage
+**Critical Guidelines for Avoiding Infinite Render Loops:**
+
+When implementing features that use `localStorage` for state persistence (sort preferences, filter settings, column visibility, etc.), follow these practices to prevent React Error #310 (infinite render loops):
+
+1. **Always Validate Persisted Data**
+   - Before using values from `localStorage`, validate they match current schema
+   - Example: When loading a saved sort field, check it exists in the current list of valid sort options
+   - Invalid data should be cleared and reset to defaults with a console warning
+
+2. **Stabilize Data with useMemo**
+   - When deriving data from API responses (e.g., `classes?.items`), wrap it in `useMemo`
+   - This prevents new array references on every render which trigger downstream effects
+   - Example:
+   ```typescript
+   const classData = useMemo(() => {
+     return classes?.items || fallbackData;
+   }, [classes?.items]);
+   ```
+
+3. **Guard Expensive Operations During Loading**
+   - Add loading state checks to prevent operations on undefined/incomplete data
+   - Example in `useMemo` sorting logic:
+   ```typescript
+   const sorted = useMemo(() => {
+     if (isLoading) return [];
+     // ... sorting logic
+   }, [isLoading, data, ...otherDeps]);
+   ```
+
+4. **Include All Dependencies in useMemo/useEffect**
+   - Missing dependencies can cause stale closures and unexpected behavior
+   - TypeScript errors about missing dependencies should not be ignored
+   - Always include loading states as dependencies when they affect the operation
+
+5. **Testing Requirements**
+   - **Always test with cleared localStorage** when adding new persistent features
+   - Test what happens when saved values don't match current data schema
+   - Test loading states and null/undefined data scenarios
+   - Verify that sort/filter operations handle missing or null field values gracefully
+
+### Sort and Filter Implementation Checklist
+When adding new sortable columns or filterable fields:
+
+- [ ] Add field to validation array in localStorage loading logic
+- [ ] Handle null/undefined values in sort comparison (use fallback values like `'zzz'` for text, `Number.POSITIVE_INFINITY` for dates)
+- [ ] Update TypeScript types for column visibility toggles
+- [ ] Test with localStorage containing old/invalid field names
+- [ ] Ensure useMemo dependencies include loading states
+- [ ] Add proper TypeScript typing (avoid `any` types in filter arrays)
+
+### Common Pitfalls
+1. **Unstable Array References**: `data?.items || fallbackArray` creates new references - use `useMemo`
+2. **Missing Loading Guards**: Operations on loading data can create render loops
+3. **Unvalidated localStorage**: Saved values from old schema versions can crash the app
+4. **Missing Dependencies**: `useMemo` with incomplete dependency arrays causes stale data
+5. **Type Errors Ignored**: TypeScript errors often indicate real runtime issues
+
+### Real-World Example: Location Dropdown Bug (Nov 2024)
+**Issue**: Adding "location" as a sortable column caused infinite render loop (React Error #310)
+**Root Cause**: 
+- `classData` was recalculated every render without `useMemo`
+- Sort logic ran during loading state
+- No validation for localStorage values
+
+**Fix Applied**:
+1. Wrapped `classData` in `useMemo` to stabilize reference
+2. Added loading guard to sort `useMemo`
+3. Validated saved `sortField` against whitelist of valid fields
+4. Added `isLoading` to `useMemo` dependencies
+5. Properly typed the `toggleColumn` function
+
+This demonstrates why all five guidelines above are critical for preventing production bugs.

@@ -142,13 +142,21 @@ export default function SchoolClassesPage() {
     localStorage.setItem('classTableColumns', JSON.stringify(visibleColumns));
   }, [visibleColumns]);
 
-  // Load sort preferences from localStorage
+  // Load sort preferences from localStorage with validation
   useEffect(() => {
     const savedSortField = localStorage.getItem('classSortField');
     const savedSortDirection = localStorage.getItem('classSortDirection');
-    if (savedSortField) {
+    
+    // Validate that saved sort field is a valid option to prevent crashes
+    const validSortFields = ['title', 'location', 'enrollmentCount', 'status', 'startDate', 'gradeLevel', 'instructor', 'category'];
+    if (savedSortField && validSortFields.includes(savedSortField)) {
       setSortField(savedSortField);
+    } else if (savedSortField) {
+      // Invalid sort field found, clear it and reset to default
+      console.warn(`Invalid sort field "${savedSortField}" found in localStorage, resetting to "title"`);
+      localStorage.removeItem('classSortField');
     }
+    
     if (savedSortDirection && (savedSortDirection === 'asc' || savedSortDirection === 'desc')) {
       setSortDirection(savedSortDirection as "asc" | "desc");
     }
@@ -161,7 +169,7 @@ export default function SchoolClassesPage() {
   }, [sortField, sortDirection]);
 
   // Toggle column visibility
-  const toggleColumn = (column: string) => {
+  const toggleColumn = (column: keyof typeof visibleColumns) => {
     setVisibleColumns(prev => ({
       ...prev,
       [column]: !prev[column]
@@ -280,49 +288,20 @@ export default function SchoolClassesPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <SchoolAdminLayout pageTitle="Classes">
-        <div className="container mx-auto p-4">
-          <div className="flex items-center justify-center h-96">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <span className="ml-2 text-lg">Loading classes...</span>
-          </div>
-        </div>
-      </SchoolAdminLayout>
-    );
-  }
-
-  if (error) {
-    return (
-      <SchoolAdminLayout pageTitle="Classes">
-        <div className="container mx-auto p-4">
-          <div className="max-w-4xl mx-auto p-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Error Loading Classes</CardTitle>
-                <CardDescription>
-                  There was a problem loading your school's classes.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p>Please try again later or contact support if this issue persists.</p>
-              </CardContent>
-              <CardFooter>
-                <Button onClick={() => window.location.reload()}>Try Again</Button>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
-      </SchoolAdminLayout>
-    );
-  }
-
-  // Use API data if available, otherwise fall back to sample data
-  const classData = classes?.items || sampleClasses;
+  // Stabilize classData with useMemo to prevent infinite render loops
+  // MUST be before early returns to comply with Rules of Hooks
+  const classData = useMemo(() => {
+    return classes?.items || sampleClasses;
+  }, [classes?.items]);
 
   // Combined filter and sort logic using useMemo for optimal performance
+  // MUST be before early returns to comply with Rules of Hooks
   const sortedClasses = useMemo(() => {
+    // Guard: Don't sort while loading to prevent instability
+    if (isLoading) {
+      return [];
+    }
+    
     // First, filter the classes
     const filtered = classData.filter((cls: any) => {
       // Safely handle instructor field - could be 'instructor' or 'instructorName'
@@ -399,12 +378,51 @@ export default function SchoolClassesPage() {
     });
     
     return sorted;
-  }, [classData, searchQuery, categoryFilter, statusFilter, gradeLevelFilter, sortField, sortDirection]);
+  }, [isLoading, classData, searchQuery, categoryFilter, statusFilter, gradeLevelFilter, sortField, sortDirection]);
 
   // Extract unique values for filters
-  const categories = Array.from(new Set(classData.map((cls: any) => cls.category)));
-  const statuses = Array.from(new Set(classData.map((cls: any) => cls.status)));
-  const gradeLevels = Array.from(new Set(classData.map((cls: any) => cls.gradeLevel)));
+  // MUST be before early returns to comply with Rules of Hooks
+  const categories = Array.from(new Set(classData.map((cls: any) => cls.category))).filter(Boolean) as string[];
+  const statuses = Array.from(new Set(classData.map((cls: any) => cls.status))).filter(Boolean) as string[];
+  const gradeLevels = Array.from(new Set(classData.map((cls: any) => cls.gradeLevel))).filter(Boolean) as string[];
+
+  if (isLoading) {
+    return (
+      <SchoolAdminLayout pageTitle="Classes">
+        <div className="container mx-auto p-4">
+          <div className="flex items-center justify-center h-96">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="ml-2 text-lg">Loading classes...</span>
+          </div>
+        </div>
+      </SchoolAdminLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <SchoolAdminLayout pageTitle="Classes">
+        <div className="container mx-auto p-4">
+          <div className="max-w-4xl mx-auto p-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Error Loading Classes</CardTitle>
+                <CardDescription>
+                  There was a problem loading your school's classes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>Please try again later or contact support if this issue persists.</p>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </div>
+      </SchoolAdminLayout>
+    );
+  }
 
   const exportClassList = () => {
     const csvContent = [
