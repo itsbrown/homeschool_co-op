@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings } from "lucide-react";
+import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,6 +113,10 @@ export default function SchoolClassesPage() {
   const [gradeLevelFilter, setGradeLevelFilter] = useState("");
   const [activeTab, setActiveTab] = useState("list");
   
+  // Sort state
+  const [sortField, setSortField] = useState<string>("title");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  
   // Column visibility state
   const [visibleColumns, setVisibleColumns] = useState({
     className: true,
@@ -137,6 +141,24 @@ export default function SchoolClassesPage() {
   useEffect(() => {
     localStorage.setItem('classTableColumns', JSON.stringify(visibleColumns));
   }, [visibleColumns]);
+
+  // Load sort preferences from localStorage
+  useEffect(() => {
+    const savedSortField = localStorage.getItem('classSortField');
+    const savedSortDirection = localStorage.getItem('classSortDirection');
+    if (savedSortField) {
+      setSortField(savedSortField);
+    }
+    if (savedSortDirection && (savedSortDirection === 'asc' || savedSortDirection === 'desc')) {
+      setSortDirection(savedSortDirection as "asc" | "desc");
+    }
+  }, []);
+
+  // Save sort preferences to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('classSortField', sortField);
+    localStorage.setItem('classSortDirection', sortDirection);
+  }, [sortField, sortDirection]);
 
   // Toggle column visibility
   const toggleColumn = (column: string) => {
@@ -299,20 +321,85 @@ export default function SchoolClassesPage() {
   // Use API data if available, otherwise fall back to sample data
   const classData = classes?.items || sampleClasses;
 
-  // Filter logic
-  const filteredClasses = classData.filter((cls: any) => {
-    // Safely handle instructor field - could be 'instructor' or 'instructorName'
-    const instructorField = cls.instructorName || cls.instructor || '';
+  // Combined filter and sort logic using useMemo for optimal performance
+  const sortedClasses = useMemo(() => {
+    // First, filter the classes
+    const filtered = classData.filter((cls: any) => {
+      // Safely handle instructor field - could be 'instructor' or 'instructorName'
+      const instructorField = cls.instructorName || cls.instructor || '';
+      const title = cls.title || '';
+      
+      return (
+        (!searchQuery || 
+         title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+         instructorField.toLowerCase().includes(searchQuery.toLowerCase())) &&
+        (!categoryFilter || categoryFilter === 'all-categories' || cls.category === categoryFilter) &&
+        (!statusFilter || statusFilter === 'all-statuses' || cls.status === statusFilter) &&
+        (!gradeLevelFilter || gradeLevelFilter === 'all-grade-levels' || cls.gradeLevel === gradeLevelFilter)
+      );
+    });
+
+    // Then, sort the filtered results
+    const sorted = [...filtered];
     
-    return (
-      (!searchQuery || 
-       cls.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-       instructorField.toLowerCase().includes(searchQuery.toLowerCase())) &&
-      (!categoryFilter || categoryFilter === 'all-categories' || cls.category === categoryFilter) &&
-      (!statusFilter || statusFilter === 'all-statuses' || cls.status === statusFilter) &&
-      (!gradeLevelFilter || gradeLevelFilter === 'all-grade-levels' || cls.gradeLevel === gradeLevelFilter)
-    );
-  });
+    sorted.sort((a: any, b: any) => {
+      let aValue: any;
+      let bValue: any;
+      
+      // Get values based on sort field with null handling
+      switch (sortField) {
+        case 'title':
+          aValue = (a.title || '').toLowerCase();
+          bValue = (b.title || '').toLowerCase();
+          break;
+        case 'location':
+          aValue = (a.location || 'zzz').toLowerCase(); // Put null locations at end
+          bValue = (b.location || 'zzz').toLowerCase();
+          break;
+        case 'enrollmentCount':
+          aValue = a.enrollmentCount || 0;
+          bValue = b.enrollmentCount || 0;
+          break;
+        case 'status':
+          aValue = (a.status || '').toLowerCase();
+          bValue = (b.status || '').toLowerCase();
+          break;
+        case 'startDate':
+          // Send null/invalid dates to the end
+          aValue = a.startDate ? new Date(a.startDate).getTime() : Number.POSITIVE_INFINITY;
+          bValue = b.startDate ? new Date(b.startDate).getTime() : Number.POSITIVE_INFINITY;
+          break;
+        case 'gradeLevel':
+          aValue = (a.gradeLevel || 'zzz').toLowerCase(); // Put null grades at end
+          bValue = (b.gradeLevel || 'zzz').toLowerCase();
+          break;
+        case 'instructor':
+          aValue = (a.instructorName || a.instructor || 'zzz').toLowerCase();
+          bValue = (b.instructorName || b.instructor || 'zzz').toLowerCase();
+          break;
+        case 'category':
+          aValue = (a.category || 'zzz').toLowerCase(); // Put null categories at end
+          bValue = (b.category || 'zzz').toLowerCase();
+          break;
+        default:
+          aValue = '';
+          bValue = '';
+      }
+      
+      // Compare values
+      let comparison = 0;
+      if (aValue < bValue) {
+        comparison = -1;
+      } else if (aValue > bValue) {
+        comparison = 1;
+      }
+      
+      // Apply sort direction
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return sorted;
+  }, [classData, searchQuery, categoryFilter, statusFilter, gradeLevelFilter, sortField, sortDirection]);
 
   // Extract unique values for filters
   const categories = Array.from(new Set(classData.map((cls: any) => cls.category)));
@@ -322,7 +409,7 @@ export default function SchoolClassesPage() {
   const exportClassList = () => {
     const csvContent = [
       ['Class Name', 'Category', 'Instructor', 'Grade Level', 'Status', 'Enrollment', 'Schedule'],
-      ...filteredClasses.map((cls: any) => [
+      ...sortedClasses.map((cls: any) => [
         cls.title,
         cls.category,
         cls.instructorName || cls.instructor || 'Unassigned',
@@ -420,6 +507,45 @@ export default function SchoolClassesPage() {
                     </SelectContent>
                   </Select>
 
+                  {/* Sort By dropdown */}
+                  <Select value={sortField} onValueChange={setSortField}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="title">Class Name</SelectItem>
+                      <SelectItem value="location">Location</SelectItem>
+                      <SelectItem value="enrollmentCount">Enrollment</SelectItem>
+                      <SelectItem value="status">Status</SelectItem>
+                      <SelectItem value="startDate">Start Date</SelectItem>
+                      <SelectItem value="gradeLevel">Grade Level</SelectItem>
+                      <SelectItem value="instructor">Instructor</SelectItem>
+                      <SelectItem value="category">Category</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Sort direction toggle */}
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
+                    data-testid="button-toggle-sort-direction"
+                  >
+                    {sortDirection === "asc" ? (
+                      <>
+                        <ArrowUp className="mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Ascending</span>
+                        <span className="sm:hidden">Asc</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDown className="mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Descending</span>
+                        <span className="sm:hidden">Desc</span>
+                      </>
+                    )}
+                  </Button>
+
                   {/* Column selector - hide on mobile */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -496,7 +622,7 @@ export default function SchoolClassesPage() {
                   <CardHeader>
                     <CardTitle>Class List</CardTitle>
                     <CardDescription>
-                      {filteredClasses.length} of {classData.length} classes
+                      {sortedClasses.length} of {classData.length} classes
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -515,8 +641,8 @@ export default function SchoolClassesPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredClasses.length > 0 ? (
-                            filteredClasses.map((cls: any) => (
+                          {sortedClasses.length > 0 ? (
+                            sortedClasses.map((cls: any) => (
                               <TableRow key={cls.id}>
                                 {visibleColumns.className && <TableCell className="font-medium">{cls.title}</TableCell>}
                                 {visibleColumns.category && <TableCell>{cls.category}</TableCell>}
@@ -600,10 +726,10 @@ export default function SchoolClassesPage() {
                 {/* Mobile Card View - Shown only on mobile */}
                 <div className="md:hidden space-y-4">
                   <div className="text-sm text-muted-foreground mb-4">
-                    {filteredClasses.length} of {classData.length} classes
+                    {sortedClasses.length} of {classData.length} classes
                   </div>
-                  {filteredClasses.length > 0 ? (
-                    filteredClasses.map((cls: any) => (
+                  {sortedClasses.length > 0 ? (
+                    sortedClasses.map((cls: any) => (
                       <Card key={cls.id} className="hover:shadow-md transition-shadow">
                         <CardHeader className="pb-3">
                           <div className="flex justify-between items-start gap-2">
@@ -694,13 +820,13 @@ export default function SchoolClassesPage() {
                   <CardHeader>
                     <CardTitle>Classes Grid</CardTitle>
                     <CardDescription>
-                      {filteredClasses.length} of {classData.length} classes
+                      {sortedClasses.length} of {classData.length} classes
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {filteredClasses.length > 0 ? (
-                        filteredClasses.map((cls: any) => (
+                      {sortedClasses.length > 0 ? (
+                        sortedClasses.map((cls: any) => (
                           <Card key={cls.id} className="hover:shadow-md transition-shadow">
                             <CardHeader className="pb-3">
                               <div className="flex justify-between items-start">
