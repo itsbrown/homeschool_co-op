@@ -572,8 +572,10 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
     // Keep classes with variants intact (don't expand into individual entries)
     const classesWithEnrollment = allClasses.map(classItem => {
       // Count enrollments for this specific class (exclude pending_payment, waitlist, cancelled, withdrawn, failed)
+      // Check both classId (for regular classes) and marketplaceClassId (for marketplace classes)
       const classEnrollmentCount = enrollments.filter(enrollment => 
-        Number(enrollment.classId) === Number(classItem.id) && 
+        (Number(enrollment.classId) === Number(classItem.id) || 
+         Number(enrollment.marketplaceClassId) === Number(classItem.id)) && 
         ['enrolled', 'completed'].includes(enrollment.status)
       ).length;
       
