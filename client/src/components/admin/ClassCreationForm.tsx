@@ -637,7 +637,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         {/* Location */}
         <FormField
           control={form.control}
-          name="location"
+          name="locationId"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Location</FormLabel>
@@ -653,7 +653,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
                 </FormControl>
                 <SelectContent>
                   {locations.map((location: any) => (
-                    <SelectItem key={location.id} value={location.name}>
+                    <SelectItem key={location.id} value={location.id.toString()}>
                       {location.name}
                     </SelectItem>
                   ))}
