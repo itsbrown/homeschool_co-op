@@ -214,6 +214,16 @@ export default function SchoolClassCreationPage() {
           ? classData.gradeLevels
           : (classData.gradeLevel ? [classData.gradeLevel] : []));
       
+      // Handle backward compatibility: if locationId is missing, find it from location (string)
+      let targetLocationId = classData.locationId || 0;
+      if (!targetLocationId && classData.location && locations.length > 0) {
+        const matchingLocation = locations.find((loc: any) => loc.name === classData.location);
+        if (matchingLocation) {
+          targetLocationId = matchingLocation.id;
+          console.log(`🔄 Backward compatibility: Mapped location "${classData.location}" to locationId ${targetLocationId}`);
+        }
+      }
+      
       form.reset({
         title: classData.title || "",
         description: classData.description || "",
@@ -230,13 +240,13 @@ export default function SchoolClassCreationPage() {
           price: classData.price || 5000
         }],
         capacity: classData.capacity || 10,
-        locationId: classData.locationId || 0,
+        locationId: targetLocationId,
         instructorName: instructorValue,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
       });
       
-      console.log('📍 Form reset with locationId:', classData.locationId);
+      console.log('📍 Form reset with locationId:', targetLocationId, 'from classData.locationId:', classData.locationId, 'or location:', classData.location);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classData, classId, staffMembers, locations]);
