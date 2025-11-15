@@ -153,9 +153,12 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         days: ['Monday', 'Wednesday'],
         price: 5000
       }],
-    // Store locationId as string (matching instructor pattern)
+    // Store locationId as string, with fallback for legacy classes that only have location name
     locationId: initialData.locationId ? 
-      initialData.locationId.toString() : "",
+      initialData.locationId.toString() : 
+      (initialData.location && locations.length > 0 ?
+        (locations.find((loc: any) => loc.name === initialData.location)?.id.toString() || "") : 
+        ""),
     // Fix price display - convert to string with proper formatting
     price: initialData.price ? formatDollars(parseFloat(initialData.price.toString())) : "0.00",
     capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
@@ -221,8 +224,12 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     // Wait for data to finish loading and ensure we have initialData
     // Only initialize once per classId to prevent wiping user edits on refetch
     if (!isLoadingLocations && !isLoadingStaff && initialData && initialData.id !== initializedClassIdRef.current) {
-      // Store locationId as string (matching instructor pattern)
-      const locationIdStr = initialData.locationId ? initialData.locationId.toString() : "";
+      // Store locationId as string, with fallback for legacy classes
+      const locationIdStr = initialData.locationId ? 
+        initialData.locationId.toString() : 
+        (initialData.location && locations.length > 0 ?
+          (locations.find((loc: any) => loc.name === initialData.location)?.id.toString() || "") : 
+          "");
       
       const formData = {
         title: initialData.title || "",
@@ -292,6 +299,11 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
       const selectedEducator = staffData.find((edu: any) => edu.id.toString() === data.instructorId);
       const instructorName = selectedEducator ? selectedEducator.name : (user.name || user.email || "Instructor");
       
+      // Find location name based on selected ID for backward compatibility
+      const selectedLocation = locations.find((loc: any) => loc.id.toString() === data.locationId);
+      // Fall back to original location if lookup fails (preserves legacy data)
+      const locationName = selectedLocation ? selectedLocation.name : (initialData?.location || "");
+      
       // Convert the input price to a number (as dollars, not cents)
       // The server will handle the conversion to cents
       const inputPrice = parseFloat(data.price.toString() || "0");
@@ -317,7 +329,9 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         // Send price as a number in dollars - server will convert to cents
         price: inputPrice,
         capacity: parseInt(data.capacity.toString(), 10),
+        // Send both locationId and location name for backward compatibility
         locationId: data.locationId ? parseInt(data.locationId) : null,
+        location: locationName || "",
         // Keep the date format exactly as entered in the form to prevent timezone shifts
         startDate: data.startDate || null,
         endDate: data.endDate || null,
