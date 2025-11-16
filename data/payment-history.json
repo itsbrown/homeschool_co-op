@@ -1,14 +1,28 @@
 [
   {
     "id": 1,
-    "createdAt": "2025-11-16T20:52:43.273Z",
-    "updatedAt": "2025-11-16T20:52:43.273Z",
+    "createdAt": "2025-11-16T20:59:12.639Z",
+    "updatedAt": "2025-11-16T20:59:12.639Z",
     "schoolId": 1,
     "parentId": 1,
     "parentEmail": "parent@test.com",
     "amount": 10000,
     "status": "completed",
     "paymentMethod": "stripe",
+    "metadata": {},
+    "currency": "usd"
+  },
+  {
+    "id": 2,
+    "createdAt": "2025-11-16T20:59:45.257Z",
+    "updatedAt": "2025-11-16T20:59:45.257Z",
+    "schoolId": 1,
+    "parentId": 8,
+    "parentEmail": "parent@test.com",
+    "amount": 10000,
+    "status": "completed",
+    "paymentMethod": "stripe",
+    "description": "Test payment",
     "metadata": {},
     "currency": "usd"
   }

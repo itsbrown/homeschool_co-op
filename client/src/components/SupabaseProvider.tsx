@@ -155,6 +155,9 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
     try {
       console.log('🚪 Starting logout process...');
 
+      // Set explicit logout flag for cart security
+      localStorage.setItem('asa_explicit_logout', 'true');
+
       // Clear local storage first
       localStorage.removeItem('supabase_token');
       localStorage.removeItem('selectedRole');

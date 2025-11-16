@@ -1166,8 +1166,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return () => clearTimeout(timer);
     } else if (isAuthenticated === false && user === null) {
-      // Only clear cart if we're definitely not authenticated (not during loading states)
-      console.log('🛒 User definitely not authenticated, clearing cart');
+      // SECURITY: Clear cart when user is not authenticated to prevent cross-account enrollment risks
+      // Server-side validation provides primary defense, but client clearing is defense-in-depth
+      console.log('🛒 User not authenticated, clearing cart for security');
       dispatch({ type: 'CLEAR_CART' });
     } else {
       // During authentication loading, ensure cart from localStorage is preserved

@@ -107,6 +107,18 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         );
         
         if (enrollment) {
+          // SECURITY: Validate enrollment belongs to authenticated parent
+          if (enrollment.parentEmail !== userEmail && enrollment.parentId !== parent.id) {
+            console.error(`🚨 SECURITY: Enrollment ${enrollment.id} does not belong to parent ${userEmail}`);
+            console.error(`   Enrollment parent: ${enrollment.parentEmail} (ID: ${enrollment.parentId})`);
+            console.error(`   Authenticated parent: ${userEmail} (ID: ${parent.id})`);
+            return res.status(403).json({
+              message: 'You do not have permission to complete payment for this enrollment',
+              error: 'UNAUTHORIZED_ENROLLMENT',
+              details: 'This enrollment belongs to a different parent account'
+            });
+          }
+          
           console.log(`✅ Found existing pending enrollment ${enrollment.id} for child ${item.childId}`);
           // Update the existing enrollment with payment plan details
           await storage.updateProgramEnrollment(enrollment.id, {

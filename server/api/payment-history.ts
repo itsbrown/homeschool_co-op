@@ -84,7 +84,8 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
     const stripePaymentIntents = new Map<string, any>();
     const stripeSubscriptionSchedules = new Map<string, any>();
     
-    if (customerIds.length > 0) {
+    // Test mode: skip Stripe API calls
+    if (process.env.NODE_ENV !== 'test' && customerIds.length > 0) {
       for (const customerId of customerIds) {
         try {
           // Fetch PaymentIntents
@@ -115,6 +116,8 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
           // Continue processing other customers even if one fails
         }
       }
+    } else if (process.env.NODE_ENV === 'test') {
+      console.log('🧪 Test mode: Skipping Stripe API calls');
     }
     console.log(`💳 Fetched ${stripePaymentIntents.size} PaymentIntents, ${stripeSubscriptionSchedules.size} subscription schedules`);
     
