@@ -1917,6 +1917,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Category methods (school-specific)
+  async getCategoryById(id: number): Promise<Category | undefined> {
+    const db = await getDb();
+    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    return category;
+  }
+
   async getCategoriesBySchoolId(schoolId: number): Promise<Category[]> {
     const db = await getDb();
     return await db

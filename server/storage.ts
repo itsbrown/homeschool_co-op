@@ -341,6 +341,13 @@ export interface IStorage {
   updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined>;
   deleteLocation(id: number): Promise<void>;
 
+  // Category methods
+  getCategoryById(id: number): Promise<any>;
+  getCategoriesBySchoolId(schoolId: number): Promise<any[]>;
+  createCategory(category: any): Promise<any>;
+  updateCategory(id: number, category: any): Promise<any>;
+  deleteCategory(id: number): Promise<void>;
+
   // Discount methods
   getDiscountById(id: number): Promise<Discount | undefined>;
   getAllDiscounts(): Promise<Discount[]>;
@@ -4615,6 +4622,27 @@ export class MemStorage implements IStorage {
 
       async deleteLocation(id: number): Promise<void> {
         return this.dbStorage.deleteLocation(id);
+      }
+
+      // Category methods
+      async getCategoryById(id: number): Promise<any> {
+        return this.dbStorage.getCategoryById(id);
+      }
+
+      async getCategoriesBySchoolId(schoolId: number): Promise<any[]> {
+        return this.dbStorage.getCategoriesBySchoolId(schoolId);
+      }
+
+      async createCategory(category: any): Promise<any> {
+        return this.dbStorage.createCategory(category);
+      }
+
+      async updateCategory(id: number, category: any): Promise<any> {
+        return this.dbStorage.updateCategory(id, category);
+      }
+
+      async deleteCategory(id: number): Promise<void> {
+        return this.dbStorage.deleteCategory(id);
       }
 
       // Daily Flow Template methods
