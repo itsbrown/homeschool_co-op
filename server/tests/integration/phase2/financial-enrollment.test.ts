@@ -20,7 +20,19 @@ app.use(session({
 
 // Mock session-based authentication for tests using header-driven lookup
 // This allows supabaseAuth middleware to bypass token validation
+// 🔒 PRODUCTION SAFETY: This middleware should NEVER run in production
 app.use(async (req: any, res, next) => {
+  // Reject test authentication headers in production
+  if (process.env.NODE_ENV === 'production') {
+    const hasTestHeaders = req.headers['x-test-user-id'] || req.headers['x-test-user-email'];
+    if (hasTestHeaders) {
+      console.error('🚨 SECURITY: Test authentication headers detected in production environment');
+      return res.status(403).json({ 
+        error: 'Test authentication is not allowed in production environment' 
+      });
+    }
+  }
+  
   req.session = req.session || {};
   
   // Check for x-test-user-id header or x-test-user-email header

@@ -31,6 +31,23 @@ import { MembershipStatusService } from "./services/membership-status-service";
 import { dataLayer } from "./services/dataLayer";
 import { webhookHandler } from "./webhook-handler";
 
+// 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
+const currentEnv = process.env.NODE_ENV || 'development';
+console.log('🚀 Server starting in environment:', currentEnv);
+
+if (currentEnv === 'production') {
+  console.log('✅ Production mode: Database fallbacks disabled, test authentication blocked');
+  // Verify critical production environment variables are set
+  const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+  const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+  if (missingVars.length > 0) {
+    console.error('❌ CRITICAL: Missing required environment variables in production:', missingVars.join(', '));
+    process.exit(1);
+  }
+} else {
+  console.log('⚙️ Development/Test mode: Database fallbacks enabled for testing');
+}
+
 const app = express();
 
 // CRITICAL: Apply Stripe webhook handler BEFORE any global body parsers

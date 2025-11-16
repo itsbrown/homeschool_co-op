@@ -4507,6 +4507,9 @@ export class MemStorage implements IStorage {
             : inArray(programEnrollments.childId, childIds)
         );
       } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
         console.error('❌ Error getting enrollments by child IDs in database, falling back to memStorage:', error);
         // Fallback to memStorage: get all enrollments and filter by child IDs
         const allEnrollments = await this.memStorage.getAllEnrollments();
@@ -4528,10 +4531,16 @@ export class MemStorage implements IStorage {
         if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
           return await this.dbStorage.createProgramEnrollment(enrollment);
         } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
           console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createProgramEnrollment');
           return await this.memStorage.createProgramEnrollment(enrollment);
         }
       } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
         console.error('❌ Error creating program enrollment in database, falling back to memStorage:', error);
         return await this.memStorage.createProgramEnrollment(enrollment);
       }
@@ -4542,10 +4551,16 @@ export class MemStorage implements IStorage {
         if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
           return await this.dbStorage.updateProgramEnrollment(id, enrollment);
         } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
           console.log('💾 DB storage unavailable or method missing, using memStorage fallback for updateProgramEnrollment');
           return await this.memStorage.updateProgramEnrollment(id, enrollment);
         }
       } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
         console.error('❌ Error updating program enrollment in database, falling back to memStorage:', error);
         return await this.memStorage.updateProgramEnrollment(id, enrollment);
       }
@@ -4610,10 +4625,16 @@ export class MemStorage implements IStorage {
         if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
           return await this.dbStorage.createProgramEnrollment(enrollment);
         } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
           console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createEnrollment');
           return await this.memStorage.createEnrollment(enrollment);
         }
       } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
         console.error('❌ Error creating enrollment in database, falling back to memStorage:', error);
         return await this.memStorage.createEnrollment(enrollment);
       }
@@ -4637,10 +4658,16 @@ export class MemStorage implements IStorage {
         if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
           return await this.dbStorage.updateProgramEnrollment(id, data);
         } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
           console.log('💾 DB storage unavailable or method missing, using memStorage fallback for updateEnrollment');
           return await this.memStorage.updateEnrollment(id, data);
         }
       } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
         console.error('❌ Error updating enrollment in database, falling back to memStorage:', error);
         const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
         const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
@@ -4678,10 +4705,16 @@ export class MemStorage implements IStorage {
         if (this.dbStorage && typeof this.dbStorage.createClass === 'function') {
           return await this.dbStorage.createClass(classData);
         } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
           console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createClass');
           return await this.memStorage.createClass(classData);
         }
       } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
         console.error('❌ Error creating class in database, falling back to memStorage:', error);
         return await this.memStorage.createClass(classData);
       }
