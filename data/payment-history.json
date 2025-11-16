@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": 1,
+    "createdAt": "2025-11-16T16:40:16.996Z",
+    "updatedAt": "2025-11-16T16:40:16.996Z",
+    "schoolId": 1,
+    "parentId": 1,
+    "parentEmail": "parent@test.com",
+    "amount": 10000,
+    "status": "completed",
+    "paymentMethod": "stripe",
+    "metadata": {},
+    "currency": "usd"
+  }
+]

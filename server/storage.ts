@@ -21,6 +21,7 @@ import {
   linkAnalytics, type LinkAnalytics, type InsertLinkAnalytics,
   payments, type Payment, type InsertPayment,
   scheduledPayments, type ScheduledPayment, type InsertScheduledPayment,
+  refunds, type Refund, type InsertRefund,
   schools, type School, type InsertSchool,
   schoolApplications, type SchoolApplication, type InsertSchoolApplication,
   schoolStudents, type SchoolStudent, type InsertSchoolStudent,
@@ -283,6 +284,14 @@ export interface IStorage {
   getAllScheduledPayments(): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
 
+  // Refund methods
+  createRefund(refund: InsertRefund): Promise<Refund>;
+  getRefundById(id: number): Promise<Refund | undefined>;
+  getRefundsByPaymentId(paymentId: number): Promise<Refund[]>;
+  getRefundsBySchoolId(schoolId: number): Promise<Refund[]>;
+  updateRefund(id: number, refund: Partial<InsertRefund>): Promise<Refund | undefined>;
+  deleteRefund(id: number): Promise<void>;
+
   // Stripe Subscription Schedule methods
   createStripeSubscriptionSchedule(schedule: InsertStripeSubscriptionSchedule): Promise<StripeSubscriptionSchedule>;
   getStripeSubscriptionScheduleById(id: number): Promise<StripeSubscriptionSchedule | undefined>;
@@ -434,6 +443,7 @@ export class MemStorage implements IStorage {
   private locationsStore: Map<number, Location>;
   private linkAnalyticsStore: Map<number, LinkAnalytics>;
   private paymentsStore: Map<number, Payment>;
+  private refundsStore: Map<number, Refund>;
   private schoolsStore: Map<number, School>;
   private dailyFlowTemplatesStore: Map<number, DailyFlowTemplate>;
   private dailyFlowEntriesStore: Map<number, DailyFlowEntry>;
@@ -458,6 +468,7 @@ export class MemStorage implements IStorage {
   private marketingLinkIdCounter: number;
   private linkAnalyticsIdCounter: number;
   private paymentIdCounter: number;
+  private refundIdCounter: number;
   private schoolIdCounter: number;
   private schoolStudentIdCounter: number;
   private userLocationIdCounter: number;
@@ -487,6 +498,7 @@ export class MemStorage implements IStorage {
     this.locationsStore = new Map();
     this.linkAnalyticsStore = new Map();
     this.paymentsStore = new Map();
+    this.refundsStore = new Map();
     this.schoolsStore = new Map();
     this.dailyFlowTemplatesStore = new Map();
     this.dailyFlowEntriesStore = new Map();
@@ -512,6 +524,7 @@ export class MemStorage implements IStorage {
     this.marketingLinkIdCounter = 1;
     this.linkAnalyticsIdCounter = 1;
     this.paymentIdCounter = 1;
+    this.refundIdCounter = 1;
     this.schoolIdCounter = 1;
     this.schoolStudentIdCounter = 1;
     this.userLocationIdCounter = 1;
@@ -641,6 +654,7 @@ export class MemStorage implements IStorage {
     this.locationsStore.clear();
     this.linkAnalyticsStore.clear();
     this.paymentsStore.clear();
+    this.refundsStore.clear();
     this.schoolsStore.clear();
     this.dailyFlowTemplatesStore.clear();
     this.dailyFlowEntriesStore.clear();
@@ -667,6 +681,7 @@ export class MemStorage implements IStorage {
     this.marketingLinkIdCounter = 1;
     this.linkAnalyticsIdCounter = 1;
     this.paymentIdCounter = 1;
+    this.refundIdCounter = 1;
     this.schoolIdCounter = 1;
     this.schoolStudentIdCounter = 1;
     this.userLocationIdCounter = 1;
@@ -2819,6 +2834,62 @@ export class MemStorage implements IStorage {
     }
   }
 
+  // Refund methods implementation
+  async createRefund(refund: InsertRefund): Promise<Refund> {
+    const id = this.refundIdCounter++;
+    const now = new Date();
+    const newRefund: Refund = {
+      id,
+      createdAt: now,
+      updatedAt: now,
+      ...refund,
+      enrollmentId: refund.enrollmentId || null,
+      description: refund.description || null,
+      stripeRefundId: refund.stripeRefundId || null,
+      processedBy: refund.processedBy || null,
+      processedAt: refund.processedAt || null,
+      failureReason: refund.failureReason || null,
+      metadata: refund.metadata || {},
+      currency: refund.currency || 'usd',
+      status: refund.status || 'pending'
+    };
+    this.refundsStore.set(id, newRefund);
+    return newRefund;
+  }
+
+  async getRefundById(id: number): Promise<Refund | undefined> {
+    return this.refundsStore.get(id);
+  }
+
+  async getRefundsByPaymentId(paymentId: number): Promise<Refund[]> {
+    return Array.from(this.refundsStore.values()).filter(
+      refund => refund.paymentId === paymentId
+    );
+  }
+
+  async getRefundsBySchoolId(schoolId: number): Promise<Refund[]> {
+    return Array.from(this.refundsStore.values()).filter(
+      refund => refund.schoolId === schoolId
+    );
+  }
+
+  async updateRefund(id: number, refundUpdate: Partial<InsertRefund>): Promise<Refund | undefined> {
+    const refund = this.refundsStore.get(id);
+    if (!refund) return undefined;
+
+    const updatedRefund: Refund = {
+      ...refund,
+      ...refundUpdate,
+      updatedAt: new Date()
+    };
+    this.refundsStore.set(id, updatedRefund);
+    return updatedRefund;
+  }
+
+  async deleteRefund(id: number): Promise<void> {
+    this.refundsStore.delete(id);
+  }
+
   // Scheduled payments methods
   private scheduledPaymentsStore = new Map<number, ScheduledPayment>();
   private scheduledPaymentIdCounter = 1;
@@ -4719,6 +4790,31 @@ export class MemStorage implements IStorage {
         } catch (error) {
           return await this.memStorage.updateScheduledPaymentStatus(id, status);
         }
+      }
+
+      // Refund methods - use memStorage since database fallback is needed
+      async createRefund(refund: InsertRefund): Promise<Refund> {
+        return this.memStorage.createRefund(refund);
+      }
+
+      async getRefundById(id: number): Promise<Refund | undefined> {
+        return this.memStorage.getRefundById(id);
+      }
+
+      async getRefundsByPaymentId(paymentId: number): Promise<Refund[]> {
+        return this.memStorage.getRefundsByPaymentId(paymentId);
+      }
+
+      async getRefundsBySchoolId(schoolId: number): Promise<Refund[]> {
+        return this.memStorage.getRefundsBySchoolId(schoolId);
+      }
+
+      async updateRefund(id: number, refund: Partial<InsertRefund>): Promise<Refund | undefined> {
+        return this.memStorage.updateRefund(id, refund);
+      }
+
+      async deleteRefund(id: number): Promise<void> {
+        return this.memStorage.deleteRefund(id);
       }
 
       // School Student methods - Migrated to database storage
