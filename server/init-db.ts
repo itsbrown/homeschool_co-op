@@ -109,6 +109,111 @@ async function runMigrations() {
       ADD COLUMN IF NOT EXISTS bundle_rule JSONB;
     `);
     console.log('✅ Migration completed: bundle_rule column added to discounts table');
+    
+    // Create categories table for school-specific class categorization
+    console.log('Running migration: Creating categories table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS categories (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_categories_school_id ON categories(school_id);
+    `);
+    console.log('✅ Migration completed: categories table created');
+    
+    // Clean up duplicate categories (keep only the first occurrence)
+    console.log('Running migration: Cleaning up duplicate categories...');
+    await db.execute(sql`
+      DELETE FROM categories c1
+      USING categories c2
+      WHERE c1.id > c2.id
+        AND c1.school_id = c2.school_id
+        AND c1.name = c2.name;
+    `);
+    console.log('✅ Migration completed: duplicate categories cleaned up');
+    
+    // Create unique constraint on (school_id, name)
+    console.log('Running migration: Adding unique constraint to categories...');
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TABLE categories 
+        ADD CONSTRAINT categories_school_id_name_unique UNIQUE (school_id, name);
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    console.log('✅ Migration completed: unique constraint added to categories');
+    
+    // Seed default categories for all existing schools
+    console.log('Running migration: Seeding default categories for existing schools...');
+    await db.execute(sql`
+      INSERT INTO categories (school_id, name, description, is_active)
+      SELECT 
+        id as school_id,
+        category_name,
+        NULL as description,
+        true as is_active
+      FROM schools
+      CROSS JOIN (
+        VALUES 
+          ('Early Childhood'),
+          ('Kindergarten'),
+          ('Lower Elementary'),
+          ('Upper Elementary'),
+          ('Middle School'),
+          ('High School'),
+          ('All Ages'),
+          ('Summer Camp')
+      ) AS default_categories(category_name)
+      ON CONFLICT (school_id, name) DO NOTHING;
+    `);
+    console.log('✅ Migration completed: default categories seeded for all schools');
+    
+    // Add category_id column to classes table
+    console.log('Running migration: Adding category_id column to classes table...');
+    await db.execute(sql`
+      ALTER TABLE classes 
+      ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES categories(id);
+    `);
+    console.log('✅ Migration completed: category_id column added to classes table');
+    
+    // Map existing category strings to category IDs
+    console.log('Running migration: Mapping existing class categories to category IDs...');
+    await db.execute(sql`
+      UPDATE classes c
+      SET category_id = cat.id
+      FROM categories cat
+      WHERE c.school_id = cat.school_id
+        AND c.category_id IS NULL
+        AND (
+          (c.category ILIKE '%early%childhood%' AND cat.name = 'Early Childhood')
+          OR (c.category ILIKE 'kindergarten' AND cat.name = 'Kindergarten')
+          OR (c.category ILIKE '%lower%elementary%' AND cat.name = 'Lower Elementary')
+          OR (c.category ILIKE '%upper%elementary%' AND cat.name = 'Upper Elementary')
+          OR (c.category ILIKE '%middle%school%' AND cat.name = 'Middle School')
+          OR (c.category ILIKE '%high%school%' AND cat.name = 'High School')
+          OR (c.category ILIKE '%summer%camp%' AND cat.name = 'Summer Camp')
+          OR (c.category ILIKE '%all%ages%' AND cat.name = 'All Ages')
+        );
+    `);
+    
+    // Map any remaining unmapped classes to "All Ages" as fallback
+    await db.execute(sql`
+      UPDATE classes c
+      SET category_id = cat.id
+      FROM categories cat
+      WHERE c.school_id = cat.school_id
+        AND c.category_id IS NULL
+        AND cat.name = 'All Ages';
+    `);
+    console.log('✅ Migration completed: existing class categories mapped to category IDs');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

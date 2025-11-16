@@ -27,6 +27,7 @@ import {
   ScheduledPayment, InsertScheduledPayment, scheduledPayments,
   Refund, InsertRefund, refunds,
   Location, InsertLocation, locations,
+  Category, InsertCategory, categories,
   UserLocation, InsertUserLocation, userLocations,
   Notification, InsertNotification, notifications,
   NotificationRecipient, InsertNotificationRecipient, notificationRecipients,
@@ -278,9 +279,12 @@ export class DatabaseStorage implements IStorage {
         materials: classes.materials,
         // Add location name from join
         locationNameFromTable: locations.name,
+        // Add category name from join
+        categoryNameFromTable: categories.name,
       })
       .from(classes)
-      .leftJoin(locations, eq(classes.locationId, locations.id));
+      .leftJoin(locations, eq(classes.locationId, locations.id))
+      .leftJoin(categories, eq(classes.categoryId, categories.id));
 
     // Build query conditions
     const conditions = [];
@@ -324,10 +328,11 @@ export class DatabaseStorage implements IStorage {
 
     const result = await query;
     
-    // Map results to include locationName (prefer joined value, fallback to old location field)
+    // Map results to include locationName and categoryName (prefer joined values, fallback to old fields)
     return result.map(row => ({
       ...row,
       locationName: row.locationNameFromTable || row.location || null,
+      categoryName: row.categoryNameFromTable || row.category || null,
     }));
   }
 
@@ -499,14 +504,18 @@ export class DatabaseStorage implements IStorage {
         materials: classes.materials,
         // Add location name from join
         locationNameFromTable: locations.name,
+        // Add category name from join
+        categoryNameFromTable: categories.name,
       })
       .from(classes)
-      .leftJoin(locations, eq(classes.locationId, locations.id));
+      .leftJoin(locations, eq(classes.locationId, locations.id))
+      .leftJoin(categories, eq(classes.categoryId, categories.id));
     
-    // Map results to include locationName (prefer joined value, fallback to old location field)
+    // Map results to include locationName and categoryName (prefer joined values, fallback to old fields)
     const allClasses = result.map(row => ({
       ...row,
       locationName: row.locationNameFromTable || row.location || null,
+      categoryName: row.categoryNameFromTable || row.category || null,
     }));
     
     console.log(`📊 getAllClasses: Found ${allClasses.length} total classes`);
@@ -582,15 +591,19 @@ export class DatabaseStorage implements IStorage {
         materials: classes.materials,
         // Add location name from join
         locationNameFromTable: locations.name,
+        // Add category name from join
+        categoryNameFromTable: categories.name,
       })
       .from(classes)
       .leftJoin(locations, eq(classes.locationId, locations.id))
+      .leftJoin(categories, eq(classes.categoryId, categories.id))
       .where(eq(classes.schoolId, schoolIdNum));
     
-    // Map results to include locationName (prefer joined value, fallback to old location field)
+    // Map results to include locationName and categoryName (prefer joined values, fallback to old fields)
     const mappedResults = result.map(row => ({
       ...row,
       locationName: row.locationNameFromTable || row.location || null,
+      categoryName: row.categoryNameFromTable || row.category || null,
     }));
     
     console.log(`📊 Filtered classes for schoolId=${schoolIdNum}: ${mappedResults.length}`);
@@ -1901,6 +1914,55 @@ export class DatabaseStorage implements IStorage {
       .update(locations)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(locations.id, id));
+  }
+
+  // Category methods (school-specific)
+  async getCategoriesBySchoolId(schoolId: number): Promise<Category[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(categories)
+      .where(and(eq(categories.schoolId, schoolId), eq(categories.isActive, true)))
+      .orderBy(asc(categories.name));
+  }
+
+  async getAllCategories(): Promise<Category[]> {
+    const db = await getDb();
+    return await db.select().from(categories).where(eq(categories.isActive, true));
+  }
+
+  async createCategory(category: InsertCategory): Promise<Category> {
+    const db = await getDb();
+    const [newCategory] = await db
+      .insert(categories)
+      .values({
+        ...category,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newCategory;
+  }
+
+  async updateCategory(id: number, category: Partial<InsertCategory>): Promise<Category | undefined> {
+    const db = await getDb();
+    const [updatedCategory] = await db
+      .update(categories)
+      .set({
+        ...category,
+        updatedAt: new Date()
+      })
+      .where(eq(categories.id, id))
+      .returning();
+    return updatedCategory;
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    const db = await getDb();
+    await db
+      .update(categories)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(categories.id, id));
   }
 
   // User Location methods

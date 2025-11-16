@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -1133,9 +1133,10 @@ export const classes = pgTable("classes", {
   // Shared fields (used by both types)
   schoolId: integer("school_id").references(() => schools.id),
   locationId: integer("location_id").references(() => locations.id),
+  categoryId: integer("category_id").references(() => categories.id),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  category: text("category").notNull(), // academic, enrichment, summer-camp, workshop, course, arts, music, sports, stem, language, coding, cooking, crafts, other
+  category: text("category").notNull(), // DEPRECATED: Will be removed after migration - use categoryId instead
   gradeLevels: text("grade_levels").array(),
   startDate: date("start_date"), // Keep as date type for compatibility
   endDate: date("end_date"), // Keep as date type for compatibility
@@ -1338,6 +1339,28 @@ export const insertUserLocationSchema = createInsertSchema(userLocations)
   .omit({ id: true, createdAt: true, updatedAt: true, assignedAt: true });
 export type InsertUserLocation = z.infer<typeof insertUserLocationSchema>;
 export type UserLocation = typeof userLocations.$inferSelect;
+
+// Categories table for class/program categorization (school-specific)
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  name: text("name").notNull(), // e.g., "Early Childhood", "High School", "Kindergarten"
+  description: text("description"), // Optional description of the category
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  // Unique constraint to prevent duplicate categories within the same school
+  uniqueSchoolCategory: unique("categories_school_id_name_unique").on(table.schoolId, table.name)
+}));
+
+export const insertCategorySchema = createInsertSchema(categories)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    description: z.string().nullable().default(null),
+  });
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
+export type Category = typeof categories.$inferSelect;
 
 // Notifications table for enhanced messaging system
 export const notifications = pgTable("notifications", {

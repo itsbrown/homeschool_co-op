@@ -4456,4 +4456,150 @@ router.post('/users/:userId/send-password-reset', supabaseAuth, async (req: any,
   }
 });
 
+// ==================== CATEGORY MANAGEMENT ====================
+
+// Get all categories for the logged-in school
+router.get("/categories", supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Get user to find their school
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || !user.schoolId) {
+      return res.status(403).json({ message: "User not associated with a school" });
+    }
+
+    console.log(`📚 Getting categories for school ID: ${user.schoolId}`);
+    const categories = await storage.getCategoriesBySchoolId(user.schoolId);
+    
+    res.json(categories);
+  } catch (error) {
+    console.error('❌ Error fetching categories:', error);
+    res.status(500).json({ message: 'Failed to fetch categories' });
+  }
+});
+
+// Create a new category
+router.post("/categories", supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Get user to find their school
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || !user.schoolId) {
+      return res.status(403).json({ message: "User not associated with a school" });
+    }
+
+    // Verify user has school admin role
+    if (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin') {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+
+    const { name, description } = req.body;
+    if (!name) {
+      return res.status(400).json({ message: "Category name is required" });
+    }
+
+    console.log(`➕ Creating new category "${name}" for school ID: ${user.schoolId}`);
+    const newCategory = await storage.createCategory({
+      schoolId: user.schoolId,
+      name,
+      description: description || null,
+      isActive: true
+    });
+
+    res.status(201).json(newCategory);
+  } catch (error) {
+    console.error('❌ Error creating category:', error);
+    res.status(500).json({ message: 'Failed to create category' });
+  }
+});
+
+// Update a category
+router.put("/categories/:id", supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Get user to find their school
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || !user.schoolId) {
+      return res.status(403).json({ message: "User not associated with a school" });
+    }
+
+    // Verify user has school admin role
+    if (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin') {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+
+    const categoryId = parseInt(req.params.id);
+    const { name, description, isActive } = req.body;
+
+    // Verify category belongs to user's school
+    const categories = await storage.getCategoriesBySchoolId(user.schoolId);
+    const categoryExists = categories.some(c => c.id === categoryId);
+    if (!categoryExists) {
+      return res.status(404).json({ message: "Category not found or access denied" });
+    }
+
+    console.log(`✏️ Updating category ID: ${categoryId} for school ID: ${user.schoolId}`);
+    const updatedCategory = await storage.updateCategory(categoryId, {
+      ...(name && { name }),
+      ...(description !== undefined && { description }),
+      ...(isActive !== undefined && { isActive })
+    });
+
+    res.json(updatedCategory);
+  } catch (error) {
+    console.error('❌ Error updating category:', error);
+    res.status(500).json({ message: 'Failed to update category' });
+  }
+});
+
+// Delete (soft delete) a category
+router.delete("/categories/:id", supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Get user to find their school
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || !user.schoolId) {
+      return res.status(403).json({ message: "User not associated with a school" });
+    }
+
+    // Verify user has school admin role
+    if (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin') {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+
+    const categoryId = parseInt(req.params.id);
+
+    // Verify category belongs to user's school
+    const categories = await storage.getCategoriesBySchoolId(user.schoolId);
+    const categoryExists = categories.some(c => c.id === categoryId);
+    if (!categoryExists) {
+      return res.status(404).json({ message: "Category not found or access denied" });
+    }
+
+    console.log(`🗑️ Soft deleting category ID: ${categoryId} for school ID: ${user.schoolId}`);
+    await storage.deleteCategory(categoryId);
+
+    res.json({ message: 'Category deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting category:', error);
+    res.status(500).json({ message: 'Failed to delete category' });
+  }
+});
+
 export default router;
