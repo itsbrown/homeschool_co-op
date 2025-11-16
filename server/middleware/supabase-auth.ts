@@ -44,9 +44,49 @@ export const supabaseAuth = async (
     
     console.log('🔐 supabaseAuth middleware - Path:', req.path);
     console.log('🔐 supabaseAuth middleware - Authorization header:', authHeader ? 'PRESENT' : 'MISSING');
+    console.log('🔐 supabaseAuth middleware - Session:', (req as any).session?.userId ? 'PRESENT' : 'MISSING');
+    
+    // Check for session-based authentication first (for tests and legacy support)
+    if ((req as any).session?.userId && (req as any).session?.userRole) {
+      console.log('✅ Session-based authentication detected - userId:', (req as any).session.userId);
+      
+      // Try to get user from storage
+      try {
+        const { storage } = await import('../storage.js');
+        const user = await storage.getUser((req as any).session.userId);
+        
+        if (user) {
+          console.log('✅ Session user found in storage:', user.email);
+          
+          // Set up auth context to match Supabase structure
+          req.user = {
+            id: String(user.id),
+            email: user.email,
+            sub: String(user.id),
+          };
+          
+          req.auth = {
+            payload: {
+              sub: String(user.id),
+              email: user.email,
+              role: user.role,
+              school_id: user.schoolId,
+              name: user.name,
+            },
+          };
+          
+          return next();
+        } else {
+          console.log('⚠️ Session user not found in storage, continuing to token check');
+        }
+      } catch (error) {
+        console.error('Error loading session user:', error);
+        // Continue to token check
+      }
+    }
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('❌ supabaseAuth - Rejecting: Missing or invalid authorization header');
+      console.log('❌ supabaseAuth - Rejecting: Missing or invalid authorization header and no valid session');
       return res.status(401).json({ error: 'Missing or invalid authorization header' });
     }
 

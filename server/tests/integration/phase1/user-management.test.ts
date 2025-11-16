@@ -28,9 +28,11 @@ describe('Integration: User Management', () => {
     await testDb.cleanup();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset all mock services before each test
     resetAllMocks();
+    // Clear storage to ensure test isolation
+    await testDb.cleanup();
   });
 
   describe('User Account Creation', () => {

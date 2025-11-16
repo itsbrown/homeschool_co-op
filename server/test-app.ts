@@ -31,6 +31,7 @@ import stripeMigrationRouter from "./api/stripe-migration";
 import stripeWebhookRouter from "./api/stripe-webhook";
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import membershipRouter from "./api/membership";
+import { configureSession } from "./config/session";
 
 /**
  * Create and configure the Express application for testing
@@ -38,6 +39,9 @@ import membershipRouter from "./api/membership";
  */
 export async function createTestApp(): Promise<Application> {
   const app = express();
+
+  // CRITICAL: Apply session middleware BEFORE routes
+  configureSession(app);
 
   // CRITICAL: Apply Stripe webhook handler BEFORE any global body parsers
   app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }), webhookHandler);

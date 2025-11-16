@@ -35,7 +35,7 @@ export interface AuthenticatedRequest extends Request {
 }
 
 /**
- * Extract email from Supabase JWT token or legacy Auth0 token
+ * Extract email from Supabase JWT token, legacy Auth0 token, or session
  */
 export function getAuthEmail(req: AuthenticatedRequest): string | undefined {
   // Try Supabase JWT payload first
@@ -48,11 +48,18 @@ export function getAuthEmail(req: AuthenticatedRequest): string | undefined {
     return req.user.email;
   }
   
+  // Fallback to session-based auth (for tests and legacy support)
+  const session = (req as any).session;
+  if (session?.userId) {
+    // Session doesn't store email directly, but req.user should be set by middleware
+    return undefined;
+  }
+  
   return undefined;
 }
 
 /**
- * Extract user ID from Supabase JWT token or legacy Auth0 token
+ * Extract user ID from Supabase JWT token, legacy Auth0 token, or session
  */
 export function getAuthUserId(req: AuthenticatedRequest): string | undefined {
   // Try Supabase JWT payload first
@@ -70,14 +77,31 @@ export function getAuthUserId(req: AuthenticatedRequest): string | undefined {
     return (req as any).auth.userId;
   }
   
+  // Fallback to session-based auth (for tests and legacy support)
+  const session = (req as any).session;
+  if (session?.userId) {
+    return String(session.userId);
+  }
+  
   return undefined;
 }
 
 /**
- * Extract role from Supabase JWT token
+ * Extract role from Supabase JWT token or session
  */
 export function getAuthRole(req: AuthenticatedRequest): string | undefined {
-  return req.auth?.payload?.role;
+  // Try JWT payload first
+  if (req.auth?.payload?.role) {
+    return req.auth.payload.role;
+  }
+  
+  // Fallback to session-based auth (for tests and legacy support)
+  const session = (req as any).session;
+  if (session?.userRole) {
+    return session.userRole;
+  }
+  
+  return undefined;
 }
 
 /**

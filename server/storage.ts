@@ -1199,6 +1199,7 @@ export class MemStorage implements IStorage {
     try {
       const fs = await import('fs');
       const path = await import('path');
+      const bcrypt = await import('bcryptjs');
       
       const dataDir = path.join(process.cwd(), 'data');
       const filePath = path.join(dataDir, 'users.json');
@@ -1210,10 +1211,20 @@ export class MemStorage implements IStorage {
         // Clear existing users and load from file
         this.usersStore.clear();
         let maxId = 0;
+        let hashedCount = 0;
         
         for (const user of users) {
+          // Hash plain-text passwords for security
+          let password = user.password;
+          if (password && !password.startsWith('$2a$') && !password.startsWith('$2b$')) {
+            // This is a plain-text password, hash it
+            password = await bcrypt.hash(password, 10);
+            hashedCount++;
+          }
+          
           this.usersStore.set(user.id, {
             ...user,
+            password,
             createdAt: new Date(user.createdAt),
             updatedAt: new Date(user.updatedAt)
           });
@@ -1224,6 +1235,9 @@ export class MemStorage implements IStorage {
         this.userIdCounter = maxId + 1;
         
         console.log(`✅ Successfully loaded ${users.length} users from storage`);
+        if (hashedCount > 0) {
+          console.log(`🔒 Hashed ${hashedCount} plain-text passwords for security`);
+        }
       } else {
         console.log('👥 No users.json found, starting with empty users');
       }
@@ -3703,6 +3717,28 @@ export class MemStorage implements IStorage {
   async updateStripeSubscriptionSchedule(id: number, schedule: any): Promise<any> {
     return null;
   }
+
+  // Category methods (stubs for memory storage)
+  async getCategoryById(id: number): Promise<any> {
+    return null;
+  }
+
+  async getCategoriesBySchoolId(schoolId: number): Promise<any[]> {
+    return [];
+  }
+
+  async createCategory(category: any): Promise<any> {
+    const id = Date.now();
+    return { ...category, id };
+  }
+
+  async updateCategory(id: number, category: any): Promise<any> {
+    return { ...category, id };
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    return;
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -3722,6 +3758,81 @@ export class MemStorage implements IStorage {
       this.memStorage = sharedMemStorage; // Use the shared instance
       this.supabaseStorage = supabaseStorage;
       this.fileStorage = sharedMemStorage; // Use the shared instance for consistency
+    }
+
+    /**
+     * Classify errors to distinguish business rules from transport issues
+     */
+    private isBusinessRuleViolation(error: any): boolean {
+      // Business rule violations should bubble up, not fall back
+      if (!error) return false;
+      
+      const message = error.message?.toLowerCase() || '';
+      const code = error.code || '';
+      
+      // Unique constraint violations
+      if (message.includes('unique') || message.includes('already exists') || message.includes('duplicate')) {
+        return true;
+      }
+      
+      // Foreign key constraints
+      if (message.includes('foreign key') || code === '23503') {
+        return true;
+      }
+      
+      // Check constraints
+      if (message.includes('check constraint') || code === '23514') {
+        return true;
+      }
+      
+      // Not null constraints
+      if (message.includes('not null') || code === '23502') {
+        return true;
+      }
+      
+      return false;
+    }
+
+    /**
+     * Log error with classification for better diagnostics
+     */
+    private logStorageError(operation: string, error: any, willFallback: boolean): void {
+      const isBusinessRule = this.isBusinessRuleViolation(error);
+      
+      if (isBusinessRule) {
+        console.warn(`🚨 [STORAGE] Business rule violation in ${operation}:`, error.message);
+        if (willFallback) {
+          console.warn(`⚠️ [STORAGE] Business rule should bubble up, but falling back anyway`);
+        }
+      } else {
+        console.log(`💾 [STORAGE] Transport error in ${operation}, ${willFallback ? 'falling back to memory' : 'no fallback'}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`   Error details:`, error.message || error);
+        }
+      }
+    }
+
+    /**
+     * Execute operation with fallback, properly handling business rules
+     */
+    private async executeWithFallback<T>(
+      operation: string,
+      dbOperation: () => Promise<T>,
+      memOperation: () => Promise<T>
+    ): Promise<T> {
+      try {
+        return await dbOperation();
+      } catch (error) {
+        // Business rule violations should bubble up
+        if (this.isBusinessRuleViolation(error)) {
+          this.logStorageError(operation, error, false);
+          throw error;
+        }
+        
+        // Transport errors fall back to memory
+        this.logStorageError(operation, error, true);
+        return await memOperation();
+      }
     }
 
     async getAllUsers(): Promise<User[]> {
