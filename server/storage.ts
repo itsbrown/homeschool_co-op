@@ -4578,8 +4578,18 @@ export class MemStorage implements IStorage {
     }
 
     async createEnrollment(enrollment: any): Promise<any> {
-      // All enrollments now stored in unified program_enrollments table
-      return this.dbStorage.createProgramEnrollment(enrollment);
+      try {
+        // All enrollments now stored in unified program_enrollments table
+        if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
+          return await this.dbStorage.createProgramEnrollment(enrollment);
+        } else {
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createEnrollment');
+          return await this.memStorage.createEnrollment(enrollment);
+        }
+      } catch (error) {
+        console.error('❌ Error creating enrollment in database, falling back to memStorage:', error);
+        return await this.memStorage.createEnrollment(enrollment);
+      }
     }
 
     async getEnrollmentsByChildId(childId: number): Promise<any[]> {
@@ -4593,10 +4603,22 @@ export class MemStorage implements IStorage {
     }
 
     async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
-      // Handle both calling signatures
-      const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
-      const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
-      return this.dbStorage.updateProgramEnrollment(id, data);
+      try {
+        // Handle both calling signatures
+        const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
+        const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
+        if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
+          return await this.dbStorage.updateProgramEnrollment(id, data);
+        } else {
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for updateEnrollment');
+          return await this.memStorage.updateEnrollment(id, data);
+        }
+      } catch (error) {
+        console.error('❌ Error updating enrollment in database, falling back to memStorage:', error);
+        const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
+        const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
+        return await this.memStorage.updateEnrollment(id, data);
+      }
     }
 
     async deleteEnrollment(id: number): Promise<void> {
@@ -4625,7 +4647,17 @@ export class MemStorage implements IStorage {
     }
 
     async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
-      return this.dbStorage.createClass(classData);
+      try {
+        if (this.dbStorage && typeof this.dbStorage.createClass === 'function') {
+          return await this.dbStorage.createClass(classData);
+        } else {
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createClass');
+          return await this.memStorage.createClass(classData);
+        }
+      } catch (error) {
+        console.error('❌ Error creating class in database, falling back to memStorage:', error);
+        return await this.memStorage.createClass(classData);
+      }
     }
 
     async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
