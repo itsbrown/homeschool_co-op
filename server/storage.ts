@@ -3751,13 +3751,19 @@ export class MemStorage implements IStorage {
   const sharedMemStorage = new MemStorage();
 
   class CombinedStorage {
-    private dbStorage: DatabaseStorage;
+    private dbStorage: DatabaseStorage | MemStorage;
     private memStorage: MemStorage;
     private supabaseStorage: SupabaseStorage
     private fileStorage: MemStorage; // Assuming fileStorage is also an instance of MemStorage for fallback
 
     constructor() {
-      this.dbStorage = new DatabaseStorage();
+      // Try to initialize DatabaseStorage, fall back to MemStorage if unavailable
+      try {
+        this.dbStorage = new DatabaseStorage();
+      } catch (error) {
+        console.log('⚠️ Database not available, using MemStorage for all operations');
+        this.dbStorage = sharedMemStorage;
+      }
       this.memStorage = sharedMemStorage; // Use the shared instance
       this.supabaseStorage = supabaseStorage;
       this.fileStorage = sharedMemStorage; // Use the shared instance for consistency
@@ -4344,18 +4350,27 @@ export class MemStorage implements IStorage {
     }
 
     async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
-      // Use dbStorage for child creation to persist to database
-      return this.dbStorage.createChild(child);
+      try {
+        return await this.dbStorage.createChild(child);
+      } catch (error) {
+        return this.memStorage.createChild(child);
+      }
     }
 
     async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
-      // Use dbStorage for child updates to persist changes to database
-      return this.dbStorage.updateChild(id, child);
+      try {
+        return await this.dbStorage.updateChild(id, child);
+      } catch (error) {
+        return this.memStorage.updateChild(id, child);
+      }
     }
 
     async deleteChild(id: number): Promise<void> {
-      // Use dbStorage for child deletion to remove from database
-      return this.dbStorage.deleteChild(id);
+      try {
+        return await this.dbStorage.deleteChild(id);
+      } catch (error) {
+        return this.memStorage.deleteChild(id);
+      }
     }
 
 

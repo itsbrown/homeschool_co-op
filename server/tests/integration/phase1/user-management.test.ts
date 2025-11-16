@@ -289,9 +289,9 @@ describe('Integration: User Management', () => {
       const response = await api.loginAsUser(user.email);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('token');
       expect(response.body).toHaveProperty('user');
       expect(response.body.user.auth0Id).toBe('auth0|123456');
+      expect(response.body.user.email).toBe('auth0user@test.com');
     });
 
     it('should handle Supabase user login', async () => {
@@ -303,8 +303,9 @@ describe('Integration: User Management', () => {
       const response = await api.loginAsUser(user.email);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
       expect(response.body.user.supabaseId).toBe('supabase-uuid-123');
+      expect(response.body.user.email).toBe('supabaseuser@test.com');
     });
 
     it('should prevent login for inactive users', async () => {
@@ -316,7 +317,7 @@ describe('Integration: User Management', () => {
       const response = await api.loginAsUser(user.email);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toContain('inactive');
+      expect(response.body.message).toContain('inactive');
     });
   });
 

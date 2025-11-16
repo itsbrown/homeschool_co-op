@@ -180,7 +180,7 @@ export class TestDatabase {
       name: 'Main Campus'
     });
     const location2 = await this.createTestLocation(school.id, {
-      name: 'West Campus'
+      name: 'East Campus'
     });
     const locations = [location1, location2];
 
