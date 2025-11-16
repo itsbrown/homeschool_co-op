@@ -2889,6 +2889,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const paymentHistoryRouter = (await import("./api/payment-history")).default;
   app.use("/api/payment-history", paymentHistoryRouter);
   
+  // 🧪 Register test-only endpoints (only available in test environment)
+  if (process.env.NODE_ENV !== 'production') {
+    const testRouter = (await import("./api/test")).default;
+    app.use("/api/test", testRouter);
+    console.log('✅ Test endpoints registered at /api/test');
+  }
+  
   const scheduledPaymentsRouter = (await import("./api/scheduled-payments")).default;
   app.use("/api/scheduled-payments", scheduledPaymentsRouter);
 
