@@ -18,8 +18,100 @@ app.use(session({
   cookie: { secure: false }
 }));
 
-app.use((req, res, next) => {
-  req.user = { email: 'parent@test.com' };
+// Mock session-based authentication for tests using header-driven lookup
+// This allows supabaseAuth middleware to bypass token validation
+app.use(async (req: any, res, next) => {
+  req.session = req.session || {};
+  
+  // Check for x-test-user-id header or x-test-user-email header
+  const testUserId = req.headers['x-test-user-id'];
+  const testUserEmail = req.headers['x-test-user-email'];
+  
+  // If x-test-user-id is provided, look up the user from storage
+  if (testUserId) {
+    try {
+      const user = await storage.getUser(parseInt(testUserId as string));
+      if (user) {
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+        req.user = {
+          id: String(user.id),
+          email: user.email,
+          sub: String(user.id),
+          role: user.role,
+          permissions: user.permissions,
+          schoolId: user.schoolId,
+          name: user.name
+        };
+        req.auth = {
+          payload: {
+            sub: String(user.id),
+            email: user.email,
+            role: user.role
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Error looking up test user:', error);
+    }
+  }
+  // If x-test-user-email is provided, look up by email
+  else if (testUserEmail) {
+    try {
+      const user = await storage.getUserByEmail(testUserEmail as string);
+      if (user) {
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+        req.user = {
+          id: String(user.id),
+          email: user.email,
+          sub: String(user.id),
+          role: user.role,
+          permissions: user.permissions,
+          schoolId: user.schoolId,
+          name: user.name
+        };
+        req.auth = {
+          payload: {
+            sub: String(user.id),
+            email: user.email,
+            role: user.role
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Error looking up test user by email:', error);
+    }
+  }
+  // Fallback: try to infer user from request body parentEmail
+  else if (req.body?.parentEmail) {
+    try {
+      const user = await storage.getUserByEmail(req.body.parentEmail);
+      if (user) {
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+        req.user = {
+          id: String(user.id),
+          email: user.email,
+          sub: String(user.id),
+          role: user.role,
+          permissions: user.permissions,
+          schoolId: user.schoolId,
+          name: user.name
+        };
+        req.auth = {
+          payload: {
+            sub: String(user.id),
+            email: user.email,
+            role: user.role
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Error looking up test user from parentEmail:', error);
+    }
+  }
+  
   next();
 });
 

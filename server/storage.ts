@@ -4498,13 +4498,20 @@ export class MemStorage implements IStorage {
     }
 
     async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
-      // Get enrollments for multiple children from unified program_enrollments table
-      const db = await getDb();
-      return await db.select().from(programEnrollments).where(
-        childIds.length === 1 
-          ? eq(programEnrollments.childId, childIds[0])
-          : inArray(programEnrollments.childId, childIds)
-      );
+      try {
+        // Get enrollments for multiple children from unified program_enrollments table
+        const db = await getDb();
+        return await db.select().from(programEnrollments).where(
+          childIds.length === 1 
+            ? eq(programEnrollments.childId, childIds[0])
+            : inArray(programEnrollments.childId, childIds)
+        );
+      } catch (error) {
+        console.error('❌ Error getting enrollments by child IDs in database, falling back to memStorage:', error);
+        // Fallback to memStorage: get all enrollments and filter by child IDs
+        const allEnrollments = await this.memStorage.getAllEnrollments();
+        return allEnrollments.filter(e => childIds.includes(e.childId));
+      }
     }
 
     async getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]> {
@@ -4517,11 +4524,31 @@ export class MemStorage implements IStorage {
     }
 
     async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
-      return this.dbStorage.createProgramEnrollment(enrollment);
+      try {
+        if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
+          return await this.dbStorage.createProgramEnrollment(enrollment);
+        } else {
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createProgramEnrollment');
+          return await this.memStorage.createProgramEnrollment(enrollment);
+        }
+      } catch (error) {
+        console.error('❌ Error creating program enrollment in database, falling back to memStorage:', error);
+        return await this.memStorage.createProgramEnrollment(enrollment);
+      }
     }
 
     async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
-      return this.dbStorage.updateProgramEnrollment(id, enrollment);
+      try {
+        if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
+          return await this.dbStorage.updateProgramEnrollment(id, enrollment);
+        } else {
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for updateProgramEnrollment');
+          return await this.memStorage.updateProgramEnrollment(id, enrollment);
+        }
+      } catch (error) {
+        console.error('❌ Error updating program enrollment in database, falling back to memStorage:', error);
+        return await this.memStorage.updateProgramEnrollment(id, enrollment);
+      }
     }
 
     async deleteProgramEnrollment(id: number): Promise<void> {

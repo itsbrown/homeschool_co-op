@@ -5,11 +5,11 @@
     "birthdate": "2010-01-01",
     "gradeLevel": "5th",
     "parentId": 1,
-    "parentEmail": "parent_gVqQpCYg@example.com",
+    "parentEmail": "parent_bXy9jQDu@example.com",
     "schoolId": 1,
     "id": 1,
-    "createdAt": "2025-11-16T16:57:58.845Z",
-    "updatedAt": "2025-11-16T16:57:58.845Z"
+    "createdAt": "2025-11-16T16:56:36.514Z",
+    "updatedAt": "2025-11-16T16:56:36.514Z"
   },
   {
     "firstName": "Child2",
@@ -17,10 +17,10 @@
     "birthdate": "2010-01-01",
     "gradeLevel": "5th",
     "parentId": 1,
-    "parentEmail": "parent_NZvIVouO@example.com",
+    "parentEmail": "parent_hHGqo8dR@example.com",
     "schoolId": 1,
     "id": 2,
-    "createdAt": "2025-11-16T16:57:58.847Z",
-    "updatedAt": "2025-11-16T16:57:58.847Z"
+    "createdAt": "2025-11-16T16:56:36.515Z",
+    "updatedAt": "2025-11-16T16:56:36.515Z"
   }
 ]
