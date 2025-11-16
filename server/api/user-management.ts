@@ -236,4 +236,52 @@ router.get('/user/current-role', isAuthenticated, async (req, res) => {
   }
 });
 
+// Update user profile by ID (session-based auth for testing)
+router.patch('/users/:id/profile', isAuthenticated, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const updateData = req.body;
+
+    // CRITICAL: Verify user is updating their own profile or is an admin
+    const sessionUserId = req.session.userId;
+    const userRole = req.session.userRole || req.user?.role;
+    const isAdmin = userRole === 'admin' || userRole === 'superAdmin';
+    
+    if (sessionUserId !== userId && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: You can only update your own profile'
+      });
+    }
+
+    // Import storage here to avoid circular dependencies
+    const { storage } = await import('../storage');
+    
+    // Update user in storage
+    const updatedUser = await storage.updateUser(userId, updateData);
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Remove password from response
+    const { password, ...userWithoutPassword } = updatedUser;
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: userWithoutPassword
+    });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating user profile'
+    });
+  }
+});
+
 export default router;

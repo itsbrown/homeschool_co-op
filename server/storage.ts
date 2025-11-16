@@ -525,8 +525,12 @@ export class MemStorage implements IStorage {
     // Add sample events for testing the calendar
     this.initializeSampleEvents();
 
-    // Load users from file
-    this.loadUsersFromJSON().catch(console.error);
+    // Load users from file (skip in test environment to prevent overwriting test data)
+    if (process.env.NODE_ENV !== 'test') {
+      this.loadUsersFromJSON().catch(console.error);
+    } else {
+      console.log('🧪 Test mode: Skipping loadUsersFromJSON to preserve test data');
+    }
 
     // Load enrollments from file
     this.initializeEnrollments().catch(console.error);
@@ -670,7 +674,6 @@ export class MemStorage implements IStorage {
     this.dailyFlowTemplateIdCounter = 1;
     this.dailyFlowEntryIdCounter = 1;
     this.dailyFlowScheduleIdCounter = 1;
-    console.log('🧹 MemStorage cleared - all stores and counters reset');
   }
 
   // User methods
@@ -3902,16 +3905,22 @@ export class MemStorage implements IStorage {
     }
 
     async getUser(id: number): Promise<User | undefined> {
-      console.log(`🔄 CombinedStorage.getUser called for user ID: ${id}`);
       try {
-        console.log(`📡 Attempting database lookup for user ID: ${id}`);
         // Try database storage first
         const result = await this.dbStorage.getUser(id);
-        console.log(`✅ Database lookup result for user ID ${id}:`, result ? `Found user: ${result.email}` : 'User not found (undefined)');
         return result;
       } catch (error) {
-        console.log(`💾 Database lookup failed for user ID: ${id}, using file storage fallback`);
-        // Fall back to reading directly from JSON file
+        // Fall back to memory storage first (contains test data and runtime changes)
+        try {
+          const memUser = await this.fileStorage.getUser(id);
+          if (memUser) {
+            return memUser;
+          }
+        } catch (memError) {
+          // Memory storage failed, continue to JSON fallback
+        }
+        
+        // Final fallback to reading directly from JSON file
         try {
           const fs = await import('fs');
           const path = await import('path');
@@ -3922,14 +3931,11 @@ export class MemStorage implements IStorage {
             const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
             const users = JSON.parse(fileContent);
             const user = users.find((u: any) => u.id === id);
-            console.log(`🔍 File storage direct lookup for user ID ${id}:`, user ? 'Found' : 'Not found');
             return user;
           }
           return undefined;
         } catch (fileError) {
-          console.log('❌ File storage direct lookup failed:', fileError);
-          // Final fallback to memory storage
-          return await this.fileStorage.getUser(id);
+          return undefined;
         }
       }
     }

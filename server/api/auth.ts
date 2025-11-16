@@ -402,6 +402,8 @@ router.post("/login", async (req, res) => {
       // Set session data
       req.session.userId = testAccount.id;
       req.session.userRole = testAccount.role;
+      // Clear activeRole on new login to prevent state leakage between users
+      req.session.activeRole = undefined;
 
       // Save session
       await new Promise<void>((resolve, reject) => {
@@ -441,6 +443,8 @@ router.post("/login", async (req, res) => {
       // Store user data in session
       req.session.userId = schoolAdminUser.id;
       req.session.userRole = schoolAdminUser.role;
+      // Clear activeRole on new login to prevent state leakage between users
+      req.session.activeRole = undefined;
 
       // Debug session information
       console.log('Session before save:', {
@@ -486,11 +490,11 @@ router.post("/login", async (req, res) => {
     const dbUser = await storage.getUserByEmail?.(loginIdentifier) || await storage.getUserByUsername?.(loginIdentifier);
     
     if (dbUser && dbUser.password) {
-      console.log(`Database user found: ${dbUser.email}, checking password with bcrypt`);
+      console.log(`🔍 Database user found: ${dbUser.email}, ID: ${dbUser.id}, role: ${dbUser.role}`);
       const passwordMatch = await bcrypt.compare(password, dbUser.password);
       
       if (passwordMatch) {
-        console.log(`✅ Database authentication successful for: ${dbUser.email}`);
+        console.log(`✅ Database authentication successful for: ${dbUser.email}, ID: ${dbUser.id}`);
         
         // Check if user is active
         if (!dbUser.isActive) {
@@ -499,8 +503,11 @@ router.post("/login", async (req, res) => {
         }
         
         // Set session data
+        console.log(`📝 Setting session - userId: ${dbUser.id}, userRole: ${dbUser.role}`);
         req.session.userId = dbUser.id;
         req.session.userRole = dbUser.role;
+        // Clear activeRole on new login to prevent state leakage between users
+        req.session.activeRole = undefined;
         
         // Save session
         await new Promise<void>((resolve, reject) => {
@@ -564,6 +571,8 @@ router.post("/login", async (req, res) => {
       if (req.session) {
         req.session.userId = user.id;
         req.session.userRole = user.role;
+        // Clear activeRole on new login to prevent state leakage between users
+        req.session.activeRole = undefined;
       } else {
         console.log('⚠️ No session available - this endpoint may be designed for token-based auth');
       }

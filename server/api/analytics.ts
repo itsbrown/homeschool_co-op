@@ -10,13 +10,9 @@ router.get("/dashboard", isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
     const user = req.user;
     
-    console.log('📊 Dashboard route hit - userId:', userId, 'user:', user?.email, 'permissions:', user?.permissions);
-    
     // Check if user has multiple roles
     const hasMultipleRoles = user?.permissions?.additionalRoles && user.permissions.additionalRoles.length > 0;
     const activeRole = req.session.activeRole;
-    
-    console.log('📊 hasMultipleRoles:', hasMultipleRoles, 'activeRole:', activeRole);
     
     // If multi-role user and no active role selected, show role selection
     if (hasMultipleRoles && !activeRole) {
@@ -49,9 +45,12 @@ router.get("/dashboard", isAuthenticated, async (req, res) => {
         });
       
       case 'schoolAdmin':
+        // Fetch the school admin's school (schools are linked by adminId, not user.schoolId)
+        const allUserSchools = await storage.getAllSchools();
+        const school = allUserSchools?.find(s => s.adminId === userId) || null;
         return res.status(200).json({
           dashboardType: 'schoolAdmin',
-          schools: [],
+          school: school || null,
           statistics: {
             totalStudents: 0,
             totalEducators: 0,
@@ -60,14 +59,16 @@ router.get("/dashboard", isAuthenticated, async (req, res) => {
         });
       
       case 'superAdmin':
+        // Fetch all schools for super admin
+        const allSchools = await storage.getAllSchools();
         return res.status(200).json({
           dashboardType: 'superAdmin',
-          platformStatistics: {
-            totalSchools: 0,
+          allSchools: allSchools || [],
+          platformMetrics: {
+            totalSchools: allSchools?.length || 0,
             totalUsers: 0,
             totalRevenue: 0
-          },
-          systemHealth: 'healthy'
+          }
         });
       
       default:
