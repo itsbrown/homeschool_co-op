@@ -1,12 +1,17 @@
 import request from 'supertest';
-
-// Note: The app needs to be exported from server/index.ts for testing
-// For now, we'll use a type-safe approach that works with the existing setup
-export type Response = any;
+import type { Express } from 'express';
+import { getTestApp } from '../../test-app';
 
 export class ApiTestHelper {
+  private app: Express | null = null;
   private authToken: string | null = null;
   private cookies: string[] = [];
+
+  async init() {
+    if (!this.app) {
+      this.app = await getTestApp();
+    }
+  }
 
   setAuthToken(token: string) {
     this.authToken = token;
@@ -21,33 +26,128 @@ export class ApiTestHelper {
     this.cookies = [];
   }
 
-  // Mock implementations for now - these would be updated to use actual server instance
-  async get(url: string, query?: Record<string, any>): Promise<Response> {
-    // This is a placeholder - actual implementation would use supertest with real server
-    return Promise.resolve({ status: 200, body: {}, headers: {} });
+  private async ensureApp() {
+    if (!this.app) {
+      await this.init();
+    }
+    return this.app!;
   }
 
-  async post(url: string, data?: any): Promise<Response> {
-    return Promise.resolve({ status: 200, body: {}, headers: {} });
+  async get(url: string, query?: Record<string, any>) {
+    const app = await this.ensureApp();
+    let req = request(app).get(url);
+    
+    if (this.authToken) {
+      req = req.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    
+    if (this.cookies.length > 0) {
+      req = req.set('Cookie', this.cookies);
+    }
+
+    if (query) {
+      req = req.query(query);
+    }
+
+    return req;
   }
 
-  async put(url: string, data?: any): Promise<Response> {
-    return Promise.resolve({ status: 200, body: {}, headers: {} });
+  async post(url: string, data?: any) {
+    const app = await this.ensureApp();
+    let req = request(app).post(url);
+    
+    if (this.authToken) {
+      req = req.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    
+    if (this.cookies.length > 0) {
+      req = req.set('Cookie', this.cookies);
+    }
+
+    if (data) {
+      req = req.send(data);
+    }
+
+    return req;
   }
 
-  async patch(url: string, data?: any): Promise<Response> {
-    return Promise.resolve({ status: 200, body: {}, headers: {} });
+  async put(url: string, data?: any) {
+    const app = await this.ensureApp();
+    let req = request(app).put(url);
+    
+    if (this.authToken) {
+      req = req.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    
+    if (this.cookies.length > 0) {
+      req = req.set('Cookie', this.cookies);
+    }
+
+    if (data) {
+      req = req.send(data);
+    }
+
+    return req;
   }
 
-  async delete(url: string): Promise<Response> {
-    return Promise.resolve({ status: 200, body: {}, headers: {} });
+  async patch(url: string, data?: any) {
+    const app = await this.ensureApp();
+    let req = request(app).patch(url);
+    
+    if (this.authToken) {
+      req = req.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    
+    if (this.cookies.length > 0) {
+      req = req.set('Cookie', this.cookies);
+    }
+
+    if (data) {
+      req = req.send(data);
+    }
+
+    return req;
   }
 
-  async uploadFile(url: string, fieldName: string, filePath: string, data?: any): Promise<Response> {
-    return Promise.resolve({ status: 200, body: {}, headers: {} });
+  async delete(url: string) {
+    const app = await this.ensureApp();
+    let req = request(app).delete(url);
+    
+    if (this.authToken) {
+      req = req.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    
+    if (this.cookies.length > 0) {
+      req = req.set('Cookie', this.cookies);
+    }
+
+    return req;
   }
 
-  async loginAsUser(email: string, password: string = 'password123'): Promise<Response> {
+  async uploadFile(url: string, fieldName: string, filePath: string, data?: any) {
+    const app = await this.ensureApp();
+    let req = request(app)
+      .post(url)
+      .attach(fieldName, filePath);
+    
+    if (this.authToken) {
+      req = req.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    
+    if (this.cookies.length > 0) {
+      req = req.set('Cookie', this.cookies);
+    }
+
+    if (data) {
+      Object.keys(data).forEach(key => {
+        req = req.field(key, data[key]);
+      });
+    }
+
+    return req;
+  }
+
+  async loginAsUser(email: string, password: string = 'password123') {
     const response = await this.post('/api/auth/login', { email, password });
     
     if (response.status === 200 && response.body.token) {
