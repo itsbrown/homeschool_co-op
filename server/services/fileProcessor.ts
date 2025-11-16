@@ -3,7 +3,6 @@ import path from 'path';
 // Temporarily disable PDF parsing to fix server startup
 // import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
-import { fileTypeFromBuffer } from 'file-type';
 
 export interface ExtractedContent {
   fileName: string;
@@ -29,6 +28,9 @@ export interface ProcessingResult {
 export async function extractFileContent(filePath: string, fileName: string): Promise<ProcessingResult> {
   try {
     const buffer = await fs.promises.readFile(filePath);
+    
+    // Dynamic import for ESM-only module (better Jest compatibility)
+    const { fileTypeFromBuffer } = await import('file-type');
     const fileType = await fileTypeFromBuffer(buffer);
     
     let content = '';

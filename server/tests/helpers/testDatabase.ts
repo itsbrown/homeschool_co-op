@@ -1,13 +1,11 @@
-import { getDb } from '../../db';
-import { eq, inArray } from 'drizzle-orm';
-import { 
-  users, schools, children, schoolStudents, schoolStaff, 
-  locations, categories, classes, schoolClassEnrollments, programEnrollments,
-  notifications, customForms, dailyFlowTemplates, knowledgeBases
-} from '../../../shared/schema';
+import { storage } from '../../storage';
 import { nanoid } from 'nanoid';
-import type { InsertUser, InsertSchool, InsertLocation, InsertCategory } from '../../../shared/schema';
+import type { InsertUser, InsertSchool, InsertLocation, InsertCategory, User, School, Location, Category, Child, Class } from '../../../shared/schema';
 
+/**
+ * Test Database Helper
+ * Uses the in-memory storage system for testing
+ */
 export class TestDatabase {
   private createdRecords: {
     users: number[];
@@ -28,54 +26,8 @@ export class TestDatabase {
   };
 
   async cleanup() {
-    // Get the actual db instance
-    const database = await getDb();
-    if (!database) return;
-
-    // Clean up in reverse order of dependencies
-    if (this.createdRecords.enrollments.length > 0) {
-      await database.delete(schoolClassEnrollments).where(
-        inArray(schoolClassEnrollments.id, this.createdRecords.enrollments)
-      );
-    }
-    
-    if (this.createdRecords.classes.length > 0) {
-      await database.delete(classes).where(
-        inArray(classes.id, this.createdRecords.classes)
-      );
-    }
-
-    if (this.createdRecords.categories.length > 0) {
-      await database.delete(categories).where(
-        inArray(categories.id, this.createdRecords.categories)
-      );
-    }
-
-    if (this.createdRecords.locations.length > 0) {
-      await database.delete(locations).where(
-        inArray(locations.id, this.createdRecords.locations)
-      );
-    }
-
-    if (this.createdRecords.children.length > 0) {
-      await database.delete(children).where(
-        inArray(children.id, this.createdRecords.children)
-      );
-    }
-
-    if (this.createdRecords.schools.length > 0) {
-      await database.delete(schools).where(
-        inArray(schools.id, this.createdRecords.schools)
-      );
-    }
-
-    if (this.createdRecords.users.length > 0) {
-      await database.delete(users).where(
-        inArray(users.id, this.createdRecords.users)
-      );
-    }
-
-    // Reset tracking
+    // In-memory storage doesn't need complex cleanup
+    // Just reset tracking arrays
     this.createdRecords = {
       users: [],
       schools: [],
@@ -87,157 +39,127 @@ export class TestDatabase {
     };
   }
 
-  async createTestUser(overrides: Partial<InsertUser> = {}) {
-    const database = await getDb();
-    if (!database) throw new Error('Database not available');
-
+  async createTestUser(overrides: Partial<InsertUser> = {}): Promise<User> {
     const uniqueId = nanoid(8);
     const userData: InsertUser = {
       username: overrides.username || `testuser_${uniqueId}`,
       email: overrides.email || `test_${uniqueId}@example.com`,
       password: overrides.password || 'hashedpassword123',
       name: overrides.name || `Test User ${uniqueId}`,
+      role: overrides.role || 'parent',
+      isActive: overrides.isActive !== undefined ? overrides.isActive : true,
       ...overrides
     };
 
-    const [user] = await database.insert(users).values(userData).returning();
+    const user = await storage.createUser(userData);
     this.createdRecords.users.push(user.id);
     return user;
   }
 
-  async createTestSchool(adminId: number, overrides: Partial<InsertSchool> = {}) {
-    const database = await getDb();
-    if (!database) throw new Error('Database not available');
-
+  async createTestSchool(adminId: number, overrides: Partial<InsertSchool> = {}): Promise<School> {
     const uniqueId = nanoid(8);
-    const schoolData = {
+    const schoolData: InsertSchool = {
       name: overrides.name || `Test School ${uniqueId}`,
-      type: overrides.type || ('school' as const),
+      type: overrides.type || 'school',
       adminId,
       city: overrides.city || 'Test City',
       state: overrides.state || 'CA',
       zipCode: overrides.zipCode || '12345',
       email: overrides.email || `school_${uniqueId}@example.com`,
-      status: overrides.status || ('active' as const),
+      status: overrides.status || 'active',
       address: null,
       phoneNumber: null,
       website: null,
       logo: null,
+      registrationCode: `TEST${uniqueId.toUpperCase()}`,
       description: null,
-      foundedYear: null,
-      accreditation: null,
-      enrollmentSize: null,
-      registrationCode: null,
       ...overrides
     };
 
-    const [school] = await database.insert(schools).values(schoolData).returning();
+    const school = await storage.createSchool(schoolData);
     this.createdRecords.schools.push(school.id);
     return school;
   }
 
-  async createTestLocation(schoolId: number, overrides: Partial<InsertLocation> = {}) {
-    const database = await getDb();
-    if (!database) throw new Error('Database not available');
-
+  async createTestLocation(schoolId: number, overrides: Partial<InsertLocation> = {}): Promise<Location> {
     const uniqueId = nanoid(8);
     const locationData = {
-      schoolId,
       name: overrides.name || `Test Location ${uniqueId}`,
+      schoolId,
       address: overrides.address || '123 Test St',
       city: overrides.city || 'Test City',
       state: overrides.state || 'CA',
       zipCode: overrides.zipCode || '12345',
-      code: `LOC${uniqueId}`,
-      email: null,
-      phoneNumber: null,
-      managerName: null,
-      capacity: null,
       ...overrides
     };
 
-    const [location] = await database.insert(locations).values(locationData).returning();
+    const location = await storage.createLocation(locationData);
     this.createdRecords.locations.push(location.id);
     return location;
   }
 
-  async createTestCategory(schoolId: number, overrides: Partial<InsertCategory> = {}) {
-    const database = await getDb();
-    if (!database) throw new Error('Database not available');
-
+  async createTestCategory(schoolId: number, overrides: Partial<InsertCategory> = {}): Promise<Category> {
     const uniqueId = nanoid(8);
     const categoryData = {
-      schoolId,
       name: overrides.name || `Test Category ${uniqueId}`,
-      description: null,
+      description: overrides.description || null,
+      schoolId,
       ...overrides
     };
 
-    const [category] = await database.insert(categories).values(categoryData).returning();
+    const category = await storage.createCategory(categoryData);
     this.createdRecords.categories.push(category.id);
     return category;
   }
 
-  async createTestChild(parentId: number, overrides: any = {}) {
-    const database = await getDb();
-    if (!database) throw new Error('Database not available');
-
+  async createTestChild(parentId: number, overrides: any = {}): Promise<Child> {
     const uniqueId = nanoid(8);
     const childData = {
+      firstName: overrides.firstName || `Child${uniqueId}`,
+      lastName: overrides.lastName || 'Test',
+      birthdate: overrides.birthdate || '2010-01-01',
+      gradeLevel: overrides.gradeLevel || '5th',
       parentId,
-      firstName: `TestChild${uniqueId}`,
-      lastName: 'Tester',
-      dateOfBirth: new Date('2015-01-01'),
+      parentEmail: overrides.parentEmail || `parent_${uniqueId}@example.com`,
+      schoolId: overrides.schoolId || null,
       ...overrides
     };
 
-    const [child] = await database.insert(children).values(childData).returning();
+    const child = await storage.createChild(childData);
     this.createdRecords.children.push(child.id);
     return child;
   }
 
-  async createTestClass(schoolId: number, overrides: any = {}) {
-    const database = await getDb();
-    if (!database) throw new Error('Database not available');
-
+  async createTestClass(schoolId: number, overrides: any = {}): Promise<Class> {
     const uniqueId = nanoid(8);
     const classData = {
-      schoolId,
       title: overrides.title || `Test Class ${uniqueId}`,
       description: overrides.description || 'Test class description',
-      price: overrides.price || 5000,
-      maxStudents: overrides.maxStudents || 20,
-      status: overrides.status || ('active' as const),
+      schoolId,
+      status: overrides.status || 'active',
+      type: overrides.type || 'marketplace',
+      price: overrides.price || 100,
+      capacity: overrides.capacity || 20,
+      locationId: overrides.locationId || null,
+      categoryId: overrides.categoryId || null,
       ...overrides
     };
 
-    const [classRecord] = await database.insert(classes).values(classData).returning();
-    this.createdRecords.classes.push(classRecord.id);
-    return classRecord;
+    const classItem = await storage.createClass(classData);
+    this.createdRecords.classes.push(classItem.id);
+    return classItem;
   }
 
-  async createTestEnrollment(childId: number, classId: number, overrides: any = {}) {
-    const database = await getDb();
-    if (!database) throw new Error('Database not available');
-
-    const enrollmentData = {
-      childId,
-      classId,
-      status: overrides.status || ('pending' as const),
-      ...overrides
-    };
-
-    const [enrollment] = await database.insert(schoolClassEnrollments).values(enrollmentData).returning();
-    this.createdRecords.enrollments.push(enrollment.id);
-    return enrollment;
-  }
-
-  // Helper to create a complete test environment
+  /**
+   * Set up a complete test environment with all necessary entities
+   */
   async setupTestEnvironment() {
     // Create admin user
     const admin = await this.createTestUser({
-      role: 'schoolAdmin',
-      name: 'Test Admin'
+      email: 'admin@test.com',
+      username: 'testadmin',
+      name: 'Test Admin',
+      role: 'schoolAdmin'
     });
 
     // Create school
@@ -246,55 +168,65 @@ export class TestDatabase {
     });
 
     // Create locations
-    const mainLocation = await this.createTestLocation(school.id, {
+    const location1 = await this.createTestLocation(school.id, {
       name: 'Main Campus'
     });
-
-    const secondLocation = await this.createTestLocation(school.id, {
-      name: 'East Campus'
+    const location2 = await this.createTestLocation(school.id, {
+      name: 'West Campus'
     });
+    const locations = [location1, location2];
 
     // Create categories
-    const mathCategory = await this.createTestCategory(school.id, {
+    const category1 = await this.createTestCategory(school.id, {
       name: 'Mathematics'
     });
-
-    const scienceCategory = await this.createTestCategory(school.id, {
+    const category2 = await this.createTestCategory(school.id, {
       name: 'Science'
     });
+    const categories = [category1, category2];
 
     // Create parent user
     const parent = await this.createTestUser({
-      role: 'parent',
-      name: 'Test Parent'
+      email: 'parent@test.com',
+      username: 'testparent',
+      name: 'Test Parent',
+      role: 'parent'
     });
 
     // Create children
     const child1 = await this.createTestChild(parent.id, {
-      firstName: 'Alice'
+      firstName: 'Alice',
+      lastName: 'Test',
+      gradeLevel: '5th',
+      schoolId: school.id
     });
-
     const child2 = await this.createTestChild(parent.id, {
-      firstName: 'Bob'
+      firstName: 'Bob',
+      lastName: 'Test',
+      gradeLevel: '3rd',
+      schoolId: school.id
     });
+    const children = [child1, child2];
 
-    // Create educator
+    // Create educator user
     const educator = await this.createTestUser({
-      role: 'teacher',
-      name: 'Test Educator'
+      email: 'educator@test.com',
+      username: 'testeducator',
+      name: 'Test Educator',
+      role: 'teacher'
     });
 
     return {
       admin,
       school,
-      locations: [mainLocation, secondLocation],
-      categories: [mathCategory, scienceCategory],
+      locations,
+      categories,
       parent,
-      children: [child1, child2],
+      children,
       educator
     };
   }
 }
 
-// Singleton instance for tests
+// Export singleton instance
 export const testDb = new TestDatabase();
