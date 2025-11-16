@@ -4,13 +4,17 @@ import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
 import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
 
-if (!process.env.STRIPE_SECRET_KEY) {
+const isTestMode = process.env.NODE_ENV === 'test';
+
+if (!process.env.STRIPE_SECRET_KEY && !isTestMode) {
   throw new Error('STRIPE_SECRET_KEY environment variable is required');
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-08-27.basil'
-});
+const stripe = isTestMode 
+  ? null 
+  : new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+      apiVersion: '2025-08-27.basil'
+    });
 
 // Stripe's minimum payment amount is $0.50 USD (50 cents)
 const STRIPE_MINIMUM_AMOUNT = 50;
@@ -90,25 +94,56 @@ export class StripePaymentPlanService {
 
     // Create immediate PaymentIntent for the first payment
     const firstPhase = phases[0];
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: firstPhase.amount,
-      currency: 'usd',
-      customer: customer.id,
-      description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
-      metadata: {
-        enrollmentIds: JSON.stringify(data.enrollmentIds),
-        parentEmail: data.parentEmail,
-        paymentPlan: data.paymentPlan,
-        totalAmount: data.totalAmount.toString(),
-        installmentNumber: '1',
-        totalInstallments: phases.length.toString(),
-        createdBy: 'asa_payment_system',
-        version: 'v2_stripe_simplified'
-      },
-      automatic_payment_methods: {
-        enabled: true
+    let paymentIntent: Stripe.PaymentIntent;
+    
+    if (isTestMode) {
+      // Mock payment intent for test environment
+      paymentIntent = {
+        id: `pi_test_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        object: 'payment_intent',
+        amount: firstPhase.amount,
+        currency: 'usd',
+        client_secret: `pi_test_${Date.now()}_secret_${Math.random().toString(36).substring(7)}`,
+        customer: customer.id,
+        description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
+        metadata: {
+          enrollmentIds: JSON.stringify(data.enrollmentIds),
+          parentEmail: data.parentEmail,
+          paymentPlan: data.paymentPlan,
+          totalAmount: data.totalAmount.toString(),
+          installmentNumber: '1',
+          totalInstallments: phases.length.toString(),
+          createdBy: 'asa_payment_system',
+          version: 'v2_stripe_simplified'
+        },
+        status: 'requires_payment_method',
+        created: Math.floor(Date.now() / 1000)
+      } as Stripe.PaymentIntent;
+      console.log('🧪 Test mode: Created mock PaymentIntent:', paymentIntent.id);
+    } else {
+      if (!stripe) {
+        throw new Error('Stripe is not initialized');
       }
-    });
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: firstPhase.amount,
+        currency: 'usd',
+        customer: customer.id,
+        description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
+        metadata: {
+          enrollmentIds: JSON.stringify(data.enrollmentIds),
+          parentEmail: data.parentEmail,
+          paymentPlan: data.paymentPlan,
+          totalAmount: data.totalAmount.toString(),
+          installmentNumber: '1',
+          totalInstallments: phases.length.toString(),
+          createdBy: 'asa_payment_system',
+          version: 'v2_stripe_simplified'
+        },
+        automatic_payment_methods: {
+          enabled: true
+        }
+      });
+    }
 
     console.log('💳 PaymentIntent created for first payment:', paymentIntent.id, CurrencyUtils.toDisplay(firstPhase.amount));
 
@@ -174,6 +209,27 @@ export class StripePaymentPlanService {
    */
   private async getOrCreateCustomer(email: string): Promise<Stripe.Customer> {
     console.log('🔍 Looking for existing Stripe customer:', email);
+
+    if (isTestMode) {
+      // Mock customer for test environment
+      const mockCustomer = {
+        id: `cus_test_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        object: 'customer',
+        email: email,
+        created: Math.floor(Date.now() / 1000),
+        metadata: {
+          source: 'asa_learning_platform',
+          created_by: 'payment_plan_service',
+          test_mode: 'true'
+        }
+      } as Stripe.Customer;
+      console.log('🧪 Test mode: Created mock customer:', mockCustomer.id);
+      return mockCustomer;
+    }
+
+    if (!stripe) {
+      throw new Error('Stripe is not initialized');
+    }
 
     // Search for existing customer by email
     const existingCustomers = await stripe.customers.list({

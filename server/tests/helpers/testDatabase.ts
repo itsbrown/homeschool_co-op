@@ -122,13 +122,21 @@ export class TestDatabase {
 
   async createTestChild(parentId: number, overrides: any = {}): Promise<Child> {
     const uniqueId = nanoid(8);
+    
+    // Look up parent's email from parentId if not provided in overrides
+    let parentEmail = overrides.parentEmail;
+    if (!parentEmail) {
+      const parent = await storage.getUser(parentId);
+      parentEmail = parent?.email || `parent_${uniqueId}@example.com`;
+    }
+    
     const childData = {
       firstName: overrides.firstName || `Child${uniqueId}`,
       lastName: overrides.lastName || 'Test',
       birthdate: overrides.birthdate || '2010-01-01',
       gradeLevel: overrides.gradeLevel || '5th',
       parentId,
-      parentEmail: overrides.parentEmail || `parent_${uniqueId}@example.com`,
+      parentEmail,
       schoolId: overrides.schoolId || null,
       ...overrides
     };

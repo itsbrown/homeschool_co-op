@@ -8,8 +8,8 @@
     "parentEmail": "parent@test.com",
     "schoolId": 1,
     "id": 1,
-    "createdAt": "2025-11-16T20:52:47.477Z",
-    "updatedAt": "2025-11-16T20:52:47.477Z"
+    "createdAt": "2025-11-16T20:50:31.733Z",
+    "updatedAt": "2025-11-16T20:50:31.733Z"
   },
   {
     "firstName": "Child2",
@@ -20,7 +20,7 @@
     "parentEmail": "parent@test.com",
     "schoolId": 1,
     "id": 2,
-    "createdAt": "2025-11-16T20:52:47.478Z",
-    "updatedAt": "2025-11-16T20:52:47.478Z"
+    "createdAt": "2025-11-16T20:50:31.734Z",
+    "updatedAt": "2025-11-16T20:50:31.734Z"
   }
 ]

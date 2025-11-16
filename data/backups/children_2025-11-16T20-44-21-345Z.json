@@ -1,0 +1,14 @@
+[
+  {
+    "firstName": "Alice",
+    "lastName": "Test",
+    "birthdate": "2010-01-01",
+    "gradeLevel": "5th",
+    "parentId": 1,
+    "parentEmail": "parent_gnU_RLGF@example.com",
+    "schoolId": 1,
+    "id": 1,
+    "createdAt": "2025-11-16T20:43:47.149Z",
+    "updatedAt": "2025-11-16T20:43:47.149Z"
+  }
+]

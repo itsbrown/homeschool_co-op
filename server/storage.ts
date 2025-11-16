@@ -215,6 +215,8 @@ export interface IStorage {
    * This method exists for backward compatibility only and will be removed in a future version.
    */
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
+  getEnrollmentsByChildIds(childIds: number[]): Promise<any[]>;
+  getEnrollmentsByClassId(classId: number): Promise<any[]>;
   
   /**
    * @deprecated Use getProgramEnrollmentById() instead
@@ -1646,23 +1648,34 @@ export class MemStorage implements IStorage {
   }
 
   async getEnrollmentsByChildId(childId: number): Promise<any[]> {
-    if (!this.classEnrollments) {
-      console.log(`📝 No classEnrollments array exists for child ${childId}`);
-      return [];
-    }
-    const enrollments = this.classEnrollments.filter(enrollment => enrollment.childId === childId);
-    console.log(`📝 ENROLLMENT QUERY: Child ${childId} has ${enrollments.length} enrollments`);
+    // Read from programEnrollmentsStore (the canonical source for all enrollments)
+    const enrollments = Array.from(this.programEnrollmentsStore.values())
+      .filter(enrollment => enrollment.childId === childId);
+    console.log(`📝 ENROLLMENT QUERY: Child ${childId} has ${enrollments.length} enrollments from programEnrollmentsStore`);
     console.log(`📝 Enrollments found:`, enrollments);
     return enrollments;
   }
 
+  async getEnrollmentsByChildIds(childIds: number[]): Promise<any[]> {
+    // Read from programEnrollmentsStore (the canonical source for all enrollments)
+    const enrollments = Array.from(this.programEnrollmentsStore.values())
+      .filter(enrollment => childIds.includes(enrollment.childId));
+    console.log(`📝 ENROLLMENT QUERY: Children ${childIds.join(', ')} have ${enrollments.length} enrollments from programEnrollmentsStore`);
+    return enrollments;
+  }
+
+  async getEnrollmentsByClassId(classId: number): Promise<any[]> {
+    // Read from programEnrollmentsStore (the canonical source for all enrollments)
+    const enrollments = Array.from(this.programEnrollmentsStore.values())
+      .filter(enrollment => enrollment.classId === classId);
+    console.log(`📝 ENROLLMENT QUERY: Class ${classId} has ${enrollments.length} enrollments from programEnrollmentsStore`);
+    return enrollments;
+  }
+
   async getEnrollmentById(id: number): Promise<any> {
-    if (!this.classEnrollments) {
-      console.log(`📝 No classEnrollments array exists for enrollment ${id}`);
-      return undefined;
-    }
-    const enrollment = this.classEnrollments.find(enrollment => enrollment.id === id);
-    console.log(`📝 ENROLLMENT QUERY: Enrollment ${id} ${enrollment ? 'found' : 'not found'}`);
+    // Read from programEnrollmentsStore (the canonical source for all enrollments)
+    const enrollment = this.programEnrollmentsStore.get(id);
+    console.log(`📝 ENROLLMENT QUERY: Enrollment ${id} ${enrollment ? 'found' : 'not found'} in programEnrollmentsStore`);
     return enrollment;
   }
 
@@ -4411,8 +4424,13 @@ export class MemStorage implements IStorage {
     }
 
     async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
-      // Use dbStorage to get children from database by parent email
-      return this.dbStorage.getChildrenByParentEmail(parentEmail);
+      try {
+        // Use dbStorage to get children from database by parent email
+        return await this.dbStorage.getChildrenByParentEmail(parentEmail);
+      } catch (error) {
+        console.error('❌ Database error in getChildrenByParentEmail, falling back to memStorage:', error);
+        return await this.memStorage.getChildrenByParentEmail(parentEmail);
+      }
     }
 
     async getAllChildren(): Promise<Child[]> {
@@ -4494,7 +4512,20 @@ export class MemStorage implements IStorage {
     }
 
     async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
-      return this.dbStorage.getProgramEnrollmentById(id);
+      try {
+        if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentById === 'function') {
+          return await this.dbStorage.getProgramEnrollmentById(id);
+        } else {
+          console.log('💾 DB storage unavailable, using memStorage fallback for getProgramEnrollmentById');
+          return await this.memStorage.getProgramEnrollmentById(id);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.log('❌ Error getting program enrollment from database, falling back to memStorage:', error);
+        return await this.memStorage.getProgramEnrollmentById(id);
+      }
     }
 
     async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
@@ -4567,7 +4598,20 @@ export class MemStorage implements IStorage {
     }
 
     async deleteProgramEnrollment(id: number): Promise<void> {
-      return this.dbStorage.deleteProgramEnrollment(id);
+      try {
+        if (this.dbStorage && typeof this.dbStorage.deleteProgramEnrollment === 'function') {
+          return await this.dbStorage.deleteProgramEnrollment(id);
+        } else {
+          console.log('💾 DB storage unavailable, using memStorage fallback for deleteProgramEnrollment');
+          return await this.memStorage.deleteProgramEnrollment(id);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.log('❌ Error deleting program enrollment from database, falling back to memStorage:', error);
+        return await this.memStorage.deleteProgramEnrollment(id);
+      }
     }
 
     async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
@@ -4641,13 +4685,65 @@ export class MemStorage implements IStorage {
     }
 
     async getEnrollmentsByChildId(childId: number): Promise<any[]> {
-      // Get all enrollments for child from unified program_enrollments table
-      return this.dbStorage.getProgramEnrollmentsByChild(childId);
+      try {
+        // Get all enrollments for child from unified program_enrollments table
+        if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentsByChild === 'function') {
+          return await this.dbStorage.getProgramEnrollmentsByChild(childId);
+        } else {
+          console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByChildId');
+          return await this.memStorage.getEnrollmentsByChildId(childId);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.log('❌ Error getting enrollments from database, falling back to memStorage:', error);
+        return await this.memStorage.getEnrollmentsByChildId(childId);
+      }
+    }
+
+    async getEnrollmentsByChildIds(childIds: number[]): Promise<any[]> {
+      try {
+        console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByChildIds');
+        return await this.memStorage.getEnrollmentsByChildIds(childIds);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.log('❌ Error getting enrollments from database, falling back to memStorage:', error);
+        return await this.memStorage.getEnrollmentsByChildIds(childIds);
+      }
+    }
+
+    async getEnrollmentsByClassId(classId: number): Promise<any[]> {
+      try {
+        console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByClassId');
+        return await this.memStorage.getEnrollmentsByClassId(classId);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.log('❌ Error getting enrollments from database, falling back to memStorage:', error);
+        return await this.memStorage.getEnrollmentsByClassId(classId);
+      }
     }
 
     async getEnrollmentById(id: number): Promise<any> {
-      // Get enrollment from unified program_enrollments table
-      return this.dbStorage.getProgramEnrollmentById(id);
+      try {
+        // Get enrollment from unified program_enrollments table
+        if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentById === 'function') {
+          return await this.dbStorage.getProgramEnrollmentById(id);
+        } else {
+          console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentById');
+          return await this.memStorage.getEnrollmentById(id);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.log('❌ Error getting enrollment from database, falling back to memStorage:', error);
+        return await this.memStorage.getEnrollmentById(id);
+      }
     }
 
     async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
@@ -4684,8 +4780,13 @@ export class MemStorage implements IStorage {
     }
 
     async getClassById(classId: number): Promise<Class | undefined> {
-      const result = await this.dbStorage.getClassById(classId);
-      return result || undefined;
+      try {
+        const result = await this.dbStorage.getClassById(classId);
+        return result || undefined;
+      } catch (error) {
+        console.error('❌ Database error in getClassById, falling back to memStorage:', error);
+        return await this.memStorage.getClassById(classId);
+      }
     }
 
     async getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]> {
