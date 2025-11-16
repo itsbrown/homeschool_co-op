@@ -1,6 +1,6 @@
 import type { Express } from "express";
-import { AITechnicalSupportService } from "../lib/ai-technical-support.js";
-import { storage } from "../storage.js";
+import { AITechnicalSupportService } from "../lib/ai-technical-support";
+import { storage } from "../storage";
 
 interface TechnicalIssue {
   id: string;

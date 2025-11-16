@@ -1,8 +1,8 @@
 import express from "express";
 import { z } from "zod";
 import { insertNotificationSchema } from "@shared/schema";
-import { storage } from '../storage.js';
-import { sendSMS, isTwilioConfigured } from '../services/twilio.js';
+import { storage } from '../storage';
+import { sendSMS, isTwilioConfigured } from '../services/twilio';
 import * as brevo from '@getbrevo/brevo';
 
 const router = express.Router();

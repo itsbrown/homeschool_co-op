@@ -7,7 +7,7 @@ import {
   getMembershipSummary,
   getMySchoolMemberships,
   getMySchoolMembershipSummary
-} from "./membership-admin.js";
+} from "./membership-admin";
 
 const router = Router();
 

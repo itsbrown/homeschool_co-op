@@ -1,5 +1,5 @@
 import express from 'express';
-import { MemStorage } from '../storage.js';
+import { MemStorage } from '../storage';
 
 const router = express.Router();
 

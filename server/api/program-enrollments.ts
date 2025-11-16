@@ -3,8 +3,8 @@ import { storage } from "../storage";
 import { insertProgramEnrollmentSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { formatZodError } from "../utils";
-import { MembershipService } from "../services/membership-service.js";
-import { MembershipCheckService } from "../services/membership-check-service.js";
+import { MembershipService } from "../services/membership-service";
+import { MembershipCheckService } from "../services/membership-check-service";
 
 // Get all enrollments for a parent's children
 export const getMyChildrenEnrollments = async (req: any, res: Response) => {

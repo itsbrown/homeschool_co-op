@@ -1,4 +1,4 @@
-import { db } from '../../db';
+import { getDb } from '../../db';
 import { eq, inArray } from 'drizzle-orm';
 import { 
   users, schools, children, schoolStudents, schoolStaff, 
@@ -29,7 +29,7 @@ export class TestDatabase {
 
   async cleanup() {
     // Get the actual db instance
-    const database = await db();
+    const database = await getDb();
     if (!database) return;
 
     // Clean up in reverse order of dependencies
@@ -88,7 +88,7 @@ export class TestDatabase {
   }
 
   async createTestUser(overrides: Partial<InsertUser> = {}) {
-    const database = await db();
+    const database = await getDb();
     if (!database) throw new Error('Database not available');
 
     const uniqueId = nanoid(8);
@@ -106,7 +106,7 @@ export class TestDatabase {
   }
 
   async createTestSchool(adminId: number, overrides: Partial<InsertSchool> = {}) {
-    const database = await db();
+    const database = await getDb();
     if (!database) throw new Error('Database not available');
 
     const uniqueId = nanoid(8);
@@ -137,7 +137,7 @@ export class TestDatabase {
   }
 
   async createTestLocation(schoolId: number, overrides: Partial<InsertLocation> = {}) {
-    const database = await db();
+    const database = await getDb();
     if (!database) throw new Error('Database not available');
 
     const uniqueId = nanoid(8);
@@ -162,7 +162,7 @@ export class TestDatabase {
   }
 
   async createTestCategory(schoolId: number, overrides: Partial<InsertCategory> = {}) {
-    const database = await db();
+    const database = await getDb();
     if (!database) throw new Error('Database not available');
 
     const uniqueId = nanoid(8);
@@ -179,7 +179,7 @@ export class TestDatabase {
   }
 
   async createTestChild(parentId: number, overrides: any = {}) {
-    const database = await db();
+    const database = await getDb();
     if (!database) throw new Error('Database not available');
 
     const uniqueId = nanoid(8);
@@ -197,7 +197,7 @@ export class TestDatabase {
   }
 
   async createTestClass(schoolId: number, overrides: any = {}) {
-    const database = await db();
+    const database = await getDb();
     if (!database) throw new Error('Database not available');
 
     const uniqueId = nanoid(8);
@@ -217,7 +217,7 @@ export class TestDatabase {
   }
 
   async createTestEnrollment(childId: number, classId: number, overrides: any = {}) {
-    const database = await db();
+    const database = await getDb();
     if (!database) throw new Error('Database not available');
 
     const enrollmentData = {

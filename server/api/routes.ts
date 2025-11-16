@@ -1,14 +1,14 @@
 import express from 'express';
-import stripeRoutes from './stripe.js';
-import billingRoutes from './billing.js';
-import paymentHistoryRoutes from './payment-history.js';
-import scheduledPaymentsRoutes from './scheduled-payments.js';
-import stripeMigrationRoutes from './stripe-migration.js';
-import stripeWebhookRoutes from './stripe-webhook.js';
-import cartRoutes from './cart.js';
-import marketingRoutes from './marketing.js';
-import schoolRoutes from './school.js';
-import { authMiddleware } from '../middleware/auth.js';
+import stripeRoutes from './stripe';
+import billingRoutes from './billing';
+import paymentHistoryRoutes from './payment-history';
+import scheduledPaymentsRoutes from './scheduled-payments';
+import stripeMigrationRoutes from './stripe-migration';
+import stripeWebhookRoutes from './stripe-webhook';
+import cartRoutes from './cart';
+import marketingRoutes from './marketing';
+import schoolRoutes from './school';
+import { authMiddleware } from '../middleware/auth';
 
 const router = express.Router();
 

@@ -5,7 +5,7 @@ import { storage } from '../storage';
 import { insertPaymentSchema, type InsertPayment } from '@shared/schema';
 import { sendPaymentConfirmationEmail } from '../lib/email-service';
 import { createClient } from '@supabase/supabase-js';
-import { dataLayer } from '../services/dataLayer.js';
+import { dataLayer } from '../services/dataLayer';
 
 const router = Router();
 

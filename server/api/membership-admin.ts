@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { storage } from "../storage.js";
+import { storage } from "../storage";
 import { z } from "zod";
 
 // Schema for updating membership

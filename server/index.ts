@@ -27,8 +27,8 @@ import stripeMigrationRouter from "./api/stripe-migration";
 import stripeWebhookRouter from "./api/stripe-webhook";
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import membershipRouter from "./api/membership";
-import { MembershipStatusService } from "./services/membership-status-service.js";
-import { dataLayer } from "./services/dataLayer.js";
+import { MembershipStatusService } from "./services/membership-status-service";
+import { dataLayer } from "./services/dataLayer";
 import { webhookHandler } from "./webhook-handler";
 
 const app = express();

@@ -1,7 +1,7 @@
 import express, { type Express, type Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { registerTechnicalSupportRoutes } from "./api/technical-support.js";
+import { registerTechnicalSupportRoutes } from "./api/technical-support";
 import { nlpService } from "./nlp-service";
 import bcrypt from "bcryptjs";
 import session from "express-session";

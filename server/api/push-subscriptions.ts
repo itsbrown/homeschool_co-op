@@ -1,7 +1,7 @@
 import express, { Response } from 'express';
-import { storage } from '../storage.js';
-import { supabaseAuth } from '../middleware/supabase-auth.js';
-import { getVapidPublicKey } from '../services/web-push.js';
+import { storage } from '../storage';
+import { supabaseAuth } from '../middleware/supabase-auth';
+import { getVapidPublicKey } from '../services/web-push';
 
 const router = express.Router();
 

@@ -1,9 +1,9 @@
 import request from 'supertest';
-import type { Express } from 'express';
+import type { Application } from 'express';
 import { getTestApp } from '../../test-app';
 
 export class ApiTestHelper {
-  private app: Express | null = null;
+  private app: Application | null = null;
   private authToken: string | null = null;
   private cookies: string[] = [];
 
@@ -26,7 +26,7 @@ export class ApiTestHelper {
     this.cookies = [];
   }
 
-  private async ensureApp() {
+  private async ensureApp(): Promise<Application> {
     if (!this.app) {
       await this.init();
     }
@@ -154,7 +154,11 @@ export class ApiTestHelper {
       this.setAuthToken(response.body.token);
       
       if (response.headers['set-cookie']) {
-        this.setCookies(response.headers['set-cookie']);
+        // Normalize set-cookie header to string array
+        const cookies = Array.isArray(response.headers['set-cookie'])
+          ? response.headers['set-cookie']
+          : [response.headers['set-cookie']];
+        this.setCookies(cookies);
       }
     }
 

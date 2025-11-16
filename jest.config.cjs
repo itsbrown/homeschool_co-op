@@ -19,8 +19,10 @@ module.exports = {
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
         resolveJsonModule: true,
-        moduleResolution: 'node'
-      }
+        moduleResolution: 'node',
+        skipLibCheck: true
+      },
+      isolatedModules: true
     }]
   },
   moduleNameMapper: {
@@ -35,5 +37,9 @@ module.exports = {
   forceExit: true,
   clearMocks: true,
   resetMocks: true,
-  restoreMocks: true
+  restoreMocks: true,
+  transformIgnorePatterns: [
+    'node_modules/(?!(file-type)/)'
+  ],
+  extensionsToTreatAsEsm: ['.ts']
 };

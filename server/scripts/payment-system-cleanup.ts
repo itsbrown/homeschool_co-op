@@ -8,7 +8,7 @@
  * 4. Ensures all enrollments use Stripe-managed payment status
  */
 
-import { MemStorage } from '../storage.js';
+import { MemStorage } from '../storage';
 
 export class PaymentSystemCleanup {
   constructor(private storage: MemStorage) {}

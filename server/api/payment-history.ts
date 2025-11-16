@@ -3,7 +3,7 @@ import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
-import { MembershipService } from '../services/membership-service.js';
+import { MembershipService } from '../services/membership-service';
 import { enrichedPaymentHistoryListResponseSchema, type EnrichedPaymentHistory } from '../../shared/schema';
 import Stripe from 'stripe';
 

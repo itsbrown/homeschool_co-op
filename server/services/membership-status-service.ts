@@ -1,5 +1,5 @@
-import { storage } from '../storage.js';
-import { MembershipService } from './membership-service.js';
+import { storage } from '../storage';
+import { MembershipService } from './membership-service';
 
 export class MembershipStatusService {
   /**

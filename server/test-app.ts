@@ -4,7 +4,7 @@
  */
 
 import "./test-env-loader";
-import express, { type Request, Response, NextFunction } from "express";
+import express, { type Request, Response, NextFunction, type Application } from "express";
 import { registerRoutes } from "./routes";
 import fileUpload from "express-fileupload";
 import path from "path";
@@ -36,7 +36,7 @@ import membershipRouter from "./api/membership";
  * Create and configure the Express application for testing
  * This is synchronous and doesn't start the server
  */
-export async function createTestApp() {
+export async function createTestApp(): Promise<Application> {
   const app = express();
 
   // CRITICAL: Apply Stripe webhook handler BEFORE any global body parsers
@@ -93,32 +93,6 @@ export async function createTestApp() {
   app.use('/api/educator', educatorRouter);
   app.use('/api/auth', authRouter);
 
-  // Test endpoints
-  if (process.env.NODE_ENV === 'test') {
-    app.post('/api/test/update-scheduled-payment', async (req, res) => {
-      try {
-        const { id, status } = req.body;
-        const { storage } = await import('./storage');
-        const payment = await storage.updateScheduledPaymentStatus(id, status);
-
-        if (status === 'paid') {
-          const paymentHistoryData = {
-            enrollmentId: payment.enrollmentId,
-            amount: payment.amount,
-            paymentDate: new Date(),
-            paymentMethod: 'scheduled',
-            status: 'completed' as const,
-          };
-          await storage.createPaymentHistory(paymentHistoryData);
-        }
-
-        res.json({ success: true, payment });
-      } catch (error) {
-        res.status(500).json({ error: 'Failed to update scheduled payment' });
-      }
-    });
-  }
-
   // Register additional routes via registerRoutes
   await registerRoutes(app);
 
@@ -139,9 +113,9 @@ export async function createTestApp() {
 }
 
 // Export a singleton instance for tests
-let testAppInstance: express.Application | null = null;
+let testAppInstance: Application | null = null;
 
-export async function getTestApp() {
+export async function getTestApp(): Promise<Application> {
   if (!testAppInstance) {
     testAppInstance = await createTestApp();
   }
