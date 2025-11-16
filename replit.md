@@ -56,6 +56,7 @@ All currency values are stored and transmitted as raw cents (numbers) by the bac
 - **Student Management System**: Comprehensive system for tracking and displaying students across schools, including auto-sync for existing children and automatic record creation for enrollments.
 - **Notification System**: In-app notification system with PostgreSQL storage, real-time unread count, and mark-as-read functionality.
 - **Enrollment Count Display**: Class enrollment counts accurately reflect valid statuses ('enrolled', 'completed').
+- **Category Management System**: School-level custom category system replacing hardcoded category enums. School administrators can create, edit, and manage custom categories for organizing classes. Categories table with (school_id, name) unique constraint; classes reference categories via category_id FK; database LEFT JOIN returns categoryName for display; default categories (Early Childhood, Elementary, Middle School, High School, Adult) seeded for all schools; backward compatible with legacy category strings; CRUD API endpoints at /api/school-admin/categories; frontend displays categoryName with fallback to legacy category field; class forms use dynamic category dropdown; localStorage validation prevents stale filter/sort mismatches.
 
 ## External Dependencies
 - **Supabase**: PostgreSQL database and OAuth authentication.
