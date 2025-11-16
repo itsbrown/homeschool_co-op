@@ -147,18 +147,22 @@ export class ApiTestHelper {
     return req;
   }
 
-  async loginAsUser(email: string, password: string = 'password123') {
+  async loginAsUser(email: string, password: string = 'password') {
     const response = await this.post('/api/auth/login', { email, password });
     
-    if (response.status === 200 && response.body.token) {
-      this.setAuthToken(response.body.token);
-      
+    // Session-based authentication - save cookies
+    if (response.status === 200) {
       if (response.headers['set-cookie']) {
         // Normalize set-cookie header to string array
         const cookies = Array.isArray(response.headers['set-cookie'])
           ? response.headers['set-cookie']
           : [response.headers['set-cookie']];
         this.setCookies(cookies);
+      }
+      
+      // Also handle token-based auth if present
+      if (response.body.token) {
+        this.setAuthToken(response.body.token);
       }
     }
 

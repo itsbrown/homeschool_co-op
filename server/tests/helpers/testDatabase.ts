@@ -1,5 +1,6 @@
 import { storage } from '../../storage';
 import { nanoid } from 'nanoid';
+import * as bcrypt from 'bcryptjs';
 import type { InsertUser, InsertSchool, InsertLocation, InsertCategory, User, School, Location, Category, Child, Class } from '../../../shared/schema';
 
 /**
@@ -26,8 +27,10 @@ export class TestDatabase {
   };
 
   async cleanup() {
-    // In-memory storage doesn't need complex cleanup
-    // Just reset tracking arrays
+    // Clear all data from in-memory storage
+    storage.clearAll();
+    
+    // Reset tracking arrays
     this.createdRecords = {
       users: [],
       schools: [],
@@ -41,10 +44,15 @@ export class TestDatabase {
 
   async createTestUser(overrides: Partial<InsertUser> = {}): Promise<User> {
     const uniqueId = nanoid(8);
+    
+    // Hash the password if provided, otherwise use default hashed 'password'
+    const plainPassword = overrides.password || 'password';
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+    
     const userData: InsertUser = {
       username: overrides.username || `testuser_${uniqueId}`,
       email: overrides.email || `test_${uniqueId}@example.com`,
-      password: overrides.password || 'hashedpassword123',
+      password: hashedPassword,
       name: overrides.name || `Test User ${uniqueId}`,
       role: overrides.role || 'parent',
       isActive: overrides.isActive !== undefined ? overrides.isActive : true,

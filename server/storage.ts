@@ -616,6 +616,63 @@ export class MemStorage implements IStorage {
     });
   }
 
+  // Clear all data from memory storage (for testing)
+  clearAll() {
+    this.usersStore.clear();
+    this.curriculaStore.clear();
+    this.lessonsStore.clear();
+    this.eventsStore.clear();
+    this.marketplaceItemsStore.clear();
+    this.knowledgeBaseStore.clear();
+    this.childrenStore.clear();
+    this.emergencyContactsStore.clear();
+    this.programsStore.clear();
+    this.programEnrollmentsStore.clear();
+    this.membershipEnrollmentsStore.clear();
+    this.classesStore.clear();
+    this.activitiesStore.clear();
+    this.marketingLinksStore.clear();
+    this.schoolStudentsStore.clear();
+    this.userLocationsStore.clear();
+    this.locationsStore.clear();
+    this.linkAnalyticsStore.clear();
+    this.paymentsStore.clear();
+    this.schoolsStore.clear();
+    this.dailyFlowTemplatesStore.clear();
+    this.dailyFlowEntriesStore.clear();
+    this.dailyFlowSchedulesStore.clear();
+    this.technicalIssuesStore.clear();
+    this.adminNotificationsStore.clear();
+    this.userNotificationsStore.clear();
+    this.classEnrollments = [];
+    
+    // Reset ID counters
+    this.userIdCounter = 1;
+    this.curriculumIdCounter = 1;
+    this.lessonIdCounter = 1;
+    this.eventIdCounter = 1;
+    this.marketplaceItemIdCounter = 1;
+    this.knowledgeBaseIdCounter = 1;
+    this.childIdCounter = 1;
+    this.emergencyContactIdCounter = 1;
+    this.programIdCounter = 1;
+    this.programEnrollmentIdCounter = 1;
+    this.membershipEnrollmentIdCounter = 1;
+    this.classIdCounter = 1;
+    this.activityIdCounter = 1;
+    this.marketingLinkIdCounter = 1;
+    this.linkAnalyticsIdCounter = 1;
+    this.paymentIdCounter = 1;
+    this.schoolIdCounter = 1;
+    this.schoolStudentIdCounter = 1;
+    this.userLocationIdCounter = 1;
+    this.locationIdCounter = 1;
+    this.dailyFlowTemplateIdCounter = 1;
+    this.dailyFlowEntryIdCounter = 1;
+    this.dailyFlowScheduleIdCounter = 1;
+    console.log('🧹 MemStorage cleared - all stores and counters reset');
+  }
+
   // User methods
   async getUser(id: number): Promise<User | undefined> {
     return this.usersStore.get(id);
@@ -3856,6 +3913,19 @@ export class MemStorage implements IStorage {
     }
 
     async createUser(user: InsertUser): Promise<User> {
+      // Enforce unique email constraint with fallback to memStorage
+      let existingUser;
+      try {
+        existingUser = await this.dbStorage.getUserByEmail(user.email);
+      } catch (error) {
+        // Database unavailable, check memStorage instead
+        existingUser = await this.memStorage.getUserByEmail(user.email);
+      }
+      
+      if (existingUser) {
+        throw new Error(`User with email ${user.email} already exists`);
+      }
+      
       try {
         // Try database storage first
         return await this.dbStorage.createUser(user);
@@ -3955,29 +4025,53 @@ export class MemStorage implements IStorage {
       }
     }
 
-    // School methods - use database storage
+    // School methods - use database storage with fallback to memory
     async getSchool(id: number): Promise<School | undefined> {
-      return this.dbStorage.getSchool(id);
+      try {
+        return await this.dbStorage.getSchool(id);
+      } catch (error) {
+        return this.memStorage.getSchool(id);
+      }
     }
 
     async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
-      return this.dbStorage.getSchoolByCode(registrationCode);
+      try {
+        return await this.dbStorage.getSchoolByCode(registrationCode);
+      } catch (error) {
+        return this.memStorage.getSchoolByCode(registrationCode);
+      }
     }
 
     async createSchool(school: InsertSchool): Promise<School> {
-      return this.dbStorage.createSchool(school);
+      try {
+        return await this.dbStorage.createSchool(school);
+      } catch (error) {
+        return this.memStorage.createSchool(school);
+      }
     }
 
     async updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined> {
-      return this.dbStorage.updateSchool(id, school);
+      try {
+        return await this.dbStorage.updateSchool(id, school);
+      } catch (error) {
+        return this.memStorage.updateSchool(id, school);
+      }
     }
 
     async getAllSchools(): Promise<School[]> {
-      return this.dbStorage.getAllSchools();
+      try {
+        return await this.dbStorage.getAllSchools();
+      } catch (error) {
+        return this.memStorage.getAllSchools();
+      }
     }
 
     async getLocationsBySchool(schoolId: number): Promise<Location[]> {
-      return this.dbStorage.getLocationsBySchool(schoolId);
+      try {
+        return await this.dbStorage.getLocationsBySchool(schoolId);
+      } catch (error) {
+        return this.memStorage.getLocationsBySchool(schoolId);
+      }
     }
 
     async getCurriculum(id: number): Promise<Curriculum | undefined> {
@@ -4599,50 +4693,94 @@ export class MemStorage implements IStorage {
         return this.dbStorage.deleteUserLocation(id);
       }
 
-      // Location methods
+      // Location methods - use database storage with fallback to memory
       async getLocationById(id: number): Promise<Location | undefined> {
-        return this.dbStorage.getLocation(id);
+        try {
+          return await this.dbStorage.getLocation(id);
+        } catch (error) {
+          return this.memStorage.getLocation(id);
+        }
       }
 
       async getLocations(): Promise<Location[]> {
-        return this.dbStorage.getAllLocations();
+        try {
+          return await this.dbStorage.getAllLocations();
+        } catch (error) {
+          return this.memStorage.getAllLocations();
+        }
       }
 
       async getLocationsBySchoolId(schoolId: number): Promise<Location[]> {
-        return this.dbStorage.getLocationsBySchoolId(schoolId);
+        try {
+          return await this.dbStorage.getLocationsBySchoolId(schoolId);
+        } catch (error) {
+          return this.memStorage.getLocationsBySchoolId(schoolId);
+        }
       }
 
       async createLocation(location: InsertLocation): Promise<Location> {
-        return this.dbStorage.createLocation(location);
+        try {
+          return await this.dbStorage.createLocation(location);
+        } catch (error) {
+          return this.memStorage.createLocation(location);
+        }
       }
 
       async updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined> {
-        return this.dbStorage.updateLocation(id, location);
+        try {
+          return await this.dbStorage.updateLocation(id, location);
+        } catch (error) {
+          return this.memStorage.updateLocation(id, location);
+        }
       }
 
       async deleteLocation(id: number): Promise<void> {
-        return this.dbStorage.deleteLocation(id);
+        try {
+          return await this.dbStorage.deleteLocation(id);
+        } catch (error) {
+          return this.memStorage.deleteLocation(id);
+        }
       }
 
-      // Category methods
+      // Category methods - use database storage with fallback to memory
       async getCategoryById(id: number): Promise<any> {
-        return this.dbStorage.getCategoryById(id);
+        try {
+          return await this.dbStorage.getCategoryById(id);
+        } catch (error) {
+          return this.memStorage.getCategoryById(id);
+        }
       }
 
       async getCategoriesBySchoolId(schoolId: number): Promise<any[]> {
-        return this.dbStorage.getCategoriesBySchoolId(schoolId);
+        try {
+          return await this.dbStorage.getCategoriesBySchoolId(schoolId);
+        } catch (error) {
+          return this.memStorage.getCategoriesBySchoolId(schoolId);
+        }
       }
 
       async createCategory(category: any): Promise<any> {
-        return this.dbStorage.createCategory(category);
+        try {
+          return await this.dbStorage.createCategory(category);
+        } catch (error) {
+          return this.memStorage.createCategory(category);
+        }
       }
 
       async updateCategory(id: number, category: any): Promise<any> {
-        return this.dbStorage.updateCategory(id, category);
+        try {
+          return await this.dbStorage.updateCategory(id, category);
+        } catch (error) {
+          return this.memStorage.updateCategory(id, category);
+        }
       }
 
       async deleteCategory(id: number): Promise<void> {
-        return this.dbStorage.deleteCategory(id);
+        try {
+          return await this.dbStorage.deleteCategory(id);
+        } catch (error) {
+          return this.memStorage.deleteCategory(id);
+        }
       }
 
       // Daily Flow Template methods
@@ -4998,6 +5136,11 @@ export class MemStorage implements IStorage {
       // Database initialization methods
       async initializeNotifications(): Promise<void> {
         return this.dbStorage.initializeNotifications();
+      }
+
+      // Clear all data from storage (for testing)
+      clearAll() {
+        this.memStorage.clearAll();
       }
   }
 

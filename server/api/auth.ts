@@ -478,7 +478,52 @@ router.post("/login", async (req, res) => {
     // 1. Provided incorrect credentials for a test account
     // 2. Is trying to use a database account
 
-    console.log(`Test account login failed, trying Supabase authentication for: ${loginIdentifier}`);
+    // Try database authentication with bcrypt (for test users and users without Supabase)
+    const dbUser = await storage.getUserByEmail?.(loginIdentifier) || await storage.getUserByUsername?.(loginIdentifier);
+    
+    if (dbUser && dbUser.password) {
+      console.log(`Database user found: ${dbUser.email}, checking password with bcrypt`);
+      const passwordMatch = await bcrypt.compare(password, dbUser.password);
+      
+      if (passwordMatch) {
+        console.log(`✅ Database authentication successful for: ${dbUser.email}`);
+        
+        // Check if user is active
+        if (!dbUser.isActive) {
+          console.log('⚠️ User account is inactive:', dbUser.email);
+          return res.status(403).json({ message: "Account is inactive. Please contact support." });
+        }
+        
+        // Set session data
+        req.session.userId = dbUser.id;
+        req.session.userRole = dbUser.role;
+        
+        // Save session
+        await new Promise<void>((resolve, reject) => {
+          req.session.save((err) => {
+            if (err) {
+              console.error('Error saving session:', err);
+              reject(err);
+            } else {
+              console.log('Session saved successfully');
+              resolve();
+            }
+          });
+        });
+        
+        // Remove password from response
+        const { password: _, ...userWithoutPassword } = dbUser;
+        
+        return res.status(200).json({
+          message: "Login successful",
+          user: userWithoutPassword
+        });
+      } else {
+        console.log('❌ Password mismatch for database user');
+      }
+    }
+
+    console.log(`Database login failed, trying Supabase authentication for: ${loginIdentifier}`);
 
     // Authenticate via Supabase
     try {
