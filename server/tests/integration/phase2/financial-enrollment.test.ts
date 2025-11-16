@@ -1716,5 +1716,161 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
         expect(enrollments.every(e => e.parentId === parent.id)).toBe(true);
       });
     });
+
+    describe('Security: Cross-Account Enrollment Protection', () => {
+      it('should return 403 when parent tries to pay for another parent\'s enrollment', async () => {
+        // Create two parents
+        const parent1 = await testDb.createTestUser({
+          email: 'parent1@test.com',
+          username: 'parent1',
+          name: 'Parent One',
+          role: 'parent'
+        });
+
+        const parent2 = await testDb.createTestUser({
+          email: 'parent2@test.com',
+          username: 'parent2',
+          name: 'Parent Two',
+          role: 'parent'
+        });
+
+        const admin = await testDb.createTestUser({
+          email: 'admin@test.com',
+          username: 'admin',
+          name: 'Admin User',
+          role: 'schoolAdmin'
+        });
+
+        const school = await testDb.createTestSchool(admin.id);
+        
+        // Create child for parent1
+        const child1 = await testDb.createTestChild(parent1.id, {
+          firstName: 'Child',
+          lastName: 'One',
+          gradeLevel: '5th',
+          schoolId: school.id
+        });
+
+        const classItem = await testDb.createTestClass(school.id, admin.id, {
+          title: 'Test Class',
+          price: 10000
+        });
+
+        // Create pending enrollment for parent1's child
+        const enrollment = await storage.createProgramEnrollment({
+          schoolId: school.id,
+          classType: 'school_class',
+          classId: classItem.id,
+          childId: child1.id,
+          childName: `${child1.firstName} ${child1.lastName}`,
+          className: classItem.title,
+          parentId: parent1.id,
+          parentEmail: parent1.email,
+          totalCost: 10000,
+          totalPaid: 0,
+          remainingBalance: 10000,
+          depositRequired: 0,
+          paymentStatus: 'pending',
+          status: 'pending_payment'
+        });
+
+        // Parent2 tries to create payment intent for parent1's enrollment
+        const response = await request(app)
+          .post('/api/stripe/create-payment-intent')
+          .set('x-test-user-email', parent2.email)
+          .send({
+            items: [{
+              enrollmentId: enrollment.id,
+              classId: classItem.id,
+              className: classItem.title,
+              childId: child1.id,
+              childName: `${child1.firstName} ${child1.lastName}`,
+              totalCost: 10000,
+              classType: 'school_class'
+            }],
+            total: 10000,
+            paymentPlan: 'full'
+          });
+
+        // Should return 403 Forbidden
+        expect(response.status).toBe(403);
+        expect(response.body.error).toBe('UNAUTHORIZED_ENROLLMENT');
+        expect(response.body.message).toContain('permission');
+      });
+
+      it('should allow parent to pay for their own enrollment', async () => {
+        const parent = await testDb.createTestUser({
+          email: 'parent@test.com',
+          username: 'parent',
+          name: 'Parent User',
+          role: 'parent'
+        });
+
+        const admin = await testDb.createTestUser({
+          email: 'admin@test.com',
+          username: 'admin',
+          name: 'Admin User',
+          role: 'schoolAdmin'
+        });
+
+        const school = await testDb.createTestSchool(admin.id);
+        
+        const child = await testDb.createTestChild(parent.id, {
+          firstName: 'Test',
+          lastName: 'Child',
+          gradeLevel: '5th',
+          schoolId: school.id
+        });
+
+        const classItem = await testDb.createTestClass(school.id, admin.id, {
+          title: 'Test Class',
+          price: 10000
+        });
+
+        // Create pending enrollment
+        const enrollment = await storage.createProgramEnrollment({
+          schoolId: school.id,
+          classType: 'school_class',
+          classId: classItem.id,
+          childId: child.id,
+          childName: `${child.firstName} ${child.lastName}`,
+          className: classItem.title,
+          parentId: parent.id,
+          parentEmail: parent.email,
+          totalCost: 10000,
+          totalPaid: 0,
+          remainingBalance: 10000,
+          depositRequired: 0,
+          paymentStatus: 'pending',
+          status: 'pending_payment'
+        });
+
+        // Parent creates payment intent for their own enrollment
+        const response = await request(app)
+          .post('/api/stripe/create-payment-intent')
+          .set('x-test-user-email', parent.email)
+          .send({
+            items: [{
+              enrollmentId: enrollment.id,
+              classId: classItem.id,
+              className: classItem.title,
+              childId: child.id,
+              childName: `${child.firstName} ${child.lastName}`,
+              totalCost: 10000,
+              classType: 'school_class'
+            }],
+            total: 10000,
+            paymentPlan: 'full'
+          });
+
+        // Should succeed (200 or 500 if Stripe API unavailable in test mode)
+        expect([200, 500]).toContain(response.status);
+        
+        // If it's a 500, it should be a Stripe API error, not auth error
+        if (response.status === 500) {
+          expect(response.body.error).not.toBe('UNAUTHORIZED_ENROLLMENT');
+        }
+      });
+    });
   });
 });

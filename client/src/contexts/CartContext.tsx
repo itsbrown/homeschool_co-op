@@ -855,7 +855,7 @@ export const useCart = () => {
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const { toast } = useToast();
-  const { user, isAuthenticated, session } = useAuth(); // Using Supabase hooks
+  const { user, isAuthenticated, session, isLoading } = useAuth(); // Using Supabase hooks
   
   // Helper function to get access token from Supabase session
   const getAccessToken = useCallback(async (): Promise<string> => {
@@ -1156,6 +1156,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load unpaid enrollments on mount and when user changes
   useEffect(() => {
+    // IMPORTANT: Don't clear cart during initial auth loading to prevent race condition
+    // isLoading comes from SupabaseProvider and tells us if auth is still initializing
+    if (isLoading) {
+      console.log('🛒 Auth still loading, preserving cart state');
+      return;
+    }
+
     if (user?.email && isAuthenticated) {
       console.log('🛒 User authenticated, loading cart after delay...');
       // Add a small delay to ensure the enrollment API has completed
@@ -1170,22 +1177,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Server-side validation provides primary defense, but client clearing is defense-in-depth
       console.log('🛒 User not authenticated, clearing cart for security');
       dispatch({ type: 'CLEAR_CART' });
-    } else {
-      // During authentication loading, ensure cart from localStorage is preserved
-      const savedCart = localStorage.getItem('asa_cart');
-      if (savedCart && state.cart.items.length === 0) {
-        try {
-          const parsedCart = JSON.parse(savedCart);
-          if (parsedCart.items && parsedCart.items.length > 0) {
-            console.log('🛒 Authentication loading - restoring cart from localStorage');
-            dispatch({ type: 'LOAD_CART', payload: parsedCart });
-          }
-        } catch (error) {
-          console.error('Error restoring cart during auth loading:', error);
-        }
-      }
     }
-  }, [user?.email, isAuthenticated, loadUnpaidEnrollments]);
+  }, [user?.email, isAuthenticated, isLoading, loadUnpaidEnrollments]);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
