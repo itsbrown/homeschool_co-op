@@ -38,7 +38,7 @@ const classFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().min(1, "Description is required"),
   subject: z.string().min(1, "Subject is required"),
-  category: z.enum(["academic", "arts", "music", "sports", "stem", "language", "coding", "cooking", "crafts", "other"]),
+  categoryId: z.string().optional(),
   gradeLevel: z.string().min(1, "Grade level is required"),
   ageRange: z.string().min(1, "Age range is required"),
   startDate: z.string().min(1, "Start date is required"),
@@ -120,13 +120,22 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     staleTime: 1000 * 60 * 10, // 10 minutes
   });
 
+  // Load categories using React Query
+  const { data: categoriesData, isLoading: isLoadingCategories } = useQuery({
+    queryKey: ['/api/school-admin/categories'],
+    retry: 1,
+    staleTime: 1000 * 60 * 10, // 10 minutes
+  });
+  
+  const categories = (categoriesData as { categories?: any[] })?.categories || [];
+
   // Process initialData to ensure all fields are properly formatted for the form
   const processedInitialData = initialData ? {
     title: initialData.title || "",
     description: initialData.description || "",
     // When editing, use stored subject or fallback if not found
     subject: initialData.subject || "mathematics",
-    category: initialData.category || "academic",
+    categoryId: initialData.categoryId ? initialData.categoryId.toString() : "",
     // When editing, use stored gradeLevel or fallback if not found
     gradeLevel: initialData.gradeLevel || "elementary",
     // When editing, use stored ageRange or fallback if not found
@@ -185,7 +194,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     title: "",
     description: "",
     subject: "",
-    category: "academic",
+    categoryId: "",
     gradeLevel: "",
     ageRange: "",
     startDate: "",
@@ -235,7 +244,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         title: initialData.title || "",
         description: initialData.description || "",
         subject: initialData.subject || "mathematics",
-        category: initialData.category || "academic",
+        categoryId: initialData.categoryId ? initialData.categoryId.toString() : "",
         gradeLevel: initialData.gradeLevel || "elementary",
         ageRange: initialData.ageRange || "6-10 years",
         startDate: initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "",
@@ -316,7 +325,8 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         description: data.description,
         // Explicitly include custom fields regardless of whether they're in the schema
         subject: data.subject || "", 
-        category: data.category,
+        // Only include categoryId if it's set (don't send null to preserve existing value during edits)
+        ...(data.categoryId ? { categoryId: parseInt(data.categoryId) } : {}),
         gradeLevel: data.gradeLevel || "",
         ageRange: data.ageRange || "",
         // Convert variants to schedule JSON structure
@@ -470,31 +480,35 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         {/* Category */}
         <FormField
           control={form.control}
-          name="category"
+          name="categoryId"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Category</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select 
+                onValueChange={field.onChange} 
+                defaultValue={field.value}
+                disabled={isLoadingCategories}
+              >
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a category" />
+                    <SelectValue placeholder={isLoadingCategories ? "Loading categories..." : "Select a category"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="academic">Academic</SelectItem>
-                  <SelectItem value="arts">Arts</SelectItem>
-                  <SelectItem value="music">Music</SelectItem>
-                  <SelectItem value="sports">Sports</SelectItem>
-                  <SelectItem value="stem">STEM</SelectItem>
-                  <SelectItem value="language">Language</SelectItem>
-                  <SelectItem value="coding">Coding</SelectItem>
-                  <SelectItem value="cooking">Cooking</SelectItem>
-                  <SelectItem value="crafts">Crafts</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  {categories.filter((cat: any) => cat.isActive).map((category: any) => (
+                    <SelectItem key={category.id} value={category.id.toString()}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                  {categories.filter((cat: any) => cat.isActive).length === 0 && (
+                    <SelectItem value="" disabled>
+                      No active categories available
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               <FormDescription>
-                The category this class belongs to
+                The category this class belongs to (optional)
               </FormDescription>
               <FormMessage />
             </FormItem>

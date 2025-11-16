@@ -24,7 +24,8 @@ import {
   Target,
   CreditCard,
   UserPlus,
-  ClipboardList
+  ClipboardList,
+  Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -106,6 +107,11 @@ const adminNavItems: NavItem[] = [
     title: 'Locations',
     href: '/schools/locations',
     icon: MapPin,
+  },
+  {
+    title: 'Categories',
+    href: '/schools/categories',
+    icon: Tag,
   },
   {
     title: 'Notifications',

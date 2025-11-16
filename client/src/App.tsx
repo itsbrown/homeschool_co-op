@@ -170,6 +170,7 @@ import SchoolApplicationPage from './pages/SchoolApplicationPage';
 import SchoolApplicationSuccessPage from './pages/SchoolApplicationSuccessPage';
 import SchoolApplicationStatusPage from './pages/SchoolApplicationStatusPage';
 import LocationManagementPage from "./pages/schools/LocationManagementPage";
+import CategoriesManagementPage from "./pages/schools/CategoriesManagementPage";
 import NotificationManagementPage from "@/pages/NotificationManagementPage";
 import DailyFlowsPage from "./pages/DailyFlows/DailyFlowsPage";
 import EnrollmentsAdminPage from "./pages/schools/EnrollmentsAdminPage";
@@ -601,6 +602,11 @@ function Router() {
       <Route path="/schools/locations">
         <SchoolAdminLayout pageTitle="Location Management">
           <LocationManagementPage />
+        </SchoolAdminLayout>
+      </Route>
+      <Route path="/schools/categories">
+        <SchoolAdminLayout pageTitle="Category Management">
+          <CategoriesManagementPage />
         </SchoolAdminLayout>
       </Route>
       <Route path="/schools/notifications">

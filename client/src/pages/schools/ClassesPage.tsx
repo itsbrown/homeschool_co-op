@@ -148,13 +148,14 @@ export default function SchoolClassesPage() {
     const savedSortDirection = localStorage.getItem('classSortDirection');
     
     // Validate that saved sort field is a valid option to prevent crashes
-    const validSortFields = ['title', 'location', 'enrollmentCount', 'status', 'startDate', 'gradeLevel', 'instructor', 'category'];
+    const validSortFields = ['title', 'location', 'enrollmentCount', 'status', 'startDate', 'gradeLevel', 'instructor', 'categoryName'];
     if (savedSortField && validSortFields.includes(savedSortField)) {
       setSortField(savedSortField);
     } else if (savedSortField) {
       // Invalid sort field found, clear it and reset to default
       console.warn(`Invalid sort field "${savedSortField}" found in localStorage, resetting to "title"`);
       localStorage.removeItem('classSortField');
+      setSortField('title');
     }
     
     if (savedSortDirection && (savedSortDirection === 'asc' || savedSortDirection === 'desc')) {
@@ -312,7 +313,7 @@ export default function SchoolClassesPage() {
         (!searchQuery || 
          title.toLowerCase().includes(searchQuery.toLowerCase()) ||
          instructorField.toLowerCase().includes(searchQuery.toLowerCase())) &&
-        (!categoryFilter || categoryFilter === 'all-categories' || cls.category === categoryFilter) &&
+        (!categoryFilter || categoryFilter === 'all-categories' || (cls.categoryName || cls.category) === categoryFilter) &&
         (!statusFilter || statusFilter === 'all-statuses' || cls.status === statusFilter) &&
         (!gradeLevelFilter || gradeLevelFilter === 'all-grade-levels' || cls.gradeLevel === gradeLevelFilter)
       );
@@ -357,9 +358,10 @@ export default function SchoolClassesPage() {
           aValue = (a.instructorName || a.instructor || 'zzz').toLowerCase();
           bValue = (b.instructorName || b.instructor || 'zzz').toLowerCase();
           break;
-        case 'category':
-          aValue = (a.category || 'zzz').toLowerCase(); // Put null categories at end
-          bValue = (b.category || 'zzz').toLowerCase();
+        case 'categoryName':
+          // Use categoryName (from join), fallback to old category field for backward compatibility
+          aValue = (a.categoryName || a.category || 'zzz').toLowerCase(); // Put null categories at end
+          bValue = (b.categoryName || b.category || 'zzz').toLowerCase();
           break;
         default:
           aValue = '';
@@ -383,9 +385,17 @@ export default function SchoolClassesPage() {
 
   // Extract unique values for filters
   // MUST be before early returns to comply with Rules of Hooks
-  const categories = Array.from(new Set(classData.map((cls: any) => cls.category))).filter(Boolean) as string[];
+  const categories = Array.from(new Set(classData.map((cls: any) => cls.categoryName || cls.category))).filter(Boolean) as string[];
   const statuses = Array.from(new Set(classData.map((cls: any) => cls.status))).filter(Boolean) as string[];
   const gradeLevels = Array.from(new Set(classData.map((cls: any) => cls.gradeLevel))).filter(Boolean) as string[];
+
+  // Clear stale category filter from localStorage if it doesn't match current categories
+  useEffect(() => {
+    if (categoryFilter && categoryFilter !== 'all-categories' && !categories.includes(categoryFilter)) {
+      console.warn(`Clearing stale category filter: ${categoryFilter} (not in current categories)`);
+      setCategoryFilter('all-categories');
+    }
+  }, [categories, categoryFilter]);
 
   if (isLoading) {
     return (
@@ -430,7 +440,7 @@ export default function SchoolClassesPage() {
       ['Class Name', 'Category', 'Instructor', 'Grade Level', 'Status', 'Enrollment', 'Schedule'],
       ...sortedClasses.map((cls: any) => [
         cls.title,
-        cls.category,
+        cls.categoryName || cls.category || '',
         cls.instructorName || cls.instructor || 'Unassigned',
         cls.gradeLevel,
         cls.status,
@@ -664,7 +674,7 @@ export default function SchoolClassesPage() {
                             sortedClasses.map((cls: any) => (
                               <TableRow key={cls.id}>
                                 {visibleColumns.className && <TableCell className="font-medium">{cls.title}</TableCell>}
-                                {visibleColumns.category && <TableCell>{cls.category}</TableCell>}
+                                {visibleColumns.category && <TableCell>{cls.categoryName || cls.category || 'Not Specified'}</TableCell>}
                                 {visibleColumns.instructor && (
                                   <TableCell>
                                     {(cls.instructorName && cls.instructorName !== "no-instructor") 
@@ -755,7 +765,7 @@ export default function SchoolClassesPage() {
                             <CardTitle className="text-lg leading-tight">{cls.title}</CardTitle>
                             <Badge variant="secondary" className="shrink-0">{cls.status}</Badge>
                           </div>
-                          <CardDescription>{cls.category} • {cls.gradeLevel}</CardDescription>
+                          <CardDescription>{cls.categoryName || cls.category || 'Not Specified'} • {cls.gradeLevel}</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0 space-y-2">
                           <div className="grid grid-cols-2 gap-2 text-sm">
@@ -852,7 +862,7 @@ export default function SchoolClassesPage() {
                                 <CardTitle className="text-lg">{cls.title}</CardTitle>
                                 <Badge variant="secondary">{cls.status}</Badge>
                               </div>
-                              <CardDescription>{cls.category} • {cls.gradeLevel}</CardDescription>
+                              <CardDescription>{cls.categoryName || cls.category || 'Not Specified'} • {cls.gradeLevel}</CardDescription>
                             </CardHeader>
                             <CardContent className="pt-0">
                               <div className="space-y-2">

@@ -249,8 +249,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         title: item.title,
         description: item.description,
         price: item.price, // Keep price in dollars for cart compatibility
-        category: 'academic', // Set all school admin classes as academic for now
-        categoryName: item.category || 'Academic',
+        category: item.category || item.categoryName || 'Academic',
+        categoryName: item.categoryName || item.category || 'Academic',
         startDate: item.startDate,
         endDate: item.endDate,
         numSessions: item.numSessions,
@@ -287,16 +287,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   };
 
 
-  // Check if there are any summer camp classes
-  const summerCamps = classesData.classes.filter(c => c.category === "summer-camp");
-  
   // Apply search, category filters, and sorting to classes
   const classesList = useMemo(() => {
     // First filter
     const filtered = classesData.classes.filter(c => {
-      // Filter by category
-      const matchesCategory = c.category === "academic" || c.category === "membership";
-      
       // Filter by search term (search in title and description)
       const matchesSearch = !searchTerm || 
         c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -307,7 +301,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         categoryFilter === 'all' || 
         c.categoryName === categoryFilter;
       
-      return matchesCategory && matchesSearch && matchesCategoryFilter;
+      return matchesSearch && matchesCategoryFilter;
     });
     
     // Then sort
@@ -362,7 +356,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   console.log('Search term:', searchTerm);
   console.log('Category filter:', categoryFilter);
   console.log('Filtered classesList:', classesList);
-  console.log('Summer camps:', summerCamps);
   console.log('classesLoading:', classesLoading);
   console.log('classesList.length:', classesList.length);
 
@@ -466,8 +459,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                     <CardHeader className="pb-3">
                       <div className="flex justify-between">
                         <CardTitle className="line-clamp-2">{classItem.title}</CardTitle>
-                        <Badge variant={classItem.category === "academic" ? "default" : "secondary"}>
-                          {classItem.category === "academic" ? "Academic" : "Membership"}
+                        <Badge variant="default">
+                          {classItem.categoryName || classItem.category || "Uncategorized"}
                         </Badge>
                       </div>
                       <CardDescription className="line-clamp-2">{classItem.description || "No description provided"}</CardDescription>
