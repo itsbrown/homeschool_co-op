@@ -1,0 +1,133 @@
+Integration Testing Implementation Plan for ASA Platform
+Overview
+Create a comprehensive integration test suite for the American Seekers Academy (ASA) platform that validates critical user flows, real-time data updates, and cross-component interactions.
+
+Scope of Integration Testing
+1. Class Management Integration Tests
+✅ Class creation with pricing and variants
+✅ Class editing (updating details, pricing, status)
+✅ Class deletion (with cascading cleanup of enrollments, payments)
+✅ Class filtering and sorting with localStorage persistence
+✅ Class listing pages showing real-time enrollment counts
+✅ Class detail pages with correct instructor, location, and category data
+✅ Class sharing functionality (share to calendar, export)
+2. Staff Management Integration Tests
+✅ Staff profile creation and editing
+✅ Staff email invitations (full flow from invite → email → account creation)
+✅ Staff-to-class assignment
+✅ Staff position/role management
+✅ Staff detail pages loading correct data
+✅ Staff filtering and search
+3. Student Management Integration Tests
+✅ Student profile creation and editing
+✅ Student-to-class enrollment
+✅ Student detail pages with enrollment history
+✅ Student roster pages
+✅ Student filtering by class, status, location
+4. User Management Integration Tests
+✅ User account creation (parent, educator, admin)
+✅ User profile editing
+✅ User role assignment and switching
+✅ User detail pages loading correct data
+✅ User authentication flow (login → role selection → dashboard)
+5. School Settings Integration Tests
+✅ School profile editing
+✅ School logo upload
+✅ Location management (create, edit, delete)
+✅ Category management (create, edit, delete)
+✅ Staff positions customization
+✅ Discount rules configuration
+6. Notification System Integration Tests
+✅ Sending notifications: Individual, role-based, location-based, broadcast
+✅ Receiving notifications: In-app, email, SMS (if Twilio configured)
+✅ Notification display: Unread count, notification center
+✅ Marking as read: Individual and bulk operations
+✅ Deleting notifications: Individual and bulk operations
+✅ Real-time updates: WebSocket delivery of new notifications
+✅ Delivery tracking: Email sent/delivered/failed status
+7. Calendar & Events Integration Tests
+✅ Event creation (classes, meetings, workshops, camps)
+✅ Calendar display with real-time data from events and classes
+✅ Event filtering (by type, date, location)
+✅ Calendar sharing functionality
+✅ Event detail pages
+8. Real-Time Data Integration Tests
+✅ WebSocket connection establishment
+✅ Real-time billing updates
+✅ Real-time enrollment updates
+✅ Real-time class roster updates
+✅ Real-time notification delivery
+✅ Connection resilience (reconnection on disconnect)
+9. Payment & Billing Integration Tests
+✅ Enrollment payment flow (cart → checkout → Stripe → database)
+✅ Payment plan creation and management
+✅ Discount application
+✅ Manual payment entry
+✅ Payment history display
+✅ Billing summary accuracy
+10. SMS Integration Tests (if Twilio configured)
+✅ SMS notification delivery
+✅ SMS invitation delivery for staff
+✅ SMS delivery status tracking
+Technical Implementation Requirements
+Test Environment Setup
+// Use Jest as test runner (already configured)
+// Setup test database with seed data
+// Mock external APIs (Stripe test mode, Brevo test mode, Twilio test mode)
+// Use Supabase test project or local Postgres
+Test Structure
+describe('Integration: Class Management', () => {
+  beforeAll(async () => {
+    // Setup test database
+    // Create test school, users, locations
+  });
+  afterAll(async () => {
+    // Cleanup test data
+  });
+  it('should create class with pricing and assign instructor', async () => {
+    // Test full flow
+  });
+});
+Key Testing Areas
+Database Operations: Verify CRUD operations persist correctly
+API Endpoints: Test request → response → side effects
+Real-time Updates: Verify WebSocket notifications trigger UI updates
+File Operations: Test uploads → storage → database records
+Email/SMS Delivery: Verify external API calls and tracking
+Role-based Access: Ensure different roles see appropriate data
+State Synchronization: Verify localStorage, cache, and database stay in sync
+Coverage Goals
+✅ All critical user flows (enrollment, payment, staff invite)
+✅ All notification types and delivery methods
+✅ Real-time data updates across multiple components
+✅ Cross-component interactions (e.g., class → enrollment → payment)
+✅ Edge cases (network failures, invalid data, concurrent updates)
+Implementation Approach
+Phase 1: Create test helpers and utilities
+
+Database seeding functions
+API test helpers
+Mock data generators
+Phase 2: Implement core flow tests
+
+Enrollment flow
+Payment flow
+Staff invitation flow
+Notification flow
+Phase 3: Add comprehensive coverage
+
+All CRUD operations
+All notification types
+Real-time update scenarios
+Calendar integration
+Phase 4: CI/CD Integration
+
+Run tests before deployment
+Block deployment on test failures
+Generate test coverage reports
+Success Criteria
+✅ All critical flows have automated integration tests
+✅ Tests run in CI/CD pipeline
+✅ Test coverage > 80% for critical paths
+✅ Tests catch issues before production deployment
+✅ Real-time features verified in tests
