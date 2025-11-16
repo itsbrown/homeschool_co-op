@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { storage } from '../storage.js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -45,25 +46,34 @@ export const supabaseAuth = async (
     console.log('🔐 supabaseAuth middleware - Path:', req.path);
     console.log('🔐 supabaseAuth middleware - Authorization header:', authHeader ? 'PRESENT' : 'MISSING');
     console.log('🔐 supabaseAuth middleware - Session:', (req as any).session?.userId ? 'PRESENT' : 'MISSING');
+    console.log('🔐 supabaseAuth middleware - Session data:', JSON.stringify({
+      userId: (req as any).session?.userId,
+      userRole: (req as any).session?.userRole,
+      activeRole: (req as any).session?.activeRole
+    }));
     
     // Check for session-based authentication first (for tests and legacy support)
-    if ((req as any).session?.userId && (req as any).session?.userRole) {
-      console.log('✅ Session-based authentication detected - userId:', (req as any).session.userId);
+    // Fall back to storage lookup if userRole is missing
+    if ((req as any).session?.userId) {
+      console.log('✅ Session with userId detected:', (req as any).session.userId);
       
       // Try to get user from storage
       try {
-        const { storage } = await import('../storage.js');
         const user = await storage.getUser((req as any).session.userId);
         
         if (user) {
-          console.log('✅ Session user found in storage:', user.email);
+          console.log('✅ Session user found in storage:', user.email, 'role:', user.role);
           
-          // Set up auth context to match Supabase structure
+          // Set up auth context to match Supabase structure with full user data
           req.user = {
             id: String(user.id),
             email: user.email,
             sub: String(user.id),
-          };
+            role: user.role,
+            permissions: user.permissions,
+            schoolId: user.schoolId,
+            name: user.name,
+          } as any;
           
           req.auth = {
             payload: {
@@ -72,12 +82,18 @@ export const supabaseAuth = async (
               role: user.role,
               school_id: user.schoolId,
               name: user.name,
+              permissions: user.permissions,
             },
           };
           
+          // Also populate userRole in session if missing
+          if (!(req as any).session.userRole) {
+            (req as any).session.userRole = user.role;
+          }
+          
           return next();
         } else {
-          console.log('⚠️ Session user not found in storage, continuing to token check');
+          console.log('⚠️ Session user ID', (req as any).session.userId, 'not found in storage, continuing to token check');
         }
       } catch (error) {
         console.error('Error loading session user:', error);

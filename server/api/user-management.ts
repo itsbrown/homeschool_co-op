@@ -1,6 +1,7 @@
 
 import { Router } from "express";
 import { jwtCheck, requireRole } from "../middleware/auth0-auth";
+import { isAuthenticated } from "./auth";
 import { UserSyncService } from "../services/userSyncService";
 
 const router = Router();
@@ -182,6 +183,55 @@ router.put('/profile', jwtCheck, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Error updating user profile' 
+    });
+  }
+});
+
+// Select active role for multi-role users (authenticated users)
+router.post('/user/select-role', isAuthenticated, async (req, res) => {
+  try {
+    const { role } = req.body;
+
+    if (!role) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Role is required' 
+      });
+    }
+
+    // Store active role in session
+    if (req.session) {
+      req.session.activeRole = role;
+    }
+
+    res.json({
+      success: true,
+      message: 'Active role updated',
+      activeRole: role
+    });
+  } catch (error) {
+    console.error('Error selecting role:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error selecting role' 
+    });
+  }
+});
+
+// Get current active role (authenticated users)
+router.get('/user/current-role', isAuthenticated, async (req, res) => {
+  try {
+    const activeRole = req.session?.activeRole || req.user?.role;
+
+    res.json({
+      success: true,
+      activeRole
+    });
+  } catch (error) {
+    console.error('Error getting current role:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error getting current role' 
     });
   }
 });

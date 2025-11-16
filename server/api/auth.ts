@@ -10,12 +10,16 @@ import { sendWelcomeEmail } from "../lib/email-service";
 import { sendPasswordResetEmail } from "../services/emailService";
 import { userStorage } from "../users-storage";
 import { supabaseAdmin } from "../db/supabase";
+import { supabaseAuth } from "../middleware/supabase-auth";
 
 const router = Router();
 
 // Middleware to check Firebase authentication
 // Removing Firebase authentication, so this middleware is no longer needed
 // Auth0 authentication is handled by middleware
+
+// Middleware to check authentication (wrapper around supabaseAuth)
+export const isAuthenticated = supabaseAuth;
 
 // Middleware to check role
 export const hasRole = (roles: string[]) => {

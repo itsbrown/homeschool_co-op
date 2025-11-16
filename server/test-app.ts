@@ -31,6 +31,8 @@ import stripeMigrationRouter from "./api/stripe-migration";
 import stripeWebhookRouter from "./api/stripe-webhook";
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import membershipRouter from "./api/membership";
+import userManagementRouter from "./api/user-management";
+import analyticsRouter from "./api/analytics";
 import { configureSession } from "./config/session";
 
 /**
@@ -96,6 +98,10 @@ export async function createTestApp(): Promise<Application> {
   app.use('/api/students', studentsRouter);
   app.use('/api/educator', educatorRouter);
   app.use('/api/auth', authRouter);
+  app.use('/api', userManagementRouter);
+  
+  // Mount analytics router at root to expose /dashboard route
+  app.use(analyticsRouter);
 
   // Register additional routes via registerRoutes
   await registerRoutes(app);

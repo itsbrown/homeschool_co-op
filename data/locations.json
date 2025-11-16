@@ -9,8 +9,8 @@
     "zipCode": "12345",
     "isActive": true,
     "timezone": "UTC",
-    "createdAt": "2025-11-16T07:04:47.396Z",
-    "updatedAt": "2025-11-16T07:04:47.396Z"
+    "createdAt": "2025-11-16T07:17:50.878Z",
+    "updatedAt": "2025-11-16T07:17:50.878Z"
   },
   {
     "id": 2,
@@ -22,7 +22,7 @@
     "zipCode": "12345",
     "isActive": true,
     "timezone": "UTC",
-    "createdAt": "2025-11-16T07:04:47.398Z",
-    "updatedAt": "2025-11-16T07:04:47.398Z"
+    "createdAt": "2025-11-16T07:17:50.880Z",
+    "updatedAt": "2025-11-16T07:17:50.880Z"
   }
 ]

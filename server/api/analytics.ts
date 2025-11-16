@@ -8,36 +8,79 @@ const router = Router();
 router.get("/dashboard", isAuthenticated, async (req, res) => {
   try {
     const userId = req.session.userId;
+    const user = req.user;
     
-    // In a real app, we would calculate these metrics from the database
-    // Mocked data for demonstration purposes
-    const statistics = {
-      totalStudents: 124,
-      activeCourses: 8,
-      completionRate: 87,
-      marketplaceSales: 2450
-    };
+    console.log('📊 Dashboard route hit - userId:', userId, 'user:', user?.email, 'permissions:', user?.permissions);
     
-    // Try to get some real data if possible
-    try {
-      // Count the user's curricula
-      const curricula = await storage.getCurriculaByAuthor(userId);
-      if (curricula.length > 0) {
-        statistics.activeCourses = curricula.filter(c => c.isPublished).length;
-      }
-      
-      // Get marketplace sales
-      const marketplaceItems = await storage.getMarketplaceItemsBySeller(userId);
-      if (marketplaceItems.length > 0) {
-        const totalRevenue = marketplaceItems.reduce((sum, item) => sum + item.revenue, 0);
-        statistics.marketplaceSales = totalRevenue;
-      }
-    } catch (error) {
-      console.error("Error getting real analytics data:", error);
-      // Fall back to mocked data
+    // Check if user has multiple roles
+    const hasMultipleRoles = user?.permissions?.additionalRoles && user.permissions.additionalRoles.length > 0;
+    const activeRole = req.session.activeRole;
+    
+    console.log('📊 hasMultipleRoles:', hasMultipleRoles, 'activeRole:', activeRole);
+    
+    // If multi-role user and no active role selected, show role selection
+    if (hasMultipleRoles && !activeRole) {
+      const availableRoles = [user.role, ...(user.permissions.additionalRoles || [])];
+      return res.status(200).json({
+        showRoleSelection: true,
+        availableRoles
+      });
     }
     
-    res.status(200).json(statistics);
+    // Determine which role to use (activeRole for multi-role, user.role otherwise)
+    const currentRole = activeRole || user?.role;
+    
+    // Return role-specific dashboard data
+    switch (currentRole) {
+      case 'parent':
+        return res.status(200).json({
+          dashboardType: 'parent',
+          children: [],
+          enrollments: []
+        });
+      
+      case 'teacher':
+      case 'educator':
+        return res.status(200).json({
+          dashboardType: 'educator',
+          classes: [],
+          students: [],
+          aiToolsAvailable: true
+        });
+      
+      case 'schoolAdmin':
+        return res.status(200).json({
+          dashboardType: 'schoolAdmin',
+          schools: [],
+          statistics: {
+            totalStudents: 0,
+            totalEducators: 0,
+            totalEnrollments: 0
+          }
+        });
+      
+      case 'superAdmin':
+        return res.status(200).json({
+          dashboardType: 'superAdmin',
+          platformStatistics: {
+            totalSchools: 0,
+            totalUsers: 0,
+            totalRevenue: 0
+          },
+          systemHealth: 'healthy'
+        });
+      
+      default:
+        // Generic dashboard
+        const statistics = {
+          totalStudents: 124,
+          activeCourses: 8,
+          completionRate: 87,
+          marketplaceSales: 2450
+        };
+        
+        return res.status(200).json(statistics);
+    }
   } catch (error) {
     console.error("Get dashboard statistics error:", error);
     res.status(500).json({ message: "Error fetching dashboard statistics" });
