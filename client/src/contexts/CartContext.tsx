@@ -1278,6 +1278,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearCart = async (skipCancellation: boolean = false) => {
     console.log('🧹 CLEARING CART - Current items:', state.cart.items.length, 'skipCancellation:', skipCancellation);
+    console.log('🧹 Cart items structure:', state.cart.items.map(item => ({
+      id: item.id,
+      enrollmentId: item.enrollmentId,
+      className: item.className,
+      childName: item.childName
+    })));
     
     // Only attempt to cancel enrollments if not skipping and cart has items with enrollment IDs
     if (!skipCancellation) {
@@ -1287,6 +1293,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .filter((id): id is number => id !== undefined && id !== null);
       
       console.log('🧹 clearCart - Found enrollmentIds to cancel:', enrollmentIds.length, 'items');
+      console.log('🧹 enrollmentIds array:', enrollmentIds);
       
       if (enrollmentIds.length > 0) {
         try {
