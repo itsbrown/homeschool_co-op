@@ -1299,9 +1299,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .map(item => item.enrollmentId)
         .filter((id): id is number => id !== undefined && id !== null);
       
+      console.log('🧹 clearCart - Found enrollmentIds to cancel:', enrollmentIds.length, 'items');
+      
       if (enrollmentIds.length > 0) {
         try {
-          console.log('🧹 Calling bulk cancel endpoint with enrollment IDs:', enrollmentIds);
+          console.log('🧹 Calling bulk cancel endpoint for', enrollmentIds.length, 'enrollments:', JSON.stringify(enrollmentIds));
           
           // Get auth token same way as other protected requests
           const token = await getAccessToken();
