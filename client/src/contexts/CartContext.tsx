@@ -470,20 +470,26 @@ const calculateCartTotalsSync = (
         .sort(([, totalA], [, totalB]) => totalB - totalA)
         .map(([childId]) => Number(childId));
       
-      // Apply discount to all children except the one with highest total cost
-      siblingDiscount = items.reduce((sum, item) => {
-        const childIndex = childrenByTotalCost.indexOf(item.childId);
-        // First child in sorted list (highest cost) gets no discount
-        if (childIndex > 0) {
-          return sum + (item.price * siblingDiscountRate);
+      // Get children who receive discount (all except highest-cost child)
+      const discountedChildrenIds = childrenByTotalCost.slice(1);
+      discountedChildIds = discountedChildrenIds;
+      
+      // Apply discount to LOWEST-PRICE enrollment per child (not all enrollments)
+      siblingDiscount = discountedChildrenIds.reduce((sum, childId) => {
+        // Find all items for this child
+        const childItems = items.filter(item => item.childId === childId);
+        
+        // Find the lowest-priced item for this child
+        if (childItems.length > 0) {
+          const lowestPriceItem = childItems.reduce((lowest, item) => 
+            item.price < lowest.price ? item : lowest
+          );
+          
+          return sum + (lowestPriceItem.price * siblingDiscountRate);
         }
+        
         return sum;
       }, 0);
-      
-      // Only track discounted children if discount was actually applied
-      if (siblingDiscount > 0) {
-        discountedChildIds = childrenByTotalCost.slice(1);
-      }
     }
   }
 
@@ -597,20 +603,26 @@ const calculateCartTotalsWithDiscounts = async (
             .sort(([, totalA], [, totalB]) => totalB - totalA)
             .map(([childId]) => Number(childId));
           
-          // Apply discount to all children except the one with highest total cost
-          siblingDiscount = items.reduce((sum, item) => {
-            const childIndex = childrenByTotalCost.indexOf(item.childId);
-            // First child in sorted list (highest cost) gets no discount
-            if (childIndex > 0) {
-              return sum + (item.price * siblingDiscountRate);
+          // Get children who receive discount (all except highest-cost child)
+          const discountedChildrenIds = childrenByTotalCost.slice(1);
+          discountedChildIds = discountedChildrenIds;
+          
+          // Apply discount to LOWEST-PRICE enrollment per child (not all enrollments)
+          siblingDiscount = discountedChildrenIds.reduce((sum, childId) => {
+            // Find all items for this child
+            const childItems = items.filter(item => item.childId === childId);
+            
+            // Find the lowest-priced item for this child
+            if (childItems.length > 0) {
+              const lowestPriceItem = childItems.reduce((lowest, item) => 
+                item.price < lowest.price ? item : lowest
+              );
+              
+              return sum + (lowestPriceItem.price * siblingDiscountRate);
             }
+            
             return sum;
           }, 0);
-          
-          // Only track discounted children if discount was actually applied
-          if (siblingDiscount > 0) {
-            discountedChildIds = childrenByTotalCost.slice(1);
-          }
         }
       } catch (error) {
         console.log('Failed to fetch sibling discount settings, using default 0%');

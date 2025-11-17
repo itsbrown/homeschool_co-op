@@ -34,18 +34,10 @@ export default function CartDrawer() {
       return;
     }
 
-    console.log('🛒 Attempting direct navigation...');
-    // Try direct navigation first
-    try {
-      window.location.href = '/cart/checkout';
-      console.log('🛒 Direct navigation attempted');
-    } catch (error) {
-      console.log('🛒 Direct navigation failed, trying setLocation');
-      closeCart();
-      setTimeout(() => {
-        setLocation('/cart/checkout');
-      }, 100);
-    }
+    console.log('🛒 Navigating to checkout...');
+    closeCart();
+    setLocation('/cart/checkout');
+    console.log('🛒 Navigation completed');
   };
 
   const getUniqueChildrenCount = () => {
