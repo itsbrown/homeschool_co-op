@@ -1200,7 +1200,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('🛒 User not authenticated, clearing cart for security');
       dispatch({ type: 'CLEAR_CART' });
     }
-  }, [user?.email, isAuthenticated, isLoading, loadUnpaidEnrollments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email, isAuthenticated, isLoading]);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
