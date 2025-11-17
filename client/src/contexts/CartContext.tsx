@@ -952,19 +952,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // Check if cart was recently cleared (within 30 seconds) to prevent refilling after payment
-      const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
-      if (clearedTimestamp) {
-        const timeSinceCleared = Date.now() - parseInt(clearedTimestamp);
-        if (timeSinceCleared < 30000) { // 30 seconds
-          console.log('🛒 Cart was recently cleared, skipping reload to prevent refilling');
-          return;
-        } else {
-          // Clear the flag after 30 seconds
-          localStorage.removeItem('asa_cart_cleared');
-        }
-      }
-
       // Group enrollments by class+child combination to find the latest status
       const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
         // Handle both classId and programId (they refer to the same thing)
