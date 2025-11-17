@@ -6,7 +6,6 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import fileUpload from "express-fileupload";
 import path from "path";
-import { backupService } from './services/backupService';
 import fileUploadRouter from './api/file-upload';
 import paymentHistoryRouter from './api/payment-history';
 import stripeRoutes from './api/stripe';
@@ -27,8 +26,6 @@ import stripeMigrationRouter from "./api/stripe-migration";
 import stripeWebhookRouter from "./api/stripe-webhook";
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import membershipRouter from "./api/membership";
-import { MembershipStatusService } from "./services/membership-status-service";
-import { dataLayer } from "./services/dataLayer";
 import { webhookHandler } from "./webhook-handler";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
@@ -214,6 +211,11 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     if (currentEnv === 'development' || currentEnv === 'test') {
       console.log('🔧 Development mode: Starting background services...');
       
+      // Dynamically import background services to avoid side effects in production
+      const { backupService } = await import('./services/backupService.js');
+      const { MembershipStatusService } = await import('./services/membership-status-service.js');
+      const { storage } = await import('./storage.js');
+      
       // Initialize and start backup service
       await backupService.init();
       backupService.startAutomaticBackups(24); // Backup every 24 hours
@@ -222,7 +224,6 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       MembershipStatusService.initializeMembershipStatusJob();
       
       // Load notifications and notification recipients from JSON into database
-      const { storage } = await import('./storage');
       await storage.initializeNotifications();
     } else {
       console.log('☁️ Production mode: Background jobs disabled (not compatible with Autoscale deployments)');

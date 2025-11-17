@@ -24,7 +24,6 @@ import adminClassesRouter from "./api/admin-classes";
 import adminRouter from "./api/admin";
 import adminEnrollmentsRouter from "./api/admin-enrollments";
 import adminUsersRouter from "./api/admin-users";
-import { backupService } from "./services/backupService";
 import classesRouter from "./api/classes";
 import activitiesRouter from "./api/activities";
 import imageServicesRouter from "./api/image-services";
@@ -110,14 +109,10 @@ function requireSchoolContext(req: any, res: any): number | null {
 // Removed express-session declarations - using Auth0 token-based authentication
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize database tables ONLY in development
-  // In production/Autoscale, migrations run at build time via build script
-  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-    const { initializeDatabase } = await import('./init-db.js');
-    await initializeDatabase();
-  } else {
-    console.log('⏭️ Skipping runtime database initialization (production mode - migrations run at build time)');
-  }
+  // Initialize database tables
+  // Migrations are idempotent and safe to run multiple times
+  const { initializeDatabase } = await import('./init-db');
+  await initializeDatabase();
 
   // Import Supabase authentication middleware
   const { supabaseAuth } = await import("./middleware/supabase-auth");
@@ -3328,17 +3323,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   
-  // Initialize WebSocket data layer for real-time updates
-  try {
-    const { dataLayer } = await import('./services/dataLayer.js');
-    dataLayer.init(httpServer);
-    console.log('🔌 Real-time data layer initialized');
-  } catch (error) {
-    console.error('❌ Failed to initialize data layer:', error);
+  // Initialize WebSocket data layer for real-time updates (development only)
+  // Autoscale deployments may have issues with WebSocket connections across multiple instances
+  const currentEnv = process.env.NODE_ENV || 'development';
+  if (currentEnv === 'development' || currentEnv === 'test') {
+    try {
+      const { dataLayer } = await import('./services/dataLayer.js');
+      dataLayer.init(httpServer);
+      console.log('🔌 Real-time data layer initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize data layer:', error);
+    }
+  } else {
+    console.log('☁️ Production mode: WebSocket data layer disabled (not compatible with Autoscale deployments)');
   }
-  // Backup management endpoints
+  // Backup management endpoints (development only - dynamically import to avoid side effects in production)
   app.get("/api/admin/backups", async (req, res) => {
     try {
+      const { backupService } = await import('./services/backupService.js');
       const backups = await backupService.listBackups();
       res.json(backups);
     } catch (error) {
@@ -3348,6 +3350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/backups/create", async (req, res) => {
     try {
+      const { backupService } = await import('./services/backupService.js');
       await backupService.performBackup();
       res.json({ success: true, message: "Backup created successfully" });
     } catch (error) {
@@ -3357,6 +3360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/backups/restore/:timestamp", async (req, res) => {
     try {
+      const { backupService } = await import('./services/backupService.js');
       const { timestamp } = req.params;
       const result = await backupService.restoreBackup(timestamp);
 
