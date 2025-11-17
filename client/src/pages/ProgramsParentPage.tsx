@@ -196,23 +196,45 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           remainingBalance: finalPrice
         };
         sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
+        
+        // CRITICAL FIX: Delay query invalidation to prevent race condition
+        // The backend needs time to process the enrollment before we refetch
+        // Otherwise, the cart query refetch might not include the new enrollment yet
+        setTimeout(async () => {
+          // Invalidate non-cart queries immediately for UI updates
+          queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+          queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${variables.childId}`] });
+          queryClient.invalidateQueries({ queryKey: [`/api/children/${variables.childId}/enrollments`] });
+          queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
+          
+          // Refresh cart via async function to ensure backend has processed the enrollment
+          await refreshCart();
+        }, 500);
       } else {
         toast({
           title: "Enrollment Successful",
           description: "Child has been enrolled in the class.",
         });
+        
+        // For non-cart enrollments, invalidate queries normally
+        setEnrollmentDialog({ open: false });
+        setSelectedChildId("");
+        setSelectedVariantId("");
+        queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+        queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${variables.childId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/children/${variables.childId}/enrollments`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
       }
 
-      setEnrollmentDialog({ open: false });
-      setSelectedChildId("");
-      setSelectedVariantId("");
-      // Invalidate all enrollment-related queries
-      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${variables.childId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/children/${variables.childId}/enrollments`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
+      if (data.isDuplicate) {
+        // For duplicate enrollments, still close dialog
+        setEnrollmentDialog({ open: false });
+        setSelectedChildId("");
+        setSelectedVariantId("");
+      }
     },
     onError: (error: any) => {
       toast({
