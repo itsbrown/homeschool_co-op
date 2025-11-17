@@ -1294,7 +1294,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Get auth token same way as other protected requests
           const token = await getAccessToken();
-          const response = await fetch('/api/program-enrollments/cancel-multiple', {
+          const response = await fetch('/api/enrollments/cancel-multiple', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
