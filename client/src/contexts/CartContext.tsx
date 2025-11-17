@@ -1287,6 +1287,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Only attempt to cancel enrollments if not skipping and cart has items with enrollment IDs
     if (!skipCancellation) {
+      console.log('✅ Entering cancellation block - will attempt to cancel enrollments');
       // Gather enrollment IDs from cart items using enrollmentId field
       const enrollmentIds = state.cart.items
         .map(item => item.enrollmentId)
@@ -1340,6 +1341,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
       }
+    } else {
+      console.log('⏭️ Skipping cancellation block - skipCancellation is truthy:', skipCancellation);
     }
 
     // Clear local state (always runs when skipCancellation is true, or after successful API call)
