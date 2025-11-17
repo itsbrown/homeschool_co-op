@@ -173,6 +173,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         addItem(cartItem, true); // Skip validation to avoid race condition
 
         console.log('🛒 Item added to cart, triggering cart update...');
+        
+        // Close the enrollment dialog immediately after adding to cart
+        setEnrollmentDialog({ open: false });
+        setSelectedChildId("");
+        setSelectedVariantId("");
 
         toast({
           title: "Added to Cart! 🛒",
