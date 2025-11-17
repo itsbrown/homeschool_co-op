@@ -51,19 +51,21 @@ export default function CartDrawer() {
 
   return (
     <Sheet open={isOpen} onOpenChange={closeCart}>
-      <SheetContent className="w-full sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            Shopping Cart ({getItemCount()})
-          </SheetTitle>
-          <SheetDescription>
-            Review your class enrollments before checkout
-          </SheetDescription>
-        </SheetHeader>
+      <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
+        <div className="px-6 pt-6 pb-4 flex-shrink-0">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Shopping Cart ({getItemCount()})
+            </SheetTitle>
+            <SheetDescription>
+              Review your class enrollments before checkout
+            </SheetDescription>
+          </SheetHeader>
+        </div>
 
         {cart.items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="flex flex-col items-center justify-center py-8 px-6 text-center">
           <ShoppingCart className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">No unpaid enrollments</h3>
           <p className="text-muted-foreground mb-4">
@@ -77,8 +79,8 @@ export default function CartDrawer() {
           </Button>
         </div>
         ) : (
-          <div className="flex flex-col h-full">
-            <ScrollArea className="flex-1 mt-6 max-h-[calc(100vh-400px)]">
+          <>
+            <ScrollArea className="flex-1 overflow-y-auto px-6">
               <div className="space-y-4 pb-4">
                 {cart.items.map((item) => {
                   const isDiscounted = cart.discounts.discountedChildIds?.includes(item.childId);
@@ -152,8 +154,8 @@ export default function CartDrawer() {
               </div>
             </ScrollArea>
 
-            {/* Cart Summary */}
-            <div className="border-t pt-4 mt-4 space-y-4 flex-shrink-0 bg-white">
+            {/* Cart Summary - Fixed Footer */}
+            <div className="border-t pt-4 space-y-4 flex-shrink-0 bg-white px-6 pb-6">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal:</span>
@@ -250,7 +252,7 @@ export default function CartDrawer() {
                 </Button>
               </div>
             </div>
-          </div>
+          </>
         )}
       </SheetContent>
     </Sheet>
