@@ -109,6 +109,29 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       console.log('🎯 Classes data:', classesData);
       console.log('🎯 Children:', children);
       
+      // Check if this is a duplicate enrollment (already in cart)
+      if (data.isDuplicate) {
+        const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
+        const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
+        
+        toast({
+          title: "Already in Cart",
+          description: `${selectedChild?.firstName || 'Child'} is already enrolled in ${selectedClass?.title || 'this class'}. Check your cart to complete payment.`,
+          variant: "default",
+        });
+        
+        setEnrollmentDialog({ open: false });
+        setSelectedChildId("");
+        setSelectedVariantId("");
+        
+        // Open cart to show existing item
+        setTimeout(() => {
+          openCart();
+        }, 500);
+        
+        return;
+      }
+      
       // Find the selected child and class data for cart item
       const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
       const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
