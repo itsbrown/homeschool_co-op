@@ -83,6 +83,7 @@ export interface AppliedDiscount {
 interface CartState {
   cart: Cart;
   isOpen: boolean;
+  cartHydrated: boolean; // Indicates if cart has been loaded from API
 }
 
 type CartAction =
@@ -785,6 +786,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       return {
         ...state,
         cart: action.payload,
+        cartHydrated: true, // Mark cart as hydrated from API
       };
 
     case 'APPLY_PROMO': {
@@ -840,11 +842,13 @@ const initialState: CartState = {
     appliedPromoCode: null,
   },
   isOpen: false,
+  cartHydrated: false,
 };
 
 interface CartContextType {
   cart: Cart;
   isOpen: boolean;
+  cartHydrated: boolean;
   addItem: (item: Omit<CartItem, 'id'>, skipValidation?: boolean) => void;
   removeItem: (id: string) => void;
   updateItem: (id: string, updates: Partial<CartItem>) => void;
@@ -854,7 +858,7 @@ interface CartContextType {
   closeCart: () => void;
   getItemCount: () => number;
   hasItem: (classId: number, childId: number) => boolean;
-  refreshCart: () => void;
+  refreshCart: () => Promise<void>;
   refreshDiscounts: () => Promise<void>;
   applyPromoCode: (code: string) => Promise<{ success: boolean; error?: string; discount?: any }>;
   removePromoCode: () => void;
@@ -1026,49 +1030,38 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Use calculateCartTotalsWithDiscounts to fetch school settings and calculate discounts properly
       const totals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null); // Fresh load - no promo code yet
 
-      // Load pending enrollments if we have any
+      // CRITICAL: Always replace cart with API data (no localStorage merge)
+      // This ensures API is the single source of truth and prevents stale data conflicts
       if (cartItems.length > 0) {
-        // If cart is empty, load all pending enrollments
-        if (state.cart.items.length === 0) {
-          dispatch({
-            type: 'LOAD_CART',
-            payload: {
-              items: cartItems,
-              ...totals,
-              appliedPromoCode: null, // Fresh load - clear promo
-              schoolSettings: totals.schoolSettings, // Preserve schoolSettings
-            },
-          });
-        } else {
-          // If cart has items, merge with pending enrollments (avoid duplicates)
-          const existingIds = state.cart.items.map(item => item.id);
-          const newItems = cartItems.filter(item => !existingIds.includes(item.id));
-          
-          if (newItems.length > 0) {
-            const allItems = [...state.cart.items, ...newItems];
-            // Also use async version for merged totals to recalculate with proper settings
-            const mergedTotals = await calculateCartTotalsWithDiscounts(allItems, getAccessToken, state.cart.appliedPromoCode); // Preserve promo when merging
-            dispatch({
-              type: 'LOAD_CART',
-              payload: {
-                items: allItems,
-                ...mergedTotals,
-                appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code when merging
-                schoolSettings: mergedTotals.schoolSettings, // Preserve schoolSettings
-              },
-            });
-          }
-        }
+        // API returned enrollments - replace cart state entirely
+        dispatch({
+          type: 'LOAD_CART',
+          payload: {
+            items: cartItems,
+            ...totals,
+            appliedPromoCode: null, // Fresh load - clear promo
+            schoolSettings: totals.schoolSettings,
+          },
+        });
+        
+        // Save to localStorage AFTER API normalization for offline resilience
+        const cartKey = getCartStorageKey(user.email);
+        localStorage.setItem(cartKey, JSON.stringify({
+          items: cartItems,
+          ...totals,
+          appliedPromoCode: null,
+          schoolSettings: totals.schoolSettings,
+        }));
       } else {
         // API returned no enrollments - clear cart to maintain server authority
-        // This ensures proper multi-user behavior (no cross-account cart leakage)
         dispatch({ type: 'CLEAR_CART' });
-        localStorage.removeItem('asa_cart_items');
+        const cartKey = getCartStorageKey(user.email);
+        localStorage.removeItem(cartKey);
       }
     } catch (error) {
       console.error('Error loading unpaid enrollments:', error);
     }
-  }, [user?.email, getAccessToken, state.cart.items, state.cart.appliedPromoCode]);
+  }, [user?.email, getAccessToken]);
 
   // Process enrollments data when query result changes
   useEffect(() => {
@@ -1078,11 +1071,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [enrollmentsData, processEnrollmentsData]);
 
   // Manual refresh function for external use - uses query invalidation
-  const refreshCart = useCallback(() => {
-    if (user?.email && isAuthenticated) {
-      refetchEnrollments();
+  // Returns a promise that resolves when refetch completes
+  const refreshCart = useCallback(async () => {
+    if (user?.email && isAuthenticated && activeRole === 'parent') {
+      console.log('🛒 refreshCart called - awaiting refetch');
+      await refetchEnrollments();
+      console.log('🛒 refreshCart complete - cart data updated');
     }
-  }, [user?.email, isAuthenticated, refetchEnrollments]);
+  }, [user?.email, isAuthenticated, activeRole, refetchEnrollments]);
 
   // Function to refresh discounts for the current cart
   const refreshDiscounts = useCallback(async () => {
@@ -1109,8 +1105,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken]);
 
-  // Load cart from localStorage on mount
+  // Load cart from localStorage on mount (ONLY for non-authenticated users or non-parent roles)
   useEffect(() => {
+    // CRITICAL: Skip localStorage loading for authenticated parents
+    // They will get cart data from API via TanStack Query
+    if (user?.email && isAuthenticated && activeRole === 'parent') {
+      console.log('🛒 Skipping localStorage load for authenticated parent - waiting for API data');
+      return;
+    }
+
     // Check if cart was recently cleared to prevent restoring after payment
     const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
     if (clearedTimestamp) {
@@ -1134,7 +1137,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem(cartKey);
       }
     }
-  }, [user?.email]);
+  }, [user?.email, isAuthenticated, activeRole]);
 
   // Clear cart on logout
   useEffect(() => {
@@ -1432,6 +1435,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const contextValue: CartContextType = {
     cart: state.cart,
     isOpen: state.isOpen,
+    cartHydrated: state.cartHydrated,
     addItem,
     removeItem,
     updateItem,

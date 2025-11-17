@@ -350,12 +350,9 @@ export default function ChildEnrollmentsPage() {
                                 className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
                                 onClick={async () => {
                                   // Refresh cart to load pending enrollments, then navigate to checkout
-                                  console.log('🛒 Complete Payment clicked - refreshing cart first');
-                                  refreshCart();
-                                  
-                                  // Wait a moment for cart to refresh before navigating
-                                  await new Promise(resolve => setTimeout(resolve, 500));
-                                  console.log('🛒 Navigating to checkout after cart refresh');
+                                  console.log('🛒 Complete Payment clicked - refreshing cart');
+                                  await refreshCart(); // CRITICAL: Await cart refresh before navigation
+                                  console.log('🛒 Cart refresh complete - navigating to checkout');
                                   setLocation('/cart/checkout');
                                 }}
                               >

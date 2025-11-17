@@ -153,7 +153,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
 }
 
 export default function CartCheckout() {
-  const { cart, clearCart, loadUnpaidEnrollments, applyPromoCode, removePromoCode } = useCart();
+  const { cart, cartHydrated, clearCart, applyPromoCode, removePromoCode } = useCart();
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [clientSecret, setClientSecret] = useState<string>('');
@@ -193,7 +193,7 @@ export default function CartCheckout() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
-    console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length);
+    console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length, 'cartHydrated:', cartHydrated);
     
     if (!isAuthenticated) {
       console.log('🛒 User not authenticated, redirecting to login');
@@ -201,56 +201,30 @@ export default function CartCheckout() {
       return;
     }
 
-    // If cart has items, mark initial load as complete
-    if (cart.items.length > 0) {
-      if (isInitialLoad) {
-        console.log('🛒 Cart has items, marking initial load complete');
-        setIsInitialLoad(false);
-      }
-      
-      // Create payment intent if we don't have one yet
-      if (!clientSecret) {
-        console.log('🛒 Creating initial payment intent');
-        createPaymentIntent();
-      }
+    // CRITICAL: Wait for cart to be hydrated from API before proceeding
+    if (!cartHydrated) {
+      console.log('🛒 Cart not yet hydrated from API - waiting for TanStack Query to load data');
       return;
     }
 
-    // Only run cart loading logic on initial load and when cart is empty
-    if (isInitialLoad && cart.items.length === 0) {
-      // First wait briefly for cart to hydrate from localStorage (fast path)
-      console.log('🛒 Cart is empty, waiting for hydration from localStorage...');
-      
-      let attempts = 0;
-      const hydrationAttempts = 4; // Wait up to 2 seconds for localStorage hydration
-      let hasSyncedWithBackend = false;
-      
-      const timer = setInterval(() => {
-        attempts++;
-        console.log(`🛒 Cart loading attempt ${attempts} - items:`, cart.items.length);
-        
-        if (cart.items.length > 0) {
-          console.log('🛒 Cart loaded with items:', cart.items.length);
-          clearInterval(timer);
-          setIsInitialLoad(false);
-          // Don't call createPaymentIntent here - the effect will re-run with cart.items
-        } else if (attempts === hydrationAttempts && !hasSyncedWithBackend) {
-          // After waiting for localStorage, sync with backend if still empty
-          console.log('🛒 Cart still empty after hydration, syncing with backend...');
-          hasSyncedWithBackend = true;
-          loadUnpaidEnrollments();
-          // Continue polling for backend response
-        } else if (attempts >= 16) {
-          // Total wait: 2s for hydration + 6s for backend sync = 8 seconds
-          console.log('🛒 CartCheckout: No items found after hydration and backend sync, redirecting to programs');
-          clearInterval(timer);
-          setLocation('/programs');
-        }
-      }, 500);
-      
-      return () => clearInterval(timer);
+    // Mark initial load as complete once cart is hydrated
+    if (isInitialLoad) {
+      console.log('🛒 Cart hydrated - marking initial load complete');
+      setIsInitialLoad(false);
     }
-  }, [isAuthenticated, cart.items.length, cart.total]); // Re-run when cart changes
+
+    // If cart has items after hydration, create payment intent
+    if (cart.items.length > 0) {
+      if (!clientSecret) {
+        console.log('🛒 Creating initial payment intent with', cart.items.length, 'items');
+        createPaymentIntent();
+      }
+    } else {
+      // Cart is hydrated but empty - redirect to programs
+      console.log('🛒 Cart hydrated but empty - redirecting to programs');
+      setLocation('/programs');
+    }
+  }, [isAuthenticated, cartHydrated, cart.items.length, cart.total]); // Re-run when cart or hydration status changes
   
   // Separate effect to handle payment plan changes with debouncing
   useEffect(() => {
@@ -491,20 +465,6 @@ export default function CartCheckout() {
                 <CardDescription>
                   Review your class enrollments
                 </CardDescription>
-                {/* Add button to load outstanding balances if cart seems incomplete */}
-                {cart.items.length <= 1 && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => {
-                      clearCart();
-                      setTimeout(() => loadUnpaidEnrollments(), 100);
-                    }}
-                    className="mt-2"
-                  >
-                    Load All Outstanding Balances
-                  </Button>
-                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 {cart.items.map((item) => {
