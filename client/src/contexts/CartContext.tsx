@@ -1032,6 +1032,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           amountPaid: amountPaid,
           remainingBalance: remainingBalance,
           totalCost: enrollment.totalCost || 0,
+          variantId: enrollment.variantId,
+          variantName: enrollment.variantName,
         };
       });
 

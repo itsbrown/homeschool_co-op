@@ -146,7 +146,9 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
         programId: program.id,
         childId: parseInt(selectedChild),
         variantId: selectedVariant,
-        status: "pending",
+        totalCost: finalPrice,
+        remainingBalance: finalPrice,
+        status: "pending_payment",
         paymentStatus: "pending"
       });
 
