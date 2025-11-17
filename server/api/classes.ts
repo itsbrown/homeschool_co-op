@@ -155,9 +155,9 @@ router.post('/:id/enroll', async (req, res) => {
     console.log(`📝 ADD TO CART REQUEST: Class ${req.params.id}, Body:`, req.body);
 
     const classId = parseInt(req.params.id);
-    const { childId } = req.body;
+    const { childId, variantId } = req.body;
 
-    console.log(`📝 PARSED: classId=${classId}, childId=${childId}`);
+    console.log(`📝 PARSED: classId=${classId}, childId=${childId}, variantId=${variantId}`);
 
     if (isNaN(classId) || !childId) {
       console.log(`📝 VALIDATION FAILED: Invalid classId or childId`);
@@ -217,8 +217,31 @@ router.post('/:id/enroll', async (req, res) => {
       console.log(`✅ Class has ${capacity - currentEnrollmentCount} spots available`);
     }
 
-    // Calculate deposit (10% of class price)
-    const classPrice = classItem.price || 90000; // Default $900 in cents
+    // VARIANT PRICE CALCULATION: Use selected variant price or fall back to class price
+    let classPrice = classItem.price || 90000; // Default $900 in cents
+    let selectedVariantName: string | null = null;
+    
+    // Parse variants from schedule field and find the selected variant
+    if (variantId && classItem.schedule) {
+      try {
+        const schedule = typeof classItem.schedule === 'string' 
+          ? JSON.parse(classItem.schedule) 
+          : classItem.schedule;
+        
+        if (schedule && Array.isArray(schedule.variants)) {
+          const selectedVariant = schedule.variants.find((v: any) => v.id === variantId);
+          if (selectedVariant && selectedVariant.price) {
+            classPrice = selectedVariant.price;
+            selectedVariantName = selectedVariant.name || null;
+            console.log(`💰 Using variant price: ${classPrice} cents for variant "${selectedVariantName}" (${variantId})`);
+          }
+        }
+      } catch (error) {
+        console.error(`⚠️ Error parsing variants from schedule:`, error);
+        // Fall back to class price
+      }
+    }
+
     const depositAmount = Math.round(classPrice * 0.1); // 10% deposit
 
     // Create PENDING enrollment record (will be confirmed after payment)
@@ -230,7 +253,7 @@ router.post('/:id/enroll', async (req, res) => {
       childId: childId,
       childName: `${child.firstName} ${child.lastName}`,
       className: classItem.title,
-      variantId: null,
+      variantId: variantId || null,
       parentId: child.parentId,
       parentEmail: child.parentEmail || '',
       totalCost: classPrice,
@@ -247,6 +270,8 @@ router.post('/:id/enroll', async (req, res) => {
       stripeSubscriptionId: null,
       stripeCustomerId: null
     });
+    
+    console.log(`💰 Enrollment created with variant: ${variantId || 'none'}, variantName: "${selectedVariantName || 'none'}", price: ${classPrice} cents`);
 
     console.log(`📝 PENDING ENROLLMENT CREATED (will be confirmed after payment):`, enrollmentData);
 
