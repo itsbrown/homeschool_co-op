@@ -1,26 +1,26 @@
 [
   {
-    "firstName": "Child1",
-    "lastName": "Test",
+    "firstName": "Cart",
+    "lastName": "Child",
     "birthdate": "2010-01-01",
     "gradeLevel": "5th",
-    "parentId": 1,
-    "parentEmail": "parent@test.com",
+    "parentId": 2,
+    "parentEmail": "cart-parent@test.com",
     "schoolId": 1,
     "id": 1,
-    "createdAt": "2025-11-16T20:59:17.230Z",
-    "updatedAt": "2025-11-16T20:59:17.230Z"
+    "createdAt": "2025-11-17T03:23:47.728Z",
+    "updatedAt": "2025-11-17T03:23:47.728Z"
   },
   {
-    "firstName": "Child2",
-    "lastName": "Test",
+    "firstName": "Cart2",
+    "lastName": "Child2",
     "birthdate": "2010-01-01",
     "gradeLevel": "5th",
-    "parentId": 1,
-    "parentEmail": "parent@test.com",
+    "parentId": 3,
+    "parentEmail": "cart-parent2@test.com",
     "schoolId": 1,
     "id": 2,
-    "createdAt": "2025-11-16T20:59:17.231Z",
-    "updatedAt": "2025-11-16T20:59:17.231Z"
+    "createdAt": "2025-11-17T03:23:47.849Z",
+    "updatedAt": "2025-11-17T03:23:47.849Z"
   }
 ]
