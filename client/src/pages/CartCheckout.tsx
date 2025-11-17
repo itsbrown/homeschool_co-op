@@ -153,7 +153,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
 }
 
 export default function CartCheckout() {
-  const { cart, cartHydrated, clearCart, applyPromoCode, removePromoCode } = useCart();
+  const { cart, cartHydrated, cartLoading, clearCart, applyPromoCode, removePromoCode } = useCart();
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [clientSecret, setClientSecret] = useState<string>('');
@@ -191,10 +191,9 @@ export default function CartCheckout() {
 
   // Track if this is the initial load
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [allowEmptyCartRedirect, setAllowEmptyCartRedirect] = useState(false);
 
   useEffect(() => {
-    console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length, 'cartHydrated:', cartHydrated);
+    console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length, 'cartHydrated:', cartHydrated, 'cartLoading:', cartLoading);
     
     if (!isAuthenticated) {
       console.log('🛒 User not authenticated, redirecting to login');
@@ -212,13 +211,13 @@ export default function CartCheckout() {
     if (isInitialLoad) {
       console.log('🛒 Cart hydrated - marking initial load complete');
       setIsInitialLoad(false);
-      
-      // Delay allowing empty cart redirect to give query time to fetch fresh data
-      // This prevents immediate redirect when navigating from "Complete Payment" buttons
-      setTimeout(() => {
-        console.log('🛒 Now allowing empty cart redirect after grace period');
-        setAllowEmptyCartRedirect(true);
-      }, 1000); // 1 second grace period for cart to load fresh data
+    }
+
+    // CRITICAL: Don't redirect while cart is actively loading/refetching
+    // This prevents premature redirect when refreshCart() invalidates the query
+    if (cartLoading) {
+      console.log('🛒 Cart is loading/refetching - waiting for fresh data');
+      return;
     }
 
     // If cart has items after hydration, create payment intent
@@ -227,14 +226,12 @@ export default function CartCheckout() {
         console.log('🛒 Creating initial payment intent with', cart.items.length, 'items');
         createPaymentIntent();
       }
-    } else if (allowEmptyCartRedirect) {
-      // Cart is hydrated but empty - redirect to programs (only after grace period)
-      console.log('🛒 Cart hydrated but empty - redirecting to programs');
-      setLocation('/programs');
     } else {
-      console.log('🛒 Cart empty but within grace period - waiting for fresh data');
+      // Cart is hydrated, not loading, and empty - redirect to programs
+      console.log('🛒 Cart hydrated, not loading, and empty - redirecting to programs');
+      setLocation('/programs');
     }
-  }, [isAuthenticated, cartHydrated, cart.items.length, cart.total, allowEmptyCartRedirect]); // Re-run when cart or hydration status changes
+  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.total]); // Re-run when cart or loading status changes
   
   // Separate effect to handle payment plan changes with debouncing
   useEffect(() => {

@@ -869,6 +869,7 @@ interface CartContextType {
   cart: Cart;
   isOpen: boolean;
   cartHydrated: boolean;
+  cartLoading: boolean; // Indicates if cart query is actively fetching/refetching
   addItem: (item: Omit<CartItem, 'id'>, skipValidation?: boolean) => void;
   removeItem: (id: string) => void;
   updateItem: (id: string, updates: Partial<CartItem>) => void;
@@ -917,7 +918,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // This prevents duplicate API calls during component remounts
   // CRITICAL: Gate on activeRole === 'parent' to prevent fetch before role resolution
   // NOTE: Query key matches ParentDashboard to share cache and prevent duplicate API calls
-  const { data: enrollmentsData, refetch: refetchEnrollments } = useQuery({
+  const { data: enrollmentsData, refetch: refetchEnrollments, isFetching } = useQuery({
     queryKey: ['/api/parent/enrollments'],
     queryFn: async () => {
       const token = await getAccessToken();
@@ -1457,6 +1458,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cart: state.cart,
     isOpen: state.isOpen,
     cartHydrated: state.cartHydrated,
+    cartLoading: isFetching, // Expose loading state from TanStack Query
     addItem,
     removeItem,
     updateItem,
