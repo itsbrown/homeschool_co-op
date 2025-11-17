@@ -51,7 +51,7 @@ export default function CartDrawer() {
 
   return (
     <Sheet open={isOpen} onOpenChange={closeCart}>
-      <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
+      <SheetContent className="w-full sm:max-w-lg flex flex-col h-[100dvh] min-h-0 p-0">
         <div className="px-6 pt-6 pb-4 flex-shrink-0">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
@@ -80,7 +80,7 @@ export default function CartDrawer() {
         </div>
         ) : (
           <>
-            <ScrollArea className="flex-1 overflow-y-auto px-6">
+            <div className="flex-1 overflow-y-auto px-6 min-h-0">
               <div className="space-y-4 pb-4">
                 {cart.items.map((item) => {
                   const isDiscounted = cart.discounts.discountedChildIds?.includes(item.childId);
@@ -152,10 +152,13 @@ export default function CartDrawer() {
                 );
                 })}
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Cart Summary - Fixed Footer */}
-            <div className="border-t pt-4 space-y-4 flex-shrink-0 bg-white px-6 pb-6">
+            <div 
+              className="border-t pt-4 space-y-4 flex-shrink-0 bg-white px-6 pb-8" 
+              style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
+            >
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal:</span>
