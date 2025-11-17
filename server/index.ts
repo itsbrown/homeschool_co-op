@@ -209,15 +209,24 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   }, async () => {
     log(`serving on port ${port}`);
 
-    // Initialize and start backup service
-    await backupService.init();
-    backupService.startAutomaticBackups(24); // Backup every 24 hours
-    
-    // Initialize membership status tracking service
-    MembershipStatusService.initializeMembershipStatusJob();
-    
-    // Load notifications and notification recipients from JSON into database
-    const { storage } = await import('./storage');
-    await storage.initializeNotifications();
+    // Background jobs and data loading only run in development
+    // Autoscale deployments don't support persistent background tasks
+    if (currentEnv === 'development' || currentEnv === 'test') {
+      console.log('🔧 Development mode: Starting background services...');
+      
+      // Initialize and start backup service
+      await backupService.init();
+      backupService.startAutomaticBackups(24); // Backup every 24 hours
+      
+      // Initialize membership status tracking service
+      MembershipStatusService.initializeMembershipStatusJob();
+      
+      // Load notifications and notification recipients from JSON into database
+      const { storage } = await import('./storage');
+      await storage.initializeNotifications();
+    } else {
+      console.log('☁️ Production mode: Background jobs disabled (not compatible with Autoscale deployments)');
+      console.log('💡 Use Scheduled Deployments or Reserved VM for background tasks');
+    }
   });
 })();

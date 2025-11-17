@@ -110,9 +110,14 @@ function requireSchoolContext(req: any, res: any): number | null {
 // Removed express-session declarations - using Auth0 token-based authentication
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize database tables
-  const { initializeDatabase } = await import('./init-db');
-  await initializeDatabase();
+  // Initialize database tables ONLY in development
+  // In production/Autoscale, migrations run at build time via build script
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    const { initializeDatabase } = await import('./init-db.js');
+    await initializeDatabase();
+  } else {
+    console.log('⏭️ Skipping runtime database initialization (production mode - migrations run at build time)');
+  }
 
   // Import Supabase authentication middleware
   const { supabaseAuth } = await import("./middleware/supabase-auth");
