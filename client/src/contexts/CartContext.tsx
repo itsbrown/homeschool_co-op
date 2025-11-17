@@ -957,7 +957,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Prioritize marketplaceClassId for marketplace enrollments, fallback to classId/programId
         const classId = enrollment.marketplaceClassId || enrollment.classId || enrollment.programId;
         const key = `${classId}-${enrollment.childId}`;
-        console.log(`🛒 Grouping enrollment ${enrollment.id}: classType=${enrollment.classType}, marketplaceClassId=${enrollment.marketplaceClassId}, classId=${enrollment.classId}, key=${key}`);
         if (!acc[key]) {
           acc[key] = [];
         }
@@ -981,9 +980,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const hasBalance = latestEnrollment.remainingBalance > 0 && 
                           latestEnrollment.paymentSystemVersion === 'v2_stripe';
         
-        console.log(`🛒 Processing group ${key}: enrollment ${latestEnrollment.id} (${latestEnrollment.className})`);
-        console.log(`   - Status: ${latestEnrollment.status}, Balance: ${latestEnrollment.remainingBalance}, PaymentSystem: ${latestEnrollment.paymentSystemVersion}`);
-        
         // Check if there's a fully paid enrollment (enrolled with no balance)
         const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
           (e.status === 'enrolled' && (e.remainingBalance === 0 || e.remainingBalance === null)) ||
@@ -998,13 +994,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const isWaitlisted = latestEnrollment.status === 'waitlist';
         const shouldSkip = hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
 
-        console.log(`   - hasBalance: ${hasBalance}, hasFullyPaid: ${hasFullyPaidEnrollment}, latestIsPaid: ${latestIsPaid}, isWaitlisted: ${isWaitlisted}`);
-
         if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0))) {
-          console.log(`   ✅ ADDED TO CART: ${latestEnrollment.className}`);
           unpaidEnrollments.push(latestEnrollment);
-        } else {
-          console.log(`   ❌ SKIPPED - Reason: ${isWaitlisted ? 'waitlisted' : shouldSkip ? 'paid or duplicate' : 'no balance or wrong status'}`);
         }
       }
 
