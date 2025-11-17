@@ -1301,9 +1301,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (enrollmentIds.length > 0) {
         try {
+          console.log('🧹 Calling bulk cancel endpoint with enrollment IDs:', enrollmentIds);
+          
           // Get auth token same way as other protected requests
           const token = await getAccessToken();
-          const response = await fetch('/api/cart/clear', {
+          const response = await fetch('/api/program-enrollments/cancel-multiple', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1314,29 +1316,28 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (!response.ok) {
             const error = await response.json();
+            console.error('🧹 Bulk cancel failed:', error);
             throw new Error(error.error || 'Failed to cancel enrollments');
           }
 
           const result = await response.json();
-          console.log('🧹 Enrollments cancelled:', result);
+          console.log('🧹 Bulk cancel successful:', result);
           
-          if (result.errors && result.errors.length > 0) {
-            console.warn('🧹 Some enrollments could not be cancelled:', result.errors);
-            toast({
-              title: "Partial Success",
-              description: `${result.cancelled.length} enrollments cancelled, but ${result.errors.length} had errors.`,
-              variant: "destructive",
-            });
-          }
+          // Success toast
+          toast({
+            title: "Cart Cleared",
+            description: `Successfully cancelled ${result.cancelled.length} enrollment(s)`,
+          });
 
-          // Invalidate program enrollments query to refresh children page
+          // Invalidate queries to refresh UI
           queryClient.invalidateQueries({ queryKey: ['/api/program-enrollments'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
           
         } catch (error: any) {
           console.error('🧹 Error cancelling enrollments:', error);
           toast({
             title: "Error",
-            description: "Failed to cancel enrollments. Please try again or contact support if the issue persists.",
+            description: error.message || "Failed to cancel enrollments. Please try again.",
             variant: "destructive",
           });
           // Don't clear local state if API fails - keep cart visible
