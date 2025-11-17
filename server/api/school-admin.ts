@@ -76,20 +76,37 @@ function generateTemporaryPassword(): string {
   return result;
 }
 
-function extractSchoolId(req: any): number | null {
+async function extractSchoolId(req: any): Promise<number | null> {
+  // First try to get school ID from token (fast path)
   const schoolIdFromToken = req.auth?.payload?.school_id;
-  if (!schoolIdFromToken) {
+  if (schoolIdFromToken) {
+    const schoolId = Number(schoolIdFromToken);
+    if (!isNaN(schoolId)) {
+      return schoolId;
+    }
+  }
+  
+  // Fallback: Look up school from database using email
+  const userEmail = req.user?.email;
+  if (!userEmail) {
     return null;
   }
-  const schoolId = Number(schoolIdFromToken);
-  if (isNaN(schoolId)) {
-    return null;
+  
+  try {
+    // Get user from database to find their school
+    const user = await storage.getUserByEmail(userEmail);
+    if (user && user.schoolId) {
+      return user.schoolId;
+    }
+  } catch (error) {
+    console.error('Error looking up school ID for user:', error);
   }
-  return schoolId;
+  
+  return null;
 }
 
-function requireSchoolContext(req: any, res: any): number | null {
-  const schoolId = extractSchoolId(req);
+async function requireSchoolContext(req: any, res: any): Promise<number | null> {
+  const schoolId = await extractSchoolId(req);
   if (schoolId === null) {
     res.status(400).json({ message: "School ID not found or invalid in user metadata" });
     return null;
