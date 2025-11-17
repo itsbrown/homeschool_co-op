@@ -1284,6 +1284,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       className: item.className,
       childName: item.childName
     })));
+    console.log('🧹 Full state.cart.items:', state.cart.items);
     
     // Only attempt to cancel enrollments if not skipping and cart has items with enrollment IDs
     if (!skipCancellation) {
