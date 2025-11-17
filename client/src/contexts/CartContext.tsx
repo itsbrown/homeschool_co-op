@@ -91,6 +91,7 @@ type CartAction =
   | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'UPDATE_ITEM'; payload: { id: string; updates: Partial<CartItem> } }
   | { type: 'CLEAR_CART' }
+  | { type: 'LOAD_EMPTY_CART' } // Clear cart but mark as hydrated from API
   | { type: 'OPEN_CART' }
   | { type: 'CLOSE_CART' }
   | { type: 'LOAD_CART'; payload: Cart }
@@ -776,6 +777,25 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         },
       };
 
+    case 'LOAD_EMPTY_CART':
+      // Clear cart but mark as hydrated from API (for when API returns no enrollments)
+      return {
+        ...state,
+        cart: {
+          items: [],
+          subtotal: 0,
+          discounts: { 
+            siblingDiscount: 0, 
+            freeAfterThree: 0,
+            appliedDiscounts: [],
+            totalDiscountAmount: 0
+          },
+          total: 0,
+          appliedPromoCode: null,
+        },
+        cartHydrated: true,
+      };
+
     case 'OPEN_CART':
       return { ...state, isOpen: true };
 
@@ -1053,8 +1073,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           schoolSettings: totals.schoolSettings,
         }));
       } else {
-        // API returned no enrollments - clear cart to maintain server authority
-        dispatch({ type: 'CLEAR_CART' });
+        // API returned no enrollments - clear cart but mark as hydrated
+        // This prevents checkout page from spinning forever waiting for hydration
+        dispatch({ type: 'LOAD_EMPTY_CART' });
         const cartKey = getCartStorageKey(user.email);
         localStorage.removeItem(cartKey);
       }
