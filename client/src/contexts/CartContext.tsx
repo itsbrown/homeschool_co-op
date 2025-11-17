@@ -1177,47 +1177,32 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user?.email]);
 
-  // Load unpaid enrollments on mount and when user changes
+  // Load unpaid enrollments when user changes
+  // Uses ref to prevent duplicate loads during rapid re-renders (e.g., role initialization)
   useEffect(() => {
-    const cartLoadedKey = 'asa_cart_loaded_for';
-    const loadedForUser = sessionStorage.getItem(cartLoadedKey);
-    
-    console.log('🛒 useEffect triggered - user:', user?.email, 'isAuth:', isAuthenticated, 'isLoading:', isLoading, 'loadedForUser:', loadedForUser);
-    
-    // IMPORTANT: Don't clear cart during initial auth loading to prevent race condition
-    // isLoading comes from SupabaseProvider and tells us if auth is still initializing
     if (isLoading) {
-      console.log('🛒 Auth still loading, preserving cart state');
+      // Wait for auth to complete before making decisions
       return;
     }
 
     if (user?.email && isAuthenticated) {
-      // Prevent duplicate loads during auth initialization by tracking in sessionStorage
-      // sessionStorage persists across component remounts (unlike refs) but clears on tab close
-      if (loadedForUser === user.email) {
-        console.log('🛒 Already loaded cart for this user in this session, skipping duplicate load');
+      // Check if we've already loaded for this user to prevent duplicate API calls
+      if (hasLoadedForUserRef.current === user.email) {
         return;
       }
-
-      console.log('🛒 User authenticated, marking as loaded and scheduling cart load...');
-      // Mark that we're loading for this user IMMEDIATELY in sessionStorage to prevent race conditions
-      sessionStorage.setItem(cartLoadedKey, user.email);
       
-      // Add a small delay to ensure the enrollment API has completed
-      const timer = setTimeout(() => {
-        console.log('🛒 Attempting to load unpaid enrollments after delay...');
-        loadUnpaidEnrollments();
-      }, 1000);
-
-      return () => clearTimeout(timer);
+      // Mark that we're loading for this user before making the API call
+      hasLoadedForUserRef.current = user.email;
+      
+      // Authenticated user: load their cart from database
+      // Cart loads from localStorage first (fast UI), then syncs with database
+      loadUnpaidEnrollments();
     } else if (isAuthenticated === false && user === null) {
-      // Reset the load tracker when user logs out
-      console.log('🛒 User logged out, resetting cart state');
-      sessionStorage.removeItem(cartLoadedKey);
+      // Reset the ref when user logs out
+      hasLoadedForUserRef.current = null;
       
       // SECURITY: Clear cart when user is not authenticated to prevent cross-account enrollment risks
       // Server-side validation provides primary defense, but client clearing is defense-in-depth
-      console.log('🛒 User not authenticated, clearing cart for security');
       dispatch({ type: 'CLEAR_CART' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
