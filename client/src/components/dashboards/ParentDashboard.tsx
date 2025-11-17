@@ -19,14 +19,8 @@ export default function ParentDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
-  const { loadUnpaidEnrollments } = useCart();
 
-  // Load unpaid enrollments when component mounts or user changes
-  useEffect(() => {
-    if (user && session) {
-      loadUnpaidEnrollments();
-    }
-  }, [user, session, loadUnpaidEnrollments]);
+  // Note: Cart loading is handled by CartContext useEffect - no need to duplicate here
 
   // Check for new parent registration and show welcome guidance
   useEffect(() => {
@@ -90,10 +84,6 @@ export default function ParentDashboard() {
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/parent/enrollments"],
     enabled: !!user && !!session,
-    onSuccess: () => {
-      // Refresh cart when enrollments change
-      loadUnpaidEnrollments();
-    },
   });
 
   // Fetch upcoming events

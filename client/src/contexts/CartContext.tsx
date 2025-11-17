@@ -1119,7 +1119,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user?.email && isAuthenticated) {
       loadUnpaidEnrollments();
     }
-  }, [user?.email, isAuthenticated, loadUnpaidEnrollments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email, isAuthenticated]);
 
   // Function to refresh discounts for the current cart
   const refreshDiscounts = useCallback(async () => {
