@@ -147,34 +147,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           selectedClass.variants?.[0];
         
         const finalPrice = selectedVariant ? selectedVariant.price : selectedClass.price;
-
-        // Add item to cart immediately for visual feedback, skip validation since we just created the enrollment
-        const cartItem = {
-          classId: variables.classId,
-          className: selectedClass.title,
-          childId: parseInt(variables.childId),
-          childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
-          price: finalPrice, // Price is in dollars
-          description: selectedClass.description,
-          startDate: selectedClass.startDate,
-          endDate: selectedClass.endDate,
-          status: 'pending_payment',
-          statusText: 'Payment Required',
-          enrollmentId: data.enrollment.id,
-          totalCost: finalPrice,
-          amountPaid: 0,
-          remainingBalance: finalPrice,
-          variantId: variables.variantId,
-          variantName: selectedVariant?.name
-        };
-
-        console.log('🛒 Adding enrollment to cart:', cartItem);
-
-        addItem(cartItem, true); // Skip validation to avoid race condition
-
-        console.log('🛒 Item added to cart, triggering cart update...');
         
-        // Close the enrollment dialog immediately after adding to cart
+        // Close the enrollment dialog
         setEnrollmentDialog({ open: false });
         setSelectedChildId("");
         setSelectedVariantId("");
@@ -184,13 +158,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
           description: `${selectedChild.firstName} enrolled in ${selectedClass.title}. Complete payment in your cart.`,
         });
 
-        // Open cart to show the new item after a brief delay
-        setTimeout(() => {
-          console.log('🛒 Opening cart...');
-          openCart();
-        }, 800);
-
-        // Also store enrollment data for direct payment plans access
+        // Store enrollment data for direct payment plans access
         const enrollmentData = {
           enrollmentId: data.enrollment.id,
           className: selectedClass.title,
@@ -202,19 +170,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         };
         sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
         
-        // CRITICAL FIX: Delay query invalidation to prevent race condition
-        // The backend needs time to process the enrollment before we refetch
-        // Otherwise, the cart query refetch might not include the new enrollment yet
+        // Wait 500ms for database to commit, then refresh cart from API and open it
+        // This prevents race condition where cart would clear due to stale API data
         setTimeout(async () => {
-          // Invalidate non-cart queries immediately for UI updates
-          queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
-          queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${variables.childId}`] });
-          queryClient.invalidateQueries({ queryKey: [`/api/children/${variables.childId}/enrollments`] });
-          queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
-          
-          // Refresh cart via async function to ensure backend has processed the enrollment
           await refreshCart();
+          openCart();
         }, 500);
       } else {
         toast({

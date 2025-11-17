@@ -28,7 +28,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const [currentPage, setCurrentPage] = useState(1);
   
   // Cart and enrollment states
-  const { addItem, openCart } = useCart();
+  const { openCart, refreshCart } = useCart();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [enrollmentDialog, setEnrollmentDialog] = useState<{
@@ -94,51 +94,16 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       console.log('🎯 Classes data:', classesData?.classes);
       console.log('🎯 Children data:', children);
       
-      // Find the selected child and class data for cart item
+      // Find the selected child and class for UI feedback
       const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
       const selectedChild = children?.find((c: any) => c.id === parseInt(variables.childId));
 
-      console.log('🎯 Selected class:', selectedClass);
-      console.log('🎯 Selected child:', selectedChild);
-
       if (selectedClass && selectedChild) {
-        console.log('🛒 Adding enrolled class to cart:', selectedClass.title);
-
-        const cartItem = {
-          classId: variables.classId,
-          className: selectedClass.title,
-          childId: selectedChild.id,
-          childName: `${selectedChild.firstName} ${selectedChild.lastName}`,
-          price: selectedClass.price,
-          description: selectedClass.description,
-          startDate: selectedClass.startDate,
-          endDate: selectedClass.endDate,
-          status: 'pending_payment',
-          statusText: 'Payment Required',
-          enrollmentId: (data as any).enrollment?.id,
-          totalCost: selectedClass.price,
-          amountPaid: 0,
-          remainingBalance: selectedClass.price
-        };
-
-        console.log('🛒 Cart item being added:', cartItem);
-
-        // Add the enrollment to the cart
-        addItem(cartItem, true); // Skip validation to avoid race condition
-
-        console.log('🛒 Item added to cart, triggering cart update...');
-
         toast({
           title: "Added to Cart! 🛒",
           description: `${selectedChild.firstName} enrolled in ${selectedClass.title}. Complete payment in your cart.`,
         });
-
-        // Open cart to show the new item after a brief delay
-        setTimeout(() => {
-          openCart();
-        }, 800);
       } else {
-        console.log('❌ Missing data - selectedClass:', !!selectedClass, 'selectedChild:', !!selectedChild);
         toast({
           title: "Enrollment Successful",
           description: "Child has been enrolled in the class.",
@@ -147,13 +112,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
       setEnrollmentDialog({ open: false });
       setSelectedChildId("");
-      // Invalidate all enrollment-related queries
-      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/enrollments/child/${variables.childId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/children/${variables.childId}/enrollments`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
+
+      // Wait 500ms for database to commit, then refresh cart from API
+      setTimeout(async () => {
+        await refreshCart();
+        openCart();
+      }, 500);
     },
     onError: (error: any) => {
       toast({

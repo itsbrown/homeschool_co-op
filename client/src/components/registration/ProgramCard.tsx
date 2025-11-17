@@ -89,7 +89,7 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
-  const { addItem, openCart } = useCart();
+  const { openCart, refreshCart } = useCart();
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -157,31 +157,14 @@ export function ProgramCard({ program, children = [], isAdmin = false }: Program
         description: "Enrollment request submitted successfully",
       });
 
-      // Add the enrollment to the cart
-      await addItem({
-        classId: program.id,
-        className: program.title,
-        childId: child.id,
-        childName: `${child.firstName} ${child.lastName}`,
-        price: finalPrice,
-        description: program.description,
-        startDate: program.startDate,
-        endDate: program.endDate,
-        status: "pending_payment",
-        statusText: "Payment Required",
-        variantId: selectedVariant,
-        variantName: variant?.name
-      });
-
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/programs"] });
-      
-      // Close dialog and open cart
+      // Close dialog first
       setIsEnrollDialogOpen(false);
-      
-      // Open cart after a short delay to show the added item
-      setTimeout(() => {
+
+      // Wait 500ms for database to commit, then refresh cart from API
+      // This prevents race condition where cart would clear due to stale data
+      setTimeout(async () => {
+        await refreshCart();
+        // Open cart to show the newly added enrollment
         openCart();
       }, 500);
       
