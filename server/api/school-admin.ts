@@ -3212,8 +3212,8 @@ router.post('/discounts', supabaseAuth, async (req: any, res) => {
       usageLimit: usageLimit || null,
       usageLimitPerUser: usageLimitPerUser || null,
       currentUsageCount: 0,
-      validFrom: validFrom || null,
-      validUntil: validUntil || null,
+      validFrom: validFrom === "" ? null : validFrom,
+      validUntil: validUntil === "" ? null : validUntil,
       isActive: isActive !== undefined ? isActive : true,
       priority: priority || 0,
       combinableWithOthers: combinableWithOthers || false,
@@ -3352,8 +3352,8 @@ router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
     if (siblingDiscount !== undefined) updates.siblingDiscount = siblingDiscount;
     if (usageLimit !== undefined) updates.usageLimit = usageLimit;
     if (usageLimitPerUser !== undefined) updates.usageLimitPerUser = usageLimitPerUser;
-    if (validFrom !== undefined) updates.validFrom = validFrom;
-    if (validUntil !== undefined) updates.validUntil = validUntil;
+    if (validFrom !== undefined) updates.validFrom = validFrom === "" ? null : validFrom;
+    if (validUntil !== undefined) updates.validUntil = validUntil === "" ? null : validUntil;
     if (isActive !== undefined) updates.isActive = isActive;
     if (priority !== undefined) updates.priority = priority;
     if (combinableWithOthers !== undefined) updates.combinableWithOthers = combinableWithOthers;
