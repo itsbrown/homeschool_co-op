@@ -3237,8 +3237,9 @@ router.post('/discounts', supabaseAuth, async (req: any, res) => {
 });
 
 // Update an existing discount
-router.put('/discounts/:id', async (req, res) => {
+router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
   try {
+    console.log('💰 Updating discount - ID:', req.params.id);
     const discountId = parseInt(req.params.id);
     
     if (isNaN(discountId)) {
@@ -3248,14 +3249,52 @@ router.put('/discounts/:id', async (req, res) => {
       });
     }
     
+    // Get school ID from authenticated user
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      console.error('❌ No user email found in request');
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+    
+    console.log('👤 User updating discount:', userEmail);
+    
+    // Get user's school from database
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || !user.schoolId) {
+      console.error('❌ User not found or has no school:', userEmail);
+      return res.status(403).json({
+        success: false,
+        error: 'User must be associated with a school'
+      });
+    }
+    
+    const schoolId = user.schoolId;
+    console.log('🏫 User school ID:', schoolId);
+    
     const existingDiscount = await storage.getDiscountById(discountId);
     
     if (!existingDiscount) {
+      console.error('❌ Discount not found:', discountId);
       return res.status(404).json({
         success: false,
         error: 'Discount not found'
       });
     }
+    
+    // Security: Ensure discount belongs to user's school
+    if (existingDiscount.schoolId !== schoolId) {
+      console.error('🚨 SECURITY: User attempted to update discount from different school');
+      console.error('  User school:', schoolId, 'Discount school:', existingDiscount.schoolId);
+      return res.status(403).json({
+        success: false,
+        error: 'You can only update discounts for your own school'
+      });
+    }
+    
+    console.log('✅ Authorization passed - updating discount');
     
     const {
       name,
@@ -3337,7 +3376,10 @@ router.put('/discounts/:id', async (req, res) => {
       discount: updatedDiscount
     });
   } catch (error) {
-    console.error('Error updating discount:', error);
+    console.error('❌ Error updating discount:', error);
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('❌ Discount ID:', req.params.id);
+    console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to update discount'
