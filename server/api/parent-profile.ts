@@ -27,9 +27,59 @@ router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'ad
       return res.status(400).json({ message: 'User is not a parent' });
     }
 
-    // Get children for this parent
-    const children = await storage.getChildrenByParentEmail(parent.email);
-    console.log(`👶 Found ${children.length} children for parent ${parent.email}`);
+    // SECURITY: Multi-tenant isolation - determine admin's permitted school IDs
+    const adminEmail = req.auth?.email || req.user?.email;
+    if (!adminEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const adminRole = req.auth?.role || req.user?.role;
+    let adminSchoolIds: number[] = [];
+    let isSuperAdmin = false;
+
+    if (adminRole === 'superAdmin') {
+      // SuperAdmin can view all data
+      isSuperAdmin = true;
+      console.log(`🔑 SuperAdmin ${adminEmail} has unrestricted access`);
+    } else {
+      // School admins can only view data from their schools
+      const adminUser = await storage.getUserByEmail(adminEmail);
+      if (!adminUser) {
+        return res.status(401).json({ message: 'Admin user not found' });
+      }
+
+      // Get admin's school(s)
+      const adminSchools = await storage.getSchoolsByAdminId(adminUser.id);
+      if (!adminSchools || adminSchools.length === 0) {
+        return res.status(403).json({ message: 'You must be associated with a school to view parent profiles' });
+      }
+      adminSchoolIds = adminSchools.map(s => s.id);
+      console.log(`🏫 Admin ${adminEmail} has access to schools:`, adminSchoolIds);
+    }
+
+    // Get ALL children for this parent
+    const allChildren = await storage.getChildrenByParentEmail(parent.email);
+    
+    // FILTER: Only children in admin's schools (or all if superAdmin)
+    const children = isSuperAdmin 
+      ? allChildren
+      : allChildren.filter(child => child.schoolId && adminSchoolIds.includes(child.schoolId));
+    
+    console.log(`👶 Found ${allChildren.length} total children, ${children.length} visible to admin`);
+
+    // Check if admin has any access to this parent
+    if (!isSuperAdmin && children.length === 0) {
+      // No children visible, check for membership enrollments
+      const allMembershipEnrollments = await storage.getMembershipEnrollmentsByParentId(parent.id);
+      const visibleMemberships = allMembershipEnrollments.filter(m => adminSchoolIds.includes(m.schoolId));
+      
+      if (visibleMemberships.length === 0) {
+        console.log(`⛔ Access denied: Admin ${adminEmail} has no relationship with parent ${parent.email}`);
+        return res.status(403).json({ message: 'You do not have permission to view this parent profile' });
+      }
+    }
+
+    console.log(`✅ Access granted: Admin ${adminEmail} can view parent ${parent.email}`);
 
     // Get school student records to map child IDs to school student IDs
     const schoolStudents = await storage.getAllSchoolStudents();
@@ -38,31 +88,110 @@ router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'ad
       childToSchoolStudentMap.set(ss.childId, ss.id);
     });
 
-    // Get enrollments for all children
+    // Get enrollments for VISIBLE children only (already filtered)
     const allEnrollments = [];
     for (const child of children) {
       try {
         const childEnrollments = await storage.getEnrollmentsByChildId(child.id);
-        console.log(`📚 Found ${childEnrollments.length} enrollments for child ${child.firstName} ${child.lastName}`);
         allEnrollments.push(...childEnrollments);
       } catch (error) {
         console.error(`❌ Error fetching enrollments for child ${child.id}:`, error);
       }
     }
 
-    // Get payment history for this parent
-    const paymentHistory = await storage.getPaymentsByParentEmail(parent.email);
-    console.log(`💳 Found ${paymentHistory.length} payment records for parent ${parent.email}`);
+    // Get classes information for enrollments to filter by school
+    const classIds = [...new Set(allEnrollments.map(e => e.classId))];
+    const classes: any[] = [];
+    const classSchoolMap = new Map<number, number>(); // classId -> schoolId
+    
+    for (const classId of classIds) {
+      try {
+        const classInfo = await storage.getClassById(classId);
+        if (classInfo) {
+          classes.push(classInfo);
+          classSchoolMap.set(classInfo.id, classInfo.schoolId);
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching class ${classId}:`, error);
+      }
+    }
 
-    // Get scheduled payments
-    const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(parent.email);
-    console.log(`📅 Found ${scheduledPayments.length} scheduled payments for parent ${parent.email}`);
+    // FILTER: Only enrollments in classes from admin's schools
+    const filteredEnrollments = isSuperAdmin
+      ? allEnrollments
+      : allEnrollments.filter(e => {
+          const classSchoolId = classSchoolMap.get(e.classId);
+          return classSchoolId && adminSchoolIds.includes(classSchoolId);
+        });
+    
+    console.log(`📚 Found ${allEnrollments.length} total enrollments, ${filteredEnrollments.length} visible to admin`);
 
-    // Get membership enrollments for this parent
-    const membershipEnrollments = await storage.getMembershipEnrollmentsByParentId(parent.id);
-    console.log(`🏅 Found ${membershipEnrollments.length} membership enrollments for parent ${parent.email}`);
+    // FILTER: Only membership enrollments from admin's schools
+    const allMembershipEnrollments = await storage.getMembershipEnrollmentsByParentId(parent.id);
+    const membershipEnrollments = isSuperAdmin
+      ? allMembershipEnrollments
+      : allMembershipEnrollments.filter(m => adminSchoolIds.includes(m.schoolId));
+    
+    console.log(`🏅 Found ${allMembershipEnrollments.length} total memberships, ${membershipEnrollments.length} visible to admin`);
 
-    // Get emergency contacts for the children
+    // Get ALL payment history
+    const allPaymentHistory = await storage.getPaymentsByParentEmail(parent.email);
+    
+    // FILTER: Only payments strictly tied to filtered enrollments or memberships
+    // Create a mapping of valid child+class combinations from filtered enrollments
+    const validEnrollmentKeys = new Set(
+      filteredEnrollments.map(e => {
+        const className = classes.find(c => c.id === e.classId)?.title || '';
+        return `${e.childName}|${className}`;
+      })
+    );
+    
+    // Create a set of visible membership school IDs
+    const visibleMembershipSchoolIds = new Set(
+      membershipEnrollments.map(m => m.schoolId)
+    );
+    
+    const paymentHistory = allPaymentHistory.filter(payment => {
+      // For membership payments, use conservative filtering
+      if (payment.description?.includes('Membership')) {
+        // TODO: SECURITY ENHANCEMENT NEEDED
+        // The payment schema lacks membershipEnrollmentId, making deterministic filtering impossible.
+        // Proper fix: Add membershipEnrollmentId to payment schema and populate it during payment creation.
+        // See: Architect recommendation to extend payment schema with authoritative membership links.
+        //
+        // CONSERVATIVE APPROACH: Exclude membership payments unless we can verify ownership
+        // This prevents cross-school data leaks at the cost of potentially hiding valid payments.
+        // When membershipEnrollmentId is added to schema, this filter should become:
+        // return membershipEnrollments.some(m => payment.membershipEnrollmentId === m.id);
+        
+        console.warn(`⚠️ Membership payment filtering is conservative - may exclude valid payments without membershipEnrollmentId`);
+        return false; // Exclude all membership payments for now to prevent leaks
+      }
+      
+      // For class payments, only include if for a filtered enrollment
+      const paymentKey = `${payment.childName}|${payment.className}`;
+      return validEnrollmentKeys.has(paymentKey);
+    });
+    
+    console.log(`💳 Found ${allPaymentHistory.length} total payments, ${paymentHistory.length} visible to admin`);
+
+    // Get ALL scheduled payments
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(parent.email);
+    
+    // FILTER: Only scheduled payments linked to filtered enrollments
+    const filteredEnrollmentIds = new Set(filteredEnrollments.map(e => e.id));
+    const scheduledPayments = allScheduledPayments.filter(payment => {
+      // Check if any of the payment's enrollment IDs are in filtered set
+      if (payment.enrollmentIds && payment.enrollmentIds.length > 0) {
+        return payment.enrollmentIds.some(id => filteredEnrollmentIds.has(id));
+      }
+      // If no enrollment IDs, exclude (can't verify it's in scope)
+      return false;
+    });
+    
+    console.log(`📅 Found ${allScheduledPayments.length} total scheduled payments, ${scheduledPayments.length} visible to admin`);
+
+    // Get emergency contacts for the VISIBLE children only
     const emergencyContacts = [];
     for (const child of children) {
       if (child.emergencyContact) {
@@ -74,26 +203,12 @@ router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'ad
       }
     }
 
-    // Get classes information for enrollments
-    const classIds = [...new Set(allEnrollments.map(e => e.classId))];
-    const classes: any[] = [];
-    for (const classId of classIds) {
-      try {
-        const classInfo = await storage.getClassById(classId);
-        if (classInfo) {
-          classes.push(classInfo);
-        }
-      } catch (error) {
-        console.error(`❌ Error fetching class ${classId}:`, error);
-      }
-    }
-
-    // Calculate summary statistics using unified billing service
+    // Calculate summary statistics using FILTERED data only
     const totalAmountPaid = BillingCalculationService.calculateTotalPaid(paymentHistory);
     
-    // Calculate total amount due by summing actual remaining balances (not stored values)
+    // Calculate total amount due by summing actual remaining balances (using FILTERED enrollments)
     const classAmountDue = CurrencyUtils.sum(
-      allEnrollments.map(enrollment => {
+      filteredEnrollments.map(enrollment => {
         const enrollmentPayments = paymentHistory.filter(payment => 
           payment.childName === enrollment.childName &&
           ['completed', 'succeeded'].includes(payment.status)
@@ -104,7 +219,7 @@ router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'ad
       })
     );
 
-    // Calculate membership amount due
+    // Calculate membership amount due (using FILTERED memberships)
     const membershipAmountDue = CurrencyUtils.sum(
       membershipEnrollments.map(membership => {
         const membershipPayments = paymentHistory.filter(payment => 
@@ -116,7 +231,7 @@ router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'ad
       })
     );
 
-    // Total amount due includes both class and membership fees
+    // Total amount due includes both class and membership fees (FILTERED data only)
     const totalAmountDue = classAmountDue + membershipAmountDue;
 
     const profile = {
@@ -147,7 +262,7 @@ router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'ad
         notes: child.notes,
         createdAt: child.createdAt
       })),
-      enrollments: allEnrollments.map(enrollment => {
+      enrollments: filteredEnrollments.map(enrollment => {
         const classInfo = (classes as any[]).find(c => c.id === enrollment.classId);
         
         // Calculate actual payments made for this enrollment
@@ -222,12 +337,12 @@ router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'ad
       })),
       emergencyContacts,
       summary: {
-        totalChildren: children.length,
-        totalEnrollments: allEnrollments.length,
-        totalMemberships: membershipEnrollments.length,
-        totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid),
-        totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue),
-        activeEnrollments: allEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length,
+        totalChildren: children.length, // FILTERED children only
+        totalEnrollments: filteredEnrollments.length, // FILTERED enrollments only
+        totalMemberships: membershipEnrollments.length, // FILTERED memberships only
+        totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid), // Based on FILTERED payments
+        totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue), // Based on FILTERED data
+        activeEnrollments: filteredEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length,
         activeMemberships: membershipEnrollments.filter(m => ['active', 'pending_payment'].includes(m.status)).length
       }
     };

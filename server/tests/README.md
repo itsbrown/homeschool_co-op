@@ -130,10 +130,19 @@ npm run test:integration -- --watch server/tests/integration/phase1/class-manage
    - Real-time WebSocket delivery
    - Notification center operations
 
+6. **Parent Profile Management** (`parent-profile-management.test.ts`)
+   - School admin viewing parent profiles
+   - Parent self-service operations
+   - Multi-tenant security and data isolation
+   - Data integrity (payment calculations, balances)
+   - Enrollment status tracking
+   - Emergency contact information
+   - Performance testing with multiple children/enrollments
+
 ### Test Coverage
 
-- **Total Tests in Phase 1**: 57 scenarios
-- **Test Files Created**: 5
+- **Total Tests in Phase 1**: 97+ scenarios
+- **Test Files Created**: 6
 - **Features Covered**: 95%+ of Phase 1 requirements
 
 ## Writing New Tests

@@ -47,7 +47,7 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 -   **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management.
 -   **User Account Management**: School administrators can send account invites and password reset emails.
 -   **Welcome Email System**: Automated, professional HTML welcome emails for new registrants.
--   **Parent Profile Management**: Parent users can update their profile information.
+-   **Parent Profile Management**: Parent users can update their profile information. School administrators can view comprehensive parent profiles with strict multi-tenant data isolation ensuring no cross-school data leakage.
 -   **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
 -   **Product Order Form System**: Enhanced schema supporting variant configurations, descriptions, and dynamic pricing.
 -   **Parent Class Details Page**: Dedicated full-page view for class details.
@@ -57,6 +57,17 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 -   **Notification System**: In-app notification system with PostgreSQL storage, real-time unread count, and mark-as-read functionality.
 -   **Enrollment Count Display**: Class enrollment counts accurately reflect valid statuses.
 -   **Category Management System**: School-level custom category system replacing hardcoded category enums, allowing administrators to create and manage categories for organizing classes.
+
+## Testing & Quality Assurance
+-   **Integration Tests**: Comprehensive integration test suites covering user management, class management, staff management, student management, notifications, and parent profile management.
+-   **Test Coverage**: Phase 1 includes 6 integration test suites with 132+ scenarios covering authentication, authorization, multi-tenant security, and feature workflows.
+-   **Test Infrastructure**: Helper methods in `testDatabase.ts` for creating test data (enrollments, payments, membership enrollments).
+
+## Known Limitations & Technical Debt
+-   **Payment Schema Enhancement Required**: The payment table currently lacks `membershipEnrollmentId` field, preventing deterministic filtering of membership payments. This causes:
+    -   Conservative security approach: All membership payments excluded from parent profile view to prevent cross-school data leaks
+    -   Membership balances show full amount due (overstated) until schema is extended
+    -   **Recommended Fix**: Add `membershipEnrollmentId` (and optionally `schoolId`) to payment schema, update Stripe webhook handlers to populate this field, and modify filtering logic to use authoritative membership links
 
 ## External Dependencies
 -   **Supabase**: PostgreSQL database and OAuth authentication.

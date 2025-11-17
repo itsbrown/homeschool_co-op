@@ -166,6 +166,60 @@ export class TestDatabase {
     return classItem;
   }
 
+  async createTestEnrollment(classId: number, childId: number, overrides: any = {}) {
+    const enrollmentData = {
+      classId,
+      marketplaceClassId: classId,
+      childId,
+      status: overrides.status || 'pending_payment',
+      amount: overrides.amount || 10000,
+      totalCost: overrides.totalCost || 10000,
+      amountPaid: overrides.amountPaid || 0,
+      remainingBalance: overrides.remainingBalance || 10000,
+      depositRequired: overrides.depositRequired || 1000,
+      enrollmentDate: overrides.enrollmentDate || new Date().toISOString(),
+      ...overrides
+    };
+
+    const enrollment = await storage.createEnrollment(enrollmentData);
+    this.createdRecords.enrollments.push(enrollment.id);
+    return enrollment;
+  }
+
+  async createTestPayment(parentEmail: string, overrides: any = {}) {
+    const paymentData = {
+      parentEmail,
+      amount: overrides.amount || 5000,
+      status: overrides.status || 'completed',
+      paymentDate: overrides.paymentDate || new Date().toISOString(),
+      description: overrides.description || 'Test payment',
+      childName: overrides.childName || 'Test Child',
+      ...overrides
+    };
+
+    const payment = await storage.createPayment(paymentData);
+    return payment;
+  }
+
+  async createTestMembershipEnrollment(parentId: number, schoolId: number, overrides: any = {}) {
+    const membershipData = {
+      parentId,
+      schoolId,
+      membershipYear: overrides.membershipYear || new Date().getFullYear(),
+      amount: overrides.amount || 15000,
+      totalCost: overrides.totalCost || 15000,
+      remainingBalance: overrides.remainingBalance || 15000,
+      status: overrides.status || 'pending',
+      dueDate: overrides.dueDate || new Date().toISOString(),
+      expirationDate: overrides.expirationDate || new Date(new Date().getFullYear(), 11, 31).toISOString(),
+      gracePeriodEnd: overrides.gracePeriodEnd || new Date(new Date().getFullYear() + 1, 0, 31).toISOString(),
+      ...overrides
+    };
+
+    const membership = await storage.createMembershipEnrollment(membershipData);
+    return membership;
+  }
+
   /**
    * Set up a complete test environment with all necessary entities
    */
