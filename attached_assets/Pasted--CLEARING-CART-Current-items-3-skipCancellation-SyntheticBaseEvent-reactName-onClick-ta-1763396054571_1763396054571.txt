@@ -1,0 +1,37 @@
+🧹 CLEARING CART - Current items: 3 skipCancellation: SyntheticBaseEvent {_reactName: 'onClick', _targetInst: null, type: 'click', nativeEvent: PointerEvent, target: button.inline-flex.items-center.justify-center.gap-2.whitespace-nowrap.rounded-md.text-sm.font-medi…, …}
+CartContext.tsx:1281 🧹 Cart items structure: (3) [{…}, {…}, {…}]
+CartContext.tsx:1356 🧹 CART CLEARED for user: jocimarie@gmail.com - Flag set at: 1763396032352
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 0 cart items: []
+ProgramsParentPage.tsx:322 School classes response: {items: Array(6), total: 6, page: 1, limit: 6, totalPages: 1}
+ProgramsParentPage.tsx:323 Classes error: null
+ProgramsParentPage.tsx:324 Classes loading: false
+ProgramsParentPage.tsx:325 Active tab: classes
+ProgramsParentPage.tsx:326 Transformed classes data: {classes: Array(6), pagination: {…}}
+ProgramsParentPage.tsx:405 All classes: (6) [{…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:406 Search term: 
+ProgramsParentPage.tsx:407 Category filter: 
+ProgramsParentPage.tsx:408 Filtered classesList: (6) [{…}, {…}, {…}, {…}, {…}, {…}]
+ProgramsParentPage.tsx:409 classesLoading: false
+ProgramsParentPage.tsx:410 classesList.length: 6
+ProgramsParentPage.tsx:618 🔄 Enrollment Dialog Debug:
+ProgramsParentPage.tsx:619   - Children: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:620   - Children loading: false
+ProgramsParentPage.tsx:621   - Children error: null
+ProgramsParentPage.tsx:622   - Is authenticated: true
+ProgramsParentPage.tsx:623   - User: {id: '4f104b25-934f-44c1-ae92-cae31b0cc84e', aud: 'authenticated', role: 'authenticated', email: 'jocimarie@gmail.com', email_confirmed_at: '2025-06-01T14:51:00.726911Z', …}
+ProgramsParentPage.tsx:661 🔍 Select rendering debug:
+ProgramsParentPage.tsx:662   - Children array: (3) [{…}, {…}, {…}]
+ProgramsParentPage.tsx:663   - Array length: 3
+ProgramsParentPage.tsx:664   - First child: {id: 5, firstName: 'Adaluna', lastName: 'Brown', birthdate: '2022-09-01', gradeLevel: 'Littles', …}
+ProgramsParentPage.tsx:680 🔍 Rendering child: Adaluna Brown (ID: 5)
+ProgramsParentPage.tsx:680 🔍 Rendering child: Hermione Brown (ID: 4)
+ProgramsParentPage.tsx:680 🔍 Rendering child: Maeve Brown (ID: 6)
+ProgramsParentPage.tsx:703 🔍 VARIANT SELECTOR DEBUG:
+ProgramsParentPage.tsx:704   - enrollmentDialog.classData: undefined
+ProgramsParentPage.tsx:705   - variants exists?: false
+ProgramsParentPage.tsx:706   - variants: undefined
+ProgramsParentPage.tsx:707   - variants length: undefined
+ProgramsParentPage.tsx:708   - should show?: undefined
+CartContext.tsx:1385 🛒 getItemCount called - current items: 0
+CartContext.tsx:1172 🛒 Cart was recently cleared, skipping localStorage save

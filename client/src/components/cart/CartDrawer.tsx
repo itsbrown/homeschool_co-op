@@ -231,7 +231,7 @@ export default function CartDrawer() {
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  onClick={clearCart}
+                  onClick={() => clearCart()}
                   className="flex-1"
                   disabled={cart.items.length === 0}
                 >
