@@ -3,6 +3,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 
 // Helper function to get user-specific cart storage key
 // This prevents cross-account data leakage by namespacing localStorage per user
@@ -853,7 +854,6 @@ interface CartContextType {
   closeCart: () => void;
   getItemCount: () => number;
   hasItem: (classId: number, childId: number) => boolean;
-  loadUnpaidEnrollments: () => Promise<void>;
   refreshCart: () => void;
   refreshDiscounts: () => Promise<void>;
   applyPromoCode: (code: string) => Promise<{ success: boolean; error?: string; discount?: any }>;
@@ -874,6 +874,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const { toast } = useToast();
   const { user, isAuthenticated, session, isLoading } = useAuth(); // Using Supabase hooks
+  const { activeRole } = useRole(); // Get active role to gate cart loading
   
   // Helper function to get access token from Supabase session
   const getAccessToken = useCallback(async (): Promise<string> => {
@@ -888,35 +889,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return session.access_token;
   }, [session]);
 
-  const loadUnpaidEnrollments = useCallback(async () => {
-    console.log('🛒 === LOAD_UNPAID_ENROLLMENTS CALLED ===');
-    console.log('🛒 User email:', user?.email);
-    console.log('🛒 Is authenticated:', isAuthenticated);
-    console.log('🛒 Current cart items before API call:', state.cart.items.length);
-    console.trace('🛒 loadUnpaidEnrollments called from:');
-
-    if (!user?.email) {
-      console.log('No user email available for cart loading');
-      return;
-    }
-
-    try {
-      console.log('🛒 Loading unpaid enrollments for user:', user.email);
-
-      // Get the access token for API requests
-      let token;
-      try {
-        token = await getAccessToken();
-      } catch (error) {
-        console.log('Failed to get access token:', error);
-        return;
-      }
-
-      if (!token) {
-        console.log('No authentication token found for cart loading');
-        return;
-      }
-
+  // Use TanStack Query to fetch enrollments with proper caching
+  // This prevents duplicate API calls during component remounts
+  // CRITICAL: Gate on activeRole === 'parent' to prevent fetch before role resolution
+  // NOTE: Query key matches ParentDashboard to share cache and prevent duplicate API calls
+  const { data: enrollmentsData, refetch: refetchEnrollments } = useQuery({
+    queryKey: ['/api/parent/enrollments'],
+    queryFn: async () => {
+      const token = await getAccessToken();
       const response = await fetch('/api/parent/enrollments', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -926,15 +906,27 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!response.ok) {
         if (response.status === 401) {
-          console.log('Authentication failed for cart loading');
-          return;
+          throw new Error('Authentication failed');
         }
         throw new Error(`Failed to fetch enrollments: ${response.status}`);
       }
 
       const enrollments = await response.json();
-      console.log('🔍 Raw enrollments from API:', enrollments);
+      return enrollments;
+    },
+    enabled: !!user?.email && isAuthenticated && !isLoading && activeRole === 'parent',
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    refetchOnMount: false, // CRITICAL: Don't refetch on component remount
+    refetchOnWindowFocus: false, // Don't refetch when window gains focus
+  });
 
+  // Process enrollments data when it changes
+  const processEnrollmentsData = useCallback(async (enrollments: any[]) => {
+    if (!user?.email || !enrollments) {
+      return;
+    }
+
+    try {
       // Check if cart was recently cleared (within 30 seconds) to prevent refilling after payment
       const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
       if (clearedTimestamp) {
@@ -986,35 +978,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const latestIsPaid = (latestEnrollment.status === 'enrolled' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null)) ||
                            (latestEnrollment.paymentStatus === 'completed' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null));
 
-        console.log(`🔍 Group ${key}:`, {
-          latestEnrollmentId: latestEnrollment.id,
-          latestStatus: latestEnrollment.status,
-          latestPaymentStatus: latestEnrollment.paymentStatus,
-          latestBalance: latestEnrollment.remainingBalance,
-          hasBalance,
-          hasFullyPaidEnrollment,
-          latestIsPaid,
-          allEnrollments: sortedEnrollments.map(e => ({
-            id: e.id,
-            status: e.status,
-            paymentStatus: e.paymentStatus,
-            balance: e.remainingBalance
-          }))
-        });
-
         // Skip items where there's a fully paid enrollment OR latest enrollment is paid OR on waitlist
         const isWaitlisted = latestEnrollment.status === 'waitlist';
         const shouldSkip = hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
 
-        if (isWaitlisted) {
-          console.log(`🔍 ⏸️ SKIPPING group ${key} - on waitlist (position ${latestEnrollment.waitlistPosition})`);
-        } else if (shouldSkip) {
-          console.log(`🔍 ✅ SKIPPING group ${key} - fully paid or enrolled with no balance`);
-        } else if (hasBalance || (latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0)) {
-          console.log(`🔍 ➕ ADDING enrollment ${latestEnrollment.id} to cart - remainingBalance=${latestEnrollment.remainingBalance}`);
+        if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0))) {
           unpaidEnrollments.push(latestEnrollment);
-        } else {
-          console.log(`🔍 ⏭️  SKIPPING group ${key} - no balance due`);
         }
       }
 
@@ -1057,15 +1026,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Use calculateCartTotalsWithDiscounts to fetch school settings and calculate discounts properly
       const totals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null); // Fresh load - no promo code yet
 
-      console.log('🛒 About to merge API enrollments with existing cart');
-      console.log('🛒 Current cart items:', state.cart.items.length);
-      console.log('🛒 API enrollment items:', cartItems.length);
-
       // Load pending enrollments if we have any
       if (cartItems.length > 0) {
         // If cart is empty, load all pending enrollments
         if (state.cart.items.length === 0) {
-          console.log('🛒 Cart is empty, loading API enrollments');
           dispatch({
             type: 'LOAD_CART',
             payload: {
@@ -1081,7 +1045,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const newItems = cartItems.filter(item => !existingIds.includes(item.id));
           
           if (newItems.length > 0) {
-            console.log('🛒 Merging new pending enrollments with existing cart');
             const allItems = [...state.cart.items, ...newItems];
             // Also use async version for merged totals to recalculate with proper settings
             const mergedTotals = await calculateCartTotalsWithDiscounts(allItems, getAccessToken, state.cart.appliedPromoCode); // Preserve promo when merging
@@ -1099,34 +1062,31 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         // API returned no enrollments - clear cart to maintain server authority
         // This ensures proper multi-user behavior (no cross-account cart leakage)
-        console.log('🛒 No pending enrollments found - clearing cart to maintain server authority');
         dispatch({ type: 'CLEAR_CART' });
         localStorage.removeItem('asa_cart_items');
       }
-
-      console.log(`🛒 Cart loaded with ${cartItems.length} unpaid enrollments`);
-      console.log('🛒 Final cart items:', cartItems);
-      console.log('🛒 Cart items:', cartItems);
-      console.log('🛒 Cart totals:', totals);
     } catch (error) {
       console.error('Error loading unpaid enrollments:', error);
     }
-  }, [user?.email, isAuthenticated, getAccessToken]);
+  }, [user?.email, getAccessToken, state.cart.items, state.cart.appliedPromoCode]);
 
-  // Manual refresh function for external use
-  const refreshCart = useCallback(() => {
-    console.log('🛒 Manual cart refresh requested');
-    if (user?.email && isAuthenticated) {
-      loadUnpaidEnrollments();
+  // Process enrollments data when query result changes
+  useEffect(() => {
+    if (enrollmentsData) {
+      processEnrollmentsData(enrollmentsData);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.email, isAuthenticated]);
+  }, [enrollmentsData, processEnrollmentsData]);
+
+  // Manual refresh function for external use - uses query invalidation
+  const refreshCart = useCallback(() => {
+    if (user?.email && isAuthenticated) {
+      refetchEnrollments();
+    }
+  }, [user?.email, isAuthenticated, refetchEnrollments]);
 
   // Function to refresh discounts for the current cart
   const refreshDiscounts = useCallback(async () => {
-    console.log('🛒 Manual discount refresh requested');
     if (state.cart.items.length === 0) {
-      console.log('🛒 No items in cart, skipping discount refresh');
       return;
     }
 
@@ -1144,7 +1104,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
         },
       });
-      console.log('🛒 Discount refresh completed:', totalsWithDiscounts.discounts);
     } catch (error) {
       console.error('Error refreshing discounts:', error);
     }
@@ -1177,36 +1136,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user?.email]);
 
-  // Load unpaid enrollments when user changes
-  // Uses ref to prevent duplicate loads during rapid re-renders (e.g., role initialization)
+  // Clear cart on logout
   useEffect(() => {
     if (isLoading) {
-      // Wait for auth to complete before making decisions
       return;
     }
 
-    if (user?.email && isAuthenticated) {
-      // Check if we've already loaded for this user to prevent duplicate API calls
-      if (hasLoadedForUserRef.current === user.email) {
-        return;
-      }
-      
-      // Mark that we're loading for this user before making the API call
-      hasLoadedForUserRef.current = user.email;
-      
-      // Authenticated user: load their cart from database
-      // Cart loads from localStorage first (fast UI), then syncs with database
-      loadUnpaidEnrollments();
-    } else if (isAuthenticated === false && user === null) {
-      // Reset the ref when user logs out
-      hasLoadedForUserRef.current = null;
-      
+    if (isAuthenticated === false && user === null) {
       // SECURITY: Clear cart when user is not authenticated to prevent cross-account enrollment risks
-      // Server-side validation provides primary defense, but client clearing is defense-in-depth
       dispatch({ type: 'CLEAR_CART' });
+      // Also clear the query cache for enrollments
+      queryClient.setQueryData(['/api/parent/enrollments', null], []);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.email, isAuthenticated, isLoading]);
+  }, [isAuthenticated, user, isLoading]);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
@@ -1410,10 +1352,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Clear any stale cart cleared flag that might prevent loading
     localStorage.removeItem('asa_cart_cleared');
     
-    // Reload unpaid enrollments after a short delay
-    setTimeout(() => {
-      loadUnpaidEnrollments();
-    }, 500);
+    // Refetch enrollments using TanStack Query
+    refetchEnrollments();
   };
 
   const openCart = () => dispatch({ type: 'OPEN_CART' });
@@ -1501,7 +1441,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     closeCart,
     getItemCount,
     hasItem,
-    loadUnpaidEnrollments,
     refreshCart,
     refreshDiscounts,
     applyPromoCode,

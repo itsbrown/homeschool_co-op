@@ -38,6 +38,7 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, and automated refunds.
+-   **Cart System**: TanStack Query-based cart implementation with optimized loading, proper caching to prevent duplicate API calls, and localStorage persistence. Cart loading is gated on `activeRole === 'parent'` to prevent premature fetching during auth initialization. Query key `['/api/parent/enrollments']` is standardized across CartContext and ParentDashboard to share cache and minimize network traffic.
 -   **Discount Systems**: Database-managed Free After Threshold Discount System, configurable by school administrators.
 -   **Enrollment Management**: Robust system preventing duplicate enrollments, managing clear status workflows, and integrated with the cart-to-checkout flow.
 -   **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing, enforcing strict school isolation.
