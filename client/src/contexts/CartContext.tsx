@@ -4,6 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from "@/components/SupabaseProvider";
 
+// Helper function to get user-specific cart storage key
+// This prevents cross-account data leakage by namespacing localStorage per user
+const getCartStorageKey = (userEmail?: string | null): string => {
+  return userEmail ? `asa_cart_${userEmail}` : 'asa_cart_guest';
+};
+
 export interface CartItem {
   id: string;
   enrollmentId?: number;
@@ -1079,7 +1085,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
-        console.log('🛒 No pending enrollments found - clearing cart completely');
+        // API returned no enrollments - clear cart to maintain server authority
+        // This ensures proper multi-user behavior (no cross-account cart leakage)
+        console.log('🛒 No pending enrollments found - clearing cart to maintain server authority');
         dispatch({ type: 'CLEAR_CART' });
         localStorage.removeItem('asa_cart_items');
       }
@@ -1141,18 +1149,20 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    const savedCart = localStorage.getItem('asa_cart');
+    // Use user-specific storage key to prevent cross-account data leakage
+    const cartKey = getCartStorageKey(user?.email);
+    const savedCart = localStorage.getItem(cartKey);
     if (savedCart) {
       try {
         const parsedCart = JSON.parse(savedCart);
-        console.log('🛒 Loading cart from localStorage:', parsedCart);
+        console.log('🛒 Loading cart from localStorage for user:', user?.email || 'guest');
         dispatch({ type: 'LOAD_CART', payload: parsedCart });
       } catch (error) {
         console.error('Error loading cart from localStorage:', error);
-        localStorage.removeItem('asa_cart');
+        localStorage.removeItem(cartKey);
       }
     }
-  }, []);
+  }, [user?.email]);
 
   // Load unpaid enrollments on mount and when user changes
   useEffect(() => {
@@ -1192,8 +1202,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    // Use user-specific storage key to prevent cross-account data leakage
+    const cartKey = getCartStorageKey(user?.email);
+    
     // Don't save empty cart if localStorage has items (prevents overriding valid cart during navigation)
-    const existingCart = localStorage.getItem('asa_cart');
+    const existingCart = localStorage.getItem(cartKey);
     if (existingCart && state.cart.items.length === 0) {
       try {
         const parsedExisting = JSON.parse(existingCart);
@@ -1205,8 +1218,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    localStorage.setItem('asa_cart', JSON.stringify(state.cart));
-  }, [state.cart]);
+    localStorage.setItem(cartKey, JSON.stringify(state.cart));
+  }, [state.cart, user?.email]);
 
   const addItem = async (item: Omit<CartItem, 'id'>, skipValidation = false) => {
     const newItem: CartItem = {
@@ -1349,13 +1362,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Clear local state (always runs when skipCancellation is true, or after successful API call)
     dispatch({ type: 'CLEAR_CART' });
-    localStorage.removeItem('asa_cart');
+    
+    // Clear user-specific cart storage
+    const cartKey = getCartStorageKey(user?.email);
+    localStorage.removeItem(cartKey);
     localStorage.removeItem('asa_cart_items');
     localStorage.removeItem('cart'); // Also remove any other cart storage
     localStorage.removeItem('selectedPaymentPlan');
     // Set a flag to prevent immediate reload after payment
     localStorage.setItem('asa_cart_cleared', Date.now().toString());
-    console.log('🧹 CART CLEARED - Flag set at:', Date.now());
+    console.log('🧹 CART CLEARED for user:', user?.email || 'guest', '- Flag set at:', Date.now());
     
     // Only show toast if manually clearing (not after successful payment)
     if (!skipCancellation) {
