@@ -1,0 +1,245 @@
+🎯 Enroll button clicked in dialog
+index-DfV7B9Qi.js:780 🎯 Selected child ID: 13
+index-DfV7B9Qi.js:780 🎯 Selected variant ID: variant-1763326758071
+index-DfV7B9Qi.js:780 🎯 Class ID: 15
+index-DfV7B9Qi.js:780 🎯 Starting enrollment mutation...
+index-DfV7B9Qi.js:780 School classes response: {items: Array(14), total: 14, page: 1, limit: 14, totalPages: 1}
+index-DfV7B9Qi.js:780 Classes error: null
+index-DfV7B9Qi.js:780 Classes loading: false
+index-DfV7B9Qi.js:780 Active tab: classes
+index-DfV7B9Qi.js:780 Transformed classes data: {classes: Array(14), pagination: {…}}
+index-DfV7B9Qi.js:780 All classes: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 Search term: 
+index-DfV7B9Qi.js:780 Category filter: 
+index-DfV7B9Qi.js:780 Filtered classesList: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 classesLoading: false
+index-DfV7B9Qi.js:780 classesList.length: 14
+index-DfV7B9Qi.js:780 🔄 Enrollment Dialog Debug:
+index-DfV7B9Qi.js:780   - Children: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Children loading: false
+index-DfV7B9Qi.js:780   - Children error: null
+index-DfV7B9Qi.js:780   - Is authenticated: true
+index-DfV7B9Qi.js:780   - User: {id: '4f104b25-934f-44c1-ae92-cae31b0cc84e', aud: 'authenticated', role: 'authenticated', email: 'jocimarie@gmail.com', email_confirmed_at: '2025-06-01T14:51:00.726911Z', …}
+index-DfV7B9Qi.js:780 🔍 Select rendering debug:
+index-DfV7B9Qi.js:780   - Children array: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Array length: 2
+index-DfV7B9Qi.js:780   - First child: {id: 13, firstName: 'Hermione', lastName: 'Brown', birthdate: '2016-04-23', gradeLevel: '4th Grade', …}
+index-DfV7B9Qi.js:780 🔍 Rendering child: Hermione Brown (ID: 13)
+index-DfV7B9Qi.js:780 🔍 Rendering child: Adaluna Brown (ID: 16)
+index-DfV7B9Qi.js:780 🔍 VARIANT SELECTOR DEBUG:
+index-DfV7B9Qi.js:780   - enrollmentDialog.classData: {id: 15, title: 'Tycoons | Brighton | Winter 2026', description: 'A meaningful, human connection with a teacher is a…piring children for a lifelong love of discovery.', price: 90000, category: 'Lower Elementary', …}
+index-DfV7B9Qi.js:780   - variants exists?: true
+index-DfV7B9Qi.js:780   - variants: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - variants length: 2
+index-DfV7B9Qi.js:780   - should show?: true
+index-DfV7B9Qi.js:780 🎯 Raw API response: Response {type: 'basic', url: 'https://accounts.americanseekersacademy.com/api/classes/15/enroll', redirected: false, status: 200, ok: true, …}
+index-DfV7B9Qi.js:780 🎯 Parsed JSON data: {message: 'Added to cart - proceed to checkout to complete enrollment', enrollment: {…}, isWaitlisted: false, waitlistPosition: null, isDuplicate: false}
+index-DfV7B9Qi.js:780 🎯 Enrollment success! Data: {message: 'Added to cart - proceed to checkout to complete enrollment', enrollment: {…}, isWaitlisted: false, waitlistPosition: null, isDuplicate: false}enrollment: {id: 134, schoolId: 2, classType: 'marketplace', classId: null, marketplaceClassId: 15, …}isDuplicate: falseisWaitlisted: falsemessage: "Added to cart - proceed to checkout to complete enrollment"waitlistPosition: null[[Prototype]]: Object
+index-DfV7B9Qi.js:780 🎯 Variables: {classId: 15, childId: '13', variantId: 'variant-1763326758071'}
+index-DfV7B9Qi.js:780 🎯 Classes data: {classes: Array(14), pagination: {…}}
+index-DfV7B9Qi.js:780 🎯 Children: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780 🎯 Found selected class: {id: 15, title: 'Tycoons | Brighton | Winter 2026', description: 'A meaningful, human connection with a teacher is a…piring children for a lifelong love of discovery.', price: 90000, category: 'Lower Elementary', …}
+index-DfV7B9Qi.js:780 🎯 Found selected child: {id: 13, firstName: 'Hermione', lastName: 'Brown', birthdate: '2016-04-23', gradeLevel: '4th Grade', …}
+index-DfV7B9Qi.js:780 🎯 Enrollment from API: {id: 134, schoolId: 2, classType: 'marketplace', classId: null, marketplaceClassId: 15, …}
+index-DfV7B9Qi.js:780 🛒 Adding enrollment to cart: {classId: 15, className: 'Tycoons | Brighton | Winter 2026', childId: 13, childName: 'Hermione Brown', price: 130000, …}
+index-DfV7B9Qi.js:709 🛒 addItem called with: {item: {…}, skipValidation: true, currentCartSize: 0}
+index-DfV7B9Qi.js:709 🛒 Dispatching ADD_ITEM action: {classId: 15, className: 'Tycoons | Brighton | Winter 2026', childId: 13, childName: 'Hermione Brown', price: 130000, …}
+index-DfV7B9Qi.js:709 🛒 Cart will update via reducer and useEffect
+index-DfV7B9Qi.js:780 🛒 Item added to cart, triggering cart update...
+index-DfV7B9Qi.js:709 🛒 ADD_ITEM reducer - current state: {currentItems: 0, addingItem: 'Tycoons | Brighton | Winter 2026', existingItemIndex: -1}
+index-DfV7B9Qi.js:709 🛒 ADD_ITEM reducer - state updated: {oldCount: 0, newCount: 1, newTotal: 130000}
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+index-DfV7B9Qi.js:780 School classes response: {items: Array(14), total: 14, page: 1, limit: 14, totalPages: 1}
+index-DfV7B9Qi.js:780 Classes error: null
+index-DfV7B9Qi.js:780 Classes loading: false
+index-DfV7B9Qi.js:780 Active tab: classes
+index-DfV7B9Qi.js:780 Transformed classes data: {classes: Array(14), pagination: {…}}
+index-DfV7B9Qi.js:780 All classes: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 Search term: 
+index-DfV7B9Qi.js:780 Category filter: 
+index-DfV7B9Qi.js:780 Filtered classesList: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 classesLoading: false
+index-DfV7B9Qi.js:780 classesList.length: 14
+index-DfV7B9Qi.js:780 🔄 Enrollment Dialog Debug:
+index-DfV7B9Qi.js:780   - Children: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Children loading: false
+index-DfV7B9Qi.js:780   - Children error: null
+index-DfV7B9Qi.js:780   - Is authenticated: true
+index-DfV7B9Qi.js:780   - User: {id: '4f104b25-934f-44c1-ae92-cae31b0cc84e', aud: 'authenticated', role: 'authenticated', email: 'jocimarie@gmail.com', email_confirmed_at: '2025-06-01T14:51:00.726911Z', …}
+index-DfV7B9Qi.js:780 🔍 Select rendering debug:
+index-DfV7B9Qi.js:780   - Children array: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Array length: 2
+index-DfV7B9Qi.js:780   - First child: {id: 13, firstName: 'Hermione', lastName: 'Brown', birthdate: '2016-04-23', gradeLevel: '4th Grade', …}
+index-DfV7B9Qi.js:780 🔍 Rendering child: Hermione Brown (ID: 13)
+index-DfV7B9Qi.js:780 🔍 Rendering child: Adaluna Brown (ID: 16)
+index-DfV7B9Qi.js:780 🔍 VARIANT SELECTOR DEBUG:
+index-DfV7B9Qi.js:780   - enrollmentDialog.classData: undefined
+index-DfV7B9Qi.js:780   - variants exists?: false
+index-DfV7B9Qi.js:780   - variants: undefined
+index-DfV7B9Qi.js:780   - variants length: undefined
+index-DfV7B9Qi.js:780   - should show?: undefined
+index-DfV7B9Qi.js:709 🛒 getItemCount called - current items: 1
+index-DfV7B9Qi.js:709 🛒 refreshCart called - awaiting refetch
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+index-DfV7B9Qi.js:780 School classes response: {items: Array(14), total: 14, page: 1, limit: 14, totalPages: 1}
+index-DfV7B9Qi.js:780 Classes error: null
+index-DfV7B9Qi.js:780 Classes loading: false
+index-DfV7B9Qi.js:780 Active tab: classes
+index-DfV7B9Qi.js:780 Transformed classes data: {classes: Array(14), pagination: {…}}
+index-DfV7B9Qi.js:780 All classes: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 Search term: 
+index-DfV7B9Qi.js:780 Category filter: 
+index-DfV7B9Qi.js:780 Filtered classesList: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 classesLoading: false
+index-DfV7B9Qi.js:780 classesList.length: 14
+index-DfV7B9Qi.js:780 🔄 Enrollment Dialog Debug:
+index-DfV7B9Qi.js:780   - Children: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Children loading: false
+index-DfV7B9Qi.js:780   - Children error: null
+index-DfV7B9Qi.js:780   - Is authenticated: true
+index-DfV7B9Qi.js:780   - User: {id: '4f104b25-934f-44c1-ae92-cae31b0cc84e', aud: 'authenticated', role: 'authenticated', email: 'jocimarie@gmail.com', email_confirmed_at: '2025-06-01T14:51:00.726911Z', …}
+index-DfV7B9Qi.js:780 🔍 Select rendering debug:
+index-DfV7B9Qi.js:780   - Children array: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Array length: 2
+index-DfV7B9Qi.js:780   - First child: {id: 13, firstName: 'Hermione', lastName: 'Brown', birthdate: '2016-04-23', gradeLevel: '4th Grade', …}
+index-DfV7B9Qi.js:780 🔍 Rendering child: Hermione Brown (ID: 13)
+index-DfV7B9Qi.js:780 🔍 Rendering child: Adaluna Brown (ID: 16)
+index-DfV7B9Qi.js:780 🔍 VARIANT SELECTOR DEBUG:
+index-DfV7B9Qi.js:780   - enrollmentDialog.classData: undefined
+index-DfV7B9Qi.js:780   - variants exists?: false
+index-DfV7B9Qi.js:780   - variants: undefined
+index-DfV7B9Qi.js:780   - variants length: undefined
+index-DfV7B9Qi.js:780   - should show?: undefined
+index-DfV7B9Qi.js:709 🛒 getItemCount called - current items: 1
+index-DfV7B9Qi.js:780 🛒 Opening cart...
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+index-DfV7B9Qi.js:780 School classes response: {items: Array(14), total: 14, page: 1, limit: 14, totalPages: 1}
+index-DfV7B9Qi.js:780 Classes error: null
+index-DfV7B9Qi.js:780 Classes loading: false
+index-DfV7B9Qi.js:780 Active tab: classes
+index-DfV7B9Qi.js:780 Transformed classes data: {classes: Array(14), pagination: {…}}
+index-DfV7B9Qi.js:780 All classes: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 Search term: 
+index-DfV7B9Qi.js:780 Category filter: 
+index-DfV7B9Qi.js:780 Filtered classesList: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 classesLoading: false
+index-DfV7B9Qi.js:780 classesList.length: 14
+index-DfV7B9Qi.js:780 🔄 Enrollment Dialog Debug:
+index-DfV7B9Qi.js:780   - Children: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Children loading: false
+index-DfV7B9Qi.js:780   - Children error: null
+index-DfV7B9Qi.js:780   - Is authenticated: true
+index-DfV7B9Qi.js:780   - User: {id: '4f104b25-934f-44c1-ae92-cae31b0cc84e', aud: 'authenticated', role: 'authenticated', email: 'jocimarie@gmail.com', email_confirmed_at: '2025-06-01T14:51:00.726911Z', …}
+index-DfV7B9Qi.js:780 🔍 Select rendering debug:
+index-DfV7B9Qi.js:780   - Children array: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Array length: 2
+index-DfV7B9Qi.js:780   - First child: {id: 13, firstName: 'Hermione', lastName: 'Brown', birthdate: '2016-04-23', gradeLevel: '4th Grade', …}
+index-DfV7B9Qi.js:780 🔍 Rendering child: Hermione Brown (ID: 13)
+index-DfV7B9Qi.js:780 🔍 Rendering child: Adaluna Brown (ID: 16)
+index-DfV7B9Qi.js:780 🔍 VARIANT SELECTOR DEBUG:
+index-DfV7B9Qi.js:780   - enrollmentDialog.classData: undefined
+index-DfV7B9Qi.js:780   - variants exists?: false
+index-DfV7B9Qi.js:780   - variants: undefined
+index-DfV7B9Qi.js:780   - variants length: undefined
+index-DfV7B9Qi.js:780   - should show?: undefined
+index-DfV7B9Qi.js:709 🛒 getItemCount called - current items: 1
+index-DfV7B9Qi.js:709 🛒 refreshCart complete - cart data updated
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+index-DfV7B9Qi.js:780 School classes response: {items: Array(14), total: 14, page: 1, limit: 14, totalPages: 1}
+index-DfV7B9Qi.js:780 Classes error: null
+index-DfV7B9Qi.js:780 Classes loading: false
+index-DfV7B9Qi.js:780 Active tab: classes
+index-DfV7B9Qi.js:780 Transformed classes data: {classes: Array(14), pagination: {…}}
+index-DfV7B9Qi.js:780 All classes: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 Search term: 
+index-DfV7B9Qi.js:780 Category filter: 
+index-DfV7B9Qi.js:780 Filtered classesList: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 classesLoading: false
+index-DfV7B9Qi.js:780 classesList.length: 14
+index-DfV7B9Qi.js:780 🔄 Enrollment Dialog Debug:
+index-DfV7B9Qi.js:780   - Children: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Children loading: false
+index-DfV7B9Qi.js:780   - Children error: null
+index-DfV7B9Qi.js:780   - Is authenticated: true
+index-DfV7B9Qi.js:780   - User: {id: '4f104b25-934f-44c1-ae92-cae31b0cc84e', aud: 'authenticated', role: 'authenticated', email: 'jocimarie@gmail.com', email_confirmed_at: '2025-06-01T14:51:00.726911Z', …}
+index-DfV7B9Qi.js:780 🔍 Select rendering debug:
+index-DfV7B9Qi.js:780   - Children array: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Array length: 2
+index-DfV7B9Qi.js:780   - First child: {id: 13, firstName: 'Hermione', lastName: 'Brown', birthdate: '2016-04-23', gradeLevel: '4th Grade', …}
+index-DfV7B9Qi.js:780 🔍 Rendering child: Hermione Brown (ID: 13)
+index-DfV7B9Qi.js:780 🔍 Rendering child: Adaluna Brown (ID: 16)
+index-DfV7B9Qi.js:780 🔍 VARIANT SELECTOR DEBUG:
+index-DfV7B9Qi.js:780   - enrollmentDialog.classData: undefined
+index-DfV7B9Qi.js:780   - variants exists?: false
+index-DfV7B9Qi.js:780   - variants: undefined
+index-DfV7B9Qi.js:780   - variants length: undefined
+index-DfV7B9Qi.js:780   - should show?: undefined
+index-DfV7B9Qi.js:709 🛒 getItemCount called - current items: 1
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 0 cart items: []
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 0 cart items: []
+index-DfV7B9Qi.js:780 School classes response: {items: Array(14), total: 14, page: 1, limit: 14, totalPages: 1}
+index-DfV7B9Qi.js:780 Classes error: null
+index-DfV7B9Qi.js:780 Classes loading: false
+index-DfV7B9Qi.js:780 Active tab: classes
+index-DfV7B9Qi.js:780 Transformed classes data: {classes: Array(14), pagination: {…}}
+index-DfV7B9Qi.js:780 All classes: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 Search term: 
+index-DfV7B9Qi.js:780 Category filter: 
+index-DfV7B9Qi.js:780 Filtered classesList: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 classesLoading: false
+index-DfV7B9Qi.js:780 classesList.length: 14
+index-DfV7B9Qi.js:780 🔄 Enrollment Dialog Debug:
+index-DfV7B9Qi.js:780   - Children: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Children loading: false
+index-DfV7B9Qi.js:780   - Children error: null
+index-DfV7B9Qi.js:780   - Is authenticated: true
+index-DfV7B9Qi.js:780   - User: {id: '4f104b25-934f-44c1-ae92-cae31b0cc84e', aud: 'authenticated', role: 'authenticated', email: 'jocimarie@gmail.com', email_confirmed_at: '2025-06-01T14:51:00.726911Z', …}
+index-DfV7B9Qi.js:780 🔍 Select rendering debug:
+index-DfV7B9Qi.js:780   - Children array: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Array length: 2
+index-DfV7B9Qi.js:780   - First child: {id: 13, firstName: 'Hermione', lastName: 'Brown', birthdate: '2016-04-23', gradeLevel: '4th Grade', …}
+index-DfV7B9Qi.js:780 🔍 Rendering child: Hermione Brown (ID: 13)
+index-DfV7B9Qi.js:780 🔍 Rendering child: Adaluna Brown (ID: 16)
+index-DfV7B9Qi.js:780 🔍 VARIANT SELECTOR DEBUG:
+index-DfV7B9Qi.js:780   - enrollmentDialog.classData: undefined
+index-DfV7B9Qi.js:780   - variants exists?: false
+index-DfV7B9Qi.js:780   - variants: undefined
+index-DfV7B9Qi.js:780   - variants length: undefined
+index-DfV7B9Qi.js:780   - should show?: undefined
+index-DfV7B9Qi.js:709 🛒 getItemCount called - current items: 0
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 0 cart items: []
+index-DfV7B9Qi.js:753 🛒 CartButton rendering - itemCount: 0 cart items: []
+index-DfV7B9Qi.js:780 School classes response: {items: Array(14), total: 14, page: 1, limit: 14, totalPages: 1}
+index-DfV7B9Qi.js:780 Classes error: null
+index-DfV7B9Qi.js:780 Classes loading: false
+index-DfV7B9Qi.js:780 Active tab: classes
+index-DfV7B9Qi.js:780 Transformed classes data: {classes: Array(14), pagination: {…}}
+index-DfV7B9Qi.js:780 All classes: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 Search term: 
+index-DfV7B9Qi.js:780 Category filter: 
+index-DfV7B9Qi.js:780 Filtered classesList: (14) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
+index-DfV7B9Qi.js:780 classesLoading: false
+index-DfV7B9Qi.js:780 classesList.length: 14
+index-DfV7B9Qi.js:780 🔄 Enrollment Dialog Debug:
+index-DfV7B9Qi.js:780   - Children: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Children loading: false
+index-DfV7B9Qi.js:780   - Children error: null
+index-DfV7B9Qi.js:780   - Is authenticated: true
+index-DfV7B9Qi.js:780   - User: {id: '4f104b25-934f-44c1-ae92-cae31b0cc84e', aud: 'authenticated', role: 'authenticated', email: 'jocimarie@gmail.com', email_confirmed_at: '2025-06-01T14:51:00.726911Z', …}
+index-DfV7B9Qi.js:780 🔍 Select rendering debug:
+index-DfV7B9Qi.js:780   - Children array: (2) [{…}, {…}]
+index-DfV7B9Qi.js:780   - Array length: 2
+index-DfV7B9Qi.js:780   - First child: {id: 13, firstName: 'Hermione', lastName: 'Brown', birthdate: '2016-04-23', gradeLevel: '4th Grade', …}
+index-DfV7B9Qi.js:780 🔍 Rendering child: Hermione Brown (ID: 13)
+index-DfV7B9Qi.js:780 🔍 Rendering child: Adaluna Brown (ID: 16)
+index-DfV7B9Qi.js:780 🔍 VARIANT SELECTOR DEBUG:
+index-DfV7B9Qi.js:780   - enrollmentDialog.classData: undefined
+index-DfV7B9Qi.js:780   - variants exists?: false
+index-DfV7B9Qi.js:780   - variants: undefined
+index-DfV7B9Qi.js:780   - variants length: undefined
+index-DfV7B9Qi.js:780   - should show?: undefined
+index-DfV7B9Qi.js:709 🛒 getItemCount called - current items: 0
