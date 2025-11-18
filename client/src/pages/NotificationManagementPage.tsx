@@ -673,26 +673,40 @@ function NotificationComposeDialog({
               <TabsContent value="location" className="space-y-4">
                 <div className="grid gap-2">
                   <Label>Select Locations</Label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {locations.map((location) => (
-                      <div key={location.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`location-${location.id}`}
-                          checked={selectedLocations.includes(location.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedLocations([...selectedLocations, location.id]);
-                            } else {
-                              setSelectedLocations(selectedLocations.filter(l => l !== location.id));
-                            }
-                          }}
-                        />
-                        <Label htmlFor={`location-${location.id}`}>
-                          {location.name} ({location.code})
-                        </Label>
+                  {locations.length === 0 ? (
+                    <div className="p-4 bg-muted rounded-lg border border-dashed">
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <MapPin className="h-5 w-5" />
+                        <div>
+                          <p className="font-medium">No locations configured</p>
+                          <p className="text-sm">
+                            Add locations in School Settings to enable location-based notifications.
+                          </p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2">
+                      {locations.map((location) => (
+                        <div key={location.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`location-${location.id}`}
+                            checked={selectedLocations.includes(location.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedLocations([...selectedLocations, location.id]);
+                              } else {
+                                setSelectedLocations(selectedLocations.filter(l => l !== location.id));
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`location-${location.id}`}>
+                            {location.name} ({location.code})
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid gap-2">
