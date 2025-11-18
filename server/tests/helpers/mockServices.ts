@@ -1,4 +1,8 @@
 // Mock external services for testing
+import { jest } from '@jest/globals';
+
+// Mock sendWelcomeEmail function
+export const mockSendWelcomeEmail = jest.fn().mockResolvedValue(true);
 
 export const mockStripeService = {
   customers: {
@@ -138,6 +142,9 @@ export const mockWebSocketService = {
 
 // Helper to reset all mocks
 export function resetAllMocks() {
+  mockSendWelcomeEmail.mockClear();
+  mockSendWelcomeEmail.mockResolvedValue(true); // Reset to default
+  
   mockStripeService.customers.create.mockClear();
   mockStripeService.customers.retrieve.mockClear();
   mockStripeService.customers.update.mockClear();

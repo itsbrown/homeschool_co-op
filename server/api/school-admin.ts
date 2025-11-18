@@ -4689,7 +4689,7 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
       user = await storage.getUserByEmail(email);
     } else {
       // userId is guaranteed to exist here due to validation above
-      user = await storage.getUserById(userId);
+      user = await storage.getUser(userId);
     }
 
     if (!user) {

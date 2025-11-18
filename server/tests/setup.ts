@@ -23,6 +23,11 @@ global.console = {
   // error: jest.fn(),
 };
 
+// Mock the email service module
+jest.unstable_mockModule('../lib/email-service', () => ({
+  sendWelcomeEmail: jest.fn(async () => true)
+}));
+
 // Mock environment setup
 beforeAll(() => {
   // Any global setup needed before all tests
