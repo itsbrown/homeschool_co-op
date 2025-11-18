@@ -3,7 +3,6 @@
  * Exports the Express app for integration testing without starting the server
  */
 
-import "./test-env-loader";
 import express, { type Request, Response, NextFunction, type Application } from "express";
 import { registerRoutes } from "./routes";
 import fileUpload from "express-fileupload";
@@ -103,11 +102,23 @@ export async function createTestApp(): Promise<Application> {
   // Mount analytics router at root to expose /dashboard route
   app.use(analyticsRouter);
 
-  // Register additional routes via registerRoutes
-  await registerRoutes(app);
-
-  // Import and apply auth middleware for admin routes
+  // Import auth middleware (needed for admin routes below)
   const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
+
+  // Register additional routes via registerRoutes
+  // Skip database initialization in test mode
+  if (process.env.NODE_ENV !== 'test') {
+    await registerRoutes(app);
+  } else {
+    // In test mode, manually register routes without database initialization
+    const { supabaseAuth } = await import("./middleware/supabase-auth");
+    
+    // Import and register school-admin routes (needed for our tests)
+    const schoolAdminRouter = await import('./api/school-admin');
+    app.use('/api/school-admin', schoolAdminRouter.default);
+    
+    console.log('✅ Test mode: Routes registered without database initialization');
+  }
   
   app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
   app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);

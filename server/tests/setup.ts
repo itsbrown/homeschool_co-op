@@ -3,9 +3,12 @@
  * Runs before all tests to configure the test environment
  */
 
-// Set test environment variables
+// CRITICAL: Set NODE_ENV to 'test' FIRST before any other imports
+// This must be done before any module that checks NODE_ENV is loaded
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgresql://test:test@localhost:5432/asa_test';
+
+console.log('🧪 Jest Setup: NODE_ENV =', process.env.NODE_ENV);
 
 // Increase timeout for integration tests
 jest.setTimeout(30000);

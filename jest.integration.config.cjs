@@ -1,10 +1,8 @@
 module.exports = {
-  preset: 'ts-jest/presets/default-esm',
+  preset: 'ts-jest',
   testEnvironment: 'node',
   rootDir: '.',
-  extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
     '^@shared/(.*)$': '<rootDir>/shared/$1',
   },
   setupFilesAfterEnv: ['<rootDir>/server/tests/setup.ts'],
@@ -13,12 +11,12 @@ module.exports = {
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
-      useESM: true,
       diagnostics: false,
       tsconfig: {
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
         moduleResolution: 'node',
+        module: 'commonjs',
       },
     }],
   },
