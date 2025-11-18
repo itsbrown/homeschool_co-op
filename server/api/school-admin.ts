@@ -4709,6 +4709,22 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
       });
     }
 
+    // Fetch school data from the recipient user's school association
+    let schoolName: string | undefined;
+    let schoolLogo: string | undefined;
+    
+    if (user.schoolId) {
+      try {
+        const school = await storage.getSchool(user.schoolId);
+        if (school) {
+          schoolName = school.name;
+          schoolLogo = school.logo || undefined;
+        }
+      } catch (schoolError) {
+        console.error('⚠️ Failed to fetch school data for welcome email:', schoolError);
+      }
+    }
+    
     // Import and call the existing sendWelcomeEmail function
     const { sendWelcomeEmail } = await import('../lib/email-service');
     
@@ -4716,7 +4732,9 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName || '',
-      role: user.role || 'parent'
+      role: user.role || 'parent',
+      schoolName,
+      schoolLogo
     });
 
     if (emailSent) {
