@@ -1,6 +1,6 @@
 import request from 'supertest';
 import type { Application } from 'express';
-import { getTestApp } from '../../test-app';
+import { getSimpleTestApp } from '../../simple-test-app';
 
 export class ApiTestHelper {
   private app: Application | null = null;
@@ -9,7 +9,7 @@ export class ApiTestHelper {
 
   async init() {
     if (!this.app) {
-      this.app = await getTestApp();
+      this.app = await getSimpleTestApp();
     }
   }
 

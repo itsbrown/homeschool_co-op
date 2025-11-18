@@ -351,8 +351,8 @@ export const testDb = {
   async createTestCategory(schoolId: number, overrides?: Partial<any>) { return getTestDb().createTestCategory(schoolId, overrides); },
   async createTestChild(parentId: number, overrides?: Partial<any>) { return getTestDb().createTestChild(parentId, overrides); },
   async createTestClass(schoolId: number, overrides?: Partial<any>) { return getTestDb().createTestClass(schoolId, overrides); },
-  async createTestEnrollment(data: any) { return getTestDb().createTestEnrollment(data); },
-  async createTestPayment(data: any) { return getTestDb().createTestPayment(data); },
-  async createTestMembershipEnrollment(data: any) { return getTestDb().createTestMembershipEnrollment(data); },
-  async createCompleteTestEnvironment() { return getTestDb().createCompleteTestEnvironment(); },
+  async createTestEnrollment(classId: number, childId: number, overrides?: any) { return getTestDb().createTestEnrollment(classId, childId, overrides); },
+  async createTestPayment(parentEmail: string, overrides?: any) { return getTestDb().createTestPayment(parentEmail, overrides); },
+  async createTestMembershipEnrollment(parentId: number, schoolId: number, overrides?: any) { return getTestDb().createTestMembershipEnrollment(parentId, schoolId, overrides); },
+  async setupTestEnvironment() { return getTestDb().setupTestEnvironment(); },
 };
