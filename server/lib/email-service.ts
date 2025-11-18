@@ -1020,6 +1020,8 @@ interface WelcomeEmailData {
   firstName: string;
   lastName?: string;
   role?: string;
+  schoolName?: string;
+  schoolLogo?: string;
 }
 
 export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean> {
@@ -1029,9 +1031,11 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
       return true; // Return true to indicate graceful handling
     }
 
-    const { email, firstName, lastName, role } = data;
+    const { email, firstName, lastName, role, schoolName, schoolLogo } = data;
     const fullName = lastName ? `${firstName} ${lastName}` : firstName;
     const loginUrl = `${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/login`;
+    const baseUrl = process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com';
+    const displaySchoolName = schoolName || 'American Seekers Academy';
     
     // Format role for display
     const formatRole = (role?: string): string => {
@@ -1050,14 +1054,19 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
       <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
           <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
-            <h1 style="color: white; margin: 0;">Welcome to American Seekers Academy!</h1>
+            ${schoolLogo ? `
+              <img src="${baseUrl}${schoolLogo}" alt="${displaySchoolName}" style="max-width: 200px; max-height: 80px; margin-bottom: 16px;" />
+              <h1 style="color: white; margin: 0;">Welcome to ${displaySchoolName}!</h1>
+            ` : `
+              <h1 style="color: white; margin: 0;">Welcome to ${displaySchoolName}!</h1>
+            `}
             <p style="color: #E0E7FF; margin: 8px 0 0 0;">Your Learning Journey Begins Here</p>
           </div>
           
           <div style="padding: 24px;">
             <h2 style="color: #1F2937; margin-bottom: 16px;">Hello ${firstName}!</h2>
             
-            <p>We're thrilled to have you join the American Seekers Academy community. Your account has been successfully created and you're all set to get started.</p>
+            <p>We're thrilled to have you join the ${displaySchoolName} community. Your account has been successfully created and you're all set to get started.</p>
             
             ${role ? `<div style="background-color: #EFF6FF; padding: 16px; border-radius: 8px; margin: 16px 0; border-left: 4px solid #3B82F6;">
               <p style="margin: 0;"><strong>Account Type:</strong> ${formatRole(role)}</p>
@@ -1092,9 +1101,9 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
             </div>
             
             <div style="margin-top: 32px; text-align: center; color: #6B7280; font-size: 14px;">
-              <p>Thank you for choosing American Seekers Academy!</p>
+              <p>Thank you for choosing ${displaySchoolName}!</p>
               <p style="margin-top: 16px; font-size: 12px;">
-                © 2025 American Seekers Academy. All rights reserved.
+                © 2025 ${displaySchoolName}. All rights reserved.
               </p>
             </div>
           </div>
@@ -1103,11 +1112,11 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
     `;
 
     const textContent = `
-Welcome to American Seekers Academy!
+Welcome to ${displaySchoolName}!
 
 Hello ${firstName}!
 
-We're thrilled to have you join the American Seekers Academy community. Your account has been successfully created and you're all set to get started.
+We're thrilled to have you join the ${displaySchoolName} community. Your account has been successfully created and you're all set to get started.
 
 ${role ? `Account Type: ${formatRole(role)}\n` : ''}
 Next Steps:
@@ -1119,18 +1128,18 @@ Next Steps:
 Need Help?
 If you have any questions or need assistance getting started, our support team is here to help at support@americanseekersacademy.com
 
-Thank you for choosing American Seekers Academy!
+Thank you for choosing ${displaySchoolName}!
 
-© 2025 American Seekers Academy. All rights reserved.
+© 2025 ${displaySchoolName}. All rights reserved.
     `;
 
     const sendSmtpEmail = new brevo.SendSmtpEmail();
     sendSmtpEmail.to = [{ email: email, name: fullName }];
     sendSmtpEmail.sender = { 
       email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
-      name: 'American Seekers Academy' 
+      name: displaySchoolName
     };
-    sendSmtpEmail.subject = 'Welcome to American Seekers Academy!';
+    sendSmtpEmail.subject = `Welcome to ${displaySchoolName}!`;
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent;
 
