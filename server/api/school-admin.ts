@@ -4661,4 +4661,80 @@ router.delete("/categories/:id", supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Resend welcome email to a user (admin utility)
+router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
+  try {
+    const { email, userId } = req.body;
+
+    // Validate input - need either email or userId
+    if (!email && !userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Either email or userId is required"
+      });
+    }
+
+    console.log('📧 Resending welcome email for:', email || `userId: ${userId}`);
+
+    // Fetch user data from database
+    let user;
+    if (email) {
+      user = await storage.getUserByEmail(email);
+    } else if (userId) {
+      user = await storage.getUserById(userId);
+    }
+
+    if (!user) {
+      console.error('❌ User not found for resend welcome email');
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Validate user has required data for welcome email
+    if (!user.email || !user.firstName) {
+      return res.status(400).json({
+        success: false,
+        message: "User missing required data (email or firstName)"
+      });
+    }
+
+    // Import and call the existing sendWelcomeEmail function
+    const { sendWelcomeEmail } = await import('../lib/email-service');
+    
+    const emailSent = await sendWelcomeEmail({
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName || '',
+      role: user.role || 'parent'
+    });
+
+    if (emailSent) {
+      console.log('✅ Welcome email resent successfully to:', user.email);
+      return res.json({
+        success: true,
+        message: `Welcome email sent to ${user.email}`,
+        user: {
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName
+        }
+      });
+    } else {
+      console.error('❌ Failed to send welcome email to:', user.email);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send welcome email - please check email service configuration"
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error resending welcome email:', error);
+    return res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to resend welcome email"
+    });
+  }
+});
+
 export default router;
