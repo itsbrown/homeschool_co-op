@@ -4711,14 +4711,12 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
 
     // Fetch school data from the recipient user's school association
     let schoolName: string | undefined;
-    let schoolLogo: string | undefined;
     
     if (user.schoolId) {
       try {
         const school = await storage.getSchool(user.schoolId);
         if (school) {
           schoolName = school.name;
-          schoolLogo = school.logo || undefined;
         }
       } catch (schoolError) {
         console.error('⚠️ Failed to fetch school data for welcome email:', schoolError);
@@ -4733,8 +4731,7 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
       firstName: user.firstName,
       lastName: user.lastName || '',
       role: user.role || 'parent',
-      schoolName,
-      schoolLogo
+      schoolName
     });
 
     if (emailSent) {

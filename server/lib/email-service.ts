@@ -1021,7 +1021,6 @@ interface WelcomeEmailData {
   lastName?: string;
   role?: string;
   schoolName?: string;
-  schoolLogo?: string;
 }
 
 export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean> {
@@ -1031,10 +1030,9 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
       return true; // Return true to indicate graceful handling
     }
 
-    const { email, firstName, lastName, role, schoolName, schoolLogo } = data;
+    const { email, firstName, lastName, role, schoolName } = data;
     const fullName = lastName ? `${firstName} ${lastName}` : firstName;
     const loginUrl = `${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/login`;
-    const baseUrl = process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com';
     const displaySchoolName = schoolName || 'American Seekers Academy';
     
     // Format role for display
@@ -1054,12 +1052,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
       <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
           <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
-            ${schoolLogo ? `
-              <img src="${baseUrl}${schoolLogo}" alt="${displaySchoolName}" style="max-width: 200px; max-height: 80px; margin-bottom: 16px;" />
-              <h1 style="color: white; margin: 0;">Welcome to ${displaySchoolName}!</h1>
-            ` : `
-              <h1 style="color: white; margin: 0;">Welcome to ${displaySchoolName}!</h1>
-            `}
+            <h1 style="color: white; margin: 0;">Welcome to ${displaySchoolName}!</h1>
             <p style="color: #E0E7FF; margin: 8px 0 0 0;">Your Learning Journey Begins Here</p>
           </div>
           
