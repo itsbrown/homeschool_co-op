@@ -2299,6 +2299,8 @@ router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, r
 
     const { freeAfterThresholdEnabled, freeAfterThreshold } = req.body;
 
+    console.log('🔄 Received "Free After Threshold" update request:', req.body);
+
     const dbUpdateData: any = {};
 
     if (freeAfterThresholdEnabled !== undefined) {
@@ -2313,7 +2315,15 @@ router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, r
       dbUpdateData.free_after_threshold = threshold;
     }
 
-    console.log('🔄 Updating "Free After Threshold" configuration:', dbUpdateData);
+    // Check if there's anything to update
+    if (Object.keys(dbUpdateData).length === 0) {
+      console.log('⚠️ No fields to update in request body');
+      return res.status(400).json({ 
+        message: "No fields to update. Please provide freeAfterThresholdEnabled or freeAfterThreshold" 
+      });
+    }
+
+    console.log('🔄 Updating "Free After Threshold" configuration with:', dbUpdateData);
 
     // Use admin client to update the school
     const { supabaseAdmin } = await import('../db/supabase');

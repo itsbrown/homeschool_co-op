@@ -311,13 +311,13 @@ export default function DiscountsPage() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          enabled: freeAfterEnabled,
-          threshold: freeAfterThreshold,
+          freeAfterThresholdEnabled: freeAfterEnabled,
+          freeAfterThreshold: freeAfterThreshold,
         }),
       });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to update settings');
+        throw new Error(error.message || 'Failed to update settings');
       }
       return response.json();
     },
