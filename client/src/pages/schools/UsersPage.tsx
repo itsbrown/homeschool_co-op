@@ -15,7 +15,8 @@ import {
   Users,
   Filter,
   Mail,
-  Key
+  Key,
+  Send
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -155,6 +156,26 @@ export default function UsersPage() {
       toast({
         title: "Error",
         description: "Failed to send password reset. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResendWelcomeEmail = async (userId: number, userName: string) => {
+    try {
+      await apiRequest('POST', '/api/school-admin/resend-welcome-email', {
+        body: JSON.stringify({ userId }),
+      });
+      
+      toast({
+        title: "Success",
+        description: `Welcome email sent to ${userName}`,
+      });
+    } catch (error) {
+      console.error('Error resending welcome email:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send welcome email. Please try again.",
         variant: "destructive",
       });
     }
@@ -361,6 +382,10 @@ export default function UsersPage() {
                             <DropdownMenuItem onClick={() => handleSendPasswordReset(user.id, `${user.firstName || user.name} ${user.lastName || ''}`)}>
                               <Key className="h-4 w-4 mr-2" />
                               Send Password Reset
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleResendWelcomeEmail(user.id, `${user.firstName || user.name} ${user.lastName || ''}`)}>
+                              <Send className="h-4 w-4 mr-2" />
+                              Resend Welcome Email
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-destructive"
