@@ -1422,6 +1422,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       console.log('✅ Promo code validated:', data.discount);
+      console.log('📊 Discount data received:', {
+        discountAmount: data.discountAmount,
+        type: data.discount.type,
+        value: data.discount.value,
+        cartTotal: state.cart.total,
+        isNaN: isNaN(data.discountAmount)
+      });
+
+      // Validate discountAmount is a valid number
+      if (data.discountAmount === undefined || data.discountAmount === null || isNaN(data.discountAmount)) {
+        console.error('❌ Invalid discountAmount received:', data.discountAmount);
+        return { success: false, error: 'Invalid discount calculation - please try again' };
+      }
 
       // Dispatch APPLY_PROMO action to update cart with discount
       dispatch({

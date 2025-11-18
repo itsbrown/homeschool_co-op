@@ -116,6 +116,24 @@ router.post('/validate', async (req, res) => {
       }
     }
 
+    console.log('💰 Discount calculation:', {
+      code: discount.code,
+      type: discount.type,
+      value: discount.value,
+      cartTotal,
+      calculatedAmount: discountAmount,
+      isNaN: isNaN(discountAmount)
+    });
+
+    // Validate discountAmount before sending
+    if (isNaN(discountAmount) || discountAmount === undefined || discountAmount === null) {
+      console.error('❌ Invalid discountAmount calculated:', discountAmount);
+      return res.status(500).json({
+        success: false,
+        error: 'Error calculating discount amount - please contact support',
+      });
+    }
+
     // Return valid discount info
     res.json({
       success: true,
@@ -130,6 +148,7 @@ router.post('/validate', async (req, res) => {
         code: discount.code,
         combinableWithOthers: discount.combinableWithOthers,
       },
+      discountAmount, // Also include at top level for easier access
     });
   } catch (error) {
     console.error('Error validating discount code:', error);
