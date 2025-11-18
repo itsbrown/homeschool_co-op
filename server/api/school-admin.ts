@@ -4667,14 +4667,15 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
     const { email, userId } = req.body;
 
     // Validate input - need exactly one of email or userId (mutual exclusivity)
-    if (!email && !userId) {
+    // Note: Use explicit undefined checks to handle userId: 0 correctly
+    if (!email && userId === undefined) {
       return res.status(400).json({
         success: false,
         message: "Either email or userId is required"
       });
     }
 
-    if (email && userId) {
+    if (email && userId !== undefined) {
       return res.status(400).json({
         success: false,
         message: "Provide either email or userId, not both"

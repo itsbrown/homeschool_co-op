@@ -252,7 +252,7 @@ describe('Integration: School Admin Email Management', () => {
         expect(response.status).toBe(500);
         expect(response.body).toMatchObject({
           success: false,
-          message: expect.stringContaining('Failed to send welcome email')
+          message: 'Email service unavailable'
         });
       });
 
@@ -276,7 +276,7 @@ describe('Integration: School Admin Email Management', () => {
 
         for (const role of roles) {
           const user = await testDb.createTestUser({
-            email: `${role}@test.com`,
+            email: `${role}-${Date.now()}-${Math.random()}@test.com`,
             firstName: 'Test',
             lastName: role,
             role: role,
