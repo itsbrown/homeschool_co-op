@@ -4666,11 +4666,18 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
   try {
     const { email, userId } = req.body;
 
-    // Validate input - need either email or userId
+    // Validate input - need exactly one of email or userId (mutual exclusivity)
     if (!email && !userId) {
       return res.status(400).json({
         success: false,
         message: "Either email or userId is required"
+      });
+    }
+
+    if (email && userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide either email or userId, not both"
       });
     }
 
@@ -4680,7 +4687,8 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
     let user;
     if (email) {
       user = await storage.getUserByEmail(email);
-    } else if (userId) {
+    } else {
+      // userId is guaranteed to exist here due to validation above
       user = await storage.getUserById(userId);
     }
 
