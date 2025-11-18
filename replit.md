@@ -59,9 +59,14 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 -   **Category Management System**: School-level custom category system replacing hardcoded category enums, allowing administrators to create and manage categories for organizing classes.
 
 ## Testing & Quality Assurance
--   **Integration Tests**: Comprehensive integration test suites covering user management, class management, staff management, student management, notifications, and parent profile management.
--   **Test Coverage**: Phase 1 includes 6 integration test suites with 132+ scenarios covering authentication, authorization, multi-tenant security, and feature workflows.
--   **Test Infrastructure**: Helper methods in `testDatabase.ts` for creating test data (enrollments, payments, membership enrollments).
+-   **Integration Tests**: Comprehensive integration test suites covering user management, class management, staff management, student management, notifications, parent profile management, and school admin email management.
+-   **Test Coverage**: Phase 1 includes 7 integration test suites with 149+ scenarios covering authentication, authorization, multi-tenant security, and feature workflows.
+-   **Test Infrastructure**: 
+    -   Helper methods in `testDatabase.ts` for creating test data (enrollments, payments, membership enrollments)
+    -   Jest manual mocks at `server/__mocks__/lib/email-service.js` for deterministic email service testing
+    -   Lazy initialization pattern in test helpers to prevent module-level app initialization
+    -   CommonJS configuration for Jest to ensure proper test execution
+-   **Email Service Testing**: Resend welcome email endpoint fully tested with 17 scenarios including authentication, validation, user lookup, email sending, and edge cases (userId: 0 handling, empty strings, missing data).
 
 ## Known Limitations & Technical Debt
 -   **Payment Schema Enhancement Required**: The payment table currently lacks `membershipEnrollmentId` field, preventing deterministic filtering of membership payments. This causes:
