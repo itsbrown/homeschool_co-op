@@ -64,6 +64,21 @@ export class TestDatabase {
     return user;
   }
 
+  async updateUser(userId: number, updates: Partial<User>): Promise<User> {
+    const user = await storage.getUser(userId);
+    if (!user) {
+      throw new Error(`User with id ${userId} not found`);
+    }
+    
+    const updatedUser = { ...user, ...updates };
+    await storage.updateUser(userId, updatedUser);
+    return updatedUser;
+  }
+
+  async updateUserSchoolId(userId: number, schoolId: number): Promise<User> {
+    return this.updateUser(userId, { schoolId });
+  }
+
   async createTestSchool(adminId: number, overrides: Partial<InsertSchool> = {}): Promise<School> {
     const uniqueId = nanoid(8);
     const schoolData: InsertSchool = {
