@@ -101,6 +101,15 @@ router.post('/validate', async (req, res) => {
     }
 
     // Calculate discount amount
+    console.log('💰 Discount raw data from DB:', {
+      id: discount.id,
+      code: discount.code,
+      type: discount.type,
+      value: discount.value,
+      maxDiscountAmount: discount.maxDiscountAmount,
+      cartTotal,
+    });
+
     let discountAmount = 0;
     if (discount.type === 'percentage') {
       discountAmount = Math.round((cartTotal * discount.value) / 100);
@@ -110,16 +119,23 @@ router.post('/validate', async (req, res) => {
       }
     } else if (discount.type === 'fixed_amount') {
       discountAmount = discount.value;
+      // Apply max discount cap if set (for fixed_amount discounts too)
+      if (discount.maxDiscountAmount && discountAmount > discount.maxDiscountAmount) {
+        console.log(`⚠️ Fixed discount value (${discountAmount}) exceeds max (${discount.maxDiscountAmount}), capping to max`);
+        discountAmount = discount.maxDiscountAmount;
+      }
       // Don't let fixed discount exceed cart total
       if (discountAmount > cartTotal) {
+        console.log(`⚠️ Fixed discount (${discountAmount}) exceeds cart total (${cartTotal}), capping to cart total`);
         discountAmount = cartTotal;
       }
     }
 
-    console.log('💰 Discount calculation:', {
+    console.log('💰 Discount calculation result:', {
       code: discount.code,
       type: discount.type,
-      value: discount.value,
+      valueFromDB: discount.value,
+      maxDiscountAmountFromDB: discount.maxDiscountAmount,
       cartTotal,
       calculatedAmount: discountAmount,
       isNaN: isNaN(discountAmount)
