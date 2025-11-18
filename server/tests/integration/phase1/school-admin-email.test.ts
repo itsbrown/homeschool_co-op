@@ -4,6 +4,13 @@ import { api } from '../../helpers/apiHelpers';
 import { resetAllMocks, mockBrevoService } from '../../helpers/mockServices';
 import type { User } from '../../../../shared/schema';
 
+// Mock the email service module
+jest.mock('../../../lib/email-service');
+
+// Import the mocked function
+import { sendWelcomeEmail } from '../../../lib/email-service';
+const mockSendWelcomeEmail = sendWelcomeEmail as jest.MockedFunction<typeof sendWelcomeEmail>;
+
 /**
  * PHASE 1: Core Platform Features
  * Integration Tests for School Admin Email Management
@@ -66,11 +73,9 @@ describe('Integration: School Admin Email Management', () => {
     // Authenticate as school admin
     await api.loginAsUser(schoolAdmin.email);
 
-    // Mock Brevo email service to return success
-    mockBrevoService.sendTransacEmail.mockResolvedValue({
-      messageId: 'msg_test123',
-      response: { statusCode: 201 }
-    });
+    // Reset and configure email service mock
+    mockSendWelcomeEmail.mockClear();
+    mockSendWelcomeEmail.mockResolvedValue(true);
   });
 
   describe('POST /api/school-admin/resend-welcome-email', () => {
@@ -210,8 +215,8 @@ describe('Integration: School Admin Email Management', () => {
           }
         });
 
-        // Verify Brevo was called
-        expect(mockBrevoService.sendTransacEmail).toHaveBeenCalled();
+        // Verify sendWelcomeEmail was called
+        expect(mockSendWelcomeEmail).toHaveBeenCalled();
       });
 
       it('should successfully resend welcome email using userId parameter', async () => {
@@ -230,13 +235,13 @@ describe('Integration: School Admin Email Management', () => {
           }
         });
 
-        // Verify Brevo was called
-        expect(mockBrevoService.sendTransacEmail).toHaveBeenCalled();
+        // Verify sendWelcomeEmail was called
+        expect(mockSendWelcomeEmail).toHaveBeenCalled();
       });
 
       it('should handle email service failure gracefully', async () => {
-        // Mock Brevo to fail
-        mockBrevoService.sendTransacEmail.mockRejectedValueOnce(
+        // Mock sendWelcomeEmail to fail
+        mockSendWelcomeEmail.mockRejectedValueOnce(
           new Error('Email service unavailable')
         );
 
@@ -253,8 +258,7 @@ describe('Integration: School Admin Email Management', () => {
 
       it('should handle sendWelcomeEmail returning false', async () => {
         // Mock sendWelcomeEmail to return false (email not sent)
-        // This simulates when Brevo returns success but email wasn't sent
-        mockBrevoService.sendTransacEmail.mockResolvedValueOnce(null as any);
+        mockSendWelcomeEmail.mockResolvedValueOnce(false);
 
         const response = await api.post('/api/school-admin/resend-welcome-email', {
           email: parentUser.email
@@ -285,10 +289,10 @@ describe('Integration: School Admin Email Management', () => {
 
           expect(response.status).toBe(200);
           expect(response.body.success).toBe(true);
-          expect(mockBrevoService.sendTransacEmail).toHaveBeenCalled();
+          expect(mockSendWelcomeEmail).toHaveBeenCalled();
 
           // Reset mock for next iteration
-          mockBrevoService.sendTransacEmail.mockClear();
+          mockSendWelcomeEmail.mockClear();
         }
       });
 
@@ -298,19 +302,12 @@ describe('Integration: School Admin Email Management', () => {
         });
 
         // Verify sendWelcomeEmail was called with correct parameters
-        expect(mockBrevoService.sendTransacEmail).toHaveBeenCalledWith(
+        expect(mockSendWelcomeEmail).toHaveBeenCalledWith(
           expect.objectContaining({
-            to: expect.arrayContaining([
-              expect.objectContaining({
-                email: parentUser.email,
-                name: `${parentUser.firstName} ${parentUser.lastName}`
-              })
-            ]),
-            templateId: expect.any(Number),
-            params: expect.objectContaining({
-              FIRST_NAME: parentUser.firstName,
-              LOGIN_URL: expect.stringContaining('login')
-            })
+            email: parentUser.email,
+            firstName: parentUser.firstName,
+            lastName: parentUser.lastName,
+            role: parentUser.role
           })
         );
       });
