@@ -233,6 +233,19 @@ export default function CartCheckout() {
     }
   }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.total]); // Re-run when cart or loading status changes
   
+  // Separate effect to handle discount changes - recreate payment intent when cart total changes
+  useEffect(() => {
+    // Don't recreate if we haven't created the initial payment intent yet
+    if (!clientSecret || !isAuthenticated || cart.items.length === 0 || isInitialLoad) {
+      return;
+    }
+    
+    // When cart total changes (e.g., discount applied), recreate payment intent
+    console.log('💳 Cart total changed, recreating payment intent with new amount:', cart.total);
+    setClientSecret(''); // Clear to show loading state
+    createPaymentIntent();
+  }, [cart.total]); // Re-run when cart total changes
+  
   // Separate effect to handle payment plan changes with debouncing
   useEffect(() => {
     // Don't recreate if we haven't created the initial payment intent yet
