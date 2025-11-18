@@ -46,7 +46,7 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 -   **AI Enrollment Assistant**: Provides personalized AI guidance for enrollment.
 -   **Staff Management & Invitation System**: Automated onboarding, secure token-based invitations, and dynamic position management.
 -   **User Account Management**: School administrators can send account invites and password reset emails.
--   **Welcome Email System**: Automated, professional HTML welcome emails for new registrants.
+-   **Welcome Email System**: Automated, professional HTML welcome emails for new registrants with school-specific branding. Emails display the recipient's school logo (when available) in the header and use the school name throughout. Gracefully falls back to generic American Seekers Academy branding when no school association exists. Both registration flow and admin resend feature fetch and include school branding data.
 -   **Parent Profile Management**: Parent users can update their profile information. School administrators can view comprehensive parent profiles with strict multi-tenant data isolation ensuring no cross-school data leakage.
 -   **Content Management System**: Creation and management of knowledge bases, file upload/processing, and AI-powered content analysis/generation.
 -   **Product Order Form System**: Enhanced schema supporting variant configurations, descriptions, and dynamic pricing.
