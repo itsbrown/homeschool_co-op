@@ -321,5 +321,38 @@ export class TestDatabase {
   }
 }
 
-// Export singleton instance
-export const testDb = new TestDatabase();
+// Lazy initialization singleton
+let testDbInstance: TestDatabase | null = null;
+
+export function getTestDb(): TestDatabase {
+  if (!testDbInstance) {
+    testDbInstance = new TestDatabase();
+  }
+  return testDbInstance;
+}
+
+// Reset the singleton for test isolation
+export function resetTestDb(): void {
+  testDbInstance = null;
+}
+
+// Export testDb object with getter for backward compatibility
+export const testDb = {
+  get instance(): TestDatabase {
+    return getTestDb();
+  },
+  // Proxy all methods to the singleton instance
+  async cleanup() { return getTestDb().cleanup(); },
+  async createTestUser(overrides?: Partial<any>) { return getTestDb().createTestUser(overrides); },
+  async updateUser(userId: number, updates: Partial<any>) { return getTestDb().updateUser(userId, updates); },
+  async updateUserSchoolId(userId: number, schoolId: number | null) { return getTestDb().updateUserSchoolId(userId, schoolId); },
+  async createTestSchool(adminId: number, overrides?: Partial<any>) { return getTestDb().createTestSchool(adminId, overrides); },
+  async createTestLocation(schoolId: number, overrides?: Partial<any>) { return getTestDb().createTestLocation(schoolId, overrides); },
+  async createTestCategory(schoolId: number, overrides?: Partial<any>) { return getTestDb().createTestCategory(schoolId, overrides); },
+  async createTestChild(parentId: number, overrides?: Partial<any>) { return getTestDb().createTestChild(parentId, overrides); },
+  async createTestClass(schoolId: number, overrides?: Partial<any>) { return getTestDb().createTestClass(schoolId, overrides); },
+  async createTestEnrollment(data: any) { return getTestDb().createTestEnrollment(data); },
+  async createTestPayment(data: any) { return getTestDb().createTestPayment(data); },
+  async createTestMembershipEnrollment(data: any) { return getTestDb().createTestMembershipEnrollment(data); },
+  async createCompleteTestEnvironment() { return getTestDb().createCompleteTestEnvironment(); },
+};

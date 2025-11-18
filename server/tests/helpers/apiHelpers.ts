@@ -202,4 +202,44 @@ export class ApiTestHelper {
   }
 }
 
-export const api = new ApiTestHelper();
+// Lazy initialization singleton
+let apiInstance: ApiTestHelper | null = null;
+
+export function getApi(): ApiTestHelper {
+  if (!apiInstance) {
+    apiInstance = new ApiTestHelper();
+  }
+  return apiInstance;
+}
+
+// Reset the singleton for test isolation
+export function resetApi(): void {
+  apiInstance = null;
+}
+
+// Export api object with getter for backward compatibility
+export const api = {
+  get instance(): ApiTestHelper {
+    return getApi();
+  },
+  // Proxy all methods to the singleton instance
+  async init() { return getApi().init(); },
+  setAuthToken(token: string) { return getApi().setAuthToken(token); },
+  setCookies(cookies: string[]) { return getApi().setCookies(cookies); },
+  clearAuth() { return getApi().clearAuth(); },
+  async get(url: string, query?: Record<string, any>) { return getApi().get(url, query); },
+  async post(url: string, data?: any) { return getApi().post(url, data); },
+  async put(url: string, data?: any) { return getApi().put(url, data); },
+  async patch(url: string, data?: any) { return getApi().patch(url, data); },
+  async delete(url: string) { return getApi().delete(url); },
+  async uploadFile(url: string, fieldName: string, filePath: string, data?: any) { 
+    return getApi().uploadFile(url, fieldName, filePath, data); 
+  },
+  async loginAsUser(email: string, password?: string) { return getApi().loginAsUser(email, password); },
+  expectSuccess(response: any, expectedStatus?: number) { return getApi().expectSuccess(response, expectedStatus); },
+  expectError(response: any, expectedStatus?: number) { return getApi().expectError(response, expectedStatus); },
+  expectValidationError(response: any) { return getApi().expectValidationError(response); },
+  expectUnauthorized(response: any) { return getApi().expectUnauthorized(response); },
+  expectForbidden(response: any) { return getApi().expectForbidden(response); },
+  expectNotFound(response: any) { return getApi().expectNotFound(response); },
+};
