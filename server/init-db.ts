@@ -214,6 +214,17 @@ async function runMigrations() {
         AND cat.name = 'All Ages';
     `);
     console.log('✅ Migration completed: existing class categories mapped to category IDs');
+    
+    // Fix discount ID sequence to prevent duplicate key errors
+    console.log('Running migration: Fixing discounts table ID sequence...');
+    try {
+      await db.execute(sql`
+        SELECT setval(pg_get_serial_sequence('discounts', 'id'), COALESCE((SELECT MAX(id) FROM discounts), 0) + 1, false);
+      `);
+      console.log('✅ Migration completed: discounts ID sequence fixed');
+    } catch (seqError) {
+      console.log('Migration note: Could not fix discounts sequence:', seqError instanceof Error ? seqError.message : String(seqError));
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

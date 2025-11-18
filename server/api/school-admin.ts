@@ -10,6 +10,8 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { getDb } from '../db';
+import { sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -3203,6 +3205,17 @@ router.post('/discounts', supabaseAuth, async (req: any, res) => {
         success: false,
         error: 'School ID not found in user metadata'
       });
+    }
+    
+    // Fix discount ID sequence before creating new discount (prevent duplicate key errors)
+    try {
+      const db = await getDb();
+      await db.execute(sql`
+        SELECT setval(pg_get_serial_sequence('discounts', 'id'), COALESCE((SELECT MAX(id) FROM discounts), 0) + 1, false);
+      `);
+      console.log('✅ Discount sequence reset successfully');
+    } catch (seqError) {
+      console.log('⚠️ Note: Could not fix discount sequence:', seqError instanceof Error ? seqError.message : String(seqError));
     }
     
     // Create discount using storage
