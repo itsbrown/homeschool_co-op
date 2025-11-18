@@ -287,11 +287,30 @@ router.post('/register', async (req, res) => {
     // Send welcome email (non-blocking - registration succeeds even if email fails)
     try {
       console.log('📧 Sending welcome email to:', email);
+      
+      // Fetch school data if schoolId is provided
+      let schoolName: string | undefined;
+      let schoolLogo: string | undefined;
+      
+      if (schoolId) {
+        try {
+          const school = await storage.getSchool(schoolId);
+          if (school) {
+            schoolName = school.name;
+            schoolLogo = school.logo || undefined;
+          }
+        } catch (schoolError) {
+          console.error('⚠️ Failed to fetch school data for welcome email:', schoolError);
+        }
+      }
+      
       await sendWelcomeEmail({
         email: email,
         firstName: userFirstName,
         lastName: userLastName,
-        role: role || 'parent'
+        role: role || 'parent',
+        schoolName,
+        schoolLogo
       });
       console.log('✅ Welcome email sent successfully');
     } catch (emailError) {
