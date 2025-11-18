@@ -163,9 +163,7 @@ export default function UsersPage() {
 
   const handleResendWelcomeEmail = async (userId: number, userName: string) => {
     try {
-      await apiRequest('POST', '/api/school-admin/resend-welcome-email', {
-        body: JSON.stringify({ userId }),
-      });
+      await apiRequest('POST', '/api/school-admin/resend-welcome-email', { userId });
       
       toast({
         title: "Success",
