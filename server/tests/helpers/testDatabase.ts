@@ -64,40 +64,43 @@ export class TestDatabase {
     return user;
   }
 
-  async updateUser(userId: number, updates: Partial<User>): Promise<User> {
+  async updateUser(userId: number, updates: Partial<InsertUser>): Promise<User> {
     const user = await storage.getUser(userId);
     if (!user) {
       throw new Error(`User with id ${userId} not found`);
     }
     
-    const updatedUser = { ...user, ...updates };
-    await storage.updateUser(userId, updatedUser);
+    await storage.updateUser(userId, updates);
+    const updatedUser = await storage.getUser(userId);
+    if (!updatedUser) {
+      throw new Error(`User with id ${userId} not found after update`);
+    }
     return updatedUser;
   }
 
-  async updateUserSchoolId(userId: number, schoolId: number): Promise<User> {
+  async updateUserSchoolId(userId: number, schoolId: number | null): Promise<User> {
     return this.updateUser(userId, { schoolId });
   }
 
   async createTestSchool(adminId: number, overrides: Partial<InsertSchool> = {}): Promise<School> {
     const uniqueId = nanoid(8);
-    const schoolData: InsertSchool = {
+    const schoolData = {
       name: overrides.name || `Test School ${uniqueId}`,
       type: overrides.type || 'school',
-      adminId,
       city: overrides.city || 'Test City',
       state: overrides.state || 'CA',
       zipCode: overrides.zipCode || '12345',
       email: overrides.email || `school_${uniqueId}@example.com`,
       status: overrides.status || 'active',
-      address: null,
-      phoneNumber: null,
-      website: null,
-      logo: null,
-      registrationCode: `TEST${uniqueId.toUpperCase()}`,
-      description: null,
+      address: overrides.address !== undefined ? overrides.address : null,
+      phoneNumber: overrides.phoneNumber !== undefined ? overrides.phoneNumber : null,
+      website: overrides.website !== undefined ? overrides.website : null,
+      logo: overrides.logo !== undefined ? overrides.logo : null,
+      registrationCode: overrides.registrationCode || `TEST${uniqueId.toUpperCase()}`,
+      description: overrides.description !== undefined ? overrides.description : null,
+      adminId,
       ...overrides
-    };
+    } as InsertSchool & { adminId: number };
 
     const school = await storage.createSchool(schoolData);
     this.createdRecords.schools.push(school.id);
@@ -106,13 +109,18 @@ export class TestDatabase {
 
   async createTestLocation(schoolId: number, overrides: Partial<InsertLocation> = {}): Promise<Location> {
     const uniqueId = nanoid(8);
-    const locationData = {
+    const locationData: InsertLocation = {
       name: overrides.name || `Test Location ${uniqueId}`,
       schoolId,
+      code: overrides.code || `LOC${uniqueId.toUpperCase().substring(0, 4)}`,
       address: overrides.address || '123 Test St',
       city: overrides.city || 'Test City',
       state: overrides.state || 'CA',
       zipCode: overrides.zipCode || '12345',
+      phoneNumber: null,
+      email: null,
+      managerName: null,
+      capacity: null,
       ...overrides
     };
 
