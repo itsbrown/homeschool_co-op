@@ -582,7 +582,8 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
         enrollments.push(...childEnrollments);
       }
     } catch (error) {
-      console.log('⚠️ Could not fetch enrollments:', error);
+      const err = error as Error;
+      console.log('⚠️ Could not fetch enrollments:', err);
     }
 
     // Add enrollment counts and parse variants from each class
@@ -610,13 +611,14 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
             console.log(`✅ Class ${classItem.id} has ${variants.length} variants`);
           }
         } catch (e) {
-          console.log(`⚠️ Class ${classItem.id} schedule JSON parse error:`, e.message);
+          const error = e as Error;
+          console.log(`⚠️ Class ${classItem.id} schedule JSON parse error:`, error.message);
         }
       } else if (classItem.schedule && typeof classItem.schedule === 'object') {
         // Schedule is already an object (not JSON string)
         console.log(`📊 Class ${classItem.id} schedule is already an object:`, classItem.schedule);
-        if (classItem.schedule.variants && Array.isArray(classItem.schedule.variants)) {
-          variants = classItem.schedule.variants;
+        if ((classItem.schedule as any).variants && Array.isArray((classItem.schedule as any).variants)) {
+          variants = (classItem.schedule as any).variants;
           console.log(`✅ Class ${classItem.id} has ${variants.length} variants from object`);
         }
       }
@@ -682,7 +684,7 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
 // Get individual class by ID for editing
 router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const classId = parseInt(req.params.id);
@@ -711,9 +713,9 @@ router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
       } catch (e) {
         // Not JSON, keep schedule as-is
       }
-    } else if (classData.schedule && typeof classData.schedule === 'object' && classData.schedule.variants) {
+    } else if (classData.schedule && typeof classData.schedule === 'object' && (classData.schedule as any).variants) {
       // Already parsed as object
-      variants = classData.schedule.variants;
+      variants = (classData.schedule as any).variants;
     }
 
     console.log('✅ Class found:', classData.title);
@@ -732,7 +734,7 @@ router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
 // Update class by ID
 router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const classId = parseInt(req.params.id);
@@ -859,7 +861,7 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
 // Delete a class
 router.delete("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const classId = parseInt(req.params.id);
@@ -903,7 +905,7 @@ router.delete("/classes/:id", supabaseAuth, async (req: any, res) => {
 // Get class roster (students enrolled in a specific class)
 router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const classId = parseInt(req.params.id);
@@ -1175,7 +1177,7 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
 // Get single staff member by ID
 router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1227,7 +1229,7 @@ router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
 // Get classes assigned to a specific staff member
 router.get("/staff/:id/classes", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1271,7 +1273,7 @@ router.get("/staff/:id/classes", supabaseAuth, async (req: any, res) => {
 // Assign staff member to a class
 router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1304,7 +1306,7 @@ router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
     const updatedClass = await storage.updateClass(classId, {
       instructorName: user.name,
       instructorId: user.id
-    });
+    } as any);
 
     if (!updatedClass) {
       return res.status(404).json({ message: "Class not found" });
@@ -1329,7 +1331,7 @@ router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
 // Unassign staff member from a class
 router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1356,7 +1358,7 @@ router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: an
     const updatedClass = await storage.updateClass(classId, {
       instructorName: "No Instructor Assigned",
       instructorId: null
-    });
+    } as any);
 
     if (!updatedClass) {
       return res.status(404).json({ message: "Class not found" });
@@ -1377,7 +1379,7 @@ router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: an
 // Resend invite to individual staff member
 router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1561,7 +1563,7 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
 // Update staff member
 router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1651,7 +1653,7 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
 // Delete staff member
 router.delete("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1695,7 +1697,7 @@ router.delete("/staff/:id", supabaseAuth, async (req: any, res) => {
 // Get staff positions/roles for dropdown
 router.get("/staff-positions", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const positions = await storage.getAllStaffPositions();
@@ -1710,7 +1712,7 @@ router.get("/staff-positions", supabaseAuth, async (req: any, res) => {
 // Create new staff position
 router.post("/staff-positions", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const { title, description, isDefault } = req.body;
@@ -1740,7 +1742,7 @@ router.patch("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
   console.log("🚨 REQUEST BODY:", req.body);
 
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const positionId = parseInt(req.params.id);
@@ -1776,7 +1778,7 @@ router.patch("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
 // Delete staff position
 router.delete("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const positionId = parseInt(req.params.id);
@@ -1803,7 +1805,7 @@ router.delete("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
 // Get departments for dropdown
 router.get("/departments", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     // These would come from database in real app
@@ -2203,7 +2205,7 @@ router.patch("/schools/:id", supabaseAuth, async (req: any, res) => {
 // Update school membership configuration
 router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     console.log('🔧 Updating membership configuration');
@@ -2294,7 +2296,7 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
 // Update school "Free After Threshold" discount configuration
 router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const { freeAfterThresholdEnabled, freeAfterThreshold } = req.body;
@@ -2358,7 +2360,7 @@ router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, r
 
 router.get("/knowledge-bases", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     // For now, return sample knowledge base data
@@ -2410,7 +2412,7 @@ router.get("/knowledge-bases", supabaseAuth, async (req: any, res) => {
 // Get all enrollments for school admin
 router.get('/enrollments', supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     console.log('📚 School admin fetching all enrollments for school:', schoolId);
@@ -2446,7 +2448,7 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
 // Get individual student endpoint
 router.get('/students/:id', supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     // Handle special case for "register" route
@@ -2512,7 +2514,7 @@ router.get('/students/:id', supabaseAuth, async (req: any, res) => {
 // Update student endpoint
 router.put('/students/:id', supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     const studentId = parseInt(req.params.id);
@@ -2559,7 +2561,7 @@ router.put('/students/:id', supabaseAuth, async (req: any, res) => {
 // Enrollment Metrics
 router.get("/metrics/enrollment", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     console.log('📊 Calculating enrollment metrics from database for school:', schoolId);
@@ -2628,7 +2630,7 @@ router.get("/metrics/enrollment", supabaseAuth, async (req: any, res) => {
 // Financial Metrics
 router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     console.log('💰 Calculating financial metrics from database for school:', schoolId);
@@ -2703,7 +2705,7 @@ router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
 // Academic Metrics
 router.get("/metrics/academic", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = requireSchoolContext(req, res);
+    const schoolId = await requireSchoolContext(req, res);
     if (schoolId === null) return;
 
     console.log('📚 Calculating academic metrics from database for school:', schoolId);
@@ -3901,9 +3903,10 @@ router.get('/users', supabaseAuth, async (req: any, res) => {
     res.status(200).json(allSchoolUsers);
   } catch (error) {
     console.error('❌ Error fetching school users:', error);
+    const err = error as Error;
     res.status(500).json({ 
       message: 'Error fetching users',
-      error: error.message 
+      error: err.message 
     });
   }
 });
@@ -3959,10 +3962,11 @@ router.get('/users/:userId', supabaseAuth, async (req: any, res) => {
     console.log(`✅ Found user: ${user.email}`);
     res.status(200).json(formattedUser);
   } catch (error) {
+    const err = error as Error;
     console.error('❌ Error fetching user:', error);
     res.status(500).json({ 
       message: 'Error fetching user',
-      error: error.message 
+      error: err.message 
     });
   }
 });
@@ -3988,10 +3992,11 @@ router.post('/users', supabaseAuth, async (req: any, res) => {
     
     res.status(201).json(newUser);
   } catch (error) {
+    const err = error as Error;
     console.error('❌ Error creating user:', error);
     res.status(500).json({ 
       message: 'Error creating user',
-      error: error.message 
+      error: err.message 
     });
   }
 });
@@ -4098,10 +4103,11 @@ router.put('/users/:id', supabaseAuth, async (req: any, res) => {
     
     res.status(200).json(updatedUser);
   } catch (error) {
+    const err = error as Error;
     console.error('❌ Error updating user:', error);
     res.status(500).json({ 
       message: 'Error updating user',
-      error: error.message 
+      error: err.message 
     });
   }
 });
@@ -4133,10 +4139,11 @@ router.delete('/users/:id', supabaseAuth, async (req: any, res) => {
     
     res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
+    const err = error as Error;
     console.error('❌ Error deleting user:', error);
     res.status(500).json({ 
       message: 'Error deleting user',
-      error: error.message 
+      error: err.message 
     });
   }
 });
