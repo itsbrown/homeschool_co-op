@@ -19,38 +19,50 @@ import type { InsertProgramEnrollment } from "./schema";
 
 /**
  * Validates that monetary value is in cents (not dollars)
- * Throws error if value appears to be in dollars instead of cents
+ * Throws error for values that appear to be dollar-denominated
  * 
  * CRITICAL: All monetary values must be stored in CENTS per schema.ts
- * Values under $100 (10000 cents) for class enrollments are likely incorrect
+ * This validation prevents dollar-to-cent conversion bugs in class enrollments
  * 
  * @param value - The monetary value to validate
  * @param fieldName - Name of the field being validated (for error messages)
- * @throws Error if value appears to be in dollars
+ * @throws Error if value appears to be in dollars instead of cents
  */
 function validateMonetaryValueInCents(value: number | null | undefined, fieldName: string): void {
   // Skip validation for null/undefined/zero values
   if (!value || value === 0) return;
 
-  // CRITICAL: Values less than $100 (10000 cents) for enrollments are suspicious
-  // Most class prices are $50+ which would be 5000+ cents
-  // If we receive a value like 147 (when it should be 14700), that's a dollar value
-  if (value > 0 && value < 5000) {
-    console.warn(
-      `⚠️  VALIDATION WARNING: ${fieldName} = ${value} cents ($${(value / 100).toFixed(2)}) ` +
-      `This seems unusually low for a class enrollment. ` +
-      `If you meant $${value.toFixed(2)}, the value should be ${value * 100} cents instead.`
+  // BLOCK all values under $10 (1000 cents) for class enrollments
+  // Rationale: No legitimate class enrollment should have values this low
+  // - Class prices are typically $50+ (5000+ cents)
+  // - Deposits (10% of price) are typically $5+ (500+ cents)
+  // - Any value < 1000 cents is almost certainly a dollar amount
+  //
+  // Examples of BLOCKED values (likely dollars):
+  //   100 cents = $1.00 → probably meant $100 (10,000 cents)
+  //   200 cents = $2.00 → probably meant $200 (20,000 cents)
+  //   75 cents = $0.75 → probably meant $75 (7,500 cents)
+  //   995 cents = $9.95 → probably meant $995 (99,500 cents)
+  //
+  // Examples of ALLOWED values (legitimate cents):
+  //   2500 cents = $25.00 deposit ✓
+  //   4900 cents = $49.00 discounted price ✓
+  //   147000 cents = $1,470.00 class price ✓
+  if (value > 0 && value < 1000) {
+    throw new Error(
+      `❌ VALIDATION ERROR: ${fieldName} = ${value} cents ($${(value / 100).toFixed(2)}) is BLOCKED. ` +
+      `Class enrollments should never have values under $10 (1000 cents). ` +
+      `This appears to be a dollar value instead of cents. ` +
+      `If you meant $${value.toFixed(2)}, pass ${value * 100} cents instead. ` +
+      `Schema requirement: All monetary values MUST be in CENTS (shared/schema.ts).`
     );
-    
-    // Log but don't throw - some classes might legitimately be under $50
-    // However, if value is suspiciously round (like 100, 200, 500), it's likely dollars
-    if (value % 100 === 0 && value < 5000) {
-      throw new Error(
-        `VALIDATION ERROR: ${fieldName} = ${value} appears to be in DOLLARS, not CENTS. ` +
-        `Per schema.ts, all monetary values must be in CENTS. ` +
-        `If you meant $${value.toFixed(2)}, please pass ${value * 100} cents instead.`
-      );
-    }
+  }
+  
+  // Log diagnostic info for monetary values to help troubleshoot issues
+  if (value > 0 && value < 10000) {
+    console.log(
+      `💰 ${fieldName}: ${value} cents = $${(value / 100).toFixed(2)}`
+    );
   }
 }
 
