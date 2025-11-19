@@ -23,7 +23,7 @@ export default function StaffProfilePage() {
   const staffId = params?.staffId;
 
   const { data: staffMember, isLoading, error } = useQuery<UserType>({
-    queryKey: [`/api/school-admin/users/${staffId}`],
+    queryKey: [`/api/school-admin/staff/${staffId}`],
     enabled: !!staffId,
   });
 

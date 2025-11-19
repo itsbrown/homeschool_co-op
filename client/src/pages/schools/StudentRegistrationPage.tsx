@@ -219,20 +219,21 @@ export default function StudentRegistrationPage() {
                       <SelectValue placeholder="Select grade level" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="Littles">Littles</SelectItem>
                       <SelectItem value="Pre-K">Pre-K</SelectItem>
                       <SelectItem value="K">Kindergarten</SelectItem>
-                      <SelectItem value="1">1st Grade</SelectItem>
-                      <SelectItem value="2">2nd Grade</SelectItem>
-                      <SelectItem value="3">3rd Grade</SelectItem>
-                      <SelectItem value="4">4th Grade</SelectItem>
-                      <SelectItem value="5">5th Grade</SelectItem>
-                      <SelectItem value="6">6th Grade</SelectItem>
-                      <SelectItem value="7">7th Grade</SelectItem>
-                      <SelectItem value="8">8th Grade</SelectItem>
-                      <SelectItem value="9">9th Grade</SelectItem>
-                      <SelectItem value="10">10th Grade</SelectItem>
-                      <SelectItem value="11">11th Grade</SelectItem>
-                      <SelectItem value="12">12th Grade</SelectItem>
+                      <SelectItem value="1st">1st Grade</SelectItem>
+                      <SelectItem value="2nd">2nd Grade</SelectItem>
+                      <SelectItem value="3rd">3rd Grade</SelectItem>
+                      <SelectItem value="4th">4th Grade</SelectItem>
+                      <SelectItem value="5th">5th Grade</SelectItem>
+                      <SelectItem value="6th">6th Grade</SelectItem>
+                      <SelectItem value="7th">7th Grade</SelectItem>
+                      <SelectItem value="8th">8th Grade</SelectItem>
+                      <SelectItem value="9th">9th Grade</SelectItem>
+                      <SelectItem value="10th">10th Grade</SelectItem>
+                      <SelectItem value="11th">11th Grade</SelectItem>
+                      <SelectItem value="12th">12th Grade</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
