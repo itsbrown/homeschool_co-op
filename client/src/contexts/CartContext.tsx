@@ -1001,8 +1001,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Convert enrollments to cart items with enhanced status display
       const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
+        // CRITICAL: All monetary values MUST be in cents per schema.ts
+        // If seeing incorrect calculations, check database data integrity
         const remainingBalance = enrollment.remainingBalance || enrollment.totalCost || 0;
         const amountPaid = enrollment.amountPaid || 0;
+        
+        // Debug logging for troubleshooting cart calculation issues
+        if (enrollment.id) {
+          console.log(`📊 Cart Item #${enrollment.id}: remainingBalance=${remainingBalance} cents ($${(remainingBalance/100).toFixed(2)}), totalCost=${enrollment.totalCost} cents`);
+        }
 
         let displayStatus = enrollment.status;
         let statusText = 'Payment Required';
@@ -1028,7 +1035,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           price: remainingBalance,
           status: displayStatus,
           statusText: statusText,
-          depositRequired: enrollment.depositRequired,
+          depositRequired: enrollment.depositRequired || 0,
           amountPaid: amountPaid,
           remainingBalance: remainingBalance,
           totalCost: enrollment.totalCost || 0,

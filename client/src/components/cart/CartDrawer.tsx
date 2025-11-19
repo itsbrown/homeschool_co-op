@@ -171,7 +171,7 @@ export default function CartDrawer() {
                       <div className="flex justify-between text-sm text-green-600">
                         <span className="flex items-center gap-1">
                           <Percent className="h-3 w-3" />
-                          Sibling Discount (10%):
+                          Sibling Discount {cart.schoolSettings?.siblingDiscountRate ? `(${Math.round(cart.schoolSettings.siblingDiscountRate * 100)}%)` : ''}:
                         </span>
                         <span>-{formatCurrency(cart.discounts.siblingDiscount)}</span>
                       </div>
