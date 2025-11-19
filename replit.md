@@ -74,6 +74,49 @@ All currency values are stored and transmitted as raw cents by the backend. The 
     -   Membership balances show full amount due (overstated) until schema is extended
     -   **Recommended Fix**: Add `membershipEnrollmentId` (and optionally `schoolId`) to payment schema, update Stripe webhook handlers to populate this field, and modify filtering logic to use authoritative membership links
 
+## Database Migrations
+### Enrollment Currency Units Fix (2025-11-19)
+**Status**: READY TO EXECUTE
+
+**Issue**: Some program_enrollments have monetary values stored in DOLLARS instead of CENTS, causing cart calculation errors (e.g., $1,470 total showing 10% deposit as $14.70 instead of $147.00).
+
+**Root Cause**: Mixed currency units in database - schema expects CENTS per `shared/schema.ts`, but some historical enrollments stored values in DOLLARS.
+
+**Solution Implemented**:
+1. **Migration SQL Scripts** (in `server/migrations/`):
+   - `fix-enrollment-currency-units.sql` - Converts dollar values to cents
+   - `rollback-enrollment-currency-units.sql` - Restores from backup if needed
+   - `run-migration.ts` - Helper script with safety instructions
+
+2. **Backend Validation** (`shared/enrollment-factory.ts`):
+   - Added `validateMonetaryValueInCents()` function
+   - Validates all monetary values in enrollment creation
+   - Throws error for suspicious round dollar values (100, 200, 500 cents)
+   - Warns for values under $50 (5000 cents)
+
+**Execution Instructions**:
+```bash
+# 1. Review the migration SQL
+cat server/migrations/fix-enrollment-currency-units.sql
+
+# 2. Execute migration (manual confirmation required)
+psql $DATABASE_URL < server/migrations/fix-enrollment-currency-units.sql
+
+# 3. Verify results - should show 0 affected records
+# (or if rollback needed)
+psql $DATABASE_URL < server/migrations/rollback-enrollment-currency-units.sql
+```
+
+**Testing**:
+- Backend validation will catch future dollar values at enrollment creation
+- Frontend cart now includes diagnostic logging for troubleshooting
+- Sibling discount label now shows actual percentage from database
+
+**Post-Migration**:
+- All cart calculations will use correct cent-denominated values
+- Deposit amounts will calculate correctly (e.g., $147.00 deposit from $1,470.00 total)
+- No code changes needed - migration fixes data layer only
+
 ## External Dependencies
 -   **Supabase**: PostgreSQL database and OAuth authentication.
 -   **Stripe**: Payment processing.
