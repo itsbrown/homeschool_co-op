@@ -319,6 +319,18 @@ export class StripePaymentPlanService {
         const depositAmount = Math.max(calculatedDeposit, STRIPE_MINIMUM_AMOUNT);
         const balanceAmount = totalAmount - depositAmount;
         
+        // DEBUG: Log deposit calculation details
+        console.log('💰 Deposit Calculation:', {
+          totalAmount_CENTS: totalAmount,
+          totalAmount_DOLLARS: CurrencyUtils.toDisplay(totalAmount),
+          calculatedDeposit_CENTS: calculatedDeposit,
+          calculatedDeposit_DOLLARS: CurrencyUtils.toDisplay(calculatedDeposit),
+          depositAmount_CENTS: depositAmount,
+          depositAmount_DOLLARS: CurrencyUtils.toDisplay(depositAmount),
+          balanceAmount_CENTS: balanceAmount,
+          balanceAmount_DOLLARS: CurrencyUtils.toDisplay(balanceAmount)
+        });
+        
         // Check if total amount is too small for any split payment plan
         if (totalAmount < STRIPE_MINIMUM_AMOUNT * 2 || balanceAmount < STRIPE_MINIMUM_AMOUNT || depositAmount >= totalAmount) {
           // If total is less than $1.00 or remaining balance would be below minimum, use full payment
