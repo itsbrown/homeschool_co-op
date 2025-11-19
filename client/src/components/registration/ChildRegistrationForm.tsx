@@ -144,6 +144,7 @@ export default function ChildRegistrationForm({
   // Reset form when defaultValues change (important for editing existing children)
   useEffect(() => {
     if (defaultValues && Object.keys(defaultValues).length > 0) {
+      console.log('🔄 Resetting form with defaultValues:', defaultValues);
       form.reset(defaultValues);
     }
   }, [defaultValues, form]);
@@ -268,7 +269,11 @@ export default function ChildRegistrationForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Grade Level*</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value || undefined}
+                      defaultValue={field.value || undefined}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select grade level" />
