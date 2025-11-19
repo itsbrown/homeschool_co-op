@@ -12,34 +12,15 @@ export default function StudentClassesPage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
 
-  // Fetch student data
+  // Fetch student data (uses default authenticated fetcher)
   const { data: student, isLoading: studentLoading, error: studentError } = useQuery({
-    queryKey: [`/api/schools/students/${id}`],
-    queryFn: async () => {
-      const response = await fetch(`/api/schools/students/${id}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
-    },
+    queryKey: [`/api/school-admin/students/${id}`],
     enabled: !!id,
   });
 
-  // Fetch student enrollments
+  // Fetch student enrollments (uses default authenticated fetcher)
   const { data: enrollments, isLoading: enrollmentsLoading } = useQuery({
     queryKey: [`/api/enrollments/child/${id}`],
-    queryFn: async () => {
-      try {
-        const response = await fetch(`/api/enrollments/child/${id}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return await response.json();
-      } catch (error) {
-        console.error('Error fetching enrollments:', error);
-        return [];
-      }
-    },
     enabled: !!id
   });
 

@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, UserPlus, Mail, Edit, MapPin } from "lucide-react";
 import { useAuth } from "@/components/SupabaseProvider";
+import { apiRequest } from "@/lib/queryClient";
 
 interface StudentData {
   id: number;
@@ -56,7 +57,7 @@ export default function StudentRegistrationPage() {
 
   // Fetch student data if in edit mode
   const { data: studentData, isLoading } = useQuery<StudentData>({
-    queryKey: [`/api/schools/students/${studentId}`],
+    queryKey: [`/api/school-admin/students/${studentId}`],
     enabled: isEditMode
   });
 
@@ -106,24 +107,12 @@ export default function StudentRegistrationPage() {
 
       console.log('Form submission data:', submissionData);
 
-      // Choose endpoint based on mode
-      const endpoint = isEditMode ? `/api/schools/students/${studentId}` : '/api/students/register';
+      // Choose endpoint and method based on mode
+      const endpoint = isEditMode ? `/api/school-admin/students/${studentId}` : '/api/students/register';
       const method = isEditMode ? 'PUT' : 'POST';
 
-      const response = await fetch(endpoint, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(submissionData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Registration failed:', errorData);
-        throw new Error(errorData.message || 'Failed to register student');
-      }
-
+      // Use apiRequest for authenticated requests
+      const response = await apiRequest(method, endpoint, submissionData);
       const result = await response.json();
       console.log('Registration success:', result);
 
