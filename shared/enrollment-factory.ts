@@ -18,6 +18,43 @@
 import type { InsertProgramEnrollment } from "./schema";
 
 /**
+ * Validates that monetary value is in cents (not dollars)
+ * Throws error if value appears to be in dollars instead of cents
+ * 
+ * CRITICAL: All monetary values must be stored in CENTS per schema.ts
+ * Values under $100 (10000 cents) for class enrollments are likely incorrect
+ * 
+ * @param value - The monetary value to validate
+ * @param fieldName - Name of the field being validated (for error messages)
+ * @throws Error if value appears to be in dollars
+ */
+function validateMonetaryValueInCents(value: number | null | undefined, fieldName: string): void {
+  // Skip validation for null/undefined/zero values
+  if (!value || value === 0) return;
+
+  // CRITICAL: Values less than $100 (10000 cents) for enrollments are suspicious
+  // Most class prices are $50+ which would be 5000+ cents
+  // If we receive a value like 147 (when it should be 14700), that's a dollar value
+  if (value > 0 && value < 5000) {
+    console.warn(
+      `⚠️  VALIDATION WARNING: ${fieldName} = ${value} cents ($${(value / 100).toFixed(2)}) ` +
+      `This seems unusually low for a class enrollment. ` +
+      `If you meant $${value.toFixed(2)}, the value should be ${value * 100} cents instead.`
+    );
+    
+    // Log but don't throw - some classes might legitimately be under $50
+    // However, if value is suspiciously round (like 100, 200, 500), it's likely dollars
+    if (value % 100 === 0 && value < 5000) {
+      throw new Error(
+        `VALIDATION ERROR: ${fieldName} = ${value} appears to be in DOLLARS, not CENTS. ` +
+        `Per schema.ts, all monetary values must be in CENTS. ` +
+        `If you meant $${value.toFixed(2)}, please pass ${value * 100} cents instead.`
+      );
+    }
+  }
+}
+
+/**
  * Child data required for enrollment
  */
 export interface EnrollmentChildInput {
@@ -126,10 +163,18 @@ export function createEnrollmentData(input: CreateEnrollmentInput): InsertProgra
     throw new Error("marketplaceClassId is required when classType is 'marketplace'");
   }
 
+  // CRITICAL: Validate monetary values are in CENTS, not DOLLARS
+  validateMonetaryValueInCents(paymentDetails.totalCost, 'paymentDetails.totalCost');
+  validateMonetaryValueInCents(paymentDetails.depositRequired, 'paymentDetails.depositRequired');
+  validateMonetaryValueInCents(paymentDetails.totalPaid, 'paymentDetails.totalPaid');
+
   // Calculate remaining balance
   const totalCost = paymentDetails.totalCost;
   const totalPaid = paymentDetails.totalPaid ?? 0;
   const remainingBalance = totalCost - totalPaid;
+  
+  // Validate calculated remaining balance
+  validateMonetaryValueInCents(remainingBalance, 'remainingBalance (calculated)');
 
   // Convert dates to proper format
   const programStartDate = classInfo.startDate 
@@ -270,6 +315,12 @@ export interface SimpleEnrollmentParams {
  * Use this when you have individual enrollment fields
  */
 export function createEnrollmentDataSimple(params: SimpleEnrollmentParams): InsertProgramEnrollment {
+  // CRITICAL: Validate monetary values are in CENTS, not DOLLARS
+  validateMonetaryValueInCents(params.totalCost, 'totalCost');
+  validateMonetaryValueInCents(params.depositRequired, 'depositRequired');
+  validateMonetaryValueInCents(params.totalPaid, 'totalPaid');
+  validateMonetaryValueInCents(params.remainingBalance, 'remainingBalance');
+
   // Convert dates to proper format
   const programStartDate = params.programStartDate 
     ? (typeof params.programStartDate === 'string' ? params.programStartDate : params.programStartDate.toISOString().split('T')[0])
