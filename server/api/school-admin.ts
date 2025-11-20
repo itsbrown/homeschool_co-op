@@ -639,6 +639,7 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
       }
       
       // Return the class with variants array intact for enrollment dialog
+      // Category is stored as a string in the database, so we just pass it through as categoryName
       return {
         ...classItem,
         enrollmentCount: classEnrollmentCount,
@@ -647,7 +648,9 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
         // Include variants array if they exist
         variants: variants || undefined,
         // Include location name for display
-        location: locationName || classItem.location || null
+        location: locationName || classItem.location || null,
+        // Pass category as categoryName for frontend consistency
+        categoryName: classItem.category || null
       };
     }));
 

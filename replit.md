@@ -57,8 +57,8 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 -   **Notification System**: In-app notification system with PostgreSQL storage, real-time unread count, and mark-as-read functionality.
 -   **Enrollment Count Display**: Class enrollment counts accurately reflect valid statuses.
 -   **Category Management System**: School-level custom category system with dynamic dropdown integration:
-    -   **Frontend**: Class creation/editing forms load categories dynamically from database (no hardcoded values)
-    -   **Backend**: Auto-seeds 8 default categories when school has none (Early Childhood, Pre-K, Kindergarten, Lower Elementary, Upper Elementary, Middle School, High School, Extracurricular)
+    -   **Frontend**: Class creation/editing forms load categories dynamically from database (no hardcoded values). Class listing page displays `categoryName` field from API response.
+    -   **Backend**: Auto-seeds 8 default categories when school has none (Early Childhood, Pre-K, Kindergarten, Lower Elementary, Upper Elementary, Middle School, High School, Extracurricular). GET /api/school-admin/classes endpoint maps `category` field to `categoryName` for frontend consistency.
     -   **Seeding**: Idempotent seeding with duplicate prevention ensures categories are created only once
     -   **Backwards Compatible**: Existing classes retain their category values (stored as strings, not foreign keys)
     -   **Management Interface**: School administrators can create, edit, activate/deactivate, and delete categories via dedicated Category Management page
