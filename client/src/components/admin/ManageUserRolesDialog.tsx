@@ -83,8 +83,8 @@ export default function ManageUserRolesDialog({
   const addRoleMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest(
-        `/api/user/admin/users/${userId}/roles`,
         'POST',
+        `/api/user/admin/users/${userId}/roles`,
         {
           role: selectedRole,
           schoolId: selectedSchoolId ? parseInt(selectedSchoolId) : null,
@@ -117,8 +117,8 @@ export default function ManageUserRolesDialog({
   const removeRoleMutation = useMutation({
     mutationFn: async (roleId: number) => {
       return await apiRequest(
-        `/api/user/admin/users/${userId}/roles/${roleId}`,
-        'DELETE'
+        'DELETE',
+        `/api/user/admin/users/${userId}/roles/${roleId}`
       );
     },
     onSuccess: () => {

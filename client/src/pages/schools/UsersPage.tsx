@@ -16,7 +16,8 @@ import {
   Filter,
   Mail,
   Key,
-  Send
+  Send,
+  UserCog
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -35,6 +36,7 @@ import {
 import { Link } from 'wouter';
 import CreateUserDialog from '@/components/schools/CreateUserDialog';
 import ImportUsersDialog from '@/components/schools/ImportUsersDialog';
+import ManageUserRolesDialog from '@/components/admin/ManageUserRolesDialog';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { useToast } from '@/hooks/use-toast';
 import { useSchoolAdmin } from '@/hooks/useSchoolAdmin';
@@ -46,6 +48,7 @@ export default function UsersPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [manageRolesUser, setManageRolesUser] = useState<any>(null);
   
   const queryClient = useQueryClient();
   const { schoolId } = useSchoolAdmin();
@@ -373,6 +376,10 @@ export default function UsersPage() {
                               <Edit className="h-4 w-4 mr-2" />
                               Edit User
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setManageRolesUser(user)} data-testid={`button-manage-roles-${user.id}`}>
+                              <UserCog className="h-4 w-4 mr-2" />
+                              Manage Roles
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleSendInvite(user.id, `${user.firstName || user.name} ${user.lastName || ''}`)}>
                               <Mail className="h-4 w-4 mr-2" />
                               Send Account Invite
@@ -418,6 +425,15 @@ export default function UsersPage() {
         onOpenChange={setShowImportDialog}
         schoolId={schoolId || 0}
       />
+      {manageRolesUser && (
+        <ManageUserRolesDialog
+          open={!!manageRolesUser}
+          onOpenChange={(open) => !open && setManageRolesUser(null)}
+          userId={manageRolesUser.id}
+          userEmail={manageRolesUser.email}
+          userName={`${manageRolesUser.firstName || ''} ${manageRolesUser.lastName || ''}`.trim()}
+        />
+      )}
       </div>
     </SchoolAdminLayout>
   );
