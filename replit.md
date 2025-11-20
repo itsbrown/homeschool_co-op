@@ -8,8 +8,11 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### November 20, 2025
+- **Multi-Role Active Role Display Fix**: Fixed complete active role lifecycle management ensuring role changes immediately reflect in Users listing and Edit User dialog. Backend now properly updates activeRole/activeRoleId when roles are added/deleted.
+- **Active Role Lifecycle Implementation**: POST /api/user/admin/users/:userId/roles now sets activeRole/activeRoleId when adding primary roles or when user has no active role. DELETE endpoint properly falls back to another role (primary first, else earliest) when deleting active/primary roles.
+- **Users Listing Enhancement**: GET /api/school-admin/users updated to query database directly and return activeRole || role, ensuring UI shows current active role instead of stale legacy role.
 - **Multi-Role Access Control Fix**: Fixed ManageUserRolesDialog school dropdown filtering - SchoolAdmins now only see their own school, global admins see all schools. Removed "No School" option for SchoolAdmins to prevent invalid role assignments.
-- **API Response Handling Fix**: Corrected ManageUserRolesDialog to properly extract roles from nested API response structure ({ user, roles }) preventing "No roles assigned" display bug.
+- **API Response Handling Fix**: Corrected ManageUserRolesDialog to properly extract roles from nested API response structure ({ user, roles }) preventing "No roles assigned" display bug. Added schoolName to role responses via left join with schools table.
 
 ## System Architecture
 ### Core Design Principles

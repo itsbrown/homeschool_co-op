@@ -11,7 +11,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { getDb } from '../db';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
+import { users } from '@shared/schema';
 
 const router = Router();
 
@@ -3876,9 +3877,38 @@ router.get('/users', supabaseAuth, async (req: any, res) => {
 
     console.log('📋 Fetching users for school admin...');
 
-    // Get all users for this school (use getAllUsers since getUsersBySchool doesn't exist)
-    const allUsers = await storage.getAllUsers();
-    const regularUsers = allUsers.filter((user: any) => user.schoolId === schoolId);
+    const db = await getDb();
+    
+    // Get all users for this school from database with active role
+    const dbUsers = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        role: users.role,
+        activeRole: users.activeRole,
+        phone: users.phone,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        schoolId: users.schoolId,
+      })
+      .from(users)
+      .where(eq(users.schoolId, schoolId));
+
+    // Map to frontend format with active role
+    const regularUsers = dbUsers.map((user: any) => ({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName || user.name?.split(' ')[0] || '',
+      lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+      role: user.activeRole || user.role, // Use active role if available, fall back to legacy role
+      phone: user.phone || '',
+      isActive: user.isActive !== false,
+      createdAt: user.createdAt,
+    }));
+    
     console.log(`👥 Found ${regularUsers.length} regular users for school ${schoolId}`);
     
     // Load staff from database

@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getDb } from '../db';
 import { sql, eq, and, ne } from 'drizzle-orm';
-import { users, userRoles, insertUserRoleSchema } from '@shared/schema';
+import { users, userRoles, schools, insertUserRoleSchema } from '@shared/schema';
 import { supabaseAuth } from '../middleware/supabase-auth';
 
 export const userRolesRouter = Router();
@@ -368,7 +368,7 @@ userRolesRouter.get('/admin/users/:userId/roles', supabaseAuth, async (req: Auth
       });
     }
 
-    // Get all roles for this user
+    // Get all roles for this user with school name
     // For schoolAdmins, only show roles from their school (strict isolation)
     // CRITICAL: Must combine predicates in a single where() to avoid overwriting
     let rolesQuery;
@@ -380,10 +380,12 @@ userRolesRouter.get('/admin/users/:userId/roles', supabaseAuth, async (req: Auth
           id: userRoles.id,
           role: userRoles.role,
           schoolId: userRoles.schoolId,
+          schoolName: schools.name,
           isPrimary: userRoles.isPrimary,
           createdAt: userRoles.createdAt,
         })
         .from(userRoles)
+        .leftJoin(schools, eq(userRoles.schoolId, schools.id))
         .where(and(
           eq(userRoles.userId, targetUserId),
           eq(userRoles.schoolId, adminSchoolId)
@@ -395,10 +397,12 @@ userRolesRouter.get('/admin/users/:userId/roles', supabaseAuth, async (req: Auth
           id: userRoles.id,
           role: userRoles.role,
           schoolId: userRoles.schoolId,
+          schoolName: schools.name,
           isPrimary: userRoles.isPrimary,
           createdAt: userRoles.createdAt,
         })
         .from(userRoles)
+        .leftJoin(schools, eq(userRoles.schoolId, schools.id))
         .where(eq(userRoles.userId, targetUserId));
     }
 
@@ -417,6 +421,7 @@ userRolesRouter.get('/admin/users/:userId/roles', supabaseAuth, async (req: Auth
         id: r.id,
         role: r.role,
         schoolId: r.schoolId,
+        schoolName: r.schoolName,
         isPrimary: r.isPrimary,
         createdAt: r.createdAt,
       })),
@@ -522,21 +527,104 @@ userRolesRouter.post('/admin/users/:userId/roles', supabaseAuth, async (req: Aut
       });
     }
 
-    // Insert new role
-    const newRole = await db
-      .insert(userRoles)
-      .values({
-        userId: targetUserId,
-        role,
-        schoolId: roleSchoolId,
-        isPrimary: isPrimary || false,
-      })
-      .returning();
+    // Execute role addition in a transaction to ensure atomicity
+    const result = await db.transaction(async (tx) => {
+      // Get current user state
+      const currentUser = await tx
+        .select({ activeRoleId: users.activeRoleId })
+        .from(users)
+        .where(eq(users.id, targetUserId))
+        .limit(1);
+
+      // If this is being marked as primary, clear existing primary flags
+      if (isPrimary) {
+        await tx
+          .update(userRoles)
+          .set({ isPrimary: false })
+          .where(eq(userRoles.userId, targetUserId));
+        
+        console.log(`🔄 Cleared existing primary flags for user ${targetUserId}`);
+      }
+
+      // Insert new role
+      const newRole = await tx
+        .insert(userRoles)
+        .values({
+          userId: targetUserId,
+          role,
+          schoolId: roleSchoolId,
+          isPrimary: isPrimary || false,
+        })
+        .returning();
+
+      // Determine whether to set this as the active role
+      let shouldSetActive = false;
+      
+      if (isPrimary) {
+        // Always set as active if this is the new primary role
+        shouldSetActive = true;
+      } else if (!currentUser[0]?.activeRoleId) {
+        // User has no active role - check if there's an existing primary role
+        const existingPrimary = await tx
+          .select({ id: userRoles.id, role: userRoles.role, schoolId: userRoles.schoolId })
+          .from(userRoles)
+          .where(and(
+            eq(userRoles.userId, targetUserId),
+            eq(userRoles.isPrimary, true),
+            ne(userRoles.id, newRole[0].id) // Exclude the just-inserted role
+          ))
+          .limit(1);
+        
+        if (existingPrimary.length > 0) {
+          // There's an existing primary role - use that instead
+          await tx
+            .update(users)
+            .set({
+              role: existingPrimary[0].role,
+              activeRole: existingPrimary[0].role,
+              activeRoleId: existingPrimary[0].id,
+              schoolId: existingPrimary[0].schoolId,
+            })
+            .where(eq(users.id, targetUserId));
+          
+          console.log(`✅ Set active role for user ${targetUserId} to existing primary ${existingPrimary[0].role} (roleId: ${existingPrimary[0].id})`);
+        } else {
+          // No existing primary - promote the new role to primary
+          shouldSetActive = true;
+          
+          // Mark the new role as primary since it's being promoted
+          if (!isPrimary) {
+            await tx
+              .update(userRoles)
+              .set({ isPrimary: true })
+              .where(eq(userRoles.id, newRole[0].id));
+            
+            console.log(`🔄 Promoted new role ${role} to primary for user ${targetUserId}`);
+          }
+        }
+      }
+      
+      if (shouldSetActive) {
+        await tx
+          .update(users)
+          .set({
+            role, // Update legacy role column for backwards compatibility
+            activeRole: role,
+            activeRoleId: newRole[0].id,
+            schoolId: roleSchoolId, // Update school context when changing active role
+          })
+          .where(eq(users.id, targetUserId));
+
+        console.log(`✅ Set active role for user ${targetUserId} to ${role} (roleId: ${newRole[0].id}, school: ${roleSchoolId})`);
+      }
+
+      return newRole[0];
+    });
 
     return res.json({
       success: true,
       message: `Successfully added ${role} role to user`,
-      role: newRole[0],
+      role: result,
     });
   } catch (error) {
     console.error('Error adding role (admin):', error);
@@ -625,68 +713,79 @@ userRolesRouter.delete('/admin/users/:userId/roles/:roleId', supabaseAuth, async
       });
     }
 
-    // CRITICAL: Handle primary role (users.role) reassignment before deletion
-    // If the role being deleted is the primary role, we need to reassign users.role
-    const currentUser = await db
-      .select({ role: users.role, activeRole: users.activeRole })
-      .from(users)
-      .where(eq(users.id, targetUserId))
-      .limit(1);
+    // Execute role deletion in a transaction to ensure atomicity
+    await db.transaction(async (tx) => {
+      // Get current user state and role being deleted
+      const currentUser = await tx
+        .select({ role: users.role, activeRole: users.activeRole, activeRoleId: users.activeRoleId })
+        .from(users)
+        .where(eq(users.id, targetUserId))
+        .limit(1);
 
-    if (currentUser.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+      if (currentUser.length === 0) {
+        throw new Error('User not found');
+      }
 
-    const isPrimaryRole = currentUser[0].role === roleToDelete[0].role;
-    
-    if (isPrimaryRole) {
-      // Find another role to promote to primary (including schoolId for proper alignment)
-      const remainingRoles = await db
-        .select({ role: userRoles.role, id: userRoles.id, schoolId: userRoles.schoolId })
+      // Check if the role being deleted is marked as primary in user_roles
+      const roleBeingDeleted = await tx
+        .select({ isPrimary: userRoles.isPrimary })
+        .from(userRoles)
+        .where(eq(userRoles.id, roleId))
+        .limit(1);
+
+      const isDeletingActiveRole = currentUser[0].activeRoleId === roleId;
+      const isDeletingPrimaryRole = roleBeingDeleted[0]?.isPrimary || currentUser[0].role === roleToDelete[0].role;
+      
+      // Find remaining roles (primary first, then earliest)
+      const remainingRoles = await tx
+        .select({ role: userRoles.role, id: userRoles.id, schoolId: userRoles.schoolId, isPrimary: userRoles.isPrimary, createdAt: userRoles.createdAt })
         .from(userRoles)
         .where(and(
           eq(userRoles.userId, targetUserId),
           ne(userRoles.id, roleId) // Exclude the role being deleted
         ))
+        .orderBy(sql`${userRoles.isPrimary} DESC, ${userRoles.createdAt} ASC`)
         .limit(1);
 
       if (remainingRoles.length === 0) {
         // This should never happen due to last-role check, but defensive coding
-        return res.status(400).json({ 
-          error: 'Cannot remove primary role',
-          message: 'Cannot delete the only remaining role. Users must have at least one role.' 
-        });
+        throw new Error('Cannot remove last role - users must have at least one role');
       }
 
-      // Reassign users.role AND users.schoolId to the next available role
-      // CRITICAL: Must update schoolId to maintain tenant isolation
-      const newPrimaryRole = remainingRoles[0].role;
-      const newSchoolId = remainingRoles[0].schoolId;
-      
-      await db
-        .update(users)
-        .set({ 
-          role: newPrimaryRole,
-          schoolId: newSchoolId, // CRITICAL: Update school context
-          activeRole: null // Also clear activeRole to use the new primary
-        })
-        .where(eq(users.id, targetUserId));
+      // If deleting the active role or primary role, fall back to the next role (primary first, else earliest)
+      if (isDeletingActiveRole || isDeletingPrimaryRole) {
+        const fallbackRole = remainingRoles[0];
+        
+        // Clear all primary flags, then set the fallback as primary
+        await tx
+          .update(userRoles)
+          .set({ isPrimary: false })
+          .where(eq(userRoles.userId, targetUserId));
+        
+        await tx
+          .update(userRoles)
+          .set({ isPrimary: true })
+          .where(eq(userRoles.id, fallbackRole.id));
+        
+        // Update users table with new active/primary role
+        await tx
+          .update(users)
+          .set({ 
+            role: fallbackRole.role, // Update legacy role column
+            activeRole: fallbackRole.role,
+            activeRoleId: fallbackRole.id,
+            schoolId: fallbackRole.schoolId, // Update school context
+          })
+          .where(eq(users.id, targetUserId));
 
-      console.log(`🔄 Reassigned primary role for user ${targetUserId} from ${roleToDelete[0].role} to ${newPrimaryRole} (school ${newSchoolId})`);
-    } else if (currentUser[0].activeRole === roleToDelete[0].role) {
-      // If activeRole matches the deleted role (but not primary), clear it
-      await db
-        .update(users)
-        .set({ activeRole: null })
-        .where(eq(users.id, targetUserId));
+        console.log(`🔄 Reassigned active role for user ${targetUserId} from ${roleToDelete[0].role} to ${fallbackRole.role} (school ${fallbackRole.schoolId}, marked as primary)`);
+      }
 
-      console.log(`🔄 Cleared activeRole for user ${targetUserId} after deleting their active role: ${roleToDelete[0].role}`);
-    }
-
-    // Delete the role
-    await db
-      .delete(userRoles)
-      .where(eq(userRoles.id, roleId));
+      // Delete the role
+      await tx
+        .delete(userRoles)
+        .where(eq(userRoles.id, roleId));
+    });
 
     return res.json({
       success: true,
