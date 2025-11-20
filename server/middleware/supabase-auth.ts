@@ -119,12 +119,6 @@ export const supabaseAuth = async (
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    req.user = {
-      id: user.id,
-      email: user.email!,
-      sub: user.id,
-    };
-
     // 🔐 PHASE 2 HYBRID MODE: Check app_metadata first (new users), then user_metadata (existing users)
     // Feature flag allows instant rollback to Phase 1 if needed
     const hasAppMetadata = user.app_metadata && (user.app_metadata.role || user.app_metadata.school_id);
@@ -134,25 +128,10 @@ export const supabaseAuth = async (
       console.log(`✅ Phase 2: Using app_metadata for ${user.email} (secure, immutable)`);
     }
 
-    // 🔒 CRITICAL: Spread user_metadata FIRST, then override with secure values
-    // This prevents user_metadata from overwriting admin-only app_metadata values
-    const { role: _, school_id: __, ...safeUserMetadata } = user.user_metadata || {};
-    
-    req.auth = {
-      payload: {
-        sub: user.id,
-        email: user.email!,
-        // Include non-critical metadata from user_metadata (like name, preferences)
-        ...safeUserMetadata,
-        // Phase 2: Use app_metadata (admin-only) or user_metadata (existing users)
-        // These MUST come after spread to prevent tampering via user_metadata
-        role: (PHASE_2_APP_METADATA_ENABLED ? user.app_metadata?.role : null) || user.user_metadata?.role,
-        school_id: (PHASE_2_APP_METADATA_ENABLED ? user.app_metadata?.school_id : null) || user.user_metadata?.school_id,
-      },
-    };
-
     // 🔒 SECURITY MONITORING & AUTO-SYNC: Detect and correct metadata mismatches
     // This protects against user_metadata tampering by ensuring database is source of truth
+    // CRITICAL: We need to fetch dbUser FIRST to set req.user.id to the database integer ID
+    let dbUserId: number | null = null;
     if (user.email) {
       try {
         // Import storage dynamically to avoid circular dependencies
@@ -160,6 +139,9 @@ export const supabaseAuth = async (
         const dbUser = await storage.getUserByEmail(user.email);
         
         if (dbUser) {
+          // Store database user ID for req.user
+          dbUserId = dbUser.id;
+          
           // For Phase 2 users (app_metadata), check if database matches app_metadata
           // For existing users (user_metadata), auto-sync from database
           const currentSchoolId = user.app_metadata?.school_id || user.user_metadata?.school_id;
@@ -236,6 +218,31 @@ export const supabaseAuth = async (
         console.error('Error during metadata sync:', syncError);
       }
     }
+
+    // Set req.user with database integer ID (not Supabase UUID)
+    // This is CRITICAL for multi-role API endpoints that query by user ID
+    req.user = {
+      id: dbUserId !== null ? dbUserId : user.id, // Use database ID if available, fallback to Supabase UUID
+      email: user.email!,
+      sub: user.id,
+    } as any;
+
+    // 🔒 CRITICAL: Spread user_metadata FIRST, then override with secure values
+    // This prevents user_metadata from overwriting admin-only app_metadata values
+    const { role: _, school_id: __, ...safeUserMetadata } = user.user_metadata || {};
+    
+    req.auth = {
+      payload: {
+        sub: user.id,
+        email: user.email!,
+        // Include non-critical metadata from user_metadata (like name, preferences)
+        ...safeUserMetadata,
+        // Phase 2: Use app_metadata (admin-only) or user_metadata (existing users)
+        // These MUST come after spread to prevent tampering via user_metadata
+        role: (PHASE_2_APP_METADATA_ENABLED ? user.app_metadata?.role : null) || user.user_metadata?.role,
+        school_id: (PHASE_2_APP_METADATA_ENABLED ? user.app_metadata?.school_id : null) || user.user_metadata?.school_id,
+      },
+    };
 
     next();
   } catch (error) {

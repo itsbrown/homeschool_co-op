@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 interface UserRole {
   id: number;
@@ -36,6 +37,7 @@ interface RoleProviderProps {
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const { user } = useAuth();
+  const { toast } = useToast();
   // Start with empty role - always fetch from database as source of truth
   // localStorage is only used as a cache after database confirms the role
   const [activeRole, setActiveRole] = useState<string>('');
@@ -44,7 +46,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
 
   // Fetch user roles from database
-  const { data: rolesData, isLoading: isLoadingRoles } = useQuery({
+  const { data: rolesData, isLoading: isLoadingRoles, error: rolesError } = useQuery({
     queryKey: ['/api/user/roles', user?.email],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
@@ -61,6 +63,18 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     enabled: !!user,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
+
+  // Show error toast if role fetch fails
+  useEffect(() => {
+    if (rolesError) {
+      console.error('❌ Failed to load roles:', rolesError);
+      toast({
+        title: 'Failed to load roles',
+        description: 'Unable to load your account roles. Please try refreshing the page.',
+        variant: 'destructive',
+      });
+    }
+  }, [rolesError, toast]);
 
   const availableRoles: UserRole[] = rolesData?.roles || [];
 
@@ -165,7 +179,8 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to switch role');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to switch role' }));
+        throw new Error(errorData.error || 'Failed to switch role');
       }
 
       const data = await response.json();
@@ -180,6 +195,11 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       window.location.reload();
     } catch (error) {
       console.error('❌ Error switching role:', error);
+      toast({
+        title: 'Failed to switch role',
+        description: error instanceof Error ? error.message : 'Unable to switch to the selected role. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
