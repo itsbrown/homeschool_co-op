@@ -38,8 +38,11 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 -   **Multi-Role System**: Users can hold multiple roles simultaneously (e.g., both parent AND educator) with role-switching capabilities:
     -   **Database Schema**: Junction table `user_roles` for many-to-many role assignments with `active_role` column in users table for current role tracking
     -   **Phase 1 (COMPLETED)**: Database migration with `user_roles` table, role enum expansion (student, parent, learner, educator, teacher, schoolAdmin, admin, superAdmin), indexes, and data migration of existing user roles
-    -   **Phase 2 (IN PROGRESS)**: Backend APIs for role management - get user roles, switch active role, add/remove roles
-    -   **Backward Compatible**: Existing single-role code continues working; original `role` column preserved
+    -   **Phase 2 (COMPLETED)**: Backend APIs for role management with two distinct feature sets:
+        -   **User APIs** (`/api/user/*`): Authenticated users can view their roles, switch active role, and reset to primary role. School context properly maintained during role switches.
+        -   **Admin APIs** (`/api/user/admin/users/:userId/*`): Admins and schoolAdmins can view, add, and remove roles for other users. Includes duplicate prevention, last-role protection, and school isolation enforcement for schoolAdmins.
+    -   **Phase 3 (PENDING)**: Frontend integration - role selection UI, role switching components, and admin role management interface
+    -   **Backward Compatible**: Existing single-role code continues working; original `role` column preserved. Legacy users without `user_roles` entries fall back to `users.schoolId` for school context.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, and automated refunds.
