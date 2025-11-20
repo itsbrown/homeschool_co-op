@@ -4,7 +4,7 @@ import { z } from "zod";
 import { relations } from "drizzle-orm";
 
 // Define the enum for user roles
-const roleEnum = pgEnum('role', ["student", "parent", "teacher", "schoolAdmin", "admin", "superAdmin"]);
+const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "teacher", "schoolAdmin", "admin", "superAdmin"]);
 
 // Users table
 export const users = pgTable("users", {

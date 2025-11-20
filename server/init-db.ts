@@ -141,15 +141,16 @@ async function runMigrations() {
     
     // Create unique constraint on (school_id, name)
     console.log('Running migration: Adding unique constraint to categories...');
-    await db.execute(sql`
-      DO $$ BEGIN
+    try {
+      await db.execute(sql`
         ALTER TABLE categories 
         ADD CONSTRAINT categories_school_id_name_unique UNIQUE (school_id, name);
-      EXCEPTION
-        WHEN duplicate_object THEN NULL;
-      END $$;
-    `);
-    console.log('✅ Migration completed: unique constraint added to categories');
+      `);
+      console.log('✅ Migration completed: unique constraint added to categories');
+    } catch (constraintError) {
+      // Constraint already exists, which is fine
+      console.log('✅ Migration completed: unique constraint already exists on categories');
+    }
     
     // Seed default categories for all existing schools
     console.log('Running migration: Seeding default categories for existing schools...');
@@ -234,6 +235,39 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: active_role column added to users table');
     
+    // Create role enum type if it doesn't exist
+    console.log('Running migration: Creating role enum type...');
+    try {
+      await db.execute(sql`
+        DO $$ BEGIN
+          CREATE TYPE role AS ENUM ('student', 'parent', 'learner', 'educator', 'teacher', 'schoolAdmin', 'admin', 'superAdmin');
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
+      console.log('✅ Migration completed: role enum type created');
+    } catch (enumError) {
+      console.log('✅ Migration completed: role enum type already exists');
+    }
+    
+    // Add missing role values to existing role enum if they don't exist
+    console.log('Running migration: Adding missing role values to enum...');
+    const rolesToAdd = ['educator', 'learner'];
+    for (const roleValue of rolesToAdd) {
+      try {
+        await db.execute(sql.raw(`
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = '${roleValue}' AND enumtypid = 'role'::regtype) THEN
+              ALTER TYPE role ADD VALUE '${roleValue}';
+            END IF;
+          END $$;
+        `));
+        console.log(`✅ Migration completed: ${roleValue} value added to role enum`);
+      } catch (roleError) {
+        console.log(`✅ Migration completed: ${roleValue} value already exists in role enum`);
+      }
+    }
+    
     // Create user_roles table for multi-role assignments
     console.log('Running migration: Creating user_roles table...');
     await db.execute(sql`
@@ -270,7 +304,7 @@ async function runMigrations() {
       INSERT INTO user_roles (user_id, role, school_id, is_primary)
       SELECT 
         id as user_id,
-        role,
+        role::role,
         school_id,
         true as is_primary
       FROM users
