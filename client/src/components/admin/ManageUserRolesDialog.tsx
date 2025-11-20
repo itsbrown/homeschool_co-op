@@ -63,7 +63,7 @@ export default function ManageUserRolesDialog({
   const { toast } = useToast();
   const [showAddRole, setShowAddRole] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('');
-  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('none');
   const [isPrimary, setIsPrimary] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState<UserRole | null>(null);
 
@@ -87,7 +87,7 @@ export default function ManageUserRolesDialog({
         `/api/user/admin/users/${userId}/roles`,
         {
           role: selectedRole,
-          schoolId: selectedSchoolId ? parseInt(selectedSchoolId) : null,
+          schoolId: selectedSchoolId && selectedSchoolId !== 'none' ? parseInt(selectedSchoolId) : null,
           isPrimary,
         }
       );
@@ -101,7 +101,7 @@ export default function ManageUserRolesDialog({
       });
       setShowAddRole(false);
       setSelectedRole('');
-      setSelectedSchoolId('');
+      setSelectedSchoolId('none');
       setIsPrimary(false);
     },
     onError: (error: any) => {
@@ -263,7 +263,7 @@ export default function ManageUserRolesDialog({
                     onClick={() => {
                       setShowAddRole(false);
                       setSelectedRole('');
-                      setSelectedSchoolId('');
+                      setSelectedSchoolId('none');
                       setIsPrimary(false);
                     }}
                     data-testid="button-cancel-add-role"
@@ -296,7 +296,7 @@ export default function ManageUserRolesDialog({
                         <SelectValue placeholder="Select a school (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No School</SelectItem>
+                        <SelectItem value="none">No School</SelectItem>
                         {schools?.map((school) => (
                           <SelectItem key={school.id} value={school.id.toString()}>
                             {school.name}
