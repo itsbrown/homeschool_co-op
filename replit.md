@@ -6,6 +6,11 @@ The ASA Learning Platform is an adaptive learning application for the American S
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+### November 20, 2025
+- **Multi-Role Access Control Fix**: Fixed ManageUserRolesDialog school dropdown filtering - SchoolAdmins now only see their own school, global admins see all schools. Removed "No School" option for SchoolAdmins to prevent invalid role assignments.
+- **API Response Handling Fix**: Corrected ManageUserRolesDialog to properly extract roles from nested API response structure ({ user, roles }) preventing "No roles assigned" display bug.
+
 ## System Architecture
 ### Core Design Principles
 The platform emphasizes scalability, security, and user experience, incorporating role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.

@@ -68,16 +68,41 @@ export default function ManageUserRolesDialog({
   const [roleToDelete, setRoleToDelete] = useState<UserRole | null>(null);
 
   // Fetch user's roles
-  const { data: userRoles, isLoading: rolesLoading } = useQuery<UserRole[]>({
+  const { data: rolesResponse, isLoading: rolesLoading } = useQuery<{
+    user: {
+      id: number;
+      email: string;
+      name: string;
+      primaryRole: string;
+      activeRole: string;
+      schoolId: number | null;
+    };
+    roles: UserRole[];
+  }>({
     queryKey: ['/api/user/admin/users', userId, 'roles'],
     enabled: open && !!userId,
   });
 
+  // Extract roles from the response
+  const userRoles = rolesResponse?.roles;
+
+  // Fetch current admin's profile to determine school access
+  const { data: adminProfile } = useQuery<{ role: string; schoolId: number | null }>({
+    queryKey: ['/api/users/profile'],
+    enabled: open,
+  });
+
   // Fetch schools (for school selection)
-  const { data: schools } = useQuery<School[]>({
+  const { data: allSchools } = useQuery<School[]>({
     queryKey: ['/api/schools'],
     enabled: open,
   });
+
+  // Filter schools based on admin privileges
+  // SchoolAdmins can only assign roles to their own school
+  const schools = adminProfile?.role === 'schoolAdmin' && adminProfile?.schoolId
+    ? allSchools?.filter(school => school.id === adminProfile.schoolId)
+    : allSchools;
 
   // Add role mutation
   const addRoleMutation = useMutation({
@@ -290,13 +315,21 @@ export default function ManageUserRolesDialog({
                   </div>
 
                   <div>
-                    <Label htmlFor="school-select">School (Optional)</Label>
+                    <Label htmlFor="school-select">
+                      {adminProfile?.role === 'schoolAdmin' ? 'School' : 'School (Optional)'}
+                    </Label>
                     <Select value={selectedSchoolId} onValueChange={setSelectedSchoolId}>
                       <SelectTrigger id="school-select" data-testid="select-school">
-                        <SelectValue placeholder="Select a school (optional)" />
+                        <SelectValue placeholder={
+                          adminProfile?.role === 'schoolAdmin' 
+                            ? "Select a school" 
+                            : "Select a school (optional)"
+                        } />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">No School</SelectItem>
+                        {adminProfile?.role !== 'schoolAdmin' && (
+                          <SelectItem value="none">No School</SelectItem>
+                        )}
                         {schools?.map((school) => (
                           <SelectItem key={school.id} value={school.id.toString()}>
                             {school.name}
