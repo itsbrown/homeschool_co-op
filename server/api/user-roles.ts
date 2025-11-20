@@ -1,4 +1,4 @@
-import { Router, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { getDb } from '../db';
 import { sql, eq, and } from 'drizzle-orm';
 import { users, userRoles } from '@shared/schema';
@@ -7,7 +7,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 export const userRolesRouter = Router();
 
 // Type for authenticated requests
-interface AuthenticatedRequest {
+interface AuthenticatedRequest extends Request {
   user?: {
     id: number;
     email: string;
@@ -54,7 +54,7 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
     const effectiveActiveRole = currentUser?.activeRole || currentUser?.role;
 
     return res.json({
-      roles: roles.map(r => ({
+      roles: roles.map((r: any) => ({
         id: r.id,
         role: r.role,
         schoolId: r.schoolId,
