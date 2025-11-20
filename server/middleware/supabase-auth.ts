@@ -134,8 +134,6 @@ export const supabaseAuth = async (
     let dbUserId: number | null = null;
     if (user.email) {
       try {
-        // Import storage dynamically to avoid circular dependencies
-        const { storage } = await import('../storage.js');
         const dbUser = await storage.getUserByEmail(user.email);
         
         if (dbUser) {

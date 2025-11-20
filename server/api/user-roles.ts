@@ -158,7 +158,7 @@ userRolesRouter.get('/current-role', supabaseAuth, async (req: AuthenticatedRequ
  * POST /api/user/switch-role
  * Switch the active role for the authenticated user
  * 
- * Body: { role: string }
+ * Body: { roleId: number }
  */
 userRolesRouter.post('/switch-role', supabaseAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -168,30 +168,37 @@ userRolesRouter.post('/switch-role', supabaseAuth, async (req: AuthenticatedRequ
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
-    const { role } = req.body;
+    const { roleId } = req.body;
 
-    if (!role) {
-      return res.status(400).json({ error: 'Role is required' });
+    if (!roleId) {
+      return res.status(400).json({ error: 'Role ID is required' });
     }
 
     const db = await getDb();
     
-    // Verify the user has this role and get the associated school
+    // Verify the user has this role and get the role details and school
     const userRole = await db
-      .select({ schoolId: userRoles.schoolId })
+      .select({ 
+        id: userRoles.id,
+        role: userRoles.role,
+        schoolId: userRoles.schoolId 
+      })
       .from(userRoles)
       .where(and(
         eq(userRoles.userId, userId),
-        eq(userRoles.role, role)
+        eq(userRoles.id, roleId)
       ))
       .limit(1);
 
     if (!userRole || userRole.length === 0) {
       return res.status(403).json({ 
         error: 'You do not have this role',
-        message: `Role '${role}' is not assigned to your account`,
+        message: `Role ID ${roleId} is not assigned to your account`,
       });
     }
+
+    const role = userRole[0].role;
+    const newSchoolId = userRole[0].schoolId;
 
     // Update the user's active role
     await db
@@ -199,12 +206,10 @@ userRolesRouter.post('/switch-role', supabaseAuth, async (req: AuthenticatedRequ
       .set({ activeRole: role })
       .where(eq(users.id, userId));
 
-    // Return the school context for the new role
-    const newSchoolId = userRole[0].schoolId;
-
     return res.json({
       success: true,
       activeRole: role,
+      activeRoleId: roleId,
       schoolId: newSchoolId,
       message: `Successfully switched to ${role} role`,
     });

@@ -41,6 +41,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   // Start with empty role - always fetch from database as source of truth
   // localStorage is only used as a cache after database confirms the role
   const [activeRole, setActiveRole] = useState<string>('');
+  const [activeRoleId, setActiveRoleId] = useState<number | null>(null);
 
   const [showRoleSelection, setShowRoleSelection] = useState<boolean>(false);
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
@@ -87,9 +88,15 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     return primaryRole?.role || availableRoles[0]?.role || 'parent';
   };
 
-  // Get active role ID from rolesData
-  const getActiveRoleId = (): number | null => {
-    return rolesData?.activeRoleId || null;
+  // Get active role from backend activeRoleId
+  const getActiveRoleFromId = (): { role: string; id: number } | null => {
+    const activeId = rolesData?.activeRoleId;
+    if (!activeId) return null;
+    
+    const activeRoleData = availableRoles.find(r => r.id === activeId);
+    if (!activeRoleData) return null;
+    
+    return { role: activeRoleData.role, id: activeRoleData.id };
   };
 
   // Handle role selection logic when roles data changes
@@ -117,44 +124,37 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       }
 
       console.log('🔄 Roles loaded for user:', user.email, 'roles:', availableRoles.length);
-      const savedRole = localStorage.getItem('activeRole');
       
-      // Determine current active role
+      // Determine the current active role from database activeRoleId
+      const activeRoleFromDb = getActiveRoleFromId();
       let currentActiveRole = '';
-      const activeRoleId = getActiveRoleId();
+      let currentActiveRoleId: number | null = null;
       
-      if (activeRoleId) {
-        // User has an active role set in the database
-        const activeRoleData = availableRoles.find(r => r.id === activeRoleId);
-        if (activeRoleData) {
-          currentActiveRole = activeRoleData.role;
-          console.log(`🔄 Active role from database: ${currentActiveRole}`);
+      if (activeRoleFromDb) {
+        currentActiveRole = activeRoleFromDb.role;
+        currentActiveRoleId = activeRoleFromDb.id;
+        console.log(`🔄 Active role from database: ${currentActiveRole} (ID: ${currentActiveRoleId})`);
+      } else {
+        // If no active role in database, use primary role
+        const primaryRole = availableRoles.find(r => r.isPrimary);
+        if (primaryRole) {
+          currentActiveRole = primaryRole.role;
+          currentActiveRoleId = primaryRole.id;
+          console.log(`🔄 Using primary role: ${currentActiveRole} (ID: ${currentActiveRoleId})`);
         }
-      }
-      
-      // If no active role in database, use primary role
-      if (!currentActiveRole) {
-        currentActiveRole = getPrimaryRole();
-        console.log(`🔄 Using primary role: ${currentActiveRole}`);
-      }
-      
-      // Validate localStorage against database
-      if (savedRole && savedRole !== currentActiveRole) {
-        console.warn(`⚠️ Role mismatch detected! localStorage: ${savedRole}, database: ${currentActiveRole}. Using database value.`);
-        localStorage.setItem('activeRole', currentActiveRole);
       }
 
       if (hasMultipleRoles) {
         console.log(`🎯 Multi-role user detected:`, user.email, 'roles:', availableRoles.map(r => r.role));
         setActiveRole(currentActiveRole);
-        localStorage.setItem('activeRole', currentActiveRole);
+        setActiveRoleId(currentActiveRoleId);
         setCanSwitchRoles(true);
         setShowRoleSelection(false);
       } else {
         // Single role user
         console.log(`🎯 Single role user - setting role: ${currentActiveRole} for ${user.email}`);
         setActiveRole(currentActiveRole);
-        localStorage.setItem('activeRole', currentActiveRole);
+        setActiveRoleId(currentActiveRoleId);
         // Allow role switching for superAdmin
         setCanSwitchRoles(currentActiveRole === 'superAdmin');
         setShowRoleSelection(false);
@@ -186,9 +186,9 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       const data = await response.json();
       console.log(`🔄 Role switch successful:`, data);
 
-      // Update local state
+      // Update local state with roleId from backend
       setActiveRole(data.activeRole);
-      localStorage.setItem('activeRole', data.activeRole);
+      setActiveRoleId(data.activeRoleId);
       setShowRoleSelection(false);
 
       // Force page refresh to ensure clean state (especially if school changed)

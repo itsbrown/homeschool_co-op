@@ -22,7 +22,7 @@ The platform emphasizes scalability, security, and user experience, incorporatin
 -   **Authentication Middleware**: Supabase-only authentication using `supabaseAuth`.
 
 ### Authentication Standards
-Uses Supabase-only authentication; all protected API endpoints must use `supabaseAuth` middleware and extract user email from `req.user.email`.
+Uses Supabase-only authentication; all protected API endpoints must use `supabaseAuth` middleware and extract user email from `req.user.email`. The middleware maps Supabase UUID to database integer ID in `req.user.id` for multi-role API compatibility.
 
 ### Currency Formatting Standards
 All currency values are stored and transmitted as raw cents by the backend. The frontend formats these amounts using `CurrencyUtils` helpers from `shared/currency-utils.ts`.
@@ -35,7 +35,7 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 
 ### Key Features
 -   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync.
--   **Multi-Role System**: Supports users holding multiple roles with role-switching capabilities, managed via database junction tables and a comprehensive API. Frontend integration is pending.
+-   **Multi-Role System**: PHASE 3 COMPLETE - Users can hold multiple roles simultaneously (e.g., parent AND educator, or educator at multiple schools) with dynamic role-switching capabilities. System uses database junction tables (user_roles), comprehensive backend APIs with security controls, and React Query-based frontend integration with RoleContext and RoleSwitcher components.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, and automated refunds.
