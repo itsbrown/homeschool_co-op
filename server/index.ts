@@ -27,6 +27,7 @@ import stripeWebhookRouter from "./api/stripe-webhook";
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
+import userRolesRouter from "./api/user-roles";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -126,6 +127,7 @@ app.use("/api/stripe-webhooks", stripeWebhookRouter);
 app.use("/api/payment-import", paymentImport);
 app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
+app.use("/api/user", userRolesRouter); // Multi-role management endpoints
 
 // Test endpoint for development - manually update scheduled payment
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {

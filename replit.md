@@ -35,6 +35,11 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 
 ### Key Features
 -   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync. Includes robust user creation and password reset flows.
+-   **Multi-Role System**: Users can hold multiple roles simultaneously (e.g., both parent AND educator) with role-switching capabilities:
+    -   **Database Schema**: Junction table `user_roles` for many-to-many role assignments with `active_role` column in users table for current role tracking
+    -   **Phase 1 (COMPLETED)**: Database migration with `user_roles` table, role enum expansion (student, parent, learner, educator, teacher, schoolAdmin, admin, superAdmin), indexes, and data migration of existing user roles
+    -   **Phase 2 (IN PROGRESS)**: Backend APIs for role management - get user roles, switch active role, add/remove roles
+    -   **Backward Compatible**: Existing single-role code continues working; original `role` column preserved
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, and automated refunds.
