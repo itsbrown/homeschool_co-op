@@ -29,6 +29,7 @@ export const users = pgTable("users", {
   emergencyContactRelationship: text("emergency_contact_relationship"), // Emergency contact relationship
   isActive: boolean("is_active").default(true).notNull(),
   lastLogin: timestamp("last_login"),
+  activeRole: text("active_role"), // Currently active role for multi-role users (NULL means use primary role)
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -36,6 +37,20 @@ export const users = pgTable("users", {
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// User Roles table - for multi-role support (e.g., someone can be both parent AND educator)
+export const userRoles = pgTable("user_roles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: roleEnum("role").notNull(),
+  schoolId: integer("school_id"), // For tenant scoping - educators/admins must be tied to a school
+  isPrimary: boolean("is_primary").default(false).notNull(), // Which role is the user's primary/default role
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
+export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
+export type UserRole = typeof userRoles.$inferSelect;
 
 // Define user relations
 // Schools/Co-ops table
