@@ -64,17 +64,22 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
       .where(eq(userRoles.userId, userId))
       .orderBy(sql`${userRoles.isPrimary} DESC, ${userRoles.createdAt} ASC`);
 
-    // Get user's active role
+    // Get user's active role and active role ID
     const user = await db
-      .select({ activeRole: users.activeRole, role: users.role })
+      .select({ 
+        activeRole: users.activeRole, 
+        activeRoleId: users.activeRoleId,
+        role: users.role 
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
     const currentUser = user[0];
     
-    // Determine the effective active role
+    // Determine the effective active role and ID
     const effectiveActiveRole = currentUser?.activeRole || currentUser?.role;
+    const effectiveActiveRoleId = currentUser?.activeRoleId;
 
     return res.json({
       roles: roles.map((r: any) => ({
@@ -85,6 +90,7 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
         createdAt: r.createdAt,
       })),
       activeRole: effectiveActiveRole,
+      activeRoleId: effectiveActiveRoleId,
       canSwitchRoles: roles.length > 1,
     });
   } catch (error) {
@@ -108,10 +114,11 @@ userRolesRouter.get('/current-role', supabaseAuth, async (req: AuthenticatedRequ
 
     const db = await getDb();
     
-    // Get user's active role and primary role
+    // Get user's active role, active role ID, and primary role
     const user = await db
       .select({ 
-        activeRole: users.activeRole, 
+        activeRole: users.activeRole,
+        activeRoleId: users.activeRoleId,
         role: users.role,
         schoolId: users.schoolId,
       })
@@ -127,25 +134,46 @@ userRolesRouter.get('/current-role', supabaseAuth, async (req: AuthenticatedRequ
     
     // Active role takes precedence, fall back to primary role
     const effectiveRole = currentUser.activeRole || currentUser.role;
+    const effectiveActiveRoleId = currentUser.activeRoleId;
 
-    // CRITICAL: Get school context from user_roles table for the active role
-    // This ensures correct tenant scope when switching between roles with different schools
-    const roleMapping = await db
-      .select({ schoolId: userRoles.schoolId })
-      .from(userRoles)
-      .where(and(
-        eq(userRoles.userId, userId),
-        eq(userRoles.role, effectiveRole)
-      ))
-      .limit(1);
+    // CRITICAL: Get school context from user_roles table
+    // Priority 1: Use activeRoleId if available (ensures correct school for multi-school roles)
+    // Priority 2: Fall back to role string match (backward compatibility)
+    let effectiveSchoolId;
+    
+    if (effectiveActiveRoleId) {
+      // Use role ID for precise school context lookup
+      const roleById = await db
+        .select({ schoolId: userRoles.schoolId })
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, userId),
+          eq(userRoles.id, effectiveActiveRoleId)
+        ))
+        .limit(1);
+      
+      effectiveSchoolId = roleById.length > 0 
+        ? roleById[0].schoolId 
+        : currentUser.schoolId;
+    } else {
+      // Fall back to role string match
+      const roleMapping = await db
+        .select({ schoolId: userRoles.schoolId })
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, userId),
+          eq(userRoles.role, effectiveRole)
+        ))
+        .limit(1);
 
-    // Priority: role mapping school ID > users.schoolId (fallback for backward compatibility)
-    const effectiveSchoolId = roleMapping.length > 0 
-      ? roleMapping[0].schoolId 
-      : currentUser.schoolId;
+      effectiveSchoolId = roleMapping.length > 0 
+        ? roleMapping[0].schoolId 
+        : currentUser.schoolId;
+    }
 
     return res.json({
       activeRole: effectiveRole,
+      activeRoleId: effectiveActiveRoleId,
       schoolId: effectiveSchoolId,
     });
   } catch (error) {
@@ -200,10 +228,13 @@ userRolesRouter.post('/switch-role', supabaseAuth, async (req: AuthenticatedRequ
     const role = userRole[0].role;
     const newSchoolId = userRole[0].schoolId;
 
-    // Update the user's active role
+    // Update the user's active role and active role ID
     await db
       .update(users)
-      .set({ activeRole: role })
+      .set({ 
+        activeRole: role,
+        activeRoleId: roleId 
+      })
       .where(eq(users.id, userId));
 
     return res.json({
@@ -247,10 +278,13 @@ userRolesRouter.post('/reset-role', supabaseAuth, async (req: AuthenticatedReque
     const primaryRole = user[0].role;
     const usersSchoolId = user[0].schoolId;
 
-    // Reset active_role to NULL (will use primary role)
+    // Reset active_role and active_role_id to NULL (will use primary role)
     await db
       .update(users)
-      .set({ activeRole: null })
+      .set({ 
+        activeRole: null,
+        activeRoleId: null 
+      })
       .where(eq(users.id, userId));
 
     // Get the school context for the primary role from user_roles

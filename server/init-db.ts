@@ -313,6 +313,28 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: user_roles populated from existing users');
     
+    // Add active_role_id column to users table for persisting active role ID across reloads
+    console.log('Running migration: Adding active_role_id column to users table...');
+    await db.execute(sql`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS active_role_id INTEGER REFERENCES user_roles(id);
+    `);
+    console.log('✅ Migration completed: active_role_id column added to users table');
+    
+    // Backfill active_role_id from existing active_role + user_roles mapping
+    console.log('Running migration: Backfilling active_role_id from active_role...');
+    await db.execute(sql`
+      UPDATE users u
+      SET active_role_id = ur.id
+      FROM user_roles ur
+      WHERE u.id = ur.user_id
+        AND u.active_role IS NOT NULL
+        AND u.active_role = ur.role::text
+        AND u.active_role_id IS NULL
+        AND COALESCE(ur.school_id, 0) = COALESCE(u.school_id, 0);
+    `);
+    console.log('✅ Migration completed: active_role_id backfilled from existing active_role');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
