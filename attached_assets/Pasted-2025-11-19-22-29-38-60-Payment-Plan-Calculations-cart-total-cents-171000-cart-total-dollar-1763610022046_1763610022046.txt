@@ -1,0 +1,65 @@
+2025-11-19 22:29:38.60
+💰 Payment Plan Calculations:
+{cart.total (cents): 171000, cart.total (dollars): 1710, depositAmount (cents): 17100, depositAmount (dollars): 171, calculation: "171000 * 0.1 = 17100"…}
+cart.total (cents): 171000
+cart.total (dollars): 1710
+depositAmount (cents): 17100
+depositAmount (dollars): 171
+calculation: "171000 * 0.1 = 17100"
+fullAmount: 171000
+splitAmount: 85500
+2025-11-19 22:29:38.60
+💰 Payment Plan Calculations:
+{cart.total (cents): 171000, cart.total (dollars): 1710, depositAmount (cents): 17100, depositAmount (dollars): 171, calculation: "171000 * 0.1 = 17100"…}
+2025-11-19 22:29:38.60
+💰 Payment Plan Calculations:
+{cart.total (cents): 171000, cart.total (dollars): 1710, depositAmount (cents): 17100, depositAmount (dollars): 171, calculation: "171000 * 0.1 = 17100"…}
+2025-11-19 22:29:38.60
+💰 Payment Plan Calculations:
+{cart.total (cents): 171000, cart.total (dollars): 1710, depositAmount (cents): 17100, depositAmount (dollars): 171, calculation: "171000 * 0.1 = 17100"…}
+2025-11-19 22:29:38.60
+💰 Payment Plan Calculations:
+{cart.total (cents): 171000, cart.total (dollars): 1710, depositAmount (cents): 17100, depositAmount (dollars): 171, calculation: "171000 * 0.1 = 17100"…}
+2025-11-19 22:29:38.60
+💰 Payment Plan Calculations:
+{cart.total (cents): 171000, cart.total (dollars): 1710, depositAmount (cents): 17100, depositAmount (dollars): 171, calculation: "171000 * 0.1 = 17100"…}
+cart.total (cents): 171000
+cart.total (dollars): 1710
+depositAmount (cents): 17100
+depositAmount (dollars): 171
+calculation: "171000 * 0.1 = 17100"
+fullAmount: 171000
+splitAmount: 85500
+2025-11-19 22:29:38.60
+🛒 CartButton rendering - itemCount:
+2
+cart items:
+(2) [Object, Object]
+2025-11-19 22:29:38.60
+🛒 CartButton rendering - itemCount:
+2
+cart items:
+(2) [Object, Object]
+0: Object
+1: Object
+id: "enrollment-112"
+enrollmentId: 112
+classType: "marketplace"
+classId: 3
+marketplaceClassId: 3
+className: "Macaroni"
+childId: 5
+childName: "Adaluna Brown"
+price: 90000
+status: "pending_payment"
+statusText: "Payment Required"
+depositRequired: 9000
+amountPaid: 0
+remainingBalance: 90000
+totalCost: 90000
+variantId: null
+2025-11-19 22:29:38.60
+🛒 getItemCount called - current items:
+2
+2025-11-19 22:29:38.60
+✅ PaymentElement is ready

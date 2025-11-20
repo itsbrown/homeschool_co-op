@@ -24,18 +24,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
     const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time' } = req.body;
 
-    // DEBUG: Log the received request body to diagnose the payment amount issue
-    console.log('💳 Received request body:', {
-      itemsCount: items?.length,
-      subtotal,
-      total,
-      totalType: typeof total,
-      totalValue: total,
-      discounts,
-      paymentPlan,
-      paymentFrequency
-    });
-
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({

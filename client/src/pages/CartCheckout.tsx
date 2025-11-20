@@ -291,7 +291,7 @@ export default function CartCheckout() {
             appliedDiscounts: cart.discounts.appliedDiscounts || [],
             totalDiscountAmount: cart.discounts.totalDiscountAmount || 0 // Already in cents
           },
-          total: selectedPlanAmount, // Already in cents from getSelectedPlanAmount()
+          total: cart.total, // ALWAYS send full cart total - backend calculates payment plan amounts
           paymentPlan: selectedPaymentPlan, // Include payment plan info
           paymentFrequency: paymentFrequency, // Include payment frequency for date-based scheduling
           parentEmail: user?.email,
@@ -327,17 +327,6 @@ export default function CartCheckout() {
     const fullAmount = cart.total;
     const splitAmount = Math.round(cart.total / 2); // 50% split payments
     const monthlyAmount = Math.round(cart.total / 3); // 3-month installments
-    
-    // DEBUG: Log payment plan calculations
-    console.log('💰 Payment Plan Calculations:', {
-      'cart.total (cents)': cart.total,
-      'cart.total (dollars)': cart.total / 100,
-      'depositAmount (cents)': depositAmount,
-      'depositAmount (dollars)': depositAmount / 100,
-      'calculation': `${cart.total} * 0.1 = ${depositAmount}`,
-      'fullAmount': fullAmount,
-      'splitAmount': splitAmount
-    });
     
     return [
       {
