@@ -56,7 +56,12 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 -   **Student Management System**: Comprehensive system for tracking and displaying students across schools, including auto-sync for existing children and automatic record creation for enrollments.
 -   **Notification System**: In-app notification system with PostgreSQL storage, real-time unread count, and mark-as-read functionality.
 -   **Enrollment Count Display**: Class enrollment counts accurately reflect valid statuses.
--   **Category Management System**: School-level custom category system replacing hardcoded category enums, allowing administrators to create and manage categories for organizing classes.
+-   **Category Management System**: School-level custom category system with dynamic dropdown integration:
+    -   **Frontend**: Class creation/editing forms load categories dynamically from database (no hardcoded values)
+    -   **Backend**: Auto-seeds 8 default categories when school has none (Early Childhood, Pre-K, Kindergarten, Lower Elementary, Upper Elementary, Middle School, High School, Extracurricular)
+    -   **Seeding**: Idempotent seeding with duplicate prevention ensures categories are created only once
+    -   **Backwards Compatible**: Existing classes retain their category values (stored as strings, not foreign keys)
+    -   **Management Interface**: School administrators can create, edit, activate/deactivate, and delete categories via dedicated Category Management page
 
 ## Testing & Quality Assurance
 -   **Integration Tests**: Comprehensive integration test suites covering user management, class management, staff management, student management, notifications, parent profile management, and school admin email management.

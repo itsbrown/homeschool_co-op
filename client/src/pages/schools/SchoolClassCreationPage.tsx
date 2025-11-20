@@ -119,6 +119,21 @@ export default function SchoolClassCreationPage() {
   // Stabilize locations with useMemo to prevent infinite loops
   const locations = React.useMemo(() => locationData || [], [locationData]);
 
+  // Fetch categories for the school
+  const { data: categoriesData = [], isLoading: categoriesLoading } = useQuery({
+    queryKey: ["/api/school-admin/categories"],
+    retry: false
+  });
+
+  // Stabilize categories and filter to only active ones
+  // Note: Database returns snake_case (is_active), not camelCase (isActive)
+  const categories = React.useMemo(() => 
+    Array.isArray(categoriesData) 
+      ? categoriesData.filter((cat: any) => cat.is_active !== false) 
+      : [], 
+    [categoriesData]
+  );
+
   // Update form when class data is loaded
   useEffect(() => {
     if (classData && classId) {
@@ -127,8 +142,8 @@ export default function SchoolClassCreationPage() {
       
       // Wait for queries to finish loading before resetting form
       // This ensures dropdowns have loaded (even if empty) before matching values
-      if (locationsLoading || staffLoading) {
-        console.log('⏭️ Waiting for locations/staff data to load...');
+      if (locationsLoading || staffLoading || categoriesLoading) {
+        console.log('⏭️ Waiting for locations/staff/categories data to load...');
         return;
       }
       
@@ -366,21 +381,29 @@ export default function SchoolClassCreationPage() {
                         <Select 
                           onValueChange={field.onChange} 
                           value={field.value}
+                          disabled={categoriesLoading}
                         >
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a category" />
+                            <SelectTrigger data-testid="select-category">
+                              <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select a category"} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="Early Childhood">Early Childhood</SelectItem>
-                            <SelectItem value="Pre-Kindergarten">Pre-Kindergarten</SelectItem>
-                            <SelectItem value="Kindergarten">Kindergarten</SelectItem>
-                            <SelectItem value="Lower Elementary">Lower Elementary</SelectItem>
-                            <SelectItem value="Upper Elementary">Upper Elementary</SelectItem>
-                            <SelectItem value="Middle School">Middle School</SelectItem>
-                            <SelectItem value="High School">High School</SelectItem>
-                            <SelectItem value="Extracurricular">Extracurricular</SelectItem>
+                            {categoriesLoading ? (
+                              <SelectItem value="loading" disabled>Loading categories...</SelectItem>
+                            ) : categories.length === 0 ? (
+                              <SelectItem value="no-categories" disabled>No categories available. Please add categories in Category Management.</SelectItem>
+                            ) : (
+                              categories.map((category: any) => (
+                                <SelectItem 
+                                  key={category.id} 
+                                  value={category.name}
+                                  data-testid={`option-category-${category.id}`}
+                                >
+                                  {category.name}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />

@@ -4547,6 +4547,52 @@ router.post('/users/:userId/send-password-reset', supabaseAuth, async (req: any,
 
 // ==================== CATEGORY MANAGEMENT ====================
 
+// Default categories to seed for new schools
+const DEFAULT_CATEGORIES = [
+  { name: 'Early Childhood', description: 'Classes for early childhood development' },
+  { name: 'Pre-Kindergarten', description: 'Pre-K programs and activities' },
+  { name: 'Kindergarten', description: 'Kindergarten classes' },
+  { name: 'Lower Elementary', description: 'Grades 1-3' },
+  { name: 'Upper Elementary', description: 'Grades 4-6' },
+  { name: 'Middle School', description: 'Grades 7-8' },
+  { name: 'High School', description: 'Grades 9-12' },
+  { name: 'Extracurricular', description: 'Extracurricular activities and clubs' },
+];
+
+// Helper function to seed default categories for a school
+async function seedDefaultCategories(schoolId: number): Promise<void> {
+  console.log(`🌱 Seeding default categories for school ID: ${schoolId}`);
+  
+  // Fetch existing categories once before the loop
+  const existingCategories = await storage.getCategoriesBySchoolId(schoolId);
+  const existingNames = new Set(existingCategories.map(c => c.name));
+  
+  let seededCount = 0;
+  for (const category of DEFAULT_CATEGORIES) {
+    try {
+      // Skip if category already exists
+      if (existingNames.has(category.name)) {
+        console.log(`⏭️  Category "${category.name}" already exists, skipping`);
+        continue;
+      }
+      
+      await storage.createCategory({
+        schoolId: schoolId,
+        name: category.name,
+        description: category.description,
+        isActive: true
+      });
+      seededCount++;
+      console.log(`✅ Created default category: ${category.name}`);
+    } catch (error) {
+      console.error(`❌ Error creating category "${category.name}":`, error);
+      // Continue with other categories even if one fails
+    }
+  }
+  
+  console.log(`✅ Finished seeding ${seededCount} default categories (${DEFAULT_CATEGORIES.length - seededCount} already existed)`);
+}
+
 // Get all categories for the logged-in school
 router.get("/categories", supabaseAuth, async (req: any, res) => {
   try {
@@ -4562,7 +4608,14 @@ router.get("/categories", supabaseAuth, async (req: any, res) => {
     }
 
     console.log(`📚 Getting categories for school ID: ${user.schoolId}`);
-    const categories = await storage.getCategoriesBySchoolId(user.schoolId);
+    let categories = await storage.getCategoriesBySchoolId(user.schoolId);
+    
+    // Auto-seed default categories if school has none
+    if (categories.length === 0) {
+      console.log(`📋 School ${user.schoolId} has no categories - seeding defaults`);
+      await seedDefaultCategories(user.schoolId);
+      categories = await storage.getCategoriesBySchoolId(user.schoolId);
+    }
     
     res.json(categories);
   } catch (error) {
