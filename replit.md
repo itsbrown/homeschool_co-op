@@ -8,11 +8,11 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### November 20, 2025
-- **Multi-Role Active Role Display Fix**: Fixed complete active role lifecycle management ensuring role changes immediately reflect in Users listing and Edit User dialog. Backend now properly updates activeRole/activeRoleId when roles are added/deleted.
-- **Active Role Lifecycle Implementation**: POST /api/user/admin/users/:userId/roles now sets activeRole/activeRoleId when adding primary roles or when user has no active role. DELETE endpoint properly falls back to another role (primary first, else earliest) when deleting active/primary roles.
-- **Users Listing Enhancement**: GET /api/school-admin/users updated to query database directly and return activeRole || role, ensuring UI shows current active role instead of stale legacy role.
-- **Multi-Role Access Control Fix**: Fixed ManageUserRolesDialog school dropdown filtering - SchoolAdmins now only see their own school, global admins see all schools. Removed "No School" option for SchoolAdmins to prevent invalid role assignments.
-- **API Response Handling Fix**: Corrected ManageUserRolesDialog to properly extract roles from nested API response structure ({ user, roles }) preventing "No roles assigned" display bug. Added schoolName to role responses via left join with schools table.
+- **Transactional Role Lifecycle Implementation (PRODUCTION-READY)**: Completed full transactional implementation of multi-role activeRole lifecycle management with atomic guarantees. POST/DELETE role operations now wrapped in database transactions ensuring atomicity and data consistency.
+- **Primary Role Invariant Enforcement**: System now enforces single primary role invariant - when adding/removing roles, transactions atomically clear existing primary flags and set new primary, preventing multiple primary roles. Legacy data self-heals when activeRole is null by detecting existing primary roles.
+- **Active Role Lifecycle Rules**: POST endpoint sets activeRole/activeRoleId when adding primary role, or when user has no activeRoleId (checks for existing primary first, promotes new role to primary if none exists). DELETE endpoint checks user_roles.isPrimary (not just users.role) and falls back to another role (ORDER BY isPrimary DESC, createdAt ASC).
+- **Users Listing & Edit Dialog Fix**: GET /api/school-admin/users returns activeRole || role ensuring UI always shows current active role. ManageUserRolesDialog properly extracts roles from {user, roles} response with schoolName included via left join.
+- **Multi-Role Access Control**: SchoolAdmins can only manage users and assign roles within their own school (strict enforcement lines 376-390, 485-500 in user-roles.ts).
 
 ## System Architecture
 ### Core Design Principles
