@@ -225,6 +225,60 @@ async function runMigrations() {
     } catch (seqError) {
       console.log('Migration note: Could not fix discounts sequence:', seqError instanceof Error ? seqError.message : String(seqError));
     }
+    
+    // Add multi-role support: active_role column to users table
+    console.log('Running migration: Adding active_role column to users table...');
+    await db.execute(sql`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS active_role TEXT;
+    `);
+    console.log('✅ Migration completed: active_role column added to users table');
+    
+    // Create user_roles table for multi-role assignments
+    console.log('Running migration: Creating user_roles table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS user_roles (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role role NOT NULL,
+        school_id INTEGER,
+        is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_user_roles_school_id ON user_roles(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_user_roles_user_id_role ON user_roles(user_id, role);
+    `);
+    
+    // Add unique constraint to prevent duplicate role assignments
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_unique_user_role 
+      ON user_roles(user_id, role, COALESCE(school_id, 0));
+    `);
+    console.log('✅ Migration completed: user_roles table created');
+    
+    // Populate user_roles from existing users.role column (data migration)
+    console.log('Running migration: Populating user_roles from existing users...');
+    await db.execute(sql`
+      INSERT INTO user_roles (user_id, role, school_id, is_primary)
+      SELECT 
+        id as user_id,
+        role,
+        school_id,
+        true as is_primary
+      FROM users
+      WHERE id NOT IN (SELECT DISTINCT user_id FROM user_roles)
+      ON CONFLICT DO NOTHING;
+    `);
+    console.log('✅ Migration completed: user_roles populated from existing users');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
