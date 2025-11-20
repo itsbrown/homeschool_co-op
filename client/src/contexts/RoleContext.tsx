@@ -1,13 +1,23 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
+import { useQuery } from "@tanstack/react-query";
+
+interface UserRole {
+  id: number;
+  role: string;
+  schoolId: number;
+  schoolName?: string;
+  isPrimary: boolean;
+}
 
 interface RoleContextType {
   activeRole: string;
-  setActiveRole: (role: string) => void;
-  availableRoles: string[];
+  setActiveRole: (roleId: number) => void;
+  availableRoles: UserRole[];
   canSwitchRoles: boolean;
   showRoleSelection: boolean;
   setShowRoleSelection: (show: boolean) => void;
+  isLoadingRoles: boolean;
 }
 
 export const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -33,49 +43,42 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [showRoleSelection, setShowRoleSelection] = useState<boolean>(false);
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
 
-  const availableRoles = canSwitchRoles
-    ? ['parent', 'schoolAdmin', 'superAdmin']
-    : [user?.user_metadata?.role || 'parent'];
-
-  // Check if user has multiple roles and handle role selection
-  const checkUserRoles = (user: any) => {
-    // Multi-role users can switch between different roles
-    // This list should be managed in the database in the future
-    const multiRoleUsers = ['corey@americanseekersacademy.com'];
-    return multiRoleUsers.includes(user?.email);
-  };
-  
-  // Fetch user role from backend database
-  const fetchUserRole = async (email: string): Promise<string> => {
-    try {
-      console.log(`🔍 Fetching role for user: ${email}`);
+  // Fetch user roles from database
+  const { data: rolesData, isLoading: isLoadingRoles } = useQuery({
+    queryKey: ['/api/user/roles', user?.email],
+    queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
-      const response = await fetch(`/api/users/role/${encodeURIComponent(email)}`, {
+      const response = await fetch('/api/user/roles', {
         headers: {
           ...(token && { Authorization: `Bearer ${token}` })
         }
       });
-      if (response.ok) {
-        const data = await response.json();
-        console.log(`✅ Role fetched for ${email}:`, data.role);
-        return data.role;
-      } else {
-        console.log(`⚠️ User not found in database: ${email}, defaulting to parent`);
-        return 'parent';
+      if (!response.ok) {
+        throw new Error('Failed to fetch roles');
       }
-    } catch (error) {
-      console.error(`❌ Error fetching role for ${email}:`, error);
-      return 'parent';
-    }
+      return response.json();
+    },
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  const availableRoles: UserRole[] = rolesData?.roles || [];
+
+  // Determine if user has multiple roles
+  const hasMultipleRoles = availableRoles.length > 1;
+
+  // Get the primary role from available roles
+  const getPrimaryRole = (): string => {
+    const primaryRole = availableRoles.find(r => r.isPrimary);
+    return primaryRole?.role || availableRoles[0]?.role || 'parent';
   };
 
-  // Get user role from backend database
-  const getUserRole = async (user: any): Promise<string> => {
-    // Always fetch role from backend database - no hardcoded emails
-    return await fetchUserRole(user?.email);
+  // Get active role ID from rolesData
+  const getActiveRoleId = (): number | null => {
+    return rolesData?.activeRoleId || null;
   };
 
-  // Handle role selection logic immediately after login
+  // Handle role selection logic when roles data changes
   useEffect(() => {
     const handleRoleAssignment = async () => {
       console.log('🔄 RoleContext useEffect triggered - user:', user?.email || 'null');
@@ -93,56 +96,90 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         return;
       }
 
-      console.log('🔄 Role check for user:', user.email);
-      const hasMultipleRoles = checkUserRoles(user);
+      // Wait for roles to load
+      if (isLoadingRoles || !rolesData) {
+        console.log('🔄 Waiting for roles data to load...');
+        return;
+      }
+
+      console.log('🔄 Roles loaded for user:', user.email, 'roles:', availableRoles.length);
       const savedRole = localStorage.getItem('activeRole');
       
-      // Always fetch the role from database first (source of truth)
-      const databaseRole = await getUserRole(user);
-      console.log(`🔄 Database role for ${user.email}: ${databaseRole}, localStorage role: ${savedRole || 'none'}`);
+      // Determine current active role
+      let currentActiveRole = '';
+      const activeRoleId = getActiveRoleId();
+      
+      if (activeRoleId) {
+        // User has an active role set in the database
+        const activeRoleData = availableRoles.find(r => r.id === activeRoleId);
+        if (activeRoleData) {
+          currentActiveRole = activeRoleData.role;
+          console.log(`🔄 Active role from database: ${currentActiveRole}`);
+        }
+      }
+      
+      // If no active role in database, use primary role
+      if (!currentActiveRole) {
+        currentActiveRole = getPrimaryRole();
+        console.log(`🔄 Using primary role: ${currentActiveRole}`);
+      }
       
       // Validate localStorage against database
-      if (savedRole && savedRole !== databaseRole) {
-        console.warn(`⚠️ Role mismatch detected! localStorage: ${savedRole}, database: ${databaseRole}. Using database value.`);
-        localStorage.setItem('activeRole', databaseRole);
+      if (savedRole && savedRole !== currentActiveRole) {
+        console.warn(`⚠️ Role mismatch detected! localStorage: ${savedRole}, database: ${currentActiveRole}. Using database value.`);
+        localStorage.setItem('activeRole', currentActiveRole);
       }
 
       if (hasMultipleRoles) {
-        console.log(`🎯 Multi-role user detected:`, user.email);
-        if (!savedRole || savedRole !== databaseRole) {
-          console.log(`🎯 No saved role or mismatch - showing role selection`);
-          setShowRoleSelection(true);
-          setActiveRole('');
-        } else {
-          console.log(`🎯 Found valid saved role: ${savedRole}`);
-          setActiveRole(savedRole);
-          setShowRoleSelection(false);
-        }
-        setCanSwitchRoles(true); // Enable role switching for multi-role users
+        console.log(`🎯 Multi-role user detected:`, user.email, 'roles:', availableRoles.map(r => r.role));
+        setActiveRole(currentActiveRole);
+        localStorage.setItem('activeRole', currentActiveRole);
+        setCanSwitchRoles(true);
+        setShowRoleSelection(false);
       } else {
-        // Single role user - use database role (already fetched)
-        console.log(`🎯 Single role user - setting role: ${databaseRole} for ${user.email}`);
-        setActiveRole(databaseRole);
-        localStorage.setItem('activeRole', databaseRole);
+        // Single role user
+        console.log(`🎯 Single role user - setting role: ${currentActiveRole} for ${user.email}`);
+        setActiveRole(currentActiveRole);
+        localStorage.setItem('activeRole', currentActiveRole);
         // Allow role switching for superAdmin
-        setCanSwitchRoles(databaseRole === 'superAdmin');
+        setCanSwitchRoles(currentActiveRole === 'superAdmin');
         setShowRoleSelection(false);
       }
     };
 
     handleRoleAssignment();
-  }, [user]);
+  }, [user, rolesData, isLoadingRoles]);
 
-  const handleRoleChange = (role: string) => {
-    if (availableRoles.includes(role)) {
-      console.log(`🔄 Switching role to: ${role}`);
-      setActiveRole(role);
-      localStorage.setItem('activeRole', role);
+  const handleRoleChange = async (roleId: number) => {
+    try {
+      console.log(`🔄 Switching to role ID: ${roleId}`);
+      
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch('/api/user/switch-role', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ roleId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to switch role');
+      }
+
+      const data = await response.json();
+      console.log(`🔄 Role switch successful:`, data);
+
+      // Update local state
+      setActiveRole(data.activeRole);
+      localStorage.setItem('activeRole', data.activeRole);
       setShowRoleSelection(false);
-      console.log(`🔄 Role change complete - new activeRole:`, role);
 
-      // Force page refresh to ensure clean state
+      // Force page refresh to ensure clean state (especially if school changed)
       window.location.reload();
+    } catch (error) {
+      console.error('❌ Error switching role:', error);
     }
   };
 
@@ -157,6 +194,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         canSwitchRoles,
         showRoleSelection,
         setShowRoleSelection,
+        isLoadingRoles,
       }}
     >
       {children}
