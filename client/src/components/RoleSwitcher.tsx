@@ -24,11 +24,11 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
 export default function RoleSwitcher() {
   const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
 
-  console.log('🎯 RoleSwitcher START - canSwitchRoles:', canSwitchRoles, 'availableRoles.length:', availableRoles.length, 'isLoadingRoles:', isLoadingRoles, 'availableRoles:', availableRoles);
+  console.log('🎯 RoleSwitcher RENDER - canSwitchRoles:', canSwitchRoles, 'roles:', availableRoles.length, 'loading:', isLoadingRoles, 'data:', JSON.stringify(availableRoles));
 
   // Don't show switcher for single-role users
   if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles) {
-    console.log('🎯 RoleSwitcher returning null - early exit');
+    console.log('🎯 RoleSwitcher EARLY EXIT - canSwitch:', canSwitchRoles, 'count:', availableRoles.length, 'loading:', isLoadingRoles);
     return null;
   }
 
@@ -39,9 +39,11 @@ export default function RoleSwitcher() {
     ? availableRoles.find(r => r.id === activeRoleId)
     : availableRoles.find(r => r.role === activeRole) || availableRoles[0];
   
+  console.log('🎯 RoleSwitcher currentRoleData:', JSON.stringify(currentRoleData));
+  
   // Defensive guard: If we can't find current role data, don't render the switcher
   if (!currentRoleData || !currentRoleData.schoolId) {
-    console.error('⚠️ RoleSwitcher: Cannot determine current role or school context', { activeRoleId, activeRole, availableRoles });
+    console.error('⚠️ RoleSwitcher MISSING DATA - activeRoleId:', activeRoleId, 'activeRole:', activeRole, 'currentRoleData:', currentRoleData);
     return null;
   }
   
