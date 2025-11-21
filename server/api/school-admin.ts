@@ -12,7 +12,7 @@ import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmai
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { getDb } from '../db';
 import { sql, eq } from 'drizzle-orm';
-import { users } from '@shared/schema';
+import { users, schools } from '@shared/schema';
 
 const router = Router();
 
@@ -2309,10 +2309,11 @@ router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, r
 
     console.log('🔄 Received "Free After Threshold" update request:', req.body);
 
-    const dbUpdateData: any = {};
+    // Build update object with camelCase table properties
+    const updateData: Partial<typeof schools.$inferInsert> = {};
 
     if (freeAfterThresholdEnabled !== undefined) {
-      dbUpdateData.free_after_threshold_enabled = Boolean(freeAfterThresholdEnabled);
+      updateData.freeAfterThresholdEnabled = Boolean(freeAfterThresholdEnabled);
     }
 
     if (freeAfterThreshold !== undefined) {
@@ -2320,38 +2321,37 @@ router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, r
       if (isNaN(threshold) || threshold < 1) {
         return res.status(400).json({ message: "Invalid threshold (must be 1 or greater)" });
       }
-      dbUpdateData.free_after_threshold = threshold;
+      updateData.freeAfterThreshold = threshold;
     }
 
     // Check if there's anything to update
-    if (Object.keys(dbUpdateData).length === 0) {
+    if (Object.keys(updateData).length === 0) {
       console.log('⚠️ No fields to update in request body');
       return res.status(400).json({ 
         message: "No fields to update. Please provide freeAfterThresholdEnabled or freeAfterThreshold" 
       });
     }
 
-    console.log('🔄 Updating "Free After Threshold" configuration with:', dbUpdateData);
+    console.log('🔄 Updating "Free After Threshold" configuration with:', updateData);
 
-    // Use admin client to update the school
-    const { supabaseAdmin } = await import('../db/supabase');
+    // Use Drizzle ORM to update the school
+    const db = await getDb();
 
     // Update the school's "Free After Threshold" configuration
-    const { data: updatedSchool, error: updateError } = await supabaseAdmin
-      .from('schools')
-      .update(dbUpdateData)
-      .eq('id', schoolId)
-      .select()
-      .single();
+    const updatedSchools = await db
+      .update(schools)
+      .set(updateData)
+      .where(eq(schools.id, schoolId))
+      .returning();
 
-    if (updateError) {
-      console.error('❌ Database update error:', updateError);
-      return res.status(500).json({ 
-        message: "Failed to update discount configuration",
-        error: updateError.message
+    if (!updatedSchools || updatedSchools.length === 0) {
+      console.error('❌ Database update failed - no school found with ID:', schoolId);
+      return res.status(404).json({ 
+        message: "School not found"
       });
     }
 
+    const updatedSchool = updatedSchools[0];
     console.log('✅ "Free After Threshold" configuration updated successfully');
 
     return res.json({
