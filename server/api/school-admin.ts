@@ -93,14 +93,14 @@ async function extractSchoolId(req: any): Promise<number | null> {
     }
   }
   
-  // Fallback: Look up school from database using email and active role
+  // Fallback: Look up school from database
   if (!userEmail) {
     console.error(`❌ [extractSchoolId] No user email in request`);
     return null;
   }
   
   try {
-    // Get user from database to find their active role
+    // Get user from database
     const user = await storage.getUserByEmail(userEmail);
     if (!user) {
       console.error(`❌ [extractSchoolId] User not found in database: ${userEmail}`);
@@ -109,7 +109,14 @@ async function extractSchoolId(req: any): Promise<number | null> {
     
     console.log(`👤 [extractSchoolId] User found - ID: ${user.id}, schoolId: ${user.schoolId}, activeRoleId: ${user.activeRoleId}`);
     
-    // Multi-role support: Get school ID from active role
+    // PRODUCTION-SAFE: Prioritize legacy schoolId field first
+    // This ensures production continues working even if activeRoleId isn't set
+    if (user.schoolId) {
+      console.log(`🏫 [extractSchoolId] ✅ Using direct user.schoolId: ${user.schoolId}`);
+      return user.schoolId;
+    }
+    
+    // Multi-role support: Get school ID from active role (only if user.schoolId is null)
     if (user.activeRoleId) {
       const db = await getDb();
       const activeRoles = await db
@@ -128,13 +135,7 @@ async function extractSchoolId(req: any): Promise<number | null> {
       console.warn(`⚠️  [extractSchoolId] No activeRoleId set for user ${userEmail}`);
     }
     
-    // Fallback to user's direct schoolId (legacy single-role users)
-    if (user.schoolId) {
-      console.log(`🏫 [extractSchoolId] ✅ Using legacy user.schoolId: ${user.schoolId}`);
-      return user.schoolId;
-    } else {
-      console.error(`❌ [extractSchoolId] No schoolId found for user ${userEmail}`);
-    }
+    console.error(`❌ [extractSchoolId] No schoolId found anywhere for user ${userEmail}`);
   } catch (error) {
     console.error(`❌ [extractSchoolId] Error looking up school ID for user ${userEmail}:`, error);
   }
