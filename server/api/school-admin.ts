@@ -81,7 +81,8 @@ function generateTemporaryPassword(): string {
 
 async function extractSchoolId(req: any): Promise<number | null> {
   const userEmail = req.user?.email;
-  console.log(`🔍 [extractSchoolId] Looking up school for user: ${userEmail}`);
+  const env = process.env.NODE_ENV || 'unknown';
+  console.log(`🔍 [extractSchoolId] [ENV:${env}] Looking up school for user: ${userEmail}`);
   
   // First try to get school ID from token (fast path)
   const schoolIdFromToken = req.auth?.payload?.school_id;
@@ -107,15 +108,16 @@ async function extractSchoolId(req: any): Promise<number | null> {
       return null;
     }
     
-    console.log(`👤 [extractSchoolId] User found - ID: ${user.id}, schoolId: ${user.schoolId} (type: ${typeof user.schoolId}), activeRoleId: ${user.activeRoleId}`);
+    console.log(`👤 [extractSchoolId] [FIX:v2.0-null-check] User found - ID: ${user.id}, schoolId: ${user.schoolId} (type: ${typeof user.schoolId}), activeRoleId: ${user.activeRoleId}`);
     
     // PRODUCTION-SAFE: Prioritize legacy schoolId field first (but only if it's a valid number)
     // This ensures production continues working even if activeRoleId isn't set
+    // v2.0: Added explicit null/undefined check to properly handle multi-role users
     if (user.schoolId !== null && user.schoolId !== undefined && user.schoolId > 0) {
-      console.log(`🏫 [extractSchoolId] ✅ Using direct user.schoolId: ${user.schoolId}`);
+      console.log(`🏫 [extractSchoolId] ✅ [FIX:v2.0] Using direct user.schoolId: ${user.schoolId}`);
       return user.schoolId;
     } else {
-      console.log(`⚠️  [extractSchoolId] Skipping user.schoolId (value: ${user.schoolId}) - falling back to activeRoleId lookup`);
+      console.log(`⚠️  [extractSchoolId] [FIX:v2.0] Skipping user.schoolId (value: ${user.schoolId}) - falling back to activeRoleId lookup`);
     }
     
     // Multi-role support: Get school ID from active role (when user.schoolId is null/undefined/invalid)
