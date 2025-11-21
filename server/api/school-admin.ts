@@ -3371,9 +3371,18 @@ router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
     if (code !== undefined) updates.code = code;
     if (type !== undefined) updates.type = type;
     
-    // FIX: Use the type from request OR fallback to existing discount's type
+    // CRITICAL FIX: Determine which discount type to use for value conversion
+    // - If type is being updated, use the NEW type from the request
+    // - If type is NOT being updated, use the EXISTING type from the database
+    // This ensures correct conversion regardless of whether type is sent with the value
     const effectiveType = type !== undefined ? type : existingDiscount.type;
-    if (value !== undefined) updates.value = effectiveType === 'percentage' ? value : Math.round(value * 100);
+    
+    // Convert value based on the effective type:
+    // - Percentage: store as-is (e.g., 10 for 10%)
+    // - Fixed amount: convert dollars to cents (e.g., 25.00 → 2500)
+    if (value !== undefined) {
+      updates.value = effectiveType === 'percentage' ? value : Math.round(value * 100);
+    }
     
     if (applicationMethod !== undefined) updates.applicationMethod = applicationMethod;
     if (minOrderAmount !== undefined) updates.minOrderAmount = minOrderAmount ? Math.round(minOrderAmount * 100) : null;
