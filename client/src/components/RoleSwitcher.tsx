@@ -24,12 +24,12 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
 export default function RoleSwitcher() {
   const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
 
-  console.log('🎯 RoleSwitcher RENDER - canSwitchRoles:', canSwitchRoles, 'roles:', availableRoles.length, 'loading:', isLoadingRoles, 'data:', JSON.stringify(availableRoles));
+  console.log('🎯🎯🎯 RoleSwitcher RENDER - canSwitchRoles:', canSwitchRoles, 'roles:', availableRoles.length, 'loading:', isLoadingRoles, 'data:', JSON.stringify(availableRoles));
 
-  // Don't show switcher for single-role users
+  // TEMPORARY DEBUG - Always show something
   if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles) {
-    console.log('🎯 RoleSwitcher EARLY EXIT - canSwitch:', canSwitchRoles, 'count:', availableRoles.length, 'loading:', isLoadingRoles);
-    return null;
+    console.log('🎯🎯🎯 RoleSwitcher EARLY EXIT - canSwitch:', canSwitchRoles, 'count:', availableRoles.length, 'loading:', isLoadingRoles);
+    return <div style={{color: 'red', fontWeight: 'bold'}}>DEBUG: Role Switcher Hidden (canSwitch:{String(canSwitchRoles)} roles:{availableRoles.length} loading:{String(isLoadingRoles)})</div>;
   }
 
   // SECURITY FIX: Find current active role data using activeRoleId to prevent duplicate role name issues
