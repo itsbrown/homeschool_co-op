@@ -82,19 +82,13 @@ function generateTemporaryPassword(): string {
 async function extractSchoolId(req: any): Promise<number | null> {
   const userEmail = req.user?.email;
   const env = process.env.NODE_ENV || 'unknown';
-  console.log(`🔍 [extractSchoolId] [ENV:${env}] Looking up school for user: ${userEmail}`);
+  console.log(`🔍 [extractSchoolId] [ENV:${env}] [FIX:v3.0-no-token] Looking up school for user: ${userEmail}`);
   
-  // First try to get school ID from token (fast path)
-  const schoolIdFromToken = req.auth?.payload?.school_id;
-  if (schoolIdFromToken) {
-    const schoolId = Number(schoolIdFromToken);
-    if (!isNaN(schoolId)) {
-      console.log(`🏫 [extractSchoolId] ✅ Found schoolId from token: ${schoolId}`);
-      return schoolId;
-    }
-  }
+  // CRITICAL FIX v3.0: Removed JWT token fast path - it used stale Supabase metadata
+  // PostgreSQL database is the ONLY source of truth for school_id
+  // Issue: Token had school_id=1 (old) while database had school_id=2 (correct)
   
-  // Fallback: Look up school from database
+  // Look up school from database (authoritative source)
   if (!userEmail) {
     console.error(`❌ [extractSchoolId] No user email in request`);
     return null;
@@ -108,16 +102,16 @@ async function extractSchoolId(req: any): Promise<number | null> {
       return null;
     }
     
-    console.log(`👤 [extractSchoolId] [FIX:v2.0-null-check] User found - ID: ${user.id}, schoolId: ${user.schoolId} (type: ${typeof user.schoolId}), activeRoleId: ${user.activeRoleId}`);
+    console.log(`👤 [extractSchoolId] [FIX:v3.0] User found - ID: ${user.id}, schoolId: ${user.schoolId} (type: ${typeof user.schoolId}), activeRoleId: ${user.activeRoleId}`);
     
     // PRODUCTION-SAFE: Prioritize legacy schoolId field first (but only if it's a valid number)
     // This ensures production continues working even if activeRoleId isn't set
-    // v2.0: Added explicit null/undefined check to properly handle multi-role users
+    // v3.0: Using database as authoritative source (removed stale JWT token lookup)
     if (user.schoolId !== null && user.schoolId !== undefined && user.schoolId > 0) {
-      console.log(`🏫 [extractSchoolId] ✅ [FIX:v2.0] Using direct user.schoolId: ${user.schoolId}`);
+      console.log(`🏫 [extractSchoolId] ✅ [FIX:v3.0] Using direct user.schoolId from DB: ${user.schoolId}`);
       return user.schoolId;
     } else {
-      console.log(`⚠️  [extractSchoolId] [FIX:v2.0] Skipping user.schoolId (value: ${user.schoolId}) - falling back to activeRoleId lookup`);
+      console.log(`⚠️  [extractSchoolId] [FIX:v3.0] Skipping user.schoolId (value: ${user.schoolId}) - falling back to activeRoleId lookup`);
     }
     
     // Multi-role support: Get school ID from active role (when user.schoolId is null/undefined/invalid)
