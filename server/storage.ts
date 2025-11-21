@@ -1414,9 +1414,14 @@ export class MemStorage implements IStorage {
   }
 
   async getEnrollmentCountForProgram(programId: number): Promise<number> {
+    // Count enrollments with valid statuses (excluding cancelled, withdrawn, failed)
+    // Valid statuses: pending_payment, enrolled, waitlist, completed
     return this.getEnrollmentsByProgramId(programId).then(enrollments =>
       enrollments.filter(enrollment =>
-        enrollment.status === 'enrolled' || enrollment.status === 'waitlist').length
+        enrollment.status === 'pending_payment' || 
+        enrollment.status === 'enrolled' || 
+        enrollment.status === 'waitlist' ||
+        enrollment.status === 'completed').length
     );
   }
 

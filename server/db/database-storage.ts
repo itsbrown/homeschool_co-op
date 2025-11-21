@@ -443,13 +443,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEnrollmentCountForProgram(programId: number): Promise<number> {
+    // Count enrollments with valid statuses (excluding cancelled, withdrawn, failed)
+    // Valid statuses: pending_payment, enrolled, waitlist, completed
     const result = await db
       .select({ count: sql<number>`count(*)` })
       .from(programEnrollments)
       .where(
         and(
           eq(programEnrollments.programId, programId),
-          sql`${programEnrollments.status} IN ('pending', 'confirmed', 'active')`
+          sql`${programEnrollments.status} IN ('pending_payment', 'enrolled', 'waitlist', 'completed')`
         )
       );
     
