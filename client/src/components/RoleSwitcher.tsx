@@ -24,8 +24,11 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
 export default function RoleSwitcher() {
   const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
 
+  console.log('🎯 RoleSwitcher START - canSwitchRoles:', canSwitchRoles, 'availableRoles.length:', availableRoles.length, 'isLoadingRoles:', isLoadingRoles, 'availableRoles:', availableRoles);
+
   // Don't show switcher for single-role users
   if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles) {
+    console.log('🎯 RoleSwitcher returning null - early exit');
     return null;
   }
 

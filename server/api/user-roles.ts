@@ -51,16 +51,18 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
 
     const db = await getDb();
     
-    // Get all roles for this user
+    // Get all roles for this user with school names
     const roles = await db
       .select({
         id: userRoles.id,
         role: userRoles.role,
         schoolId: userRoles.schoolId,
+        schoolName: schools.name,
         isPrimary: userRoles.isPrimary,
         createdAt: userRoles.createdAt,
       })
       .from(userRoles)
+      .leftJoin(schools, eq(userRoles.schoolId, schools.id))
       .where(eq(userRoles.userId, userId))
       .orderBy(sql`${userRoles.isPrimary} DESC, ${userRoles.createdAt} ASC`);
 
@@ -86,6 +88,7 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
         id: r.id,
         role: r.role,
         schoolId: r.schoolId,
+        schoolName: r.schoolName,
         isPrimary: r.isPrimary,
         createdAt: r.createdAt,
       })),
