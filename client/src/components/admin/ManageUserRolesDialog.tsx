@@ -154,6 +154,7 @@ export default function ManageUserRolesDialog({
         description: 'Role removed successfully',
       });
       setRoleToDelete(null);
+      onOpenChange(false);
     },
     onError: (error: any) => {
       toast({
