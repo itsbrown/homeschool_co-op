@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { storage } from '../storage';
-import { jwtCheck, requireRole } from '../middleware/auth0-auth';
+import { supabaseAuth } from '../middleware/supabase-auth';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 
 const router = Router();
 
 // Get comprehensive parent profile data for school admin
-router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'admin']), async (req: any, res) => {
+router.get('/:parentId', supabaseAuth, async (req: any, res) => {
   try {
     const parentId = parseInt(req.params.parentId);
     
@@ -28,33 +28,63 @@ router.get('/:parentId', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'ad
     }
 
     // SECURITY: Multi-tenant isolation - determine admin's permitted school IDs
-    const adminEmail = req.auth?.email || req.user?.email;
+    const adminEmail = req.user?.email; // Supabase auth provides email in req.user
     if (!adminEmail) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const adminRole = req.auth?.role || req.user?.role;
+    // Get admin user from database to check role and school access
+    const adminUser = await storage.getUserByEmail(adminEmail);
+    if (!adminUser) {
+      return res.status(401).json({ message: 'Admin user not found' });
+    }
+
+    // Determine effective role (from active user_roles entry for multi-role users)
+    let adminRole = adminUser.role; // Default to primary role
     let adminSchoolIds: number[] = [];
     let isSuperAdmin = false;
 
-    if (adminRole === 'superAdmin') {
-      // SuperAdmin can view all data
-      isSuperAdmin = true;
-      console.log(`🔑 SuperAdmin ${adminEmail} has unrestricted access`);
-    } else {
-      // School admins can only view data from their schools
-      const adminUser = await storage.getUserByEmail(adminEmail);
-      if (!adminUser) {
-        return res.status(401).json({ message: 'Admin user not found' });
+    // For multi-role users, get role and school from active role
+    if (adminUser.activeRoleId) {
+      const { getDb } = await import('../db');
+      const { userRoles } = await import('../../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      
+      const db = await getDb();
+      const activeRoles = await db
+        .select()
+        .from(userRoles)
+        .where(eq(userRoles.id, adminUser.activeRoleId))
+        .limit(1);
+      
+      if (activeRoles.length > 0) {
+        adminRole = activeRoles[0].role; // Use active role for authorization
+        if (activeRoles[0].schoolId) {
+          adminSchoolIds = [activeRoles[0].schoolId];
+          console.log(`🏫 Admin ${adminEmail} using active role (${adminRole}) with school ID:`, activeRoles[0].schoolId);
+        }
       }
+    }
 
-      // Get admin's school(s)
-      const adminSchools = await storage.getSchoolsByAdminId(adminUser.id);
-      if (!adminSchools || adminSchools.length === 0) {
-        return res.status(403).json({ message: 'You must be associated with a school to view parent profiles' });
+    // Authorization check based on effective role
+    if (adminRole === 'superAdmin' || adminRole === 'admin') {
+      // SuperAdmin and Admin can view all data
+      isSuperAdmin = true;
+      console.log(`🔑 ${adminRole} ${adminEmail} has unrestricted access`);
+    } else if (adminRole === 'schoolAdmin') {
+      // School admins can only view data from their schools
+      if (adminSchoolIds.length === 0) {
+        // No school from active role, try legacy path
+        const adminSchools = await storage.getSchoolsByAdminId(adminUser.id);
+        if (!adminSchools || adminSchools.length === 0) {
+          return res.status(403).json({ message: 'You must be associated with a school to view parent profiles' });
+        }
+        adminSchoolIds = adminSchools.map(s => s.id);
+        console.log(`🏫 Admin ${adminEmail} has access to schools (legacy):`, adminSchoolIds);
       }
-      adminSchoolIds = adminSchools.map(s => s.id);
-      console.log(`🏫 Admin ${adminEmail} has access to schools:`, adminSchoolIds);
+    } else {
+      // Non-admin users cannot view parent profiles
+      return res.status(403).json({ message: 'You do not have permission to view parent profiles' });
     }
 
     // Get ALL children for this parent
