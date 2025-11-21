@@ -2573,6 +2573,26 @@ router.put('/students/:id', supabaseAuth, async (req: any, res) => {
 // Dashboard Metrics Endpoints - Calculate authentic data from database
 
 // Enrollment Metrics
+// DIAGNOSTIC ENDPOINT: Check user's school context
+router.get("/diagnostic/school-context", supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user?.email;
+    const user = await storage.getUserByEmail(userEmail);
+    const schoolId = await extractSchoolId(req);
+    
+    res.json({
+      userEmail,
+      userId: user?.id,
+      userSchoolId: user?.schoolId,
+      activeRoleId: user?.activeRoleId,
+      extractedSchoolId: schoolId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get("/metrics/enrollment", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await requireSchoolContext(req, res);
