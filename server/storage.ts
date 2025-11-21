@@ -4577,6 +4577,10 @@ export class MemStorage implements IStorage {
       return enrollments.length;
     }
 
+    async getEnrollmentCountForClass(classId: number): Promise<number> {
+      return await this.dbStorage.getEnrollmentCountForClass(classId);
+    }
+
     async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
       try {
         if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {

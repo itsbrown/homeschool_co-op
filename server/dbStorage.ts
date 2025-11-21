@@ -796,6 +796,36 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(programEnrollments).where(eq(programEnrollments.childId, childId));
   }
 
+  async getEnrollmentCountForProgram(programId: number): Promise<number> {
+    const db = await getDb();
+    const enrollments = await db.select().from(programEnrollments)
+      .where(eq(programEnrollments.programId, programId));
+    // Count only valid statuses: pending_payment, enrolled, waitlist, completed
+    return enrollments.filter(e => 
+      e.status === 'pending_payment' || 
+      e.status === 'enrolled' || 
+      e.status === 'waitlist' ||
+      e.status === 'completed'
+    ).length;
+  }
+
+  async getEnrollmentCountForClass(classId: number): Promise<number> {
+    const db = await getDb();
+    const { or } = await import('drizzle-orm');
+    const enrollments = await db.select().from(programEnrollments)
+      .where(or(
+        eq(programEnrollments.classId, classId),
+        eq(programEnrollments.marketplaceClassId, classId)
+      ));
+    // Count only valid statuses: pending_payment, enrolled, waitlist, completed
+    return enrollments.filter(e => 
+      e.status === 'pending_payment' || 
+      e.status === 'enrolled' || 
+      e.status === 'waitlist' ||
+      e.status === 'completed'
+    ).length;
+  }
+
   async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
     const db = await getDb();
     const [newEnrollment] = await db
