@@ -7,6 +7,12 @@ The ASA Learning Platform is an adaptive learning application for the American S
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+### November 21, 2025
+- **Same-School Role Switching Policy (SECURITY)**: Implemented strict same-school-only role switching to prevent cross-tenant data leakage. Users can only switch between roles at the same school. RoleSwitcher UI filters roles by current schoolId, backend validates and rejects cross-school switches with 403 error, and regression tests ensure security enforcement.
+- **Role Switcher UI Enhancement**: Added RoleSwitcher component to Header.tsx, providing visible role status and dropdown menu for switching between available roles at the current school.
+- **Smart Cache Invalidation**: Replaced window.location.reload() with targeted React Query cache invalidation, providing smooth role transitions without full page refresh while ensuring data consistency.
+- **Legacy Endpoint Removal**: Removed obsolete /api/switch-role endpoint from server/routes.ts to prevent bypass of secure multi-role flow.
+
 ### November 20, 2025
 - **Transactional Role Lifecycle Implementation (PRODUCTION-READY)**: Completed full transactional implementation of multi-role activeRole lifecycle management with atomic guarantees. POST/DELETE role operations now wrapped in database transactions ensuring atomicity and data consistency.
 - **Primary Role Invariant Enforcement**: System now enforces single primary role invariant - when adding/removing roles, transactions atomically clear existing primary flags and set new primary, preventing multiple primary roles. Legacy data self-heals when activeRole is null by detecting existing primary roles.
@@ -43,7 +49,7 @@ All currency values are stored and transmitted as raw cents by the backend. The 
 
 ### Key Features
 -   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync.
--   **Multi-Role System**: PHASE 3 COMPLETE - Users can hold multiple roles simultaneously (e.g., parent AND educator, or educator at multiple schools) with dynamic role-switching capabilities. System uses database junction tables (user_roles), comprehensive backend APIs with security controls, React Query-based frontend integration with RoleContext and RoleSwitcher components, and admin role management UI. Active role persistence implemented via activeRoleId column in users table, ensuring role state survives page reloads and correctly resolves school context for multi-school scenarios. Admin UI allows school administrators to view, add, and remove multiple roles per user with visual indicators for primary roles and school associations.
+-   **Multi-Role System**: PHASE 3 COMPLETE - Users can hold multiple roles simultaneously (e.g., parent AND educator) with dynamic role-switching capabilities limited to same-school contexts for security. System uses database junction tables (user_roles), comprehensive backend APIs with security controls, React Query-based frontend integration with RoleContext and RoleSwitcher components visible in the header, and admin role management UI. **Same-School Role Switching Policy**: Users can only switch between roles at their current school to prevent cross-tenant data leakage; cross-school switches are blocked at both UI and API levels. Active role persistence implemented via activeRoleId column in users table, ensuring role state survives page reloads. Admin UI allows school administrators to view, add, and remove multiple roles per user with visual indicators for primary roles and school associations, restricted to their own school's users.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, and automated refunds.

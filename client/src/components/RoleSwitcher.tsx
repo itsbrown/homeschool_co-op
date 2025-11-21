@@ -22,21 +22,41 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
 };
 
 export default function RoleSwitcher() {
-  const { activeRole, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
+  const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
 
   // Don't show switcher for single-role users
   if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles) {
     return null;
   }
 
-  // Find current active role data
-  const currentRoleData = availableRoles.find(r => r.role === activeRole) || availableRoles[0];
-  const currentRoleInfo = roleConfig[currentRoleData?.role || 'parent'] || roleConfig.parent;
+  // SECURITY FIX: Find current active role data using activeRoleId to prevent duplicate role name issues
+  // Users might have the same role name at multiple schools (e.g., "educator" at school 1 and school 2)
+  // Using roleId ensures we always reference the correct active role at the correct school
+  const currentRoleData = activeRoleId 
+    ? availableRoles.find(r => r.id === activeRoleId)
+    : availableRoles.find(r => r.role === activeRole) || availableRoles[0];
+  
+  // Defensive guard: If we can't find current role data, don't render the switcher
+  if (!currentRoleData || !currentRoleData.schoolId) {
+    console.error('⚠️ RoleSwitcher: Cannot determine current role or school context', { activeRoleId, activeRole, availableRoles });
+    return null;
+  }
+  
+  const currentRoleInfo = roleConfig[currentRoleData.role] || roleConfig.parent;
   const CurrentIcon = currentRoleInfo.icon;
   
-  console.log(`🎯 RoleSwitcher render - activeRole:`, activeRole, 'available roles:', availableRoles.length);
+  // SECURITY: Only show roles from the same school to prevent cross-school switching
+  const currentSchoolId = currentRoleData.schoolId;
+  const sameSchoolRoles = availableRoles.filter(r => r.schoolId === currentSchoolId);
+  
+  console.log(`🎯 RoleSwitcher render - activeRole:`, activeRole, 'same-school roles:', sameSchoolRoles.length, 'of', availableRoles.length);
 
-  // Determine if user has roles across multiple schools
+  // Don't show switcher if only one role at current school
+  if (sameSchoolRoles.length <= 1) {
+    return null;
+  }
+
+  // Check if user has roles at multiple schools (for informational purposes)
   const schoolIds = new Set(availableRoles.map(r => r.schoolId));
   const hasMultipleSchools = schoolIds.size > 1;
 
@@ -55,7 +75,7 @@ export default function RoleSwitcher() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
-          {availableRoles.map((role) => {
+          {sameSchoolRoles.map((role) => {
             const roleInfo = roleConfig[role.role] || roleConfig.parent;
             const RoleIcon = roleInfo.icon;
             const isActive = role.id === currentRoleData?.id;
@@ -75,7 +95,7 @@ export default function RoleSwitcher() {
                     {roleInfo.label}
                     {role.isPrimary && <Badge variant="outline" className="ml-2 text-xs">Primary</Badge>}
                   </div>
-                  {hasMultipleSchools && role.schoolName && (
+                  {role.schoolName && (
                     <div className="text-sm text-muted-foreground">
                       {role.schoolName}
                     </div>

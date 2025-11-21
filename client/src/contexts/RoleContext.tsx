@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 interface UserRole {
   id: number;
@@ -13,6 +14,7 @@ interface UserRole {
 
 interface RoleContextType {
   activeRole: string;
+  activeRoleId: number | null;
   setActiveRole: (roleId: number) => void;
   availableRoles: UserRole[];
   canSwitchRoles: boolean;
@@ -191,8 +193,21 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       setActiveRoleId(data.activeRoleId);
       setShowRoleSelection(false);
 
-      // Force page refresh to ensure clean state (especially if school changed)
-      window.location.reload();
+      // Invalidate all role-scoped queries to ensure fresh data
+      // This includes school-admin, parent, educator, and user-specific queries
+      console.log('🔄 Invalidating cached queries after role switch...');
+      await queryClient.invalidateQueries({ queryKey: ['/api/user/roles'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/school-admin'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/parent'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/educator'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      console.log('✅ Cache invalidation complete');
+
+      toast({
+        title: 'Role switched',
+        description: `Switched to ${data.activeRole} role successfully`,
+      });
     } catch (error) {
       console.error('❌ Error switching role:', error);
       toast({
@@ -209,6 +224,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     <RoleContext.Provider
       value={{
         activeRole,
+        activeRoleId,
         setActiveRole: handleRoleChange,
         availableRoles,
         canSwitchRoles,

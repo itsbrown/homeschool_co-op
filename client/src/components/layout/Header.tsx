@@ -66,6 +66,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <AIStatusBadge />
         </div>
 
+        <RoleSwitcher />
+
         <NotificationCenter
           notifications={notifications}
           onMarkAsRead={markAsRead}

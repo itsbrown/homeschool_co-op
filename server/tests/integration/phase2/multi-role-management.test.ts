@@ -193,7 +193,7 @@ describe('Phase 2: Multi-Role Management APIs', () => {
       expect(updatedUser[0].schoolId).toBe(1);
     });
 
-    it('should switch school context when switching to cross-school role', async () => {
+    it('should block cross-school role switching for security', async () => {
       const rolesResponse = await request(app)
         .get('/api/user/roles')
         .set('x-test-user-email', testUsers.multiRoleUser.email)
@@ -208,20 +208,61 @@ describe('Phase 2: Multi-Role Management APIs', () => {
         .post('/api/user/switch-role')
         .set('x-test-user-email', testUsers.multiRoleUser.email)
         .send({ roleId: school2Role.id })
-        .expect(200);
+        .expect(403);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.activeRole).toBe('educator');
-      expect(response.body.schoolId).toBe(2);
+      expect(response.body.error).toBe('Cross-school switching not allowed');
+      expect(response.body.message).toContain('same school');
 
-      // Verify school context changed
+      // Verify school context did NOT change
       const updatedUser = await db
         .select()
         .from(users)
         .where(eq(users.id, userIds.multiRoleUser))
         .limit(1);
       
-      expect(updatedUser[0].schoolId).toBe(2);
+      // Should still be at original school (school 1)
+      expect(updatedUser[0].schoolId).toBe(1);
+    });
+
+    it('should allow switching between roles within the same school', async () => {
+      // Get user's roles
+      const rolesResponse = await request(app)
+        .get('/api/user/roles')
+        .set('x-test-user-email', testUsers.multiRoleUser.email)
+        .expect(200);
+
+      // Find two different roles at the same school
+      const parentRole = rolesResponse.body.roles.find(
+        (r: any) => r.role === 'parent' && r.schoolId === 1
+      );
+      const educatorRole = rolesResponse.body.roles.find(
+        (r: any) => r.role === 'educator' && r.schoolId === 1
+      );
+      
+      expect(parentRole).toBeDefined();
+      expect(educatorRole).toBeDefined();
+
+      // Switch from parent to educator (both at school 1)
+      const response = await request(app)
+        .post('/api/user/switch-role')
+        .set('x-test-user-email', testUsers.multiRoleUser.email)
+        .send({ roleId: educatorRole.id })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.activeRole).toBe('educator');
+      expect(response.body.schoolId).toBe(1);
+
+      // Verify database was updated
+      const updatedUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userIds.multiRoleUser))
+        .limit(1);
+      
+      expect(updatedUser[0].activeRole).toBe('educator');
+      expect(updatedUser[0].activeRoleId).toBe(educatorRole.id);
+      expect(updatedUser[0].schoolId).toBe(1);
     });
 
     it('should reject switching to non-existent role', async () => {
@@ -543,8 +584,53 @@ describe('Phase 2: Multi-Role Management APIs', () => {
   });
 
   describe('School Context Isolation', () => {
-    it('should maintain school context across role switches', async () => {
+    it('should maintain school context when switching roles within same school', async () => {
       // Get roles
+      const rolesResponse = await request(app)
+        .get('/api/user/roles')
+        .set('x-test-user-email', testUsers.multiRoleUser.email)
+        .expect(200);
+
+      const parentRole = rolesResponse.body.roles.find(
+        (r: any) => r.role === 'parent' && r.schoolId === 1
+      );
+      const educatorRole = rolesResponse.body.roles.find(
+        (r: any) => r.role === 'educator' && r.schoolId === 1
+      );
+
+      // Switch to parent role at school 1
+      await request(app)
+        .post('/api/user/switch-role')
+        .set('x-test-user-email', testUsers.multiRoleUser.email)
+        .send({ roleId: parentRole.id })
+        .expect(200);
+
+      let user = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userIds.multiRoleUser))
+        .limit(1);
+      expect(user[0].schoolId).toBe(1);
+      expect(user[0].activeRole).toBe('parent');
+
+      // Switch to educator role (also at school 1)
+      await request(app)
+        .post('/api/user/switch-role')
+        .set('x-test-user-email', testUsers.multiRoleUser.email)
+        .send({ roleId: educatorRole.id })
+        .expect(200);
+
+      user = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userIds.multiRoleUser))
+        .limit(1);
+      expect(user[0].schoolId).toBe(1); // School context unchanged
+      expect(user[0].activeRole).toBe('educator');
+    });
+
+    it('should prevent cross-school data leakage by blocking cross-school switching', async () => {
+      // Get roles from different schools
       const rolesResponse = await request(app)
         .get('/api/user/roles')
         .set('x-test-user-email', testUsers.multiRoleUser.email)
@@ -557,33 +643,27 @@ describe('Phase 2: Multi-Role Management APIs', () => {
         (r: any) => r.schoolId === 2
       );
 
-      // Switch to school 1 role
+      // Set user to school 1
       await request(app)
         .post('/api/user/switch-role')
         .set('x-test-user-email', testUsers.multiRoleUser.email)
         .send({ roleId: school1Role.id })
         .expect(200);
 
-      let user = await db
+      // Attempt to switch to school 2 role should be blocked
+      await request(app)
+        .post('/api/user/switch-role')
+        .set('x-test-user-email', testUsers.multiRoleUser.email)
+        .send({ roleId: school2Role.id })
+        .expect(403);
+
+      // Verify user is still at school 1
+      const user = await db
         .select()
         .from(users)
         .where(eq(users.id, userIds.multiRoleUser))
         .limit(1);
       expect(user[0].schoolId).toBe(1);
-
-      // Switch to school 2 role
-      await request(app)
-        .post('/api/user/switch-role')
-        .set('x-test-user-email', testUsers.multiRoleUser.email)
-        .send({ roleId: school2Role.id })
-        .expect(200);
-
-      user = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, userIds.multiRoleUser))
-        .limit(1);
-      expect(user[0].schoolId).toBe(2);
     });
   });
 });

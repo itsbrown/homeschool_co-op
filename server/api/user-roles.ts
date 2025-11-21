@@ -204,6 +204,37 @@ userRolesRouter.post('/switch-role', supabaseAuth, async (req: AuthenticatedRequ
 
     const db = await getDb();
     
+    // Get current user to check current school context
+    const currentUser = await db
+      .select({ 
+        activeRoleId: users.activeRoleId,
+        schoolId: users.schoolId 
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!currentUser || currentUser.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get current school from active role
+    let currentSchoolId = currentUser[0].schoolId;
+    if (currentUser[0].activeRoleId) {
+      const currentRole = await db
+        .select({ schoolId: userRoles.schoolId })
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, userId),
+          eq(userRoles.id, currentUser[0].activeRoleId)
+        ))
+        .limit(1);
+      
+      if (currentRole.length > 0) {
+        currentSchoolId = currentRole[0].schoolId;
+      }
+    }
+    
     // Verify the user has this role and get the role details and school
     const userRole = await db
       .select({ 
@@ -228,12 +259,23 @@ userRolesRouter.post('/switch-role', supabaseAuth, async (req: AuthenticatedRequ
     const role = userRole[0].role;
     const newSchoolId = userRole[0].schoolId;
 
-    // Update the user's active role and active role ID
+    // SECURITY: Block cross-school role switching
+    if (currentSchoolId !== newSchoolId) {
+      return res.status(403).json({
+        error: 'Cross-school switching not allowed',
+        message: 'You can only switch between roles within the same school. If you need to access a different school, please contact your administrator.',
+        currentSchoolId,
+        targetSchoolId: newSchoolId,
+      });
+    }
+
+    // Update the user's active role, active role ID, and school ID (keep in sync)
     await db
       .update(users)
       .set({ 
         activeRole: role,
-        activeRoleId: roleId 
+        activeRoleId: roleId,
+        schoolId: newSchoolId // Ensure schoolId stays in sync
       })
       .where(eq(users.id, userId));
 
