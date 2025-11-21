@@ -3,7 +3,7 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Bell, Mail, Menu, Search } from "lucide-react";
-import RoleSwitcher from "@/components/RoleSwitcher";
+import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NotificationCenter } from "@/components/ui/notification-center";

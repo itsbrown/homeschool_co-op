@@ -5,6 +5,7 @@ import { CartProvider } from "@/contexts/CartContext";
 import ParentSidebar from "./ParentSidebar";
 import CartDrawer from "@/components/cart/CartDrawer";
 import CartButton from "@/components/cart/CartButton";
+import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
@@ -226,6 +227,12 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                           <p className="text-xs text-muted-foreground">Parent Account</p>
                         </div>
                       </div>
+                      
+                      {/* Role Switcher for multi-role users */}
+                      <div className="mb-3">
+                        <RoleSwitcher />
+                      </div>
+                      
                       <Button
                         variant="outline"
                         className="w-full"
@@ -284,6 +291,9 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
           <div className="hidden lg:block">
             <div className="flex items-center justify-end bg-white px-6 py-3 shadow-sm border-b">
               <div className="flex items-center gap-4">
+                {/* Role Switcher */}
+                <RoleSwitcher />
+                
                 {/* Notification Bell */}
                 <Link href="/notifications">
                   <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications-desktop">

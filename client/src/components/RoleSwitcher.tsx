@@ -26,10 +26,10 @@ export default function RoleSwitcher() {
 
   console.log('🎯🎯🎯 RoleSwitcher RENDER - canSwitchRoles:', canSwitchRoles, 'roles:', availableRoles.length, 'loading:', isLoadingRoles, 'data:', JSON.stringify(availableRoles));
 
-  // TEMPORARY DEBUG - Always show something
+  // Don't show switcher for single-role users
   if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles) {
     console.log('🎯🎯🎯 RoleSwitcher EARLY EXIT - canSwitch:', canSwitchRoles, 'count:', availableRoles.length, 'loading:', isLoadingRoles);
-    return <div style={{color: 'red', fontWeight: 'bold'}}>DEBUG: Role Switcher Hidden (canSwitch:{String(canSwitchRoles)} roles:{availableRoles.length} loading:{String(isLoadingRoles)})</div>;
+    return null;
   }
 
   // SECURITY FIX: Find current active role data using activeRoleId to prevent duplicate role name issues
