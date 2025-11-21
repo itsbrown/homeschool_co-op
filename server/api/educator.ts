@@ -31,7 +31,18 @@ router.get('/classes', async (req, res) => {
 
     console.log(`✅ Found ${assignedClasses.length} classes for educator ${email}`);
     
-    res.json(assignedClasses);
+    // Calculate enrollment counts for each class
+    const classesWithEnrollmentCounts = await Promise.all(
+      assignedClasses.map(async (cls) => {
+        const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
+        return {
+          ...cls,
+          enrollmentCount
+        };
+      })
+    );
+    
+    res.json(classesWithEnrollmentCounts);
   } catch (error) {
     console.error('❌ Error fetching educator classes:', error);
     res.status(500).json({ message: 'Failed to fetch educator classes' });

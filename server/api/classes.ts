@@ -43,9 +43,20 @@ router.get('/', async (req, res) => {
       classes = classes.filter(c => c.categoryName === categoryName);
     }
 
+    // Calculate enrollment counts for each class
+    const classesWithEnrollmentCounts = await Promise.all(
+      classes.map(async (cls) => {
+        const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
+        return {
+          ...cls,
+          enrollmentCount
+        };
+      })
+    );
+
     // Return classes with pagination metadata
     res.json({
-      classes,
+      classes: classesWithEnrollmentCounts,
       pagination: {
         page,
         limit,
@@ -72,7 +83,13 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Class not found' });
     }
 
-    res.json(classItem);
+    // Calculate enrollment count dynamically
+    const enrollmentCount = await storage.getEnrollmentCountForClass(classItem.id);
+
+    res.json({
+      ...classItem,
+      enrollmentCount
+    });
   } catch (error) {
     console.error('Error fetching class:', error);
     res.status(500).json({ message: 'Failed to fetch class' });
@@ -103,8 +120,19 @@ router.get('/category/:categoryName', async (req, res) => {
     const endIndex = page * limit;
     const paginatedClasses = filteredClasses.slice(startIndex, endIndex);
 
+    // Calculate enrollment counts for each class
+    const classesWithEnrollmentCounts = await Promise.all(
+      paginatedClasses.map(async (cls) => {
+        const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
+        return {
+          ...cls,
+          enrollmentCount
+        };
+      })
+    );
+
     res.json({
-      classes: paginatedClasses,
+      classes: classesWithEnrollmentCounts,
       pagination: {
         page,
         limit,
