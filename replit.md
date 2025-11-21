@@ -8,6 +8,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### November 21, 2025
+- **CRITICAL FIX: ActiveRoleId Backfill Migration (PRODUCTION-READY)**: Added two production-ready migrations to `server/init-db.ts` that automatically backfill null activeRoleId values for all users. First migration sets activeRoleId to primary role (isPrimary=true) from user_roles table. Second migration provides fallback to earliest role (ORDER BY created_at) for users without primary role. Migrations are idempotent, run automatically on all environment startups, and resolve RoleSwitcher visibility issue for multi-role users. Verified to update 19 affected users successfully.
 - **Same-School Role Switching Policy (SECURITY)**: Implemented strict same-school-only role switching to prevent cross-tenant data leakage. Users can only switch between roles at the same school. RoleSwitcher UI filters roles by current schoolId, backend validates and rejects cross-school switches with 403 error, and regression tests ensure security enforcement.
 - **Role Switcher UI Enhancement**: Added RoleSwitcher component to Header.tsx, providing visible role status and dropdown menu for switching between available roles at the current school.
 - **Smart Cache Invalidation**: Replaced window.location.reload() with targeted React Query cache invalidation, providing smooth role transitions without full page refresh while ensuring data consistency.

@@ -335,6 +335,48 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: active_role_id backfilled from existing active_role');
     
+    // CRITICAL FIX: Backfill null active_role_id for all users with roles
+    // This ensures RoleSwitcher appears for multi-role users
+    console.log('Running migration: Backfilling null active_role_id to primary role...');
+    await db.execute(sql`
+      UPDATE users u
+      SET active_role_id = (
+        SELECT ur.id
+        FROM user_roles ur
+        WHERE ur.user_id = u.id
+          AND ur.is_primary = true
+        LIMIT 1
+      )
+      WHERE u.active_role_id IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM user_roles ur
+          WHERE ur.user_id = u.id
+            AND ur.is_primary = true
+        );
+    `);
+    console.log('✅ Migration completed: null active_role_id backfilled to primary role');
+    
+    // Fallback: Set active_role_id to first role (by created_at) if no primary role exists
+    console.log('Running migration: Setting active_role_id to first role when no primary exists...');
+    await db.execute(sql`
+      UPDATE users u
+      SET active_role_id = (
+        SELECT ur.id
+        FROM user_roles ur
+        WHERE ur.user_id = u.id
+        ORDER BY ur.created_at ASC
+        LIMIT 1
+      )
+      WHERE u.active_role_id IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM user_roles ur
+          WHERE ur.user_id = u.id
+        );
+    `);
+    console.log('✅ Migration completed: active_role_id set to first role for users without primary');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
