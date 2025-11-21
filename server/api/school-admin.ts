@@ -12,7 +12,7 @@ import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmai
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { getDb } from '../db';
 import { sql, eq } from 'drizzle-orm';
-import { users, schools } from '@shared/schema';
+import { users, schools, userRoles } from '@shared/schema';
 
 const router = Router();
 
@@ -89,16 +89,37 @@ async function extractSchoolId(req: any): Promise<number | null> {
     }
   }
   
-  // Fallback: Look up school from database using email
+  // Fallback: Look up school from database using email and active role
   const userEmail = req.user?.email;
   if (!userEmail) {
     return null;
   }
   
   try {
-    // Get user from database to find their school
+    // Get user from database to find their active role
     const user = await storage.getUserByEmail(userEmail);
-    if (user && user.schoolId) {
+    if (!user) {
+      return null;
+    }
+    
+    // Multi-role support: Get school ID from active role
+    if (user.activeRoleId) {
+      const db = await getDb();
+      const activeRoles = await db
+        .select()
+        .from(userRoles)
+        .where(eq(userRoles.id, user.activeRoleId))
+        .limit(1);
+      
+      if (activeRoles.length > 0 && activeRoles[0].schoolId) {
+        console.log(`🏫 Using active role school ID: ${activeRoles[0].schoolId} for user: ${userEmail}`);
+        return activeRoles[0].schoolId;
+      }
+    }
+    
+    // Fallback to user's direct schoolId (legacy single-role users)
+    if (user.schoolId) {
+      console.log(`🏫 Using legacy user.schoolId: ${user.schoolId} for user: ${userEmail}`);
       return user.schoolId;
     }
   } catch (error) {
