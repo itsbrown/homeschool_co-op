@@ -3370,7 +3370,11 @@ router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
     if (description !== undefined) updates.description = description;
     if (code !== undefined) updates.code = code;
     if (type !== undefined) updates.type = type;
-    if (value !== undefined) updates.value = type === 'percentage' ? value : Math.round(value * 100);
+    
+    // FIX: Use the type from request OR fallback to existing discount's type
+    const effectiveType = type !== undefined ? type : existingDiscount.type;
+    if (value !== undefined) updates.value = effectiveType === 'percentage' ? value : Math.round(value * 100);
+    
     if (applicationMethod !== undefined) updates.applicationMethod = applicationMethod;
     if (minOrderAmount !== undefined) updates.minOrderAmount = minOrderAmount ? Math.round(minOrderAmount * 100) : null;
     if (maxDiscountAmount !== undefined) updates.maxDiscountAmount = maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null;
