@@ -596,30 +596,12 @@ router.get("/classes", supabaseAuth, async (req: any, res: any) => {
     
     console.log(`Found ${allClasses.length} classes for school ID ${schoolId} from database`);
 
-    // Get enrollments from database to calculate enrollment counts
-    let enrollments = [];
-    try {
-      // Get all marketplace class enrollments
-      const allEnrollments = await storage.getAllChildren();
-      for (const child of allEnrollments) {
-        const childEnrollments = await storage.getEnrollmentsByChildId(child.id);
-        enrollments.push(...childEnrollments);
-      }
-    } catch (error) {
-      const err = error as Error;
-      console.log('⚠️ Could not fetch enrollments:', err);
-    }
-
     // Add enrollment counts and parse variants from each class
     // Keep classes with variants intact (don't expand into individual entries)
     const classesWithEnrollment = await Promise.all(allClasses.map(async (classItem) => {
-      // Count enrollments for this specific class (exclude pending_payment, waitlist, cancelled, withdrawn, failed)
-      // Check both classId (for regular classes) and marketplaceClassId (for marketplace classes)
-      const classEnrollmentCount = enrollments.filter(enrollment => 
-        (Number(enrollment.classId) === Number(classItem.id) || 
-         Number(enrollment.marketplaceClassId) === Number(classItem.id)) && 
-        ['enrolled', 'completed'].includes(enrollment.status)
-      ).length;
+      // Calculate enrollment count using the correct method
+      // This counts enrollments by classId/marketplaceClassId with valid statuses (pending_payment, enrolled, waitlist, completed)
+      const classEnrollmentCount = await storage.getEnrollmentCountForClass(classItem.id);
       
       // Parse variants from schedule field if they exist
       let variants = undefined;
@@ -748,9 +730,14 @@ router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
     console.log('✅ Class found:', classData.title);
     console.log('📋 Parsed variants:', variants);
     
+    // Calculate enrollment count dynamically
+    const enrollmentCount = await storage.getEnrollmentCountForClass(classData.id);
+    console.log(`📊 Class ${classData.id} enrollment count: ${enrollmentCount}`);
+    
     res.json({
       ...classData,
-      variants
+      variants,
+      enrollmentCount
     });
   } catch (error) {
     console.error('❌ Error fetching class:', error);

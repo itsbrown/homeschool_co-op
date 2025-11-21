@@ -185,6 +185,7 @@ export interface IStorage {
   getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]>;
   getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]>;
   getEnrollmentCountForProgram(programId: number): Promise<number>;
+  getEnrollmentCountForClass(classId: number): Promise<number>;
   createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment>;
   updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined>;
   deleteProgramEnrollment(id: number): Promise<void>;
@@ -1423,6 +1424,20 @@ export class MemStorage implements IStorage {
         enrollment.status === 'waitlist' ||
         enrollment.status === 'completed').length
     );
+  }
+
+  async getEnrollmentCountForClass(classId: number): Promise<number> {
+    // Count enrollments for a class by classId or marketplaceClassId
+    // Valid statuses: pending_payment, enrolled, waitlist, completed
+    const enrollments = Array.from(this.programEnrollmentsStore.values())
+      .filter(enrollment => 
+        (enrollment.classId === classId || enrollment.marketplaceClassId === classId) &&
+        (enrollment.status === 'pending_payment' || 
+         enrollment.status === 'enrolled' || 
+         enrollment.status === 'waitlist' ||
+         enrollment.status === 'completed')
+      );
+    return enrollments.length;
   }
 
   async createProgramEnrollment(enrollmentData: InsertProgramEnrollment): Promise<ProgramEnrollment> {

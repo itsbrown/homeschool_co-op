@@ -458,6 +458,25 @@ export class DatabaseStorage implements IStorage {
     return result[0]?.count || 0;
   }
 
+  async getEnrollmentCountForClass(classId: number): Promise<number> {
+    // Count enrollments for a class by classId or marketplaceClassId
+    // Valid statuses: pending_payment, enrolled, waitlist, completed
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(programEnrollments)
+      .where(
+        and(
+          or(
+            eq(programEnrollments.classId, classId),
+            eq(programEnrollments.marketplaceClassId, classId)
+          ),
+          sql`${programEnrollments.status} IN ('pending_payment', 'enrolled', 'waitlist', 'completed')`
+        )
+      );
+    
+    return result[0]?.count || 0;
+  }
+
   async createProgramEnrollment(enrollmentData: InsertProgramEnrollment): Promise<ProgramEnrollment> {
     const [enrollment] = await db
       .insert(programEnrollments)
