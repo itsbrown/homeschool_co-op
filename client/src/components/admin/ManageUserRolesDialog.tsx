@@ -420,7 +420,7 @@ export default function ManageUserRolesDialog({
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!roleToDelete} onOpenChange={() => setRoleToDelete(null)}>
-        <AlertDialogContent data-testid="dialog-confirm-delete" className="z-[100]">
+        <AlertDialogContent data-testid="dialog-confirm-delete">
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Role?</AlertDialogTitle>
             <AlertDialogDescription>
