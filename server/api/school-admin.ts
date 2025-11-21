@@ -107,16 +107,18 @@ async function extractSchoolId(req: any): Promise<number | null> {
       return null;
     }
     
-    console.log(`👤 [extractSchoolId] User found - ID: ${user.id}, schoolId: ${user.schoolId}, activeRoleId: ${user.activeRoleId}`);
+    console.log(`👤 [extractSchoolId] User found - ID: ${user.id}, schoolId: ${user.schoolId} (type: ${typeof user.schoolId}), activeRoleId: ${user.activeRoleId}`);
     
-    // PRODUCTION-SAFE: Prioritize legacy schoolId field first
+    // PRODUCTION-SAFE: Prioritize legacy schoolId field first (but only if it's a valid number)
     // This ensures production continues working even if activeRoleId isn't set
-    if (user.schoolId) {
+    if (user.schoolId !== null && user.schoolId !== undefined && user.schoolId > 0) {
       console.log(`🏫 [extractSchoolId] ✅ Using direct user.schoolId: ${user.schoolId}`);
       return user.schoolId;
+    } else {
+      console.log(`⚠️  [extractSchoolId] Skipping user.schoolId (value: ${user.schoolId}) - falling back to activeRoleId lookup`);
     }
     
-    // Multi-role support: Get school ID from active role (only if user.schoolId is null)
+    // Multi-role support: Get school ID from active role (when user.schoolId is null/undefined/invalid)
     if (user.activeRoleId) {
       const db = await getDb();
       const activeRoles = await db
