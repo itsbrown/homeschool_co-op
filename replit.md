@@ -8,6 +8,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 ### November 21, 2025
+- **Discount System Bug Fixes (PRODUCTION-READY)**: Fixed two critical discount management bugs. (1) Discount value update now uses effectiveType fallback (type ?? existingDiscount.type) to prevent value mis-scaling when type field omitted in PATCH requests - ensures percentage vs fixed-amount conversion uses correct type. (2) Free-after-threshold endpoint migrated from Supabase client to Drizzle ORM to bypass Supabase schema cache issues with new columns - updates now persist reliably using direct PostgreSQL access via Drizzle with proper camelCase-to-snake_case mapping.
 - **CRITICAL FIX: ActiveRoleId Backfill Migration (PRODUCTION-READY)**: Added two production-ready migrations to `server/init-db.ts` that automatically backfill null activeRoleId values for all users. First migration sets activeRoleId to primary role (isPrimary=true) from user_roles table. Second migration provides fallback to earliest role (ORDER BY created_at) for users without primary role. Migrations are idempotent, run automatically on all environment startups, and resolve RoleSwitcher visibility issue for multi-role users. Verified to update 19 affected users successfully.
 - **Same-School Role Switching Policy (SECURITY)**: Implemented strict same-school-only role switching to prevent cross-tenant data leakage. Users can only switch between roles at the same school. RoleSwitcher UI filters roles by current schoolId, backend validates and rejects cross-school switches with 403 error, and regression tests ensure security enforcement.
 - **Role Switcher UI Enhancement**: Added RoleSwitcher component to Header.tsx, providing visible role status and dropdown menu for switching between available roles at the current school.
@@ -41,6 +42,16 @@ Uses Supabase-only authentication; all protected API endpoints must use `supabas
 
 ### Currency Formatting Standards
 All currency values are stored and transmitted as raw cents by the backend. The frontend formats these amounts using `CurrencyUtils` helpers from `shared/currency-utils.ts`.
+
+### Data Persistence Architecture
+**Source of Truth**: PostgreSQL (Neon-hosted) is the authoritative data store for all application data. All backend data operations use Drizzle ORM for type-safe, direct database access.
+
+**Architecture Pattern**:
+-   **Drizzle ORM**: Primary data layer for all CRUD operations. Schema defined in `shared/schema.ts` provides type safety and direct PostgreSQL access without intermediary caching layers.
+-   **Supabase**: Reserved exclusively for authentication (OAuth on frontend, auth admin operations on backend). Supabase client is NOT used for general data persistence.
+-   **Rationale**: Drizzle eliminates schema cache synchronization issues, provides compile-time type safety, and aligns with the existing codebase architecture where most endpoints already use Drizzle.
+
+**Migration from Supabase Client**: Legacy endpoints using Supabase client for data operations should be migrated to Drizzle to maintain consistency and avoid cache drift issues (e.g., free-after-threshold discount configuration previously failed due to Supabase schema cache not recognizing newly added columns).
 
 ### Data Storage
 -   **Primary Database**: Neon PostgreSQL.
