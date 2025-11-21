@@ -141,22 +141,41 @@ export default function ManageUserRolesDialog({
   // Remove role mutation
   const removeRoleMutation = useMutation({
     mutationFn: async (roleId: number) => {
-      return await apiRequest(
-        'DELETE',
-        `/api/user/admin/users/${userId}/roles/${roleId}`
-      );
+      console.log('🔧 removeRoleMutation.mutationFn called with roleId:', roleId);
+      console.log('📍 DELETE URL:', `/api/user/admin/users/${userId}/roles/${roleId}`);
+      try {
+        const result = await apiRequest(
+          'DELETE',
+          `/api/user/admin/users/${userId}/roles/${roleId}`
+        );
+        console.log('✅ DELETE request successful, result:', result);
+        return result;
+      } catch (error) {
+        console.error('❌ DELETE request failed:', error);
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onMutate: (roleId) => {
+      console.log('🔄 removeRoleMutation.onMutate - Starting mutation for roleId:', roleId);
+    },
+    onSuccess: (data, roleId) => {
+      console.log('✅ removeRoleMutation.onSuccess - Role deleted successfully:', { data, roleId });
+      console.log('🔄 Invalidating query cache...');
       queryClient.invalidateQueries({ queryKey: ['/api/user/admin/users', userId, 'roles'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      console.log('✅ Cache invalidated');
       toast({
         title: 'Success',
         description: 'Role removed successfully',
       });
+      console.log('🔄 Clearing roleToDelete state...');
       setRoleToDelete(null);
+      console.log('🔄 Closing dialog...');
       onOpenChange(false);
+      console.log('✅ Dialog close triggered');
     },
-    onError: (error: any) => {
+    onError: (error: any, roleId) => {
+      console.error('❌ removeRoleMutation.onError - Failed to delete role:', { error, roleId });
       toast({
         title: 'Error',
         description: error.message || 'Failed to remove role',
@@ -194,12 +213,37 @@ export default function ManageUserRolesDialog({
   };
 
   const handleDeleteRole = (role: UserRole) => {
-    setRoleToDelete(role);
+    try {
+      console.log('🗑️ handleDeleteRole called with role:', role);
+      setRoleToDelete(role);
+      console.log('✅ roleToDelete state set successfully');
+    } catch (error) {
+      console.error('❌ Error in handleDeleteRole:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to prepare role deletion: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    }
   };
 
   const confirmDeleteRole = () => {
-    if (roleToDelete) {
-      removeRoleMutation.mutate(roleToDelete.id);
+    try {
+      console.log('🔄 confirmDeleteRole called, roleToDelete:', roleToDelete);
+      if (roleToDelete) {
+        console.log('🚀 Calling removeRoleMutation.mutate with roleId:', roleToDelete.id);
+        removeRoleMutation.mutate(roleToDelete.id);
+        console.log('✅ Mutation called successfully');
+      } else {
+        console.warn('⚠️ roleToDelete is null/undefined');
+      }
+    } catch (error) {
+      console.error('❌ Error in confirmDeleteRole:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to delete role: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
     }
   };
 
