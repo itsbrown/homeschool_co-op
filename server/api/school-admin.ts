@@ -80,18 +80,22 @@ function generateTemporaryPassword(): string {
 }
 
 async function extractSchoolId(req: any): Promise<number | null> {
+  const userEmail = req.user?.email;
+  console.log(`🔍 [extractSchoolId] Looking up school for user: ${userEmail}`);
+  
   // First try to get school ID from token (fast path)
   const schoolIdFromToken = req.auth?.payload?.school_id;
   if (schoolIdFromToken) {
     const schoolId = Number(schoolIdFromToken);
     if (!isNaN(schoolId)) {
+      console.log(`🏫 [extractSchoolId] ✅ Found schoolId from token: ${schoolId}`);
       return schoolId;
     }
   }
   
   // Fallback: Look up school from database using email and active role
-  const userEmail = req.user?.email;
   if (!userEmail) {
+    console.error(`❌ [extractSchoolId] No user email in request`);
     return null;
   }
   
@@ -99,8 +103,11 @@ async function extractSchoolId(req: any): Promise<number | null> {
     // Get user from database to find their active role
     const user = await storage.getUserByEmail(userEmail);
     if (!user) {
+      console.error(`❌ [extractSchoolId] User not found in database: ${userEmail}`);
       return null;
     }
+    
+    console.log(`👤 [extractSchoolId] User found - ID: ${user.id}, schoolId: ${user.schoolId}, activeRoleId: ${user.activeRoleId}`);
     
     // Multi-role support: Get school ID from active role
     if (user.activeRoleId) {
@@ -112,20 +119,27 @@ async function extractSchoolId(req: any): Promise<number | null> {
         .limit(1);
       
       if (activeRoles.length > 0 && activeRoles[0].schoolId) {
-        console.log(`🏫 Using active role school ID: ${activeRoles[0].schoolId} for user: ${userEmail}`);
+        console.log(`🏫 [extractSchoolId] ✅ Using active role school ID: ${activeRoles[0].schoolId}`);
         return activeRoles[0].schoolId;
+      } else {
+        console.warn(`⚠️  [extractSchoolId] Active role ${user.activeRoleId} not found or has no schoolId`);
       }
+    } else {
+      console.warn(`⚠️  [extractSchoolId] No activeRoleId set for user ${userEmail}`);
     }
     
     // Fallback to user's direct schoolId (legacy single-role users)
     if (user.schoolId) {
-      console.log(`🏫 Using legacy user.schoolId: ${user.schoolId} for user: ${userEmail}`);
+      console.log(`🏫 [extractSchoolId] ✅ Using legacy user.schoolId: ${user.schoolId}`);
       return user.schoolId;
+    } else {
+      console.error(`❌ [extractSchoolId] No schoolId found for user ${userEmail}`);
     }
   } catch (error) {
-    console.error('Error looking up school ID for user:', error);
+    console.error(`❌ [extractSchoolId] Error looking up school ID for user ${userEmail}:`, error);
   }
   
+  console.error(`❌ [extractSchoolId] FINAL: Returning null for user ${userEmail}`);
   return null;
 }
 
