@@ -91,8 +91,9 @@ export async function requireSchoolContext(req: any, res: Response, next: NextFu
       });
     }
     
-    // Inject schoolId into request for downstream handlers
-    req.schoolId = schoolId;
+    // Inject schoolId into request for downstream handlers (as STRING to match storage contracts)
+    req.schoolId = String(schoolId);
+    console.log(`✅ [requireSchoolContext] Injected req.schoolId="${req.schoolId}" (string) for user ${req.user?.email}`);
     next();
   } catch (error) {
     console.error('[requireSchoolContext] Error extracting school ID:', error);

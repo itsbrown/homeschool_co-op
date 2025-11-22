@@ -587,20 +587,10 @@ async function setupSchool(req: any, res: any) {
 router.post("/setup-school", setupSchool);
 
 // Get classes for the school
-router.get("/classes", supabaseAuth, async (req: any, res: any) => {
+router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res: any) => {
   try {
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ 
-        message: "School ID not found in user metadata. Please log out and log back in.",
-        hint: "If this persists, contact support to update your account."
-      });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     console.log(`🏫 Loading classes for school ID: ${schoolId}`);
 
