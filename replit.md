@@ -7,6 +7,11 @@ The ASA Learning Platform is an adaptive learning application for the American S
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+### November 22, 2025 - UsersPage Infinite Loading Fix
+-   **Critical Bug Fix**: Fixed infinite loading issue on UsersPage by adding `enabled: !!schoolId` check to React Query
+-   **Pattern Applied**: Admin pages using `useSchoolAdmin` hook must wait for schoolId before fetching data
+-   **Affected Pages**: Verified StaffPage, StudentsPage, and DiscountsPage don't use `useSchoolAdmin` and are unaffected
+
 ### November 22, 2025 - Database-Driven School Context Migration Complete
 -   **Endpoint Migration**: All 39 school-admin endpoints now use database-driven school context via `requireSchoolContext` middleware
 -   **Data Source**: PostgreSQL database (via Drizzle ORM) is the single source of truth; JWT metadata deprecated for school context
