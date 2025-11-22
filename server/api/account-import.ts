@@ -5,6 +5,7 @@ import { parse } from "csv-parse/sync";
 import * as fileUpload from "express-fileupload";
 import { UploadedFile } from "express-fileupload";
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireSchoolContext } from '../middleware/require-school-context';
 import path from "path";
 import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 
@@ -49,17 +50,10 @@ router.use(fileUpload.default({
 }));
 
 // Preview import to show duplicates and changes
-router.post("/preview-import", supabaseAuth, async (req: any, res: Response) => {
+router.post("/preview-import", supabaseAuth, requireSchoolContext, async (req: any, res: Response) => {
   try {
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ message: "No files uploaded" });
@@ -83,17 +77,10 @@ router.post("/preview-import", supabaseAuth, async (req: any, res: Response) => 
 });
 
 // Import complete account data (parents, children, enrollments, payments)
-router.post("/upload-accounts", supabaseAuth, async (req: any, res: Response) => {
+router.post("/upload-accounts", supabaseAuth, requireSchoolContext, async (req: any, res: Response) => {
   try {
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ message: "No files uploaded" });
