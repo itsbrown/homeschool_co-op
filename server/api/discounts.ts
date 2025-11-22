@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { storage } from '../storage';
 import type { Discount } from '@shared/schema';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireSchoolContext } from '../middleware/require-school-context';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ router.use(supabaseAuth);
  * Validate a discount code without applying it
  * Used in cart to check if a code is valid before user submits
  */
-router.post('/validate', async (req, res) => {
+router.post('/validate', requireSchoolContext, async (req: any, res) => {
   try {
     const { code, cartTotal, items } = req.body;
 
@@ -24,14 +25,8 @@ router.post('/validate', async (req, res) => {
       });
     }
 
-    // Extract school_id from authenticated JWT
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required - school context missing',
-      });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     console.log(`🔐 Validating discount code for school ${schoolId}`);
 
@@ -180,7 +175,7 @@ router.post('/validate', async (req, res) => {
  * Apply a discount code and increment usage counter
  * Called after successful payment to track discount usage
  */
-router.post('/apply', async (req, res) => {
+router.post('/apply', requireSchoolContext, async (req: any, res) => {
   try {
     const {
       code,
@@ -200,16 +195,9 @@ router.post('/apply', async (req, res) => {
       });
     }
 
-    // Extract school_id from authenticated JWT
-    const schoolId = req.auth?.payload?.school_id;
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
     const userEmail = req.auth?.payload?.email;
-    
-    if (!schoolId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required - school context missing',
-      });
-    }
 
     // Verify user belongs to this school and matches parentEmail
     if (userEmail !== parentEmail) {
