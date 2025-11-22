@@ -1012,12 +1012,10 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
   console.log("📧 Staff invitation request received:", req.body);
 
   try {
-    console.log("🔍 Step 1: Extracting schoolId from auth");
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    console.log("✅ Step 1 complete: schoolId =", schoolId);
+    console.log("🔍 Step 1: Extracting schoolId from database [FIX:v3.0]");
+    const schoolId = await requireSchoolContext(req, res);
+    if (schoolId === null) return;
+    console.log("✅ Step 1 complete: schoolId from DB =", schoolId);
 
     const { email, firstName, lastName, role, locationId, classId, message } = req.body;
 
@@ -1135,12 +1133,11 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
 // Get staff members for the school
 router.get("/staff", supabaseAuth, async (req: any, res: any) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
+    // [FIX:v3.0] Use database as source of truth, not JWT token
+    const schoolId = await requireSchoolContext(req, res);
+    if (schoolId === null) return;
 
-    console.log(`👥 Loading staff for school ID: ${schoolId} from database`);
+    console.log(`👥 [FIX:v3.0] Loading staff for school ID: ${schoolId} from database`);
 
     // Get all school staff from database
     const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
@@ -1497,10 +1494,9 @@ router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
 // Resend all pending invites
 router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
+    // [FIX:v3.0] Use database as source of truth, not JWT token
+    const schoolId = await requireSchoolContext(req, res);
+    if (schoolId === null) return;
     
     // Get all inactive (pending) staff members from database
     const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
@@ -1861,17 +1857,11 @@ router.get("/departments", supabaseAuth, async (req: any, res) => {
 // Get students for the school
 router.get("/students", supabaseAuth, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] Use database as source of truth, not JWT token
+    const schoolId = await requireSchoolContext(req, res);
+    if (schoolId === null) return;
 
-    console.log(`📚 Fetching students for school admin (school_id: ${schoolId})...`);
+    console.log(`📚 [FIX:v3.0] Fetching students for school admin (school_id from DB: ${schoolId})...`);
     
     // Get school students from database (not in-memory storage)
     const schoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
@@ -1960,17 +1950,11 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
 // Backfill/sync students to school_students table
 router.post("/students/sync", supabaseAuth, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] Use database as source of truth, not JWT token
+    const schoolId = await requireSchoolContext(req, res);
+    if (schoolId === null) return;
 
-    console.log(`🔄 Starting student sync for school ${schoolId}...`);
+    console.log(`🔄 [FIX:v3.0] Starting student sync for school ${schoolId} (from DB)...`);
     
     // Get all children for this school
     const allChildren = await storage.getAllChildren();
