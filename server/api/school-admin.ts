@@ -83,6 +83,59 @@ function generateTemporaryPassword(): string {
 // NOTE: extractSchoolId and requireSchoolContext are now imported from middleware/require-school-context.ts
 // The middleware handles school ID extraction from the database
 
+/**
+ * Legacy helper for routes that call requireSchoolContext as a function instead of middleware
+ * This should be used temporarily until all routes are refactored to use middleware properly
+ * @deprecated Use requireSchoolContext middleware and read req.schoolId instead
+ */
+async function getSchoolIdFromRequest(req: any, res: any): Promise<number | null> {
+  // If middleware already set req.schoolId, use it
+  if (req.schoolId) {
+    return Number(req.schoolId);
+  }
+  
+  // Otherwise, extract from database (fallback for routes not using middleware)
+  const userEmail = req.user?.email;
+  if (!userEmail) {
+    res.status(400).json({ message: "User email not found in request" });
+    return null;
+  }
+  
+  try {
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      res.status(400).json({ message: "User not found in database" });
+      return null;
+    }
+    
+    // Prioritize legacy schoolId field
+    if (user.schoolId !== null && user.schoolId !== undefined && user.schoolId > 0) {
+      return user.schoolId;
+    }
+    
+    // Multi-role support: Get school ID from active role
+    if (user.activeRoleId) {
+      const db = await getDb();
+      const activeRoles = await db
+        .select()
+        .from(userRoles)
+        .where(eq(userRoles.id, user.activeRoleId))
+        .limit(1);
+      
+      if (activeRoles.length > 0 && activeRoles[0].schoolId) {
+        return activeRoles[0].schoolId;
+      }
+    }
+    
+    res.status(400).json({ message: "School ID not found in database" });
+    return null;
+  } catch (error) {
+    console.error('Error extracting school ID:', error);
+    res.status(500).json({ message: "Error determining school context" });
+    return null;
+  }
+}
+
 // Create Supabase account for staff member
 async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string; userExists?: boolean }> {
   try {
@@ -655,7 +708,7 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
 // Get individual class by ID for editing
 router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const classId = parseInt(req.params.id);
@@ -710,7 +763,7 @@ router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
 // Update class by ID
 router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const classId = parseInt(req.params.id);
@@ -837,7 +890,7 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
 // Delete a class
 router.delete("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const classId = parseInt(req.params.id);
@@ -881,7 +934,7 @@ router.delete("/classes/:id", supabaseAuth, async (req: any, res) => {
 // Get class roster (students enrolled in a specific class)
 router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const classId = parseInt(req.params.id);
@@ -962,7 +1015,7 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
 
   try {
     console.log("🔍 Step 1: Extracting schoolId from database [FIX:v3.0]");
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
     console.log("✅ Step 1 complete: schoolId from DB =", schoolId);
 
@@ -1083,7 +1136,7 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
 router.get("/staff", supabaseAuth, async (req: any, res: any) => {
   try {
     // [FIX:v3.0] Use database as source of truth, not JWT token
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     console.log(`👥 [FIX:v3.0] Loading staff for school ID: ${schoolId} from database`);
@@ -1150,7 +1203,7 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
 // Get single staff member by ID
 router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1202,7 +1255,7 @@ router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
 // Get classes assigned to a specific staff member
 router.get("/staff/:id/classes", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1246,7 +1299,7 @@ router.get("/staff/:id/classes", supabaseAuth, async (req: any, res) => {
 // Assign staff member to a class
 router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1304,7 +1357,7 @@ router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
 // Unassign staff member from a class
 router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1352,7 +1405,7 @@ router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: an
 // Resend invite to individual staff member
 router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1444,7 +1497,7 @@ router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
 router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any) => {
   try {
     // [FIX:v3.0] Use database as source of truth, not JWT token
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
     
     // Get all inactive (pending) staff members from database
@@ -1535,7 +1588,7 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
 // Update staff member
 router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1625,7 +1678,7 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
 // Delete staff member
 router.delete("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const staffId = parseInt(req.params.id, 10);
@@ -1669,7 +1722,7 @@ router.delete("/staff/:id", supabaseAuth, async (req: any, res) => {
 // Get staff positions/roles for dropdown
 router.get("/staff-positions", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const positions = await storage.getAllStaffPositions();
@@ -1684,7 +1737,7 @@ router.get("/staff-positions", supabaseAuth, async (req: any, res) => {
 // Create new staff position
 router.post("/staff-positions", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const { title, description, isDefault } = req.body;
@@ -1714,7 +1767,7 @@ router.patch("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
   console.log("🚨 REQUEST BODY:", req.body);
 
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const positionId = parseInt(req.params.id);
@@ -1750,7 +1803,7 @@ router.patch("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
 // Delete staff position
 router.delete("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const positionId = parseInt(req.params.id);
@@ -1777,7 +1830,7 @@ router.delete("/staff-positions/:id", supabaseAuth, async (req: any, res) => {
 // Get departments for dropdown
 router.get("/departments", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     // These would come from database in real app
@@ -1807,7 +1860,7 @@ router.get("/departments", supabaseAuth, async (req: any, res) => {
 router.get("/students", supabaseAuth, async (req: any, res) => {
   try {
     // [FIX:v3.0] Use database as source of truth, not JWT token
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     console.log(`📚 [FIX:v3.0] Fetching students for school admin (school_id from DB: ${schoolId})...`);
@@ -1900,7 +1953,7 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
 router.post("/students/sync", supabaseAuth, async (req: any, res) => {
   try {
     // [FIX:v3.0] Use database as source of truth, not JWT token
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     console.log(`🔄 [FIX:v3.0] Starting student sync for school ${schoolId} (from DB)...`);
@@ -2161,7 +2214,7 @@ router.patch("/schools/:id", supabaseAuth, async (req: any, res) => {
 // Update school membership configuration
 router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     console.log('🔧 Updating membership configuration');
@@ -2252,7 +2305,7 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
 // Update school "Free After Threshold" discount configuration
 router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const { freeAfterThresholdEnabled, freeAfterThreshold } = req.body;
@@ -2316,7 +2369,7 @@ router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, r
 
 router.get("/knowledge-bases", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     // For now, return sample knowledge base data
@@ -2368,7 +2421,7 @@ router.get("/knowledge-bases", supabaseAuth, async (req: any, res) => {
 // Get all enrollments for school admin
 router.get('/enrollments', supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     console.log('📚 School admin fetching all enrollments for school:', schoolId);
@@ -2404,7 +2457,7 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
 // Get individual student endpoint
 router.get('/students/:id', supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     // Handle special case for "register" route
@@ -2470,7 +2523,7 @@ router.get('/students/:id', supabaseAuth, async (req: any, res) => {
 // Update student endpoint
 router.put('/students/:id', supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     const studentId = parseInt(req.params.id);
@@ -2537,7 +2590,7 @@ router.get("/diagnostic/school-context", supabaseAuth, async (req: any, res) => 
 
 router.get("/metrics/enrollment", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     console.log('📊 Calculating enrollment metrics from database for school:', schoolId);
@@ -2606,7 +2659,7 @@ router.get("/metrics/enrollment", supabaseAuth, async (req: any, res) => {
 // Financial Metrics
 router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     console.log('💰 Calculating financial metrics from database for school:', schoolId);
@@ -2681,7 +2734,7 @@ router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
 // Academic Metrics
 router.get("/metrics/academic", supabaseAuth, async (req: any, res) => {
   try {
-    const schoolId = await requireSchoolContext(req, res);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
     console.log('📚 Calculating academic metrics from database for school:', schoolId);
