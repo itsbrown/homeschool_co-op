@@ -377,22 +377,49 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
       return res.status(500).json({ message: "User sync failed" });
     }
     
-    console.log('✅ Found admin user:', { id: adminUser.id, email: adminUser.email, role: adminUser.role });
+    console.log('✅ Found admin user:', { id: adminUser.id, email: adminUser.email, role: adminUser.role, schoolId: adminUser.schoolId });
+    
+    // CRITICAL FIX: Use the user's schoolId directly from the database
+    // This is the authoritative source of truth
+    if (adminUser.schoolId) {
+      console.log(`🎯 Using user's schoolId from database: ${adminUser.schoolId}`);
+      const school = await storage.getSchool(adminUser.schoolId);
+      
+      if (school) {
+        console.log('✅ Found school for user:', school.name);
+        
+        // Load locations for this school
+        const locations = await storage.getLocationsBySchoolId(school.id);
+        console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
+        
+        const responseData = {
+          ...school,
+          locations
+        };
+        
+        console.log('🚀 SENDING RESPONSE FROM DATABASE (schoolId):', JSON.stringify(responseData, null, 2));
+        
+        // Return school with embedded locations
+        return res.json(responseData);
+      } else {
+        console.error(`❌ School ${adminUser.schoolId} not found in database!`);
+      }
+    }
     
     console.log('🔍 Fetching schools from database...');
     
-    // Get all schools from database
+    // Fallback: Get all schools from database
     const allSchools = await storage.getAllSchools();
     console.log('📋 Found schools in database:', allSchools.length);
     console.log('🔍 All schools:', allSchools.map((s: any) => ({ id: s.id, name: s.name, adminId: s.adminId })));
 
-    // First, try to find a school already associated with this admin user
+    // Try to find a school already associated with this admin user via adminId
     let school = allSchools.find((s: any) => 
       s.adminId === adminUser.id
     );
 
     if (school) {
-      console.log('✅ Found existing school for admin:', school.name);
+      console.log('✅ Found existing school for admin (via adminId):', school.name);
       console.log('📊 RAW DATABASE DATA:', JSON.stringify(school, null, 2));
       
       // Load locations for this school
