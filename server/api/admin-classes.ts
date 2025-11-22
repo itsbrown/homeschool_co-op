@@ -4,6 +4,7 @@ import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireAdmin } from '../middleware/auth0-auth';
+import { requireSchoolContext } from '../middleware/require-school-context';
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
@@ -29,17 +30,10 @@ router.get("/educators", supabaseAuth, requireAdmin, async (req, res) => {
 });
 
 // Get a specific class by ID
-router.get("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) => {
+router.get("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -66,17 +60,10 @@ router.get("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) => 
 });
 
 // Get all classes (with pagination and filters)
-router.get("/classes", supabaseAuth, requireAdmin, async (req: any, res) => {
+router.get("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -133,17 +120,10 @@ router.get("/classes", supabaseAuth, requireAdmin, async (req: any, res) => {
 });
 
 // Create a new class
-router.post("/classes", supabaseAuth, requireAdmin, async (req: any, res) => {
+router.post("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     // Validate request body (exclude school_id from client data)
     const { school_id: _, ...bodyWithoutSchoolId } = req.body;
@@ -181,22 +161,15 @@ router.post("/classes", supabaseAuth, requireAdmin, async (req: any, res) => {
 });
 
 // Update a class
-router.patch("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) => {
+router.patch("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid class ID" });
     }
 
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     // Get existing class using database storage
     const existingClass = await storage.getClassById(id);
@@ -277,22 +250,15 @@ router.patch("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) =
 });
 
 // Delete a class
-router.delete("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) => {
+router.delete("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid class ID" });
     }
 
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     const existingClass = await storage.getClassById(id);
     if (!existingClass) {
@@ -326,17 +292,10 @@ router.delete("/classes/:id", supabaseAuth, requireAdmin, async (req: any, res) 
 });
 
 // Handle CSV file upload for classes
-router.post("/classes/upload", supabaseAuth, requireAdmin, async (req: any, res) => {
+router.post("/classes/upload", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata and normalize to number
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    if (!schoolIdFromToken) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     if (!req.files || !req.files.file) {
       return res.status(400).json({ message: "No file uploaded" });
