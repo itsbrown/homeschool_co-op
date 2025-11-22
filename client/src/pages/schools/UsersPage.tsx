@@ -51,12 +51,15 @@ export default function UsersPage() {
   const [manageRolesUser, setManageRolesUser] = useState<any>(null);
   
   const queryClient = useQueryClient();
-  const { schoolId } = useSchoolAdmin();
+  const { schoolId, isLoading: isLoadingSchool } = useSchoolAdmin();
 
   // Fetch users for the school
-  const { data: users = [], isLoading } = useQuery<any[]>({
+  const { data: users = [], isLoading: isLoadingUsers, error } = useQuery<any[]>({
     queryKey: ['/api/school-admin/users'],
+    enabled: !!schoolId, // Only fetch when schoolId is available
   });
+
+  const isLoading = isLoadingSchool || isLoadingUsers;
 
   // Filter users based on search and role
   const filteredUsers = users.filter((user: any) => {
