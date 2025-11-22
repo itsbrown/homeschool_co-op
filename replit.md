@@ -6,6 +6,14 @@ The ASA Learning Platform is an adaptive learning application for the American S
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+### November 22, 2025 - Database-Driven School Context Migration Complete
+-   **Endpoint Migration**: All 39 school-admin endpoints now use database-driven school context via `requireSchoolContext` middleware
+-   **Data Source**: PostgreSQL database (via Drizzle ORM) is the single source of truth; JWT metadata deprecated for school context
+-   **Type Safety**: Consistent type normalization applied across all endpoints (String() for comparisons, Number() for storage calls)
+-   **Endpoints Migrated**: Final 9 unmigrated endpoints completed (POST /classes, GET /metrics/staff, POST /discounts, POST /contact-import, GET /users, GET /users/:userId, POST /users, PUT /users/:id, DELETE /users/:id)
+-   **Architecture**: Supabase reserved exclusively for authentication; all data operations use Drizzle ORM
+
 ## System Architecture
 ### Core Design Principles
 The platform emphasizes scalability, security, and user experience, incorporating role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
