@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { insertLocationSchema, insertUserLocationSchema } from "@shared/schema";
 import { storage } from "../storage";
+import { requireSchoolContext } from "../middleware/require-school-context";
 
 const router = express.Router();
 
@@ -9,21 +10,10 @@ const router = express.Router();
 // to prevent Express from treating "accessible" as an ID
 
 // Get all locations for a school
-router.get("/", async (req: any, res) => {
+router.get("/", requireSchoolContext, async (req: any, res) => {
   try {
-    // SECURITY: Always use authenticated user's schoolId from JWT token
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    
-    if (!schoolIdFromToken) {
-      return res.status(401).json({ 
-        message: "Authentication required - school ID not found in token" 
-      });
-    }
-    
-    const authenticatedSchoolId = Number(schoolIdFromToken);
-    if (isNaN(authenticatedSchoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in authentication token" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const authenticatedSchoolId = req.schoolId;
     
     // If a query parameter is provided, validate it matches the authenticated school
     if (req.query.schoolId) {
@@ -57,21 +47,10 @@ router.get("/", async (req: any, res) => {
 });
 
 // Get accessible locations for a user (BEFORE /:id to prevent route shadowing)
-router.get("/accessible", async (req: any, res) => {
+router.get("/accessible", requireSchoolContext, async (req: any, res) => {
   try {
-    // SECURITY: Verify authenticated user's school
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    
-    if (!schoolIdFromToken) {
-      return res.status(401).json({ 
-        message: "Authentication required - school ID not found in token" 
-      });
-    }
-    
-    const authenticatedSchoolId = Number(schoolIdFromToken);
-    if (isNaN(authenticatedSchoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in authentication token" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const authenticatedSchoolId = req.schoolId;
     
     const userId = parseInt(req.query.userId as string);
     if (isNaN(userId)) {
@@ -111,21 +90,10 @@ router.get("/accessible", async (req: any, res) => {
 });
 
 // Get a single location by ID (AFTER /accessible to prevent shadowing)
-router.get("/:id", async (req: any, res) => {
+router.get("/:id", requireSchoolContext, async (req: any, res) => {
   try {
-    // SECURITY: Verify authenticated user's school
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    
-    if (!schoolIdFromToken) {
-      return res.status(401).json({ 
-        message: "Authentication required - school ID not found in token" 
-      });
-    }
-    
-    const authenticatedSchoolId = Number(schoolIdFromToken);
-    if (isNaN(authenticatedSchoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in authentication token" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const authenticatedSchoolId = req.schoolId;
     
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -154,7 +122,7 @@ router.get("/:id", async (req: any, res) => {
 });
 
 // Create a new location
-router.post("/", async (req: any, res) => {
+router.post("/", requireSchoolContext, async (req: any, res) => {
   try {
     console.log('📍 Location creation request received');
     console.log('📍 Headers:', {
@@ -163,32 +131,10 @@ router.post("/", async (req: any, res) => {
     });
     console.log('📍 req.auth exists:', !!req.auth);
     console.log('📍 req.user exists:', !!req.user);
-    console.log('📍 Full req.auth:', JSON.stringify(req.auth, null, 2));
     
-    // Get school_id from JWT token metadata (Auth0 or Supabase)
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    console.log('🔐 Location creation - JWT payload:', {
-      school_id: schoolIdFromToken,
-      email: req.auth?.payload?.email,
-      sub: req.auth?.payload?.sub
-    });
-    
-    if (!schoolIdFromToken) {
-      console.error('❌ No school_id found in JWT token');
-      console.error('❌ Full payload:', JSON.stringify(req.auth?.payload, null, 2));
-      return res.status(403).json({ 
-        message: "Unable to determine your school. Please contact support." 
-      });
-    }
-
-    // Normalize and validate schoolId
-    const schoolId = Number(schoolIdFromToken);
-    if (isNaN(schoolId)) {
-      console.error('❌ Invalid school_id in JWT token:', schoolIdFromToken);
-      return res.status(403).json({ 
-        message: "Invalid school identifier. Please contact support." 
-      });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
+    console.log('🔐 Location creation - School ID:', schoolId);
     
     // Validate that the school exists
     const school = await storage.getSchool(schoolId);
@@ -225,21 +171,10 @@ router.post("/", async (req: any, res) => {
 });
 
 // Update a location
-router.put("/:id", async (req: any, res) => {
+router.put("/:id", requireSchoolContext, async (req: any, res) => {
   try {
-    // SECURITY: Verify authenticated user's school
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    
-    if (!schoolIdFromToken) {
-      return res.status(401).json({ 
-        message: "Authentication required - school ID not found in token" 
-      });
-    }
-    
-    const authenticatedSchoolId = Number(schoolIdFromToken);
-    if (isNaN(authenticatedSchoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in authentication token" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const authenticatedSchoolId = req.schoolId;
     
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -284,21 +219,10 @@ router.put("/:id", async (req: any, res) => {
 });
 
 // Delete a location
-router.delete("/:id", async (req: any, res) => {
+router.delete("/:id", requireSchoolContext, async (req: any, res) => {
   try {
-    // SECURITY: Verify authenticated user's school
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    
-    if (!schoolIdFromToken) {
-      return res.status(401).json({ 
-        message: "Authentication required - school ID not found in token" 
-      });
-    }
-    
-    const authenticatedSchoolId = Number(schoolIdFromToken);
-    if (isNaN(authenticatedSchoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in authentication token" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const authenticatedSchoolId = req.schoolId;
     
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -330,21 +254,10 @@ router.delete("/:id", async (req: any, res) => {
 });
 
 // Assign user access to a location
-router.post("/access", async (req: any, res) => {
+router.post("/access", requireSchoolContext, async (req: any, res) => {
   try {
-    // SECURITY: Verify authenticated user's school
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    
-    if (!schoolIdFromToken) {
-      return res.status(401).json({ 
-        message: "Authentication required - school ID not found in token" 
-      });
-    }
-    
-    const authenticatedSchoolId = Number(schoolIdFromToken);
-    if (isNaN(authenticatedSchoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in authentication token" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const authenticatedSchoolId = req.schoolId;
     
     const validatedData = insertUserLocationSchema.parse(req.body);
     
