@@ -2007,19 +2007,15 @@ router.post("/students/sync", supabaseAuth, async (req: any, res) => {
 });
 
 // Create a new class for a school
-router.post("/classes", supabaseAuth, async (req: any, res: any) => {
+router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res: any) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
+    const schoolId = req.schoolId;
     console.log('📝 Creating new class:', JSON.stringify(req.body, null, 2));
     
     // Find instructor details from database if instructorName is provided
     let instructorId = 1; // Default instructor ID
     if (req.body.instructorName) {
-      const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+      const allStaff = await storage.getSchoolStaffBySchoolId(Number(schoolId));
       for (const staffRecord of allStaff) {
         const user = await storage.getUser(staffRecord.userId);
         if (user && user.id.toString() === req.body.instructorName) {
@@ -2048,7 +2044,7 @@ router.post("/classes", supabaseAuth, async (req: any, res: any) => {
 
     // Create new class object
     const newClassData = {
-      schoolId,
+      schoolId: Number(schoolId),
       title: req.body.title,
       description: req.body.description,
       category: req.body.category || 'Academic',
@@ -2776,16 +2772,12 @@ router.get("/metrics/academic", supabaseAuth, async (req: any, res) => {
 });
 
 // Staff Metrics
-router.get("/metrics/staff", supabaseAuth, async (req: any, res: any) => {
+router.get("/metrics/staff", supabaseAuth, requireSchoolContext, async (req: any, res: any) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
+    const schoolId = req.schoolId;
     console.log('👥 Calculating staff metrics from database');
 
-    const staffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+    const staffRecords = await storage.getSchoolStaffBySchoolId(Number(schoolId));
 
     // Calculate staff metrics from actual data
     const totalStaff = staffRecords.length;
@@ -3162,7 +3154,7 @@ router.get('/discounts/:id', async (req, res) => {
 });
 
 // Create a new discount
-router.post('/discounts', supabaseAuth, async (req: any, res) => {
+router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     console.log('💰 Creating new discount:', req.body);
     
@@ -3217,14 +3209,8 @@ router.post('/discounts', supabaseAuth, async (req: any, res) => {
     const minOrderAmountInCents = minOrderAmount ? Math.round(minOrderAmount * 100) : null;
     const maxDiscountAmountInCents = maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null;
     
-    // Get school ID from authenticated user
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({
-        success: false,
-        error: 'School ID not found in user metadata'
-      });
-    }
+    // Get school ID from database-driven middleware
+    const schoolId = req.schoolId;
     
     // Fix discount ID sequence before creating new discount (prevent duplicate key errors)
     try {
@@ -3239,7 +3225,7 @@ router.post('/discounts', supabaseAuth, async (req: any, res) => {
     
     // Create discount using storage
     const newDiscount = await storage.createDiscount({
-      schoolId,
+      schoolId: Number(schoolId),
       name,
       description: description || null,
       code: code || null,
@@ -3674,13 +3660,9 @@ router.get('/discounts/:id/applications', async (req, res) => {
 });
 
 // School-specific contact import endpoint using express-fileupload instead of multer
-router.post('/contact-import', supabaseAuth, async (req: any, res) => {
+router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
+    const schoolId = req.schoolId;
     console.log('📁 School admin contact import - processing files');
     console.log('📊 Request files:', req.files);
     console.log('📊 Request body:', req.body);
@@ -3699,7 +3681,7 @@ router.post('/contact-import', supabaseAuth, async (req: any, res) => {
     console.log(`🏫 Processing contact import for school ID: ${schoolId}`);
 
     // Get all locations for this school to enable location matching
-    const schoolLocations = await storage.getLocationsBySchoolId(schoolId);
+    const schoolLocations = await storage.getLocationsBySchoolId(Number(schoolId));
     console.log(`📍 Found ${schoolLocations.length} locations for school:`, schoolLocations.map(l => l.name));
 
     // Files are already processed above
@@ -3896,13 +3878,9 @@ router.post('/contact-import', supabaseAuth, async (req: any, res) => {
 
 
 // Get all users for the school
-router.get('/users', supabaseAuth, async (req: any, res) => {
+router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
+    const schoolId = req.schoolId;
     console.log('📋 Fetching users for school admin...');
 
     const db = await getDb();
@@ -3923,7 +3901,7 @@ router.get('/users', supabaseAuth, async (req: any, res) => {
         schoolId: users.schoolId,
       })
       .from(users)
-      .where(eq(users.schoolId, schoolId));
+      .where(eq(users.schoolId, Number(schoolId)));
 
     // Map to frontend format with active role
     const regularUsers = dbUsers.map((user: any) => ({
@@ -3940,7 +3918,7 @@ router.get('/users', supabaseAuth, async (req: any, res) => {
     console.log(`👥 Found ${regularUsers.length} regular users for school ${schoolId}`);
     
     // Load staff from database
-    const staffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+    const staffRecords = await storage.getSchoolStaffBySchoolId(Number(schoolId));
     console.log(`👨‍🏫 Found ${staffRecords.length} staff members from database`);
     
     // Convert staff to user format for the frontend
@@ -3986,13 +3964,9 @@ router.get('/users', supabaseAuth, async (req: any, res) => {
 });
 
 // Get a single user by ID (numeric database primary key)
-router.get('/users/:userId', supabaseAuth, async (req: any, res) => {
+router.get('/users/:userId', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
+    const schoolId = req.schoolId;
     const userId = Number(req.params.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       return res.status(400).json({ message: 'Invalid user ID - must be a positive integer' });
@@ -4013,7 +3987,7 @@ router.get('/users/:userId', supabaseAuth, async (req: any, res) => {
       return res.status(403).json({ message: 'Access denied - user has no school assignment' });
     }
     
-    if (userSchoolId !== schoolId) {
+    if (String(userSchoolId) !== schoolId) {
       console.log(`❌ School ID mismatch: user has ${userSchoolId}, admin has ${schoolId}`);
       return res.status(403).json({ message: 'Access denied - user belongs to different school' });
     }
@@ -4046,18 +4020,14 @@ router.get('/users/:userId', supabaseAuth, async (req: any, res) => {
 });
 
 // Create a new user for the school
-router.post('/users', supabaseAuth, async (req: any, res) => {
+router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
+    const schoolId = req.schoolId;
     console.log('👤 Creating new user for school admin...');
 
     const userData = {
       ...req.body,
-      schoolId: schoolId // Associate with this school
+      schoolId: Number(schoolId) // Associate with this school
     };
 
     // Create user with school association
@@ -4076,16 +4046,12 @@ router.post('/users', supabaseAuth, async (req: any, res) => {
 });
 
 // Update an existing user
-router.put('/users/:id', supabaseAuth, async (req: any, res) => {
+router.put('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   console.log('🚀 PUT /users/:id endpoint reached');
   console.log('📄 Request params:', req.params);
   console.log('📄 Request body:', req.body);
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
+    const schoolId = req.schoolId;
     console.log('📝 Updating user for school admin...');
     
     const userId = parseInt(req.params.id);
@@ -4104,14 +4070,14 @@ router.put('/users/:id', supabaseAuth, async (req: any, res) => {
     
     // Check schoolId (handle both camelCase and snake_case)
     const userSchoolId = existingUser.schoolId || (existingUser as any).school_id;
-    if (userSchoolId !== schoolId) {
+    if (String(userSchoolId) !== schoolId) {
       console.log(`❌ School ID mismatch: user has ${userSchoolId}, admin has ${schoolId}`);
       return res.status(403).json({ message: 'Access denied - user belongs to different school' });
     }
 
     const userData = {
       ...req.body,
-      schoolId: schoolId // Maintain school association
+      schoolId: Number(schoolId) // Maintain school association
     };
 
     // Handle password updates - need to sync with both local storage and Supabase
@@ -4187,13 +4153,9 @@ router.put('/users/:id', supabaseAuth, async (req: any, res) => {
 });
 
 // Delete a user
-router.delete('/users/:id', supabaseAuth, async (req: any, res) => {
+router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
-
+    const schoolId = req.schoolId;
     console.log('🗑️ Deleting user for school admin...');
     
     const userId = parseInt(req.params.id);
@@ -4203,7 +4165,7 @@ router.delete('/users/:id', supabaseAuth, async (req: any, res) => {
 
     // Verify user belongs to this school before deleting
     const existingUser = await storage.getUser(userId);
-    if (!existingUser || existingUser.schoolId !== schoolId) {
+    if (!existingUser || String(existingUser.schoolId) !== schoolId) {
       return res.status(404).json({ message: 'User not found or access denied' });
     }
 
