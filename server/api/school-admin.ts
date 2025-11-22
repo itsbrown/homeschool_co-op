@@ -10,6 +10,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireSchoolContext } from '../middleware/require-school-context';
 import { getDb } from '../db';
 import { sql, eq } from 'drizzle-orm';
 import { users, schools, userRoles } from '@shared/schema';
@@ -79,77 +80,8 @@ function generateTemporaryPassword(): string {
   return result;
 }
 
-async function extractSchoolId(req: any): Promise<number | null> {
-  const userEmail = req.user?.email;
-  const env = process.env.NODE_ENV || 'unknown';
-  console.log(`🔍 [extractSchoolId] [ENV:${env}] [FIX:v3.0-no-token] Looking up school for user: ${userEmail}`);
-  
-  // CRITICAL FIX v3.0: Removed JWT token fast path - it used stale Supabase metadata
-  // PostgreSQL database is the ONLY source of truth for school_id
-  // Issue: Token had school_id=1 (old) while database had school_id=2 (correct)
-  
-  // Look up school from database (authoritative source)
-  if (!userEmail) {
-    console.error(`❌ [extractSchoolId] No user email in request`);
-    return null;
-  }
-  
-  try {
-    // Get user from database
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user) {
-      console.error(`❌ [extractSchoolId] User not found in database: ${userEmail}`);
-      return null;
-    }
-    
-    console.log(`👤 [extractSchoolId] [FIX:v3.0] User found - ID: ${user.id}, schoolId: ${user.schoolId} (type: ${typeof user.schoolId}), activeRoleId: ${user.activeRoleId}`);
-    
-    // PRODUCTION-SAFE: Prioritize legacy schoolId field first (but only if it's a valid number)
-    // This ensures production continues working even if activeRoleId isn't set
-    // v3.0: Using database as authoritative source (removed stale JWT token lookup)
-    if (user.schoolId !== null && user.schoolId !== undefined && user.schoolId > 0) {
-      console.log(`🏫 [extractSchoolId] ✅ [FIX:v3.0] Using direct user.schoolId from DB: ${user.schoolId}`);
-      return user.schoolId;
-    } else {
-      console.log(`⚠️  [extractSchoolId] [FIX:v3.0] Skipping user.schoolId (value: ${user.schoolId}) - falling back to activeRoleId lookup`);
-    }
-    
-    // Multi-role support: Get school ID from active role (when user.schoolId is null/undefined/invalid)
-    if (user.activeRoleId) {
-      const db = await getDb();
-      const activeRoles = await db
-        .select()
-        .from(userRoles)
-        .where(eq(userRoles.id, user.activeRoleId))
-        .limit(1);
-      
-      if (activeRoles.length > 0 && activeRoles[0].schoolId) {
-        console.log(`🏫 [extractSchoolId] ✅ Using active role school ID: ${activeRoles[0].schoolId}`);
-        return activeRoles[0].schoolId;
-      } else {
-        console.warn(`⚠️  [extractSchoolId] Active role ${user.activeRoleId} not found or has no schoolId`);
-      }
-    } else {
-      console.warn(`⚠️  [extractSchoolId] No activeRoleId set for user ${userEmail}`);
-    }
-    
-    console.error(`❌ [extractSchoolId] No schoolId found anywhere for user ${userEmail}`);
-  } catch (error) {
-    console.error(`❌ [extractSchoolId] Error looking up school ID for user ${userEmail}:`, error);
-  }
-  
-  console.error(`❌ [extractSchoolId] FINAL: Returning null for user ${userEmail}`);
-  return null;
-}
-
-async function requireSchoolContext(req: any, res: any): Promise<number | null> {
-  const schoolId = await extractSchoolId(req);
-  if (schoolId === null) {
-    res.status(400).json({ message: "School ID not found or invalid in user metadata" });
-    return null;
-  }
-  return schoolId;
-}
+// NOTE: extractSchoolId and requireSchoolContext are now imported from middleware/require-school-context.ts
+// The middleware handles school ID extraction from the database
 
 // Create Supabase account for staff member
 async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string; userExists?: boolean }> {
