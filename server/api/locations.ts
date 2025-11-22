@@ -12,16 +12,12 @@ const router = express.Router();
 // Get all locations for a school
 router.get("/", requireSchoolContext, async (req: any, res) => {
   try {
-    // [FIX:v3.0] School ID injected by middleware from database
+    // [FIX:v3.0] School ID injected by middleware from database (string)
     const authenticatedSchoolId = req.schoolId;
     
     // If a query parameter is provided, validate it matches the authenticated school
     if (req.query.schoolId) {
-      const requestedSchoolId = parseInt(req.query.schoolId as string);
-      
-      if (isNaN(requestedSchoolId)) {
-        return res.status(400).json({ message: "Invalid school ID in query parameter" });
-      }
+      const requestedSchoolId = String(req.query.schoolId);
       
       // SECURITY: Prevent cross-tenant data access
       if (requestedSchoolId !== authenticatedSchoolId) {
@@ -63,7 +59,8 @@ router.get("/accessible", requireSchoolContext, async (req: any, res) => {
       return res.status(404).json({ message: "User not found" });
     }
     
-    if (user.schoolId !== authenticatedSchoolId) {
+    // [FIX:v3.0] Normalize DB value for comparison - schoolId is now string
+    if (String(user.schoolId) !== authenticatedSchoolId) {
       console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to access locations for user ${userId} from school ${user.schoolId}`);
       return res.status(403).json({ 
         message: "Access denied - this user belongs to a different school" 
@@ -73,9 +70,10 @@ router.get("/accessible", requireSchoolContext, async (req: any, res) => {
     // Get locations the user has access to from database
     const accessibleLocations = await storage.getUserAccessibleLocations(userId);
     
-    // SECURITY: Filter to only locations belonging to authenticated user's school (defense in depth)
+    // [FIX:v3.0] SECURITY: Filter to only locations belonging to authenticated user's school (defense in depth)
+    // Normalize DB schoolId values for comparison - schoolId is now string
     const schoolFilteredLocations = accessibleLocations.filter(
-      location => location.schoolId === authenticatedSchoolId
+      location => String(location.schoolId) === authenticatedSchoolId
     );
     
     if (accessibleLocations.length !== schoolFilteredLocations.length) {
@@ -106,8 +104,9 @@ router.get("/:id", requireSchoolContext, async (req: any, res) => {
       return res.status(404).json({ message: "Location not found" });
     }
     
-    // SECURITY: Verify location belongs to authenticated user's school
-    if (location.schoolId !== authenticatedSchoolId) {
+    // [FIX:v3.0] SECURITY: Verify location belongs to authenticated user's school
+    // Normalize DB value for comparison - schoolId is now string
+    if (String(location.schoolId) !== authenticatedSchoolId) {
       console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to access location ${id} from school ${location.schoolId}`);
       return res.status(403).json({ 
         message: "Access denied - this location belongs to a different school" 
@@ -187,8 +186,9 @@ router.put("/:id", requireSchoolContext, async (req: any, res) => {
       return res.status(404).json({ message: "Location not found" });
     }
     
-    // SECURITY: Verify location belongs to authenticated user's school
-    if (existingLocation.schoolId !== authenticatedSchoolId) {
+    // [FIX:v3.0] SECURITY: Verify location belongs to authenticated user's school
+    // Normalize DB value for comparison - schoolId is now string
+    if (String(existingLocation.schoolId) !== authenticatedSchoolId) {
       console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to update location ${id} from school ${existingLocation.schoolId}`);
       return res.status(403).json({ 
         message: "Access denied - this location belongs to a different school" 
@@ -235,8 +235,9 @@ router.delete("/:id", requireSchoolContext, async (req: any, res) => {
       return res.status(404).json({ message: "Location not found" });
     }
     
-    // SECURITY: Verify location belongs to authenticated user's school
-    if (existingLocation.schoolId !== authenticatedSchoolId) {
+    // [FIX:v3.0] SECURITY: Verify location belongs to authenticated user's school
+    // Normalize DB value for comparison - schoolId is now string
+    if (String(existingLocation.schoolId) !== authenticatedSchoolId) {
       console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to delete location ${id} from school ${existingLocation.schoolId}`);
       return res.status(403).json({ 
         message: "Access denied - this location belongs to a different school" 
@@ -267,7 +268,8 @@ router.post("/access", requireSchoolContext, async (req: any, res) => {
       return res.status(404).json({ message: "Location not found" });
     }
     
-    if (location.schoolId !== authenticatedSchoolId) {
+    // [FIX:v3.0] Normalize DB values for comparison - schoolId is now string
+    if (String(location.schoolId) !== authenticatedSchoolId) {
       console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to assign access to location ${validatedData.locationId} from school ${location.schoolId}`);
       return res.status(403).json({ 
         message: "Access denied - this location belongs to a different school" 
@@ -280,7 +282,8 @@ router.post("/access", requireSchoolContext, async (req: any, res) => {
       return res.status(404).json({ message: "User not found" });
     }
     
-    if (user.schoolId !== authenticatedSchoolId) {
+    // [FIX:v3.0] Normalize DB value for comparison - schoolId is now string
+    if (String(user.schoolId) !== authenticatedSchoolId) {
       console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to assign access for user ${validatedData.userId} from school ${user.schoolId}`);
       return res.status(403).json({ 
         message: "Access denied - this user belongs to a different school" 

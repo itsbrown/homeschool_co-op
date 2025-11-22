@@ -141,7 +141,8 @@ router.post("/upload-accounts", supabaseAuth, requireSchoolContext, async (req: 
   }
 });
 
-async function processParents(records: any[], results: any, options: ImportOptions, schoolId: number) {
+// [FIX:v3.0] schoolId is now string from middleware
+async function processParents(records: any[], results: any, options: ImportOptions, schoolId: string) {
   for (const record of records) {
     try {
       const parentData = {
@@ -216,7 +217,8 @@ async function processParents(records: any[], results: any, options: ImportOptio
   }
 }
 
-async function processChildren(records: any[], results: any, options: ImportOptions, schoolId: number) {
+// [FIX:v3.0] schoolId is now string from middleware
+async function processChildren(records: any[], results: any, options: ImportOptions, schoolId: string) {
   for (const record of records) {
     try {
       const parentEmail = record['Parent Email'] || record.parentEmail;
@@ -292,7 +294,8 @@ async function processChildren(records: any[], results: any, options: ImportOpti
   }
 }
 
-async function processEnrollments(records: any[], results: any, options: ImportOptions, schoolId: number) {
+// [FIX:v3.0] schoolId is now string from middleware
+async function processEnrollments(records: any[], results: any, options: ImportOptions, schoolId: string) {
   for (const record of records) {
     try {
       // Safely parse IDs with validation to prevent pg_strtoint32_safe errors
@@ -393,7 +396,8 @@ async function processEnrollments(records: any[], results: any, options: ImportO
   }
 }
 
-async function processPayments(records: any[], results: any, options: ImportOptions, schoolId: number) {
+// [FIX:v3.0] schoolId is now string from middleware
+async function processPayments(records: any[], results: any, options: ImportOptions, schoolId: string) {
   for (const record of records) {
     try {
       const parentEmail = record['Customer Email'] || record.parentEmail;

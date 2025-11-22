@@ -46,8 +46,8 @@ router.get("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, asy
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // Verify class belongs to user's school (both normalized to numbers)
-    if (classData.school_id !== schoolId) {
+    // [FIX:v3.0] Verify class belongs to user's school - schoolId is now string, normalize DB value
+    if (String(classData.school_id) !== schoolId) {
       console.log(`Access denied: class school_id=${classData.school_id}, user school_id=${schoolId}`);
       return res.status(403).json({ message: "Not authorized to access classes from other schools" });
     }
@@ -177,8 +177,8 @@ router.patch("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, a
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // Verify class belongs to user's school (both normalized to numbers)
-    if (existingClass.school_id !== schoolId) {
+    // [FIX:v3.0] Verify class belongs to user's school - schoolId is now string, normalize DB value
+    if (String(existingClass.school_id) !== schoolId) {
       console.log(`Update denied: class school_id=${existingClass.school_id}, user school_id=${schoolId}`);
       return res.status(403).json({ message: "Not authorized to update classes from other schools" });
     }
@@ -265,8 +265,8 @@ router.delete("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, 
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // Verify class belongs to user's school (both normalized to numbers)
-    if (existingClass.school_id !== schoolId) {
+    // [FIX:v3.0] Verify class belongs to user's school - schoolId is now string, normalize DB value
+    if (String(existingClass.school_id) !== schoolId) {
       console.log(`Delete denied: class school_id=${existingClass.school_id}, user school_id=${schoolId}`);
       return res.status(403).json({ message: "Not authorized to delete classes from other schools" });
     }
