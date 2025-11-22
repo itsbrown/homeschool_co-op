@@ -7,6 +7,13 @@ The ASA Learning Platform is an adaptive learning application for the American S
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+### November 22, 2025 - Critical Middleware Import Fix
+-   **Root Cause**: `requireSchoolContext` middleware was NOT imported in `server/api/school-admin.ts`, causing middleware to silently fail
+-   **Duplicate Functions**: Removed duplicate local `extractSchoolId` and `requireSchoolContext` functions that were shadowing the imported middleware
+-   **Fix Applied**: Added `import { requireSchoolContext } from '../middleware/require-school-context'` to properly import middleware
+-   **Impact**: All 39 school-admin endpoints now properly use database-driven school context
+-   **Pattern**: Always verify middleware imports; local function definitions can shadow imported functions causing silent failures
+
 ### November 22, 2025 - UsersPage Infinite Loading Fix
 -   **Critical Bug Fix**: Fixed infinite loading issue on UsersPage by adding `enabled: !!schoolId` check to React Query
 -   **Pattern Applied**: Admin pages using `useSchoolAdmin` hook must wait for schoolId before fetching data
