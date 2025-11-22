@@ -12,8 +12,8 @@ function generateCampaignId(): string {
   return crypto.randomBytes(8).toString('hex');
 }
 
-// Generate QR code URL (using a free QR code service)
-function generateQRCodeUrl(campaignId: string, schoolId: number): string {
+// [FIX:v3.0] Generate QR code URL (using a free QR code service) - schoolId is now string
+function generateQRCodeUrl(campaignId: string, schoolId: string): string {
   const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
   const enrollUrl = `https://${baseUrl}/school/${schoolId}/enroll/${campaignId}`;
   return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(enrollUrl)}`;
@@ -25,18 +25,18 @@ router.post("/", supabaseAuth, requireSchoolContext, async (req: any, res) => {
     // [FIX:v3.0] School ID injected by middleware from database
     const schoolId = req.schoolId;
 
-    // Validate request data
+    // [FIX:v3.0] Validate request data - convert string schoolId to number for schema
     const validatedData = insertMarketingLinkSchema.parse({
       ...req.body,
-      schoolId,
+      schoolId: Number(schoolId), // Convert to number for Drizzle integer column
       campaignId: generateCampaignId(),
     });
 
     // Create marketing link
     const marketingLink = await storage.createMarketingLink(validatedData);
 
-    // Generate QR code URL
-    const qrCodeUrl = generateQRCodeUrl(marketingLink.campaignId, marketingLink.schoolId);
+    // [FIX:v3.0] Generate QR code URL - convert numeric DB schoolId to string for function
+    const qrCodeUrl = generateQRCodeUrl(marketingLink.campaignId, String(marketingLink.schoolId));
     
     // Update with QR code URL
     const updatedLink = await storage.updateMarketingLink(marketingLink.id, { qrCodeUrl });
@@ -59,10 +59,11 @@ router.post("/", supabaseAuth, requireSchoolContext, async (req: any, res) => {
 // Get marketing links for a school
 router.get("/", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    // [FIX:v3.0] School ID injected by middleware from database
+    // [FIX:v3.0] School ID injected by middleware from database (string)
     const schoolId = req.schoolId;
     
-    const links = await storage.getMarketingLinksBySchoolId(schoolId);
+    // [FIX:v3.0] Convert string to number for storage call expecting numeric ID
+    const links = await storage.getMarketingLinksBySchoolId(Number(schoolId));
     
     // Add tracking URLs to each link
     const baseUrl = process.env.REPLIT_DOMAIN || 'localhost:5000';
@@ -92,8 +93,8 @@ router.get("/:id", supabaseAuth, requireSchoolContext, async (req: any, res) => 
       return res.status(404).json({ error: "Marketing link not found" });
     }
 
-    // Verify link belongs to user's school
-    if (link.schoolId !== schoolId) {
+    // [FIX:v3.0] Verify link belongs to user's school - normalize DB value for comparison
+    if (String(link.schoolId) !== schoolId) {
       return res.status(403).json({ error: "Not authorized to access marketing links from other schools" });
     }
 
@@ -120,12 +121,12 @@ router.put("/:id", supabaseAuth, requireSchoolContext, async (req: any, res) => 
 
     const id = parseInt(req.params.id);
     
-    // Verify link belongs to user's school before updating
+    // [FIX:v3.0] Verify link belongs to user's school before updating - normalize DB value
     const existingLink = await storage.getMarketingLinkById(id);
     if (!existingLink) {
       return res.status(404).json({ error: "Marketing link not found" });
     }
-    if (existingLink.schoolId !== schoolId) {
+    if (String(existingLink.schoolId) !== schoolId) {
       return res.status(403).json({ error: "Not authorized to update marketing links from other schools" });
     }
 
@@ -159,12 +160,12 @@ router.delete("/:id", supabaseAuth, requireSchoolContext, async (req: any, res) 
 
     const id = parseInt(req.params.id);
     
-    // Verify link belongs to user's school before deleting
+    // [FIX:v3.0] Verify link belongs to user's school before deleting - normalize DB value
     const existingLink = await storage.getMarketingLinkById(id);
     if (!existingLink) {
       return res.status(404).json({ error: "Marketing link not found" });
     }
-    if (existingLink.schoolId !== schoolId) {
+    if (String(existingLink.schoolId) !== schoolId) {
       return res.status(403).json({ error: "Not authorized to delete marketing links from other schools" });
     }
 
@@ -222,7 +223,8 @@ router.get("/:id/analytics", supabaseAuth, requireSchoolContext, async (req: any
     if (!link) {
       return res.status(404).json({ error: "Marketing link not found" });
     }
-    if (link.schoolId !== schoolId) {
+    // [FIX:v3.0] Normalize DB value for comparison - schoolId is now string
+    if (String(link.schoolId) !== schoolId) {
       return res.status(403).json({ error: "Not authorized to view analytics from other schools" });
     }
 

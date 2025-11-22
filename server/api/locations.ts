@@ -32,8 +32,8 @@ router.get("/", requireSchoolContext, async (req: any, res) => {
     const schoolId = authenticatedSchoolId;
 
     console.log('🏢 Fetching locations for school ID:', schoolId);
-    // Get all locations for the school from database
-    const locations = await storage.getLocationsBySchoolId(schoolId);
+    // [FIX:v3.0] Get all locations for the school from database - convert string to number for storage
+    const locations = await storage.getLocationsBySchoolId(Number(schoolId));
     console.log('✅ Found locations:', locations.length);
     res.json(locations);
   } catch (error) {
@@ -146,11 +146,11 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
     
     console.log(`✅ Creating location for school ${school.name} (ID: ${school.id})`);
     
-    // SECURITY: Use the authenticated user's schoolId from JWT, ignoring client-provided value
+    // [FIX:v3.0] SECURITY: Use the authenticated user's schoolId from database, ignoring client-provided value
     const validatedData = insertLocationSchema.parse(req.body);
     const locationData = {
       ...validatedData,
-      schoolId: schoolId  // Override with JWT-authenticated school
+      schoolId: Number(schoolId)  // Convert string to number for Drizzle integer column
     };
     
     // Create location using authenticated school

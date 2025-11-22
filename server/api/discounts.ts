@@ -30,12 +30,12 @@ router.post('/validate', requireSchoolContext, async (req: any, res) => {
 
     console.log(`🔐 Validating discount code for school ${schoolId}`);
 
-    // Find discount by code AND school_id (tenant isolation)
+    // [FIX:v3.0] Find discount by code AND school_id (tenant isolation)
     const allDiscounts = await storage.getAllDiscounts();
     const discount = allDiscounts.find(
       (d) => d.code?.toLowerCase() === code.toLowerCase() && 
              d.isActive && 
-             d.schoolId === schoolId // CRITICAL: Filter by school
+             String(d.schoolId) === schoolId // CRITICAL: Filter by school - normalize DB value
     );
 
     if (!discount) {
@@ -209,12 +209,12 @@ router.post('/apply', requireSchoolContext, async (req: any, res) => {
 
     console.log(`🔐 Applying discount code for school ${schoolId}, user ${parentEmail}`);
 
-    // Find discount by code AND school_id (tenant isolation)
+    // [FIX:v3.0] Find discount by code AND school_id (tenant isolation)
     const allDiscounts = await storage.getAllDiscounts();
     const discount = allDiscounts.find(
       (d) => d.code?.toLowerCase() === code.toLowerCase() && 
              d.isActive && 
-             d.schoolId === schoolId // CRITICAL: Filter by school
+             String(d.schoolId) === schoolId // CRITICAL: Filter by school - normalize DB value
     );
 
     if (!discount) {

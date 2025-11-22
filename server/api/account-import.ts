@@ -151,7 +151,7 @@ async function processParents(records: any[], results: any, options: ImportOptio
         email: record['Email'] || record.email,
         phone: record['Phone'] || record.phone,
         role: 'parent' as const,
-        schoolId, // Use authenticated user's school ID
+        schoolId: Number(schoolId), // [FIX:v3.0] Convert string to number for Drizzle schema
         isActive: true,
         createdAt: record['Created Date'] ? new Date(record['Created Date']) : new Date(),
         updatedAt: new Date()
@@ -231,8 +231,9 @@ async function processChildren(records: any[], results: any, options: ImportOpti
         continue;
       }
       
-      // Verify parent belongs to this school - CRITICAL for multi-tenant security
-      if (parent.schoolId !== schoolId) {
+      // [FIX:v3.0] Verify parent belongs to this school - CRITICAL for multi-tenant security
+      // Normalize DB value for comparison - schoolId is now string
+      if (String(parent.schoolId) !== schoolId) {
         results.children.failed++;
         results.errors.push(`Child row: Parent ${parentEmail} does not belong to school ${schoolId}`);
         continue;
@@ -245,15 +246,16 @@ async function processChildren(records: any[], results: any, options: ImportOpti
         birthdate: record['Birth Date'] || record.birthdate,
         gradeLevel: record['Grade Level'] || record.gradeLevel,
         parentEmail,
-        schoolId, // Use authenticated user's school ID
+        schoolId: Number(schoolId), // [FIX:v3.0] Convert string to number for Drizzle schema
       };
       
-      // Check for existing child by name and parent email - only within this school
+      // [FIX:v3.0] Check for existing child by name and parent email - only within this school
+      // Normalize DB value for comparison - schoolId is now string
       const existingChildren = await storage.getChildrenByParentEmail(parentEmail);
       const existingChild = existingChildren.find(child => 
         child.firstName === childData.firstName && 
         child.lastName === childData.lastName &&
-        child.schoolId === schoolId
+        String(child.schoolId) === schoolId
       );
       
       if (existingChild) {
@@ -312,17 +314,17 @@ async function processEnrollments(records: any[], results: any, options: ImportO
         continue;
       }
       
-      // Verify child belongs to this school
+      // [FIX:v3.0] Verify child belongs to this school - normalize DB value for comparison
       const child = await storage.getChildById(childId);
-      if (!child || child.schoolId !== schoolId) {
+      if (!child || String(child.schoolId) !== schoolId) {
         results.enrollments.failed++;
         results.errors.push(`Enrollment row: Child ID ${childId} not found in school ${schoolId}`);
         continue;
       }
       
-      // Verify class belongs to this school
+      // [FIX:v3.0] Verify class belongs to this school - normalize DB value for comparison
       const classRecord = await storage.getClassById(classId);
-      if (!classRecord || classRecord.schoolId !== schoolId) {
+      if (!classRecord || String(classRecord.schoolId) !== schoolId) {
         results.enrollments.failed++;
         results.errors.push(`Enrollment row: Class ID ${classId} not found in school ${schoolId}`);
         continue;
@@ -366,9 +368,9 @@ async function processEnrollments(records: any[], results: any, options: ImportO
           paymentStatus = 'pending';
         }
         
-        // Create complete enrollment using factory function
+        // [FIX:v3.0] Create complete enrollment using factory function - convert string to number
         const enrollmentData = createEnrollmentDataSimple({
-          schoolId: schoolId,
+          schoolId: Number(schoolId), // Convert to number for Drizzle integer column
           parentId: child.parentId,
           parentEmail: child.parentEmail || '',
           childId: childId,
@@ -410,15 +412,15 @@ async function processPayments(records: any[], results: any, options: ImportOpti
         continue;
       }
       
-      // Verify parent belongs to this school
-      if (parent.schoolId !== schoolId) {
+      // [FIX:v3.0] Verify parent belongs to this school - normalize DB value for comparison
+      if (String(parent.schoolId) !== schoolId) {
         results.payments.failed++;
         results.errors.push(`Payment row: Parent ${parentEmail} does not belong to school ${schoolId}`);
         continue;
       }
       
       const paymentData = {
-        schoolId, // Use authenticated user's school ID
+        schoolId: Number(schoolId), // [FIX:v3.0] Convert string to number for Drizzle schema
         parentId: parent.id,
         parentEmail,
         stripePaymentIntentId: record.id || record['Payment ID'] || `imported_${Date.now()}_${Math.random()}`,
@@ -443,8 +445,8 @@ async function processPayments(records: any[], results: any, options: ImportOpti
       // This method is already scoped to exact match, then we verify school ownership
       const existingPayment = await storage.getPaymentByStripeId(paymentData.stripePaymentIntentId);
       
-      // Verify the existing payment belongs to this school if found
-      if (existingPayment && existingPayment.schoolId !== schoolId) {
+      // [FIX:v3.0] Verify the existing payment belongs to this school if found - normalize DB value
+      if (existingPayment && String(existingPayment.schoolId) !== schoolId) {
         // Payment exists but belongs to another school - treat as new for this school
         // This prevents cross-tenant duplicate detection
         await storage.createPayment(paymentData);
@@ -479,8 +481,8 @@ async function processPayments(records: any[], results: any, options: ImportOpti
   }
 }
 
-// Process import preview to analyze duplicates
-async function processImportPreview(files: any, importMode: ImportMode, schoolId: number): Promise<ImportPreview> {
+// [FIX:v3.0] Process import preview to analyze duplicates - schoolId is now string
+async function processImportPreview(files: any, importMode: ImportMode, schoolId: string): Promise<ImportPreview> {
   const preview: ImportPreview = {
     newRecords: { parents: [], children: [], enrollments: [], payments: [] },
     duplicates: [],
@@ -532,7 +534,8 @@ async function processImportPreview(files: any, importMode: ImportMode, schoolId
   return preview;
 }
 
-async function analyzeParents(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: number) {
+// [FIX:v3.0] schoolId is now string from middleware
+async function analyzeParents(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: string) {
   for (const record of records) {
     const parentData = {
       firstName: record['First Name'] || record.firstName,
@@ -544,8 +547,9 @@ async function analyzeParents(records: any[], preview: ImportPreview, importMode
     
     const existingUser = await storage.getUserByEmail(parentData.email);
     
-    // Only consider it a duplicate if the user belongs to the same school
-    if (existingUser && existingUser.schoolId === schoolId) {
+    // [FIX:v3.0] Only consider it a duplicate if the user belongs to the same school
+    // Normalize DB value for comparison - schoolId is now string
+    if (existingUser && String(existingUser.schoolId) === schoolId) {
       preview.duplicates.push({
         type: 'user',
         existingRecord: existingUser,
@@ -558,7 +562,8 @@ async function analyzeParents(records: any[], preview: ImportPreview, importMode
   }
 }
 
-async function analyzeChildren(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: number) {
+// [FIX:v3.0] schoolId is now string from middleware
+async function analyzeChildren(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: string) {
   for (const record of records) {
     const childData = {
       firstName: record['First Name'] || record.firstName,
@@ -569,11 +574,11 @@ async function analyzeChildren(records: any[], preview: ImportPreview, importMod
     };
     
     const existingChildren = await storage.getChildrenByParentEmail(childData.parentEmail);
-    // Only consider children from the same school
+    // [FIX:v3.0] Only consider children from the same school - normalize DB value for comparison
     const existingChild = existingChildren.find(child => 
       child.firstName === childData.firstName && 
       child.lastName === childData.lastName &&
-      child.schoolId === schoolId
+      String(child.schoolId) === schoolId
     );
     
     if (existingChild) {
@@ -589,7 +594,8 @@ async function analyzeChildren(records: any[], preview: ImportPreview, importMod
   }
 }
 
-async function analyzeEnrollments(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: number) {
+// [FIX:v3.0] schoolId is now string from middleware
+async function analyzeEnrollments(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: string) {
   for (const record of records) {
     // Safely parse IDs with validation to prevent pg_strtoint32_safe errors
     const classIdStr = record['Class ID'] || record.classId;
@@ -611,16 +617,16 @@ async function analyzeEnrollments(records: any[], preview: ImportPreview, import
       status: record['Status'] || record.status || 'enrolled'
     };
     
-    // Get class to verify it belongs to this school
+    // [FIX:v3.0] Get class to verify it belongs to this school - normalize DB value for comparison
     const classRecord = await storage.getClassById(classId);
-    if (!classRecord || classRecord.schoolId !== schoolId) {
+    if (!classRecord || String(classRecord.schoolId) !== schoolId) {
       // Skip enrollments for classes not in this school
       continue;
     }
     
-    // Get child to verify it belongs to this school
+    // [FIX:v3.0] Get child to verify it belongs to this school - normalize DB value for comparison
     const childRecord = await storage.getChildById(childId);
-    if (!childRecord || childRecord.schoolId !== schoolId) {
+    if (!childRecord || String(childRecord.schoolId) !== schoolId) {
       // Skip enrollments for children not in this school
       continue;
     }
@@ -646,7 +652,8 @@ async function analyzeEnrollments(records: any[], preview: ImportPreview, import
   }
 }
 
-async function analyzePayments(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: number) {
+// [FIX:v3.0] schoolId is now string from middleware
+async function analyzePayments(records: any[], preview: ImportPreview, importMode: ImportMode, schoolId: string) {
   for (const record of records) {
     const paymentData = {
       stripePaymentIntentId: record.id || record['Payment ID'] || `imported_${Date.now()}_${Math.random()}`,
@@ -657,9 +664,9 @@ async function analyzePayments(records: any[], preview: ImportPreview, importMod
       description: record.Description || 'Imported payment'
     };
     
-    // Verify the parent belongs to this school before analyzing payment
+    // [FIX:v3.0] Verify the parent belongs to this school before analyzing payment - normalize DB value
     const parent = await storage.getUserByEmail(paymentData.parentEmail);
-    if (!parent || parent.schoolId !== schoolId) {
+    if (!parent || String(parent.schoolId) !== schoolId) {
       // Skip payments for parents not in this school
       continue;
     }
@@ -668,8 +675,8 @@ async function analyzePayments(records: any[], preview: ImportPreview, importMod
     // This method is already scoped to exact match, then we verify school ownership
     const existingPayment = await storage.getPaymentByStripeId(paymentData.stripePaymentIntentId);
     
-    // Only consider it a duplicate if it belongs to this school
-    if (existingPayment && existingPayment.schoolId !== schoolId) {
+    // [FIX:v3.0] Only consider it a duplicate if it belongs to this school - normalize DB value
+    if (existingPayment && String(existingPayment.schoolId) !== schoolId) {
       // Payment exists but belongs to another school - not a duplicate for this school
       preview.newRecords.payments.push(paymentData);
       continue;

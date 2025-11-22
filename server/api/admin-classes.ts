@@ -127,9 +127,10 @@ router.post("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async 
 
     // Validate request body (exclude school_id from client data)
     const { school_id: _, ...bodyWithoutSchoolId } = req.body;
+    // [FIX:v3.0] Convert string schoolId to number for schema validation (Drizzle expects integer)
     const validatedData = insertClassSchema.parse({
       ...bodyWithoutSchoolId,
-      school_id: schoolId, // Use authenticated user's school ID (normalized to number)
+      school_id: Number(schoolId), // Use authenticated user's school ID
     });
 
     console.log("Creating class with data:", JSON.stringify(validatedData));
@@ -357,7 +358,7 @@ router.post("/classes/upload", supabaseAuth, requireAdmin, requireSchoolContext,
         location: row.location || "Virtual",
         instructorName: row.instructor || "Staff",
         instructorId, // Use authenticated user's ID
-        school_id: schoolId, // Use authenticated user's school ID
+        school_id: Number(schoolId), // [FIX:v3.0] Convert string to number for Drizzle schema
         isPublished: true,
         status: row.status || "published",
         productId: row.productId || null,

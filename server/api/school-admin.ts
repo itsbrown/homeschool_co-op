@@ -4299,8 +4299,8 @@ router.post('/import-users', async (req: any, res) => {
   }
 });
 
-// Helper function to process parent records
-async function processParentRecords(records: any[], results: any, schoolId: number) {
+// [FIX:v3.0] Helper function to process parent records - schoolId is now string
+async function processParentRecords(records: any[], results: any, schoolId: string) {
   console.log(`👨‍👩‍👧‍👦 Processing ${records.length} parent records...`);
   
   for (const record of records) {
@@ -4336,8 +4336,8 @@ async function processParentRecords(records: any[], results: any, schoolId: numb
   }
 }
 
-// Helper function to process child records
-async function processChildRecords(records: any[], results: any, schoolId: number) {
+// [FIX:v3.0] Helper function to process child records - schoolId is now string
+async function processChildRecords(records: any[], results: any, schoolId: string) {
   console.log(`👶 Processing ${records.length} child records...`);
   
   for (const record of records) {
@@ -4369,8 +4369,8 @@ async function processChildRecords(records: any[], results: any, schoolId: numbe
   }
 }
 
-// Helper function to process staff records
-async function processStaffRecords(records: any[], results: any, schoolId: number) {
+// [FIX:v3.0] Helper function to process staff records - schoolId is now string
+async function processStaffRecords(records: any[], results: any, schoolId: string) {
   console.log(`👩‍🏫 Processing ${records.length} staff records...`);
   
   for (const record of records) {
@@ -4381,7 +4381,7 @@ async function processStaffRecords(records: any[], results: any, schoolId: numbe
         email: record['Email'] || record.email,
         phone: record['Phone'] || record.phone,
         role: 'educator',
-        schoolId: schoolId,
+        schoolId: Number(schoolId), // [FIX:v3.0] Convert string to number for Drizzle schema
         username: (record['Email'] || record.email)?.split('@')[0] || '',
         password: 'tempPass123!' // Temporary password
       };
