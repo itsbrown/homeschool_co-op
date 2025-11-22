@@ -2,6 +2,7 @@ import express from "express";
 import { storage } from "../storage";
 import { insertMarketingLinkSchema, insertLinkAnalyticsSchema } from "@shared/schema";
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireSchoolContext } from '../middleware/require-school-context';
 import crypto from "crypto";
 
 const router = express.Router();
@@ -19,13 +20,10 @@ function generateQRCodeUrl(campaignId: string, schoolId: number): string {
 }
 
 // Create marketing link
-router.post("/", supabaseAuth, async (req: any, res) => {
+router.post("/", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     // Validate request data
     const validatedData = insertMarketingLinkSchema.parse({
@@ -59,13 +57,10 @@ router.post("/", supabaseAuth, async (req: any, res) => {
 });
 
 // Get marketing links for a school
-router.get("/", supabaseAuth, async (req: any, res) => {
+router.get("/", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
     
     const links = await storage.getMarketingLinksBySchoolId(schoolId);
     
@@ -85,13 +80,10 @@ router.get("/", supabaseAuth, async (req: any, res) => {
 });
 
 // Get marketing link by ID
-router.get("/:id", supabaseAuth, async (req: any, res) => {
+router.get("/:id", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     const id = parseInt(req.params.id);
     const link = await storage.getMarketingLinkById(id);
@@ -121,13 +113,10 @@ router.get("/:id", supabaseAuth, async (req: any, res) => {
 });
 
 // Update marketing link
-router.put("/:id", supabaseAuth, async (req: any, res) => {
+router.put("/:id", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     const id = parseInt(req.params.id);
     
@@ -163,13 +152,10 @@ router.put("/:id", supabaseAuth, async (req: any, res) => {
 });
 
 // Delete marketing link
-router.delete("/:id", supabaseAuth, async (req: any, res) => {
+router.delete("/:id", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     const id = parseInt(req.params.id);
     
@@ -224,13 +210,10 @@ router.get("/track/:campaignId", async (req, res) => {
 });
 
 // Get analytics for a marketing link
-router.get("/:id/analytics", supabaseAuth, async (req: any, res) => {
+router.get("/:id/analytics", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    // Extract school_id from authenticated user's token metadata
-    const schoolId = req.auth?.payload?.school_id;
-    if (!schoolId) {
-      return res.status(400).json({ message: "School ID not found in user metadata" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const schoolId = req.schoolId;
 
     const id = parseInt(req.params.id);
     

@@ -303,21 +303,10 @@ router.post("/access", requireSchoolContext, async (req: any, res) => {
 });
 
 // Remove user access from a location
-router.delete("/access/:userId/:locationId", async (req: any, res) => {
+router.delete("/access/:userId/:locationId", requireSchoolContext, async (req: any, res) => {
   try {
-    // SECURITY: Verify authenticated user's school
-    const schoolIdFromToken = req.auth?.payload?.school_id;
-    
-    if (!schoolIdFromToken) {
-      return res.status(401).json({ 
-        message: "Authentication required - school ID not found in token" 
-      });
-    }
-    
-    const authenticatedSchoolId = Number(schoolIdFromToken);
-    if (isNaN(authenticatedSchoolId)) {
-      return res.status(400).json({ message: "Invalid school ID in authentication token" });
-    }
+    // [FIX:v3.0] School ID injected by middleware from database
+    const authenticatedSchoolId = req.schoolId;
     
     const userId = parseInt(req.params.userId);
     const locationId = parseInt(req.params.locationId);
