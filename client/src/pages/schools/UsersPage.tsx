@@ -17,7 +17,8 @@ import {
   Mail,
   Key,
   Send,
-  UserCog
+  UserCog,
+  Eye
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -379,6 +380,20 @@ export default function UsersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <Link 
+                              href={
+                                user.role === 'parent' ? `/schools/parents/${user.id}` :
+                                user.role === 'educator' ? `/schools/educators/${user.id}` :
+                                user.role === 'staff' ? `/schools/staff/${user.id}` :
+                                user.role === 'schoolAdmin' ? `/schools/admins/${user.id}` :
+                                `/schools/users/${user.id}`
+                              }
+                            >
+                              <DropdownMenuItem data-testid={`button-view-profile-${user.id}`}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Profile
+                              </DropdownMenuItem>
+                            </Link>
                             <DropdownMenuItem onClick={() => handleEditUser(user)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit User
