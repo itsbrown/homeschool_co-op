@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -129,15 +129,17 @@ export default function DiscountsPage() {
       if (!response.ok) {
         throw new Error('Failed to fetch school settings');
       }
-      const data = await response.json();
-      // Update local state when data is fetched
-      if (data.school) {
-        setFreeAfterEnabled(data.school.freeAfterThresholdEnabled || false);
-        setFreeAfterThreshold(data.school.freeAfterThreshold || 3);
-      }
-      return data;
+      return response.json();
     },
   });
+
+  // Sync local state with fetched school data
+  useEffect(() => {
+    if (schoolData?.school) {
+      setFreeAfterEnabled(schoolData.school.freeAfterThresholdEnabled || false);
+      setFreeAfterThreshold(schoolData.school.freeAfterThreshold || 3);
+    }
+  }, [schoolData]);
 
   // Fetch discounts
   const { data: discountsData, isLoading } = useQuery({
