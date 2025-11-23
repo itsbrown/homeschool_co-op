@@ -57,16 +57,17 @@ const mobileNavigationItems = [
     title: "Payments",
     icon: DollarSign,
   },
-  {
-    href: "/enrollment-assistant",
-    title: "AI Enrollment Assistant",
-    icon: Bot,
-  },
-  {
-    href: "/ai-insights",
-    title: "AI Insights",
-    icon: Brain,
-  },
+  // Hidden: AI features not yet ready for production
+  // {
+  //   href: "/enrollment-assistant",
+  //   title: "AI Enrollment Assistant",
+  //   icon: Bot,
+  // },
+  // {
+  //   href: "/ai-insights",
+  //   title: "AI Insights",
+  //   icon: Brain,
+  // },
   {
     href: "/settings",
     title: "Settings",
