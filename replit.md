@@ -13,6 +13,7 @@ For detailed development and testing guidelines, see:
 
 ### Recent Changes
 **Nov 23, 2025**
+- **Membership Fee Currency Bug Fix**: Fixed double conversion bug where membership fees were being multiplied by 100 twice (once in frontend, once in backend), causing $175 to display as $17,500. Backend now accepts cents value directly from frontend without additional conversion, matching application-wide currency format pattern.
 - **TypeScript Type Safety Complete Refactor**: Resolved all 97 LSP errors in `server/api/school-admin.ts` and normalized authentication middleware contract:
   - Created `server/middleware/types.ts` with Express module augmentation for type-safe middleware properties (id, email, sub, role, schoolId, activeRoleId, permissions, name)
   - Normalized both session and bearer-token auth paths to use consistent numeric database IDs and Supabase UUID handling
