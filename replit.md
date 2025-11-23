@@ -13,9 +13,16 @@ For detailed development and testing guidelines, see:
 
 ### Recent Changes
 **Nov 23, 2025**
+- **TypeScript Type Safety Complete Refactor**: Resolved all 97 LSP errors in `server/api/school-admin.ts` and normalized authentication middleware contract:
+  - Created `server/middleware/types.ts` with Express module augmentation for type-safe middleware properties (id, email, sub, role, schoolId, activeRoleId, permissions, name)
+  - Normalized both session and bearer-token auth paths to use consistent numeric database IDs and Supabase UUID handling
+  - Fixed `req.user.dbUser` undefined error in `/my-school` route by reading from `req.user` directly
+  - Both auth paths now use `user.supabaseId || String(user.id)` for consistent `sub` normalization in `req.user.sub` and `req.auth.payload.sub`
+  - Removed all `as any` casts from authentication middleware for improved type safety
+  - Added 401 enforcement for users without database records
 - **Settings Page Consolidation**: Unified school admin settings into SchoolSettingsPage at `/schools/settings` with 4 tabs (Profile, Security, Notifications, School Configuration). Deprecated legacy `/school-settings` route. School Configuration tab includes membership fee management (amount, renewal date, grace period, required toggle) and logo upload.
 - **Parent Profile Access Control Fix**: Fixed access control to allow school admins to view parents who have roles in their school (even without enrolled children/memberships)
-- **Database Schema Sync Fix**: Added missing columns to `membership_enrollments` table (membership_year, amount, remaining_balance, due_date, expiration_date, grace_period_end, payment_method) to match Drizzle schema definition
+- **Database Schema Sync Fix**: Added missing columns to `membership_enrollments` table (membership_year, amount, remaining_balance, due_date, expiration_date, grace_period_end, payment_date) to match Drizzle schema definition
 - **Parent Profile Fix**: Resolved 500 error on parent profile page caused by missing database columns
 
 **Nov 22, 2025**
