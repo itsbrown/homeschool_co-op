@@ -60,18 +60,22 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-08-27.basil',
 });
 
+// DEPRECATED: Old subscription schedule handlers - replaced by membership webhook handlers
 // Handle successful subscription schedule payments
 async function handlePaymentSuccess(invoice: any) {
   try {
-    console.log('✅ Processing successful payment for invoice:', invoice.id);
+    console.log('⚠️ DEPRECATED: Old subscription schedule payment handler called for invoice:', invoice.id);
+    console.log('ℹ️ This handler is deprecated. Use membership webhook handlers instead.');
     
+    // Legacy code commented out - no longer used
+    /*
     // Get subscription schedule from invoice
     if (invoice.subscription_schedule) {
       const scheduleId = invoice.subscription_schedule;
       
       // Find enrollments associated with this schedule
       const schedules = await storage.getStripeSubscriptionSchedules();
-      const schedule = schedules.find(s => s.stripeScheduleId === scheduleId);
+      const schedule = schedules.find((s: any) => s.stripeScheduleId === scheduleId);
       
       if (schedule) {
         const enrollmentIds = JSON.parse(schedule.enrollmentIds);
@@ -101,22 +105,27 @@ async function handlePaymentSuccess(invoice: any) {
         console.log(`📧 Payment receipt for ${schedule.parentEmail}: ${paymentAmount}`);
       }
     }
+    */
   } catch (error) {
     console.error('❌ Error handling payment success:', error);
   }
 }
 
+// DEPRECATED: Old subscription schedule handlers - replaced by membership webhook handlers
 // Handle failed subscription schedule payments with retry logic
 async function handlePaymentFailure(invoice: any) {
   try {
-    console.log('❌ Processing failed payment for invoice:', invoice.id);
+    console.log('⚠️ DEPRECATED: Old subscription schedule payment failure handler called for invoice:', invoice.id);
+    console.log('ℹ️ This handler is deprecated. Use membership webhook handlers instead.');
     
+    // Legacy code commented out - no longer used
+    /*
     if (invoice.subscription_schedule) {
       const scheduleId = invoice.subscription_schedule;
       
       // Find enrollments associated with this schedule
       const schedules = await storage.getStripeSubscriptionSchedules();
-      const schedule = schedules.find(s => s.stripeScheduleId === scheduleId);
+      const schedule = schedules.find((s: any) => s.stripeScheduleId === scheduleId);
       
       if (schedule) {
         // Check attempt count
@@ -160,6 +169,7 @@ async function handlePaymentFailure(invoice: any) {
         console.log(`📡 Payment failed for ${schedule.parentEmail}: attempt ${attemptCount}/${maxAttempts}`);
       }
     }
+    */
   } catch (error) {
     console.error('❌ Error handling payment failure:', error);
   }
@@ -217,13 +227,16 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     // Build child and class names from actual enrollments
     let childName = 'Child';
     let className = 'Class';
+    let schoolId = 0;
     
     if (enrollments.length === 1) {
       childName = enrollments[0].childName || 'Child';
       className = enrollments[0].className || 'Class';
+      schoolId = enrollments[0].schoolId || 0;
     } else if (enrollments.length > 1) {
       const childNames = [...new Set(enrollments.map(e => e.childName).filter(Boolean))];
       const classNames = [...new Set(enrollments.map(e => e.className).filter(Boolean))];
+      schoolId = enrollments[0].schoolId || 0; // Use first enrollment's school
       
       childName = childNames.length === 1 ? childNames[0] : `${childNames.length} children`;
       className = classNames.length === 1 ? classNames[0] : `${classNames.length} classes`;
@@ -231,14 +244,21 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     
     // Create payment record with actual enrollment data
     const payment = {
+      schoolId,
+      parentId: null, // Will be set later if needed
       stripePaymentIntentId: paymentIntent.id,
       parentEmail: parentEmail,
       childName: childName,
       className: className,
+      description: `Direct payment for ${className}`,
       amount: totalAmount,
       currency: paymentIntent.currency || 'usd',
       status: 'completed' as const,
-      enrollmentIds: enrollmentIdList, // Add enrollment IDs for reference
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
+      paymentDate: new Date(),
+      enrollmentIds: enrollmentIdList,
       metadata: {
         paymentType: 'direct_payment',
         enrollmentCount: enrollmentIdList.length

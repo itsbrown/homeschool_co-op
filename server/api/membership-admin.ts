@@ -364,9 +364,9 @@ export const recordMembershipPayment = async (req: any, res: Response) => {
     // Determine new status
     let newStatus = membership.status;
     if (newRemainingBalance <= 0) {
-      newStatus = 'active';
+      newStatus = 'enrolled'; // Fully paid = enrolled status
     } else if (newAmountPaid > 0 && newRemainingBalance > 0) {
-      newStatus = 'partial_payment';
+      newStatus = 'pending_payment'; // Partial payment = still pending
     }
 
     // Update membership
@@ -391,8 +391,14 @@ export const recordMembershipPayment = async (req: any, res: Response) => {
           amount: validatedData.amount,
           currency: 'usd',
           status: 'completed',
-          paymentMethod: validatedData.paymentMethod === 'credit_card' ? 'stripe' : validatedData.paymentMethod,
+          paymentMethod: validatedData.paymentMethod === 'credit_card' || validatedData.paymentMethod === 'paypal' ? 'stripe' : validatedData.paymentMethod,
           description: `Membership payment for ${membership.membershipYear}`,
+          childName: null,
+          className: null,
+          stripePaymentIntentId: null,
+          stripeChargeId: null,
+          stripeRefundId: null,
+          originalPaymentId: null,
           enrollmentIds: [],
           metadata: {
             membershipId: membership.id,
@@ -607,7 +613,13 @@ export const createMembershipEnrollment = async (req: any, res: Response) => {
       expirationDate,
       gracePeriodEnd,
       paymentMethod: null,
-      notes: null
+      notes: null,
+      // Add required fields
+      stripeCustomerId: null,
+      startDate: null,
+      stripeSubscriptionId: null,
+      membershipTier: 'basic' as const, // Default tier
+      renewalDate: null
     };
 
     const newMembership = await storage.createMembershipEnrollment(membershipData);
