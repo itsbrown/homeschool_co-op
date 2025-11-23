@@ -377,13 +377,23 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: active_role_id set to first role for users without primary');
     
-    // Add parent_user_id column to membership_enrollments table
-    console.log('Running migration: Adding parent_user_id to membership_enrollments table...');
+    // Add missing columns to membership_enrollments table
+    console.log('Running migration: Adding missing columns to membership_enrollments table...');
     await db.execute(sql`
       ALTER TABLE membership_enrollments 
-      ADD COLUMN IF NOT EXISTS parent_user_id INTEGER REFERENCES users(id);
+      ADD COLUMN IF NOT EXISTS parent_user_id INTEGER REFERENCES users(id),
+      ADD COLUMN IF NOT EXISTS membership_year INTEGER,
+      ADD COLUMN IF NOT EXISTS amount INTEGER,
+      ADD COLUMN IF NOT EXISTS amount_paid INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS remaining_balance INTEGER,
+      ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending_payment',
+      ADD COLUMN IF NOT EXISTS due_date TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS expiration_date TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS grace_period_end TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS payment_method TEXT,
+      ADD COLUMN IF NOT EXISTS notes TEXT;
     `);
-    console.log('✅ Migration completed: parent_user_id column added to membership_enrollments table');
+    console.log('✅ Migration completed: missing columns added to membership_enrollments table');
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

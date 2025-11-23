@@ -11,7 +11,12 @@ For detailed development and testing guidelines, see:
 - **[Development Testing Checklist](./DEVELOPMENT_TESTING_CHECKLIST.md)** - Pre-completion verification checklist for middleware, functions, and database changes
 - **[Architectural Patterns & Common Pitfalls](./ARCHITECTURAL_PATTERNS.md)** - 7 key patterns with code examples and real bug scenarios from Nov 22, 2025
 
-### Recent Changes (Nov 22, 2025)
+### Recent Changes
+**Nov 23, 2025**
+- **Database Schema Sync Fix**: Added missing columns to `membership_enrollments` table (membership_year, amount, remaining_balance, due_date, expiration_date, grace_period_end, payment_method) to match Drizzle schema definition
+- **Parent Profile Fix**: Resolved 500 error on parent profile page caused by missing database columns
+
+**Nov 22, 2025**
 - **Critical Middleware Import Fix**: Fixed missing `requireSchoolContext` import in `server/api/school-admin.ts` that caused silent failures
 - **Removed Duplicate Functions**: Eliminated local `extractSchoolId` and `requireSchoolContext` functions shadowing imported middleware
 - **UsersPage Infinite Loading Fix**: Added `enabled: !!schoolId` check to React Query for proper async dependency handling
