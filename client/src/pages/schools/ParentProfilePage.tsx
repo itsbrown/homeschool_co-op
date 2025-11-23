@@ -552,6 +552,140 @@ export default function ParentProfilePage() {
     },
   });
 
+  // Stripe checkout mutation
+  const createCheckoutMutation = useMutation({
+    mutationFn: async ({ membershipId, tier }: { membershipId: number; tier: string }) => {
+      const response = await apiRequest("POST", "/api/membership/checkout", {
+        membershipId,
+        tier,
+      });
+      
+      // apiRequest returns Response, need to parse JSON manually
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}: Failed to create checkout session`);
+      }
+      
+      return await response.json();
+    },
+    onSuccess: (data: any) => {
+      // Now data is parsed JSON, check for sessionUrl or url
+      const checkoutUrl = data.sessionUrl || data.url;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+      } else {
+        toast({
+          title: "Error",
+          description: "No checkout URL returned from server",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create checkout session",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Comp/Free membership mutation
+  const compFreeMutation = useMutation({
+    mutationFn: async (membershipId: number) => {
+      return apiRequest("PATCH", `/api/admin/membership-enrollments/${membershipId}`, {
+        status: 'active',
+        amountPaid: 0,
+        remainingBalance: 0,
+        paymentMethod: 'comp',
+        notes: 'Marked as complimentary/free by school administrator'
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Membership Updated",
+        description: "Membership has been marked as complimentary/free."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update membership",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Change tier mutation
+  const changeTierMutation = useMutation({
+    mutationFn: async ({ membershipId, tier }: { membershipId: number; tier: string }) => {
+      return apiRequest("PATCH", `/api/admin/membership-enrollments/${membershipId}`, {
+        membershipTier: tier
+      });
+    },
+    onSuccess: (_data, variables) => {
+      toast({
+        title: "Tier Changed",
+        description: `Membership tier changed to ${variables.tier}.`
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to change membership tier",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete membership mutation
+  const deleteMembershipMutation = useMutation({
+    mutationFn: async (membershipId: number) => {
+      return apiRequest("DELETE", `/api/admin/membership-enrollments/${membershipId}`, {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Membership Deleted",
+        description: "Membership has been deleted successfully."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete membership",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Membership action handlers
+  const handlePayViaStripe = (membership: any) => {
+    createCheckoutMutation.mutate({
+      membershipId: membership.id,
+      tier: membership.membershipTier || 'basic'
+    });
+  };
+
+  const handleCompFree = (membership: any) => {
+    compFreeMutation.mutate(membership.id);
+  };
+
+  const handleChangeTier = (membership: any, tier: 'basic' | 'standard' | 'premium' | 'vip') => {
+    changeTierMutation.mutate({
+      membershipId: membership.id,
+      tier
+    });
+  };
+
+  const handleDeleteMembership = (membership: any) => {
+    if (confirm(`Are you sure you want to delete this membership? This action cannot be undone.`)) {
+      deleteMembershipMutation.mutate(membership.id);
+    }
+  };
+
   // Child management handlers
   const handleAddChildSuccess = () => {
     setAddChildDialogOpen(false);
@@ -692,7 +826,21 @@ export default function ParentProfilePage() {
               
               {/* Membership Status Badge */}
               {profile.membershipEnrollments.length > 0 && (() => {
-                const activeMembership = profile.membershipEnrollments.find(m => m.status === 'active') || profile.membershipEnrollments[0];
+                // Prioritize: active > grace_period > pending_payment by latest renewal date
+                const sortedEnrollments = [...profile.membershipEnrollments].sort((a, b) => {
+                  const statusPriority = { active: 0, grace_period: 1, pending_payment: 2, expired: 3, cancelled: 4, suspended: 5 };
+                  const aPriority = statusPriority[a.status as keyof typeof statusPriority] ?? 999;
+                  const bPriority = statusPriority[b.status as keyof typeof statusPriority] ?? 999;
+                  
+                  if (aPriority !== bPriority) return aPriority - bPriority;
+                  
+                  // Same status: prefer latest renewal date
+                  const aDate = a.renewalDate ? new Date(a.renewalDate).getTime() : 0;
+                  const bDate = b.renewalDate ? new Date(b.renewalDate).getTime() : 0;
+                  return bDate - aDate;
+                });
+                
+                const activeMembership = sortedEnrollments[0];
                 const tierDisplay = (activeMembership.membershipTier || 'basic').charAt(0).toUpperCase() + (activeMembership.membershipTier || 'basic').slice(1);
                 const renewalDate = activeMembership.renewalDate ? new Date(activeMembership.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
                 
@@ -1154,17 +1302,12 @@ export default function ParentProfilePage() {
                               <Button 
                                 size="sm" 
                                 variant="default"
-                                onClick={() => {
-                                  // TODO: Implement Stripe checkout session creation
-                                  toast({
-                                    title: "Feature Coming Soon",
-                                    description: "Stripe payment checkout integration is being finalized.",
-                                  });
-                                }}
+                                onClick={() => handlePayViaStripe(membership)}
+                                disabled={createCheckoutMutation.isPending}
                                 data-testid={`button-pay-stripe-${membership.id}`}
                               >
                                 <CreditCard className="h-4 w-4 mr-1" />
-                                Pay via Stripe
+                                {createCheckoutMutation.isPending ? "Processing..." : "Pay via Stripe"}
                               </Button>
                               
                               <Button 
@@ -1181,30 +1324,20 @@ export default function ParentProfilePage() {
                               <Button 
                                 size="sm" 
                                 variant="outline"
-                                onClick={() => {
-                                  // TODO: Implement comp/free membership
-                                  toast({
-                                    title: "Feature Coming Soon",
-                                    description: "Comp/Free membership option will be available soon.",
-                                  });
-                                }}
+                                onClick={() => handleCompFree(membership)}
+                                disabled={compFreeMutation.isPending}
                                 data-testid={`button-comp-free-${membership.id}`}
                               >
                                 <DollarSign className="h-4 w-4 mr-1" />
-                                Comp/Free
+                                {compFreeMutation.isPending ? "Processing..." : "Comp/Free"}
                               </Button>
                             </>
                           )}
                           
                           <Select
                             defaultValue={membership.membershipTier || 'basic'}
-                            onValueChange={(tier) => {
-                              // TODO: Implement tier change
-                              toast({
-                                title: "Feature Coming Soon",
-                                description: `Change tier to ${tier} will be available soon.`,
-                              });
-                            }}
+                            onValueChange={(tier) => handleChangeTier(membership, tier as 'basic' | 'standard' | 'premium' | 'vip')}
+                            disabled={changeTierMutation.isPending}
                           >
                             <SelectTrigger className="w-[140px] h-9" data-testid={`select-tier-${membership.id}`}>
                               <SelectValue placeholder="Change Tier" />
@@ -1220,17 +1353,12 @@ export default function ParentProfilePage() {
                           <Button 
                             size="sm" 
                             variant="destructive"
-                            onClick={() => {
-                              // TODO: Implement delete membership
-                              toast({
-                                title: "Feature Coming Soon",
-                                description: "Delete membership option will be available soon.",
-                              });
-                            }}
+                            onClick={() => handleDeleteMembership(membership)}
+                            disabled={deleteMembershipMutation.isPending}
                             data-testid={`button-delete-${membership.id}`}
                           >
                             <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
+                            {deleteMembershipMutation.isPending ? "Deleting..." : "Delete"}
                           </Button>
                         </div>
                       </div>

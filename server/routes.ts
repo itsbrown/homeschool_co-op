@@ -1767,6 +1767,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update membership enrollment (PATCH)
+  app.patch('/api/admin/membership-enrollments/:id', supabaseAuth, async (req: any, res) => {
+    try {
+      const authenticatedUser = req.user;
+      if (!authenticatedUser || !authenticatedUser.email) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // Require admin role
+      if (!authenticatedUser.role || !['schoolAdmin', 'admin', 'superAdmin'].includes(authenticatedUser.role)) {
+        return res.status(403).json({ message: "Not authorized - admin access required" });
+      }
+
+      const membershipId = parseInt(req.params.id);
+      if (isNaN(membershipId)) {
+        return res.status(400).json({ message: "Invalid membership ID" });
+      }
+
+      // Get membership to check school ownership
+      const membership = await storage.getMembershipEnrollmentById(membershipId);
+      if (!membership) {
+        return res.status(404).json({ message: "Membership not found" });
+      }
+
+      // School admins can only update memberships from their school
+      if (authenticatedUser.role === 'schoolAdmin' && membership.schoolId !== authenticatedUser.schoolId) {
+        return res.status(403).json({ message: "Not authorized to update this membership" });
+      }
+
+      // Validate allowed fields with Zod schema
+      const updateSchema = z.object({
+        status: z.enum(["pending_payment", "active", "expired", "grace_period", "suspended", "cancelled", "payment_failed"]).optional(),
+        membershipTier: z.enum(["basic", "standard", "premium", "vip"]).optional(),
+        amountPaid: z.number().min(0).optional(),
+        remainingBalance: z.number().min(0).optional(),
+        paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "check", "comp", "stripe", "other"]).optional(),
+        notes: z.string().optional(),
+        stripeSubscriptionId: z.string().optional(),
+        stripeCustomerId: z.string().optional(),
+        startDate: z.union([z.string(), z.date()]).optional(),
+        renewalDate: z.union([z.string(), z.date()]).optional(),
+      });
+
+      const validationResult = updateSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid update data", 
+          errors: validationResult.error.errors 
+        });
+      }
+
+      // Update membership with validated fields
+      const updatedMembership = await storage.updateMembershipEnrollment(membershipId, validationResult.data);
+      
+      console.log(`✅ Admin ${authenticatedUser.email} updated membership ${membershipId}`);
+      res.status(200).json(updatedMembership);
+    } catch (error: any) {
+      console.error("Error updating membership:", error);
+      res.status(500).json({ 
+        message: "Failed to update membership", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Delete membership enrollment (DELETE)
+  app.delete('/api/admin/membership-enrollments/:id', supabaseAuth, async (req: any, res) => {
+    try {
+      const authenticatedUser = req.user;
+      if (!authenticatedUser || !authenticatedUser.email) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // Require admin role
+      if (!authenticatedUser.role || !['schoolAdmin', 'admin', 'superAdmin'].includes(authenticatedUser.role)) {
+        return res.status(403).json({ message: "Not authorized - admin access required" });
+      }
+
+      const membershipId = parseInt(req.params.id);
+      if (isNaN(membershipId)) {
+        return res.status(400).json({ message: "Invalid membership ID" });
+      }
+
+      // Get membership to check school ownership
+      const membership = await storage.getMembershipEnrollmentById(membershipId);
+      if (!membership) {
+        return res.status(404).json({ message: "Membership not found" });
+      }
+
+      // School admins can only delete memberships from their school
+      if (authenticatedUser.role === 'schoolAdmin' && membership.schoolId !== authenticatedUser.schoolId) {
+        return res.status(403).json({ message: "Not authorized to delete this membership" });
+      }
+
+      // Delete membership
+      await storage.deleteMembershipEnrollment(membershipId);
+      
+      console.log(`✅ Admin ${authenticatedUser.email} deleted membership ${membershipId}`);
+      res.status(200).json({ message: "Membership deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting membership:", error);
+      res.status(500).json({ 
+        message: "Failed to delete membership", 
+        error: error.message 
+      });
+    }
+  });
+
   // AI Enrollment Assistant with Anthropic AI
   app.post('/api/ai/enrollment-assistant', jwtCheck, handleEnrollmentMessage);
 
