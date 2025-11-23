@@ -347,7 +347,6 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
     
     // User is already authenticated and synced by jwtCheck middleware
     const user = req.user;
-    const dbUser = req.user?.dbUser;
     
     if (!user || !user.email) {
       return res.status(401).json({ message: "Authentication failed" });
@@ -356,7 +355,7 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
     console.log('✅ Authenticated user from middleware:', user.email);
 
     // Get admin user from middleware (already synced to database)
-    const adminUser = dbUser;
+    const adminUser = user;
     
     if (!adminUser) {
       console.log('❌ User not synced to database:', user.email);

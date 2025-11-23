@@ -77,7 +77,7 @@ export const supabaseAuth = async (
           
           req.auth = {
             payload: {
-              sub: String(user.id),
+              sub: user.supabaseId || String(user.id), // Use Supabase UUID if available, fallback to DB ID
               email: user.email,
               role: user.role,
               school_id: user.schoolId,
