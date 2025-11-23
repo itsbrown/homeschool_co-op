@@ -23,30 +23,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // Track users whose metadata has been synced to avoid repeated warnings
 const metadataSyncedUsers = new Set<string>();
 
+/**
+ * AuthenticatedRequest extends Express Request with all middleware-added properties
+ * Type definition is centralized in server/middleware/types.ts to avoid duplication
+ */
 export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string | number;
-    email: string;
-    sub: string;
-    role?: string;
-    schoolId?: number;
-    activeRoleId?: number;
-  };
-  dbUser?: {
-    id: number;
-    email: string;
-    role?: string;
-    schoolId?: number;
-    activeRoleId?: number;
-  };
-  auth?: {
-    payload?: {
-      sub: string;
-      email: string;
-      [key: string]: any;
-    };
-  };
-  schoolId?: string | number;
+  // All properties are inherited from the module augmentation in types.ts
+  // This interface exists for backwards compatibility and explicit type checking
 }
 
 export const supabaseAuth = async (
@@ -79,15 +62,16 @@ export const supabaseAuth = async (
           console.log('✅ Session user found in storage:', user.email, 'role:', user.role);
           
           // Set up auth context to match Supabase structure with full user data
+          // Use numeric database ID directly (no string conversion)
           req.user = {
-            id: String(user.id),
+            id: user.id, // Numeric database ID
             email: user.email,
-            sub: String(user.id),
+            sub: String(user.id), // sub is Supabase UUID format (string)
             role: user.role,
             permissions: user.permissions,
             schoolId: user.schoolId,
             name: user.name,
-          } as any;
+          };
           
           req.auth = {
             payload: {
@@ -233,15 +217,24 @@ export const supabaseAuth = async (
     // Set req.user with database integer ID (not Supabase UUID)
     // This is CRITICAL for multi-role API endpoints that query by user ID
     // Also populate role, schoolId, permissions, and name from dbUser
+    
+    // ENFORCE: All authenticated users MUST have a database record
+    if (dbUserId === null) {
+      console.error(`❌ User ${user.email} authenticated via Supabase but not found in database`);
+      return res.status(401).json({ 
+        error: 'User not found in database. Please contact your administrator.' 
+      });
+    }
+    
     req.user = {
-      id: dbUserId !== null ? dbUserId : user.id, // Use database ID if available, fallback to Supabase UUID
+      id: dbUserId, // Always a database integer ID (enforced by check above)
       email: user.email!,
       sub: user.id,
       role: dbUserData?.role,
       schoolId: dbUserData?.schoolId,
       permissions: dbUserData?.permissions,
       name: dbUserData?.name,
-    } as any;
+    };
 
     // 🔒 CRITICAL: Spread user_metadata FIRST, then override with secure values
     // This prevents user_metadata from overwriting admin-only app_metadata values

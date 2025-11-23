@@ -1,5 +1,9 @@
 import { Request } from 'express';
 
+/**
+ * Extended Request interface with all middleware-added properties
+ * Centralizes type definitions to avoid duplication and drift
+ */
 declare module 'express-serve-static-core' {
   interface Request {
     auth?: {
@@ -7,22 +11,30 @@ declare module 'express-serve-static-core' {
         [key: string]: any;
         sub: string;
         email: string;
+        role?: string;
+        school_id?: number | null;
+        name?: string;
+        permissions?: any;
       };
     };
     user?: {
-      id: number | string;
+      id: number;  // Always normalized to DB integer ID in supabaseAuth
       email: string;
-      sub: string;
+      sub: string;  // Supabase UUID
       role?: string;
-      schoolId?: number;
-      activeRoleId?: number;
+      schoolId?: number | null;
+      activeRoleId?: number | null;
+      permissions?: any;
+      name?: string;
     };
     dbUser?: {
       id: number;
       email: string;
       role?: string;
-      schoolId?: number;
-      activeRoleId?: number;
+      schoolId?: number | null;
+      activeRoleId?: number | null;
+      permissions?: any;
+      name?: string;
     };
     schoolId?: string | number;
   }
