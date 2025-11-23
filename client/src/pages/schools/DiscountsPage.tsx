@@ -135,9 +135,9 @@ export default function DiscountsPage() {
 
   // Sync local state with fetched school data
   useEffect(() => {
-    if (schoolData?.school) {
-      setFreeAfterEnabled(schoolData.school.freeAfterThresholdEnabled || false);
-      setFreeAfterThreshold(schoolData.school.freeAfterThreshold || 3);
+    if (schoolData) {
+      setFreeAfterEnabled(schoolData.freeAfterThresholdEnabled || false);
+      setFreeAfterThreshold(schoolData.freeAfterThreshold || 3);
     }
   }, [schoolData]);
 
