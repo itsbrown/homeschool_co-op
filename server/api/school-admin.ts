@@ -14,7 +14,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getDb } from '../db';
 import { sql, eq } from 'drizzle-orm';
-import { users, schools, userRoles } from '@shared/schema';
+import { users, schools, userRoles, type InsertSchool } from '@shared/schema';
 
 const router = Router();
 
@@ -2564,7 +2564,7 @@ router.get("/diagnostic/school-context", supabaseAuth, async (req: any, res) => 
   try {
     const userEmail = req.user?.email;
     const user = await storage.getUserByEmail(userEmail);
-    const schoolId = await extractSchoolId(req);
+    const schoolId = await getSchoolIdFromRequest(req, res);
     
     res.json({
       userEmail,
@@ -3943,7 +3943,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
           isActive: staffRecord.isActive,
           createdAt: staffRecord.startDate,
           department: staffRecord.department,
-          position: staffRecord.position || mapRoleToPosition(staffRecord.role)
+          position: staffRecord.position || 'Staff Member'
         };
       })
     );
