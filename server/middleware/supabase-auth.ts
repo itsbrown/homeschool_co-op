@@ -63,10 +63,12 @@ export const supabaseAuth = async (
           
           // Set up auth context to match Supabase structure with full user data
           // Use numeric database ID directly (no string conversion)
+          // NOTE: For session auth, we don't have a Supabase UUID, so we use the DB ID as sub
+          // This is acceptable for session-based auth (tests and legacy support)
           req.user = {
             id: user.id, // Numeric database ID
             email: user.email,
-            sub: String(user.id), // sub is Supabase UUID format (string)
+            sub: user.supabaseId || String(user.id), // Use Supabase UUID if available, fallback to DB ID
             role: user.role,
             permissions: user.permissions,
             schoolId: user.schoolId,

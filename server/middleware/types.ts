@@ -20,16 +20,7 @@ declare module 'express-serve-static-core' {
     user?: {
       id: number;  // Always normalized to DB integer ID in supabaseAuth
       email: string;
-      sub: string;  // Supabase UUID
-      role?: string;
-      schoolId?: number | null;
-      activeRoleId?: number | null;
-      permissions?: any;
-      name?: string;
-    };
-    dbUser?: {
-      id: number;
-      email: string;
+      sub: string;  // Supabase UUID (or DB ID string for session auth)
       role?: string;
       schoolId?: number | null;
       activeRoleId?: number | null;
