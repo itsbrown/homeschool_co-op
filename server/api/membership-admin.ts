@@ -512,3 +512,109 @@ export const getMembershipSummary = async (req: any, res: Response) => {
     res.status(500).json({ message: "Error fetching summary", error: error.message });
   }
 };
+
+/**
+ * Create a new membership enrollment (admin only)
+ */
+export const createMembershipEnrollment = async (req: any, res: Response) => {
+  try {
+    // Get authenticated user email from supabaseAuth
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    // Get user from database
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    // Check if user is school admin or platform admin
+    if (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin') {
+      return res.status(403).json({ message: "Not authorized - school admin access required" });
+    }
+
+    // Validate request body
+    const { parentUserId, schoolId, membershipYear } = req.body;
+    
+    if (!parentUserId || !schoolId || !membershipYear) {
+      return res.status(400).json({ 
+        message: "Missing required fields: parentUserId, schoolId, and membershipYear are required" 
+      });
+    }
+
+    // Verify school access - admins can only create memberships for their school (unless superAdmin)
+    if (user.role === 'schoolAdmin' && user.schoolId !== schoolId) {
+      return res.status(403).json({ message: "Not authorized to create memberships for this school" });
+    }
+
+    // Get school to fetch membership settings
+    const school = await storage.getSchool(schoolId);
+    if (!school) {
+      return res.status(404).json({ message: "School not found" });
+    }
+
+    // Check if membership already exists for this parent/school/year
+    const existingMembership = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+      parentUserId,
+      schoolId,
+      membershipYear
+    );
+
+    if (existingMembership) {
+      return res.status(409).json({ 
+        message: "Membership already exists for this parent, school, and year",
+        existingMembership 
+      });
+    }
+
+    // Get membership fee from school settings
+    const membershipFee = school.membershipFeeAmount || 0;
+    
+    if (membershipFee <= 0) {
+      return res.status(400).json({ 
+        message: "School does not have a membership fee configured" 
+      });
+    }
+
+    // Calculate dates based on school settings
+    const renewalMonth = school.membershipRenewalMonth || 9; // Default to September
+    const renewalDay = school.membershipRenewalDay || 1; // Default to 1st
+    const gracePeriodDays = school.membershipGracePeriodDays || 30; // Default to 30 days
+
+    // Due date: renewal date of the membership year
+    const dueDate = new Date(membershipYear, renewalMonth - 1, renewalDay);
+    
+    // Expiration date: one year from due date
+    const expirationDate = new Date(membershipYear + 1, renewalMonth - 1, renewalDay);
+    
+    // Grace period end: expiration date + grace period days
+    const gracePeriodEnd = new Date(expirationDate);
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays);
+
+    // Create membership enrollment
+    const membershipData = {
+      schoolId,
+      parentUserId,
+      membershipYear,
+      amount: membershipFee,
+      amountPaid: 0,
+      remainingBalance: membershipFee,
+      status: 'pending_payment' as const,
+      dueDate,
+      expirationDate,
+      gracePeriodEnd,
+      paymentMethod: null,
+      notes: null
+    };
+
+    const newMembership = await storage.createMembershipEnrollment(membershipData);
+
+    console.log(`✅ Admin ${userEmail} created membership ${newMembership.id} for parent ${parentUserId}`);
+    res.status(201).json(newMembership);
+  } catch (error: any) {
+    console.error("Error creating membership enrollment:", error);
+    res.status(500).json({ message: "Failed to create membership", error: error.message });
+  }
+};

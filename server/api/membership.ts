@@ -6,7 +6,8 @@ import {
   recordMembershipPayment,
   getMembershipSummary,
   getMySchoolMemberships,
-  getMySchoolMembershipSummary
+  getMySchoolMembershipSummary,
+  createMembershipEnrollment
 } from "./membership-admin";
 
 const router = Router();
@@ -21,5 +22,8 @@ router.get("/summary/:schoolId", getMembershipSummary);
 router.get("/:id", getMembershipById);
 router.patch("/:id", updateMembership);
 router.post("/:id/payment", recordMembershipPayment);
+
+// Create new membership enrollment
+router.post("/", createMembershipEnrollment);
 
 export default router;

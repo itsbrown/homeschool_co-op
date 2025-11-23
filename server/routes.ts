@@ -1607,53 +1607,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Manual membership enrollment creation for school admins
-  app.post('/api/admin/membership-enrollments', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'admin']), async (req, res) => {
+  app.post('/api/admin/membership-enrollments', supabaseAuth, async (req: any, res) => {
     try {
+      // Get authenticated user email from supabaseAuth
+      const userEmail = req.user?.email;
+      if (!userEmail) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // Get user from database
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      // Check if user is school admin or platform admin
+      if (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin') {
+        return res.status(403).json({ message: "Not authorized - school admin access required" });
+      }
+
+      // Validate request body
       const { parentUserId, schoolId, membershipYear } = req.body;
       
-      if (!parentUserId || !schoolId) {
-        return res.status(400).json({ message: 'Parent ID and School ID are required' });
+      if (!parentUserId || !schoolId || !membershipYear) {
+        return res.status(400).json({ 
+          message: "Missing required fields: parentUserId, schoolId, and membershipYear are required" 
+        });
       }
-      
-      // Get the school to fetch membership settings
+
+      // Verify school access - admins can only create memberships for their school (unless superAdmin)
+      if (user.role === 'schoolAdmin' && user.schoolId !== schoolId) {
+        return res.status(403).json({ message: "Not authorized to create memberships for this school" });
+      }
+
+      // Get school to fetch membership settings
       const school = await storage.getSchool(schoolId);
       if (!school) {
-        return res.status(404).json({ message: 'School not found' });
+        return res.status(404).json({ message: "School not found" });
       }
-      
-      if (!school.membershipFeeAmount || school.membershipFeeAmount <= 0) {
-        return res.status(400).json({ message: 'School does not have membership fees configured' });
-      }
-      
-      // Use current year if not provided
-      const currentYear = membershipYear || new Date().getFullYear();
-      
-      // Check if membership already exists for this parent, school, and year
-      const existingMembership = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, currentYear);
-      if (existingMembership) {
-        return res.status(400).json({ message: 'Membership already exists for this year' });
-      }
-      
-      // Create the membership enrollment
-      const membershipData = {
+
+      // Check if membership already exists for this parent/school/year
+      const existingMembership = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
         parentUserId,
         schoolId,
-        membershipYear: currentYear,
-        amount: school.membershipFeeAmount,
+        membershipYear
+      );
+
+      if (existingMembership) {
+        return res.status(409).json({ 
+          message: "Membership already exists for this parent, school, and year",
+          existingMembership 
+        });
+      }
+
+      // Get membership fee from school settings
+      const membershipFee = school.membershipFeeAmount || 0;
+      
+      if (membershipFee <= 0) {
+        return res.status(400).json({ 
+          message: "School does not have a membership fee configured" 
+        });
+      }
+
+      // Calculate dates based on school settings
+      const renewalMonth = school.membershipRenewalMonth || 9; // Default to September
+      const renewalDay = school.membershipRenewalDay || 1; // Default to 1st
+      const gracePeriodDays = school.membershipGracePeriodDays || 30; // Default to 30 days
+
+      // Due date: renewal date of the membership year
+      const dueDate = new Date(membershipYear, renewalMonth - 1, renewalDay);
+      
+      // Expiration date: one year from due date
+      const expirationDate = new Date(membershipYear + 1, renewalMonth - 1, renewalDay);
+      
+      // Grace period end: expiration date + grace period days
+      const gracePeriodEnd = new Date(expirationDate);
+      gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays);
+
+      // Create membership enrollment
+      const membershipData = {
+        schoolId,
+        parentUserId,
+        membershipYear,
+        amount: membershipFee,
+        amountPaid: 0,
+        remainingBalance: membershipFee,
         status: 'pending_payment' as const,
-        dueDate: school.membershipRenewalDate || new Date(currentYear, 8, 1), // September 1st default
-        expirationDate: new Date(currentYear + 1, 7, 31), // August 31st of next year
-        gracePeriodEnd: new Date(currentYear, 8, 30), // September 30th
-        createdAt: new Date(),
-        updatedAt: new Date()
+        dueDate,
+        expirationDate,
+        gracePeriodEnd,
+        paymentMethod: null,
+        notes: null
       };
-      
-      const membership = await storage.createMembershipEnrollment(membershipData);
-      
-      res.status(201).json(membership);
+
+      const newMembership = await storage.createMembershipEnrollment(membershipData);
+
+      console.log(`✅ Admin ${userEmail} created membership ${newMembership.id} for parent ${parentUserId}`);
+      res.status(201).json(newMembership);
     } catch (error: any) {
-      console.error('Error creating membership enrollment:', error);
-      res.status(500).json({ message: 'Failed to create membership enrollment', error: error.message });
+      console.error("Error creating membership enrollment:", error);
+      res.status(500).json({ message: "Failed to create membership", error: error.message });
     }
   });
 
