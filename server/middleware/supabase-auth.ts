@@ -132,13 +132,15 @@ export const supabaseAuth = async (
     // This protects against user_metadata tampering by ensuring database is source of truth
     // CRITICAL: We need to fetch dbUser FIRST to set req.user.id to the database integer ID
     let dbUserId: number | null = null;
+    let dbUserData: any = null;
     if (user.email) {
       try {
         const dbUser = await storage.getUserByEmail(user.email);
         
         if (dbUser) {
-          // Store database user ID for req.user
+          // Store database user data for req.user
           dbUserId = dbUser.id;
+          dbUserData = dbUser;
           
           // For Phase 2 users (app_metadata), check if database matches app_metadata
           // For existing users (user_metadata), auto-sync from database
@@ -219,10 +221,15 @@ export const supabaseAuth = async (
 
     // Set req.user with database integer ID (not Supabase UUID)
     // This is CRITICAL for multi-role API endpoints that query by user ID
+    // Also populate role, schoolId, permissions, and name from dbUser
     req.user = {
       id: dbUserId !== null ? dbUserId : user.id, // Use database ID if available, fallback to Supabase UUID
       email: user.email!,
       sub: user.id,
+      role: dbUserData?.role,
+      schoolId: dbUserData?.schoolId,
+      permissions: dbUserData?.permissions,
+      name: dbUserData?.name,
     } as any;
 
     // 🔒 CRITICAL: Spread user_metadata FIRST, then override with secure values
