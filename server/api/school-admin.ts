@@ -2229,16 +2229,14 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
       membershipRequired
     } = req.body;
 
-    // Build update data with only provided fields
-    const dbUpdateData: any = {
-      updated_at: new Date().toISOString()
-    };
+    // Build update data with only provided fields (using camelCase for Drizzle)
+    const updateData: Partial<InsertSchool> = {};
 
     if (membershipFeeAmount !== undefined) {
       // Convert dollars to cents if needed, or accept cents directly
       const feeInCents = typeof membershipFeeAmount === 'number' ? 
         Math.round(membershipFeeAmount * 100) : 0;
-      dbUpdateData.membership_fee_amount = feeInCents;
+      updateData.membershipFeeAmount = feeInCents;
     }
 
     if (membershipRenewalMonth !== undefined) {
@@ -2246,7 +2244,7 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
       if (isNaN(month) || month < 1 || month > 12) {
         return res.status(400).json({ message: "Invalid renewal month (must be 1-12)" });
       }
-      dbUpdateData.membership_renewal_month = month;
+      updateData.membershipRenewalMonth = month;
     }
 
     if (membershipRenewalDay !== undefined) {
@@ -2254,7 +2252,7 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
       if (isNaN(day) || day < 1 || day > 31) {
         return res.status(400).json({ message: "Invalid renewal day (must be 1-31)" });
       }
-      dbUpdateData.membership_renewal_day = day;
+      updateData.membershipRenewalDay = day;
     }
 
     if (membershipGracePeriodDays !== undefined) {
@@ -2262,35 +2260,27 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
       if (isNaN(gracePeriod) || gracePeriod < 0) {
         return res.status(400).json({ message: "Invalid grace period (must be 0 or greater)" });
       }
-      dbUpdateData.membership_grace_period_days = gracePeriod;
+      updateData.membershipGracePeriodDays = gracePeriod;
     }
 
     if (membershipRequired !== undefined) {
-      dbUpdateData.membership_required = Boolean(membershipRequired);
+      updateData.membershipRequired = Boolean(membershipRequired);
     }
 
-    console.log('🔄 Updating membership configuration:', dbUpdateData);
+    console.log('🔄 Updating membership configuration via Drizzle:', updateData);
 
-    // Use admin client to update the school
-    const { supabaseAdmin } = await import('../db/supabase');
+    // Update the school membership configuration using Drizzle ORM
+    const updatedSchool = await storage.updateSchool(schoolId, updateData);
 
-    // Update the school membership configuration
-    const { data: updatedSchool, error: updateError } = await supabaseAdmin
-      .from('schools')
-      .update(dbUpdateData)
-      .eq('id', schoolId)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error('❌ Database update error:', updateError);
-      return res.status(500).json({ 
+    if (!updatedSchool) {
+      console.error('❌ Database update failed: School not found');
+      return res.status(404).json({ 
         message: "Failed to update membership configuration",
-        error: updateError.message
+        error: "School not found"
       });
     }
 
-    console.log('✅ Membership configuration updated successfully');
+    console.log('✅ Membership configuration updated successfully via Drizzle');
 
     return res.json({
       message: "Membership configuration updated successfully",
