@@ -104,8 +104,17 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       const visibleMemberships = allMembershipEnrollments.filter(m => adminSchoolIds.includes(m.schoolId));
       
       if (visibleMemberships.length === 0) {
-        console.log(`⛔ Access denied: Admin ${adminEmail} has no relationship with parent ${parent.email}`);
-        return res.status(403).json({ message: 'You do not have permission to view this parent profile' });
+        // No memberships visible, check if parent has a role in admin's schools
+        const parentRoles = await storage.getUserRolesByUserId(parent.id);
+        const visibleRoles = parentRoles.filter(r => 
+          r.role === 'parent' && r.schoolId && adminSchoolIds.includes(r.schoolId)
+        );
+        
+        if (visibleRoles.length === 0) {
+          console.log(`⛔ Access denied: Admin ${adminEmail} has no relationship with parent ${parent.email}`);
+          return res.status(403).json({ message: 'You do not have permission to view this parent profile' });
+        }
+        console.log(`✅ Access granted via parent role in admin's school`);
       }
     }
 
