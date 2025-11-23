@@ -25,9 +25,19 @@ const metadataSyncedUsers = new Set<string>();
 
 export interface AuthenticatedRequest extends Request {
   user?: {
-    id: string;
+    id: string | number;
     email: string;
     sub: string;
+    role?: string;
+    schoolId?: number;
+    activeRoleId?: number;
+  };
+  dbUser?: {
+    id: number;
+    email: string;
+    role?: string;
+    schoolId?: number;
+    activeRoleId?: number;
   };
   auth?: {
     payload?: {
@@ -36,6 +46,7 @@ export interface AuthenticatedRequest extends Request {
       [key: string]: any;
     };
   };
+  schoolId?: string | number;
 }
 
 export const supabaseAuth = async (
