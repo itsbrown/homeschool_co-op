@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Bell, 
   User, 
@@ -45,6 +47,22 @@ interface UserProfile {
     name: string;
     logo?: string | null;
   };
+}
+
+interface SchoolData {
+  id: number;
+  name: string;
+  type: string;
+  city: string;
+  state: string;
+  registrationCode?: string;
+  logo?: string;
+  status?: string;
+  membershipFeeAmount?: number;
+  membershipRenewalMonth?: number;
+  membershipRenewalDay?: number;
+  membershipGracePeriodDays?: number;
+  membershipRequired?: boolean;
 }
 
 interface NotificationSettings {
@@ -91,6 +109,12 @@ export default function SchoolSettingsPage() {
     enabled: !!user?.email
   });
 
+  // Fetch school data
+  const { data: schoolData, isLoading: isSchoolLoading } = useQuery<SchoolData>({
+    queryKey: ['/api/school-admin/my-school'],
+    enabled: !!user?.email,
+  });
+
   // Initialize form with user data
   useEffect(() => {
     if (userProfile) {
@@ -109,10 +133,7 @@ export default function SchoolSettingsPage() {
       phoneNumber: string;
       username: string;
     }) => {
-      return await apiRequest('/api/users/profile', {
-        method: 'PATCH',
-        body: JSON.stringify(profileData)
-      });
+      return await apiRequest('PATCH', '/api/users/profile', profileData);
     },
     onSuccess: () => {
       toast({
@@ -132,10 +153,7 @@ export default function SchoolSettingsPage() {
   // Update notifications mutation
   const updateNotificationsMutation = useMutation({
     mutationFn: async (notificationSettings: NotificationSettings) => {
-      return await apiRequest('/api/users/notifications', {
-        method: 'PATCH',
-        body: JSON.stringify(notificationSettings)
-      });
+      return await apiRequest('PATCH', '/api/users/notifications', notificationSettings);
     },
     onSuccess: () => {
       toast({
@@ -158,10 +176,7 @@ export default function SchoolSettingsPage() {
       currentPassword: string;
       newPassword: string;
     }) => {
-      return await apiRequest('/api/users/change-password', {
-        method: 'POST',
-        body: JSON.stringify(passwordData)
-      });
+      return await apiRequest('POST', '/api/users/change-password', passwordData);
     },
     onSuccess: () => {
       toast({
@@ -229,6 +244,16 @@ export default function SchoolSettingsPage() {
   // Logo upload state
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  // Membership configuration state
+  const [membershipDialogOpen, setMembershipDialogOpen] = useState(false);
+  const [membershipFormData, setMembershipFormData] = useState({
+    feeAmount: '',
+    renewalMonth: '',
+    renewalDay: '',
+    gracePeriod: '',
+    required: true
+  });
 
   // Logo upload mutation
   const uploadLogoMutation = useMutation({
@@ -321,6 +346,95 @@ export default function SchoolSettingsPage() {
   const handleCancelLogo = () => {
     setSelectedLogo(null);
     setLogoPreview(null);
+  };
+
+  // Membership update mutation
+  const membershipUpdateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest('PATCH', '/api/school-admin/my-school/membership', data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Membership configuration updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+      setMembershipDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update membership configuration",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Open membership dialog with current values
+  const handleOpenMembershipDialog = () => {
+    setMembershipFormData({
+      feeAmount: schoolData?.membershipFeeAmount ? ((schoolData.membershipFeeAmount) / 100).toString() : '0',
+      renewalMonth: schoolData?.membershipRenewalMonth?.toString() || '9',
+      renewalDay: schoolData?.membershipRenewalDay?.toString() || '1',
+      gracePeriod: schoolData?.membershipGracePeriodDays?.toString() || '30',
+      required: schoolData?.membershipRequired ?? true
+    });
+    setMembershipDialogOpen(true);
+  };
+
+  // Handle membership form submission
+  const handleMembershipSubmit = () => {
+    // Validate fee amount (default empty to "0")
+    const feeAmount = parseFloat(membershipFormData.feeAmount || "0");
+    if (isNaN(feeAmount) || feeAmount < 0) {
+      toast({
+        title: "Invalid fee amount",
+        description: "Please enter a valid fee amount (0 or greater)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate renewal month
+    const renewalMonth = parseInt(membershipFormData.renewalMonth);
+    if (isNaN(renewalMonth) || renewalMonth < 1 || renewalMonth > 12) {
+      toast({
+        title: "Invalid renewal month",
+        description: "Please select a valid month",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate renewal day
+    const renewalDay = parseInt(membershipFormData.renewalDay);
+    if (isNaN(renewalDay) || renewalDay < 1 || renewalDay > 31) {
+      toast({
+        title: "Invalid renewal day",
+        description: "Please enter a valid day (1-31)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate grace period
+    const gracePeriod = parseInt(membershipFormData.gracePeriod);
+    if (isNaN(gracePeriod) || gracePeriod < 0) {
+      toast({
+        title: "Invalid grace period",
+        description: "Please enter a valid grace period (0 or greater)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    membershipUpdateMutation.mutate({
+      membershipFeeAmount: Math.round(feeAmount * 100),
+      membershipRenewalMonth: renewalMonth,
+      membershipRenewalDay: renewalDay,
+      membershipGracePeriodDays: gracePeriod,
+      membershipRequired: membershipFormData.required
+    });
   };
 
   return (
@@ -846,6 +960,225 @@ export default function SchoolSettingsPage() {
                           </AlertDescription>
                         </Alert>
                       )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Membership Configuration */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    Annual Membership Fees
+                  </CardTitle>
+                  <CardDescription>
+                    Configure annual membership fees for parent families. When enabled, families are automatically enrolled in annual memberships when they register for classes.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Membership Fee Amount</Label>
+                      <div className="mt-1 p-2 bg-gray-50 rounded border">
+                        ${((schoolData?.membershipFeeAmount || 0) / 100).toFixed(2)}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Current annual membership fee (in USD)
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Renewal Date</Label>
+                      <div className="mt-1 p-2 bg-gray-50 rounded border">
+                        {schoolData?.membershipRenewalMonth ? 
+                          new Date(0, (schoolData.membershipRenewalMonth - 1), schoolData.membershipRenewalDay || 1).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+                          : 'Not configured'
+                        }
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Annual membership renewal date
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Grace Period</Label>
+                    <div className="mt-1 p-2 bg-gray-50 rounded border">
+                      {schoolData?.membershipGracePeriodDays || 30} days
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Grace period after expiration before membership becomes inactive
+                    </p>
+                  </div>
+                  
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">Membership Status</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {schoolData?.membershipFeeAmount && schoolData?.membershipFeeAmount > 0 
+                            ? `Membership fees are enabled at $${((schoolData.membershipFeeAmount) / 100).toFixed(2)} annually`
+                            : 'Membership fees are not configured'
+                          }
+                        </p>
+                      </div>
+                      <Badge variant={schoolData?.membershipFeeAmount && schoolData?.membershipFeeAmount > 0 ? "default" : "secondary"}>
+                        {schoolData?.membershipFeeAmount && schoolData?.membershipFeeAmount > 0 ? "Enabled" : "Disabled"}
+                      </Badge>
+                    </div>
+                    
+                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <h5 className="font-medium text-blue-900 mb-2">How Membership Fees Work</h5>
+                      <ul className="text-sm text-blue-800 space-y-1">
+                        <li>• Parents are automatically assigned annual membership when they enroll children in classes</li>
+                        <li>• Membership fees are separate from class fees and tracked independently</li>
+                        <li>• School administrators can mark membership payments as paid manually</li>
+                        <li>• Expired memberships enter a grace period before becoming inactive</li>
+                      </ul>
+                    </div>
+
+                    <div className="mt-4">
+                      <Dialog open={membershipDialogOpen} onOpenChange={setMembershipDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={handleOpenMembershipDialog}
+                            data-testid="button-configure-membership"
+                          >
+                            <Settings className="h-4 w-4 mr-2" />
+                            Configure Membership Settings
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[500px]">
+                          <DialogHeader>
+                            <DialogTitle>Membership Configuration</DialogTitle>
+                            <DialogDescription>
+                              Configure annual membership fees and renewal settings for parent families
+                            </DialogDescription>
+                          </DialogHeader>
+                          
+                          <div className="space-y-4 py-4">
+                            {/* Fee Amount */}
+                            <div className="space-y-2">
+                              <Label htmlFor="feeAmount">Annual Membership Fee (USD)</Label>
+                              <Input
+                                id="feeAmount"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="50.00"
+                                value={membershipFormData.feeAmount}
+                                onChange={(e) => setMembershipFormData({ ...membershipFormData, feeAmount: e.target.value })}
+                                data-testid="input-membership-fee"
+                              />
+                              <p className="text-sm text-muted-foreground">
+                                Set to $0 to disable membership fees
+                              </p>
+                            </div>
+
+                            {/* Renewal Month */}
+                            <div className="space-y-2">
+                              <Label htmlFor="renewalMonth">Renewal Month</Label>
+                              <Select
+                                value={membershipFormData.renewalMonth}
+                                onValueChange={(value) => setMembershipFormData({ ...membershipFormData, renewalMonth: value })}
+                              >
+                                <SelectTrigger id="renewalMonth" data-testid="select-renewal-month">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">January</SelectItem>
+                                  <SelectItem value="2">February</SelectItem>
+                                  <SelectItem value="3">March</SelectItem>
+                                  <SelectItem value="4">April</SelectItem>
+                                  <SelectItem value="5">May</SelectItem>
+                                  <SelectItem value="6">June</SelectItem>
+                                  <SelectItem value="7">July</SelectItem>
+                                  <SelectItem value="8">August</SelectItem>
+                                  <SelectItem value="9">September</SelectItem>
+                                  <SelectItem value="10">October</SelectItem>
+                                  <SelectItem value="11">November</SelectItem>
+                                  <SelectItem value="12">December</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Renewal Day */}
+                            <div className="space-y-2">
+                              <Label htmlFor="renewalDay">Renewal Day</Label>
+                              <Input
+                                id="renewalDay"
+                                type="number"
+                                min="1"
+                                max="31"
+                                value={membershipFormData.renewalDay}
+                                onChange={(e) => setMembershipFormData({ ...membershipFormData, renewalDay: e.target.value })}
+                                data-testid="input-renewal-day"
+                              />
+                            </div>
+
+                            {/* Grace Period */}
+                            <div className="space-y-2">
+                              <Label htmlFor="gracePeriod">Grace Period (Days)</Label>
+                              <Input
+                                id="gracePeriod"
+                                type="number"
+                                min="0"
+                                value={membershipFormData.gracePeriod}
+                                onChange={(e) => setMembershipFormData({ ...membershipFormData, gracePeriod: e.target.value })}
+                                data-testid="input-grace-period"
+                              />
+                              <p className="text-sm text-muted-foreground">
+                                Number of days after expiration before membership becomes inactive
+                              </p>
+                            </div>
+
+                            {/* Membership Required */}
+                            <div className="flex items-center justify-between space-x-2">
+                              <div className="space-y-0.5">
+                                <Label htmlFor="membershipRequired">Membership Required</Label>
+                                <p className="text-sm text-muted-foreground">
+                                  Require families to have active membership to enroll in classes
+                                </p>
+                              </div>
+                              <Switch
+                                id="membershipRequired"
+                                checked={membershipFormData.required}
+                                onCheckedChange={(checked) => setMembershipFormData({ ...membershipFormData, required: checked })}
+                                data-testid="switch-membership-required"
+                              />
+                            </div>
+                          </div>
+
+                          <DialogFooter>
+                            <Button 
+                              variant="outline" 
+                              onClick={() => setMembershipDialogOpen(false)}
+                              disabled={membershipUpdateMutation.isPending}
+                              data-testid="button-cancel-membership"
+                            >
+                              Cancel
+                            </Button>
+                            <Button 
+                              onClick={handleMembershipSubmit}
+                              disabled={membershipUpdateMutation.isPending}
+                              data-testid="button-save-membership"
+                            >
+                              {membershipUpdateMutation.isPending ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  Saving...
+                                </>
+                              ) : (
+                                <>
+                                  <Save className="h-4 w-4 mr-2" />
+                                  Save Changes
+                                </>
+                              )}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
                   </div>
                 </CardContent>
