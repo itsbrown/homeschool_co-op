@@ -1,6 +1,9 @@
 import express from 'express';
 import Stripe from 'stripe';
 import { storage } from '../storage';
+import { getDb } from '../db';
+import { membershipEnrollments, users } from '../../shared/schema';
+import { eq } from 'drizzle-orm';
 
 const router = express.Router();
 
@@ -54,7 +57,7 @@ router.post('/subscription-schedules', async (req, res) => {
 
 // Initialize Stripe for retry operations
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-04-30.basil',
+  apiVersion: '2025-08-27.basil',
 });
 
 // Handle successful subscription schedule payments
@@ -277,6 +280,311 @@ async function handleFinalPaymentFailure(schedule: any, invoice: any) {
     
   } catch (error) {
     console.error('❌ Error handling final payment failure:', error);
+  }
+}
+
+/**
+ * Stripe webhook handler for membership subscriptions
+ * Handles: invoice.paid, invoice.payment_failed, customer.subscription.updated
+ */
+router.post('/membership', async (req, res) => {
+  try {
+    console.log('🔔 Stripe membership webhook received');
+    
+    const event = req.body;
+    
+    // In a real implementation, verify webhook signature here:
+    // const signature = req.headers['stripe-signature'];
+    // const event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+    
+    switch (event.type) {
+      case 'invoice.paid':
+        console.log('✅ Invoice paid for membership');
+        await handleMembershipInvoicePaid(event.data.object);
+        break;
+        
+      case 'invoice.payment_failed':
+        console.log('❌ Invoice payment failed for membership');
+        await handleMembershipPaymentFailed(event.data.object);
+        break;
+        
+      case 'customer.subscription.created':
+        console.log('🆕 Subscription created for membership');
+        await handleMembershipSubscriptionCreated(event.data.object);
+        break;
+        
+      case 'customer.subscription.updated':
+        console.log('🔄 Subscription updated for membership');
+        await handleMembershipSubscriptionUpdated(event.data.object);
+        break;
+        
+      case 'customer.subscription.deleted':
+        console.log('🗑️ Subscription deleted/cancelled for membership');
+        await handleMembershipSubscriptionDeleted(event.data.object);
+        break;
+        
+      default:
+        console.log('ℹ️ Unhandled membership webhook event type:', event.type);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('❌ Error processing membership webhook:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// Handle successful membership invoice payment
+async function handleMembershipInvoicePaid(invoice: any) {
+  try {
+    console.log('✅ Processing successful membership payment for invoice:', invoice.id);
+    
+    const subscriptionId = invoice.subscription;
+    if (!subscriptionId) {
+      console.log('⚠️ No subscription ID in invoice');
+      return;
+    }
+    
+    const db = await getDb();
+    
+    // Find membership enrollment by subscription ID
+    const enrollments = await db
+      .select()
+      .from(membershipEnrollments)
+      .where(eq(membershipEnrollments.stripeSubscriptionId, subscriptionId));
+    
+    if (enrollments.length === 0) {
+      console.log('⚠️ No membership enrollment found for subscription:', subscriptionId);
+      return;
+    }
+    
+    const enrollment = enrollments[0];
+    
+    // Calculate payment tracking
+    const amountPaid = invoice.amount_paid || 0;
+    const currentAmountPaid = enrollment.amountPaid || 0;
+    const newAmountPaid = currentAmountPaid + amountPaid;
+    const totalAmount = enrollment.amount || 0;
+    const remainingBalance = Math.max(0, totalAmount - newAmountPaid);
+    
+    // Determine new status based on payment
+    let newStatus = enrollment.status;
+    if (remainingBalance === 0) {
+      newStatus = 'active';
+    } else if (amountPaid > 0) {
+      newStatus = 'active'; // Partial payment still activates membership
+    }
+    
+    // Calculate renewal date (1 year from start date)
+    const startDate = enrollment.startDate || new Date();
+    const renewalDate = new Date(startDate);
+    renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+    
+    // Update membership enrollment
+    await db
+      .update(membershipEnrollments)
+      .set({
+        status: newStatus,
+        amountPaid: newAmountPaid,
+        remainingBalance: remainingBalance,
+        renewalDate: renewalDate,
+        paymentMethod: 'stripe',
+        updatedAt: new Date()
+      })
+      .where(eq(membershipEnrollments.id, enrollment.id));
+    
+    console.log(`✅ Membership ${enrollment.id} updated: status=${newStatus}, paid=${newAmountPaid}, balance=${remainingBalance}`);
+    
+  } catch (error) {
+    console.error('❌ Error handling membership invoice paid:', error);
+  }
+}
+
+// Handle failed membership invoice payment
+async function handleMembershipPaymentFailed(invoice: any) {
+  try {
+    console.log('❌ Processing failed membership payment for invoice:', invoice.id);
+    
+    const subscriptionId = invoice.subscription;
+    if (!subscriptionId) {
+      console.log('⚠️ No subscription ID in invoice');
+      return;
+    }
+    
+    const db = await getDb();
+    
+    // Find membership enrollment by subscription ID
+    const enrollments = await db
+      .select()
+      .from(membershipEnrollments)
+      .where(eq(membershipEnrollments.stripeSubscriptionId, subscriptionId));
+    
+    if (enrollments.length === 0) {
+      console.log('⚠️ No membership enrollment found for subscription:', subscriptionId);
+      return;
+    }
+    
+    const enrollment = enrollments[0];
+    const attemptCount = invoice.attempt_count || 1;
+    
+    // Update status to payment_failed but keep active until grace period ends
+    await db
+      .update(membershipEnrollments)
+      .set({
+        status: 'payment_failed',
+        notes: `Payment attempt ${attemptCount} failed for invoice ${invoice.id}`,
+        updatedAt: new Date()
+      })
+      .where(eq(membershipEnrollments.id, enrollment.id));
+    
+    console.log(`⚠️ Membership ${enrollment.id} marked as payment_failed (attempt ${attemptCount})`);
+    
+    // TODO: Send notification to parent about failed payment
+    
+  } catch (error) {
+    console.error('❌ Error handling membership payment failure:', error);
+  }
+}
+
+// Handle new subscription creation
+async function handleMembershipSubscriptionCreated(subscription: any) {
+  try {
+    console.log('🆕 Processing new membership subscription:', subscription.id);
+    
+    const membershipId = subscription.metadata?.membershipId;
+    if (!membershipId) {
+      console.log('⚠️ No membershipId in subscription metadata');
+      return;
+    }
+    
+    const db = await getDb();
+    
+    // Find and update membership enrollment
+    const enrollment = await db
+      .select()
+      .from(membershipEnrollments)
+      .where(eq(membershipEnrollments.id, parseInt(membershipId)))
+      .limit(1);
+    
+    if (enrollment.length === 0) {
+      console.log('⚠️ No membership enrollment found for ID:', membershipId);
+      return;
+    }
+    
+    // Calculate dates
+    const startDate = new Date(subscription.current_period_start * 1000);
+    const renewalDate = new Date(subscription.current_period_end * 1000);
+    
+    // Update enrollment with subscription data
+    await db
+      .update(membershipEnrollments)
+      .set({
+        stripeSubscriptionId: subscription.id,
+        stripeCustomerId: subscription.customer,
+        startDate: startDate,
+        renewalDate: renewalDate,
+        status: subscription.status === 'active' ? 'active' : 'pending_payment',
+        updatedAt: new Date()
+      })
+      .where(eq(membershipEnrollments.id, parseInt(membershipId)));
+    
+    console.log(`✅ Membership ${membershipId} linked to subscription ${subscription.id}`);
+    
+  } catch (error) {
+    console.error('❌ Error handling subscription creation:', error);
+  }
+}
+
+// Handle subscription updates (tier changes, cancellations)
+async function handleMembershipSubscriptionUpdated(subscription: any) {
+  try {
+    console.log('🔄 Processing membership subscription update:', subscription.id);
+    
+    const db = await getDb();
+    
+    // Find membership by subscription ID
+    const enrollments = await db
+      .select()
+      .from(membershipEnrollments)
+      .where(eq(membershipEnrollments.stripeSubscriptionId, subscription.id));
+    
+    if (enrollments.length === 0) {
+      console.log('⚠️ No membership found for subscription:', subscription.id);
+      return;
+    }
+    
+    const enrollment = enrollments[0];
+    
+    // Map Stripe status to our status
+    let newStatus = enrollment.status;
+    if (subscription.status === 'active') {
+      newStatus = 'active';
+    } else if (subscription.status === 'canceled') {
+      newStatus = 'cancelled';
+    } else if (subscription.status === 'past_due') {
+      newStatus = 'payment_failed';
+    } else if (subscription.status === 'unpaid') {
+      newStatus = 'expired';
+    }
+    
+    // Update renewal date
+    const renewalDate = new Date(subscription.current_period_end * 1000);
+    
+    // Update enrollment
+    await db
+      .update(membershipEnrollments)
+      .set({
+        status: newStatus,
+        renewalDate: renewalDate,
+        updatedAt: new Date()
+      })
+      .where(eq(membershipEnrollments.id, enrollment.id));
+    
+    console.log(`✅ Membership ${enrollment.id} updated: status=${newStatus}, renewalDate=${renewalDate.toISOString()}`);
+    
+  } catch (error) {
+    console.error('❌ Error handling subscription update:', error);
+  }
+}
+
+// Handle subscription deletion/cancellation
+async function handleMembershipSubscriptionDeleted(subscription: any) {
+  try {
+    console.log('🗑️ Processing membership subscription cancellation:', subscription.id);
+    
+    const db = await getDb();
+    
+    // Find membership by subscription ID
+    const enrollments = await db
+      .select()
+      .from(membershipEnrollments)
+      .where(eq(membershipEnrollments.stripeSubscriptionId, subscription.id));
+    
+    if (enrollments.length === 0) {
+      console.log('⚠️ No membership found for subscription:', subscription.id);
+      return;
+    }
+    
+    const enrollment = enrollments[0];
+    
+    // Calculate expiration date (end of current period)
+    const expirationDate = new Date(subscription.current_period_end * 1000);
+    
+    // Update enrollment to cancelled
+    await db
+      .update(membershipEnrollments)
+      .set({
+        status: 'cancelled',
+        expirationDate: expirationDate,
+        notes: `Subscription cancelled on ${new Date().toISOString()}. Access until ${expirationDate.toISOString()}`,
+        updatedAt: new Date()
+      })
+      .where(eq(membershipEnrollments.id, enrollment.id));
+    
+    console.log(`✅ Membership ${enrollment.id} marked as cancelled. Expires: ${expirationDate.toISOString()}`);
+    
+  } catch (error) {
+    console.error('❌ Error handling subscription deletion:', error);
   }
 }
 

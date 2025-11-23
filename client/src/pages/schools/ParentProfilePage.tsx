@@ -117,6 +117,11 @@ interface ParentProfile {
     dueDate: string;
     expirationDate: string;
     gracePeriodEnd: string;
+    membershipTier?: string;
+    stripeSubscriptionId?: string;
+    stripeCustomerId?: string;
+    startDate?: string;
+    renewalDate?: string;
   }>;
   paymentHistory: Array<{
     id: number;
@@ -658,30 +663,66 @@ export default function ParentProfilePage() {
         {/* Parent Info Card */}
         <Card>
           <CardHeader>
-            <div className="flex items-center space-x-4">
-              <div className="bg-primary/10 p-3 rounded-full">
-                <User className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-2xl">
-                  {profile.parent.firstName} {profile.parent.lastName}
-                </CardTitle>
-                <CardDescription className="flex items-center space-x-4 mt-2">
-                  <span className="flex items-center">
-                    <Mail className="h-4 w-4 mr-1" />
-                    {profile.parent.email}
-                  </span>
-                  {profile.parent.phone && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="bg-primary/10 p-3 rounded-full">
+                  <User className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-2xl">
+                    {profile.parent.firstName} {profile.parent.lastName}
+                  </CardTitle>
+                  <CardDescription className="flex items-center space-x-4 mt-2">
                     <span className="flex items-center">
-                      <Phone className="h-4 w-4 mr-1" />
-                      {profile.parent.phone}
+                      <Mail className="h-4 w-4 mr-1" />
+                      {profile.parent.email}
                     </span>
-                  )}
-                  <Badge variant={profile.parent.isActive ? 'default' : 'secondary'}>
-                    {profile.parent.isActive ? 'Active' : 'Inactive'}
-                  </Badge>
-                </CardDescription>
+                    {profile.parent.phone && (
+                      <span className="flex items-center">
+                        <Phone className="h-4 w-4 mr-1" />
+                        {profile.parent.phone}
+                      </span>
+                    )}
+                    <Badge variant={profile.parent.isActive ? 'default' : 'secondary'}>
+                      {profile.parent.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </CardDescription>
+                </div>
               </div>
+              
+              {/* Membership Status Badge */}
+              {profile.membershipEnrollments.length > 0 && (() => {
+                const activeMembership = profile.membershipEnrollments.find(m => m.status === 'active') || profile.membershipEnrollments[0];
+                const tierDisplay = (activeMembership.membershipTier || 'basic').charAt(0).toUpperCase() + (activeMembership.membershipTier || 'basic').slice(1);
+                const renewalDate = activeMembership.renewalDate ? new Date(activeMembership.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+                
+                return (
+                  <div className="flex flex-col items-end space-y-2" data-testid="membership-status-badge">
+                    <Badge 
+                      variant={
+                        activeMembership.status === 'active' ? 'default' :
+                        activeMembership.status === 'pending_payment' ? 'secondary' :
+                        activeMembership.status === 'grace_period' ? 'outline' :
+                        activeMembership.status === 'expired' ? 'destructive' : 'secondary'
+                      }
+                      className="text-sm"
+                    >
+                      {activeMembership.status === 'active' && <CheckCircle className="h-3 w-3 mr-1" />}
+                      {activeMembership.status === 'pending_payment' && <Clock className="h-3 w-3 mr-1" />}
+                      {activeMembership.status === 'grace_period' && <AlertTriangle className="h-3 w-3 mr-1" />}
+                      {activeMembership.status === 'expired' && <AlertTriangle className="h-3 w-3 mr-1" />}
+                      {tierDisplay} Membership
+                    </Badge>
+                    <div className="flex flex-col items-end text-xs text-muted-foreground">
+                      <span className="font-medium">{activeMembership.status.replace('_', ' ').toUpperCase()}</span>
+                      <span className="flex items-center">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        Renews: {renewalDate}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </CardHeader>
         </Card>
@@ -1028,12 +1069,45 @@ export default function ParentProfilePage() {
                     {profile.membershipEnrollments.map((membership) => (
                       <div key={membership.id} className="border rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h3 className="font-semibold text-lg">{membership.schoolName} Membership {membership.membershipYear}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Due: {new Date(membership.dueDate).toLocaleDateString()} • 
-                              Expires: {new Date(membership.expirationDate).toLocaleDateString()}
-                            </p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-lg">{membership.schoolName} Membership {membership.membershipYear}</h3>
+                              <Badge variant="outline" className="font-medium">
+                                {(membership.membershipTier || 'basic').toUpperCase()}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                              {membership.startDate && (
+                                <span className="flex items-center">
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  Started: {new Date(membership.startDate).toLocaleDateString()}
+                                </span>
+                              )}
+                              {membership.renewalDate && (
+                                <span className="flex items-center">
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  Renews: {new Date(membership.renewalDate).toLocaleDateString()}
+                                </span>
+                              )}
+                              {!membership.startDate && !membership.renewalDate && (
+                                <>
+                                  <span>Due: {new Date(membership.dueDate).toLocaleDateString()}</span>
+                                  <span>Expires: {new Date(membership.expirationDate).toLocaleDateString()}</span>
+                                </>
+                              )}
+                              {membership.stripeSubscriptionId && (
+                                <a 
+                                  href={`https://dashboard.stripe.com/subscriptions/${membership.stripeSubscriptionId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center text-blue-600 hover:text-blue-800 hover:underline"
+                                  data-testid={`link-stripe-subscription-${membership.id}`}
+                                >
+                                  <CreditCard className="h-3 w-3 mr-1" />
+                                  View in Stripe
+                                </a>
+                              )}
+                            </div>
                           </div>
                           <Badge variant={
                             membership.status === 'active' ? 'default' :
@@ -1073,18 +1147,92 @@ export default function ParentProfilePage() {
                           </div>
                         )}
 
-                        {membership.remainingBalance > 0 && (
-                          <div className="mt-3 flex justify-end">
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => setMembershipPaymentDialog({ open: true, membership })}
-                              disabled={markMembershipPaidMutation.isPending}
-                            >
-                              {markMembershipPaidMutation.isPending ? "Processing..." : "Mark as Paid"}
-                            </Button>
-                          </div>
-                        )}
+                        {/* Admin Controls */}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {membership.remainingBalance > 0 && (
+                            <>
+                              <Button 
+                                size="sm" 
+                                variant="default"
+                                onClick={() => {
+                                  // TODO: Implement Stripe checkout session creation
+                                  toast({
+                                    title: "Feature Coming Soon",
+                                    description: "Stripe payment checkout integration is being finalized.",
+                                  });
+                                }}
+                                data-testid={`button-pay-stripe-${membership.id}`}
+                              >
+                                <CreditCard className="h-4 w-4 mr-1" />
+                                Pay via Stripe
+                              </Button>
+                              
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => setMembershipPaymentDialog({ open: true, membership })}
+                                disabled={markMembershipPaidMutation.isPending}
+                                data-testid={`button-already-paid-${membership.id}`}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                {markMembershipPaidMutation.isPending ? "Processing..." : "Already Paid"}
+                              </Button>
+                              
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => {
+                                  // TODO: Implement comp/free membership
+                                  toast({
+                                    title: "Feature Coming Soon",
+                                    description: "Comp/Free membership option will be available soon.",
+                                  });
+                                }}
+                                data-testid={`button-comp-free-${membership.id}`}
+                              >
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                Comp/Free
+                              </Button>
+                            </>
+                          )}
+                          
+                          <Select
+                            defaultValue={membership.membershipTier || 'basic'}
+                            onValueChange={(tier) => {
+                              // TODO: Implement tier change
+                              toast({
+                                title: "Feature Coming Soon",
+                                description: `Change tier to ${tier} will be available soon.`,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-[140px] h-9" data-testid={`select-tier-${membership.id}`}>
+                              <SelectValue placeholder="Change Tier" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="basic">Basic</SelectItem>
+                              <SelectItem value="standard">Standard</SelectItem>
+                              <SelectItem value="premium">Premium</SelectItem>
+                              <SelectItem value="vip">VIP</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => {
+                              // TODO: Implement delete membership
+                              toast({
+                                title: "Feature Coming Soon",
+                                description: "Delete membership option will be available soon.",
+                              });
+                            }}
+                            data-testid={`button-delete-${membership.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
