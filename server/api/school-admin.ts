@@ -2233,9 +2233,9 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
     const updateData: Partial<InsertSchool> = {};
 
     if (membershipFeeAmount !== undefined) {
-      // Convert dollars to cents if needed, or accept cents directly
+      // Frontend already converts dollars to cents, so accept the value as-is
       const feeInCents = typeof membershipFeeAmount === 'number' ? 
-        Math.round(membershipFeeAmount * 100) : 0;
+        Math.round(membershipFeeAmount) : 0;
       updateData.membershipFeeAmount = feeInCents;
     }
 
