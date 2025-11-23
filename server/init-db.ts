@@ -377,6 +377,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: active_role_id set to first role for users without primary');
     
+    // Add parent_user_id column to membership_enrollments table
+    console.log('Running migration: Adding parent_user_id to membership_enrollments table...');
+    await db.execute(sql`
+      ALTER TABLE membership_enrollments 
+      ADD COLUMN IF NOT EXISTS parent_user_id INTEGER REFERENCES users(id);
+    `);
+    console.log('✅ Migration completed: parent_user_id column added to membership_enrollments table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
