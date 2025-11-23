@@ -7,7 +7,8 @@ import {
   getMembershipSummary,
   getMySchoolMemberships,
   getMySchoolMembershipSummary,
-  createMembershipEnrollment
+  createMembershipEnrollment,
+  createMembershipCheckoutSession
 } from "./membership-admin";
 
 const router = Router();
@@ -25,5 +26,8 @@ router.post("/:id/payment", recordMembershipPayment);
 
 // Create new membership enrollment
 router.post("/", createMembershipEnrollment);
+
+// Create Stripe Checkout Session for membership payment
+router.post("/create-checkout-session", createMembershipCheckoutSession);
 
 export default router;

@@ -31,6 +31,7 @@ export const users = pgTable("users", {
   lastLogin: timestamp("last_login"),
   activeRole: text("active_role"), // Currently active role for multi-role users (NULL means use primary role)
   activeRoleId: integer("active_role_id"), // ID of the currently active role from user_roles table (NULL means use primary role)
+  stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for payments
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

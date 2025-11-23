@@ -431,6 +431,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: Stripe integration columns added to membership_enrollments table');
     
+    // Add stripe_customer_id column to users table
+    console.log('Running migration: Adding stripe_customer_id column to users table...');
+    await db.execute(sql`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+    `);
+    console.log('✅ Migration completed: stripe_customer_id column added to users table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

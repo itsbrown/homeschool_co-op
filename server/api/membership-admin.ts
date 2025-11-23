@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
+import Stripe from "stripe";
 
 // Schema for updating membership
 const updateMembershipSchema = z.object({
@@ -616,5 +617,141 @@ export const createMembershipEnrollment = async (req: any, res: Response) => {
   } catch (error: any) {
     console.error("Error creating membership enrollment:", error);
     res.status(500).json({ message: "Failed to create membership", error: error.message });
+  }
+};
+
+/**
+ * Create Stripe Checkout Session for membership payment
+ */
+export const createMembershipCheckoutSession = async (req: any, res: Response) => {
+  try {
+    // Check if Stripe is configured
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({ message: "Stripe is not configured" });
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' });
+
+    const { membershipEnrollmentId, tier } = req.body;
+
+    if (!membershipEnrollmentId) {
+      return res.status(400).json({ message: "Membership enrollment ID is required" });
+    }
+
+    // Get authenticated user email
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    // Get membership enrollment
+    const membership = await storage.getMembershipEnrollmentById(membershipEnrollmentId);
+    if (!membership) {
+      return res.status(404).json({ message: "Membership enrollment not found" });
+    }
+
+    // Get parent user
+    const parent = await storage.getUser(membership.parentUserId);
+    if (!parent) {
+      return res.status(404).json({ message: "Parent user not found" });
+    }
+
+    // Get school configuration
+    const school = await storage.getSchool(membership.schoolId);
+    if (!school) {
+      return res.status(404).json({ message: "School not found" });
+    }
+
+    // Get membership fee amount (in cents)
+    const membershipFeeAmount = school.membershipFeeAmount || 0;
+    if (membershipFeeAmount <= 0) {
+      return res.status(400).json({ message: "School does not have a membership fee configured" });
+    }
+
+    // Determine tier pricing (all tiers same price for now, can be differentiated later)
+    const selectedTier = tier || membership.membershipTier || 'basic';
+    const priceInCents = membershipFeeAmount;
+
+    // Create or retrieve Stripe customer
+    let customerId = parent.stripeCustomerId;
+    if (!customerId) {
+      console.log(`Creating new Stripe customer for parent ${parent.email}`);
+      const customer = await stripe.customers.create({
+        email: parent.email,
+        name: parent.name,
+        metadata: {
+          userId: parent.id.toString(),
+          schoolId: membership.schoolId.toString(),
+          membershipEnrollmentId: membershipEnrollmentId.toString()
+        }
+      });
+      customerId = customer.id;
+
+      // Update parent with customer ID
+      await storage.updateUser(parent.id, { stripeCustomerId: customerId });
+      console.log(`✅ Created Stripe customer ${customerId} for parent ${parent.email}`);
+    }
+
+    // Calculate anniversary dates for subscription
+    const renewalMonth = school.membershipRenewalMonth || 9;
+    const renewalDay = school.membershipRenewalDay || 1;
+    const currentYear = new Date().getFullYear();
+    const nextRenewalDate = new Date(currentYear + 1, renewalMonth - 1, renewalDay);
+    
+    // Create Stripe Checkout Session with subscription
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${school.name} - Annual Membership (${selectedTier})`,
+              description: school.membershipDescription || 'Annual family membership',
+              metadata: {
+                schoolId: membership.schoolId.toString(),
+                tier: selectedTier
+              }
+            },
+            unit_amount: priceInCents,
+            recurring: {
+              interval: 'year',
+              interval_count: 1
+            }
+          },
+          quantity: 1,
+        },
+      ],
+      subscription_data: {
+        metadata: {
+          membershipEnrollmentId: membershipEnrollmentId.toString(),
+          schoolId: membership.schoolId.toString(),
+          parentUserId: parent.id.toString(),
+          tier: selectedTier
+        }
+      },
+      success_url: `${req.protocol}://${req.get('host')}/membership-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.protocol}://${req.get('host')}/parent-profile`,
+      metadata: {
+        membershipEnrollmentId: membershipEnrollmentId.toString(),
+        schoolId: membership.schoolId.toString(),
+        parentUserId: parent.id.toString(),
+        tier: selectedTier
+      }
+    });
+
+    console.log(`✅ Created Stripe Checkout Session ${session.id} for membership ${membershipEnrollmentId}`);
+    res.status(200).json({ 
+      sessionUrl: session.url,
+      sessionId: session.id
+    });
+  } catch (error: any) {
+    console.error("Error creating membership checkout session:", error);
+    res.status(500).json({ 
+      message: "Failed to create checkout session", 
+      error: error.message 
+    });
   }
 };

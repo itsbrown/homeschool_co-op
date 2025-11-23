@@ -5,12 +5,13 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "../storage";
-import { insertUserSchema } from "@shared/schema";
+import { insertUserSchema, membershipEnrollments } from "@shared/schema";
 import { sendWelcomeEmail } from "../lib/email-service";
 import { sendPasswordResetEmail } from "../services/emailService";
 import { userStorage } from "../users-storage";
 import { supabaseAdmin } from "../db/supabase";
 import { supabaseAuth } from "../middleware/supabase-auth";
+import { getDb } from "../db";
 
 const router = Router();
 
@@ -283,6 +284,33 @@ router.post('/register', async (req, res) => {
     }
 
     console.log(`✅ Registration complete for ${email} (User ID: ${user.id}, Supabase ID: ${supabaseUser.id})`);
+    
+    // Auto-create membership enrollment for parent users with school association
+    if (schoolId && (role === 'parent' || !role)) {
+      try {
+        console.log(`🎫 Auto-creating membership enrollment for parent ${email} at school ${schoolId}`);
+        
+        // Get database connection
+        const db = await getDb();
+        
+        // Create pending membership enrollment with basic tier
+        const [newMembership] = await db.insert(membershipEnrollments).values({
+          schoolId: schoolId,
+          parentUserId: user.id,
+          status: 'pending_payment',
+          membershipTier: 'basic',
+          membershipYear: new Date().getFullYear(),
+          amount: 0, // Will be set when school configures fee amount
+          amountPaid: 0,
+          remainingBalance: 0
+        }).returning();
+        
+        console.log(`✅ Membership enrollment auto-created (ID: ${newMembership.id}) for parent ${email}`);
+      } catch (membershipError) {
+        // Non-blocking - registration succeeds even if membership creation fails
+        console.error('⚠️ Failed to auto-create membership enrollment, but registration was successful:', membershipError);
+      }
+    }
     
     // Send welcome email (non-blocking - registration succeeds even if email fails)
     try {
