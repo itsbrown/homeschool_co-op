@@ -1,50 +1,41 @@
 # ASA Learning Platform
 
 ## Overview
-The ASA Learning Platform is an adaptive learning application for the American Seekers Academy. It delivers a comprehensive and engaging educational experience through a full-stack web architecture, AI-powered content generation, and assessment tools. The platform aims to provide personalized learning paths, efficient administrative capabilities, and a secure, user-friendly environment, positioning itself for significant market impact in adaptive learning.
+The ASA Learning Platform is an adaptive learning application for the American Seekers Academy. It offers a comprehensive and engaging educational experience through a full-stack web architecture, AI-powered content generation, and assessment tools. The platform aims to deliver personalized learning paths, efficient administrative capabilities, and a secure, user-friendly environment, positioning itself for significant market impact in adaptive learning.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Development Guidelines
-For detailed development and testing guidelines, see:
-- **[Development Testing Checklist](./DEVELOPMENT_TESTING_CHECKLIST.md)** - Pre-completion verification checklist for middleware, functions, and database changes
-- **[Architectural Patterns & Common Pitfalls](./ARCHITECTURAL_PATTERNS.md)** - 7 key patterns with code examples and real bug scenarios from Nov 22, 2025
-
-### Recent Changes (Nov 22, 2025)
-- **Critical Middleware Import Fix**: Fixed missing `requireSchoolContext` import in `server/api/school-admin.ts` that caused silent failures
-- **Removed Duplicate Functions**: Eliminated local `extractSchoolId` and `requireSchoolContext` functions shadowing imported middleware
-- **UsersPage Infinite Loading Fix**: Added `enabled: !!schoolId` check to React Query for proper async dependency handling
-- **Database-Driven School Context**: All 39 school-admin endpoints now use PostgreSQL as single source of truth via `requireSchoolContext` middleware
-
 ## System Architecture
 ### Core Design Principles
-The platform prioritizes scalability, security, and user experience, incorporating role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
+The platform emphasizes scalability, security, and user experience, incorporating role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
 
 ### Frontend
 -   **Framework**: React with TypeScript (Vite).
 -   **UI**: Shadcn/ui (Radix UI) and Tailwind CSS for a professional, responsive, and mobile-first design.
 -   **State Management**: React hooks and context.
+-   **Currency Formatting**: Frontend formats currency values (stored as cents on backend).
 
 ### Backend
 -   **Runtime**: Node.js with Express.
 -   **Language**: TypeScript with ESM modules.
 -   **API Design**: RESTful JSON API.
--   **Authentication Middleware**: Supabase-only authentication using `supabaseAuth`. All protected API endpoints must use `supabaseAuth` and extract user email from `req.user.email`, mapping Supabase UUID to a database integer ID in `req.user.id`.
+-   **Authentication Middleware**: Supabase-only authentication using `supabaseAuth`. All protected API endpoints must use `supabaseAuth` and extract user email from `req.user.email`. The middleware maps Supabase UUID to a database integer ID in `req.user.id` for multi-role API compatibility.
 
 ### Data Persistence Architecture
-**Source of Truth**: PostgreSQL (Neon-hosted) is the authoritative data store for all application data.
--   **Drizzle ORM**: Primary data layer for all CRUD operations, with schema defined in `shared/schema.ts` for type safety.
--   **Supabase**: Reserved exclusively for authentication (OAuth on frontend, auth admin operations on backend) and NOT for general data persistence.
+**Source of Truth**: PostgreSQL (Neon-hosted) is the authoritative data store for all application data. All backend data operations use Drizzle ORM for type-safe, direct database access.
+-   **Drizzle ORM**: Primary data layer for all CRUD operations. Schema defined in `shared/schema.ts` provides type safety and direct PostgreSQL access.
+-   **Supabase**: Reserved exclusively for authentication (OAuth on frontend, auth admin operations on backend) and NOT used for general data persistence.
 
 ### Data Storage
 -   **Primary Database**: Neon PostgreSQL.
 -   **File Storage**: Local filesystem for general files and knowledge bases.
 -   **Authentication Integration**: Frontend uses Supabase OAuth; backend queries Supabase for user/school data.
+-   **Storage Architecture**: Hybrid system routing operations between persistent database and in-memory storage.
 
 ### Key Features
 -   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync.
--   **Multi-Role System**: Supports users holding multiple roles (e.g., parent AND educator) with dynamic, school-context-restricted role-switching capabilities.
+-   **Multi-Role System**: Users can hold multiple roles with dynamic role-switching capabilities limited to same-school contexts.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, and automated refunds.
@@ -60,14 +51,24 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Parent Profile Management**: Parent users can update profiles; school administrators view profiles with multi-tenant data isolation.
 -   **Content Management System**: Creation and management of knowledge bases, file uploads, and AI-powered content analysis/generation.
 -   **Product Order Form System**: Enhanced schema supporting variant configurations, descriptions, and dynamic pricing.
--   **Dedicated Detail/Edit Pages**: Specific pages for parent class details and editing child profiles.
+-   **Parent Class Details Page**: Dedicated full-page view for class details.
+-   **Edit Child Profile Page**: Dedicated page for editing child profiles.
 -   **Responsive UI Patterns**: Consistent mobile-responsive patterns across admin pages.
 -   **Student Management System**: Tracks students across schools, including auto-sync for existing children.
 -   **Notification System**: In-app notification system with PostgreSQL storage and real-time unread counts.
 -   **Category Management System**: School-level custom category system with dynamic dropdown integration and idempotent seeding of default categories.
 
+### Architectural Patterns & Common Pitfalls
+-   **Database as Single Source of Truth**: PostgreSQL (via Drizzle ORM) is the authoritative data source. JWT metadata is not trusted for mutable user data.
+-   **Defensive React Query Patterns**: Use `enabled` checks for queries dependent on async data.
+-   **Proper Middleware Usage Patterns**: Middleware should be used in route definitions, not called as functions inside handlers.
+-   **Type Safety for Database Operations**: Consistent type conversions (string for middleware/DB comparisons, number for storage methods) are used.
+-   **Multi-Role Context & School ID Extraction**: Prioritize `user.schoolId` then `activeRoleId` for multi-role users.
+-   **API Endpoint School Context Checklist**: New school-scoped endpoints must use `requireSchoolContext`, read `req.schoolId`, filter database queries by `schoolId`, use type conversion, and include error handling.
+-   **Frontend State Management Patterns**: Supabase session is the source of truth for critical auth state, not localStorage.
+
 ## External Dependencies
--   **Supabase**: Authentication (OAuth) and PostgreSQL database.
+-   **Supabase**: PostgreSQL database and OAuth authentication.
 -   **Stripe**: Payment processing.
 -   **Anthropic Claude API**: AI content generation and analysis.
 -   **Stability AI**: Image generation.
