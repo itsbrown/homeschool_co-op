@@ -904,6 +904,14 @@ export const membershipEnrollments = pgTable("membership_enrollments", {
     enum: ["credit_card", "paypal", "bank_transfer", "cash", "check", "other"] 
   }),
   notes: text("notes"),
+  // Stripe integration for subscription-based memberships
+  membershipTier: text("membership_tier", {
+    enum: ["basic", "standard", "premium", "vip"]
+  }).default("basic").notNull(),
+  stripeSubscriptionId: text("stripe_subscription_id"), // Stripe subscription ID for recurring billing
+  stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID
+  startDate: timestamp("start_date"), // When membership actually started (payment date)
+  renewalDate: timestamp("renewal_date"), // Individual anniversary renewal date
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -917,6 +925,11 @@ export const insertMembershipEnrollmentSchema = createInsertSchema(membershipEnr
     notes: z.string().nullable().default(null),
     paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "check", "other"]).nullable().default(null),
     gracePeriodEnd: z.date().nullable().default(null),
+    membershipTier: z.enum(["basic", "standard", "premium", "vip"]).default("basic"),
+    stripeSubscriptionId: z.string().nullable().default(null),
+    stripeCustomerId: z.string().nullable().default(null),
+    startDate: z.date().nullable().default(null),
+    renewalDate: z.date().nullable().default(null),
   });
 export type InsertMembershipEnrollment = z.infer<typeof insertMembershipEnrollmentSchema>;
 export type MembershipEnrollment = typeof membershipEnrollments.$inferSelect;

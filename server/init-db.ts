@@ -395,6 +395,42 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: missing columns added to membership_enrollments table');
     
+    // Add membership configuration columns to schools table
+    console.log('Running migration: Adding membership configuration columns to schools table...');
+    await db.execute(sql`
+      ALTER TABLE schools 
+      ADD COLUMN IF NOT EXISTS membership_fee_amount INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS membership_renewal_month INTEGER DEFAULT 9,
+      ADD COLUMN IF NOT EXISTS membership_renewal_day INTEGER DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS membership_grace_period_days INTEGER DEFAULT 30,
+      ADD COLUMN IF NOT EXISTS membership_description TEXT,
+      ADD COLUMN IF NOT EXISTS membership_required BOOLEAN DEFAULT true;
+    `);
+    console.log('✅ Migration completed: membership configuration columns added to schools table');
+    
+    // Add Stripe integration and tier columns to membership_enrollments table
+    console.log('Running migration: Adding Stripe integration columns to membership_enrollments table...');
+    await db.execute(sql`
+      ALTER TABLE membership_enrollments 
+      ADD COLUMN IF NOT EXISTS membership_tier TEXT DEFAULT 'basic',
+      ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT,
+      ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT,
+      ADD COLUMN IF NOT EXISTS start_date TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS renewal_date TIMESTAMP;
+    `);
+    
+    // Add constraint for membership_tier values
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TABLE membership_enrollments 
+        ADD CONSTRAINT membership_enrollments_tier_check 
+        CHECK (membership_tier IN ('basic', 'standard', 'premium', 'vip'));
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    console.log('✅ Migration completed: Stripe integration columns added to membership_enrollments table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
