@@ -1623,11 +1623,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Not authorized - school admin access required" });
       }
 
-      // Validate request body with Zod schema
+      // Validate request body with Zod schema - coerce strings to numbers for compatibility
       const requestBodySchema = z.object({
-        parentUserId: z.number().int().positive("Parent user ID must be a positive integer"),
-        schoolId: z.number().int().positive("School ID must be a positive integer"),
-        membershipYear: z.number().int().min(2020).max(2100, "Membership year must be between 2020 and 2100")
+        parentUserId: z.union([z.number(), z.string()]).transform(val => {
+          const num = typeof val === 'string' ? parseInt(val, 10) : val;
+          if (isNaN(num) || num <= 0) {
+            throw new Error("Parent user ID must be a positive integer");
+          }
+          return num;
+        }),
+        schoolId: z.union([z.number(), z.string()]).transform(val => {
+          const num = typeof val === 'string' ? parseInt(val, 10) : val;
+          if (isNaN(num) || num <= 0) {
+            throw new Error("School ID must be a positive integer");
+          }
+          return num;
+        }).optional(), // Optional - will be overridden for school admins
+        membershipYear: z.union([z.number(), z.string()]).transform(val => {
+          const num = typeof val === 'string' ? parseInt(val, 10) : val;
+          if (isNaN(num) || num < 2020 || num > 2100) {
+            throw new Error("Membership year must be between 2020 and 2100");
+          }
+          return num;
+        })
       });
 
       const parseResult = requestBodySchema.safeParse(req.body);
@@ -1638,13 +1656,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { parentUserId, schoolId, membershipYear } = parseResult.data;
-
-      // Authorization: School admins can only create memberships for their school
-      if (userRole === 'schoolAdmin' && userSchoolId !== schoolId) {
-        return res.status(403).json({ 
-          message: "Not authorized to create memberships for other schools" 
-        });
+      const { parentUserId, membershipYear } = parseResult.data;
+      
+      // CRITICAL: School admins MUST use their own schoolId from auth context
+      // This enforces tenant boundary - they cannot create memberships for other schools
+      let schoolId: number;
+      if (userRole === 'schoolAdmin') {
+        if (!userSchoolId) {
+          return res.status(403).json({ 
+            message: "School admin must have a school assigned" 
+          });
+        }
+        schoolId = userSchoolId; // Use authenticated user's school - ignore request body
+      } else {
+        // admin/superAdmin can specify schoolId in request
+        if (!parseResult.data.schoolId) {
+          return res.status(400).json({
+            message: "School ID is required for admin/superAdmin users"
+          });
+        }
+        schoolId = parseResult.data.schoolId;
       }
 
       // Get school to fetch membership settings
