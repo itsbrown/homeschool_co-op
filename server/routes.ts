@@ -6,7 +6,7 @@ import { nlpService } from "./nlp-service";
 import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
-import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema } from "@shared/schema";
+import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema, insertMembershipEnrollmentSchema } from "@shared/schema";
 import { supabaseAuth } from "./middleware/supabase-auth";
 
 // Type for authenticated requests with our auth structure
