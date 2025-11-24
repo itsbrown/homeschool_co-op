@@ -110,7 +110,7 @@ export default function RegistrationLandingPage() {
   // Update default location when locations are loaded
   useEffect(() => {
     if (locations.length > 0 && !form.getValues("location")) {
-      form.setValue("location", locations[0].name);
+      form.setValue("location", locations[0].id.toString());
     }
   }, [locations, form]);
 
@@ -389,12 +389,12 @@ export default function RegistrationLandingPage() {
                           <SelectContent>
                             {locations.length > 0 ? (
                               locations.map((location: any) => (
-                                <SelectItem key={location.id} value={location.name}>
+                                <SelectItem key={location.id} value={location.id.toString()}>
                                   {location.name}
                                 </SelectItem>
                               ))
                             ) : (
-                              <SelectItem value="Brighton">Brighton</SelectItem>
+                              <SelectItem value="1">Brighton</SelectItem>
                             )}
                           </SelectContent>
                         </Select>

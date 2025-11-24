@@ -233,6 +233,30 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // Save location association if location was provided during registration
+    if (location) {
+      try {
+        // Convert location to integer (it may come as string from form)
+        const locationId = typeof location === 'string' ? parseInt(location, 10) : location;
+        
+        if (isNaN(locationId)) {
+          console.error(`⚠️ Invalid location ID: ${location}`);
+          console.log('⚠️ Registration will continue without location association');
+        } else {
+          console.log(`📍 Saving location association for user ${user.id} with location ${locationId}`);
+          await storage.createUserLocation({
+            userId: user.id,
+            locationId: locationId
+          });
+          console.log(`✅ Location association saved successfully`);
+        }
+      } catch (locationError) {
+        // Log error but don't fail registration - location is supplementary data
+        console.error('⚠️ Failed to save location association:', locationError);
+        console.log('⚠️ Registration will continue without location association');
+      }
+    }
+
     // If this is a school-specific registration, associate with school
     // CRITICAL: School association MUST succeed for school registrations
     if (schoolId && registrationCode) {
