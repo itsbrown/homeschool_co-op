@@ -1607,6 +1607,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Manual membership enrollment creation for school admins
+  // Stripe sync endpoint for looking up customers by email
+  app.post('/api/admin/stripe-sync', supabaseAuth, async (req: any, res) => {
+    const { syncStripeSubscription } = await import('./api/membership-admin');
+    return syncStripeSubscription(req, res);
+  });
+
   app.post('/api/admin/membership-enrollments', supabaseAuth, async (req: any, res) => {
     try {
       // Extract authenticated user from supabaseAuth middleware

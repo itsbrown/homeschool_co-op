@@ -767,3 +767,100 @@ export const createMembershipCheckoutSession = async (req: any, res: Response) =
     });
   }
 };
+
+/**
+ * Lookup and sync Stripe subscription data for a user by email
+ */
+export const syncStripeSubscription = async (req: any, res: Response) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    
+    // Initialize Stripe
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    
+    // Search for customer in Stripe
+    const customers = await stripe.customers.search({
+      query: `email:'${email}'`
+    });
+    
+    if (customers.data.length === 0) {
+      return res.status(404).json({ message: "No Stripe customer found with this email" });
+    }
+    
+    const customer = customers.data[0];
+    
+    // Get subscriptions for this customer
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customer.id,
+      status: 'active'
+    });
+    
+    // Check if user exists in database
+    const user = await storage.getUserByEmail(email);
+    
+    if (!user) {
+      return res.status(404).json({ 
+        message: "User not found in database",
+        stripeData: {
+          customerId: customer.id,
+          name: customer.name,
+          email: customer.email,
+          subscriptions: subscriptions.data.length
+        }
+      });
+    }
+    
+    // Get existing memberships
+    const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
+    
+    // Prepare response
+    const response: any = {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        schoolId: user.schoolId,
+        stripeCustomerId: user.stripeCustomerId
+      },
+      stripe: {
+        customerId: customer.id,
+        name: customer.name,
+        email: customer.email,
+        subscriptions: subscriptions.data.map((sub: any) => ({
+          id: sub.id,
+          status: sub.status,
+          amount: sub.items.data[0]?.price?.unit_amount,
+          interval: sub.items.data[0]?.price?.recurring?.interval,
+          currentPeriodStart: new Date(sub.current_period_start * 1000),
+          currentPeriodEnd: new Date(sub.current_period_end * 1000)
+        }))
+      },
+      memberships: memberships.map((m: any) => ({
+        id: m.id,
+        schoolId: m.schoolId,
+        amount: m.amount,
+        status: m.status,
+        stripeSubscriptionId: m.stripeSubscriptionId,
+        stripeCustomerId: m.stripeCustomerId
+      })),
+      syncNeeded: {
+        updateUserStripeId: user.stripeCustomerId !== customer.id,
+        linkSubscriptions: subscriptions.data.length > 0 && memberships.length === 0,
+        updateMembershipSubscriptionIds: memberships.some((m: any) => 
+          subscriptions.data.some(sub => !m.stripeSubscriptionId || m.stripeSubscriptionId !== sub.id)
+        )
+      }
+    };
+    
+    res.json(response);
+    
+  } catch (error: any) {
+    console.error("Error syncing Stripe subscription:", error);
+    res.status(500).json({ message: "Error syncing subscription", error: error.message });
+  }
+};
