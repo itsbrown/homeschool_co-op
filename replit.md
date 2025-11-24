@@ -12,6 +12,14 @@ For detailed development and testing guidelines, see:
 - **[Architectural Patterns & Common Pitfalls](./ARCHITECTURAL_PATTERNS.md)** - 7 key patterns with code examples and real bug scenarios from Nov 22, 2025
 
 ### Recent Changes
+**Nov 24, 2025**
+- **Stripe Account Lookup Testing**: Implemented comprehensive testing infrastructure for Stripe account lookup feature that runs during payment intent creation:
+  - Created test endpoint `POST /api/stripe/test-account-lookup` for debugging account lookup logic without modifying data
+  - Fixed 10 TypeScript errors in `server/api/stripe.ts` related to membership enrollment creation and Stripe subscription property access
+  - Added comprehensive manual testing guide (`STRIPE_ACCOUNT_LOOKUP_TEST_GUIDE.md`) with 5 test scenarios and debugging tips
+  - Documented storage interface typing limitation: CombinedStorage has all required IStorage methods but doesn't formally implement the interface (requires 127+ type fixes across storage layer for full compliance)
+  - Test endpoint provides detailed diagnostics: Stripe customer lookup, subscription status, database user verification, membership enrollment sync, and actionable recommendations
+
 **Nov 23, 2025**
 - **Membership Fee Currency Bug Fix**: Fixed double conversion bug where membership fees were being multiplied by 100 twice (once in frontend, once in backend), causing $175 to display as $17,500. Backend now accepts cents value directly from frontend without additional conversion, matching application-wide currency format pattern.
 - **TypeScript Type Safety Complete Refactor**: Resolved all 97 LSP errors in `server/api/school-admin.ts` and normalized authentication middleware contract:

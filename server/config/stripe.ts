@@ -4,7 +4,11 @@
  * Automatically selects appropriate Stripe keys based on environment:
  * - Development: Uses TESTING_STRIPE_SECRET_KEY
  * - Production: Uses STRIPE_SECRET_KEY
+ * 
+ * Exports a single Stripe client instance for the entire application.
  */
+
+import Stripe from 'stripe';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -28,3 +32,12 @@ export const getStripeSecretKey = (): string => {
 };
 
 export const STRIPE_SECRET_KEY = getStripeSecretKey();
+
+/**
+ * Single Stripe client instance for the entire application
+ * Import this instead of creating new Stripe instances for better testability
+ */
+export const stripe = new Stripe(STRIPE_SECRET_KEY, {
+  apiVersion: '2025-08-27.basil',
+  typescript: true,
+});

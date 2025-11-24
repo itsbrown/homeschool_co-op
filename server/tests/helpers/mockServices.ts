@@ -9,6 +9,7 @@ export const mockStripeService = {
     create: jest.fn().mockResolvedValue({ id: 'cus_test123' }),
     retrieve: jest.fn().mockResolvedValue({ id: 'cus_test123', email: 'test@example.com' }),
     update: jest.fn().mockResolvedValue({ id: 'cus_test123' }),
+    search: jest.fn().mockResolvedValue({ data: [] }), // Default: no customers found
   },
   paymentIntents: {
     create: jest.fn().mockResolvedValue({ 
@@ -38,6 +39,7 @@ export const mockStripeService = {
       id: 'sub_test123',
       status: 'canceled'
     }),
+    list: jest.fn().mockResolvedValue({ data: [] }), // Default: no subscriptions found
   },
   webhooks: {
     constructEvent: jest.fn().mockReturnValue({

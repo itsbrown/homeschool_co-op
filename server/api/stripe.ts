@@ -1,18 +1,12 @@
 import { Router } from 'express';
-import Stripe from 'stripe';
 import { storage } from '../storage';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { StripePaymentPlanService } from '../services/stripe-payment-plans';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
-import { STRIPE_SECRET_KEY } from '../config/stripe';
+import { stripe } from '../config/stripe';
 
 const router = Router();
-
-// Initialize Stripe with environment-based key selection
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-08-27.basil',
-});
 
 // Create payment intent for cart checkout
 router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
@@ -273,6 +267,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       console.log('✅ Using enrollments with IDs:', enrollmentIds);
 
       // Use payment plan service for ALL payment plans
+      // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
+      // See server/storage.ts TODO comment for full context on storage interface alignment
       const paymentPlanService = new StripePaymentPlanService(storage as any);
       const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
         parentEmail: userEmail,

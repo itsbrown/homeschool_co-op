@@ -3893,6 +3893,12 @@ export class MemStorage implements IStorage {
   // Create a shared MemStorage instance to ensure consistency
   const sharedMemStorage = new MemStorage();
 
+  // TODO: Make CombinedStorage formally implement IStorage interface
+  // Currently CombinedStorage has all required IStorage methods but adds extra helper methods,
+  // causing 127+ type errors when forcing interface compliance. This requires a full storage
+  // layer refactor to align interface contracts across MemStorage, DatabaseStorage, and CombinedStorage.
+  // For now, services casting to IStorage (like StripePaymentPlanService) use 'as any' as a pragmatic
+  // workaround since all required methods are present. Future work: align all storage implementations.
   class CombinedStorage {
     private dbStorage: DatabaseStorage | MemStorage;
     private memStorage: MemStorage;
