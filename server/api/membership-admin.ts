@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
 import Stripe from "stripe";
+import { STRIPE_SECRET_KEY } from "../config/stripe";
 
 // Schema for updating membership
 const updateMembershipSchema = z.object({
@@ -637,12 +638,8 @@ export const createMembershipEnrollment = async (req: any, res: Response) => {
  */
 export const createMembershipCheckoutSession = async (req: any, res: Response) => {
   try {
-    // Check if Stripe is configured
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return res.status(500).json({ message: "Stripe is not configured" });
-    }
-
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' });
+    // Initialize Stripe with environment-based key selection
+    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' });
 
     const { membershipEnrollmentId, tier } = req.body;
 
@@ -779,8 +776,8 @@ export const syncStripeSubscription = async (req: any, res: Response) => {
       return res.status(400).json({ message: "Email is required" });
     }
     
-    // Initialize Stripe
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    // Initialize Stripe with environment-based key selection
+    const stripe = new Stripe(STRIPE_SECRET_KEY);
     
     // Search for customer in Stripe
     const customers = await stripe.customers.search({

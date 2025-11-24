@@ -2,13 +2,12 @@ import { Router } from 'express';
 import { storage } from '../storage';
 import Stripe from 'stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { STRIPE_SECRET_KEY } from '../config/stripe';
 
-// Initialize Stripe
-const stripe = process.env.STRIPE_SECRET_KEY 
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-08-27.basil'
-    })
-  : null;
+// Initialize Stripe with environment-based key selection
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
+  apiVersion: '2025-08-27.basil'
+});
 
 const router = Router();
 

@@ -3,16 +3,13 @@ import { IStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
 import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
+import { STRIPE_SECRET_KEY } from '../config/stripe';
 
 const isTestMode = process.env.NODE_ENV === 'test';
 
-if (!process.env.STRIPE_SECRET_KEY && !isTestMode) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
-}
-
 const stripe = isTestMode 
   ? null 
-  : new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  : new Stripe(STRIPE_SECRET_KEY, {
       apiVersion: '2025-08-27.basil'
     });
 

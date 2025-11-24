@@ -5,11 +5,12 @@ import { sendPaymentReceipt } from '../lib/email-service';
 import { StripePaymentPlanService } from '../services/stripe-payment-plans';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
+import { STRIPE_SECRET_KEY } from '../config/stripe';
 
 const router = Router();
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Initialize Stripe with environment-based key selection
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2025-08-27.basil',
 });
 

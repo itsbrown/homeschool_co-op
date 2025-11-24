@@ -50,6 +50,7 @@ import os from 'os';
 import stream from 'stream';
 import { promisify } from 'util';
 import Stripe from "stripe";
+import { STRIPE_SECRET_KEY } from "./config/stripe";
 
 // For historical and test users (keep these for test compatibility)
 const testUsers = {
@@ -1256,14 +1257,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Initialize Stripe
-  if (!process.env.STRIPE_SECRET_KEY) {
-    console.error('Critical: STRIPE_SECRET_KEY environment variable is missing. Stripe payments will not work.');
-  }
-
-  const stripe = process.env.STRIPE_SECRET_KEY ? 
-    new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' }) : 
-    null;
+  // Initialize Stripe with environment-based key selection
+  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' });
 
   // Create payment intent for knowledge base purchase
   app.post("/api/create-payment-intent", isAuthenticated, async (req, res) => {

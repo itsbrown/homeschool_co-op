@@ -2,11 +2,12 @@ import express from 'express';
 import Stripe from 'stripe';
 import { storage } from '../storage';
 import { recalculatePaymentSchedule, validateFrequencyChange, type PaymentFrequency } from '../lib/payment-calculator';
+import { STRIPE_SECRET_KEY } from '../config/stripe';
 
 const router = express.Router();
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Initialize Stripe with environment-based key selection
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2025-08-27.basil',
 });
 
