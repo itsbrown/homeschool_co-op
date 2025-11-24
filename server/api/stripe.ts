@@ -692,6 +692,153 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
   }
 });
 
+// Test endpoint for Stripe account lookup debugging
+router.post('/test-account-lookup', supabaseAuth, async (req: any, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
+      });
+    }
+
+    console.log('🧪 Testing Stripe account lookup for email:', email);
+    
+    const result: any = {
+      email,
+      timestamp: new Date().toISOString(),
+      stripeCustomer: null,
+      activeSubscriptions: [],
+      databaseUser: null,
+      membershipEnrollments: [],
+      summary: {
+        hasStripeCustomer: false,
+        hasActiveSubscription: false,
+        hasDatabaseRecord: false,
+        hasActiveMembership: false
+      }
+    };
+
+    // Step 1: Check database for user
+    try {
+      const user = await storage.getUserByEmail(email);
+      if (user) {
+        result.databaseUser = {
+          id: user.id,
+          email: user.email,
+          schoolId: user.schoolId,
+          stripeCustomerId: user.stripeCustomerId,
+          role: user.role
+        };
+        result.summary.hasDatabaseRecord = true;
+        console.log('✅ Found database user:', user.id);
+
+        // Check for membership enrollments
+        const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
+        result.membershipEnrollments = memberships.map(m => ({
+          id: m.id,
+          membershipYear: m.membershipYear,
+          status: m.status,
+          amount: m.amount,
+          amountPaid: m.amountPaid,
+          stripeSubscriptionId: m.stripeSubscriptionId,
+          startDate: m.startDate,
+          renewalDate: m.renewalDate
+        }));
+        
+        const activeMembership = memberships.find(m => 
+          m.status === 'enrolled' && m.membershipYear === new Date().getFullYear()
+        );
+        result.summary.hasActiveMembership = !!activeMembership;
+        console.log(`📋 Found ${memberships.length} membership enrollments`);
+      } else {
+        console.log('ℹ️ No database user found');
+      }
+    } catch (dbError: any) {
+      console.error('⚠️ Database lookup error:', dbError.message);
+      result.databaseError = dbError.message;
+    }
+
+    // Step 2: Search Stripe for customer
+    try {
+      const customers = await stripe.customers.search({
+        query: `email:'${email}'`
+      });
+      
+      if (customers.data.length > 0) {
+        const customer = customers.data[0];
+        result.stripeCustomer = {
+          id: customer.id,
+          email: customer.email,
+          created: customer.created,
+          metadata: customer.metadata
+        };
+        result.summary.hasStripeCustomer = true;
+        console.log('✅ Found Stripe customer:', customer.id);
+
+        // Step 3: Get active subscriptions
+        const subscriptions = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: 'active',
+          limit: 10
+        });
+        
+        result.activeSubscriptions = subscriptions.data.map(sub => {
+          const subData = sub as any;
+          return {
+            id: sub.id,
+            status: sub.status,
+            created: sub.created,
+            current_period_start: subData.current_period_start,
+            current_period_end: subData.current_period_end,
+            items: sub.items.data.map(item => ({
+              id: item.id,
+              price: item.price,
+              quantity: item.quantity
+            })),
+            metadata: sub.metadata
+          };
+        });
+        
+        result.summary.hasActiveSubscription = subscriptions.data.length > 0;
+        console.log(`✅ Found ${subscriptions.data.length} active subscriptions`);
+      } else {
+        console.log('ℹ️ No Stripe customer found');
+      }
+    } catch (stripeError: any) {
+      console.error('⚠️ Stripe lookup error:', stripeError.message);
+      result.stripeError = stripeError.message;
+    }
+
+    // Summary and recommendations
+    if (result.summary.hasStripeCustomer && !result.summary.hasDatabaseRecord) {
+      result.recommendation = 'Stripe customer exists but no database user. User may need to register.';
+    } else if (result.summary.hasActiveSubscription && !result.summary.hasActiveMembership) {
+      result.recommendation = 'Active Stripe subscription found but no active membership enrollment. Consider syncing.';
+    } else if (result.summary.hasStripeCustomer && result.databaseUser?.stripeCustomerId !== result.stripeCustomer.id) {
+      result.recommendation = 'Stripe customer ID mismatch. Database should be updated.';
+    } else if (result.summary.hasActiveSubscription && result.summary.hasActiveMembership) {
+      result.recommendation = 'Everything is in sync! ✅';
+    } else {
+      result.recommendation = 'No issues detected or user has no Stripe account.';
+    }
+
+    res.json({
+      success: true,
+      result
+    });
+
+  } catch (error: any) {
+    console.error('❌ Test account lookup error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to test account lookup'
+    });
+  }
+});
+
 // NOTE: Webhook handler has been moved to dedicated webhook-handler.ts 
 // and is applied directly in server/index.ts BEFORE any JSON parsers
 // to ensure proper raw buffer handling for signature verification.
