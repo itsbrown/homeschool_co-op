@@ -3,6 +3,7 @@ import { getDb } from '../db';
 import { sql, eq, and, ne } from 'drizzle-orm';
 import { users, userRoles, schools, insertUserRoleSchema } from '@shared/schema';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import type { Request as ExpressRequest } from 'express-serve-static-core';
 
 export const userRolesRouter = Router();
 
@@ -29,13 +30,8 @@ async function isAdminOrSchoolAdmin(userId: number): Promise<{ isAdmin: boolean;
   };
 }
 
-// Type for authenticated requests
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: number;
-    email: string;
-  };
-}
+// Type for authenticated requests - uses the extended Request type from middleware/types.ts
+type AuthenticatedRequest = ExpressRequest;
 
 /**
  * GET /api/user/roles
@@ -573,7 +569,7 @@ userRolesRouter.post('/admin/users/:userId/roles', supabaseAuth, async (req: Aut
     }
 
     // Execute role addition in a transaction to ensure atomicity
-    const result = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx: any) => {
       // Get current user state
       const currentUser = await tx
         .select({ activeRoleId: users.activeRoleId })
@@ -759,7 +755,7 @@ userRolesRouter.delete('/admin/users/:userId/roles/:roleId', supabaseAuth, async
     }
 
     // Execute role deletion in a transaction to ensure atomicity
-    await db.transaction(async (tx) => {
+    await db.transaction(async (tx: any) => {
       // Get current user state and role being deleted
       const currentUser = await tx
         .select({ role: users.role, activeRole: users.activeRole, activeRoleId: users.activeRoleId })
