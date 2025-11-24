@@ -13,6 +13,11 @@ For detailed development and testing guidelines, see:
 
 ### Recent Changes
 **Nov 24, 2025**
+- **Critical Middleware Cache Fix**: Fixed production issue where school admin users couldn't access dashboard despite correct database associations:
+  - **Root Cause**: jwtCheck middleware preserved schoolId from Supabase user_metadata, creating a stale cache that ignored database updates
+  - **Fix**: Removed lines 34-38 in `server/middleware/auth0-auth.ts` that injected metadata schoolId into UserSyncService
+  - **Impact**: Database is now ALWAYS the source of truth for schoolId - direct database updates take effect immediately without metadata synchronization
+  - **Test Scenario**: User with admin_id in database can now access /my-school dashboard without "No School Found" error
 - **Stripe Account Lookup Testing Infrastructure**: Implemented comprehensive testing infrastructure for Stripe account lookup feature:
   - **Test Endpoint**: Created `POST /api/stripe/test-account-lookup` for debugging account lookup logic with detailed diagnostics (Stripe customer search, subscription status, database verification, membership enrollments, actionable recommendations)
   - **TypeScript Fixes**: Resolved 10 TypeScript errors in `server/api/stripe.ts` related to membership enrollment creation and Stripe subscription property access
