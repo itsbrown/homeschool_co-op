@@ -121,6 +121,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             
             if (!activeMembership) {
               // Create active membership enrollment from Stripe subscription
+              const subData = existingSubscription as any;
               await storage.createMembershipEnrollment({
                 schoolId: parent.schoolId,
                 parentUserId: parent.id,
@@ -132,8 +133,13 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
                 status: 'enrolled',
                 stripeSubscriptionId: existingSubscription.id,
                 stripeCustomerId: customer.id,
-                startDate: new Date(existingSubscription.current_period_start * 1000),
-                renewalDate: new Date(existingSubscription.current_period_end * 1000)
+                startDate: new Date(subData.current_period_start * 1000),
+                renewalDate: new Date(subData.current_period_end * 1000),
+                notes: 'Auto-synced from Stripe subscription',
+                paymentMethod: 'other',
+                dueDate: new Date(subData.current_period_start * 1000),
+                expirationDate: new Date(subData.current_period_end * 1000),
+                gracePeriodEnd: null
               });
               console.log('✅ Created active membership enrollment from Stripe subscription');
             }
@@ -267,7 +273,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       console.log('✅ Using enrollments with IDs:', enrollmentIds);
 
       // Use payment plan service for ALL payment plans
-      const paymentPlanService = new StripePaymentPlanService(storage);
+      const paymentPlanService = new StripePaymentPlanService(storage as any);
       const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
         parentEmail: userEmail,
         enrollmentIds,
@@ -481,19 +487,22 @@ router.get('/subscriptions', supabaseAuth, async (req: any, res) => {
     console.log(`✅ Retrieved ${allSubscriptions.length} subscriptions from Stripe`);
 
     // Transform to frontend format (keep Stripe snake_case for nested properties)
-    const formattedSubscriptions = allSubscriptions.map(sub => ({
-      id: sub.id,
-      status: sub.status,
-      created: sub.created,
-      current_period_start: sub.current_period_start,
-      current_period_end: sub.current_period_end,
-      customer: sub.customer,
-      items: sub.items.data,
-      metadata: sub.metadata,
-      cancel_at_period_end: sub.cancel_at_period_end,
-      canceled_at: sub.canceled_at,
-      schedule: sub.schedule
-    }));
+    const formattedSubscriptions = allSubscriptions.map(sub => {
+      const subData = sub as any;
+      return {
+        id: sub.id,
+        status: sub.status,
+        created: sub.created,
+        current_period_start: subData.current_period_start,
+        current_period_end: subData.current_period_end,
+        customer: sub.customer,
+        items: sub.items.data,
+        metadata: sub.metadata,
+        cancel_at_period_end: sub.cancel_at_period_end,
+        canceled_at: sub.canceled_at,
+        schedule: sub.schedule
+      };
+    });
 
     res.json({
       success: true,
@@ -525,12 +534,12 @@ router.get('/payment-history', supabaseAuth, async (req: any, res) => {
     }
 
     // Fetch payment history from database
-    const paymentHistory = await storage.getStripePaymentHistoryByUserId(user.id);
+    const paymentHistory = await storage.getPaymentsByParentEmail(userEmail);
     
     console.log(`✅ Retrieved ${paymentHistory.length} payment records from database`);
 
     // Format payment history for frontend
-    const formattedPayments = paymentHistory.map(payment => ({
+    const formattedPayments = paymentHistory.map((payment: any) => ({
       id: payment.id,
       paymentIntentId: payment.paymentIntentId,
       customerId: payment.customerId,
@@ -637,25 +646,32 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
     if (!activeMembership) {
       // Create active membership enrollment from Stripe subscription
       // Use adminSchoolId directly to ensure school ownership (already verified above)
+      const subData = subscription as any;
       await storage.createMembershipEnrollment({
         schoolId: Number(adminSchoolId),
-          parentUserId: user.id,
-          membershipYear: currentYear,
-          membershipTier: 'basic',
-          amount: 17500, // $175 in cents
-          amountPaid: 17500,
-          remainingBalance: 0,
-          status: 'enrolled',
-          stripeSubscriptionId: subscription.id,
-          stripeCustomerId: customer.id,
-          startDate: new Date(subscription.current_period_start * 1000),
-          renewalDate: new Date(subscription.current_period_end * 1000)
-        });
-        console.log('✅ Created active membership enrollment from Stripe subscription');
+        parentUserId: user.id,
+        membershipYear: currentYear,
+        membershipTier: 'basic',
+        amount: 17500, // $175 in cents
+        amountPaid: 17500,
+        remainingBalance: 0,
+        status: 'enrolled',
+        stripeSubscriptionId: subscription.id,
+        stripeCustomerId: customer.id,
+        startDate: new Date(subData.current_period_start * 1000),
+        renewalDate: new Date(subData.current_period_end * 1000),
+        notes: 'Admin-synced from Stripe subscription',
+        paymentMethod: 'other',
+        dueDate: new Date(subData.current_period_start * 1000),
+        expirationDate: new Date(subData.current_period_end * 1000),
+        gracePeriodEnd: null
+      });
+      console.log('✅ Created active membership enrollment from Stripe subscription');
     } else {
       console.log('ℹ️ User already has active membership for current year');
     }
 
+    const subData = subscription as any;
     res.json({
       success: true,
       message: `Successfully synced Stripe subscription for ${email}`,
@@ -663,7 +679,7 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
         customerId: customer.id,
         subscriptionId: subscription.id,
         subscriptionStatus: subscription.status,
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString()
+        currentPeriodEnd: new Date(subData.current_period_end * 1000).toISOString()
       }
     });
 
