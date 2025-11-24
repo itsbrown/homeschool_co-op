@@ -5,7 +5,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "../storage";
-import { insertUserSchema, membershipEnrollments } from "@shared/schema";
+import { insertUserSchema, membershipEnrollments, insertMembershipEnrollmentSchema } from "@shared/schema";
 import { sendWelcomeEmail } from "../lib/email-service";
 import { sendPasswordResetEmail } from "../services/emailService";
 import { userStorage } from "../users-storage";
