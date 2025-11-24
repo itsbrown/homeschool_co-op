@@ -7,6 +7,7 @@ import { sendPaymentConfirmationEmail } from '../lib/email-service';
 import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { STRIPE_SECRET_KEY } from '../config/stripe';
+import { supabaseAuth } from '../middleware/supabase-auth';
 
 const router = Router();
 
@@ -63,7 +64,7 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     // Update each enrollment
     for (const enrollment of enrollments) {
       const newAmountPaid = (enrollment.totalPaid || 0) + paymentPerEnrollment;
-      const classData = await storage.getClassById(enrollment.programId);
+      const classData = enrollment.programId ? await storage.getClassById(enrollment.programId) : null;
       const totalCost = classData?.price || 0;
       const remainingBalance = Math.max(0, totalCost - newAmountPaid);
       
@@ -213,6 +214,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
       originalPaymentId: null,
       paymentMethod: 'stripe' as const,
       enrollmentIds: enrollmentDetails.map((e: any) => e.enrollmentId),
+      paymentDate: null,
       metadata: {
         enrollmentDetails,
         clientSecret: paymentIntent.client_secret
@@ -247,7 +249,7 @@ router.post('/confirm-payment', async (req, res) => {
       // Update payment status in database
       const payment = await storage.getPaymentByStripeId(paymentIntentId);
       if (payment) {
-        await storage.updatePaymentStatus(payment.id, 'completed');
+        await storage.updatePaymentStatus(payment.id, 'succeeded');
       }
 
       // Send confirmation email
@@ -677,14 +679,18 @@ router.post('/confirm-payment', async (req, res) => {
     
     if (updatedEnrollments.length === 1) {
       const enrollment = updatedEnrollments[0];
-      const child = await storage.getChildById(enrollment.childId);
-      const classDetails = await storage.getClassById(enrollment.classId);
+      const child = enrollment.childId ? await storage.getChildById(enrollment.childId) : null;
+      const classDetails = enrollment.classId ? await storage.getClassById(enrollment.classId) : null;
       childName = child ? `${child.firstName} ${child.lastName}` : 'Unknown Child';
-      className = classDetails?.className || 'Unknown Class';
+      className = classDetails?.title || classDetails?.description || 'Unknown Class';
     }
 
+    // Get parent and school info for payment record
+    const parentUser = await storage.getUserByEmail(userEmail);
+    const schoolId = updatedEnrollments[0]?.schoolId || parentUser?.schoolId;
+    
     // Create payment record
-    const payment = {
+    const paymentRecord: InsertPayment = {
       stripePaymentIntentId: paymentIntentId,
       parentEmail: userEmail,
       childName: childName,
@@ -692,16 +698,32 @@ router.post('/confirm-payment', async (req, res) => {
       amount: amount,
       currency: 'usd',
       status: 'completed' as const,
+      description: `Payment for ${enrollmentIds.length} enrollment(s)`,
+      schoolId: schoolId || 0,
+      parentId: parentUser?.id || null,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
+      paymentMethod: 'stripe' as const,
+      enrollmentIds: enrollmentIds,
+      paymentDate: paymentDate ? new Date(paymentDate) : null,
       metadata: {
         enrollmentIds: enrollmentIds,
         paymentDate: paymentDate
       }
     };
 
+    let createdPayment: any;
     try {
-      await storage.createPayment(payment);
+      createdPayment = await storage.createPayment(paymentRecord);
     } catch (error) {
       console.log('⚠️ Payment record creation failed, continuing with email...');
+      createdPayment = { 
+        ...paymentRecord, 
+        id: Date.now(), 
+        createdAt: new Date(), 
+        updatedAt: new Date()
+      };
     }
 
     // Send confirmation email
@@ -709,11 +731,11 @@ router.post('/confirm-payment', async (req, res) => {
       const { sendPaymentConfirmationEmail } = await import('../lib/email-service');
       
       const enrollmentDetails = await Promise.all(updatedEnrollments.map(async (enrollment) => {
-        const child = await storage.getChildById(enrollment.childId);
-        const classDetails = await storage.getClassById(enrollment.classId);
+        const child = enrollment.childId ? await storage.getChildById(enrollment.childId) : null;
+        const classDetails = enrollment.classId ? await storage.getClassById(enrollment.classId) : null;
         return {
           childName: child ? `${child.firstName} ${child.lastName}` : 'Unknown Child',
-          className: classDetails?.className || 'Unknown Class',
+          className: classDetails?.title || classDetails?.description || 'Unknown Class',
           price: classDetails?.price || 0,
           amountPaid: Math.round(amount / enrollmentIds.length),
         };
@@ -722,7 +744,7 @@ router.post('/confirm-payment', async (req, res) => {
       const emailSent = await sendPaymentConfirmationEmail({
         parentEmail: userEmail,
         parentName: user.user_metadata?.full_name || 'Parent',
-        payment: payment,
+        payment: createdPayment,
         enrollmentDetails: enrollmentDetails,
       });
 
@@ -735,7 +757,7 @@ router.post('/confirm-payment', async (req, res) => {
       success: true,
       message: 'Payment confirmed and enrollments updated',
       updatedEnrollments: updatedEnrollments.length,
-      paymentId: payment.id
+      paymentId: createdPayment.id
     });
 
   } catch (error) {
@@ -762,7 +784,17 @@ router.post('/test-email', async (req, res) => {
       className: enrollmentDetails[0]?.className || 'Test Class',
       amount: enrollmentDetails[0]?.amountPaid || 900,
       currency: 'usd',
-      status: 'completed',
+      status: 'completed' as const,
+      description: 'Test payment',
+      schoolId: 1,
+      parentId: null,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
+      paymentMethod: 'stripe' as const,
+      enrollmentIds: [],
+      paymentDate: new Date(),
+      metadata: {},
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -784,22 +816,22 @@ router.post('/test-email', async (req, res) => {
     }
   } catch (error) {
     console.error('❌ Test email error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ success: false, error: errorMessage });
   }
 });
 
 
 // Manual payment processing endpoint for when CartSuccess doesn't trigger
-router.post('/process-recent-payment', async (req, res) => {
+router.post('/process-recent-payment', supabaseAuth, async (req, res) => {
   try {
     console.log('🔄 Manual payment processing requested');
     
-    const authResult = await authenticateRequest(req);
-    if (!authResult.success) {
-      return res.status(401).json({ error: authResult.error });
+    if (!req.user?.email) {
+      return res.status(401).json({ error: 'User not authenticated' });
     }
 
-    const userEmail = authResult.user.email;
+    const userEmail = req.user.email;
     const { paymentIntentId } = req.body;
 
     console.log(`🔍 Processing recent payment for user: ${userEmail}, PI: ${paymentIntentId || 'auto-detect'}`);
