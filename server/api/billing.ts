@@ -805,7 +805,7 @@ router.post('/process-recent-payment', async (req, res) => {
     console.log(`🔍 Processing recent payment for user: ${userEmail}, PI: ${paymentIntentId || 'auto-detect'}`);
 
     // Get the most recent payment intent for this user from Stripe
-    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(STRIPE_SECRET_KEY);
     
     let targetPaymentIntent;
     if (paymentIntentId) {

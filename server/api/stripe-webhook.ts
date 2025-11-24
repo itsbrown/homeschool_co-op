@@ -4,6 +4,7 @@ import { storage } from '../storage';
 import { getDb } from '../db';
 import { membershipEnrollments, users } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
+import { STRIPE_SECRET_KEY } from '../config/stripe';
 
 const router = express.Router();
 
@@ -56,7 +57,7 @@ router.post('/subscription-schedules', async (req, res) => {
 });
 
 // Initialize Stripe for retry operations
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+const stripe = new Stripe(STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-08-27.basil',
 });
 
