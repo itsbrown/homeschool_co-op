@@ -27,17 +27,11 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     console.log('🔍 User object fields:', Object.keys(user));
     console.log('🔍 User ID field:', user.id);
 
-    // Sync user with database
+    // Sync user with database - ALWAYS use database as source of truth for schoolId
     let dbUser;
     try {
-      // Extract school ID from user metadata if available
-      const additionalData: any = {};
-      if (user.user_metadata?.schoolId) {
-        additionalData.schoolId = user.user_metadata.schoolId;
-        console.log('🏫 Preserving schoolId from metadata:', user.user_metadata.schoolId);
-      }
-      
-      dbUser = await UserSyncService.syncAuth0User(user, Object.keys(additionalData).length > 0 ? additionalData : undefined);
+      // Do NOT pass schoolId from metadata - let database be the source of truth
+      dbUser = await UserSyncService.syncAuth0User(user);
       console.log('✅ User synced with database:', dbUser.email, 'Role:', dbUser.role, 'SchoolId:', dbUser.schoolId);
     } catch (syncError) {
       console.error('❌ Failed to sync user with database:', syncError);
