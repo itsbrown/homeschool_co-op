@@ -4,6 +4,7 @@ import { storage } from '../storage';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { StripePaymentPlanService } from '../services/stripe-payment-plans';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireSchoolContext } from '../middleware/require-school-context';
 
 const router = Router();
 
@@ -73,6 +74,78 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         message: 'Parent user not found',
         error: 'USER_NOT_FOUND'
       });
+    }
+    
+    // Check for existing Stripe subscription for this user
+    let existingSubscription: any = null;
+    let hasActiveSubscription = false;
+    
+    try {
+      console.log('🔍 Checking for existing Stripe subscription for:', userEmail);
+      
+      // Search for customer in Stripe by email
+      const customers = await stripe.customers.search({
+        query: `email:'${userEmail}'`
+      });
+      
+      if (customers.data.length > 0) {
+        const customer = customers.data[0];
+        console.log('✅ Found Stripe customer:', customer.id);
+        
+        // Get active subscriptions for this customer
+        const subscriptions = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: 'active',
+          limit: 1
+        });
+        
+        if (subscriptions.data.length > 0) {
+          existingSubscription = subscriptions.data[0];
+          hasActiveSubscription = true;
+          console.log('✅ Found active subscription:', existingSubscription.id);
+          
+          // Update user's Stripe customer ID if not already set
+          if (parent.stripeCustomerId !== customer.id) {
+            await storage.updateUser(parent.id, { stripeCustomerId: customer.id });
+            console.log('✅ Updated user.stripeCustomerId to:', customer.id);
+          }
+          
+          // Update or create membership enrollment if subscription exists
+          if (parent.schoolId) {
+            const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parent.id);
+            const currentYear = new Date().getFullYear();
+            const activeMembership = existingMemberships.find(m => 
+              m.membershipYear === currentYear && m.status === 'enrolled'
+            );
+            
+            if (!activeMembership) {
+              // Create active membership enrollment from Stripe subscription
+              await storage.createMembershipEnrollment({
+                schoolId: parent.schoolId,
+                parentUserId: parent.id,
+                membershipYear: currentYear,
+                membershipTier: 'basic',
+                amount: 17500, // $175 in cents
+                amountPaid: 17500,
+                remainingBalance: 0,
+                status: 'enrolled',
+                stripeSubscriptionId: existingSubscription.id,
+                stripeCustomerId: customer.id,
+                startDate: new Date(existingSubscription.current_period_start * 1000),
+                renewalDate: new Date(existingSubscription.current_period_end * 1000)
+              });
+              console.log('✅ Created active membership enrollment from Stripe subscription');
+            }
+          }
+        } else {
+          console.log('ℹ️ No active subscriptions found for customer:', customer.id);
+        }
+      } else {
+        console.log('ℹ️ No Stripe customer found with email:', userEmail);
+      }
+    } catch (stripeError: any) {
+      // Log error but don't fail the whole checkout - just proceed without Stripe sync
+      console.error('⚠️ Error checking Stripe subscription (non-blocking):', stripeError.message);
     }
     
     try {
@@ -214,7 +287,14 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         paymentIntentId: paymentPlanResult.paymentIntent.id,
         enrollmentIds,
         scheduledPayments: paymentPlanResult.scheduledPayments,
-        paymentPlan
+        paymentPlan,
+        // Include Stripe subscription info for UI display
+        hasActiveSubscription,
+        subscriptionInfo: existingSubscription ? {
+          id: existingSubscription.id,
+          status: existingSubscription.status,
+          currentPeriodEnd: new Date(existingSubscription.current_period_end * 1000).toISOString()
+        } : null
       });
 
     } catch (error: any) {
@@ -424,6 +504,173 @@ router.get('/subscriptions', supabaseAuth, async (req: any, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch subscriptions'
+    });
+  }
+});
+
+// Get payment history for authenticated user
+router.get('/payment-history', supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user.email;
+    console.log('💰 Fetching payment history for user:', userEmail);
+
+    // Get user from database to get user ID
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Fetch payment history from database
+    const paymentHistory = await storage.getStripePaymentHistoryByUserId(user.id);
+    
+    console.log(`✅ Retrieved ${paymentHistory.length} payment records from database`);
+
+    // Format payment history for frontend
+    const formattedPayments = paymentHistory.map(payment => ({
+      id: payment.id,
+      paymentIntentId: payment.paymentIntentId,
+      customerId: payment.customerId,
+      amount: payment.amount,
+      status: payment.status,
+      subscriptionId: payment.subscriptionId,
+      createdDate: payment.createdDate,
+      paymentMethod: payment.paymentMethod,
+      description: payment.description
+    }));
+
+    res.json({
+      success: true,
+      payments: formattedPayments
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error fetching payment history:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch payment history'
+    });
+  }
+});
+
+// Admin endpoint for manual Stripe subscription sync
+router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const { email } = req.body;
+    const adminSchoolId = req.schoolId; // School ID from middleware
+    console.log('🔄 Admin manually syncing Stripe subscription for email:', email, 'from school:', adminSchoolId);
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required'
+      });
+    }
+
+    // Security: First, get user from database and verify they exist
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: `User with email ${email} not found in database`
+      });
+    }
+
+    // Security: Verify user belongs to the requesting admin's school BEFORE contacting Stripe
+    if (!user.schoolId || String(user.schoolId) !== String(adminSchoolId)) {
+      console.log(`❌ Authorization failed: user school ${user.schoolId} doesn't match admin school ${adminSchoolId}`);
+      return res.status(403).json({
+        success: false,
+        message: `User with email ${email} does not belong to your school`
+      });
+    }
+
+    console.log('✅ Authorization passed: user belongs to admin school');
+
+    // Now proceed with Stripe lookup
+    const customers = await stripe.customers.search({
+      query: `email:'${email}'`
+    });
+
+    if (customers.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No Stripe customer found with email: ${email}`
+      });
+    }
+
+    const customer = customers.data[0];
+    console.log('✅ Found Stripe customer:', customer.id);
+
+    // Get active subscriptions for this customer
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customer.id,
+      status: 'active',
+      limit: 1
+    });
+
+    if (subscriptions.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Stripe customer ${customer.id} exists but has no active subscriptions`
+      });
+    }
+
+    const subscription = subscriptions.data[0];
+    console.log('✅ Found active subscription:', subscription.id);
+
+    // Update user's Stripe customer ID
+    await storage.updateUser(user.id, { stripeCustomerId: customer.id });
+    console.log('✅ Updated user.stripeCustomerId to:', customer.id);
+
+    // Create or update membership enrollment
+    // Note: We already verified user.schoolId === adminSchoolId above, but use adminSchoolId directly for clarity
+    const existingMemberships = await storage.getMembershipEnrollmentsByParentId(user.id);
+    const currentYear = new Date().getFullYear();
+    const activeMembership = existingMemberships.find(m => 
+      m.membershipYear === currentYear && m.status === 'enrolled'
+    );
+
+    if (!activeMembership) {
+      // Create active membership enrollment from Stripe subscription
+      // Use adminSchoolId directly to ensure school ownership (already verified above)
+      await storage.createMembershipEnrollment({
+        schoolId: Number(adminSchoolId),
+          parentUserId: user.id,
+          membershipYear: currentYear,
+          membershipTier: 'basic',
+          amount: 17500, // $175 in cents
+          amountPaid: 17500,
+          remainingBalance: 0,
+          status: 'enrolled',
+          stripeSubscriptionId: subscription.id,
+          stripeCustomerId: customer.id,
+          startDate: new Date(subscription.current_period_start * 1000),
+          renewalDate: new Date(subscription.current_period_end * 1000)
+        });
+        console.log('✅ Created active membership enrollment from Stripe subscription');
+    } else {
+      console.log('ℹ️ User already has active membership for current year');
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully synced Stripe subscription for ${email}`,
+      data: {
+        customerId: customer.id,
+        subscriptionId: subscription.id,
+        subscriptionStatus: subscription.status,
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString()
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error syncing Stripe subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to sync Stripe subscription'
     });
   }
 });

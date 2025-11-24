@@ -168,6 +168,10 @@ export default function CartCheckout() {
   const [validatingPromo, setValidatingPromo] = useState(false);
   const [appliedPromo, setAppliedPromo] = useState<any>(null);
   const [promoError, setPromoError] = useState<string>('');
+  
+  // Stripe subscription state
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  const [subscriptionInfo, setSubscriptionInfo] = useState<any>(null);
 
   // Debug cart data
   console.log('🛒 CartCheckout - cart data:', {
@@ -302,6 +306,16 @@ export default function CartCheckout() {
       
       if (data.clientSecret) {
         setClientSecret(data.clientSecret);
+        
+        // Capture Stripe subscription info from response
+        if (data.hasActiveSubscription) {
+          setHasActiveSubscription(true);
+          setSubscriptionInfo(data.subscriptionInfo);
+          console.log('✅ User has active Stripe subscription:', data.subscriptionInfo);
+        } else {
+          setHasActiveSubscription(false);
+          setSubscriptionInfo(null);
+        }
       } else {
         throw new Error('Failed to create payment intent');
       }
@@ -770,6 +784,22 @@ export default function CartCheckout() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Stripe Subscription Alert */}
+            {hasActiveSubscription && subscriptionInfo && (
+              <Alert className="border-green-200 bg-green-50" data-testid="alert-stripe-subscription">
+                <Check className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-700">
+                  <strong>Active Membership Found!</strong> You have an active membership through Stripe. 
+                  Your membership is active and will renew on {new Date(subscriptionInfo.currentPeriodEnd).toLocaleDateString()}.
+                  {cart.items.some(item => item.className?.toLowerCase().includes('membership')) && (
+                    <span className="block mt-1 text-sm">
+                      Note: Membership fees are already covered by your existing subscription.
+                    </span>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Payment Frequency Selector - Only show for split payment plan */}
             {['split'].includes(selectedPaymentPlan) && (

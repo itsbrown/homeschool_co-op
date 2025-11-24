@@ -439,6 +439,40 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: stripe_customer_id column added to users table');
     
+    // Create stripe_payment_history table for syncing Stripe payments
+    console.log('Running migration: Creating stripe_payment_history table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS stripe_payment_history (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        payment_intent_id TEXT NOT NULL UNIQUE,
+        customer_id TEXT NOT NULL,
+        subscription_id TEXT,
+        amount INTEGER NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'usd',
+        status TEXT NOT NULL CHECK (status IN ('succeeded', 'pending', 'failed', 'canceled', 'refunded')),
+        payment_method TEXT,
+        description TEXT,
+        stripe_created_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    
+    // Create index on user_id for faster lookups
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_stripe_payment_history_user_id 
+      ON stripe_payment_history(user_id);
+    `);
+    
+    // Create index on customer_id for Stripe lookups
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_stripe_payment_history_customer_id 
+      ON stripe_payment_history(customer_id);
+    `);
+    
+    console.log('✅ Migration completed: stripe_payment_history table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

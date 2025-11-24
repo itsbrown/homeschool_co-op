@@ -787,6 +787,45 @@ export const insertRefundSchema = createInsertSchema(refunds)
 export type InsertRefund = z.infer<typeof insertRefundSchema>;
 export type Refund = typeof refunds.$inferSelect;
 
+// Stripe Payment History table - for syncing payment data from Stripe API
+export const stripePaymentHistory = pgTable("stripe_payment_history", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  
+  // Stripe identifiers
+  paymentIntentId: text("payment_intent_id").notNull().unique(), // Stripe payment_intent ID
+  customerId: text("customer_id").notNull(), // Stripe customer ID
+  subscriptionId: text("subscription_id"), // Stripe subscription ID if applicable
+  
+  // Payment details (amounts in cents)
+  amount: integer("amount").notNull(),
+  currency: text("currency").default("usd").notNull(),
+  
+  // Payment status from Stripe
+  status: text("status", { 
+    enum: ["succeeded", "pending", "failed", "canceled", "refunded"] 
+  }).notNull(),
+  
+  // Payment method and metadata
+  paymentMethod: text("payment_method"), // card, bank_transfer, etc.
+  description: text("description"),
+  
+  // Timestamps
+  stripeCreatedAt: timestamp("stripe_created_at").notNull(), // When payment was created in Stripe
+  createdAt: timestamp("created_at").defaultNow().notNull(), // When we synced it to our DB
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertStripePaymentHistorySchema = createInsertSchema(stripePaymentHistory)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    subscriptionId: z.string().nullable().default(null),
+    paymentMethod: z.string().nullable().default(null),
+    description: z.string().nullable().default(null),
+  });
+export type InsertStripePaymentHistory = z.infer<typeof insertStripePaymentHistorySchema>;
+export type StripePaymentHistory = typeof stripePaymentHistory.$inferSelect;
+
 // Define emergency contact relations
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
   user: one(users, { fields: [emergencyContacts.userId], references: [users.id] })

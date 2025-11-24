@@ -11,6 +11,7 @@ import {
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
   membershipEnrollments, type MembershipEnrollment, type InsertMembershipEnrollment,
   stripeSubscriptionSchedules, type StripeSubscriptionSchedule, type InsertStripeSubscriptionSchedule,
+  stripePaymentHistory, type StripePaymentHistory, type InsertStripePaymentHistory,
   classes, type Class, type InsertClass,
   activities, type Activity, type InsertActivity,
   roleInvitations, type RoleInvitation, type InsertRoleInvitation,
@@ -280,6 +281,12 @@ export interface IStorage {
   getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]>;
   getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
   updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined>;
+
+  // Stripe Payment History methods
+  saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory>;
+  getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]>;
+  getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]>;
+  getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined>;
 
   // Scheduled Payment methods
   createScheduledPayment(payment: any): Promise<any>;
@@ -2834,6 +2841,38 @@ export class MemStorage implements IStorage {
     };
     this.paymentsStore.set(id, updatedPayment);
     return updatedPayment;
+  }
+
+  // Stripe Payment History methods implementation
+  async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
+    const db = await getDb();
+    
+    // Check if payment already exists by payment_intent_id
+    const existing = await this.getStripePaymentByIntentId(payment.paymentIntentId);
+    if (existing) {
+      return existing;
+    }
+    
+    const result = await db.insert(stripePaymentHistory).values(payment).returning();
+    return result[0];
+  }
+
+  async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.userId, userId));
+    return result;
+  }
+
+  async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.subscriptionId, subscriptionId));
+    return result;
+  }
+
+  async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
+    return result[0];
   }
 
   private async initializePayments() {

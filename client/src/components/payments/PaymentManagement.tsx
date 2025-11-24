@@ -177,6 +177,31 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         });
     },
   });
+
+  // Get Stripe payment history for user
+  const { data: stripePayments, isLoading: isLoadingStripePayments } = useQuery({
+    queryKey: ["/api/stripe/payment-history"],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/stripe/payment-history', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Stripe payment history: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.success ? data.payments : [];
+    },
+  });
   
   // Filter payments based on search and status
   const filteredPayments = React.useMemo(() => {
@@ -358,6 +383,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         <TabsList className="w-full flex-col sm:flex-row justify-start h-auto">
           <TabsTrigger value="overview" className="w-full sm:w-auto sm:mr-2">Overview</TabsTrigger>
           <TabsTrigger value="all-payments" className="w-full sm:w-auto sm:mr-2">All Payments</TabsTrigger>
+          <TabsTrigger value="stripe-payments" className="w-full sm:w-auto sm:mr-2">Stripe Payments</TabsTrigger>
           <TabsTrigger value="upcoming" className="w-full sm:w-auto">Upcoming Payments</TabsTrigger>
         </TabsList>
         
@@ -639,6 +665,85 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                               </Button>
                             )}
                           </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Stripe Payments Tab */}
+        <TabsContent value="stripe-payments" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Stripe Payment History</CardTitle>
+              <CardDescription>View all payments processed through Stripe (membership subscriptions)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingStripePayments ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <p>Loading Stripe payment history...</p>
+                </div>
+              ) : stripePayments && stripePayments.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CreditCard className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                  <p>No Stripe payments found</p>
+                  <p className="text-sm mt-2">Stripe payments will appear here once you have active subscriptions</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Payment Method</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Subscription ID</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stripePayments?.map((payment: any) => (
+                      <TableRow key={payment.id} data-testid={`row-stripe-payment-${payment.id}`}>
+                        <TableCell>
+                          <div className="flex items-center">
+                            <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+                            {formatDate(payment.createdDate)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{payment.description || 'Stripe Payment'}</div>
+                            {payment.paymentIntentId && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                ID: {payment.paymentIntentId}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm text-muted-foreground capitalize">
+                            {payment.paymentMethod || 'Unknown'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{formatCurrency(payment.amount)}</span>
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(payment.status)}
+                        </TableCell>
+                        <TableCell>
+                          {payment.subscriptionId ? (
+                            <div className="text-xs text-muted-foreground font-mono">
+                              {payment.subscriptionId}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

@@ -255,6 +255,10 @@ export default function SchoolSettingsPage() {
     required: true
   });
 
+  // Stripe sync state
+  const [stripeSyncEmail, setStripeSyncEmail] = useState('');
+  const [stripeSyncResult, setStripeSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Logo upload mutation
   const uploadLogoMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -369,6 +373,61 @@ export default function SchoolSettingsPage() {
       });
     },
   });
+
+  // Stripe sync mutation
+  const stripeSyncMutation = useMutation({
+    mutationFn: async (email: string) => {
+      return await apiRequest('POST', '/api/admin/sync-stripe-subscription', { email });
+    },
+    onSuccess: (data) => {
+      setStripeSyncResult({
+        success: true,
+        message: data.message || 'Successfully synced Stripe subscription'
+      });
+      toast({
+        title: "Stripe Sync Successful",
+        description: data.message || 'User subscription synced successfully',
+      });
+      // Clear the email input
+      setStripeSyncEmail('');
+    },
+    onError: (error: Error) => {
+      setStripeSyncResult({
+        success: false,
+        message: error.message || 'Failed to sync Stripe subscription'
+      });
+      toast({
+        title: "Stripe Sync Failed",
+        description: error.message || 'Failed to sync Stripe subscription',
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleStripeSyncSubmit = () => {
+    if (!stripeSyncEmail.trim()) {
+      toast({
+        title: "Email Required",
+        description: "Please enter a user email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(stripeSyncEmail)) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setStripeSyncResult(null); // Clear previous results
+    stripeSyncMutation.mutate(stripeSyncEmail);
+  };
 
   // Open membership dialog with current values
   const handleOpenMembershipDialog = () => {
@@ -1180,6 +1239,68 @@ export default function SchoolSettingsPage() {
                         </DialogContent>
                       </Dialog>
                     </div>
+                  </div>
+
+                  {/* Stripe Manual Sync Section */}
+                  <Separator className="my-6" />
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-1">Manual Stripe Subscription Sync</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Look up and sync a user's Stripe subscription by email address. This will update their membership status and customer ID if an active subscription is found.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <Input
+                          type="email"
+                          placeholder="user@example.com"
+                          value={stripeSyncEmail}
+                          onChange={(e) => setStripeSyncEmail(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleStripeSyncSubmit();
+                            }
+                          }}
+                          disabled={stripeSyncMutation.isPending}
+                          data-testid="input-stripe-sync-email"
+                        />
+                      </div>
+                      <Button 
+                        onClick={handleStripeSyncSubmit}
+                        disabled={stripeSyncMutation.isPending || !stripeSyncEmail.trim()}
+                        data-testid="button-stripe-sync"
+                      >
+                        {stripeSyncMutation.isPending ? (
+                          <>
+                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                            Syncing...
+                          </>
+                        ) : (
+                          <>
+                            <Settings className="h-4 w-4 mr-2" />
+                            Sync from Stripe
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {stripeSyncResult && (
+                      <Alert 
+                        variant={stripeSyncResult.success ? "default" : "destructive"}
+                        className={stripeSyncResult.success ? "border-green-200 bg-green-50" : ""}
+                      >
+                        {stripeSyncResult.success ? (
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4" />
+                        )}
+                        <AlertDescription className={stripeSyncResult.success ? "text-green-700" : ""}>
+                          {stripeSyncResult.message}
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                 </CardContent>
               </Card>
