@@ -13,6 +13,13 @@ For detailed development and testing guidelines, see:
 
 ### Recent Changes
 **Nov 24, 2025**
+- **Parent Registration & Dashboard Access Fix**: Fixed loading screen issue preventing newly registered parents from accessing their dashboard:
+  - **Root Cause**: RoleContext only read `roles` array from API, ignoring fallback `activeRole` field for users without `user_roles` entries
+  - **Fix**: Updated `client/src/contexts/RoleContext.tsx` to use API's `activeRole` field (which falls back to `users.role`) when no user_roles entries exist
+  - **Impact**: Newly registered parents can immediately access ParentDashboard after registration without getting stuck at loading screen
+  - **Pattern Compliance**: Maintains database as source of truth - API queries `users.activeRole || users.role` from PostgreSQL
+- **Missing Schema Import Fix**: Added `insertMembershipEnrollmentSchema` import to `server/routes.ts` and `server/api/auth.ts` to fix membership enrollment creation errors
+- **Location Persistence**: Parent registration now saves selected location to `user_locations` table for location-specific features
 - **Critical Middleware Cache Fix**: Fixed production issue where school admin users couldn't access dashboard despite correct database associations:
   - **Root Cause**: jwtCheck middleware preserved schoolId from Supabase user_metadata, creating a stale cache that ignored database updates
   - **Fix**: Removed lines 34-38 in `server/middleware/auth0-auth.ts` that injected metadata schoolId into UserSyncService
