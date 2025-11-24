@@ -13,12 +13,15 @@ For detailed development and testing guidelines, see:
 
 ### Recent Changes
 **Nov 24, 2025**
-- **Stripe Account Lookup Testing**: Implemented comprehensive testing infrastructure for Stripe account lookup feature that runs during payment intent creation:
-  - Created test endpoint `POST /api/stripe/test-account-lookup` for debugging account lookup logic without modifying data
-  - Fixed 10 TypeScript errors in `server/api/stripe.ts` related to membership enrollment creation and Stripe subscription property access
-  - Added comprehensive manual testing guide (`STRIPE_ACCOUNT_LOOKUP_TEST_GUIDE.md`) with 5 test scenarios and debugging tips
-  - Documented storage interface typing limitation: CombinedStorage has all required IStorage methods but doesn't formally implement the interface (requires 127+ type fixes across storage layer for full compliance)
-  - Test endpoint provides detailed diagnostics: Stripe customer lookup, subscription status, database user verification, membership enrollment sync, and actionable recommendations
+- **Stripe Account Lookup Testing Infrastructure**: Implemented comprehensive testing infrastructure for Stripe account lookup feature:
+  - **Test Endpoint**: Created `POST /api/stripe/test-account-lookup` for debugging account lookup logic with detailed diagnostics (Stripe customer search, subscription status, database verification, membership enrollments, actionable recommendations)
+  - **TypeScript Fixes**: Resolved 10 TypeScript errors in `server/api/stripe.ts` related to membership enrollment creation and Stripe subscription property access
+  - **Stripe Client Refactoring**: Centralized Stripe client to single exported instance in `server/config/stripe.ts` for better testability and consistency
+  - **Automated Tests**: Created 13 integration tests for diagnostic endpoint (`server/tests/integration/stripe-account-lookup.test.ts`) with proper Stripe mocking, authentication validation, and response structure verification
+  - **Test Database Enhancements**: Added `getUserById()` and `getMembershipEnrollmentsByParentId()` helper methods to `testDatabase.ts` for integration testing
+  - **Manual Testing Guide**: Comprehensive guide (`STRIPE_ACCOUNT_LOOKUP_TEST_GUIDE.md`) with 5 test scenarios, curl examples, and debugging tips
+  - **Storage Typing Documentation**: Documented CombinedStorage typing limitation (requires 127+ type fixes for full IStorage compliance - documented as technical debt)
+  - **Note**: Payment intent sync logic tests created but require cart/enrollment setup to properly exercise database update paths (identified by architect review)
 
 **Nov 23, 2025**
 - **Membership Fee Currency Bug Fix**: Fixed double conversion bug where membership fees were being multiplied by 100 twice (once in frontend, once in backend), causing $175 to display as $17,500. Backend now accepts cents value directly from frontend without additional conversion, matching application-wide currency format pattern.

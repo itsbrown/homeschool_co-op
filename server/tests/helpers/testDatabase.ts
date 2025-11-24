@@ -64,6 +64,14 @@ export class TestDatabase {
     return user;
   }
 
+  async getUserById(userId: number): Promise<User> {
+    const user = await storage.getUser(userId);
+    if (!user) {
+      throw new Error(`User with id ${userId} not found`);
+    }
+    return user;
+  }
+
   async updateUser(userId: number, updates: Partial<InsertUser>): Promise<User> {
     const user = await storage.getUser(userId);
     if (!user) {
@@ -80,6 +88,10 @@ export class TestDatabase {
 
   async updateUserSchoolId(userId: number, schoolId: number | null): Promise<User> {
     return this.updateUser(userId, { schoolId });
+  }
+
+  async getMembershipEnrollmentsByParentId(parentUserId: number) {
+    return storage.getMembershipEnrollmentsByParentId(parentUserId);
   }
 
   async createTestSchool(adminId: number, overrides: Partial<InsertSchool> = {}): Promise<School> {
@@ -344,8 +356,10 @@ export const testDb = {
   // Proxy all methods to the singleton instance
   async cleanup() { return getTestDb().cleanup(); },
   async createTestUser(overrides?: Partial<any>) { return getTestDb().createTestUser(overrides); },
+  async getUserById(userId: number) { return getTestDb().getUserById(userId); },
   async updateUser(userId: number, updates: Partial<any>) { return getTestDb().updateUser(userId, updates); },
   async updateUserSchoolId(userId: number, schoolId: number | null) { return getTestDb().updateUserSchoolId(userId, schoolId); },
+  async getMembershipEnrollmentsByParentId(parentUserId: number) { return getTestDb().getMembershipEnrollmentsByParentId(parentUserId); },
   async createTestSchool(adminId: number, overrides?: Partial<any>) { return getTestDb().createTestSchool(adminId, overrides); },
   async createTestLocation(schoolId: number, overrides?: Partial<any>) { return getTestDb().createTestLocation(schoolId, overrides); },
   async createTestCategory(schoolId: number, overrides?: Partial<any>) { return getTestDb().createTestCategory(schoolId, overrides); },
