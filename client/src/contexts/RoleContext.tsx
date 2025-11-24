@@ -143,6 +143,12 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
           currentActiveRole = primaryRole.role;
           currentActiveRoleId = primaryRole.id;
           console.log(`🔄 Using primary role: ${currentActiveRole} (ID: ${currentActiveRoleId})`);
+        } else if (rolesData?.activeRole) {
+          // FALLBACK: For users with no user_roles entries (e.g., newly registered parents),
+          // use the activeRole field from the API response which falls back to users.role
+          currentActiveRole = rolesData.activeRole;
+          currentActiveRoleId = rolesData.activeRoleId || null;
+          console.log(`🔄 Using fallback activeRole from API: ${currentActiveRole} (ID: ${currentActiveRoleId})`);
         }
       }
 
@@ -153,7 +159,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         setCanSwitchRoles(true);
         setShowRoleSelection(false);
       } else {
-        // Single role user
+        // Single role user (or user with basic role only)
         console.log(`🎯 Single role user - setting role: ${currentActiveRole} for ${user.email}`);
         setActiveRole(currentActiveRole);
         setActiveRoleId(currentActiveRoleId);
