@@ -362,13 +362,23 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
       return res.status(500).json({ message: "User sync failed" });
     }
     
-    console.log('✅ Found admin user:', { id: adminUser.id, email: adminUser.email, role: adminUser.role, schoolId: adminUser.schoolId });
+    // CRITICAL FIX: Access schoolId from the database user (dbUser) or req.auth
+    // The middleware stores database info in req.user.dbUser and req.auth.schoolId
+    const userSchoolId = adminUser.dbUser?.schoolId || req.auth?.schoolId;
     
-    // CRITICAL FIX: Use the user's schoolId directly from the database
-    // This is the authoritative source of truth
-    if (adminUser.schoolId) {
-      console.log(`🎯 Using user's schoolId from database: ${adminUser.schoolId}`);
-      const school = await storage.getSchool(adminUser.schoolId);
+    console.log('✅ Found admin user:', { 
+      id: adminUser.id, 
+      email: adminUser.email, 
+      role: adminUser.role,
+      dbUserSchoolId: adminUser.dbUser?.schoolId,
+      reqAuthSchoolId: req.auth?.schoolId,
+      finalSchoolId: userSchoolId
+    });
+    
+    // This is the authoritative source of truth from the database
+    if (userSchoolId) {
+      console.log(`🎯 Using user's schoolId from database: ${userSchoolId}`);
+      const school = await storage.getSchool(userSchoolId);
       
       if (school) {
         console.log('✅ Found school for user:', school.name);
@@ -399,8 +409,13 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
     console.log('🔍 All schools:', allSchools.map((s: any) => ({ id: s.id, name: s.name, adminId: s.adminId })));
 
     // Try to find a school already associated with this admin user via adminId
+    // Use the database user ID (from dbUser), not the Supabase UUID
+    const dbUserId = adminUser.dbUser?.id;
+    
+    console.log('🔍 Looking for school with adminId:', dbUserId);
+    
     let school = allSchools.find((s: any) => 
-      s.adminId === adminUser.id
+      s.adminId === dbUserId
     );
 
     if (school) {
