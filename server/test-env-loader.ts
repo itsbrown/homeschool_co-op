@@ -7,15 +7,12 @@ const hasLiveStripeKeys =
   process.env.VITE_STRIPE_PUBLIC_KEY?.startsWith('pk_live_');
 
 if (hasLiveStripeKeys || process.env.NODE_ENV === 'production') {
+  const isLiveSecret = process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_');
+  const isLivePublic = process.env.VITE_STRIPE_PUBLIC_KEY?.startsWith('pk_live_');
+  
   console.log('🚀 Live mode detected - using configured Stripe keys');
-  console.log('🔑 STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY?.substring(0, 7) + '...' + 
-    (process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_') ? ' ✅ (LIVE MODE)' : 
-     process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_') ? ' ⚠️  (TEST MODE - WARNING!)' : 
-     ' ❌ (INVALID KEY FORMAT)'));
-  console.log('🔑 VITE_STRIPE_PUBLIC_KEY:', process.env.VITE_STRIPE_PUBLIC_KEY?.substring(0, 7) + '...' + 
-    (process.env.VITE_STRIPE_PUBLIC_KEY?.startsWith('pk_live_') ? ' ✅ (LIVE MODE)' : 
-     process.env.VITE_STRIPE_PUBLIC_KEY?.startsWith('pk_test_') ? ' ⚠️  (TEST MODE - WARNING!)' : 
-     ' ❌ (INVALID KEY FORMAT)'));
+  console.log('🔑 Stripe secret key:', isLiveSecret ? '✅ (LIVE MODE)' : '⚠️  (TEST MODE - WARNING!)');
+  console.log('🔑 Stripe public key:', isLivePublic ? '✅ (LIVE MODE)' : '⚠️  (TEST MODE - WARNING!)');
 } else {
   console.log('🔧 Development/test mode - loading test environment configuration...');
   
@@ -28,8 +25,5 @@ if (hasLiveStripeKeys || process.env.NODE_ENV === 'production') {
   // It must come from Replit environment variables and match the Stripe account that owns these keys
   // The webhook secret you set in Replit must be from a webhook created for the account: acct_1RkR2QRFKXbVXRE3
   
-  console.log('✅ Test environment loaded:');
-  console.log('🔑 STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY?.substring(0, 20) + '...');
-  console.log('🔑 STRIPE_PUBLISHABLE_KEY:', process.env.STRIPE_PUBLISHABLE_KEY?.substring(0, 20) + '...');
-  console.log('🧪 Test mode:', process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_'));
+  console.log('✅ Test environment loaded - Stripe keys configured for test mode');
 }
