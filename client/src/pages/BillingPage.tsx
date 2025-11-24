@@ -17,24 +17,13 @@ import { useCart } from '@/contexts/CartContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
 import { formatCurrency } from '@/utils/currency';
+import { STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
-const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-console.log('🔑 Stripe publishable key check:', stripePublishableKey ? 'Present' : 'Missing');
-console.log('🔑 Stripe publishable key starts with:', stripePublishableKey ? stripePublishableKey.substring(0, 15) + '...' : 'N/A');
+console.log('🔑 Stripe publishable key check:', STRIPE_PUBLISHABLE_KEY ? 'Present' : 'Missing');
+console.log('🔑 Stripe publishable key starts with:', STRIPE_PUBLISHABLE_KEY ? STRIPE_PUBLISHABLE_KEY.substring(0, 15) + '...' : 'N/A');
 
-if (!stripePublishableKey || stripePublishableKey.trim() === '') {
-  console.error('❌ Missing VITE_STRIPE_PUBLIC_KEY environment variable');
-  throw new Error('Missing VITE_STRIPE_PUBLIC_KEY environment variable');
-}
-
-// Validate the key format
-if (!stripePublishableKey.startsWith('pk_test_') && !stripePublishableKey.startsWith('pk_live_')) {
-  console.error('❌ Invalid Stripe publishable key format');
-  throw new Error('Invalid Stripe publishable key format');
-}
-
-const stripePromise = loadStripe(stripePublishableKey);
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 // Simple payment form component
 function SimplePaymentForm({ onSuccess, onError }: { 

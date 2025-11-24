@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 interface Submission {
   id: number;

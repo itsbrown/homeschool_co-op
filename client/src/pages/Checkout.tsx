@@ -7,12 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation } from 'wouter';
 import { Loader2 } from 'lucide-react';
+import { STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
 
 // Initialize Stripe outside component to avoid re-creating the Stripe object
-if (!import.meta.env.VITE_STRIPE_PUBLIC_KEY) {
-  throw new Error('Missing required Stripe key: VITE_STRIPE_PUBLIC_KEY');
-}
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 const CheckoutForm = ({ purchaseData }: { purchaseData: any }) => {
   const stripe = useStripe();
