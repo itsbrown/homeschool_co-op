@@ -222,13 +222,21 @@ function SubscriptionSchedulesTab() {
         <p className="text-muted-foreground">Your scheduled payment installments</p>
       </div>
 
-      {/* Database-stored scheduled payments */}
+      {/* Database-stored scheduled payments (Class Enrollments) */}
       {scheduledPayments.length > 0 && (
         <div className="space-y-4">
-          <h3 className="font-medium text-lg">Upcoming Payments ({scheduledPayments.length})</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-lg">Class Payment Plans ({scheduledPayments.length})</h3>
+            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+              Class Enrollments
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Payment installments for your class enrollments (biweekly, deposit, or split payments)
+          </p>
           
           {Object.entries(groupedPayments).map(([planType, payments]) => (
-            <Card key={planType} className="p-6" data-testid={`payment-plan-${planType}`}>
+            <Card key={planType} className="p-6 border-l-4 border-l-blue-500" data-testid={`payment-plan-${planType}`}>
               <div className="flex items-start justify-between mb-4">
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
@@ -274,12 +282,21 @@ function SubscriptionSchedulesTab() {
         </div>
       )}
 
-      {/* Legacy Stripe subscription schedules */}
+      {/* Stripe subscription schedules (Platform Subscriptions) */}
       {stripeSchedules.length > 0 && (
         <div className="space-y-4">
-          <h3 className="font-medium text-lg">Stripe-Managed Schedules</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-lg">Platform Subscriptions</h3>
+            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+              Stripe Managed
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Recurring subscriptions for platform features (managed by Stripe)
+          </p>
+          
           {stripeSchedules.map((schedule: any) => (
-            <Card key={schedule.id} className="p-6">
+            <Card key={schedule.id} className="p-6 border-l-4 border-l-purple-500">
               <div className="flex items-start justify-between mb-4">
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
