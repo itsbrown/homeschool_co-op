@@ -633,36 +633,6 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     return stats;
   }, [payments, outstandingBalances]);
   
-  // Handle making a payment
-  const handlePayment = async (paymentId: string) => {
-    try {
-      const response = await apiRequest("POST", `/api/payments/${paymentId}/pay`, {
-        method: paymentMethod
-      });
-      
-      if (!response.ok) {
-        throw new Error("Payment failed");
-      }
-      
-      toast({
-        title: "Payment Successful",
-        description: "Your payment has been processed successfully.",
-      });
-      
-      // Refresh the payment data
-      refetch();
-      
-      // Close the payment dialog
-      setSelectedPaymentId(null);
-    } catch (error: any) {
-      toast({
-        title: "Payment Failed",
-        description: error.message || "There was an error processing your payment.",
-        variant: "destructive",
-      });
-    }
-  };
-  
   // Format currency amount
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -1137,87 +1107,26 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                           <div className="text-right">
                             <p className="font-medium">{formatCurrency(payment.amount)}</p>
                           </div>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button size="sm">Pay Now</Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Make Payment</DialogTitle>
-                                <DialogDescription>
-                                  Complete your payment for {payment.description}
-                                </DialogDescription>
-                              </DialogHeader>
-                              
-                              <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                  <h3 className="text-sm font-medium">Payment Summary</h3>
-                                  <div className="bg-muted p-4 rounded-lg">
-                                    <div className="flex justify-between mb-2">
-                                      <span>Program:</span>
-                                      <span className="font-medium">{payment.programName}</span>
-                                    </div>
-                                    <div className="flex justify-between mb-2">
-                                      <span>Child:</span>
-                                      <span className="font-medium">{payment.childName}</span>
-                                    </div>
-                                    <div className="flex justify-between mb-2">
-                                      <span>Due Date:</span>
-                                      <span className="font-medium">{formatDate(payment.dueDate!)}</span>
-                                    </div>
-                                    <div className="flex justify-between pt-2 border-t border-border">
-                                      <span>Total:</span>
-                                      <span className="font-bold">{formatCurrency(payment.amount)}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                <div className="space-y-2">
-                                  <Label htmlFor="payment-method">Payment Method</Label>
-                                  <Select defaultValue="credit_card" onValueChange={setPaymentMethod}>
-                                    <SelectTrigger id="payment-method">
-                                      <SelectValue placeholder="Select payment method" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="credit_card">Credit Card</SelectItem>
-                                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                                      <SelectItem value="paypal">PayPal</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                
-                                {paymentMethod === 'credit_card' && (
-                                  <div className="space-y-4">
-                                    <div className="space-y-2">
-                                      <Label htmlFor="card-number">Card Number</Label>
-                                      <Input id="card-number" placeholder="•••• •••• •••• ••••" />
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div className="space-y-2">
-                                        <Label htmlFor="expiry">Expiry Date</Label>
-                                        <Input id="expiry" placeholder="MM/YY" />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="cvc">CVC</Label>
-                                        <Input id="cvc" placeholder="•••" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              
-                              <DialogFooter>
-                                <Button variant="outline" onClick={() => setSelectedPaymentId(null)}>
-                                  Cancel
-                                </Button>
-                                <Button onClick={() => handlePayment(payment.id)}>
-                                  <CreditCard className="mr-2 h-4 w-4" />
-                                  Pay {formatCurrency(payment.amount)}
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
+                          <Button 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedPaymentForDialog({
+                                id: payment.id,
+                                amount: payment.amount,
+                                description: payment.description,
+                                programName: payment.programName,
+                                childName: payment.childName,
+                                dueDate: payment.dueDate,
+                                installmentNumber: payment.installmentNumber,
+                                totalInstallments: payment.totalInstallments,
+                                paymentPlan: payment.paymentPlan
+                              });
+                              setPaymentDialogOpen(true);
+                            }}
+                            data-testid={`button-pay-upcoming-${payment.id}`}
+                          >
+                            Pay Now
+                          </Button>
                         </div>
                       </div>
                       ))}
@@ -1229,6 +1138,24 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
           </Card>
         </TabsContent>
       </Tabs>
+      
+      {/* Stripe Payment Dialog */}
+      {selectedPaymentForDialog && (
+        <ScheduledPaymentDialog
+          payment={selectedPaymentForDialog}
+          isOpen={paymentDialogOpen}
+          onClose={() => {
+            setPaymentDialogOpen(false);
+            setSelectedPaymentForDialog(null);
+          }}
+          onSuccess={() => {
+            refetch();
+            refetchDbScheduledPayments();
+          }}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+        />
+      )}
     </div>
   );
 }
