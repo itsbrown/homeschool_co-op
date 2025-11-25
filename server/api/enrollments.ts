@@ -6,6 +6,32 @@ import { eq, inArray } from "drizzle-orm";
 
 const router = express.Router();
 
+// Get all enrollments for the authenticated parent (uses supabaseAuth from routes.ts)
+router.get('/', async (req: any, res) => {
+  try {
+    // Get user from supabaseAuth middleware (req.user.email and req.user.id)
+    const userEmail = req.user?.email;
+    const userId = req.user?.id;
+    
+    if (!userEmail || !userId) {
+      console.log('❌ No authenticated user found for enrollments request');
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    console.log(`📚 Fetching enrollments for parent: ${userEmail} (ID: ${userId})`);
+    
+    // Get all enrollments for this parent
+    const enrollments = await storage.getProgramEnrollmentsByParent(userId);
+    
+    console.log(`📚 Found ${enrollments.length} enrollments for parent ${userEmail}`);
+    
+    res.json(enrollments);
+  } catch (error) {
+    console.error('Error fetching parent enrollments:', error);
+    res.status(500).json({ message: 'Failed to fetch enrollments' });
+  }
+});
+
 // Get enrollments for a specific child
 router.get('/child/:childId', async (req, res) => {
   try {
@@ -216,7 +242,7 @@ router.post('/cancel-multiple', async (req: any, res) => {
           );
         }
         
-        console.log(`✅ Atomically deleted ${result.length} enrollments in single operation:`, result.map(r => r.id));
+        console.log(`✅ Atomically deleted ${result.length} enrollments in single operation:`, result.map((r: { id: number }) => r.id));
       });
       
       // Transaction committed successfully - all enrollments cancelled

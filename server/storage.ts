@@ -183,6 +183,7 @@ export interface IStorage {
 
   // Program Enrollment methods
   getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined>;
+  getProgramEnrollmentsByParent(parentId: number): Promise<ProgramEnrollment[]>;
   getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]>;
   getEnrollmentsByProgramId(programId: number): Promise<ProgramEnrollment[]>;
   getEnrollmentCountForProgram(programId: number): Promise<number>;
@@ -1410,6 +1411,11 @@ export class MemStorage implements IStorage {
   // Program Enrollment methods
   async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
     return this.programEnrollmentsStore.get(id);
+  }
+
+  async getProgramEnrollmentsByParent(parentId: number): Promise<ProgramEnrollment[]> {
+    return Array.from(this.programEnrollmentsStore.values())
+      .filter(enrollment => enrollment.parentId === parentId);
   }
 
   async getEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
@@ -4609,6 +4615,23 @@ export class MemStorage implements IStorage {
         }
         console.log('❌ Error getting program enrollment from database, falling back to memStorage:', error);
         return await this.memStorage.getProgramEnrollmentById(id);
+      }
+    }
+
+    async getProgramEnrollmentsByParent(parentId: number): Promise<ProgramEnrollment[]> {
+      try {
+        if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentsByParent === 'function') {
+          return await this.dbStorage.getProgramEnrollmentsByParent(parentId);
+        } else {
+          console.log('💾 DB storage unavailable, using memStorage fallback for getProgramEnrollmentsByParent');
+          return await this.memStorage.getProgramEnrollmentsByParent(parentId);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.log('❌ Error getting program enrollments by parent from database, falling back to memStorage:', error);
+        return await this.memStorage.getProgramEnrollmentsByParent(parentId);
       }
     }
 
