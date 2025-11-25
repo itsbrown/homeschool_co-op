@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Loader2 } from "lucide-react";
 import { ClassVariants } from "@/components/admin/ClassVariants";
+import { ClassInclusionsManager } from "@/components/admin/ClassInclusionsManager";
 
 // Form schema for class creation
 const classFormSchema = z.object({
@@ -52,6 +53,7 @@ export default function SchoolClassCreationPage() {
   const queryClient = useQueryClient();
   const [isEditMode, setIsEditMode] = useState(false);
   const formInitialized = React.useRef(false);
+  const [selectedInclusions, setSelectedInclusions] = useState<number[]>([]);
   
   // Get schoolId from authenticated user
   const { schoolId } = useSchoolAdmin();
@@ -266,20 +268,82 @@ export default function SchoolClassCreationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classData, classId, staffMembers, locations]);
 
+  // Helper function to save class inclusions - returns count of failures
+  const saveClassInclusions = async (parentClassId: number, inclusionIds: number[]): Promise<{ success: number; failed: number }> => {
+    const token = localStorage.getItem("supabase_token");
+    let successCount = 0;
+    let failedCount = 0;
+    
+    for (const includedClassId of inclusionIds) {
+      try {
+        const response = await fetch("/api/class-inclusions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            parentClassId,
+            includedClassId,
+          }),
+        });
+        
+        if (response.ok) {
+          successCount++;
+        } else {
+          failedCount++;
+          console.error(`Failed to save inclusion for class ${includedClassId}: ${response.status}`);
+        }
+      } catch (error) {
+        failedCount++;
+        console.error(`Failed to save inclusion for class ${includedClassId}:`, error);
+      }
+    }
+    
+    return { success: successCount, failed: failedCount };
+  };
+
   // Create class mutation
   const createClassMutation = useMutation({
     mutationFn: (data: ClassFormValues) => {
       return apiRequest("POST", "/school-admin/classes", data);
     },
-    onSuccess: () => {
-      toast({
-        title: "Class created successfully",
-        description: "Your new class has been added to the system.",
-      });
-      // Invalidate all class-related caches to ensure UI updates everywhere
+    onSuccess: async (response: any) => {
+      // Invalidate class caches immediately so the new class appears in lists
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes-list"] });
-      navigate("/schools/classes");
+      
+      // Save class inclusions if any were selected
+      let inclusionResult = { success: 0, failed: 0 };
+      if (selectedInclusions.length > 0 && response?.id) {
+        inclusionResult = await saveClassInclusions(response.id, selectedInclusions);
+        queryClient.invalidateQueries({ queryKey: ["/api/class-inclusions"] });
+      }
+      
+      // Show appropriate message based on inclusion save results
+      if (inclusionResult.failed > 0) {
+        // Some inclusions failed - redirect to edit page so user can retry
+        toast({
+          title: "Class created - some inclusions failed",
+          description: `Class created successfully, but ${inclusionResult.failed} of ${selectedInclusions.length} class inclusion(s) failed to save. Redirecting to edit page where you can add them again.`,
+          variant: "destructive",
+        });
+        // Navigate to edit page for the newly created class so user can fix inclusions
+        if (response?.id) {
+          navigate(`/schools/classes/${response.id}/edit`);
+        } else {
+          navigate("/schools/classes");
+        }
+      } else {
+        toast({
+          title: "Class created successfully",
+          description: selectedInclusions.length > 0 
+            ? `Your new class has been added with ${inclusionResult.success} included class(es).`
+            : "Your new class has been added to the system.",
+        });
+        navigate("/schools/classes");
+      }
     },
     onError: (error) => {
       toast({
@@ -666,6 +730,14 @@ export default function SchoolClassCreationPage() {
                       <FormMessage />
                     </FormItem>
                   )}
+                />
+
+                {/* Class Inclusions Section */}
+                <ClassInclusionsManager
+                  classId={classId}
+                  selectedInclusions={selectedInclusions}
+                  onInclusionsChange={setSelectedInclusions}
+                  isEditMode={isEditMode}
                 />
 
                 <CardFooter className="flex justify-between px-0 pb-0">
