@@ -12,6 +12,16 @@ For detailed development and testing guidelines, see:
 - **[Architectural Patterns & Common Pitfalls](./ARCHITECTURAL_PATTERNS.md)** - 7 key patterns with code examples and real bug scenarios from Nov 22, 2025
 
 ### Recent Changes
+**Nov 25, 2025**
+- **Payment Reminder System**: Implemented comprehensive payment reminder system to ensure parents complete enrollment payments:
+  - **Parent Dashboard Alert Banner**: Prominent amber alert banner showing when pending_payment enrollments exist, with direct link to cart/checkout
+  - **Payments Stats Card**: Updated stats grid with "Payments" card using warning styling (amber) when unpaid enrollments exist
+  - **Cart Drawer Notice**: Alert at top of cart drawer reminding parents that payment is required to secure spots
+  - **Email Reminder Functions**: Created `sendEnrollmentReminderEmail` and `sendBulkEnrollmentReminderEmail` functions in `server/services/emailService.ts` for nicely formatted HTML payment reminder emails
+  - **Enrollment Reminder Scheduler**: Scheduled job in `server/services/enrollmentReminderScheduler.ts` that runs every 6 hours to send automatic payment reminders for pending_payment enrollments
+  - **Reminder Tracking**: Added `last_reminder_sent_at` and `reminder_count` columns to `school_class_enrollments` table with 72-hour throttling and max 5 reminders per enrollment
+  - **Database Migration**: Added migration in `server/init-db.ts` for reminder tracking columns
+
 **Nov 24, 2025**
 - **Parent Registration & Dashboard Access Fix**: Fixed loading screen issue preventing newly registered parents from accessing their dashboard:
   - **Root Cause**: RoleContext only read `roles` array from API, ignoring fallback `activeRole` field for users without `user_roles` entries

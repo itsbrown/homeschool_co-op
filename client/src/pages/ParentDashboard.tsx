@@ -5,10 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, BookOpen, Calendar, Plus, User, GraduationCap } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Users, BookOpen, Calendar, Plus, User, GraduationCap, CreditCard, ShoppingCart, Clock } from "lucide-react";
 import { AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import { useCart } from "@/contexts/CartContext";
 
 interface Child {
   id: number;
@@ -36,6 +38,7 @@ interface Program {
 export default function ParentDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
+  const { items: cartItems } = useCart();
 
   // Query for children data
   const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<Child[]>({
@@ -56,6 +59,13 @@ export default function ParentDashboard() {
   });
 
   const isLoadingChildren = childrenLoading;
+  
+  // Calculate pending payment enrollments
+  const pendingPaymentEnrollments = enrollments.filter(
+    (e: any) => e.status === 'pending_payment'
+  );
+  const hasPendingPayments = pendingPaymentEnrollments.length > 0;
+  const hasCartItems = cartItems.length > 0;
 
   return (
     <ParentAppShell>
@@ -75,6 +85,45 @@ export default function ParentDashboard() {
             </Link>
           </Button>
         </div>
+
+        {/* Payment Required Alert - High Visibility */}
+        {(hasPendingPayments || hasCartItems) && (
+          <Alert variant="destructive" className="border-amber-500 bg-amber-50 dark:bg-amber-950/30" data-testid="alert-payment-required">
+            <CreditCard className="h-5 w-5 text-amber-600" />
+            <AlertTitle className="text-amber-800 dark:text-amber-200 font-semibold">
+              {hasCartItems ? "Complete Your Enrollment" : "Payment Required to Secure Your Spot"}
+            </AlertTitle>
+            <AlertDescription className="text-amber-700 dark:text-amber-300">
+              {hasCartItems ? (
+                <div className="mt-2">
+                  <p className="mb-3">
+                    You have <strong>{cartItems.length} item{cartItems.length !== 1 ? 's' : ''}</strong> in your cart. 
+                    <strong> Payment is required to save your seat and complete enrollment.</strong> Spots are limited and not guaranteed until payment is received.
+                  </p>
+                  <Button asChild size="sm" className="bg-amber-600 hover:bg-amber-700 text-white">
+                    <Link href="/cart">
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      Complete Payment Now
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <p className="mb-3">
+                    You have <strong>{pendingPaymentEnrollments.length} enrollment{pendingPaymentEnrollments.length !== 1 ? 's' : ''}</strong> pending payment. 
+                    <strong> Your spot is not guaranteed until payment is complete.</strong> Please complete payment as soon as possible to secure your child's enrollment.
+                  </p>
+                  <Button asChild size="sm" className="bg-amber-600 hover:bg-amber-700 text-white">
+                    <Link href="/payments">
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      View Pending Payments
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Action Buttons - Mobile Optimized */}
         <div className="flex flex-col sm:flex-row gap-3">
@@ -137,16 +186,27 @@ export default function ParentDashboard() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className={hasPendingPayments || hasCartItems ? "border-amber-500 bg-amber-50 dark:bg-amber-950/30" : ""}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Upcoming</CardTitle>
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className={`text-sm font-medium ${hasPendingPayments || hasCartItems ? "text-amber-800 dark:text-amber-200" : ""}`}>
+                    Payments
+                  </CardTitle>
+                  <CreditCard className={`h-4 w-4 ${hasPendingPayments || hasCartItems ? "text-amber-600" : "text-muted-foreground"}`} />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">0</div>
-                  <p className="text-xs text-muted-foreground">
-                    Classes this week
+                  <div className={`text-2xl font-bold ${hasPendingPayments || hasCartItems ? "text-amber-800 dark:text-amber-200" : ""}`}>
+                    {pendingPaymentEnrollments.length + cartItems.length}
+                  </div>
+                  <p className={`text-xs ${hasPendingPayments || hasCartItems ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>
+                    {hasPendingPayments || hasCartItems ? "Pending - Action Required" : "No pending payments"}
                   </p>
+                  {(hasPendingPayments || hasCartItems) && (
+                    <Button asChild size="sm" variant="link" className="px-0 h-auto mt-1 text-amber-700 dark:text-amber-300">
+                      <Link href={hasCartItems ? "/cart" : "/payments"}>
+                        Complete payment →
+                      </Link>
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             </div>

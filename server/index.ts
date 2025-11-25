@@ -216,6 +216,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       // Dynamically import background services to avoid side effects in production
       const { backupService } = await import('./services/backupService.js');
       const { MembershipStatusService } = await import('./services/membership-status-service.js');
+      const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
       const { storage } = await import('./storage.js');
       
       // Initialize and start backup service
@@ -224,6 +225,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       
       // Initialize membership status tracking service
       MembershipStatusService.initializeMembershipStatusJob();
+      
+      // Start enrollment payment reminder scheduler
+      startEnrollmentReminderScheduler();
       
       // Load notifications and notification recipients from JSON into database
       await storage.initializeNotifications();

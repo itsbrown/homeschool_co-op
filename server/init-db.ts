@@ -473,6 +473,15 @@ async function runMigrations() {
     
     console.log('✅ Migration completed: stripe_payment_history table created');
     
+    // Add reminder tracking columns to school_class_enrollments table
+    console.log('Running migration: Adding reminder tracking columns to school_class_enrollments table...');
+    await db.execute(sql`
+      ALTER TABLE school_class_enrollments 
+      ADD COLUMN IF NOT EXISTS last_reminder_sent_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS reminder_count INTEGER DEFAULT 0;
+    `);
+    console.log('✅ Migration completed: reminder tracking columns added to school_class_enrollments table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

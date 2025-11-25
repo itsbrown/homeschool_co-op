@@ -6,7 +6,8 @@ import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, ShoppingCart, CreditCard, Percent, Gift, X } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Trash2, ShoppingCart, CreditCard, Percent, Gift, X, Clock, AlertCircle } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/utils/currency';
@@ -80,6 +81,16 @@ export default function CartDrawer() {
         </div>
         ) : (
           <>
+            {/* Payment Required Notice */}
+            <div className="px-6 pb-3 flex-shrink-0">
+              <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-950/30" data-testid="alert-cart-payment-notice">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-700 dark:text-amber-300 text-sm">
+                  <strong>Payment is required to save your seat.</strong> Spots are limited and not guaranteed until payment is complete.
+                </AlertDescription>
+              </Alert>
+            </div>
+            
             <div className="flex-1 overflow-y-auto px-6 min-h-0">
               <div className="space-y-4 pb-4">
                 {cart.items.map((item) => {

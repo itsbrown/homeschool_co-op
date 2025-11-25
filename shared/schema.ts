@@ -382,6 +382,8 @@ export const schoolClassEnrollments = pgTable("school_class_enrollments", {
   grade: text("grade"), // final grade for the class
   status: text("status", { enum: ["pending_payment", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"] }).default("enrolled").notNull(),
   notes: text("notes"),
+  lastReminderSentAt: timestamp("last_reminder_sent_at"), // For payment reminder tracking
+  reminderCount: integer("reminder_count").default(0), // Track how many reminders sent
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
