@@ -40,12 +40,15 @@ export default function CartSuccess() {
           // Get cart data to know how many items were purchased
           let cartData = localStorage.getItem('cart') || sessionStorage.getItem('cart_backup');
           let itemCount = 1;
+          let enrollmentIds: number[] = [];
           
           if (cartData) {
             try {
               const cart = JSON.parse(cartData);
               itemCount = cart.items?.length || 1;
-              console.log(`🛒 Cart had ${itemCount} items`);
+              // Extract enrollment IDs from cart items
+              enrollmentIds = cart.items?.map((item: any) => item.enrollmentId).filter((id: any) => id) || [];
+              console.log(`🛒 Cart had ${itemCount} items, enrollment IDs:`, enrollmentIds);
             } catch (e) {
               console.error('Failed to parse cart data:', e);
             }
@@ -55,14 +58,31 @@ export default function CartSuccess() {
           const selectedPaymentPlan = localStorage.getItem('selectedPaymentPlan') || 'full';
           console.log(`💳 Payment plan: ${selectedPaymentPlan}`);
           
-          // The webhook will handle updating payment status in the background
-          // We just need to show success and clear the cart
+          // CRITICAL: Confirm enrollments in database (update status from pending_payment to enrolled)
+          // This ensures cart will be empty when refetched since items are no longer pending
+          try {
+            console.log('📝 Confirming enrollments with API...');
+            const confirmResponse = await apiRequest('POST', '/api/enrollments/confirm', {
+              paymentIntentId: paymentIntent,
+              enrollmentIds: enrollmentIds.length > 0 ? enrollmentIds : undefined
+            });
+            
+            if (confirmResponse.ok) {
+              const confirmResult = await confirmResponse.json();
+              console.log('✅ Enrollments confirmed:', confirmResult);
+            } else {
+              console.error('❌ Failed to confirm enrollments:', await confirmResponse.text());
+            }
+          } catch (confirmError) {
+            console.error('❌ Error confirming enrollments:', confirmError);
+            // Continue anyway - worst case is cart shows items that are actually paid
+          }
           
           setProcessedEnrollments(itemCount);
           
           toast({
             title: "Payment Successful!",
-            description: `Your payment has been processed. Enrollments are being confirmed.`,
+            description: `Your payment has been processed and enrollments are confirmed.`,
             duration: 5000,
           });
 

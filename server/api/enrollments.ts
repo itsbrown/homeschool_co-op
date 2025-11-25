@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { getDb } from "../db";
 import { programEnrollments } from "../../shared/schema";
 import { eq, inArray } from "drizzle-orm";
+import { getStripeClient } from "../config/stripe";
 
 const router = express.Router();
 
@@ -270,6 +271,141 @@ router.post('/cancel-multiple', async (req: any, res) => {
   } catch (error) {
     console.error('Error in bulk cancel operation:', error);
     res.status(500).json({ error: 'Failed to cancel enrollments' });
+  }
+});
+
+// Confirm enrollments after successful payment (update status from pending_payment to enrolled)
+// SECURITY: Verifies payment with Stripe before updating enrollment status
+router.post('/confirm', async (req: any, res) => {
+  try {
+    const userEmail = req.user?.email;
+    const userId = req.user?.id;
+    
+    if (!userEmail || !userId) {
+      console.log('❌ No authenticated user found for enrollment confirmation');
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const { paymentIntentId, enrollmentIds } = req.body;
+
+    if (!paymentIntentId) {
+      return res.status(400).json({ message: 'Payment intent ID is required' });
+    }
+
+    console.log(`🔐 Verifying payment with Stripe: ${paymentIntentId}`);
+    console.log(`📧 User: ${userEmail}, Enrollment IDs:`, enrollmentIds);
+
+    // SECURITY: Verify the payment actually succeeded with Stripe
+    let stripe;
+    try {
+      stripe = await getStripeClient();
+    } catch (stripeError) {
+      console.error('❌ Failed to initialize Stripe client:', stripeError);
+      return res.status(500).json({ message: 'Payment verification unavailable' });
+    }
+
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    } catch (retrieveError: any) {
+      console.error('❌ Failed to retrieve PaymentIntent from Stripe:', retrieveError);
+      return res.status(400).json({ 
+        message: 'Invalid payment - could not verify with payment provider',
+        error: retrieveError.message 
+      });
+    }
+
+    // SECURITY: Check that the payment actually succeeded
+    if (paymentIntent.status !== 'succeeded') {
+      console.error(`❌ Payment not succeeded. Status: ${paymentIntent.status}`);
+      return res.status(400).json({ 
+        message: `Payment not confirmed. Current status: ${paymentIntent.status}`,
+        paymentStatus: paymentIntent.status
+      });
+    }
+
+    // SECURITY: Verify the payment email matches the authenticated user
+    const paymentEmail = paymentIntent.receipt_email || paymentIntent.metadata?.parentEmail;
+    if (paymentEmail && paymentEmail.toLowerCase() !== userEmail.toLowerCase()) {
+      console.error(`🚨 SECURITY: Email mismatch. Payment: ${paymentEmail}, User: ${userEmail}`);
+      return res.status(403).json({ 
+        message: 'Unauthorized - payment does not belong to this user' 
+      });
+    }
+
+    console.log(`✅ Payment verified with Stripe. Status: ${paymentIntent.status}, Amount: ${paymentIntent.amount}`);
+
+    // Get database instance for transaction
+    const db = await getDb();
+    
+    // Get all pending_payment enrollments for this parent
+    const parentEnrollments = await storage.getProgramEnrollmentsByParent(userId);
+    
+    // Filter to only pending_payment enrollments
+    const pendingEnrollments = parentEnrollments.filter((e: any) => 
+      e.status === 'pending_payment'
+    );
+
+    if (pendingEnrollments.length === 0) {
+      console.log('⚠️ No pending_payment enrollments found for user:', userEmail);
+      return res.json({ 
+        success: true, 
+        message: 'No pending enrollments to confirm',
+        confirmed: 0 
+      });
+    }
+
+    // Determine which enrollments to confirm
+    let enrollmentsToConfirm = pendingEnrollments;
+    
+    // If specific enrollment IDs provided, filter to those
+    if (enrollmentIds && Array.isArray(enrollmentIds) && enrollmentIds.length > 0) {
+      enrollmentsToConfirm = pendingEnrollments.filter((e: any) => 
+        enrollmentIds.includes(e.id)
+      );
+    }
+
+    const idsToConfirm = enrollmentsToConfirm.map((e: any) => e.id);
+
+    if (idsToConfirm.length === 0) {
+      console.log('⚠️ No matching enrollments found to confirm');
+      return res.json({ 
+        success: true, 
+        message: 'No matching enrollments to confirm',
+        confirmed: 0 
+      });
+    }
+
+    console.log(`📝 Confirming ${idsToConfirm.length} enrollments:`, idsToConfirm);
+
+    // Update enrollments to 'enrolled' status
+    await db.transaction(async (tx: any) => {
+      const result = await tx
+        .update(programEnrollments)
+        .set({ 
+          status: 'enrolled',
+          remainingBalance: 0,
+          paymentStatus: 'completed'
+        })
+        .where(inArray(programEnrollments.id, idsToConfirm))
+        .returning({ id: programEnrollments.id });
+      
+      console.log(`✅ Updated ${result.length} enrollments to enrolled status`);
+    });
+
+    console.log(`✅ Successfully confirmed ${idsToConfirm.length} enrollments for ${userEmail}`);
+    
+    res.json({ 
+      success: true,
+      message: `Successfully confirmed ${idsToConfirm.length} enrollment(s)`,
+      confirmed: idsToConfirm.length,
+      enrollmentIds: idsToConfirm,
+      paymentIntentId,
+      paymentAmount: paymentIntent.amount
+    });
+  } catch (error) {
+    console.error('Error confirming enrollments:', error);
+    res.status(500).json({ message: 'Failed to confirm enrollments' });
   }
 });
 

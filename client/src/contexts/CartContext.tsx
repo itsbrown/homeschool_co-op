@@ -945,11 +945,35 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refetchOnWindowFocus: false, // Don't refetch when window gains focus
   });
 
+  // Track last processed enrollments to prevent infinite loops
+  const lastProcessedEnrollmentsRef = useRef<string>('');
+  const processingRef = useRef<boolean>(false);
+
   // Process enrollments data when it changes
   const processEnrollmentsData = useCallback(async (enrollments: any[]) => {
     if (!user?.email || !enrollments) {
       return;
     }
+
+    // Prevent concurrent processing
+    if (processingRef.current) {
+      console.log('🛒 Skipping processEnrollmentsData - already processing');
+      return;
+    }
+
+    // Create a stable hash of enrollment IDs and statuses to detect actual changes
+    const enrollmentHash = enrollments
+      .map(e => `${e.id}:${e.status}:${e.remainingBalance}`)
+      .sort()
+      .join('|');
+
+    // Skip if we've already processed this exact data
+    if (lastProcessedEnrollmentsRef.current === enrollmentHash) {
+      console.log('🛒 Skipping processEnrollmentsData - data unchanged');
+      return;
+    }
+
+    processingRef.current = true;
 
     try {
       // Group enrollments by class+child combination to find the latest status
@@ -1076,8 +1100,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cartKey = getCartStorageKey(user.email);
         localStorage.removeItem(cartKey);
       }
+
+      // Update hash to mark this data as processed
+      lastProcessedEnrollmentsRef.current = enrollmentHash;
     } catch (error) {
       console.error('Error loading unpaid enrollments:', error);
+    } finally {
+      processingRef.current = false;
     }
   }, [user?.email, getAccessToken]);
 
