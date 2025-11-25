@@ -12,7 +12,7 @@ const router = Router();
 
 // Initialize Stripe with environment-based key selection
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-11-17.clover' as any,
+  apiVersion: '2025-03-31.basil' as any,
 });
 
 // Helper: Calculate next payment date from Stripe subscription schedule
