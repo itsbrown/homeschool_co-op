@@ -408,9 +408,10 @@ router.get('/subscription-schedules', supabaseAuth, async (req: any, res) => {
     console.log(`📅 Found ${customerIds.length} Stripe customer IDs`);
 
     // Fetch subscription schedules from Stripe for each customer ID
+    const stripe = await getStripeClient();
     const allSchedules = [];
     for (const customerId of customerIds) {
-      const schedules = await stripe!.subscriptionSchedules.list({
+      const schedules = await stripe.subscriptionSchedules.list({
         customer: customerId,
         limit: 100
       });
@@ -486,9 +487,10 @@ router.get('/subscriptions', supabaseAuth, async (req: any, res) => {
     console.log(`💳 Found ${customerIds.length} Stripe customer IDs`);
 
     // Fetch subscriptions from Stripe for each customer ID
+    const stripe = await getStripeClient();
     const allSubscriptions = [];
     for (const customerId of customerIds) {
-      const subscriptions = await stripe!.subscriptions.list({
+      const subscriptions = await stripe.subscriptions.list({
         customer: customerId,
         status: 'all', // Get all statuses (active, past_due, canceled, etc.)
         limit: 100
