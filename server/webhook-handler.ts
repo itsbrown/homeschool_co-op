@@ -6,7 +6,7 @@ import { STRIPE_SECRET_KEY } from './config/stripe';
 
 // Initialize Stripe with environment-based key selection
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2024-11-20',
+  apiVersion: '2025-02-24.acacia',
 });
 
 /**
