@@ -292,12 +292,17 @@ export default function SchoolSettingsPage() {
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate all queries that might display the school logo
       queryClient.invalidateQueries({ queryKey: ['/api/users/profile'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-parents/school'] });
+      // Force refetch to get fresh data
+      queryClient.refetchQueries({ queryKey: ['/api/users/profile'] });
       setSelectedLogo(null);
       setLogoPreview(null);
       toast({
         title: "Logo uploaded",
-        description: "Your school logo has been updated successfully.",
+        description: "Your school logo has been updated successfully. You may need to refresh the page to see the new logo everywhere.",
       });
     },
     onError: (error: Error) => {
