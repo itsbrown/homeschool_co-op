@@ -6,10 +6,71 @@ import { getStripeClient } from '../config/stripe';
 
 const router = Router();
 
-// DEPRECATED: This endpoint has been replaced by /api/stripe/subscription-schedules
+// Get upcoming scheduled payments from local database
+// This endpoint fetches scheduled payments created by the StripePaymentPlanService
+router.get('/upcoming', supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user.email;
+    console.log('📅 Fetching upcoming scheduled payments for:', userEmail);
+
+    // Get scheduled payments from local database
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    
+    // Filter for pending payments only (future installments)
+    const pendingPayments = allScheduledPayments.filter(p => p.status === 'pending');
+    
+    console.log(`📊 Found ${pendingPayments.length} pending scheduled payments for ${userEmail}`);
+
+    // Get enrollment details for enrichment
+    const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
+      let enrollmentDetails = null;
+      if (payment.enrollmentId) {
+        const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
+        if (enrollment) {
+          enrollmentDetails = {
+            className: enrollment.className,
+            childName: enrollment.childName
+          };
+        }
+      }
+      
+      const metadata = payment.metadata as any || {};
+      return {
+        id: payment.id,
+        amount: payment.amount,
+        dueDate: payment.scheduledDate,
+        description: metadata.description || `Payment ${payment.installmentNumber} of ${payment.totalInstallments}`,
+        paymentPlan: metadata.paymentPlan || 'biweekly',
+        status: payment.status,
+        installmentNumber: payment.installmentNumber,
+        totalInstallments: payment.totalInstallments,
+        enrollmentId: payment.enrollmentId,
+        className: enrollmentDetails?.className || 'Class',
+        childName: enrollmentDetails?.childName || ''
+      };
+    }));
+
+    // Sort by due date
+    enrichedPayments.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+    res.json({
+      success: true,
+      payments: enrichedPayments
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching scheduled payments:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch scheduled payments'
+    });
+  }
+});
+
+// DEPRECATED: Old Stripe subscription schedule-based endpoint
 // Keeping commented out for reference during migration
 /*
-router.get('/upcoming', async (req, res) => {
+router.get('/upcoming-old', async (req, res) => {
   try {
     console.log('🚀 Upcoming payments API called');
     // Extract user email from Supabase token (same as billing summary)

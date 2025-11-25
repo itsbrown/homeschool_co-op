@@ -384,119 +384,26 @@ function UpcomingPaymentsTab({
   const { isConnected } = useRealTimeUpdates();
 
   const { data: upcomingPayments, isLoading, refetch: refetchUpcoming } = useQuery({
-    queryKey: ['stripe-subscription-schedules'],
+    queryKey: ['scheduled-payments-upcoming'],
     staleTime: 0,
-    refetchInterval: 2000, // Refresh every 2 seconds
+    refetchInterval: 5000, // Refresh every 5 seconds
     queryFn: async () => {
-      console.log('📅 Fetching upcoming payments from Stripe subscription schedules...');
-      const response = await apiRequest('GET', '/api/stripe/subscription-schedules');
+      console.log('📅 Fetching upcoming scheduled payments from database...');
+      const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
       
       if (!response.ok) {
-        throw new Error('Failed to fetch subscription schedules');
+        throw new Error('Failed to fetch scheduled payments');
       }
       
       const data = await response.json();
-      console.log('📅 Subscription schedules response:', data);
+      console.log('📅 Scheduled payments response:', data);
       
-      if (!data.success || !data.schedules) {
+      if (!data.success || !data.payments) {
         return [];
       }
       
-      // Transform subscription schedules into upcoming installment objects
-      const upcomingInstallments: any[] = [];
-      
-      data.schedules.forEach((schedule: any) => {
-        console.log('📅 Processing schedule:', { id: schedule.id, status: schedule.stripeStatus, hasNextInvoice: !!schedule.nextInvoice, phaseCount: schedule.phases?.length });
-        
-        // Only process active or not_started schedules
-        if (schedule.stripeStatus === 'active' || schedule.stripeStatus === 'not_started') {
-          // Calculate total installments across all phases first
-          let totalInstallmentCount = 0;
-          if (schedule.phases && Array.isArray(schedule.phases)) {
-            schedule.phases.forEach((phase: any) => {
-              const iterations = phase.iterations || 1;
-              totalInstallmentCount += iterations;
-            });
-          }
-          
-          // Initialize installment counter
-          let currentInstallmentNumber = 1;
-          
-          // Add next invoice as an upcoming payment if it exists
-          if (schedule.nextInvoice && schedule.nextInvoice.period_start) {
-            const dueDate = new Date(schedule.nextInvoice.period_start * 1000);
-            upcomingInstallments.push({
-              id: `${schedule.id}-next`,
-              scheduleId: schedule.id,
-              amount: schedule.nextInvoice.amount_due,
-              dueDate: dueDate.toISOString(),
-              description: `${schedule.paymentPlan} - Payment ${currentInstallmentNumber}/${totalInstallmentCount}`,
-              paymentPlan: schedule.paymentPlan,
-              status: 'upcoming',
-              metadata: schedule.metadata || {},
-              installmentNumber: currentInstallmentNumber,
-              totalInstallments: totalInstallmentCount
-            });
-            console.log('📅 Added next invoice payment:', { id: schedule.id, installment: currentInstallmentNumber, total: totalInstallmentCount, amount: schedule.nextInvoice.amount_due, dueDate: dueDate.toISOString() });
-            currentInstallmentNumber++;
-          }
-          
-          // Transform phases into upcoming payments
-          if (schedule.phases && Array.isArray(schedule.phases)) {
-            schedule.phases.forEach((phase: any, phaseIndex: number) => {
-              const phaseStartDate = new Date(phase.start_date * 1000);
-              const phaseEndDate = phase.end_date ? new Date(phase.end_date * 1000) : null;
-              const now = new Date();
-              const iterations = phase.iterations || 1;
-              const amount = phase.items && phase.items.length > 0 ? (phase.items[0]?.price?.unit_amount || 0) : 0;
-              
-              // Calculate interval between iterations if there are multiple
-              let intervalMs = 0;
-              if (iterations > 1 && phaseEndDate) {
-                intervalMs = (phaseEndDate.getTime() - phaseStartDate.getTime()) / iterations;
-              }
-              
-              // Create an installment for each iteration in this phase
-              for (let iteration = 0; iteration < iterations; iteration++) {
-                const installmentDate = new Date(phaseStartDate.getTime() + (intervalMs * iteration));
-                
-                // Only include future installments
-                if (installmentDate > now && amount > 0) {
-                  upcomingInstallments.push({
-                    id: `${schedule.id}-phase-${phaseIndex}-iter-${iteration}`,
-                    scheduleId: schedule.id,
-                    amount: amount,
-                    dueDate: installmentDate.toISOString(),
-                    description: `${schedule.paymentPlan} - Payment ${currentInstallmentNumber}/${totalInstallmentCount}`,
-                    paymentPlan: schedule.paymentPlan,
-                    status: 'upcoming',
-                    metadata: schedule.metadata || {},
-                    installmentNumber: currentInstallmentNumber,
-                    totalInstallments: totalInstallmentCount
-                  });
-                  console.log('📅 Added phase payment:', { 
-                    id: schedule.id, 
-                    phase: phaseIndex + 1, 
-                    iteration: iteration + 1,
-                    installment: currentInstallmentNumber,
-                    amount, 
-                    dueDate: installmentDate.toISOString() 
-                  });
-                }
-                currentInstallmentNumber++;
-              }
-            });
-          }
-        }
-      });
-      
-      // Sort by due date ascending (soonest first)
-      upcomingInstallments.sort((a, b) => 
-        new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-      );
-      
-      console.log('📅 Processed upcoming installments:', upcomingInstallments.length, upcomingInstallments);
-      return upcomingInstallments;
+      console.log('📅 Found upcoming payments:', data.payments.length);
+      return data.payments;
     },
   });
 

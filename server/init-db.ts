@@ -482,6 +482,46 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: reminder tracking columns added to school_class_enrollments table');
     
+    // Create scheduled_payments table for payment plan installments
+    console.log('Running migration: Creating scheduled_payments table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS scheduled_payments (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        enrollment_id INTEGER NOT NULL REFERENCES program_enrollments(id),
+        parent_id INTEGER NOT NULL REFERENCES users(id),
+        parent_email TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'usd',
+        scheduled_date TIMESTAMP NOT NULL,
+        frequency TEXT NOT NULL DEFAULT 'one_time' CHECK (frequency IN ('one_time', 'weekly', 'monthly', 'quarterly', 'annual')),
+        installment_number INTEGER NOT NULL,
+        total_installments INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled', 'skipped', 'paid')),
+        stripe_payment_intent_id TEXT,
+        processed_at TIMESTAMP,
+        failure_reason TEXT,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        metadata JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    
+    // Create index on parent_email for faster lookups
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_scheduled_payments_parent_email 
+      ON scheduled_payments(parent_email);
+    `);
+    
+    // Create index on enrollment_id for faster lookups
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_scheduled_payments_enrollment_id 
+      ON scheduled_payments(enrollment_id);
+    `);
+    
+    console.log('✅ Migration completed: scheduled_payments table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
