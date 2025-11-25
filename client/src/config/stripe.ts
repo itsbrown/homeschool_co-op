@@ -1,7 +1,7 @@
 /**
  * Stripe Configuration Module (Frontend)
  * 
- * Uses Stripe.js clover CDN (loaded in index.html) for compatibility with
+ * Uses @stripe/stripe-js v8.x npm package for compatibility with
  * Stripe account API version 2025-11-17.clover.
  * 
  * Environment-based key selection:
@@ -9,8 +9,7 @@
  * - Production: Uses VITE_STRIPE_PUBLIC_KEY
  */
 
-// Declare the global Stripe type from the CDN script
-declare const Stripe: any;
+import { loadStripe, Stripe } from '@stripe/stripe-js';
 
 const isDevelopment = import.meta.env.MODE === 'development';
 
@@ -36,22 +35,7 @@ export const getStripePublishableKey = (): string => {
 export const STRIPE_PUBLISHABLE_KEY = getStripePublishableKey();
 
 /**
- * Stripe promise using the clover CDN version
+ * Stripe promise using @stripe/stripe-js v8.x npm package
  * Compatible with Stripe account API version 2025-11-17.clover
  */
-export const stripePromise = new Promise<any>((resolve) => {
-  if (typeof Stripe !== 'undefined') {
-    console.log('💳 Stripe.js clover loaded from CDN');
-    resolve(Stripe(STRIPE_PUBLISHABLE_KEY));
-  } else {
-    window.addEventListener('load', () => {
-      if (typeof Stripe !== 'undefined') {
-        console.log('💳 Stripe.js clover loaded from CDN (on window load)');
-        resolve(Stripe(STRIPE_PUBLISHABLE_KEY));
-      } else {
-        console.error('❌ Stripe.js clover failed to load from CDN');
-        resolve(null);
-      }
-    });
-  }
-});
+export const stripePromise: Promise<Stripe | null> = loadStripe(STRIPE_PUBLISHABLE_KEY);
