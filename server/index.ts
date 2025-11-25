@@ -129,8 +129,52 @@ app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
 app.use("/api/user", userRolesRouter); // Multi-role management endpoints
 
-// Test endpoint for development - manually update scheduled payment
+// Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+  // Manually trigger enrollment reminder check
+  app.post('/api/test/trigger-enrollment-reminders', async (req, res) => {
+    try {
+      const { processEnrollmentReminders, getPendingPaymentEnrollments } = await import('./services/enrollmentReminderScheduler');
+      
+      // Option to just get pending enrollments without sending (for preview)
+      if (req.query.preview === 'true') {
+        const pending = await getPendingPaymentEnrollments();
+        return res.json({ 
+          success: true, 
+          preview: true,
+          pendingEnrollments: pending.map(e => ({
+            enrollmentId: e.enrollmentId,
+            childName: e.childName,
+            className: e.className,
+            parentEmail: e.parentEmail,
+            reminderCount: e.reminderCount,
+            lastReminderSentAt: e.lastReminderSentAt,
+          }))
+        });
+      }
+      
+      // Force send reminders (bypasses throttle check for testing)
+      if (req.query.force === 'true') {
+        const { getDb } = await import('./db');
+        const db = await getDb();
+        const { schoolClassEnrollments } = await import('@shared/schema');
+        const { eq } = await import('drizzle-orm');
+        
+        // Reset reminder tracking to allow immediate send
+        await db.update(schoolClassEnrollments)
+          .set({ lastReminderSentAt: null, reminderCount: 0 })
+          .where(eq(schoolClassEnrollments.status, 'pending_payment'));
+        console.log('🔄 Reset reminder tracking for all pending_payment enrollments');
+      }
+      
+      const stats = await processEnrollmentReminders();
+      res.json({ success: true, stats });
+    } catch (error: any) {
+      console.error('Error triggering enrollment reminders:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   app.post('/api/test/update-scheduled-payment', async (req, res) => {
     try {
       const { id, status } = req.body;
