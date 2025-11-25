@@ -642,6 +642,9 @@ interface EnrollmentDetail {
 interface BillingSummary {
   totalBalance: number;
   totalBalanceFormatted: string;
+  enrollmentBalance?: number;
+  scheduledPaymentsBalance?: number;
+  pendingScheduledPayments?: number;
   enrollmentCount: number;
   enrollmentDetails: EnrollmentDetail[];
   parentEmail: string;
@@ -1221,7 +1224,7 @@ export default function BillingPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="text-center p-4 border rounded-lg">
                     <div className="text-2xl font-bold text-red-600">
                       {formatCurrency(getSelectedTotal())}
@@ -1235,12 +1238,33 @@ export default function BillingPage() {
                     <div className="text-sm text-muted-foreground">Unpaid Enrollments</div>
                   </div>
                   <div className="text-center p-4 border rounded-lg">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {billingSummary.pendingScheduledPayments || 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Scheduled Payments</div>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
                     <div className="text-2xl font-bold text-green-600">
                       {formatCurrency(getPaymentPlanAmount())}
                     </div>
                     <div className="text-sm text-muted-foreground">Next Payment Amount</div>
                   </div>
                 </div>
+                
+                {/* Breakdown of outstanding balance if there are scheduled payments */}
+                {(billingSummary.scheduledPaymentsBalance || 0) > 0 && (
+                  <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                    <div className="text-sm font-medium text-orange-800 mb-2">Outstanding Balance Breakdown</div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-gray-600">Enrollment Balances:</div>
+                      <div className="text-right font-medium">{formatCurrency(billingSummary.enrollmentBalance || 0)}</div>
+                      <div className="text-gray-600">Scheduled Payments (payment plan):</div>
+                      <div className="text-right font-medium text-orange-600">{formatCurrency(billingSummary.scheduledPaymentsBalance || 0)}</div>
+                      <div className="border-t pt-1 text-gray-800 font-medium">Total:</div>
+                      <div className="border-t pt-1 text-right font-bold text-red-600">{formatCurrency(getSelectedTotal())}</div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

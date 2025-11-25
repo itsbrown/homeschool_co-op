@@ -505,19 +505,58 @@ router.get('/summary', async (req, res) => {
       }
     }
 
+    // Get pending scheduled payments (payment plan installments not yet paid)
+    let scheduledPaymentsTotal = 0;
+    let pendingScheduledPayments: Array<{
+      id: number;
+      amount: number;
+      scheduledDate: Date;
+      installmentNumber: number;
+      totalInstallments: number;
+      status: string;
+    }> = [];
+    
+    try {
+      const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+      pendingScheduledPayments = allScheduledPayments
+        .filter(p => p.status === 'pending')
+        .map(p => ({
+          id: p.id,
+          amount: p.amount,
+          scheduledDate: p.scheduledDate,
+          installmentNumber: p.installmentNumber,
+          totalInstallments: p.totalInstallments,
+          status: p.status
+        }));
+      
+      scheduledPaymentsTotal = pendingScheduledPayments.reduce((sum, p) => sum + p.amount, 0);
+      console.log(`📅 Found ${pendingScheduledPayments.length} pending scheduled payments totaling ${scheduledPaymentsTotal} cents`);
+    } catch (error) {
+      console.log('⚠️ Could not fetch scheduled payments:', error);
+    }
+    
+    // Total outstanding = enrollment balances + pending scheduled payments
+    const combinedBalance = totalBalance + scheduledPaymentsTotal;
+
     const summary = {
-      totalBalance: totalBalance,
+      totalBalance: combinedBalance,
       totalBalanceFormatted: new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD'
-      }).format(totalBalance / 100),
+      }).format(combinedBalance / 100),
+      enrollmentBalance: totalBalance,
+      scheduledPaymentsBalance: scheduledPaymentsTotal,
+      pendingScheduledPayments: pendingScheduledPayments.length,
       enrollmentCount: enrollmentDetails.length,
       enrollmentDetails: enrollmentDetails,
       parentEmail: userEmail
     };
 
     console.log('✅ Billing summary generated:', {
-      totalBalance,
+      combinedBalance,
+      enrollmentBalance: totalBalance,
+      scheduledPaymentsBalance: scheduledPaymentsTotal,
+      pendingScheduledPayments: pendingScheduledPayments.length,
       enrollmentCount: enrollmentDetails.length,
       parentEmail: userEmail
     });
