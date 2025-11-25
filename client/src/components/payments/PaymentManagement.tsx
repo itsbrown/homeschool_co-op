@@ -116,7 +116,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     },
   });
 
-  // Get subscription schedules for upcoming payments tab
+  // Get subscription schedules for upcoming payments tab (Stripe-managed)
   const { data: scheduledPayments, isLoading: isLoadingScheduled } = useQuery({
     queryKey: ["/api/stripe/subscription-schedules", childId],
     queryFn: async () => {
@@ -172,9 +172,53 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
             description: schedule.metadata?.description || 'Upcoming payment',
             stripeScheduleId: schedule.id,
             installmentNumber: currentPhaseIndex + 1,
-            totalInstallments: schedule.phases?.length || 0
+            totalInstallments: schedule.phases?.length || 0,
+            source: 'stripe' as const
           };
         });
+    },
+  });
+
+  // Get database-stored scheduled payments (class enrollments)
+  const { data: dbScheduledPayments, isLoading: isLoadingDbScheduled } = useQuery({
+    queryKey: ["/api/scheduled-payments/upcoming"],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/scheduled-payments/upcoming', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch scheduled payments: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.success || !data.payments) {
+        return [];
+      }
+
+      // Transform database payments to match UI structure
+      return data.payments.map((payment: any) => ({
+        id: payment.id,
+        amount: payment.amount,
+        dueDate: new Date(payment.dueDate),
+        status: payment.status,
+        childName: payment.enrollment?.childName || 'Child',
+        className: payment.enrollment?.className || 'Class',
+        description: payment.description || `Payment for ${payment.enrollment?.className || 'class'}`,
+        enrollmentId: payment.enrollmentId,
+        installmentNumber: payment.installmentNumber,
+        totalInstallments: payment.totalInstallments,
+        paymentPlan: payment.paymentPlan,
+        source: 'database' as const
+      }));
     },
   });
 
@@ -762,7 +806,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               <CardDescription>Payments scheduled for the future</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading || isLoadingScheduled ? (
+              {isLoading || isLoadingScheduled || isLoadingDbScheduled ? (
                 <div className="text-center py-8">
                   <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
                   <p>Loading upcoming payments...</p>
@@ -777,6 +821,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                       source: 'payment_history'
                     }));
                   
+                  // Stripe-managed scheduled payments
                   const scheduledPaymentItems = (scheduledPayments || [])
                     .map((sp: any) => ({
                       id: sp.id,
@@ -786,10 +831,28 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                       status: 'pending',
                       childName: sp.childName,
                       programName: sp.className,
-                      source: 'scheduled_payment'
+                      source: 'stripe_scheduled',
+                      installmentNumber: sp.installmentNumber,
+                      totalInstallments: sp.totalInstallments
                     }));
                   
-                  const allUpcomingPayments = [...pendingPayments, ...scheduledPaymentItems]
+                  // Database-stored scheduled payments (class enrollments)
+                  const dbScheduledPaymentItems = (dbScheduledPayments || [])
+                    .map((sp: any) => ({
+                      id: sp.id,
+                      description: sp.description || `${sp.className} - ${sp.childName}`,
+                      amount: sp.amount,
+                      dueDate: sp.dueDate,
+                      status: sp.status || 'pending',
+                      childName: sp.childName,
+                      programName: sp.className,
+                      source: 'database_scheduled',
+                      installmentNumber: sp.installmentNumber,
+                      totalInstallments: sp.totalInstallments,
+                      paymentPlan: sp.paymentPlan
+                    }));
+                  
+                  const allUpcomingPayments = [...pendingPayments, ...scheduledPaymentItems, ...dbScheduledPaymentItems]
                     .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
                   
                   return allUpcomingPayments.length === 0 ? (
@@ -801,18 +864,53 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                   ) : (
                     <div className="space-y-4">
                       {allUpcomingPayments.map((payment: any) => (
-                        <div key={`${payment.source}-${payment.id}`} className="flex justify-between items-center p-4 border rounded-lg">
+                        <div 
+                          key={`${payment.source}-${payment.id}`} 
+                          className={`flex justify-between items-center p-4 border rounded-lg ${
+                            payment.source === 'database_scheduled' 
+                              ? 'border-l-4 border-l-blue-500' 
+                              : payment.source === 'stripe_scheduled'
+                              ? 'border-l-4 border-l-purple-500'
+                              : ''
+                          }`}
+                        >
                           <div className="flex items-center gap-4">
-                            <div className="h-10 w-10 rounded-full bg-yellow-100 text-yellow-700 flex items-center justify-center">
+                            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                              payment.source === 'database_scheduled'
+                                ? 'bg-blue-100 text-blue-700'
+                                : payment.source === 'stripe_scheduled'
+                                ? 'bg-purple-100 text-purple-700'
+                                : 'bg-yellow-100 text-yellow-700'
+                            }`}>
                               <Calendar className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-medium">{payment.description}</h3>
+                                {payment.source === 'database_scheduled' && (
+                                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                    Class Enrollment
+                                  </Badge>
+                                )}
+                                {payment.source === 'stripe_scheduled' && (
+                                  <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                    Stripe Managed
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                Due: {formatDate(payment.dueDate!)} • {payment.childName}
+                                {payment.installmentNumber && payment.totalInstallments && (
+                                  <span> • Installment {payment.installmentNumber} of {payment.totalInstallments}</span>
+                                )}
+                              </p>
+                              {payment.paymentPlan && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Plan: {payment.paymentPlan}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-medium">{payment.description}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Due: {formatDate(payment.dueDate!)} • {payment.childName}
-                            </p>
-                          </div>
-                        </div>
                         <div className="flex items-center gap-3">
                           <div className="text-right">
                             <p className="font-medium">{formatCurrency(payment.amount)}</p>
