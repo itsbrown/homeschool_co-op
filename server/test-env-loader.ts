@@ -18,7 +18,8 @@ if (process.env.NODE_ENV === 'production') {
   // Use TESTING_STRIPE_SECRET_KEY from environment/secrets for development
   // This ensures frontend and backend use keys from the same Stripe account
   const testSecretKey = process.env.TESTING_STRIPE_SECRET_KEY;
-  const testPublicKey = process.env.VITE_TESTING_STRIPE_PUBLIC_KEY;
+  // Check both naming conventions for the public key
+  const testPublicKey = process.env.VITE_TESTING_STRIPE_PUBLIC_KEY || process.env.TESTING_VITE_STRIPE_PUBLIC_KEY;
   
   if (testSecretKey) {
     process.env.STRIPE_SECRET_KEY = testSecretKey;
