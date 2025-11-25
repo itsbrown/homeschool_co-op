@@ -18,6 +18,7 @@ export const getStripePublishableKey = (): string => {
     const testKey = import.meta.env.VITE_TESTING_STRIPE_PUBLIC_KEY;
     if (testKey) {
       console.log('🧪 Using Stripe TEST public key for development');
+      console.log('🔑 Key prefix:', testKey.substring(0, 20) + '...');
       return testKey;
     }
     console.warn('⚠️ VITE_TESTING_STRIPE_PUBLIC_KEY not found, falling back to VITE_STRIPE_PUBLIC_KEY');
