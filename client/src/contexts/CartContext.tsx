@@ -951,28 +951,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Check if cart was recently cleared to prevent re-populating after payment
-    const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
-    const forceClearedTimestamp = localStorage.getItem('asa_cart_force_cleared');
-    
-    // Use longer timeout (5 minutes) for force clears, shorter (60 seconds) for regular clears
-    const timeoutDuration = forceClearedTimestamp ? 300000 : 60000; // 5 min vs 1 min
-    const effectiveTimestamp = forceClearedTimestamp || clearedTimestamp;
-    
-    if (effectiveTimestamp) {
-      const timeSinceCleared = Date.now() - parseInt(effectiveTimestamp);
-      if (timeSinceCleared < timeoutDuration) {
-        console.log('🛒 Cart was recently cleared, skipping API cart restore for', Math.round((timeoutDuration - timeSinceCleared) / 1000), 'more seconds');
-        // Dispatch LOAD_EMPTY_CART to mark cart as hydrated with empty state
-        dispatch({ type: 'LOAD_EMPTY_CART' });
-        return;
-      } else {
-        // Clear the old flags after expiry
-        localStorage.removeItem('asa_cart_cleared');
-        localStorage.removeItem('asa_cart_force_cleared');
-      }
-    }
-
     try {
       // Group enrollments by class+child combination to find the latest status
       const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
@@ -1154,16 +1132,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Check if cart was recently cleared to prevent restoring after payment
-    const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
-    if (clearedTimestamp) {
-      const timeSinceCleared = Date.now() - parseInt(clearedTimestamp);
-      if (timeSinceCleared < 30000) { // 30 seconds
-        console.log('🛒 Cart was recently cleared, skipping localStorage restore');
-        return;
-      }
-    }
-
     // Use user-specific storage key to prevent cross-account data leakage
     const cartKey = getCartStorageKey(user?.email);
     const savedCart = localStorage.getItem(cartKey);
@@ -1195,16 +1163,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
-    // Check if cart was recently cleared to prevent overriding the clear operation
-    const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
-    if (clearedTimestamp) {
-      const timeSinceCleared = Date.now() - parseInt(clearedTimestamp);
-      if (timeSinceCleared < 30000) { // 30 seconds
-        console.log('🛒 Cart was recently cleared, skipping localStorage save');
-        return;
-      }
-    }
-
     // Use user-specific storage key to prevent cross-account data leakage
     const cartKey = getCartStorageKey(user?.email);
     
@@ -1384,11 +1342,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cartKey = getCartStorageKey(user?.email);
     localStorage.removeItem(cartKey);
     localStorage.removeItem('asa_cart_items');
-    localStorage.removeItem('cart'); // Also remove any other cart storage
+    localStorage.removeItem('cart');
     localStorage.removeItem('selectedPaymentPlan');
-    // Set a flag to prevent immediate reload after payment
-    localStorage.setItem('asa_cart_cleared', Date.now().toString());
-    console.log('🧹 CART CLEARED for user:', user?.email || 'guest', '- Flag set at:', Date.now());
+    console.log('🧹 CART CLEARED for user:', user?.email || 'guest');
+    
+    // Invalidate cart-related queries to ensure fresh data on next load
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/program-enrollments'] });
     
     // Only show toast if manually clearing (not after successful payment)
     if (!skipCancellation) {
@@ -1405,9 +1365,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Clear current cart first
     dispatch({ type: 'CLEAR_CART' });
-    
-    // Clear any stale cart cleared flag that might prevent loading
-    localStorage.removeItem('asa_cart_cleared');
     
     // Refetch enrollments using TanStack Query
     refetchEnrollments();

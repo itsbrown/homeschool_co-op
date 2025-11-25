@@ -72,9 +72,6 @@ export default function CartSuccess() {
           localStorage.removeItem('selectedPaymentPlan');
           sessionStorage.removeItem('cart_backup');
           
-          // Set the cleared flag to prevent cart restoration
-          localStorage.setItem('asa_cart_cleared', Date.now().toString());
-          
           // Clear cart in context - skip enrollment cancellation since payment already succeeded
           // Await to ensure cart clears properly, but don't fail if it errors
           try {

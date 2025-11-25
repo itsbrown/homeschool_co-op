@@ -266,36 +266,6 @@ export default function CartDrawer() {
                 </Button>
               </div>
               
-              {/* Force Clear option for items that keep reappearing after payment */}
-              <div className="text-center">
-                <button 
-                  className="text-xs text-muted-foreground underline hover:text-primary"
-                  onClick={async () => {
-                    // Set a longer protection window to prevent restoration
-                    localStorage.setItem('asa_cart_cleared', Date.now().toString());
-                    localStorage.setItem('asa_cart_force_cleared', Date.now().toString());
-                    // Clear all cart storage keys
-                    Object.keys(localStorage).forEach(key => {
-                      if (key.startsWith('asa_cart_')) {
-                        localStorage.removeItem(key);
-                      }
-                    });
-                    // Re-set the clear flag after removing cart keys
-                    localStorage.setItem('asa_cart_cleared', Date.now().toString());
-                    localStorage.setItem('asa_cart_force_cleared', Date.now().toString());
-                    await clearCart(true);
-                    closeCart();
-                    toast({
-                      title: "Cart Cleared",
-                      description: "Your cart has been cleared. Items won't reappear for 5 minutes.",
-                    });
-                    // Force page refresh to reset query cache
-                    window.location.reload();
-                  }}
-                >
-                  Already paid? Force clear cart
-                </button>
-              </div>
             </div>
           </>
         )}
