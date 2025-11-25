@@ -70,12 +70,23 @@ export class StripePaymentPlanService {
     if (data.paymentFrequency && data.paymentFrequency !== 'one_time' && data.enrollmentIds.length > 0) {
       const firstEnrollment = await this.storage.getEnrollmentById(data.enrollmentIds[0]);
       if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
-        programStartDate = new Date(firstEnrollment.programStartDate);
-        programEndDate = new Date(firstEnrollment.programEndDate);
-        console.log('📅 Using enrollment dates for payment schedule:', {
-          startDate: programStartDate.toLocaleDateString(),
-          endDate: programEndDate.toLocaleDateString()
-        });
+        const parsedStartDate = new Date(firstEnrollment.programStartDate);
+        const parsedEndDate = new Date(firstEnrollment.programEndDate);
+        
+        // Only use dates if they are valid (not NaN)
+        if (!isNaN(parsedStartDate.getTime()) && !isNaN(parsedEndDate.getTime())) {
+          programStartDate = parsedStartDate;
+          programEndDate = parsedEndDate;
+          console.log('📅 Using enrollment dates for payment schedule:', {
+            startDate: programStartDate.toLocaleDateString(),
+            endDate: programEndDate.toLocaleDateString()
+          });
+        } else {
+          console.warn('⚠️ Invalid enrollment dates, using default payment schedule:', {
+            rawStartDate: firstEnrollment.programStartDate,
+            rawEndDate: firstEnrollment.programEndDate
+          });
+        }
       }
     }
 
