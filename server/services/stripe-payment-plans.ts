@@ -3,15 +3,9 @@ import { IStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
 import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
-import { STRIPE_SECRET_KEY } from '../config/stripe';
+import { getStripeClient } from '../config/stripe';
 
 const isTestMode = process.env.NODE_ENV === 'test';
-
-const stripe = isTestMode 
-  ? null 
-  : new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2025-11-17.clover' as any,
-    });
 
 // Stripe's minimum payment amount is $0.50 USD (50 cents)
 const STRIPE_MINIMUM_AMOUNT = 50;
@@ -129,9 +123,7 @@ export class StripePaymentPlanService {
       } as Stripe.PaymentIntent;
       console.log('🧪 Test mode: Created mock PaymentIntent:', paymentIntent.id);
     } else {
-      if (!stripe) {
-        throw new Error('Stripe is not initialized');
-      }
+      const stripe = await getStripeClient();
       paymentIntent = await stripe.paymentIntents.create({
         amount: firstPhase.amount,
         currency: 'usd',
@@ -235,9 +227,7 @@ export class StripePaymentPlanService {
       return mockCustomer;
     }
 
-    if (!stripe) {
-      throw new Error('Stripe is not initialized');
-    }
+    const stripe = await getStripeClient();
 
     // Search for existing customer by email
     const existingCustomers = await stripe.customers.list({

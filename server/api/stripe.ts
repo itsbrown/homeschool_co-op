@@ -4,8 +4,7 @@ import { sendPaymentReceipt } from '../lib/email-service';
 import { StripePaymentPlanService } from '../services/stripe-payment-plans';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
-import { stripe } from '../config/stripe';
-import { getStripePublishableKey } from '../stripeClient';
+import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 
 const router = Router();
 
@@ -89,6 +88,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     // Check for existing Stripe subscription for this user
     let existingSubscription: any = null;
     let hasActiveSubscription = false;
+    const stripe = await getStripeClient();
     
     try {
       console.log('🔍 Checking for existing Stripe subscription for:', userEmail);
@@ -349,6 +349,7 @@ router.post('/create-product-payment', supabaseAuth, async (req: any, res) => {
     }
 
     // Create payment intent
+    const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(totalAmount), // Amount in cents
       currency: 'usd',
@@ -611,6 +612,7 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
     console.log('✅ Authorization passed: user belongs to admin school');
 
     // Now proceed with Stripe lookup
+    const stripe = await getStripeClient();
     const customers = await stripe.customers.search({
       query: `email:'${email}'`
     });
@@ -774,6 +776,7 @@ router.post('/test-account-lookup', supabaseAuth, async (req: any, res) => {
 
     // Step 2: Search Stripe for customer
     try {
+      const stripe = await getStripeClient();
       const customers = await stripe.customers.search({
         query: `email:'${email}'`
       });

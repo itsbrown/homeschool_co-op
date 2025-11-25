@@ -5,6 +5,10 @@
  * This ensures the backend uses the same Stripe account as the frontend.
  * 
  * IMPORTANT: Uses 2025-11-17.clover API version to match user's Stripe account
+ * 
+ * All Stripe access should use the async getters:
+ * - await getStripeClient() - returns configured Stripe instance
+ * - await getStripeSecretKey() - returns the secret key string
  */
 
 import Stripe from 'stripe';
@@ -101,34 +105,9 @@ export async function getStripeClient(): Promise<Stripe> {
 }
 
 /**
- * Legacy exports for backward compatibility
- * NOTE: These will use the cached key after first async load
- * New code should use getStripeClient() instead
+ * Get the Stripe publishable key for frontend use
  */
-export let STRIPE_SECRET_KEY = '';
-
-// Initialize the key asynchronously on first import
-// This maintains backward compatibility while using the new connector
-(async () => {
-  try {
-    STRIPE_SECRET_KEY = await getStripeSecretKey();
-  } catch (error) {
-    console.error('Failed to initialize Stripe secret key:', error);
-  }
-})();
-
-/**
- * Legacy synchronous Stripe instance
- * NOTE: This may not work correctly until async initialization completes
- * New code should use getStripeClient() instead
- */
-export let stripe: Stripe | null = null;
-
-// Initialize stripe client asynchronously
-(async () => {
-  try {
-    stripe = await getStripeClient();
-  } catch (error) {
-    console.error('Failed to initialize Stripe client:', error);
-  }
-})();
+export async function getStripePublishableKey(): Promise<string> {
+  const { publishableKey } = await fetchStripeCredentials();
+  return publishableKey;
+}

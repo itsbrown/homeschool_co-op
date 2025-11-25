@@ -6,7 +6,7 @@ import { insertPaymentSchema, type InsertPayment } from '@shared/schema';
 import { sendPaymentConfirmationEmail } from '../lib/email-service';
 import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
-import { STRIPE_SECRET_KEY } from '../config/stripe';
+import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
 
 const router = Router();
@@ -21,11 +21,6 @@ const paymentRateLimit = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-});
-
-// Initialize Stripe with environment-based key selection
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-11-17.clover' as any,
 });
 
 // Helper function to process balance payments with installment support
@@ -163,6 +158,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     });
 
     // Create payment intent
+    const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
       amount: installmentAmount, // For monthly: first installment; for full: total amount
       currency,
@@ -243,6 +239,7 @@ router.post('/confirm-payment', async (req, res) => {
     const { paymentIntentId, parentEmail, enrollmentDetails } = req.body;
 
     // Retrieve payment intent from Stripe
+    const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
     if (paymentIntent.status === 'succeeded') {
@@ -390,6 +387,7 @@ router.get('/payment-status/:paymentIntentId', async (req, res) => {
     }
 
     // Also check Stripe for the latest status
+    const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
     
     res.json({
@@ -568,6 +566,7 @@ router.post('/pay-balance', async (req, res) => {
     console.log('💳 Processing payment for:', userEmail, 'Amount:', totalAmount);
 
     // Create payment intent
+    const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(totalAmount * 100), // Convert dollars to cents for Stripe
       currency: 'usd',
@@ -837,7 +836,7 @@ router.post('/process-recent-payment', supabaseAuth, async (req, res) => {
     console.log(`🔍 Processing recent payment for user: ${userEmail}, PI: ${paymentIntentId || 'auto-detect'}`);
 
     // Get the most recent payment intent for this user from Stripe
-    const stripe = new Stripe(STRIPE_SECRET_KEY);
+    const stripe = await getStripeClient();
     
     let targetPaymentIntent;
     if (paymentIntentId) {

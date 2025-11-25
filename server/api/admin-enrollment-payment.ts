@@ -2,14 +2,9 @@ import express from 'express';
 import Stripe from 'stripe';
 import { storage } from '../storage';
 import { recalculatePaymentSchedule, validateFrequencyChange, type PaymentFrequency } from '../lib/payment-calculator';
-import { STRIPE_SECRET_KEY } from '../config/stripe';
+import { getStripeClient } from '../config/stripe';
 
 const router = express.Router();
-
-// Initialize Stripe with environment-based key selection
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-11-17.clover' as any,
-});
 
 /**
  * PATCH /api/admin/enrollments/:id/payment-plan
@@ -137,6 +132,7 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
     if (enrollment.stripeSubscriptionId) {
       try {
         console.log(`🔄 Updating Stripe subscription schedule for enrollment ${enrollmentId}`);
+        const stripe = await getStripeClient();
         
         // Retrieve the subscription schedule from Stripe
         const subscriptionSchedules = await stripe.subscriptionSchedules.list({

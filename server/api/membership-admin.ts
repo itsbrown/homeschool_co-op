@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
 import Stripe from "stripe";
-import { STRIPE_SECRET_KEY } from "../config/stripe";
+import { getStripeClient } from "../config/stripe";
 
 // Schema for updating membership
 const updateMembershipSchema = z.object({
@@ -638,9 +638,6 @@ export const createMembershipEnrollment = async (req: any, res: Response) => {
  */
 export const createMembershipCheckoutSession = async (req: any, res: Response) => {
   try {
-    // Initialize Stripe with environment-based key selection
-    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-11-17.clover' as any });
-
     const { membershipEnrollmentId, tier } = req.body;
 
     if (!membershipEnrollmentId) {
@@ -682,6 +679,7 @@ export const createMembershipCheckoutSession = async (req: any, res: Response) =
     const priceInCents = membershipFeeAmount;
 
     // Create or retrieve Stripe customer
+    const stripe = await getStripeClient();
     let customerId = parent.stripeCustomerId;
     if (!customerId) {
       console.log(`Creating new Stripe customer for parent ${parent.email}`);
@@ -776,8 +774,8 @@ export const syncStripeSubscription = async (req: any, res: Response) => {
       return res.status(400).json({ message: "Email is required" });
     }
     
-    // Initialize Stripe with environment-based key selection
-    const stripe = new Stripe(STRIPE_SECRET_KEY);
+    // Get Stripe client from managed connector
+    const stripe = await getStripeClient();
     
     // Search for customer in Stripe
     const customers = await stripe.customers.search({

@@ -52,7 +52,7 @@ import os from 'os';
 import stream from 'stream';
 import { promisify } from 'util';
 import Stripe from "stripe";
-import { STRIPE_SECRET_KEY } from "./config/stripe";
+import { getStripeClient } from "./config/stripe";
 
 // For historical and test users (keep these for test compatibility)
 const testUsers = {
@@ -1259,16 +1259,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Initialize Stripe with environment-based key selection
-  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-11-17.clover' as any });
-
   // Create payment intent for knowledge base purchase
   app.post("/api/create-payment-intent", isAuthenticated, async (req, res) => {
     try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe is not configured" });
-      }
-
       const { amount, knowledgeBaseId, title } = req.body;
 
       if (!amount || amount <= 0) {
@@ -1276,6 +1269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create a payment intent
+      const stripe = await getStripeClient();
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(amount * 100), // Convert to cents
         currency: "usd",
@@ -1311,8 +1305,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if payment was successful (can be expanded to validate with Stripe)
       const { paymentIntentId } = req.body;
 
-      if (stripe && paymentIntentId) {
+      if (paymentIntentId) {
         // Verify the payment intent if provided
+        const stripe = await getStripeClient();
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
         if (paymentIntent.status !== 'succeeded') {
@@ -1341,18 +1336,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create Stripe Checkout Session for subscriptions
   app.post("/api/subscriptions/create", isAuthenticated, async (req, res) => {
     try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe is not configured" });
-      }
-
       const { planId, stripePriceId, interval } = req.body;
 
       if (!stripePriceId) {
         return res.status(400).json({ message: "Price ID is required" });
       }
 
+      const stripe = await getStripeClient();
+
       // Create Stripe customer if they don't have one
-      let customerId = req.user?.stripeCustomerId;
+      let customerId = (req.user as any)?.stripeCustomerId;
       if (!customerId) {
         const customer = await stripe.customers.create({
           email: req.user?.email,
@@ -1423,18 +1416,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user;
 
-      let subscriptionDetails = {
-        plan: user.subscription || 'free',
-        status: user.subscriptionStatus || 'inactive',
-        customerId: user.stripeCustomerId || null,
+      let subscriptionDetails: any = {
+        plan: (user as any).subscription || 'free',
+        status: (user as any).subscriptionStatus || 'inactive',
+        customerId: (user as any).stripeCustomerId || null,
         subscription: null
       };
 
       // If user has Stripe customer ID, get subscription details
-      if (stripe && user.stripeCustomerId) {
+      if ((user as any).stripeCustomerId) {
         try {
+          const stripe = await getStripeClient();
           const subscriptions = await stripe.subscriptions.list({
-            customer: user.stripeCustomerId,
+            customer: (user as any).stripeCustomerId,
             limit: 1,
             status: 'all'
           });
@@ -1464,15 +1458,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Cancel subscription
   app.post("/api/subscriptions/cancel", isAuthenticated, async (req, res) => {
     try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe is not configured" });
-      }
-
-      const user = req.user;
+      const user = req.user as any;
 
       if (!user.stripeCustomerId) {
         return res.status(400).json({ message: "No subscription found" });
       }
+
+      const stripe = await getStripeClient();
 
       // Get active subscriptions
       const subscriptions = await stripe.subscriptions.list({
@@ -1503,15 +1495,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reactivate canceled subscription
   app.post("/api/subscriptions/reactivate", isAuthenticated, async (req, res) => {
     try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe is not configured" });
-      }
-
-      const user = req.user;
+      const user = req.user as any;
 
       if (!user.stripeCustomerId) {
         return res.status(400).json({ message: "No subscription found" });
       }
+
+      const stripe = await getStripeClient();
 
       // Get subscriptions
       const subscriptions = await stripe.subscriptions.list({

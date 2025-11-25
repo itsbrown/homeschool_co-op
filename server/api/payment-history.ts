@@ -5,15 +5,9 @@ import { sendPaymentReceipt } from '../lib/email-service';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 import { MembershipService } from '../services/membership-service';
 import { enrichedPaymentHistoryListResponseSchema, type EnrichedPaymentHistory } from '../../shared/schema';
-import Stripe from 'stripe';
-import { STRIPE_SECRET_KEY } from '../config/stripe';
+import { getStripeClient } from '../config/stripe';
 
 const router = Router();
-
-// Initialize Stripe with environment-based key selection
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-11-17.clover' as any,
-});
 
 // Helper: Calculate next payment date from Stripe subscription schedule
 // Uses Stripe's actual subscription data for accuracy (no approximations)
@@ -24,6 +18,7 @@ async function calculateNextPaymentDate(schedule: any, enrollment: any): Promise
   // If the schedule has a subscription ID, fetch the subscription for accurate billing data
   if (schedule.subscription) {
     try {
+      const stripe = await getStripeClient();
       const subscription = await stripe.subscriptions.retrieve(schedule.subscription);
       
       // Use current_period_end for the next payment date (Stripe's accurate billing anchor)
@@ -87,6 +82,7 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
     
     // Test mode: skip Stripe API calls
     if (process.env.NODE_ENV !== 'test' && customerIds.length > 0) {
+      const stripe = await getStripeClient();
       for (const customerId of customerIds) {
         try {
           // Fetch PaymentIntents
@@ -603,7 +599,7 @@ router.post('/refund/:paymentId', supabaseAuth, async (req: any, res) => {
     if (isStripePayment) {
       try {
         console.log(`💳 Processing Stripe refund for payment intent: ${originalPayment.stripePaymentIntentId}`);
-        
+        const stripe = await getStripeClient();
         stripeRefund = await stripe.refunds.create({
           payment_intent: originalPayment.stripePaymentIntentId!,
           amount: refundAmountCents,

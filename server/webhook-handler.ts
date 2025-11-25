@@ -2,12 +2,9 @@ import express, { Request, Response } from 'express';
 import Stripe from 'stripe';
 import { storage } from './storage';
 import { sendPaymentReceipt } from './lib/email-service';
-import { STRIPE_SECRET_KEY } from './config/stripe';
+import { getStripeClient } from './config/stripe';
 
-// Initialize Stripe with environment-based key selection
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-11-17.clover' as any,
-});
+// Stripe client will be lazily initialized within the webhook handler
 
 /**
  * Standalone Stripe webhook handler that must be applied BEFORE any JSON body parsers.
@@ -17,6 +14,9 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
  * app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }), webhookHandler);
  */
 export const webhookHandler = async (req: Request, res: Response) => {
+  // Get Stripe client for webhook operations
+  const stripe = await getStripeClient();
+  
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 

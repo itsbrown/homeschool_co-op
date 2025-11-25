@@ -2,12 +2,7 @@ import { Router } from 'express';
 import { storage } from '../storage';
 import Stripe from 'stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
-import { STRIPE_SECRET_KEY } from '../config/stripe';
-
-// Initialize Stripe with environment-based key selection
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-11-17.clover' as any,
-});
+import { getStripeClient } from '../config/stripe';
 
 const router = Router();
 
@@ -180,13 +175,6 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
 
     console.log('💳 Processing scheduled payment:', { paymentId, amount, description, userEmail });
 
-    if (!stripe) {
-      return res.status(500).json({
-        success: false,
-        error: 'Stripe is not configured'
-      });
-    }
-
     if (!paymentId || !amount) {
       return res.status(400).json({
         success: false,
@@ -212,6 +200,7 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
     }
 
     // Create Stripe payment intent
+    const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount), // Amount should be in cents
       currency: 'usd',
