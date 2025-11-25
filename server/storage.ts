@@ -5036,14 +5036,26 @@ export class MemStorage implements IStorage {
 
       // Scheduled payments methods 
       async createScheduledPayment(scheduledPayment: InsertScheduledPayment): Promise<ScheduledPayment> {
+        console.log('📝 createScheduledPayment called:', {
+          parentEmail: scheduledPayment.parentEmail,
+          amount: scheduledPayment.amount,
+          scheduledDate: scheduledPayment.scheduledDate,
+          hasDbStorage: !!this.dbStorage,
+          hasMethod: this.dbStorage && typeof this.dbStorage.createScheduledPayment === 'function'
+        });
+        
         try {
           if (this.dbStorage && typeof this.dbStorage.createScheduledPayment === 'function') {
-            return await this.dbStorage.createScheduledPayment(scheduledPayment);
+            console.log('💾 Using PostgreSQL database for scheduled payment creation');
+            const result = await this.dbStorage.createScheduledPayment(scheduledPayment);
+            console.log('✅ Scheduled payment saved to database:', result.id);
+            return result;
           } else {
-            console.log('💾 DB storage unavailable or method missing, using file storage fallback for createScheduledPayment');
+            console.log('⚠️ DB storage unavailable or method missing, using file storage fallback for createScheduledPayment');
             return await this.fileStorage.createScheduledPayment(scheduledPayment);
           }
         } catch (error) {
+          console.error('❌ Error creating scheduled payment in database, falling back to file storage:', error);
           return await this.fileStorage.createScheduledPayment(scheduledPayment);
         }
       }
@@ -5552,7 +5564,20 @@ export class MemStorage implements IStorage {
       }
 
       async getAllScheduledPayments(): Promise<any[]> {
-        return this.memStorage.getAllScheduledPayments();
+        console.log('📋 getAllScheduledPayments called - checking database...');
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getAllScheduledPayments === 'function') {
+            const payments = await this.dbStorage.getAllScheduledPayments();
+            console.log(`📋 Found ${payments.length} scheduled payments in database`);
+            return payments;
+          } else {
+            console.log('⚠️ DB storage unavailable for getAllScheduledPayments, using memStorage fallback');
+            return await this.memStorage.getAllScheduledPayments();
+          }
+        } catch (error) {
+          console.error('❌ Error fetching scheduled payments from database:', error);
+          return await this.memStorage.getAllScheduledPayments();
+        }
       }
 
       async createStripeSubscriptionSchedule(schedule: InsertStripeSubscriptionSchedule): Promise<StripeSubscriptionSchedule> {

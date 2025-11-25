@@ -522,6 +522,15 @@ async function runMigrations() {
     
     console.log('✅ Migration completed: scheduled_payments table created');
     
+    // Add reminder tracking columns to scheduled_payments table
+    console.log('Running migration: Adding reminder tracking columns to scheduled_payments table...');
+    await db.execute(sql`
+      ALTER TABLE scheduled_payments 
+      ADD COLUMN IF NOT EXISTS reminder_count INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS last_reminder_sent_at TIMESTAMP;
+    `);
+    console.log('✅ Migration completed: reminder tracking columns added to scheduled_payments table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

@@ -1528,6 +1528,20 @@ export class DatabaseStorage implements IStorage {
     return updatedPayment;
   }
 
+  async updateScheduledPaymentReminderCount(id: number, count: number): Promise<ScheduledPayment | undefined> {
+    const db = await getDb();
+    const [updatedPayment] = await db
+      .update(scheduledPayments)
+      .set({
+        reminderCount: count,
+        lastReminderSentAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(scheduledPayments.id, id))
+      .returning();
+    return updatedPayment;
+  }
+
   // Refund methods
   async createRefund(refund: InsertRefund): Promise<Refund> {
     const db = await getDb();
