@@ -15,15 +15,24 @@ if (process.env.NODE_ENV === 'production') {
 } else {
   console.log('🔧 Development mode - loading test Stripe keys...');
   
-  // ALWAYS override with test keys in development, regardless of what's configured
-  // This prevents accidental use of live keys in development
-  process.env.STRIPE_SECRET_KEY = "sk_test_51RkR2QRFKXbVXRE3U8c2AyDvLcOlqBQTYTeokh9J1O4hy9daHeW6B5Tzs0FyP2X2OC0Fnu9RVw9f8fQ8XMxFK6ne00nmfCHJxA";
-  process.env.STRIPE_PUBLISHABLE_KEY = "pk_test_51RkR2QRFKXbVXRE3BwJnN0L9qeEDh2uDM3vsGr8JDb4LjGLPIUEQV5HeYFHnZlqGlVKrlFU8GRwM9dY0Sy0BXntL00uLiEGiXl";
-  process.env.VITE_STRIPE_PUBLIC_KEY = "pk_test_51RkR2QRFKXbVXRE3BwJnN0L9qeEDh2uDM3vsGr8JDb4LjGLPIUEQV5HeYFHnZlqGlVKrlFU8GRwM9dY0Sy0BXntL00uLiEGiXl";
+  // Use TESTING_STRIPE_SECRET_KEY from environment/secrets for development
+  // This ensures frontend and backend use keys from the same Stripe account
+  const testSecretKey = process.env.TESTING_STRIPE_SECRET_KEY;
+  const testPublicKey = process.env.VITE_TESTING_STRIPE_PUBLIC_KEY;
   
-  // Note: STRIPE_WEBHOOK_SECRET is intentionally NOT set here
-  // It must come from Replit environment variables and match the Stripe account that owns these keys
-  // The webhook secret you set in Replit must be from a webhook created for the account: acct_1RkR2QRFKXbVXRE3
+  if (testSecretKey) {
+    process.env.STRIPE_SECRET_KEY = testSecretKey;
+    console.log('✅ Using TESTING_STRIPE_SECRET_KEY from secrets');
+  } else {
+    console.warn('⚠️ TESTING_STRIPE_SECRET_KEY not found - using STRIPE_SECRET_KEY from environment');
+  }
+  
+  if (testPublicKey) {
+    process.env.VITE_STRIPE_PUBLIC_KEY = testPublicKey;
+    console.log('✅ Using VITE_TESTING_STRIPE_PUBLIC_KEY from secrets');
+  } else {
+    console.warn('⚠️ VITE_TESTING_STRIPE_PUBLIC_KEY not found - using VITE_STRIPE_PUBLIC_KEY from environment');
+  }
   
   console.log('✅ Test Stripe keys loaded - development environment secured');
 }
