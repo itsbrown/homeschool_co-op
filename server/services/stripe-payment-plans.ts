@@ -10,7 +10,7 @@ const isTestMode = process.env.NODE_ENV === 'test';
 const stripe = isTestMode 
   ? null 
   : new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2025-03-31.basil' as any,
+      apiVersion: '2025-11-17.clover' as any,
     });
 
 // Stripe's minimum payment amount is $0.50 USD (50 cents)
