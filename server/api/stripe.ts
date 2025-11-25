@@ -5,8 +5,23 @@ import { StripePaymentPlanService } from '../services/stripe-payment-plans';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { stripe } from '../config/stripe';
+import { getStripePublishableKey } from '../stripeClient';
 
 const router = Router();
+
+// Get Stripe publishable key from Replit connection API
+router.get('/config', async (req, res) => {
+  try {
+    const publishableKey = await getStripePublishableKey();
+    res.json({ publishableKey });
+  } catch (error: any) {
+    console.error('Failed to get Stripe publishable key:', error);
+    res.status(500).json({ 
+      error: 'Failed to get Stripe configuration',
+      message: error.message 
+    });
+  }
+});
 
 // Create payment intent for cart checkout
 router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {

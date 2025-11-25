@@ -15,10 +15,8 @@ import { apiRequest } from '@/lib/queryClient';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
-import { stripePromise, STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
-
-// Stripe is initialized in config/stripe.ts with correct API version
-console.log('🔑 CartCheckout Stripe key check:', STRIPE_PUBLISHABLE_KEY ? 'Present' : 'Missing');
+import { stripePromise } from '@/config/stripe';
+import type { Stripe } from '@stripe/stripe-js';
 
 function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPaymentPlan: string; selectedPlanAmount: number }) {
   const stripe = useStripe();
@@ -153,6 +151,34 @@ export default function CartCheckout() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full');
   const [paymentFrequency, setPaymentFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | 'one_time'>('one_time');
+  
+  // Stripe loading state
+  const [stripeReady, setStripeReady] = useState(false);
+  const [stripeError, setStripeError] = useState<string>('');
+  const [resolvedStripePromise, setResolvedStripePromise] = useState<Promise<Stripe | null> | null>(null);
+  
+  // Load Stripe on mount
+  useEffect(() => {
+    const loadStripeInstance = async () => {
+      try {
+        console.log('🔄 Loading Stripe from server...');
+        // The stripePromise will fetch the key and load Stripe
+        const stripe = await stripePromise;
+        if (stripe) {
+          console.log('✅ Stripe loaded successfully');
+          setResolvedStripePromise(Promise.resolve(stripe));
+          setStripeReady(true);
+        } else {
+          console.error('❌ Stripe failed to load');
+          setStripeError('Failed to initialize Stripe');
+        }
+      } catch (err: any) {
+        console.error('❌ Error loading Stripe:', err);
+        setStripeError(err.message || 'Failed to load payment system');
+      }
+    };
+    loadStripeInstance();
+  }, []);
   
   // Promo code state
   const [promoCode, setPromoCode] = useState<string>('');
@@ -879,7 +905,19 @@ export default function CartCheckout() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {loading && !clientSecret ? (
+                {!stripeReady ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-muted-foreground">Initializing payment system...</span>
+                  </div>
+                ) : stripeError ? (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {stripeError}
+                    </AlertDescription>
+                  </Alert>
+                ) : loading && !clientSecret ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     <span className="ml-2 text-muted-foreground">Loading payment form...</span>
@@ -891,15 +929,8 @@ export default function CartCheckout() {
                       {error}
                     </AlertDescription>
                   </Alert>
-                ) : !stripePromise ? (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Stripe is not properly initialized. Please check your Stripe publishable key.
-                    </AlertDescription>
-                  </Alert>
-                ) : clientSecret ? (
-                  <Elements key={clientSecret} stripe={stripePromise} options={{ clientSecret }}>
+                ) : clientSecret && resolvedStripePromise ? (
+                  <Elements key={clientSecret} stripe={resolvedStripePromise} options={{ clientSecret }}>
                     <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getButtonDisplayAmount()} />
                   </Elements>
                 ) : (

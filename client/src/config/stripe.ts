@@ -4,39 +4,61 @@
  * Uses @stripe/stripe-js v8.x npm package for compatibility with
  * Stripe account API version 2025-11-17.clover.
  * 
- * Environment-based key selection:
- * - Development: Uses VITE_TESTING_STRIPE_PUBLIC_KEY
- * - Production: Uses VITE_STRIPE_PUBLIC_KEY
+ * Fetches publishable key from backend API which uses Replit's
+ * secure Stripe connection for proper key management.
  */
 
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 
-const isDevelopment = import.meta.env.MODE === 'development';
-
-export const getStripePublishableKey = (): string => {
-  if (isDevelopment) {
-    const testKey = import.meta.env.VITE_TESTING_STRIPE_PUBLIC_KEY;
-    if (testKey) {
-      console.log('🧪 Using Stripe TEST public key for development');
-      console.log('🔑 Key prefix:', testKey.substring(0, 20) + '...');
-      return testKey;
-    }
-    console.warn('⚠️ VITE_TESTING_STRIPE_PUBLIC_KEY not found, falling back to VITE_STRIPE_PUBLIC_KEY');
-  }
-  
-  const liveKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-  if (!liveKey) {
-    throw new Error('VITE_STRIPE_PUBLIC_KEY environment variable is required');
-  }
-  
-  console.log('💳 Using Stripe LIVE public key for production');
-  return liveKey;
-};
-
-export const STRIPE_PUBLISHABLE_KEY = getStripePublishableKey();
+let cachedPublishableKey: string | null = null;
+let stripePromiseCache: Promise<Stripe | null> | null = null;
 
 /**
- * Stripe promise using @stripe/stripe-js v8.x npm package
- * Compatible with Stripe account API version 2025-11-17.clover
+ * Fetch the Stripe publishable key from the backend
+ * The backend uses Replit's connection API for secure key management
  */
-export const stripePromise: Promise<Stripe | null> = loadStripe(STRIPE_PUBLISHABLE_KEY);
+export async function fetchStripePublishableKey(): Promise<string> {
+  if (cachedPublishableKey) {
+    return cachedPublishableKey;
+  }
+
+  try {
+    const response = await fetch('/api/stripe/config');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Stripe config: ${response.status}`);
+    }
+    const data = await response.json();
+    cachedPublishableKey = data.publishableKey;
+    console.log('🔑 Stripe publishable key loaded from server');
+    console.log('🔑 Key prefix:', cachedPublishableKey?.substring(0, 20) + '...');
+    return cachedPublishableKey!;
+  } catch (error) {
+    console.error('Failed to fetch Stripe publishable key:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get the Stripe promise - fetches key on first use
+ */
+export async function getStripePromise(): Promise<Stripe | null> {
+  if (stripePromiseCache) {
+    return stripePromiseCache;
+  }
+
+  const publishableKey = await fetchStripePublishableKey();
+  stripePromiseCache = loadStripe(publishableKey);
+  return stripePromiseCache;
+}
+
+/**
+ * Legacy exports for backward compatibility
+ * These will throw if accessed before fetchStripePublishableKey is called
+ */
+export const STRIPE_PUBLISHABLE_KEY = '';
+
+// Create a lazy-loading stripe promise
+export const stripePromise: Promise<Stripe | null> = (async () => {
+  const key = await fetchStripePublishableKey();
+  return loadStripe(key);
+})();
