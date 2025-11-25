@@ -1,5 +1,4 @@
 import { useStripe, Elements, PaymentElement, useElements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
 import { useEffect, useState } from 'react';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -7,10 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation } from 'wouter';
 import { Loader2 } from 'lucide-react';
-import { STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
-
-// Initialize Stripe outside component to avoid re-creating the Stripe object
-const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
+import { stripePromise } from '@/config/stripe';
 
 const CheckoutForm = ({ purchaseData }: { purchaseData: any }) => {
   const stripe = useStripe();

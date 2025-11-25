@@ -1,16 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
-
-const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
+import { stripePromise } from '@/config/stripe';
 
 interface Submission {
   id: number;

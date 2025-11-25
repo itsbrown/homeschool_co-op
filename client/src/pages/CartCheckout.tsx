@@ -10,18 +10,15 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
-import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest } from '@/lib/queryClient';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
-import { STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
+import { stripePromise, STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
 
-// Initialize Stripe outside component to avoid re-creating the Stripe object
+// Stripe is initialized in config/stripe.ts with correct API version
 console.log('🔑 CartCheckout Stripe key check:', STRIPE_PUBLISHABLE_KEY ? 'Present' : 'Missing');
-
-const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPaymentPlan: string; selectedPlanAmount: number }) {
   const stripe = useStripe();

@@ -6,6 +6,8 @@
  * - Production: Uses VITE_STRIPE_PUBLIC_KEY
  */
 
+import { loadStripe, Stripe } from '@stripe/stripe-js';
+
 const isDevelopment = import.meta.env.MODE === 'development';
 
 export const getStripePublishableKey = (): string => {
@@ -28,3 +30,17 @@ export const getStripePublishableKey = (): string => {
 };
 
 export const STRIPE_PUBLISHABLE_KEY = getStripePublishableKey();
+
+/**
+ * Stripe API version - must match the backend version (2025-02-24.acacia)
+ * This ensures frontend and backend communicate using the same API version
+ */
+export const STRIPE_API_VERSION = '2025-02-24.acacia';
+
+/**
+ * Pre-configured Stripe promise with the correct API version
+ * Use this instead of calling loadStripe directly
+ */
+export const stripePromise: Promise<Stripe | null> = loadStripe(STRIPE_PUBLISHABLE_KEY, {
+  apiVersion: STRIPE_API_VERSION as any,
+});
