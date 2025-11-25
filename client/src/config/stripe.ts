@@ -29,8 +29,6 @@ export async function fetchStripePublishableKey(): Promise<string> {
     }
     const data = await response.json();
     cachedPublishableKey = data.publishableKey;
-    console.log('🔑 Stripe publishable key loaded from server');
-    console.log('🔑 Key prefix:', cachedPublishableKey?.substring(0, 20) + '...');
     return cachedPublishableKey!;
   } catch (error) {
     console.error('Failed to fetch Stripe publishable key:', error);

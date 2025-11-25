@@ -152,28 +152,23 @@ export default function CartCheckout() {
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full');
   const [paymentFrequency, setPaymentFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | 'one_time'>('one_time');
   
-  // Stripe loading state
+  // Stripe loading state - store resolved Stripe instance, not a Promise
   const [stripeReady, setStripeReady] = useState(false);
   const [stripeError, setStripeError] = useState<string>('');
-  const [resolvedStripePromise, setResolvedStripePromise] = useState<Promise<Stripe | null> | null>(null);
+  const [stripeInstance, setStripeInstance] = useState<Stripe | null>(null);
   
   // Load Stripe on mount
   useEffect(() => {
     const loadStripeInstance = async () => {
       try {
-        console.log('🔄 Loading Stripe from server...');
-        // The stripePromise will fetch the key and load Stripe
         const stripe = await stripePromise;
         if (stripe) {
-          console.log('✅ Stripe loaded successfully');
-          setResolvedStripePromise(Promise.resolve(stripe));
+          setStripeInstance(stripe);
           setStripeReady(true);
         } else {
-          console.error('❌ Stripe failed to load');
-          setStripeError('Failed to initialize Stripe');
+          setStripeError('Failed to initialize payment system');
         }
       } catch (err: any) {
-        console.error('❌ Error loading Stripe:', err);
         setStripeError(err.message || 'Failed to load payment system');
       }
     };
@@ -929,8 +924,8 @@ export default function CartCheckout() {
                       {error}
                     </AlertDescription>
                   </Alert>
-                ) : clientSecret && resolvedStripePromise ? (
-                  <Elements key={clientSecret} stripe={resolvedStripePromise} options={{ clientSecret }}>
+                ) : clientSecret && stripeInstance ? (
+                  <Elements key={clientSecret} stripe={stripeInstance} options={{ clientSecret }}>
                     <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getButtonDisplayAmount()} />
                   </Elements>
                 ) : (
