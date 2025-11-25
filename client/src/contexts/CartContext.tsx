@@ -951,6 +951,21 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Check if cart was recently cleared to prevent re-populating after payment
+    const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
+    if (clearedTimestamp) {
+      const timeSinceCleared = Date.now() - parseInt(clearedTimestamp);
+      if (timeSinceCleared < 60000) { // 60 seconds - give webhook time to process
+        console.log('🛒 Cart was recently cleared, skipping API cart restore for', Math.round((60000 - timeSinceCleared) / 1000), 'more seconds');
+        // Dispatch LOAD_EMPTY_CART to mark cart as hydrated with empty state
+        dispatch({ type: 'LOAD_EMPTY_CART' });
+        return;
+      } else {
+        // Clear the old flag after expiry
+        localStorage.removeItem('asa_cart_cleared');
+      }
+    }
+
     try {
       // Group enrollments by class+child combination to find the latest status
       const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
