@@ -293,6 +293,7 @@ export interface IStorage {
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
   getAllScheduledPayments(): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
+  updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
 
   // Refund methods
   createRefund(refund: InsertRefund): Promise<Refund>;
@@ -3015,6 +3016,24 @@ export class MemStorage implements IStorage {
     return updatedPayment;
   }
 
+  async updateScheduledPaymentReminderCount(id: number, count: number): Promise<ScheduledPayment | undefined> {
+    const payment = this.scheduledPaymentsStore.get(id);
+    if (!payment) return undefined;
+
+    const updatedPayment: ScheduledPayment = {
+      ...payment,
+      reminderCount: count,
+      updatedAt: new Date()
+    };
+    this.scheduledPaymentsStore.set(id, updatedPayment);
+    
+    // Save to file for persistence
+    await this.saveScheduledPaymentsToFile();
+    console.log(`💾 Saved scheduled payment ${id} reminder count update to file`);
+    
+    return updatedPayment;
+  }
+
   private async saveScheduledPaymentsToFile(): Promise<void> {
     try {
       const fs = await import('fs');
@@ -5051,6 +5070,18 @@ export class MemStorage implements IStorage {
           }
         } catch (error) {
           return await this.memStorage.updateScheduledPaymentStatus(id, status);
+        }
+      }
+
+      async updateScheduledPaymentReminderCount(id: number, count: number): Promise<ScheduledPayment | undefined> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.updateScheduledPaymentReminderCount === 'function') {
+            return await this.dbStorage.updateScheduledPaymentReminderCount(id, count);
+          } else {
+            return await this.memStorage.updateScheduledPaymentReminderCount(id, count);
+          }
+        } catch (error) {
+          return await this.memStorage.updateScheduledPaymentReminderCount(id, count);
         }
       }
 

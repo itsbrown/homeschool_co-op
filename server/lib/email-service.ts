@@ -1155,3 +1155,374 @@ Thank you for choosing ${displaySchoolName}!
     return true; // Return true to indicate registration success despite email failure
   }
 }
+
+// ============================================================================
+// SCHEDULED PAYMENT REMINDER EMAILS
+// ============================================================================
+
+interface ScheduledPaymentReminderData {
+  parentEmail: string;
+  childName: string;
+  className: string;
+  schoolName: string;
+  amount: number;
+  dueDate: Date;
+  daysUntilDue: number;
+  paymentId: number;
+  installmentNumber: number;
+  totalInstallments: number;
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+}
+
+export async function sendScheduledPaymentReminder(data: ScheduledPaymentReminderData): Promise<boolean> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping payment reminder email');
+      return true;
+    }
+
+    const {
+      parentEmail,
+      childName,
+      className,
+      schoolName,
+      amount,
+      dueDate,
+      daysUntilDue,
+      paymentId,
+      installmentNumber,
+      totalInstallments,
+      urgency
+    } = data;
+
+    const formatCurrency = (amt: number) => {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(amt / 100);
+    };
+
+    const formatDate = (date: Date) => {
+      return new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }).format(date);
+    };
+
+    const urgencyColors = {
+      low: { bg: '#EFF6FF', border: '#3B82F6', text: '#1E40AF' },
+      medium: { bg: '#FFFBEB', border: '#F59E0B', text: '#92400E' },
+      high: { bg: '#FEF2F2', border: '#EF4444', text: '#991B1B' },
+      critical: { bg: '#FEF2F2', border: '#DC2626', text: '#7F1D1D' }
+    };
+
+    const colors = urgencyColors[urgency];
+    const paymentUrl = `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/billing`;
+
+    let subjectLine = '';
+    let headerMessage = '';
+    if (daysUntilDue === 7) {
+      subjectLine = `Upcoming Payment Reminder - ${className}`;
+      headerMessage = 'Your payment is due in 7 days';
+    } else if (daysUntilDue === 3) {
+      subjectLine = `Payment Due Soon - ${className}`;
+      headerMessage = 'Your payment is due in 3 days';
+    } else if (daysUntilDue === 1) {
+      subjectLine = `Payment Due Tomorrow - ${className}`;
+      headerMessage = 'Your payment is due tomorrow';
+    } else if (daysUntilDue === 0) {
+      subjectLine = `Payment Due Today - ${className}`;
+      headerMessage = 'Your payment is due today';
+    } else {
+      subjectLine = `Payment Reminder - ${className}`;
+      headerMessage = `Your payment is due in ${daysUntilDue} days`;
+    }
+
+    const htmlContent = `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+          <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+            <h1 style="color: white; margin: 0;">Payment Reminder</h1>
+            <p style="color: #E0E7FF; margin: 8px 0 0 0;">${schoolName}</p>
+          </div>
+          
+          <div style="padding: 24px;">
+            <div style="background-color: ${colors.bg}; border-left: 4px solid ${colors.border}; padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
+              <p style="margin: 0; color: ${colors.text}; font-size: 18px; font-weight: bold;">
+                ${headerMessage}
+              </p>
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>This is a friendly reminder that your payment for ${childName}'s enrollment in <strong>${className}</strong> is coming up.</p>
+            
+            <div style="background-color: #F3F4F6; padding: 20px; border-radius: 8px; margin: 24px 0;">
+              <h3 style="margin: 0 0 16px 0; color: #374151;">Payment Details</h3>
+              <table style="width: 100%;">
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Amount Due:</td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold; font-size: 18px; color: #4F46E5;">${formatCurrency(amount)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Due Date:</td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold;">${formatDate(dueDate)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Child:</td>
+                  <td style="padding: 8px 0; text-align: right;">${childName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Class:</td>
+                  <td style="padding: 8px 0; text-align: right;">${className}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Payment:</td>
+                  <td style="padding: 8px 0; text-align: right;">${installmentNumber} of ${totalInstallments}</td>
+                </tr>
+              </table>
+            </div>
+            
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${paymentUrl}" 
+                 style="background-color: #4F46E5; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                 Make Payment Now
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px;">
+              If you have any questions about this payment or need assistance, please contact us at 
+              <a href="mailto:support@americanseekersacademy.com" style="color: #4F46E5;">support@americanseekersacademy.com</a>
+            </p>
+            
+            <div style="margin-top: 32px; text-align: center; color: #6B7280; font-size: 14px;">
+              <p>Thank you for choosing ${schoolName}!</p>
+              <p style="margin-top: 16px; font-size: 12px;">
+                © 2025 ${schoolName}. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const textContent = `
+Payment Reminder - ${schoolName}
+
+${headerMessage}
+
+Hello,
+
+This is a friendly reminder that your payment for ${childName}'s enrollment in ${className} is coming up.
+
+Payment Details:
+- Amount Due: ${formatCurrency(amount)}
+- Due Date: ${formatDate(dueDate)}
+- Child: ${childName}
+- Class: ${className}
+- Payment: ${installmentNumber} of ${totalInstallments}
+
+Make your payment at: ${paymentUrl}
+
+If you have any questions, please contact us at support@americanseekersacademy.com
+
+Thank you for choosing ${schoolName}!
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: parentEmail }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
+      name: schoolName
+    };
+    sendSmtpEmail.subject = subjectLine;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Payment reminder email sent successfully to:', parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
+  } catch (error: any) {
+    console.error('❌ Failed to send payment reminder email:', error.message || error);
+    return false;
+  }
+}
+
+interface OverduePaymentNoticeData {
+  parentEmail: string;
+  childName: string;
+  className: string;
+  schoolName: string;
+  amount: number;
+  daysOverdue: number;
+  paymentId: number;
+  dueDate: Date;
+  installmentNumber: number;
+  totalInstallments: number;
+}
+
+export async function sendOverduePaymentNotice(data: OverduePaymentNoticeData): Promise<boolean> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping overdue payment notice');
+      return true;
+    }
+
+    const {
+      parentEmail,
+      childName,
+      className,
+      schoolName,
+      amount,
+      daysOverdue,
+      dueDate,
+      installmentNumber,
+      totalInstallments
+    } = data;
+
+    const formatCurrency = (amt: number) => {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(amt / 100);
+    };
+
+    const formatDate = (date: Date) => {
+      return new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }).format(date);
+    };
+
+    const paymentUrl = `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/billing`;
+    const isFinalNotice = daysOverdue >= 7;
+
+    const subjectLine = isFinalNotice 
+      ? `FINAL NOTICE: Payment Overdue - ${className}`
+      : `Payment Overdue - ${className}`;
+
+    const htmlContent = `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+          <div style="background-color: ${isFinalNotice ? '#DC2626' : '#EF4444'}; padding: 24px; text-align: center;">
+            <h1 style="color: white; margin: 0;">${isFinalNotice ? 'FINAL NOTICE' : 'Payment Overdue'}</h1>
+            <p style="color: #FEE2E2; margin: 8px 0 0 0;">${schoolName}</p>
+          </div>
+          
+          <div style="padding: 24px;">
+            <div style="background-color: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
+              <p style="margin: 0; color: #7F1D1D; font-size: 18px; font-weight: bold;">
+                Your payment is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue
+              </p>
+              ${isFinalNotice ? '<p style="margin: 8px 0 0 0; color: #991B1B;">Please make your payment immediately to avoid enrollment suspension.</p>' : ''}
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>We noticed that your payment for ${childName}'s enrollment in <strong>${className}</strong> is past due. Please make your payment as soon as possible to ensure continued enrollment.</p>
+            
+            <div style="background-color: #F3F4F6; padding: 20px; border-radius: 8px; margin: 24px 0;">
+              <h3 style="margin: 0 0 16px 0; color: #374151;">Overdue Payment Details</h3>
+              <table style="width: 100%;">
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Amount Due:</td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold; font-size: 18px; color: #DC2626;">${formatCurrency(amount)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Original Due Date:</td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold;">${formatDate(dueDate)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Days Overdue:</td>
+                  <td style="padding: 8px 0; text-align: right; color: #DC2626; font-weight: bold;">${daysOverdue} day${daysOverdue > 1 ? 's' : ''}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Child:</td>
+                  <td style="padding: 8px 0; text-align: right;">${childName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Class:</td>
+                  <td style="padding: 8px 0; text-align: right;">${className}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6B7280;">Payment:</td>
+                  <td style="padding: 8px 0; text-align: right;">${installmentNumber} of ${totalInstallments}</td>
+                </tr>
+              </table>
+            </div>
+            
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${paymentUrl}" 
+                 style="background-color: #DC2626; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                 Make Payment Now
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px;">
+              If you're experiencing financial difficulties or need to discuss payment options, please contact us at 
+              <a href="mailto:support@americanseekersacademy.com" style="color: #4F46E5;">support@americanseekersacademy.com</a>
+            </p>
+            
+            <div style="margin-top: 32px; text-align: center; color: #6B7280; font-size: 14px;">
+              <p>Thank you,</p>
+              <p>${schoolName} Team</p>
+              <p style="margin-top: 16px; font-size: 12px;">
+                © 2025 ${schoolName}. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const textContent = `
+${isFinalNotice ? 'FINAL NOTICE: ' : ''}Payment Overdue - ${schoolName}
+
+Your payment is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue
+
+Hello,
+
+We noticed that your payment for ${childName}'s enrollment in ${className} is past due. Please make your payment as soon as possible to ensure continued enrollment.
+
+Overdue Payment Details:
+- Amount Due: ${formatCurrency(amount)}
+- Original Due Date: ${formatDate(dueDate)}
+- Days Overdue: ${daysOverdue} day${daysOverdue > 1 ? 's' : ''}
+- Child: ${childName}
+- Class: ${className}
+- Payment: ${installmentNumber} of ${totalInstallments}
+
+Make your payment at: ${paymentUrl}
+
+If you're experiencing financial difficulties or need to discuss payment options, please contact us at support@americanseekersacademy.com
+
+Thank you,
+${schoolName} Team
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: parentEmail }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
+      name: schoolName
+    };
+    sendSmtpEmail.subject = subjectLine;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Overdue payment notice sent successfully to:', parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
+  } catch (error: any) {
+    console.error('❌ Failed to send overdue payment notice:', error.message || error);
+    return false;
+  }
+}

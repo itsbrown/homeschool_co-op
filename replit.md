@@ -31,7 +31,8 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Multi-Role System**: Supports users holding multiple roles with dynamic, school-context-restricted role-switching capabilities.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
--   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, and automated refunds.
+-   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and automatic payment reminders.
+-   **Payment Reminder System**: Automated email reminders for scheduled payments at T-7, T-3, T-1, T+0 (due day), and T+1 (overdue) days. Uses Brevo SMTP for delivery.
 -   **Cart System**: TanStack Query-based cart implementation with API-first state management, race condition prevention, and atomic bulk cancellation.
 -   **Discount Systems**: Database-managed Free After Threshold Discount System.
 -   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows, and integrates with the cart-to-checkout flow.
