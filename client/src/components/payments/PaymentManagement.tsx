@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { stripePromise } from '@/config/stripe';
+import { Loader2 } from "lucide-react";
 
 import {
   Card,
@@ -60,12 +63,302 @@ interface PaymentManagementProps {
   childId?: string; // Optional child ID to filter payments for a specific child
 }
 
+// Stripe payment form for scheduled payments
+function ScheduledPaymentForm({ 
+  onSuccess, 
+  onError,
+  onCancel,
+  amount
+}: { 
+  onSuccess: () => void; 
+  onError: (error: string) => void;
+  onCancel: () => void;
+  amount: number;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [elementsReady, setElementsReady] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!stripe || !elements) {
+      onError('Payment system not ready. Please try again.');
+      return;
+    }
+
+    if (!elementsReady) {
+      onError('Please wait for the payment form to load.');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: window.location.origin + '/parent/payments'
+        },
+        redirect: 'if_required'
+      });
+
+      if (error) {
+        onError(error.message || 'Payment failed');
+        setIsProcessing(false);
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        onSuccess();
+      } else if (paymentIntent && paymentIntent.status === 'requires_action') {
+        onError('Additional verification required. Please try again.');
+        setIsProcessing(false);
+      } else {
+        onError('Payment status unknown. Please check your payment history.');
+        setIsProcessing(false);
+      }
+    } catch (err: any) {
+      onError(err.message || 'An error occurred during payment');
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement 
+        onReady={() => setElementsReady(true)}
+        onLoadError={() => setElementsReady(false)}
+      />
+      <div className="flex gap-2 pt-2">
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={onCancel}
+          disabled={isProcessing}
+          className="flex-1"
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={!stripe || !elementsReady || isProcessing} 
+          className="flex-1"
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <CreditCard className="mr-2 h-4 w-4" />
+              Pay ${(amount / 100).toFixed(2)}
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// Dialog component for scheduled payment with Stripe Elements
+interface ScheduledPaymentDialogProps {
+  payment: {
+    id: string | number;
+    amount: number;
+    description: string;
+    programName?: string;
+    childName?: string;
+    dueDate?: string;
+    installmentNumber?: number;
+    totalInstallments?: number;
+    paymentPlan?: string;
+  };
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  formatCurrency: (amount: number) => string;
+  formatDate: (date: string) => string;
+}
+
+function ScheduledPaymentDialog({ 
+  payment, 
+  isOpen, 
+  onClose, 
+  onSuccess,
+  formatCurrency,
+  formatDate
+}: ScheduledPaymentDialogProps) {
+  const { toast } = useToast();
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Create payment intent when dialog opens
+  useEffect(() => {
+    if (isOpen && !clientSecret) {
+      createPaymentIntent();
+    }
+  }, [isOpen]);
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setClientSecret(null);
+      setError(null);
+    }
+  }, [isOpen]);
+
+  const createPaymentIntent = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('Please sign in to make a payment');
+      }
+
+      const response = await fetch('/api/scheduled-payments/pay', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentId: payment.id,
+          amount: payment.amount,
+          description: payment.description
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to initialize payment');
+      }
+
+      setClientSecret(data.clientSecret);
+    } catch (err: any) {
+      setError(err.message || 'Failed to initialize payment');
+      toast({
+        title: "Payment Error",
+        description: err.message || 'Failed to initialize payment',
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSuccess = () => {
+    toast({
+      title: "Payment Successful",
+      description: "Your payment has been processed successfully.",
+    });
+    // Invalidate queries to refresh data
+    queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
+    onSuccess();
+    onClose();
+  };
+
+  const handleError = (errorMessage: string) => {
+    toast({
+      title: "Payment Failed",
+      description: errorMessage,
+      variant: "destructive",
+    });
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Make Payment</DialogTitle>
+          <DialogDescription>
+            {payment.installmentNumber && payment.totalInstallments 
+              ? `Complete your payment for ${payment.paymentPlan || 'scheduled'} payment ${payment.installmentNumber} of ${payment.totalInstallments}`
+              : `Complete your payment for ${payment.description}`
+            }
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          {/* Payment Summary */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Payment Summary</h3>
+            <div className="bg-muted p-4 rounded-lg">
+              <div className="flex justify-between mb-2">
+                <span>Program:</span>
+                <span className="font-medium">{payment.programName || 'Class'}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span>Child:</span>
+                <span className="font-medium">{payment.childName || 'Child'}</span>
+              </div>
+              {payment.dueDate && (
+                <div className="flex justify-between mb-2">
+                  <span>Due Date:</span>
+                  <span className="font-medium">{formatDate(payment.dueDate)}</span>
+                </div>
+              )}
+              <div className="flex justify-between pt-2 border-t border-border">
+                <span>Total:</span>
+                <span className="font-bold">{formatCurrency(payment.amount)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Form */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Initializing payment...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-4">
+              <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+              <p className="text-destructive mb-4">{error}</p>
+              <Button onClick={createPaymentIntent} variant="outline">
+                Try Again
+              </Button>
+            </div>
+          ) : clientSecret ? (
+            <Elements 
+              stripe={stripePromise} 
+              options={{ 
+                clientSecret,
+                appearance: {
+                  theme: 'stripe',
+                  variables: {
+                    colorPrimary: '#1e3a5f',
+                  }
+                }
+              }}
+            >
+              <ScheduledPaymentForm 
+                onSuccess={handleSuccess}
+                onError={handleError}
+                onCancel={onClose}
+                amount={payment.amount}
+              />
+            </Elements>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function PaymentManagement({ childId }: PaymentManagementProps) {
   const { toast } = useToast();
-  const [paymentMethod, setPaymentMethod] = useState("credit_card");
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  
+  // State for the Stripe payment dialog
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [selectedPaymentForDialog, setSelectedPaymentForDialog] = useState<any>(null);
   
   // Get payment data for the parent (and optionally filtered by child)
   const { data: payments, isLoading, refetch } = useQuery({
