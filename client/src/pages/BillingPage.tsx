@@ -124,35 +124,68 @@ interface StripeSubscriptionSchedule {
   };
 }
 
-// Stripe Subscription Schedules Tab
+// Scheduled Payment Plans Tab - shows database-stored payment installments
 function SubscriptionSchedulesTab() {
-  const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
+  // Fetch database-stored scheduled payments (biweekly, deposit, split plans)
+  const { data: scheduledPayments = [], isLoading: scheduledLoading } = useQuery({
+    queryKey: ['scheduled-payments-upcoming'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
+      if (!response.ok) {
+        throw new Error('Failed to fetch scheduled payments');
+      }
+      const data = await response.json();
+      return data.success ? data.payments : [];
+    },
+  });
+
+  // Also fetch Stripe subscription schedules for legacy data
+  const { data: stripeSchedules = [], isLoading: stripeLoading } = useQuery({
     queryKey: ['stripe-subscription-schedules'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/stripe/subscription-schedules');
       if (!response.ok) {
-        throw new Error('Failed to fetch subscription schedules');
+        return [];
       }
       const data = await response.json();
       return data.success ? data.schedules : [];
     },
   });
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
+  const isLoading = scheduledLoading || stripeLoading;
+
+  const formatDate = (dateValue: string | number | Date) => {
+    if (typeof dateValue === 'number') {
+      return new Date(dateValue * 1000).toLocaleDateString();
+    }
+    return new Date(dateValue).toLocaleDateString();
   };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      'pending': 'outline',
       'not_started': 'outline',
       'active': 'default',
       'completed': 'secondary',
-      'canceled': 'destructive'
+      'paid': 'secondary',
+      'canceled': 'destructive',
+      'failed': 'destructive'
     };
     return variants[status] || 'outline';
   };
 
-  if (schedulesLoading) {
+  const formatPaymentPlanName = (plan: string) => {
+    const planNames: Record<string, string> = {
+      'biweekly': 'Biweekly Payments',
+      'deposit': 'Deposit Plan',
+      'split': 'Split Payment',
+      'full': 'Full Payment',
+      'three_payments': '3 Monthly Payments'
+    };
+    return planNames[plan] || plan;
+  };
+
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center h-48">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -160,80 +193,145 @@ function SubscriptionSchedulesTab() {
     );
   }
 
-  if (schedules.length === 0) {
+  const hasPayments = scheduledPayments.length > 0 || stripeSchedules.length > 0;
+
+  if (!hasPayments) {
     return (
       <div className="text-center py-12">
         <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">No payment plans found</h3>
-        <p className="text-gray-500">Stripe-managed payment plans will appear here when you enroll with a payment plan option.</p>
+        <p className="text-gray-500">Payment plans will appear here when you enroll with a payment plan option (biweekly, deposit, or split payments).</p>
       </div>
     );
   }
 
+  // Group scheduled payments by payment plan
+  const groupedPayments = scheduledPayments.reduce((groups: Record<string, any[]>, payment: any) => {
+    const key = payment.paymentPlan || 'other';
+    if (!groups[key]) {
+      groups[key] = [];
+    }
+    groups[key].push(payment);
+    return groups;
+  }, {});
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="mb-6">
         <h2 className="text-xl font-semibold">Payment Plans</h2>
-        <p className="text-muted-foreground">Stripe-managed payment schedules and installments</p>
+        <p className="text-muted-foreground">Your scheduled payment installments</p>
       </div>
 
-      <div className="space-y-4">
-        {schedules.map((schedule: any) => (
-          <Card key={schedule.id} className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
-                  <h3 className="font-medium">Payment Plan #{schedule.id}</h3>
-                  <Badge variant={getStatusBadge(schedule.stripeStatus)}>
-                    {schedule.stripeStatus}
-                  </Badge>
+      {/* Database-stored scheduled payments */}
+      {scheduledPayments.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="font-medium text-lg">Upcoming Payments ({scheduledPayments.length})</h3>
+          
+          {Object.entries(groupedPayments).map(([planType, payments]) => (
+            <Card key={planType} className="p-6" data-testid={`payment-plan-${planType}`}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-medium">{formatPaymentPlanName(planType)}</h3>
+                    <Badge variant="default">{(payments as any[]).length} payments</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Total remaining: {formatCurrency((payments as any[]).reduce((sum, p) => sum + p.amount, 0))}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Plan: {schedule.paymentPlan} | Total: {formatCurrency(schedule.totalAmount)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Created: {formatDate(new Date(schedule.createdAt).getTime() / 1000)}
-                </p>
               </div>
-              <div className="text-right">
-                <div className="text-lg font-semibold">
-                  {schedule.nextInvoice ? formatCurrency(schedule.nextInvoice.amount_due) : 'N/A'}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {schedule.nextInvoice ? `Due: ${formatDate(schedule.nextInvoice.period_start)}` : 'No upcoming payment'}
-                </p>
-              </div>
-            </div>
 
-            {schedule.phases && schedule.phases.length > 0 && (
               <div className="mt-4 pt-4 border-t">
-                <h4 className="font-medium mb-2">Payment Schedule</h4>
-                <div className="space-y-2">
-                  {schedule.phases.map((phase: any, index: number) => (
-                    <div key={index} className="flex justify-between text-sm">
-                      <span>
-                        Phase {index + 1}: {formatDate(phase.start_date)} - {formatDate(phase.end_date)}
-                      </span>
-                      <span>
-                        {phase.items[0] ? formatCurrency(phase.items[0].price.unit_amount) : 'N/A'}
-                      </span>
+                <h4 className="font-medium mb-3">Payment Schedule</h4>
+                <div className="space-y-3">
+                  {(payments as any[]).map((payment: any) => (
+                    <div key={payment.id} className="flex justify-between items-center text-sm p-3 bg-muted/50 rounded-lg" data-testid={`scheduled-payment-${payment.id}`}>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            Payment {payment.installmentNumber} of {payment.totalInstallments}
+                          </span>
+                          <Badge variant={getStatusBadge(payment.status)} className="text-xs">
+                            {payment.status}
+                          </Badge>
+                        </div>
+                        <p className="text-muted-foreground text-xs">
+                          {payment.className} {payment.childName ? `- ${payment.childName}` : ''}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          Due: {formatDate(payment.dueDate)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-semibold">{formatCurrency(payment.amount)}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
+            </Card>
+          ))}
+        </div>
+      )}
 
-            {schedule.error && (
-              <Alert className="mt-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {schedule.error}
-                </AlertDescription>
-              </Alert>
-            )}
-          </Card>
-        ))}
-      </div>
+      {/* Legacy Stripe subscription schedules */}
+      {stripeSchedules.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="font-medium text-lg">Stripe-Managed Schedules</h3>
+          {stripeSchedules.map((schedule: any) => (
+            <Card key={schedule.id} className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-medium">Schedule #{schedule.id}</h3>
+                    <Badge variant={getStatusBadge(schedule.stripeStatus)}>
+                      {schedule.stripeStatus}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Plan: {schedule.paymentPlan} | Total: {formatCurrency(schedule.totalAmount)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-semibold">
+                    {schedule.nextInvoice ? formatCurrency(schedule.nextInvoice.amount_due) : 'N/A'}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {schedule.nextInvoice ? `Due: ${formatDate(schedule.nextInvoice.period_start)}` : 'No upcoming payment'}
+                  </p>
+                </div>
+              </div>
+
+              {schedule.phases && schedule.phases.length > 0 && (
+                <div className="mt-4 pt-4 border-t">
+                  <h4 className="font-medium mb-2">Payment Phases</h4>
+                  <div className="space-y-2">
+                    {schedule.phases.map((phase: any, index: number) => (
+                      <div key={index} className="flex justify-between text-sm">
+                        <span>
+                          Phase {index + 1}: {formatDate(phase.start_date)} - {formatDate(phase.end_date)}
+                        </span>
+                        <span>
+                          {phase.items[0] ? formatCurrency(phase.items[0].price.unit_amount) : 'N/A'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {schedule.error && (
+                <Alert className="mt-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    {schedule.error}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
