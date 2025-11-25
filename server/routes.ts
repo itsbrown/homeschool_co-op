@@ -43,6 +43,8 @@ import paymentCleanupRouter from "./api/payment-cleanup";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import customFormsRouter from "./api/custom-forms";
 import discountsRouter from "./api/discounts";
+import enrollmentConflictsRouter from "./api/enrollment-conflicts";
+import classInclusionsRouter from "./api/class-inclusions";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2918,6 +2920,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.use("/api/parent-profile", parentProfileRouter);
+  
+  // Enrollment conflicts router
+  app.use("/api/enrollment-conflicts", enrollmentConflictsRouter);
+  
+  // Class inclusions router (admin)
+  app.use("/api/class-inclusions", classInclusionsRouter);
   
   // Multi-location support routes
   const locationsRouter = (await import("./api/locations")).default;

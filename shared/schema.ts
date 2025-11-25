@@ -1319,6 +1319,20 @@ export const classesRelations = relations(classes, ({ one }) => ({
   curriculum: one(curricula, { fields: [classes.curriculumId], references: [curricula.id] }),
 }));
 
+// Class Inclusions - tracks which classes are included in other classes (e.g., Full Day includes Woodshop, Art, Music)
+export const classInclusions = pgTable("class_inclusions", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  parentClassId: integer("parent_class_id").notNull().references(() => classes.id, { onDelete: "cascade" }), // The "container" class (e.g., Full Day)
+  includedClassId: integer("included_class_id").notNull().references(() => classes.id, { onDelete: "cascade" }), // The included class (e.g., Woodshop)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertClassInclusionSchema = createInsertSchema(classInclusions)
+  .omit({ id: true, createdAt: true });
+export type InsertClassInclusion = z.infer<typeof insertClassInclusionSchema>;
+export type ClassInclusion = typeof classInclusions.$inferSelect;
+
 // Marketing Links table for school admin marketing campaigns
 export const marketingLinks = pgTable("marketing_links", {
   id: serial("id").primaryKey(),

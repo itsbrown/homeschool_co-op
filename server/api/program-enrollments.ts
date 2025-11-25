@@ -91,10 +91,19 @@ export const getEnrollmentById = async (req: Request, res: Response) => {
     
     // Security check - verify user has appropriate access (parent of child or instructor of program)
     const child = await storage.getChildById(enrollment.childId);
+    
+    if (!child) {
+      return res.status(404).json({ message: "Associated child not found" });
+    }
+    
+    if (!enrollment.programId) {
+      return res.status(400).json({ message: "Enrollment has no associated program" });
+    }
+    
     const program = await storage.getProgramById(enrollment.programId);
     
-    if (!child || !program) {
-      return res.status(404).json({ message: "Associated child or program not found" });
+    if (!program) {
+      return res.status(404).json({ message: "Associated program not found" });
     }
     
     // Check if user is parent of the child or instructor of the program

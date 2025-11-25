@@ -26,6 +26,22 @@ interface Child {
   gradeLevel: string;
 }
 
+// Conflict data interface
+interface ConflictData {
+  hasConflicts: boolean;
+  conflicts: Array<{
+    type: 'schedule' | 'inclusion';
+    conflictingClassId: number;
+    conflictingClassName: string;
+    message: string;
+    details?: {
+      day?: string;
+      time?: string;
+    };
+  }>;
+  canEnroll: boolean;
+}
+
 // Program interface (simplified)
 interface Program {
   id: number;
@@ -74,7 +90,7 @@ export function ProgramEnrollmentForm({
       program && typeof program === 'object' && 'isPublished' in program && program.isPublished) : [],
   });
 
-  const { data: children, isLoading: isLoadingChildren } = useQuery({
+  const { data: children, isLoading: isLoadingChildren} = useQuery({
     queryKey: ["/api/parent/children"],
   });
 
@@ -90,8 +106,15 @@ export function ProgramEnrollmentForm({
     },
   });
 
-  // Watch for selected program changes
+  // Watch for selected program and child changes
   const watchProgramId = form.watch("programId");
+  const watchChildId = form.watch("childId");
+
+  // Fetch enrollment conflicts when both child and program are selected
+  const { data: conflictData, isLoading: isLoadingConflicts } = useQuery<ConflictData>({
+    queryKey: ["/api/enrollment-conflicts", watchChildId, "class", watchProgramId],
+    enabled: !!watchChildId && !!watchProgramId && watchChildId !== "" && watchProgramId !== "",
+  });
 
   // Update selected program when program ID changes
   useEffect(() => {
@@ -367,16 +390,32 @@ export function ProgramEnrollmentForm({
               </div>
             )}
 
+            {conflictData && conflictData.hasConflicts && (
+              <div className="mt-4 p-4 border border-destructive rounded-md bg-destructive/10">
+                <h4 className="font-semibold text-destructive mb-2">Enrollment Conflicts Detected</h4>
+                <ul className="space-y-2 text-sm">
+                  {conflictData.conflicts.map((conflict: any, index: number) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-destructive">•</span>
+                      <span>{conflict.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={isSubmitting}
+              disabled={isSubmitting || (conflictData?.hasConflicts ?? false)}
             >
               {isSubmitting 
                 ? "Processing..." 
-                : enrollmentId 
-                  ? "Update Enrollment" 
-                  : "Complete Enrollment"
+                : (conflictData?.hasConflicts ?? false)
+                  ? "Cannot Enroll - Conflicts Detected"
+                  : enrollmentId 
+                    ? "Update Enrollment" 
+                    : "Complete Enrollment"
               }
             </Button>
           </form>
