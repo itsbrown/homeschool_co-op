@@ -953,16 +953,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Check if cart was recently cleared to prevent re-populating after payment
     const clearedTimestamp = localStorage.getItem('asa_cart_cleared');
-    if (clearedTimestamp) {
-      const timeSinceCleared = Date.now() - parseInt(clearedTimestamp);
-      if (timeSinceCleared < 60000) { // 60 seconds - give webhook time to process
-        console.log('🛒 Cart was recently cleared, skipping API cart restore for', Math.round((60000 - timeSinceCleared) / 1000), 'more seconds');
+    const forceClearedTimestamp = localStorage.getItem('asa_cart_force_cleared');
+    
+    // Use longer timeout (5 minutes) for force clears, shorter (60 seconds) for regular clears
+    const timeoutDuration = forceClearedTimestamp ? 300000 : 60000; // 5 min vs 1 min
+    const effectiveTimestamp = forceClearedTimestamp || clearedTimestamp;
+    
+    if (effectiveTimestamp) {
+      const timeSinceCleared = Date.now() - parseInt(effectiveTimestamp);
+      if (timeSinceCleared < timeoutDuration) {
+        console.log('🛒 Cart was recently cleared, skipping API cart restore for', Math.round((timeoutDuration - timeSinceCleared) / 1000), 'more seconds');
         // Dispatch LOAD_EMPTY_CART to mark cart as hydrated with empty state
         dispatch({ type: 'LOAD_EMPTY_CART' });
         return;
       } else {
-        // Clear the old flag after expiry
+        // Clear the old flags after expiry
         localStorage.removeItem('asa_cart_cleared');
+        localStorage.removeItem('asa_cart_force_cleared');
       }
     }
 
