@@ -1260,7 +1260,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Initialize Stripe with environment-based key selection
-  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-11-20.acacia' });
+  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-11-20' });
 
   // Create payment intent for knowledge base purchase
   app.post("/api/create-payment-intent", isAuthenticated, async (req, res) => {

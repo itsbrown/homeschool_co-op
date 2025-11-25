@@ -58,7 +58,7 @@ router.post('/subscription-schedules', async (req, res) => {
 
 // Initialize Stripe for retry operations
 const stripe = new Stripe(STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2024-11-20',
 });
 
 // DEPRECATED: Old subscription schedule handlers - replaced by membership webhook handlers

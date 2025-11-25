@@ -38,6 +38,6 @@ export const STRIPE_SECRET_KEY = getStripeSecretKey();
  * Import this instead of creating new Stripe instances for better testability
  */
 export const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2024-11-20',
   typescript: true,
 });
