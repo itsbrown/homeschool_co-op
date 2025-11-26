@@ -171,18 +171,21 @@ function SocialShareButtons({ formTitle, formUrl }: { formTitle: string; formUrl
 }
 
 function SchoolBranding({ school }: { school: SchoolInfo }) {
+  const [logoError, setLogoError] = useState(false);
+  
   return (
     <div className="flex items-center gap-4 mb-6 pb-6 border-b" data-testid="school-branding">
-      {school.logo ? (
-        <Avatar className="h-16 w-16">
-          <AvatarImage src={school.logo} alt={school.name} />
-          <AvatarFallback className="text-lg bg-primary/10 text-primary">
-            {school.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+      {school.logo && !logoError ? (
+        <img 
+          src={school.logo} 
+          alt={school.name}
+          className="h-14 max-w-[200px] object-contain"
+          onError={() => setLogoError(true)}
+          data-testid="img-school-logo"
+        />
       ) : (
-        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-          <School className="h-8 w-8 text-primary" />
+        <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <School className="h-7 w-7 text-primary" />
         </div>
       )}
       <div>
