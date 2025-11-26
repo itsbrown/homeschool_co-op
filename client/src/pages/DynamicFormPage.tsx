@@ -48,18 +48,24 @@ interface CustomForm {
   school?: SchoolInfo | null;
 }
 
-function SocialShareButtons({ formTitle, formUrl }: { formTitle: string; formUrl: string }) {
+function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle: string; formUrl: string; formDescription?: string | null }) {
   const { toast } = useToast();
   
-  const shareText = `Check out this form: ${formTitle}`;
+  const descriptionText = formDescription ? `\n\n${formDescription}` : '';
+  const shareText = `${formTitle}${descriptionText}`;
   const encodedText = encodeURIComponent(shareText);
   const encodedUrl = encodeURIComponent(formUrl);
+  const encodedQuote = encodeURIComponent(formDescription || formTitle);
+  
+  const emailBody = formDescription 
+    ? `${formDescription}\n\nFill out the form here: ${formUrl}`
+    : `Check out this form: ${formUrl}`;
   
   const shareLinks = {
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedQuote}`,
     twitter: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
     linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-    email: `mailto:?subject=${encodeURIComponent(formTitle)}&body=${encodeURIComponent(`Check out this form: ${formUrl}`)}`,
+    email: `mailto:?subject=${encodeURIComponent(formTitle)}&body=${encodeURIComponent(emailBody)}`,
   };
   
   const copyToClipboard = async () => {
