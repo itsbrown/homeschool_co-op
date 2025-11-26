@@ -50,6 +50,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Student Management System**: Tracks students across schools, including auto-sync for existing children.
 -   **Notification System**: In-app notification system with PostgreSQL storage and real-time unread counts.
 -   **Category Management System**: School-level custom category system with dynamic dropdown integration and idempotent seeding of default categories.
+-   **Interactive Onboarding Tour**: Custom-built guided tour for new parent accounts explaining dashboard features, enrollment workflow, and emphasizing that children are only enrolled after first payment. School admins can toggle this feature on/off.
 
 ## External Dependencies
 -   **Supabase**: Authentication (OAuth).

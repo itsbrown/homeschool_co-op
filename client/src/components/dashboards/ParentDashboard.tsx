@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
+import OnboardingTour from "@/components/onboarding/OnboardingTour";
 
 
 export default function ParentDashboard() {
@@ -18,7 +19,70 @@ export default function ParentDashboard() {
   const [userSchool, setUserSchool] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const { toast } = useToast();
+
+  // Fetch onboarding status
+  const { data: onboardingStatus } = useQuery({
+    queryKey: ["/api/onboarding/status"],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) return null;
+      
+      const response = await fetch("/api/onboarding/status", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !!session,
+  });
+
+  // Complete onboarding tour mutation
+  const completeOnboardingMutation = useMutation({
+    mutationFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch("/api/onboarding/complete", {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/status"] });
+      toast({
+        title: "Tour Complete!",
+        description: "You're all set to start enrolling your children.",
+      });
+    }
+  });
+
+  // Show tour if user hasn't completed it and tour is enabled
+  useEffect(() => {
+    if (onboardingStatus?.shouldShowTour && !showTour) {
+      const timer = setTimeout(() => {
+        setShowTour(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [onboardingStatus?.shouldShowTour]);
+
+  const handleTourClose = () => {
+    setShowTour(false);
+    completeOnboardingMutation.mutate();
+  };
+
+  const handleTourComplete = () => {
+    setShowTour(false);
+    completeOnboardingMutation.mutate();
+  };
 
   // Note: Cart loading is handled by CartContext useEffect - no need to duplicate here
 
@@ -144,9 +208,16 @@ export default function ParentDashboard() {
     }, [user?.email]);
 
   return (
+    <>
+      <OnboardingTour
+        isOpen={showTour}
+        onClose={handleTourClose}
+        onComplete={handleTourComplete}
+      />
+      
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0" data-tour="welcome-section">
           <h1 className="text-2xl md:text-3xl font-bold break-words">{userSchool ? `${userSchool.name} - Parent Dashboard` : 'Parent Dashboard'}</h1>
           <p className="text-muted-foreground mt-1 text-sm md:text-base">
             {userSchool
@@ -155,14 +226,14 @@ export default function ParentDashboard() {
             }
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-          <Button asChild className="w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto" data-tour="children-section">
+          <Button asChild className="w-full sm:w-auto" data-testid="btn-register-child">
             <Link href="/children/register">
               <PlusCircle className="mr-2 h-4 w-4" />
               Register Child
             </Link>
           </Button>
-          <Button asChild variant="outline" className="w-full sm:w-auto whitespace-nowrap">
+          <Button asChild variant="outline" className="w-full sm:w-auto whitespace-nowrap" data-tour="classes-section" data-testid="btn-browse-classes">
             <Link href="/programs">
               <BookOpen className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Browse Classes & Programs</span>
@@ -265,13 +336,13 @@ export default function ParentDashboard() {
             </Card>
 
             {/* Quick Actions */}
-            <Card>
+            <Card data-tour="cart-section">
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Common parent tasks</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button asChild variant="outline" className="w-full justify-start h-auto p-4">
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="profile-section" data-testid="btn-my-children">
                   <Link href="/children">
                     <UserPlus className="mr-3 h-5 w-5" />
                     <div className="text-left">
@@ -281,7 +352,7 @@ export default function ParentDashboard() {
                   </Link>
                 </Button>
 
-                <Button asChild variant="outline" className="w-full justify-start h-auto p-4">
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="enrollment-info" data-testid="btn-enrollments">
                   <Link href="/enrollments">
                     <BookOpen className="mr-3 h-5 w-5" />
                     <div className="text-left">
@@ -291,7 +362,7 @@ export default function ParentDashboard() {
                   </Link>
                 </Button>
 
-                <Button asChild variant="outline" className="w-full justify-start h-auto p-4">
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="payments-section" data-testid="btn-payments">
                   <Link href="/payments">
                     <CreditCard className="mr-3 h-5 w-5" />
                     <div className="text-left">
@@ -496,5 +567,6 @@ export default function ParentDashboard() {
         </TabsContent>
       </Tabs>
       </div>
+    </>
   );
 }

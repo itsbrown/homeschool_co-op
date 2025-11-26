@@ -531,6 +531,18 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: reminder tracking columns added to scheduled_payments table');
     
+    // Add onboarding tour columns
+    console.log('Running migration: Adding onboarding tour columns...');
+    await db.execute(sql`
+      ALTER TABLE schools 
+      ADD COLUMN IF NOT EXISTS onboarding_tour_enabled BOOLEAN DEFAULT true;
+    `);
+    await db.execute(sql`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN DEFAULT false;
+    `);
+    console.log('✅ Migration completed: onboarding tour columns added');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

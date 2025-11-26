@@ -32,6 +32,7 @@ export const users = pgTable("users", {
   activeRole: text("active_role"), // Currently active role for multi-role users (NULL means use primary role)
   activeRoleId: integer("active_role_id"), // ID of the currently active role from user_roles table (NULL means use primary role)
   stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for payments
+  hasCompletedOnboarding: boolean("has_completed_onboarding").default(false), // Whether user has completed the onboarding tour
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -90,6 +91,9 @@ export const schools = pgTable("schools", {
   // "Free After X" Discount Configuration
   freeAfterThresholdEnabled: boolean("free_after_threshold_enabled").default(false), // Enable/disable "free after X children" discount
   freeAfterThreshold: integer("free_after_threshold").default(3), // Number of children before free enrollments apply (default: 3, meaning 4th+ child gets discounts)
+  
+  // Onboarding Tour Configuration
+  onboardingTourEnabled: boolean("onboarding_tour_enabled").default(true), // Enable/disable onboarding tour for new parents
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -117,6 +121,9 @@ export const insertSchoolSchema = createInsertSchema(schools)
     freeAfterThreshold: z.number().int().min(1).default(3),
     membershipDescription: z.string().nullable().default(null),
     membershipRequired: z.boolean().default(true),
+    
+    // Onboarding Tour Configuration
+    onboardingTourEnabled: z.boolean().default(true),
   });
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
 export type School = typeof schools.$inferSelect;
