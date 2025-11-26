@@ -3,8 +3,63 @@ import { storage } from '../storage';
 import type { Discount } from '@shared/schema';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
+import { getDb } from '../db';
+import { userRoles } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 
 const router = Router();
+
+// Helper function to get all roles for a user
+async function getUserRoles(userId: number): Promise<string[]> {
+  try {
+    const db = await getDb();
+    const roles = await db
+      .select({ role: userRoles.role })
+      .from(userRoles)
+      .where(eq(userRoles.userId, userId));
+    return roles.map((r: { role: string }) => r.role);
+  } catch (error) {
+    console.error('Error getting user roles:', error);
+    return [];
+  }
+}
+
+// Helper function to check if user meets role requirements for a discount
+function checkRoleEligibility(
+  userRolesList: string[], 
+  requiredRoles: string[] | null | undefined, 
+  matchLogic: string | null | undefined
+): { eligible: boolean; reason?: string } {
+  // If no required roles specified, discount is available to everyone
+  if (!requiredRoles || requiredRoles.length === 0) {
+    return { eligible: true };
+  }
+
+  const logic = matchLogic || 'or';
+  
+  if (logic === 'and') {
+    // User must have ALL required roles
+    const hasAllRoles = requiredRoles.every(role => userRolesList.includes(role));
+    if (!hasAllRoles) {
+      const missingRoles = requiredRoles.filter(role => !userRolesList.includes(role));
+      return { 
+        eligible: false, 
+        reason: `This discount requires you to have ALL of these roles: ${requiredRoles.join(', ')}. You are missing: ${missingRoles.join(', ')}`
+      };
+    }
+    return { eligible: true };
+  } else {
+    // User must have ANY of the required roles (OR logic)
+    const hasAnyRole = requiredRoles.some(role => userRolesList.includes(role));
+    if (!hasAnyRole) {
+      return { 
+        eligible: false, 
+        reason: `This discount is only available to users with one of these roles: ${requiredRoles.join(', ')}`
+      };
+    }
+    return { eligible: true };
+  }
+}
 
 // Apply authentication middleware to all discount endpoints
 router.use(supabaseAuth);
@@ -80,6 +135,44 @@ router.post('/validate', requireSchoolContext, async (req: any, res) => {
         error: 'This discount has reached its usage limit',
         valid: false,
       });
+    }
+
+    // Check role-based eligibility
+    if (discount.requiredRoles && discount.requiredRoles.length > 0) {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required to validate this discount',
+          valid: false,
+        });
+      }
+
+      const userRolesList = await getUserRoles(userId);
+      console.log(`🎭 Checking role eligibility for user ${userId}:`, {
+        userRoles: userRolesList,
+        requiredRoles: discount.requiredRoles,
+        matchLogic: discount.roleMatchLogic || 'or',
+      });
+
+      const roleCheck = checkRoleEligibility(
+        userRolesList,
+        discount.requiredRoles,
+        discount.roleMatchLogic
+      );
+
+      if (!roleCheck.eligible) {
+        return res.status(400).json({
+          success: false,
+          error: roleCheck.reason || 'You are not eligible for this discount based on your role',
+          valid: false,
+          discount: {
+            name: discount.name,
+            requiredRoles: discount.requiredRoles,
+            roleMatchLogic: discount.roleMatchLogic,
+          },
+        });
+      }
     }
 
     // Check minimum order amount

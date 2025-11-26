@@ -1570,6 +1570,10 @@ export const discounts = pgTable("discounts", {
   newStudentsOnly: boolean("new_students_only").default(false),
   siblingDiscount: boolean("sibling_discount").default(false), // Apply when multiple siblings enroll
   
+  // Role-based discount eligibility
+  requiredRoles: text("required_roles").array(), // Roles required for discount (e.g., ["parent", "educator"])
+  roleMatchLogic: text("role_match_logic", { enum: ["and", "or"] }).default("or"), // "and" = user must have ALL roles, "or" = user must have ANY role
+  
   // Bundle discount rules (optional)
   bundleRule: jsonb("bundle_rule").$type<{
     type: 'nth_item_free' | 'buy_x_get_y_free' | 'buy_x_get_y_percent_off';

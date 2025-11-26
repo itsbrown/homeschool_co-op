@@ -31,6 +31,8 @@ interface Discount {
   applicableToGradeLevels: string[];
   newStudentsOnly: boolean;
   siblingDiscount: boolean;
+  requiredRoles: string[] | null;
+  roleMatchLogic: 'and' | 'or' | null;
   usageLimit: number | null;
   usageLimitPerUser: number | null;
   currentUsageCount: number;
@@ -58,6 +60,8 @@ interface DiscountFormData {
   applicableToGradeLevels: string[];
   newStudentsOnly: boolean;
   siblingDiscount: boolean;
+  requiredRoles: string[];
+  roleMatchLogic: 'and' | 'or';
   usageLimit: number | null;
   usageLimitPerUser: number | null;
   validFrom: string;
@@ -74,6 +78,14 @@ const categoryOptions = [
 
 const gradeLevelOptions = [
   'PreK', 'K', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'
+];
+
+const roleOptions = [
+  { value: 'parent', label: 'Parent' },
+  { value: 'educator', label: 'Educator' },
+  { value: 'teacher', label: 'Teacher' },
+  { value: 'student', label: 'Student' },
+  { value: 'learner', label: 'Learner' },
 ];
 
 export default function DiscountsPage() {
@@ -103,6 +115,8 @@ export default function DiscountsPage() {
     applicableToGradeLevels: [],
     newStudentsOnly: false,
     siblingDiscount: false,
+    requiredRoles: [],
+    roleMatchLogic: 'or',
     usageLimit: null,
     usageLimitPerUser: null,
     validFrom: '',
@@ -370,6 +384,8 @@ export default function DiscountsPage() {
       applicableToGradeLevels: discount.applicableToGradeLevels || [],
       newStudentsOnly: discount.newStudentsOnly,
       siblingDiscount: discount.siblingDiscount,
+      requiredRoles: discount.requiredRoles || [],
+      roleMatchLogic: discount.roleMatchLogic || 'or',
       usageLimit: discount.usageLimit,
       usageLimitPerUser: discount.usageLimitPerUser,
       validFrom: discount.validFrom ? discount.validFrom.split('T')[0] : '',
@@ -912,6 +928,89 @@ function DiscountFormDialog({
             <p className="text-sm text-muted-foreground mt-1">
               Leave empty to apply to all grade levels
             </p>
+          </div>
+
+          {/* Role-Based Eligibility */}
+          <div className="p-4 border rounded-lg bg-purple-50/50 dark:bg-purple-950/20 space-y-4">
+            <div>
+              <Label className="text-base font-medium flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Role-Based Discount Eligibility
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Restrict this discount to users with specific roles. Useful for giving special discounts to parents who are also educators.
+              </p>
+            </div>
+
+            <div>
+              <Label>Required User Roles</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {roleOptions.map((role) => (
+                  <Button
+                    key={role.value}
+                    type="button"
+                    variant={formData.requiredRoles.includes(role.value) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      const newRoles = formData.requiredRoles.includes(role.value)
+                        ? formData.requiredRoles.filter(r => r !== role.value)
+                        : [...formData.requiredRoles, role.value];
+                      setFormData({ ...formData, requiredRoles: newRoles });
+                    }}
+                    data-testid={`button-role-${role.value}`}
+                  >
+                    {role.label}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Leave empty to apply to all users regardless of role
+              </p>
+            </div>
+
+            {formData.requiredRoles.length > 1 && (
+              <div className="space-y-2">
+                <Label>Role Match Logic</Label>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="roleMatchOr"
+                      name="roleMatchLogic"
+                      value="or"
+                      checked={formData.roleMatchLogic === 'or'}
+                      onChange={() => setFormData({ ...formData, roleMatchLogic: 'or' })}
+                      className="h-4 w-4"
+                      data-testid="radio-role-match-or"
+                    />
+                    <Label htmlFor="roleMatchOr" className="font-normal cursor-pointer">
+                      <span className="font-medium">OR</span> - User needs ANY of the selected roles
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="roleMatchAnd"
+                      name="roleMatchLogic"
+                      value="and"
+                      checked={formData.roleMatchLogic === 'and'}
+                      onChange={() => setFormData({ ...formData, roleMatchLogic: 'and' })}
+                      className="h-4 w-4"
+                      data-testid="radio-role-match-and"
+                    />
+                    <Label htmlFor="roleMatchAnd" className="font-normal cursor-pointer">
+                      <span className="font-medium">AND</span> - User needs ALL of the selected roles
+                    </Label>
+                  </div>
+                </div>
+                <p className="text-sm text-purple-600 dark:text-purple-400">
+                  {formData.roleMatchLogic === 'and' 
+                    ? `Users must have ALL of these roles: ${formData.requiredRoles.join(' AND ')}`
+                    : `Users must have ANY of these roles: ${formData.requiredRoles.join(' OR ')}`
+                  }
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

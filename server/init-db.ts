@@ -569,6 +569,18 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: pending_admin_approval status added to enrollments');
     
+    // Add role-based discount columns to discounts table
+    console.log('Running migration: Adding role-based discount columns to discounts table...');
+    await db.execute(sql`
+      ALTER TABLE discounts 
+      ADD COLUMN IF NOT EXISTS required_roles TEXT[];
+    `);
+    await db.execute(sql`
+      ALTER TABLE discounts 
+      ADD COLUMN IF NOT EXISTS role_match_logic TEXT DEFAULT 'or';
+    `);
+    console.log('✅ Migration completed: role-based discount columns added to discounts table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
