@@ -52,6 +52,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Notification System**: In-app notification system with PostgreSQL storage and real-time unread counts.
 -   **Category Management System**: School-level custom category system with dynamic dropdown integration and idempotent seeding of default categories.
 -   **Interactive Onboarding Tour**: Custom-built guided tour for new parent accounts explaining dashboard features, enrollment workflow, and emphasizing that children are only enrolled after first payment. School admins can toggle this feature on/off.
+-   **Subscription Status Toggle**: School admin-configurable toggle in School Settings → Checkout Settings to control whether subscription status is displayed during checkout. Defaults to OFF to prevent potential date parsing errors when subscription data is unavailable.
 
 ## External Dependencies
 -   **Supabase**: Authentication (OAuth).
