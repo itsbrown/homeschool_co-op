@@ -293,16 +293,30 @@ export default function SchoolSettingsPage() {
     },
     onSuccess: () => {
       // Invalidate all queries that might display the school logo
+      // Use predicate to catch all variations of school-related queries (including those with email in path)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          if (typeof key === 'string') {
+            return key.includes('/api/school-admin/my-school') || 
+                   key.includes('/api/school-parents/school') ||
+                   key.includes('/api/users/profile');
+          }
+          return false;
+        }
+      });
+      // Also invalidate by exact keys for standard format queries
       queryClient.invalidateQueries({ queryKey: ['/api/users/profile'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-parents/school'] });
       // Force refetch to get fresh data
       queryClient.refetchQueries({ queryKey: ['/api/users/profile'] });
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/my-school'] });
       setSelectedLogo(null);
       setLogoPreview(null);
       toast({
         title: "Logo uploaded",
-        description: "Your school logo has been updated successfully. You may need to refresh the page to see the new logo everywhere.",
+        description: "Your school logo has been updated successfully.",
       });
     },
     onError: (error: Error) => {

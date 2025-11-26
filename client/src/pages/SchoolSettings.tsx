@@ -131,7 +131,25 @@ export default function SchoolSettings() {
         title: "Success",
         description: "School logo uploaded successfully",
       });
+      // Invalidate all queries that might display the school logo
+      // Use predicate to catch all variations of school-related queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          if (typeof key === 'string') {
+            return key.includes('/api/school-admin/my-school') || 
+                   key.includes('/api/school-parents/school') ||
+                   key.includes('/api/users/profile');
+          }
+          return false;
+        }
+      });
+      // Also invalidate by exact keys for standard format queries
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-parents/school'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/users/profile'] });
+      // Force refetch to ensure fresh data
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/my-school'] });
       setSelectedFile(null);
     },
     onError: (error: Error) => {
