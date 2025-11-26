@@ -42,15 +42,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Handle $0 total (100% discount) - requires admin approval
-    if (total === 0) {
-      return res.status(400).json({
-        message: 'Free enrollment requires admin approval. Please use the free enrollment endpoint.',
-        error: 'FREE_ENROLLMENT_REQUIRES_APPROVAL',
-        requiresAdminApproval: true
-      });
-    }
-
     if (total < 0) {
       return res.status(400).json({
         message: 'Invalid total amount',

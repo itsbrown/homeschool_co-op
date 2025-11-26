@@ -192,6 +192,40 @@ export default function EnrollmentsAdminPage() {
     }
   };
 
+  const handleMarkAsEnrolled = async (enrollment: Enrollment) => {
+    try {
+      const response = await apiRequest(
+        "PUT",
+        `/api/program-enrollments/${enrollment.id}`,
+        { 
+          status: 'enrolled',
+          totalPaid: enrollment.totalCost,
+          remainingBalance: 0,
+          paymentStatus: 'completed'
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to update enrollment status");
+      }
+      
+      toast({
+        title: "Enrollment Activated",
+        description: `${enrollment.childName} is now enrolled in ${enrollment.className}.`,
+      });
+      
+      // Refresh the enrollments list
+      refetch();
+    } catch (error) {
+      console.error("Failed to mark as enrolled:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update enrollment status. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSavePaymentPlan = () => {
     if (!selectedEnrollment || !selectedFrequency) return;
     
@@ -334,15 +368,28 @@ export default function EnrollmentsAdminPage() {
                               Promote
                             </Button>
                           ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditClick(enrollment)}
-                              data-testid={`button-edit-payment-plan-${enrollment.id}`}
-                            >
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit Plan
-                            </Button>
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditClick(enrollment)}
+                                data-testid={`button-edit-payment-plan-${enrollment.id}`}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Plan
+                              </Button>
+                              {(enrollment.paymentStatus === 'pending_payment' || enrollment.paymentStatus === 'pending') && (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => handleMarkAsEnrolled(enrollment)}
+                                  data-testid={`button-mark-enrolled-${enrollment.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  Mark Enrolled
+                                </Button>
+                              )}
+                            </>
                           )}
                         </div>
                       </TableCell>

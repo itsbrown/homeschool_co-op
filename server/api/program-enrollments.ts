@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { storage } from "../storage";
-import { insertProgramEnrollmentSchema } from "@shared/schema";
+import { insertProgramEnrollmentSchema, updateProgramEnrollmentSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { formatZodError } from "../utils";
 import { MembershipService } from "../services/membership-service";
@@ -272,7 +272,7 @@ export const updateEnrollment = async (req: Request, res: Response) => {
       }
     }
 
-    const validatedData = insertProgramEnrollmentSchema.partial().parse(req.body);
+    const validatedData = updateProgramEnrollmentSchema.parse(req.body);
     
     // Check if this is a promotion from waitlist
     const wasWaitlisted = existingEnrollment.status === 'waitlist';

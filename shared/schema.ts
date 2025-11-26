@@ -577,6 +577,14 @@ export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollmen
 export type InsertProgramEnrollment = z.infer<typeof insertProgramEnrollmentSchema>;
 export type ProgramEnrollment = typeof programEnrollments.$inferSelect;
 
+export const updateProgramEnrollmentSchema = insertProgramEnrollmentSchema.partial().extend({
+  remainingBalance: z.number().optional(),
+  paymentStatus: z.enum(["pending", "deposit_paid", "partial_payment", "completed", "stripe_managed", "refunded"]).optional(),
+  status: z.enum(["pending_payment", "pending_admin_approval", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"]).optional(),
+  totalPaid: z.number().optional(),
+});
+export type UpdateProgramEnrollment = z.infer<typeof updateProgramEnrollmentSchema>;
+
 // Payments table - for tracking all payment transactions
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
