@@ -272,7 +272,7 @@ function ScheduledPaymentDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Make Payment</DialogTitle>
           <DialogDescription>
@@ -473,7 +473,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   });
 
   // Get database-stored scheduled payments (class enrollments)
-  const { data: dbScheduledPayments, isLoading: isLoadingDbScheduled } = useQuery({
+  const { data: dbScheduledPayments, isLoading: isLoadingDbScheduled, refetch: refetchDbScheduledPayments } = useQuery({
     queryKey: ["/api/scheduled-payments/upcoming"],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
@@ -766,8 +766,8 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredPayments.slice(0, 5).map((payment: Payment) => (
-                    <div key={payment.id} className="flex justify-between items-center p-4 border rounded-lg">
+                  {filteredPayments.slice(0, 5).map((payment: Payment, index: number) => (
+                    <div key={`recent-${payment.id}-${index}`} className="flex justify-between items-center p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
                         <div className={`h-10 w-10 rounded-full flex items-center justify-center 
                           ${payment.status === 'paid' || payment.status === 'succeeded' ? 'bg-green-100 text-green-700' : 
@@ -863,8 +863,8 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPayments.map((payment: Payment) => (
-                      <TableRow key={payment.id}>
+                    {filteredPayments.map((payment: Payment, index: number) => (
+                      <TableRow key={`payment-${payment.id}-${index}`}>
                         <TableCell>{formatDate(payment.date)}</TableCell>
                         <TableCell className="font-medium">{payment.description}</TableCell>
                         <TableCell>{payment.childName}</TableCell>
