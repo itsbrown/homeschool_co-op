@@ -543,6 +543,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: onboarding tour columns added');
     
+    // Add show_subscription_status column to schools table
+    console.log('Running migration: Adding show_subscription_status column to schools table...');
+    await db.execute(sql`
+      ALTER TABLE schools 
+      ADD COLUMN IF NOT EXISTS show_subscription_status BOOLEAN DEFAULT false;
+    `);
+    console.log('✅ Migration completed: show_subscription_status column added to schools table');
+    
     // Add pending_admin_approval status to enrollment constraints
     console.log('Running migration: Adding pending_admin_approval status to enrollments...');
     await db.execute(sql`

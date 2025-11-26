@@ -30,6 +30,7 @@ interface SchoolData {
   membershipRenewalDay?: number;
   membershipGracePeriodDays?: number;
   membershipRequired?: boolean;
+  showSubscriptionStatus?: boolean;
 }
 
 export default function SchoolSettings() {
@@ -682,6 +683,49 @@ export default function SchoolSettings() {
                           </DialogContent>
                         </Dialog>
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Checkout Settings */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Checkout Settings</CardTitle>
+                    <CardDescription>
+                      Configure how checkout displays payment and subscription information
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between space-x-2">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="showSubscriptionStatus">Show Subscription Status</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Display Stripe subscription status and billing cycle during checkout. 
+                          Turn off to simplify checkout or if subscription features are not yet configured.
+                        </p>
+                      </div>
+                      <Switch
+                        id="showSubscriptionStatus"
+                        checked={schoolData?.showSubscriptionStatus ?? false}
+                        onCheckedChange={(checked) => {
+                          apiRequest('PATCH', '/api/school-admin/my-school/settings', { showSubscriptionStatus: checked })
+                            .then(() => {
+                              toast({
+                                title: "Success",
+                                description: `Subscription status display ${checked ? 'enabled' : 'disabled'}`,
+                              });
+                              queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+                            })
+                            .catch((error) => {
+                              toast({
+                                title: "Error",
+                                description: "Failed to update checkout settings",
+                                variant: "destructive",
+                              });
+                            });
+                        }}
+                        data-testid="switch-show-subscription-status"
+                      />
                     </div>
                   </CardContent>
                 </Card>

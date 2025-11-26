@@ -866,8 +866,8 @@ export default function CartCheckout() {
             </Card>
             )}
 
-            {/* Stripe Subscription Alert - only show when there's a balance to pay */}
-            {cart.total > 0 && hasActiveSubscription && subscriptionInfo && (
+            {/* Stripe Subscription Alert - only show when school has enabled subscription status display */}
+            {cart.total > 0 && cart.schoolSettings?.showSubscriptionStatus && hasActiveSubscription && subscriptionInfo && (
               <Alert className="border-green-200 bg-green-50" data-testid="alert-stripe-subscription">
                 <Check className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-700">

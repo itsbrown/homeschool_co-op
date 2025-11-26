@@ -94,6 +94,9 @@ export const schools = pgTable("schools", {
   
   // Onboarding Tour Configuration
   onboardingTourEnabled: boolean("onboarding_tour_enabled").default(true), // Enable/disable onboarding tour for new parents
+  
+  // Payment/Subscription Display Configuration
+  showSubscriptionStatus: boolean("show_subscription_status").default(false), // Show subscription status during checkout (disabled by default to avoid date parsing issues)
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -124,6 +127,9 @@ export const insertSchoolSchema = createInsertSchema(schools)
     
     // Onboarding Tour Configuration
     onboardingTourEnabled: z.boolean().default(true),
+    
+    // Payment/Subscription Display Configuration
+    showSubscriptionStatus: z.boolean().default(false),
   });
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
 export type School = typeof schools.$inferSelect;

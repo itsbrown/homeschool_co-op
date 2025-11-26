@@ -60,6 +60,7 @@ export interface Cart {
     freeAfterThresholdEnabled: boolean;
     freeAfterThreshold: number;
     siblingDiscountRate: number;
+    showSubscriptionStatus?: boolean;
   };
 }
 
@@ -138,10 +139,10 @@ const fetchSiblingDiscountSettings = async (getAccessTokenSilently?: () => Promi
   return { rate, isActive: true };
 };
 
-// Fetch "Free After X" configuration from school settings
-const fetchFreeAfterThresholdSettings = async (getAccessTokenSilently?: () => Promise<string>): Promise<{ enabled: boolean; threshold: number }> => {
+// Fetch "Free After X" configuration and other school settings
+const fetchFreeAfterThresholdSettings = async (getAccessTokenSilently?: () => Promise<string>): Promise<{ enabled: boolean; threshold: number; showSubscriptionStatus: boolean }> => {
   if (!getAccessTokenSilently) {
-    return { enabled: false, threshold: 3 }; // Default fallback
+    return { enabled: false, threshold: 3, showSubscriptionStatus: false }; // Default fallback
   }
 
   try {
@@ -155,7 +156,7 @@ const fetchFreeAfterThresholdSettings = async (getAccessTokenSilently?: () => Pr
 
     if (!response.ok) {
       console.log('Failed to fetch school settings, using defaults');
-      return { enabled: false, threshold: 3 };
+      return { enabled: false, threshold: 3, showSubscriptionStatus: false };
     }
 
     const data = await response.json();
@@ -163,11 +164,12 @@ const fetchFreeAfterThresholdSettings = async (getAccessTokenSilently?: () => Pr
 
     return {
       enabled: school?.freeAfterThresholdEnabled || false,
-      threshold: school?.freeAfterThreshold || 3
+      threshold: school?.freeAfterThreshold || 3,
+      showSubscriptionStatus: school?.showSubscriptionStatus || false
     };
   } catch (error) {
     console.error('Error fetching free after threshold settings:', error);
-    return { enabled: false, threshold: 3 }; // Default fallback
+    return { enabled: false, threshold: 3, showSubscriptionStatus: false }; // Default fallback
   }
 };
 
@@ -419,7 +421,7 @@ const calculateBundleDiscount = (
 const calculateCartTotalsSync = (
   items: CartItem[],
   appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null,
-  schoolSettings?: { freeAfterThresholdEnabled: boolean; freeAfterThreshold: number; siblingDiscountRate: number }
+  schoolSettings?: { freeAfterThresholdEnabled: boolean; freeAfterThreshold: number; siblingDiscountRate: number; showSubscriptionStatus?: boolean }
 ): { subtotal: number; discounts: any; total: number; schoolSettings?: typeof schoolSettings } => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
 
@@ -540,7 +542,7 @@ const calculateCartTotalsWithDiscounts = async (
   items: CartItem[],
   getAccessTokenSilently?: () => Promise<string>,
   appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null
-): Promise<{ subtotal: number; discounts: any; total: number; schoolSettings?: { freeAfterThresholdEnabled: boolean; freeAfterThreshold: number; siblingDiscountRate: number } }> => {
+): Promise<{ subtotal: number; discounts: any; total: number; schoolSettings?: { freeAfterThresholdEnabled: boolean; freeAfterThreshold: number; siblingDiscountRate: number; showSubscriptionStatus?: boolean } }> => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
 
   // Group items by child to calculate sibling discount
@@ -551,17 +553,20 @@ const calculateCartTotalsWithDiscounts = async (
 
   const uniqueChildren = Object.keys(childrenWithClasses).length;
 
-  // Fetch "Free After Threshold" configuration from school settings
+  // Fetch "Free After Threshold" configuration and other school settings
   let freeAfterThreeEnabled = false;
   let freeAfterThreshold = 3;
+  let showSubscriptionStatus = false;
   try {
     const freeAfterSettings = await fetchFreeAfterThresholdSettings(getAccessTokenSilently);
     freeAfterThreeEnabled = freeAfterSettings.enabled;
     freeAfterThreshold = freeAfterSettings.threshold;
+    showSubscriptionStatus = freeAfterSettings.showSubscriptionStatus;
   } catch (error) {
     console.log('Failed to fetch free after threshold settings, using defaults (disabled)');
     freeAfterThreeEnabled = false;
     freeAfterThreshold = 3;
+    showSubscriptionStatus = false;
   }
 
   // Apply "Free After Threshold" - Makes cheapest enrollments free based on child count
@@ -682,6 +687,7 @@ const calculateCartTotalsWithDiscounts = async (
       freeAfterThresholdEnabled: freeAfterThreeEnabled,
       freeAfterThreshold: freeAfterThreshold,
       siblingDiscountRate: siblingDiscountRate,
+      showSubscriptionStatus: showSubscriptionStatus,
     },
   };
 };

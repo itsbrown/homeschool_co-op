@@ -2307,6 +2307,60 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Update general school settings (checkout settings, display preferences, etc.)
+router.patch("/my-school/settings", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const { showSubscriptionStatus, onboardingTourEnabled } = req.body;
+
+    console.log('🔄 Received school settings update request:', req.body);
+
+    // Build update object with camelCase table properties
+    const updateData: Partial<typeof schools.$inferInsert> = {};
+
+    if (showSubscriptionStatus !== undefined) {
+      updateData.showSubscriptionStatus = Boolean(showSubscriptionStatus);
+    }
+
+    if (onboardingTourEnabled !== undefined) {
+      updateData.onboardingTourEnabled = Boolean(onboardingTourEnabled);
+    }
+
+    // Check if there's anything to update
+    if (Object.keys(updateData).length === 0) {
+      console.log('⚠️ No fields to update in request body');
+      return res.status(400).json({ 
+        message: "No fields to update. Please provide at least one setting to change." 
+      });
+    }
+
+    console.log('🔄 Updating school settings:', updateData);
+
+    // Update the school settings using Drizzle ORM
+    const updatedSchool = await storage.updateSchool(schoolId, updateData);
+
+    if (!updatedSchool) {
+      console.error('❌ Database update failed: School not found');
+      return res.status(404).json({ 
+        message: "Failed to update school settings",
+        error: "School not found"
+      });
+    }
+
+    console.log('✅ School settings updated successfully');
+
+    return res.json({
+      message: "School settings updated successfully",
+      school: updatedSchool
+    });
+  } catch (error) {
+    console.error("Error updating school settings:", error);
+    return res.status(500).json({ message: "Server error while updating school settings" });
+  }
+});
+
 // Update school "Free After Threshold" discount configuration
 router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, res) => {
   try {
