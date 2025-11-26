@@ -51,10 +51,20 @@ interface FormSubmission {
   productImages?: string[];
 }
 
+interface CustomFormField {
+  id: number;
+  formId: number;
+  fieldKey: string;
+  label: string;
+  fieldType: string;
+  order: number;
+}
+
 interface CustomForm {
   id: number;
   title: string;
   description: string | null;
+  fields?: CustomFormField[];
 }
 
 export default function SubmissionsPage() {
@@ -64,17 +74,25 @@ export default function SubmissionsPage() {
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null);
   const formId = params?.id ? parseInt(params.id) : 0;
 
-  // Fetch form details
+  // Fetch form details with fields
   const { data: formData } = useQuery<CustomForm>({
-    queryKey: [`/api/custom-forms/forms/${formId}`],
+    queryKey: ['/api/custom-forms/forms', formId],
     enabled: !!formId,
   });
 
   // Fetch submissions
   const { data: submissions = [], isLoading } = useQuery<FormSubmission[]>({
-    queryKey: [`/api/custom-forms/forms/${formId}/submissions`],
+    queryKey: ['/api/custom-forms/forms', formId, 'submissions'],
     enabled: !!formId,
   });
+
+  // Create field ID to label mapping
+  const fieldLabelMap: Record<string, string> = {};
+  if (formData?.fields) {
+    formData.fields.forEach((field) => {
+      fieldLabelMap[field.fieldKey] = field.label;
+    });
+  }
 
   const filteredSubmissions = submissions.filter((submission: FormSubmission) => {
     const searchLower = searchTerm.toLowerCase();
@@ -109,19 +127,20 @@ export default function SubmissionsPage() {
     if (submissions.length === 0) return;
 
     // Get all unique field keys from response data
-    const allFields = new Set<string>();
+    const allFieldKeys = new Set<string>();
     submissions.forEach((sub: FormSubmission) => {
-      Object.keys(sub.responseData || {}).forEach((key) => allFields.add(key));
+      Object.keys(sub.responseData || {}).forEach((key) => allFieldKeys.add(key));
     });
+    const fieldKeysArray = Array.from(allFieldKeys);
 
-    // Create CSV headers
+    // Create CSV headers - use field labels instead of field IDs
     const headers = [
       'Submission ID',
       'Email',
       'Name',
       'Status',
       'Submitted At',
-      ...Array.from(allFields),
+      ...fieldKeysArray.map((key) => fieldLabelMap[key] || key),
     ];
 
     // Create CSV rows
@@ -132,7 +151,7 @@ export default function SubmissionsPage() {
         sub.submitterName,
         sub.status,
         formatDate(sub.createdAt),
-        ...Array.from(allFields).map((field) => {
+        ...fieldKeysArray.map((field) => {
           const value = sub.responseData?.[field];
           return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value || '';
         }),
@@ -432,7 +451,9 @@ export default function SubmissionsPage() {
                     <TableBody>
                       {Object.entries(selectedSubmission.responseData || {}).map(([key, value]) => (
                         <TableRow key={key}>
-                          <TableCell className="font-medium">{key}</TableCell>
+                          <TableCell className="font-medium">
+                            {fieldLabelMap[key] || key}
+                          </TableCell>
                           <TableCell>
                             {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
                           </TableCell>

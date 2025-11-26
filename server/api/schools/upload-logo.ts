@@ -99,7 +99,7 @@ router.post('/', async (req, res) => {
       try {
         const allSchools = await storage.getAllSchools?.();
         console.log('🔍 All available schools:', allSchools);
-      } catch (e) {
+      } catch (e: any) {
         console.log('🔍 Could not list all schools:', e.message);
       }
       
@@ -107,6 +107,25 @@ router.post('/', async (req, res) => {
         success: false,
         message: `School not found with ID: ${schoolIdNum}`
       });
+    }
+    
+    // Delete old logo file if it exists
+    if (existingSchool.logo) {
+      // Remove leading slash from logo path since it's stored as a URL path (e.g., "/uploads/logos/...")
+      const normalizedLogoPath = existingSchool.logo.replace(/^\//, '');
+      const oldLogoPath = path.join(process.cwd(), normalizedLogoPath);
+      console.log('🗑️ Attempting to delete old logo:', oldLogoPath);
+      if (fs.existsSync(oldLogoPath)) {
+        try {
+          fs.unlinkSync(oldLogoPath);
+          console.log('✅ Old logo deleted successfully');
+        } catch (deleteError) {
+          console.log('⚠️ Could not delete old logo:', deleteError);
+          // Continue with upload even if old file deletion fails
+        }
+      } else {
+        console.log('ℹ️ Old logo file not found at path:', oldLogoPath);
+      }
     }
     
     try {
