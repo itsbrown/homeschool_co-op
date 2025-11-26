@@ -126,7 +126,8 @@ export default function CartSuccess() {
     };
 
     processStripeRedirect();
-  }, [toast, clearCart]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount - processes Stripe redirect URL parameters which are static after page load
 
   // Show loading state while processing
   if (processing) {
