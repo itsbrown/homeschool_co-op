@@ -231,9 +231,13 @@ export const createEnrollment = async (req: Request, res: Response) => {
 };
 
 // Update an enrollment status (by parent, instructor, or admin)
-export const updateEnrollment = async (req: Request, res: Response) => {
+export const updateEnrollment = async (req: any, res: Response) => {
   try {
-    if (!req.session.userId) {
+    // Support both session-based auth and Supabase auth
+    const userEmail = req.user?.email || req.session?.userEmail;
+    const sessionUserId = req.session?.userId;
+    
+    if (!userEmail && !sessionUserId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
@@ -248,18 +252,30 @@ export const updateEnrollment = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Enrollment not found" });
     }
     
-    // Security check - verify user has appropriate access
-    const child = await storage.getChildById(existingEnrollment.childId);
-    const program = await storage.getProgramById(existingEnrollment.programId);
+    // Get user from database if using Supabase auth
+    let userId = sessionUserId;
+    let userRole = req.session?.userRole;
     
-    if (!child || !program) {
-      return res.status(404).json({ message: "Associated child or program not found" });
+    if (userEmail && !userId) {
+      const dbUser = await storage.getUserByEmail(userEmail);
+      if (dbUser) {
+        userId = dbUser.id;
+        userRole = dbUser.role;
+      }
     }
     
-    // Check if user is parent of the child or instructor of the program
-    const isParent = child.parentId === req.session.userId;
-    const isInstructor = program.instructorId === req.session.userId;
-    const isAdmin = req.session.userRole === 'admin';
+    // Security check - verify user has appropriate access
+    const child = await storage.getChildById(existingEnrollment.childId);
+    const program = existingEnrollment.programId ? await storage.getProgramById(existingEnrollment.programId) : null;
+    
+    if (!child) {
+      return res.status(404).json({ message: "Associated child not found" });
+    }
+    
+    // Check if user is parent of the child or instructor of the program or admin
+    const isParent = child.parentId === userId;
+    const isInstructor = program?.instructorId === userId;
+    const isAdmin = userRole === 'admin' || userRole === 'schoolAdmin';
     
     if (!isParent && !isInstructor && !isAdmin) {
       return res.status(403).json({ message: "Not authorized to update this enrollment" });
@@ -287,16 +303,17 @@ export const updateEnrollment = async (req: Request, res: Response) => {
     
     // Auto-create school_student record if enrollment status is or became enrolled/completed (check both new and existing status)
     const finalStatus = updatedEnrollment.status || existingEnrollment.status;
-    if (program.schoolId && ['enrolled', 'completed'].includes(finalStatus)) {
+    const schoolId = existingEnrollment.schoolId || program?.schoolId;
+    if (schoolId && ['enrolled', 'completed'].includes(finalStatus)) {
       try {
         // Check if school_student record already exists for this child AND school (targeted query)
-        const existingSchoolStudent = await storage.getSchoolStudentByChildAndSchool(child.id, program.schoolId);
+        const existingSchoolStudent = await storage.getSchoolStudentByChildAndSchool(child.id, schoolId);
         
         if (!existingSchoolStudent) {
-          console.log(`📚 Creating school_student record for child ${child.id} at school ${program.schoolId} (status: ${finalStatus})`);
+          console.log(`📚 Creating school_student record for child ${child.id} at school ${schoolId} (status: ${finalStatus})`);
           await storage.createSchoolStudent({
             childId: child.id,
-            schoolId: program.schoolId,
+            schoolId: schoolId,
             grade: child.gradeLevel || 'Unknown',
             status: 'active',
             locationId: null,
@@ -312,7 +329,7 @@ export const updateEnrollment = async (req: Request, res: Response) => {
     }
     
     // If student was promoted from waitlist, recalculate positions for remaining students
-    if (isBeingPromoted) {
+    if (isBeingPromoted && existingEnrollment.programId) {
       try {
         // Get all waitlisted enrollments for this program
         const allEnrollments = await storage.getEnrollmentsByProgramId(existingEnrollment.programId);
