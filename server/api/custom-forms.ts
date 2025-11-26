@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db';
-import { customForms, customFormFields, customFormSubmissions, insertCustomFormSchema, insertCustomFormFieldSchema, insertCustomFormSubmissionSchema } from '@shared/schema';
+import { customForms, customFormFields, customFormSubmissions, schools, insertCustomFormSchema, insertCustomFormFieldSchema, insertCustomFormSubmissionSchema } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { jwtCheck, requireSchoolAccess } from '../middleware/auth0-auth';
@@ -33,7 +33,18 @@ router.get('/forms/by-slug/:slug', async (req, res) => {
       .where(eq(customFormFields.formId, form.id))
       .orderBy(customFormFields.order);
     
-    res.json({ ...form, fields });
+    // Fetch school information for branding
+    const [school] = await db
+      .select({
+        id: schools.id,
+        name: schools.name,
+        logo: schools.logo,
+        website: schools.website,
+      })
+      .from(schools)
+      .where(eq(schools.id, form.schoolId));
+    
+    res.json({ ...form, fields, school: school || null });
   } catch (error) {
     console.error('Error fetching form by slug:', error);
     res.status(500).json({ message: 'Error fetching form' });
@@ -68,7 +79,18 @@ router.get('/forms/by-slug-auth/:slug', jwtCheck, async (req: any, res) => {
       .where(eq(customFormFields.formId, form.id))
       .orderBy(customFormFields.order);
     
-    res.json({ ...form, fields });
+    // Fetch school information for branding
+    const [school] = await db
+      .select({
+        id: schools.id,
+        name: schools.name,
+        logo: schools.logo,
+        website: schools.website,
+      })
+      .from(schools)
+      .where(eq(schools.id, form.schoolId));
+    
+    res.json({ ...form, fields, school: school || null });
   } catch (error) {
     console.error('Error fetching form by slug:', error);
     res.status(500).json({ message: 'Error fetching form' });

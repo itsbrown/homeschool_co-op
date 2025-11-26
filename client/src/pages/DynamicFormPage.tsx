@@ -15,9 +15,12 @@ import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Share2, Facebook, Mail, Linkedin, Link2, School } from 'lucide-react';
+import { SiX } from 'react-icons/si';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-interface FormField {
+interface FormFieldType {
   id: number;
   fieldType: string;
   label: string;
@@ -29,12 +32,168 @@ interface FormField {
   validationRules: any;
 }
 
+interface SchoolInfo {
+  id: number;
+  name: string;
+  logo: string | null;
+  website: string | null;
+}
+
 interface CustomForm {
   id: number;
   title: string;
   description: string | null;
-  fields: FormField[];
+  fields: FormFieldType[];
   settings: any;
+  school?: SchoolInfo | null;
+}
+
+function SocialShareButtons({ formTitle, formUrl }: { formTitle: string; formUrl: string }) {
+  const { toast } = useToast();
+  
+  const shareText = `Check out this form: ${formTitle}`;
+  const encodedText = encodeURIComponent(shareText);
+  const encodedUrl = encodeURIComponent(formUrl);
+  
+  const shareLinks = {
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    twitter: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
+    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+    email: `mailto:?subject=${encodeURIComponent(formTitle)}&body=${encodeURIComponent(`Check out this form: ${formUrl}`)}`,
+  };
+  
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(formUrl);
+      toast({ title: 'Link copied!', description: 'Form link has been copied to your clipboard.' });
+    } catch (err) {
+      toast({ title: 'Failed to copy', description: 'Could not copy link to clipboard.', variant: 'destructive' });
+    }
+  };
+  
+  const openShareWindow = (url: string) => {
+    window.open(url, '_blank', 'width=600,height=400,noopener,noreferrer');
+  };
+  
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground flex items-center gap-1">
+        <Share2 className="h-4 w-4" />
+        Share:
+      </span>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => openShareWindow(shareLinks.facebook)}
+              data-testid="button-share-facebook"
+            >
+              <Facebook className="h-4 w-4 text-blue-600" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share on Facebook</TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => openShareWindow(shareLinks.twitter)}
+              data-testid="button-share-twitter"
+            >
+              <SiX className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share on X</TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => openShareWindow(shareLinks.linkedin)}
+              data-testid="button-share-linkedin"
+            >
+              <Linkedin className="h-4 w-4 text-blue-700" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share on LinkedIn</TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => window.location.href = shareLinks.email}
+              data-testid="button-share-email"
+            >
+              <Mail className="h-4 w-4 text-gray-600" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share via Email</TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={copyToClipboard}
+              data-testid="button-copy-link"
+            >
+              <Link2 className="h-4 w-4 text-gray-600" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Copy Link</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
+function SchoolBranding({ school }: { school: SchoolInfo }) {
+  return (
+    <div className="flex items-center gap-4 mb-6 pb-6 border-b" data-testid="school-branding">
+      {school.logo ? (
+        <Avatar className="h-16 w-16">
+          <AvatarImage src={school.logo} alt={school.name} />
+          <AvatarFallback className="text-lg bg-primary/10 text-primary">
+            {school.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+      ) : (
+        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <School className="h-8 w-8 text-primary" />
+        </div>
+      )}
+      <div>
+        <h2 className="text-xl font-semibold text-foreground" data-testid="text-school-name">
+          {school.name}
+        </h2>
+        {school.website && (
+          <a 
+            href={school.website} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-primary transition-colors"
+            data-testid="link-school-website"
+          >
+            {school.website.replace(/^https?:\/\//, '')}
+          </a>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function DynamicFormPage() {
@@ -42,15 +201,15 @@ export default function DynamicFormPage() {
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);
   const slug = params?.slug || '';
+  
+  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
 
-  // Fetch form by slug
   const { data: form, isLoading } = useQuery<CustomForm>({
     queryKey: [`/api/custom-forms/forms/by-slug/${slug}`],
     enabled: !!slug,
   });
 
-  // Build dynamic validation schema
-  const buildValidationSchema = (fields: FormField[]) => {
+  const buildValidationSchema = (fields: FormFieldType[]) => {
     const shape: any = {};
     fields.forEach((field) => {
       let fieldSchema: any;
@@ -103,17 +262,15 @@ export default function DynamicFormPage() {
     }, {} as any) || {},
   });
 
-  // Submit form mutation
   const submitMutation = useMutation({
     mutationFn: async (data: any) => {
       if (!form?.id) {
         throw new Error('Form not loaded');
       }
       
-      console.log('📤 Submitting form data:', data);
-      console.log('📤 Form ID:', form.id);
+      console.log('Submitting form data:', data);
+      console.log('Form ID:', form.id);
       
-      // Extract email and name from field data
       const emailField = form.fields.find(f => f.fieldType === 'email');
       const nameFields = form.fields.filter(f => 
         f.label.toLowerCase().includes('name') && f.fieldType === 'text'
@@ -131,7 +288,7 @@ export default function DynamicFormPage() {
         submitterName,
       };
       
-      console.log('📤 Payload:', payload);
+      console.log('Payload:', payload);
       
       const response = await apiRequest('POST', `/api/custom-forms/forms/${form.id}/submit`, payload);
       return response.json();
@@ -141,7 +298,7 @@ export default function DynamicFormPage() {
       toast({ title: 'Success', description: form?.settings?.confirmationMessage || 'Form submitted successfully' });
     },
     onError: (error: any) => {
-      console.error('❌ Form submission error:', error);
+      console.error('Form submission error:', error);
       toast({ 
         title: 'Error', 
         description: error?.message || 'Failed to submit form', 
@@ -154,7 +311,7 @@ export default function DynamicFormPage() {
     submitMutation.mutate(data);
   };
 
-  const renderField = (field: FormField) => {
+  const renderField = (field: FormFieldType) => {
     const fieldKey = `field_${field.id}`;
 
     switch (field.fieldType) {
@@ -176,6 +333,7 @@ export default function DynamicFormPage() {
                     {...formField}
                     type={field.fieldType}
                     placeholder={field.placeholder || ''}
+                    data-testid={`input-field-${field.id}`}
                   />
                 </FormControl>
                 {field.helpText && <FormDescription>{field.helpText}</FormDescription>}
@@ -201,6 +359,7 @@ export default function DynamicFormPage() {
                     {...formField}
                     placeholder={field.placeholder || ''}
                     rows={4}
+                    data-testid={`input-field-${field.id}`}
                   />
                 </FormControl>
                 {field.helpText && <FormDescription>{field.helpText}</FormDescription>}
@@ -229,6 +388,7 @@ export default function DynamicFormPage() {
                     type="number"
                     placeholder={field.placeholder || ''}
                     step={field.fieldType === 'price' ? '0.01' : '1'}
+                    data-testid={`input-field-${field.id}`}
                   />
                 </FormControl>
                 {field.helpText && <FormDescription>{field.helpText}</FormDescription>}
@@ -250,7 +410,7 @@ export default function DynamicFormPage() {
                   {field.isRequired && <span className="text-destructive ml-1">*</span>}
                 </FormLabel>
                 <FormControl>
-                  <Input {...formField} type="date" />
+                  <Input {...formField} type="date" data-testid={`input-field-${field.id}`} />
                 </FormControl>
                 {field.helpText && <FormDescription>{field.helpText}</FormDescription>}
                 <FormMessage />
@@ -272,7 +432,7 @@ export default function DynamicFormPage() {
                 </FormLabel>
                 <Select onValueChange={formField.onChange} defaultValue={formField.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger data-testid={`select-field-${field.id}`}>
                       <SelectValue placeholder={field.placeholder || 'Select an option'} />
                     </SelectTrigger>
                   </FormControl>
@@ -334,6 +494,7 @@ export default function DynamicFormPage() {
                   <Checkbox
                     checked={formField.value}
                     onCheckedChange={formField.onChange}
+                    data-testid={`checkbox-field-${field.id}`}
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
@@ -379,6 +540,7 @@ export default function DynamicFormPage() {
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <Card className="max-w-md text-center">
           <CardHeader>
+            {form.school && <SchoolBranding school={form.school} />}
             <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <CardTitle>Thank You!</CardTitle>
             <CardDescription className="text-base">
@@ -395,10 +557,16 @@ export default function DynamicFormPage() {
       <div className="max-w-3xl mx-auto">
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">{form.title}</CardTitle>
-            {form.description && (
-              <CardDescription className="text-base">{form.description}</CardDescription>
-            )}
+            {form.school && <SchoolBranding school={form.school} />}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="flex-1">
+                <CardTitle className="text-2xl" data-testid="text-form-title">{form.title}</CardTitle>
+                {form.description && (
+                  <CardDescription className="text-base mt-2">{form.description}</CardDescription>
+                )}
+              </div>
+              <SocialShareButtons formTitle={form.title} formUrl={currentUrl} />
+            </div>
           </CardHeader>
           <CardContent>
             <Form {...form_hook}>
@@ -410,6 +578,7 @@ export default function DynamicFormPage() {
                   type="submit"
                   className="w-full"
                   disabled={submitMutation.isPending}
+                  data-testid="button-submit"
                 >
                   {submitMutation.isPending ? 'Submitting...' : 'Submit'}
                 </Button>
