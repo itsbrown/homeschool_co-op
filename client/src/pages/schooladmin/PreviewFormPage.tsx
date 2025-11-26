@@ -57,18 +57,24 @@ interface CustomForm {
   school?: SchoolInfo | null;
 }
 
-function SocialShareButtons({ formTitle, formUrl }: { formTitle: string; formUrl: string }) {
+function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle: string; formUrl: string; formDescription?: string | null }) {
   const { toast } = useToast();
   
-  const shareText = `Check out this form: ${formTitle}`;
+  const descriptionText = formDescription ? `\n\n${formDescription}` : '';
+  const shareText = `${formTitle}${descriptionText}`;
   const encodedText = encodeURIComponent(shareText);
   const encodedUrl = encodeURIComponent(formUrl);
+  const encodedQuote = encodeURIComponent(formDescription || formTitle);
+  
+  const emailBody = formDescription 
+    ? `${formDescription}\n\nFill out the form here: ${formUrl}`
+    : `Check out this form: ${formUrl}`;
   
   const shareLinks = {
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedQuote}`,
     twitter: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
     linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-    email: `mailto:?subject=${encodeURIComponent(formTitle)}&body=${encodeURIComponent(`Check out this form: ${formUrl}`)}`,
+    email: `mailto:?subject=${encodeURIComponent(formTitle)}&body=${encodeURIComponent(emailBody)}`,
   };
   
   const copyToClipboard = async () => {
@@ -173,37 +179,43 @@ function SocialShareButtons({ formTitle, formUrl }: { formTitle: string; formUrl
 function SchoolBranding({ school }: { school: SchoolInfo }) {
   const [logoError, setLogoError] = useState(false);
   
+  const hasValidLogo = school.logo && !logoError;
+  
   return (
-    <div className="flex items-center gap-4 mb-6 pb-6 border-b" data-testid="school-branding">
-      {school.logo && !logoError ? (
-        <img 
-          src={school.logo} 
-          alt={school.name}
-          className="h-14 max-w-[200px] object-contain"
-          onError={() => setLogoError(true)}
-          data-testid="img-school-logo"
-        />
+    <div className="mb-6 pb-6 border-b" data-testid="school-branding">
+      {hasValidLogo ? (
+        <div className="flex justify-center">
+          <img 
+            src={school.logo!} 
+            alt={school.name}
+            className="h-16 max-w-[280px] object-contain"
+            onError={() => setLogoError(true)}
+            data-testid="img-school-logo"
+          />
+        </div>
       ) : (
-        <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <School className="h-7 w-7 text-primary" />
+        <div className="flex items-center gap-4">
+          <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <School className="h-7 w-7 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-foreground" data-testid="text-school-name">
+              {school.name}
+            </h2>
+            {school.website && (
+              <a 
+                href={school.website} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                data-testid="link-school-website"
+              >
+                {school.website.replace(/^https?:\/\//, '')}
+              </a>
+            )}
+          </div>
         </div>
       )}
-      <div>
-        <h2 className="text-xl font-semibold text-foreground" data-testid="text-school-name">
-          {school.name}
-        </h2>
-        {school.website && (
-          <a 
-            href={school.website} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-sm text-muted-foreground hover:text-primary transition-colors"
-            data-testid="link-school-website"
-          >
-            {school.website.replace(/^https?:\/\//, '')}
-          </a>
-        )}
-      </div>
     </div>
   );
 }
@@ -416,7 +428,7 @@ export default function PreviewFormPage() {
                   </Badge>
                 </div>
                 {actualPublicUrl && (
-                  <SocialShareButtons formTitle={form.title} formUrl={actualPublicUrl} />
+                  <SocialShareButtons formTitle={form.title} formUrl={actualPublicUrl} formDescription={form.description} />
                 )}
               </div>
             </div>

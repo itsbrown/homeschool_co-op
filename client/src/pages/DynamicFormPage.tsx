@@ -170,37 +170,43 @@ function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle
 function SchoolBranding({ school }: { school: SchoolInfo }) {
   const [logoError, setLogoError] = useState(false);
   
+  const hasValidLogo = school.logo && !logoError;
+  
   return (
-    <div className="flex items-center gap-4 mb-6 pb-6 border-b" data-testid="school-branding">
-      {school.logo && !logoError ? (
-        <img 
-          src={school.logo} 
-          alt={school.name}
-          className="h-14 max-w-[200px] object-contain"
-          onError={() => setLogoError(true)}
-          data-testid="img-school-logo"
-        />
+    <div className="mb-6 pb-6 border-b" data-testid="school-branding">
+      {hasValidLogo ? (
+        <div className="flex justify-center">
+          <img 
+            src={school.logo!} 
+            alt={school.name}
+            className="h-16 max-w-[280px] object-contain"
+            onError={() => setLogoError(true)}
+            data-testid="img-school-logo"
+          />
+        </div>
       ) : (
-        <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <School className="h-7 w-7 text-primary" />
+        <div className="flex items-center gap-4">
+          <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <School className="h-7 w-7 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-foreground" data-testid="text-school-name">
+              {school.name}
+            </h2>
+            {school.website && (
+              <a 
+                href={school.website} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                data-testid="link-school-website"
+              >
+                {school.website.replace(/^https?:\/\//, '')}
+              </a>
+            )}
+          </div>
         </div>
       )}
-      <div>
-        <h2 className="text-xl font-semibold text-foreground" data-testid="text-school-name">
-          {school.name}
-        </h2>
-        {school.website && (
-          <a 
-            href={school.website} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-sm text-muted-foreground hover:text-primary transition-colors"
-            data-testid="link-school-website"
-          >
-            {school.website.replace(/^https?:\/\//, '')}
-          </a>
-        )}
-      </div>
     </div>
   );
 }
@@ -621,7 +627,7 @@ export default function DynamicFormPage() {
                   <CardDescription className="text-base mt-2">{form.description}</CardDescription>
                 )}
               </div>
-              <SocialShareButtons formTitle={form.title} formUrl={currentUrl} />
+              <SocialShareButtons formTitle={form.title} formUrl={currentUrl} formDescription={form.description} />
             </div>
           </CardHeader>
           <CardContent>
