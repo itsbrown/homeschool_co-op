@@ -233,11 +233,10 @@ export const createEnrollment = async (req: Request, res: Response) => {
 // Update an enrollment status (by parent, instructor, or admin)
 export const updateEnrollment = async (req: any, res: Response) => {
   try {
-    // Support both session-based auth and Supabase auth
-    const userEmail = req.user?.email || req.session?.userEmail;
-    const sessionUserId = req.session?.userId;
+    // Supabase-only authentication pattern
+    const userEmail = req.user?.email;
     
-    if (!userEmail && !sessionUserId) {
+    if (!userEmail) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
@@ -252,17 +251,14 @@ export const updateEnrollment = async (req: any, res: Response) => {
       return res.status(404).json({ message: "Enrollment not found" });
     }
     
-    // Get user from database if using Supabase auth
-    let userId = sessionUserId;
-    let userRole = req.session?.userRole;
-    
-    if (userEmail && !userId) {
-      const dbUser = await storage.getUserByEmail(userEmail);
-      if (dbUser) {
-        userId = dbUser.id;
-        userRole = dbUser.role;
-      }
+    // Look up the database user by email to get their ID and role
+    const dbUser = await storage.getUserByEmail(userEmail);
+    if (!dbUser) {
+      return res.status(401).json({ message: "User not found in database" });
     }
+    
+    const userId = dbUser.id;
+    const userRole = dbUser.role;
     
     // Security check - verify user has appropriate access
     const child = await storage.getChildById(existingEnrollment.childId);
